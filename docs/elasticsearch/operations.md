@@ -74,6 +74,15 @@ quorum checks remain in force. Correct the platform/runtime failure, then run
 
 If a restarted Elasticsearch node cannot start because of a product-invalid setting, correct `engineOptions.elasticsearch.settings` and reapply it. The in-flight rolling pass publishes the correction to that same node while waiting for rejoin; it does not disrupt the next member. During upgrade, configuration repair keeps the journal's target binary version and never attempts an in-place downgrade.
 
+## Agent rollout and maintenance windows
+
+`karactl clusters upgrade-agents search --wait` refreshes Karakoram agents without changing Elasticsearch or Stack versions, runtime identities or volumes. The durable rollout freezes the control-plane build and skips healthy members already reporting it; `--include-current` explicitly refreshes those members too. Data-only nodes roll first, then non-elected master-eligible nodes, the elected master, Kibana, Logstash and APM. Each node retains the master/quorum, shard-health, primaries-only allocation, flush and recovery gates above, and must report the exact target agent build before advancing. Stack components must also report that build and pass component readiness. Completed members are journaled across control-plane restarts. Cancellation is allowed between members, never while allocation or a stopped member needs recovery. If the control-plane build changes again, re-run the operation for the new build.
+
+`spec.maintenance` windows gate the start of each new disruptive member step: restart, TLS rotation, agent rollout, engine upgrade, restart-required configuration/resource changes and scale-in (including optional component removal). Automatic database leaf renewal waits while more than seven days remain. A member already allocation-restricted or stopped always completes rejoin, allocation restoration and shard recovery even after the window closes.
+
+Healing, create/scale-out, delete/suspend/resume, backup/restore, credential rotation, agent transport-certificate renewal and database certificates with at most seven days remaining are exempt. No windows means always open. Use `--ignore-maintenance-window` on a supported operation or spec update for an explicit override; it does not bypass native safety or deployment admission. See [maintenance policy](../operations.md) for schedules and override scope.
+
+
 ## Readiness and monitoring
 
 | Process | Local readiness |

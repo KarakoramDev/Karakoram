@@ -4,6 +4,36 @@
 
 Use the shared [operation/generation model](../clusters.md#operations-and-status). A successful request or operation is not a database health guarantee. Keep client reconnect logic and capacity for replacement/rebuild work.
 
+## Agent rollout and maintenance windows
+
+`karactl -n NS clusters upgrade-agents appdb` redeploys the current Karakoram
+executable to the existing runtimes and volumes without changing PostgreSQL's
+applied version or data/etcd identities. Unlike a process restart, this updates
+the member agent. HA replicas precede the primary; the primary must pass the
+normal local-etcd and safe-candidate switchover checks before redeployment.
+Each deployment waits for readiness, streaming catch-up and the frozen target
+agent build before advancing. Standalone and proxy runtimes incur an interruption.
+
+Already-current members are skipped. `--include-current` explicitly refreshes
+them too, but never repeats a journaled completed member after a control-plane
+restart. Cancellation finishes any in-flight member and stops between members.
+The operation freezes its target build; a different control-plane build refuses
+to start the next disruption. Re-enqueue against the new build instead.
+Deploy admission caps and deployment retry budgets still apply.
+
+`spec.maintenance` gates the start of desired engine-version changes, major
+offline upgrades, rolling resource changes, restart-required settings (including
+directional shared-memory restarts), and scale-in. Each new member disruption
+waits independently; work already stopped/deployed continues to readiness after
+the window closes. Automatic database leaf renewal waits only while more than
+seven days remain. Agent transport renewal, emergency database leaf renewal,
+healing/runtime recovery, creation/scale-out and recovery operations remain
+ungated. Restart, TLS rotation and agent-rollout operations wait before claim.
+`MaintenanceWindow=False/WaitingForWindow` explains a delayed convergence;
+waiting does not consume the operation budget. No configured windows means
+always open. The shared [operations guide](../operations.md) describes policy
+syntax and `--ignore-maintenance-window` overrides.
+
 ## Health and configuration
 
 ```sh

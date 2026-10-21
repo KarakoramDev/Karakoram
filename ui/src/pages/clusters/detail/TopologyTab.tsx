@@ -24,6 +24,8 @@ import { useSubmissionKey } from './use-submission-key';
 import { buildPatch, draftFrom, specFromDraft, type Draft } from './topology';
 import { MemberHealthBadge, MemberRole, useMemberRoles } from '../cluster-utils';
 import { engines, publicExposureMetadata, replicaLimits, reviewChanges, supportsOperation, validateReplicas } from '@/engines';
+import { MaintenanceCard, MaintenanceOverride } from './Maintenance';
+import { memberMoveRestriction, placementCopy } from './ops-state';
 
 const RS_SIZES = [1, 3, 5, 7];
 
@@ -47,7 +49,9 @@ export function TopologyTab() {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(cluster.spec));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [replaceMember, setReplaceMember] = useState<string | null>(null);
-  const submission = useSubmissionKey(JSON.stringify(draft));
+  const [moveMember, setMoveMember] = useState<string | null>(null);
+  const [ignoreMaintenanceWindow, setIgnoreMaintenanceWindow] = useState(false);
+  const submission = useSubmissionKey(JSON.stringify({ draft, replaceMember, moveMember, ignoreMaintenanceWindow }));
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
 
 
@@ -90,10 +94,11 @@ export function TopologyTab() {
   if (patch.exposure) errors.push(...validateExposure(draft.exposure, allAddressesConfirmed));
 
   const save = useMutation({
-    mutationFn: ({ spec, key }: { spec: Record<string, unknown>; key: string }) => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec } })),
+    mutationFn: ({ spec, key }: { spec: Record<string, unknown>; key: string }) => unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(ignoreMaintenanceWindow ? `${key}-maintenance-override` : key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace, ignoreMaintenanceWindow } }, body: { spec } })),
     onSuccess: (c) => {
       submission.reset();
       setAllAddressesConfirmed(false);
+      setIgnoreMaintenanceWindow(false);
       queryClient.setQueryData(keys.cluster(namespace, name), c);
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(<OperationNotice operationId={c.operationId}>Changes submitted; the cluster is reconciling.</OperationNotice>);
@@ -105,22 +110,30 @@ export function TopologyTab() {
   });
 
   const replace = useMutation({
-    mutationFn: (member: string) => unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, member }, query: { namespace } } })),
+    mutationFn: ({ member, move }: { member: string; move: boolean }) => {
+      const options = { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name, member }, query: { namespace, ignoreMaintenanceWindow } } };
+      return move ? unwrap(api.POST('/clusters/{cluster}/members/{member}/move', options)) : unwrap(api.POST('/clusters/{cluster}/members/{member}/replace', options));
+    },
     onSuccess: (op) => {
       submission.reset();
-      toast.success(<OperationNotice operationId={op.id}>Replacement started.</OperationNotice>);
+      toast.success(<OperationNotice operationId={op.id}>Member operation queued.</OperationNotice>);
       setReplaceMember(null);
+      setMoveMember(null);
+      setIgnoreMaintenanceWindow(false);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
 
   const members = cluster.status.members.filter((m) => (roles.get(m.name) ?? m.role) !== 'router');
+  const selectedMoveRestriction = moveMember ? memberMoveRestriction(cluster, cluster.status.members.find((m) => m.name === moveMember)) : undefined;
 
   return (
     <div className="stack" style={{ gap: 16 }}>
       {!editable ? <Callout tone="info">{can('update') ? `Editing is unavailable while the cluster is ${cluster.status.phase}.` : 'You have read-only access to this cluster.'}</Callout> : null}
       {cluster.status.observedGeneration < cluster.generation ? <Callout tone="info">A previous change is still being reconciled (generation {cluster.status.observedGeneration} of {cluster.generation}).</Callout> : null}
+      <MaintenanceCard />
+      {editable ? <Card title="Maintenance override for topology changes"><MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} /></Card> : null}
 
       {TopologyEditor ? <TopologyEditor cluster={cluster} provider={provider} editable={editable} can={can} busy={save.isPending} submit={(spec, key) => save.mutateAsync({ spec, key })} /> : <>
       <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }} className="stack">
@@ -211,7 +224,7 @@ export function TopologyTab() {
       ) : null}
       </>}
 
-      {supportsOperation(provider, 'replace-member') ? <Card title="Replace a member" flush>
+      {supportsOperation(provider, 'replace-member') ? <Card title="Member placement & replacement" flush>
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -220,19 +233,24 @@ export function TopologyTab() {
                 <th>Set</th>
                 <th>Role</th>
                 <th>Health</th>
+                <th>Placement group</th>
                 <th className="actions">Action</th>
               </tr>
             </thead>
             <tbody>
-              {members.map((m) => (
+              {members.map((m) => {
+                const moveRestriction = memberMoveRestriction(cluster, m);
+                return (
                 <tr key={m.name}>
                   <td className="mono">{m.name}</td>
                   <td className="mono">{m.set}</td>
                   <td><MemberRole member={m} roles={roles} /></td>
                   <td><MemberHealthBadge member={m} suspended={cluster.status.phase === 'Suspended'} /></td>
+                  <td className="small"><span className="mono xs">{m.placementGroup || 'unknown'}</span>{moveRestriction ? <div className="xs muted" style={{ maxWidth: 300 }}>Move unavailable: {moveRestriction}</div> : null}</td>
                   <td className="actions">
                     {editable ? (
                       <Menu>
+                        <MenuItem disabled={Boolean(moveRestriction)} title={moveRestriction} onClick={() => { if (!moveRestriction) setMoveMember(m.name); }}>Move member…</MenuItem>
                         <MenuItem onClick={() => setReplaceMember(m.name)} danger>
                           Replace with new member…
                         </MenuItem>
@@ -240,10 +258,11 @@ export function TopologyTab() {
                     ) : null}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {members.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="table-empty">
+                  <td colSpan={6} className="table-empty">
                     No members yet.
                   </td>
                 </tr>
@@ -269,13 +288,14 @@ export function TopologyTab() {
             <pre className="code">{JSON.stringify({ spec: patch }, null, 2)}</pre>
           </details>
           {clusters.data && clusters.data.items.length > 1 && patch.exposure ? <p className="xs faint">Other clusters are unaffected.</p> : null}
+          <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
         </div>
       </ConfirmDialog>}
 
       <ConfirmDialog
         open={replaceMember !== null}
-        onClose={() => { setReplaceMember(null); replace.reset(); submission.reset(); }}
-        onConfirm={() => replaceMember && replace.mutateAsync(replaceMember)}
+        onClose={() => { setReplaceMember(null); setIgnoreMaintenanceWindow(false); replace.reset(); submission.reset(); }}
+        onConfirm={() => replaceMember && replace.mutateAsync({ member: replaceMember, move: false })}
         title={`Replace ${replaceMember ?? ''}`}
         confirmLabel="Replace member"
         danger
@@ -287,6 +307,18 @@ export function TopologyTab() {
           A new member with the next index is created and completes initial sync before <span className="mono">{replaceMember}</span> is removed from the set and its services and volume are deleted. If it is the primary, a
           step-down happens first.
         </p>
+        <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
+      </ConfirmDialog>
+      <ConfirmDialog open={moveMember !== null} onClose={() => { setMoveMember(null); setIgnoreMaintenanceWindow(false); replace.reset(); submission.reset(); }} onConfirm={() => moveMember && !selectedMoveRestriction ? replace.mutateAsync({ member: moveMember, move: true }) : false} title={`Move ${moveMember ?? ''}`} confirmLabel="Move member" danger typeToConfirm={moveMember ?? undefined} busy={replace.isPending} error={replace.error}>
+        <div className="stack">
+          <p className="small">Create a replacement runtime and volume using normal engine safety gates, then retire the original member. This is disruptive and may temporarily reduce availability.</p>
+          {selectedMoveRestriction ? <Callout tone="warn">{selectedMoveRestriction}</Callout> : null}
+          <Callout tone="warn" title={cluster.status.placement?.source === 'backend' ? 'Avoid the current placement group' : 'Best-effort relocation'}>
+            {cluster.status.placement?.source === 'backend' ? 'The backend excludes the current placement group. If no other eligible node exists, the move fails before removing the original member.' : 'The backend cannot guarantee a different host. Placement is observed again after the replacement is created.'}
+          </Callout>
+          <p className="small muted">{placementCopy(cluster.status.placement).message}</p>
+          <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
+        </div>
       </ConfirmDialog>
     </div>
   );

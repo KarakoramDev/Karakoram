@@ -70,6 +70,13 @@ After all binary upgrades finish, feature flags are enabled and queue/stream lea
 
 Live platform RAM changes do not update broker limits until the gated rolling restart. Managed total memory follows desired minimum RAM, watermark **60%**, disk-free limit **max(0.5 GB, minimum RAM)**. Compare desired/platform/current metric limits. Disk growth works; shrinking is rejected. For CPU-mode cooldowns inspect `PlatformCooldown`/events and the existing retry deadline; do not resubmit changes.
 
+### Agent executable rollout and windows
+
+`karactl -n NS clusters upgrade-agents brokers --wait` redeploys the current control-plane executable to the same runtimes and volumes, preserving the applied RabbitMQ version, resources, TLS, configuration and options. It uses the normal quorum → critical-queue check → drain → stop → deploy → start → wait → revive sequence. A broker must rejoin healthy and report the frozen target build before the next broker changes. Target-build members are skipped unless `--include-current` is set; completed brokers are journaled across control-plane restarts. Cancellation is safe between brokers. If the running control plane no longer matches the frozen build, re-run the failed operation rather than deploying different bytes under the old target.
+
+`spec.maintenance` gates new desired-state engine upgrades, rolling resource/configuration changes and scale-in, plus automatic database leaf renewal while more than seven days remain. Already-drained brokers finish rejoining after window closure. Creation/scale-out, healing, agent transport renewal and database leaves within seven days of expiry are exempt. Imperative restarts, TLS rotation, replacements and agent upgrades wait before claim; supported actions accept `--ignore-maintenance-window`. See [maintenance policy](../operations.md).
+
+
 ## Quorum-blocked restarts and replica growth
 
 Scale-up does **not** enlarge existing queue groups: a queue declared on one broker may still have one replica afterward. `QuorumCriticalQueues`/`RollingRestartBlocked` identify queue/vhost/member blockers. Recover stream/metadata majorities separately; queue additions do not repair them.

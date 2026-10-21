@@ -19,10 +19,10 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/netguard"
 	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -241,83 +241,27 @@ func (t noRedirectTransport) RoundTrip(r *http.Request) (*http.Response, error) 
 }
 
 func endpointAllowlisted(host, port, allowlist string) bool {
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if host == "storage-prg1.zerops.io" && (port == "80" || port == "443") {
-		return true
-	}
-	for _, entry := range strings.Split(allowlist, ",") {
-		entry = strings.ToLower(strings.TrimSpace(entry))
-		if entry == net.JoinHostPort(host, port) || (strings.TrimSuffix(entry, ".") == host && (port == "80" || port == "443")) {
-			return true
-		}
-	}
-	return false
+	policy := netguard.Policy{Allowlist: netguard.ParseAllowlist(allowlist + ",storage-prg1.zerops.io")}
+	return policy.Allowlisted(host, port)
 }
-
-var (
-	sharedAddressSpace = netip.MustParsePrefix("100.64.0.0/10")
-	metadataAWS        = netip.MustParseAddr("fd00:ec2::254")
-	metadataAzure      = netip.MustParseAddr("168.63.129.16")
-	metadataOracle     = netip.MustParseAddr("192.0.0.192")
-)
 
 // EndpointAddressAllowed is the shared outbound address policy. OAuth metadata
 // calls it with privateAllowed=false, independently of the backup allowlist.
 func EndpointAddressAllowed(ip netip.Addr, privateAllowed bool) bool {
-	ip = ip.Unmap()
-	if !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
-		return false
-	}
-	// Metadata service addresses are forbidden even for an approved private
-	// endpoint; not every provider uses a link-local metadata address.
-	if sharedAddressSpace.Contains(ip) || ip == metadataAWS || ip == metadataAzure || ip == metadataOracle {
-		return false
-	}
-	return !ip.IsPrivate() || privateAllowed
+	return netguard.AddressAllowed(ip, privateAllowed, false)
 }
 
 func endpointDialer(endpoint *url.URL, allowlist string) func(context.Context, string, string) (net.Conn, error) {
-	endpointHost := strings.ToLower(strings.TrimSuffix(endpoint.Hostname(), "."))
-	endpointPort := endpoint.Port()
-	if endpointPort == "" {
-		endpointPort = "80"
-		if endpoint.Scheme == "https" {
-			endpointPort = "443"
-		}
+	policy := &netguard.Policy{
+		Allowlist:       netguard.ParseAllowlist(allowlist + ",storage-prg1.zerops.io"),
+		S3Compatibility: true,
+		Endpoint:        endpoint,
 	}
-	approved := endpointAllowlisted(endpointHost, endpointPort, allowlist)
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	return func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, err
+		conn, err := policy.DialContext(ctx, network, address)
+		if errors.Is(err, netguard.ErrNotAllowed) {
+			return nil, &verificationFailure{reason: "endpoint_not_allowed", err: err}
 		}
-		host = strings.ToLower(strings.TrimSuffix(host, "."))
-		if port != endpointPort || (host != endpointHost && !strings.HasSuffix(host, "."+endpointHost)) || (!approved && port != "80" && port != "443") {
-			return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint destination or port is not permitted")}
-		}
-		// Resolve on every new connection and dial the checked numeric address,
-		// preventing DNS rebinding between policy validation and connection.
-		addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-		if err != nil {
-			return nil, err
-		}
-		if len(addresses) == 0 {
-			return nil, errors.New("S3 endpoint has no addresses")
-		}
-		for _, ip := range addresses {
-			if !EndpointAddressAllowed(ip, approved) {
-				return nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("S3 endpoint address is not permitted")}
-			}
-		}
-		var dialErr error
-		for _, ip := range addresses {
-			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-			if err == nil {
-				return conn, nil
-			}
-			dialErr = err
-		}
-		return nil, dialErr
+		return conn, err
 	}
 }

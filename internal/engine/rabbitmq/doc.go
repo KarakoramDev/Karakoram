@@ -51,8 +51,14 @@
 // the broker before any disruptive platform action. Durable maintenance holds
 // prevent background configuration pulls from starting a stopped broker while a
 // platform operation is pending. A member must acknowledge its configuration,
-// run, rejoin and revive before another member is changed. Resource changes are
-// applied through the backend and followed by a gated rolling configuration
+// run, rejoin and revive before another member is changed.
+// Restart, TLS rotation and agent rollout recheck the maintenance window before
+// each new member drain, including operations claimed in an earlier window.
+// A drained member always finishes recovery; the persisted operation override
+// permits the entire rolling pass outside windows. All three operations allow
+// provisioning Sync until native formation or scale-out completes, but isolate
+// ordinary Sync while a member change is active.
+// Resource changes are applied through the backend and followed by a gated rolling configuration
 // update. Backends whose resource receipt reapplies the stored runtime enter
 // disruption gates before RAM/CPU changes and skip a second identical deployment;
 // reload, configuration acknowledgement and full membership still gate completion.

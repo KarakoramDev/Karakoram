@@ -697,6 +697,14 @@ func (s *Server) dispatch(ctx context.Context, name string, in input) response {
 	switch name {
 	case "ListOAuthGrants", "DeleteOAuthGrant":
 		return s.oauthGrants(ctx, name, in)
+	case "CreateBackupDrill", "ListBackupDrills", "GetBackupDrill":
+		return s.backupDrills(ctx, name, in)
+	case "ListNotificationChannels", "CreateNotificationChannel", "GetNotificationChannel", "ReplaceNotificationChannel", "DeleteNotificationChannel", "TestNotificationChannel":
+		return s.notificationChannels(ctx, name, in)
+	case "GetAgentRolloutSettings", "UpdateAgentRolloutSettings":
+		return s.agentRolloutSettings(ctx, name, in)
+	case "GetControlPlaneBackupPolicy", "UpdateControlPlaneBackupPolicy", "ListControlPlaneBackups", "CreateControlPlaneBackup":
+		return s.controlPlaneBackup(ctx, name, in)
 	case "ListElasticUsers", "GetElasticUser", "CreateElasticUser", "UpdateElasticUser", "DeleteElasticUser", "ListElasticRoles", "GetElasticRole", "CreateElasticRole", "UpdateElasticRole", "DeleteElasticRole", "ListElasticAPIKeys", "CreateElasticAPIKey", "InvalidateElasticAPIKey":
 		return s.elasticAccess(ctx, name, in)
 	case "GetHealth":

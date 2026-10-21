@@ -31,6 +31,9 @@ var (
 	// ErrUnavailable reports a transient backend outage, rate limit or
 	// network failure; the request may be retried.
 	ErrUnavailable = errors.New("infra: backend unavailable")
+	// ErrPlacementUnsatisfiable reports that explicit placement exclusions leave
+	// no eligible node. Retrying the same placement intent cannot resolve it.
+	ErrPlacementUnsatisfiable = errors.New("infra: no other eligible node")
 	// ErrUnsupported reports a feature this backend does not provide
 	// (see Capabilities).
 	ErrUnsupported = errors.New("infra: not supported by backend")
@@ -145,7 +148,7 @@ func SafeDetail(err error) string {
 	if errors.As(err, &d) {
 		return d.SafeDetail()
 	}
-	for _, class := range []error{ErrUnauthorized, ErrNotFound, ErrConflict, ErrUnavailable, ErrUnsupported, ErrResourceChangeCooldown, ErrRejected, ErrConfiguration} {
+	for _, class := range []error{ErrPlacementUnsatisfiable, ErrUnauthorized, ErrNotFound, ErrConflict, ErrUnavailable, ErrUnsupported, ErrResourceChangeCooldown, ErrRejected, ErrConfiguration} {
 		if errors.Is(err, class) {
 			return class.Error()
 		}

@@ -59,7 +59,7 @@ export const genericMonitoringPanels: MonitoringPanel[] = [
 ];
 
 const PSMDB_CAPABILITIES = ['databaseUsers', 'databaseRoles', 'systemUsers', 'balancer', 'pitr', 'backups', 'restores', 'fcv', 'publicExposure', 'tls', 'monitoring', 'engineConfig'];
-const PSMDB_OPERATIONS = ['backup', 'delete-backup', 'restore', 'raise-fcv', 'restart', 'replace-member', 'rotate-system-user', 'rotate-tls'];
+const PSMDB_OPERATIONS = ['backup', 'delete-backup', 'restore', 'raise-fcv', 'restart', 'upgrade-agents', 'replace-member', 'rotate-system-user', 'rotate-tls'];
 type Metadata = Pick<Schemas['Provider'], 'capabilities' | 'operations' | 'processes'> & { name?: string };
 
 /** Catalog access is optional for readers with cluster-scoped permissions. */

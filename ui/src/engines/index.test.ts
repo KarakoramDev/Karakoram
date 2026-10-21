@@ -53,6 +53,7 @@ test('older provider metadata retains Mongo capabilities, operations and process
   for (const capability of ['databaseUsers', 'systemUsers', 'backups', 'restores', 'fcv', 'balancer', 'pitr']) assert.equal(hasCapability({}, capability), true);
   assert.equal(supportsOperation({}, 'restart'), true);
   assert.equal(supportsOperation({}, 'rotate-system-user'), true);
+  assert.equal(supportsOperation({}, 'upgrade-agents'), true);
   assert.equal(supportsOperation({}, 'unknown'), false);
   assert.deepEqual(providerProcesses({}), ['mongod', 'mongos', 'pbm-agent', 'agent']);
   assert.equal(tabAvailable(undefined, 'users'), true);

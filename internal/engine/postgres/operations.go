@@ -36,6 +36,11 @@ func (p *Core) convertTopology(ctx context.Context, rc *engine.Context, s *state
 func (p *Core) scaleDown(ctx context.Context, rc *engine.Context, s *state, result engine.Result) (engine.Result, error) {
 	data := s.data()
 	m := data[len(data)-1]
+	if m.Retirement == "" && !m.Removing {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return wait, nil
+		}
+	}
 	if m.ServiceID != "" {
 		fenced, err := fenceRetirement(ctx, rc, s, m)
 		if err != nil || !fenced {
@@ -80,6 +85,9 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 
 // RunOperation executes bounded, checkpointed rolling restarts.
 func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	allowed, err := p.CanClaimOperation(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
@@ -109,6 +117,8 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		return p.rotateDataUser(ctx, rc, op)
 	case "rebalance":
 		return p.runCitusRebalance(ctx, rc, op, false)
+	case domain.OperationUpgradeAgents:
+		return p.upgradeAgents(ctx, rc, op, false)
 	case domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore":
 		return p.runBackupOperation(ctx, rc, op)
 	case domain.OperationReplaceMember:
@@ -195,6 +205,10 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 			checkpoint.Waiting = false
 		}
 	} else {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			raw, err := json.Marshal(checkpoint)
+			return engine.OpResult{Checkpoint: raw, Step: "restart", Message: "Waiting for maintenance window", RequeueAfter: wait.RequeueAfter}, err
+		}
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
 			return engine.OpResult{}, err

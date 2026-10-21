@@ -55,6 +55,8 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0052](0052-mysql-engine.md) | Percona Server for MySQL, Group Replication single-primary, ProxySQL, XtraBackup and binary-log PITR |
 | [0053](0053-pxc-engine.md) | Percona XtraDB Cluster as a separate provider over the MySQL core |
 | [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
+| [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
+| [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
 
 ## References and verification
 

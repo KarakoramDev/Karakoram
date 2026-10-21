@@ -262,6 +262,9 @@ target deletion, not liveness-based Ready. Backup provenance (destination prefix
 topology/version and protected recovery-identity reference) survives source deletion.
 Running replacements opt into Sync only for join/removal; other operations,
 especially restore, exclude ordinary convergence.
+A fleet move freezes its relocate/avoid-group intent in the operation checkpoint,
+member journal and import plan. Definitive placement rejection fails before old
+member retirement; failure cleanup retires only the unjoined replacement.
 
 Cleanup deletes snapshots/PITR at all known backup destinations while agents
 are still running. It then deletes public routing and runtimes, observing each

@@ -19,11 +19,13 @@ import (
 // and its predecessor has been retired. Every transition is persisted with the
 // cluster, so a lost operation response cannot allocate a second replacement.
 type replacementState struct {
-	Operation string `json:"operation"`
-	Old       string `json:"old"`
-	New       string `json:"new"`
-	Stage     string `json:"stage"`
-	Recovery  string `json:"recovery,omitempty"`
+	Operation  string `json:"operation"`
+	Old        string `json:"old"`
+	New        string `json:"new"`
+	Stage      string `json:"stage"`
+	Recovery   string `json:"recovery,omitempty"`
+	Relocate   bool   `json:"relocate,omitempty"`
+	AvoidGroup string `json:"avoidGroup,omitempty"`
 }
 
 // SyncDuringOperation permits provisioning only while a replacement joins.
@@ -61,7 +63,9 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 			}
 		}
 		var payload struct {
-			Member string `json:"member"`
+			Member     string `json:"member"`
+			Relocate   bool   `json:"relocate"`
+			AvoidGroup string `json:"avoidGroup"`
 		}
 		if err := json.Unmarshal(op.Payload, &payload); err != nil {
 			return result, engine.Invalid("invalid replacement request")
@@ -74,7 +78,7 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 			return result, engine.ErrUnavailable
 		}
 		m := s.newGroupMember(rc.Cluster, old.Group)
-		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join"}
+		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join", Relocate: payload.Relocate, AvoidGroup: payload.AvoidGroup}
 	}
 	cp := s.Replacement
 	if cp.Operation != op.ID {
@@ -193,7 +197,7 @@ func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
 }
 
 func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
-	if op.Kind != domain.OperationReplaceMember && op.Kind != "rebalance" {
+	if op.Kind != domain.OperationReplaceMember && op.Kind != "rebalance" && op.Kind != domain.OperationUpgradeAgents {
 		return engine.Invalid("operation does not support cancellation")
 	}
 	return nil
@@ -205,6 +209,9 @@ func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *doma
 	}
 	if op.Kind == domain.OperationBackup {
 		return handoffCitusBackupRecovery(rc, op)
+	}
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, op, true)
 	}
 	if restoreOperation(op) {
 		return handoffRestoreRecovery(rc, op)
@@ -377,4 +384,23 @@ func switchAwayConfigured(ctx context.Context, rc *engine.Context, s *state, old
 func blockedSwitchover(s *state, message string) error {
 	s.SwitchoverBlocked = message
 	return engine.Invalid("%s", message)
+}
+
+// ValidateMemberReplacement is also promoted by the Supabase provider.
+func (*Core) ValidateMemberReplacement(c *domain.Cluster, name string) error {
+	s, err := load(c)
+	if err != nil {
+		return err
+	}
+	if !patroniTopology(s.Topology) {
+		return engine.Invalid("member replacement requires a replicated group")
+	}
+	m := s.find(name)
+	if m == nil || m.Role != "data" {
+		return engine.Invalid("replacement target must be a data member")
+	}
+	if len(s.group(m.Group).data()) < 2 {
+		return engine.Invalid("member replacement requires a replicated group")
+	}
+	return nil
 }

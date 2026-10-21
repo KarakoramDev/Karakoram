@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/maintenance"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -60,8 +61,8 @@ func (m *Manager) failQueueOperation(p engine.Provider, op *domain.Operation, er
 	return true
 }
 
-// DefaultOperationTimeout bounds observed control-plane execution time, including
-// scheduled waits. Wall-clock steps and time spent offline cannot exhaust it.
+// DefaultOperationTimeout bounds observed control-plane execution time, excluding
+// maintenance waits. Wall-clock steps and time spent offline cannot exhaust it.
 const DefaultOperationTimeout = 2 * time.Hour
 const DefaultRestoreTimeout = 6 * time.Hour
 const DefaultOperationRetryLimit = 20
@@ -96,6 +97,7 @@ func (m *Manager) operationTimeout(op *domain.Operation) time.Duration {
 type operationBudget struct {
 	observed time.Time
 	cleanup  bool
+	paused   bool
 }
 
 // elapsedOperationTime accumulates monotonic intervals only. Persisted elapsed
@@ -118,10 +120,11 @@ func (m *Manager) elapsedOperationTime(op *domain.Operation, cleanup bool) time.
 	if cleanup {
 		elapsed = &op.FailureCleanupElapsed
 	}
-	if previous, ok := budgets[op.ID]; ok && previous.cleanup == cleanup {
+	previous, ok := budgets[op.ID]
+	if ok && previous.cleanup == cleanup && (!previous.paused || cleanup) {
 		*elapsed += now.Sub(previous.observed)
 	}
-	budgets[op.ID] = operationBudget{observed: now, cleanup: cleanup}
+	budgets[op.ID] = operationBudget{observed: now, cleanup: cleanup, paused: previous.paused && !cleanup}
 	return *elapsed
 }
 
@@ -221,6 +224,10 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 	for i := range ops {
 		op := &ops[i]
 		if !domain.IsConvergenceOperation(op.Kind) {
+			// Pending maintenance work has not started an execution budget.
+			if op.Phase == domain.PhasePending && maintenance.Gated(op) {
+				continue
+			}
 			// Expire Pending work even if ordinary convergence keeps failing before claim.
 			_, deferred := p.(engine.OperationClaimPolicy)
 			if op.Phase == domain.PhasePending && !deferred {
@@ -257,6 +264,7 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			m.observeOperationBlocker(op, message, observed)
 		}
+		m.maintenanceBudget(op, c, maintenance.Waiting(c))
 		if c.Generation > op.TargetGeneration {
 			op.Phase, op.Message, op.CompletedAt = domain.PhaseCancelled, "Superseded by a newer cluster generation", &now
 		} else if !m.operationFailure(op, cause) {
@@ -358,4 +366,47 @@ func versionPart(version string) (uint64, string) {
 		i++
 	}
 	return part, version[i:]
+}
+
+// maintenanceBudget changes pause state only for work that actually reached its
+// disruption gate. Cluster conditions alone are not imperative wait receipts.
+// Cleanup and cancellation must always retain their bounded recovery budgets.
+func (m *Manager) maintenanceBudget(op *domain.Operation, c *domain.Cluster, waiting bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := c.Ref().Key()
+	if m.budgets == nil {
+		m.budgets = make(map[string]map[string]operationBudget)
+	}
+	if m.budgets[key] == nil {
+		m.budgets[key] = make(map[string]operationBudget)
+	}
+	budget := m.budgets[key][op.ID]
+	paused := waiting && !op.IgnoreMaintenanceWindow && !op.CancelRequested && op.Step != failureCleanupStep
+	if domain.IsConvergenceOperation(op.Kind) {
+		paused = paused && op.TargetGeneration == c.Generation &&
+			(c.MaintenanceOverrideGeneration == 0 || c.MaintenanceOverrideGeneration != c.Generation)
+	} else {
+		paused = paused && maintenance.Gated(op)
+	}
+	if paused || budget.paused || budget.observed.IsZero() {
+		budget.observed = time.Now()
+	}
+	budget.paused = paused
+	m.budgets[key][op.ID] = budget
+}
+
+// Provider health snapshots must not discard the disruption gate's wait receipt.
+func preserveMaintenance(c *domain.Cluster, status *domain.ClusterStatus) {
+	for _, condition := range status.Conditions {
+		if condition.Type == "MaintenanceWindow" {
+			return
+		}
+	}
+	for _, condition := range c.Status.Conditions {
+		if condition.Type == "MaintenanceWindow" {
+			status.Conditions = append(status.Conditions, condition)
+			return
+		}
+	}
 }

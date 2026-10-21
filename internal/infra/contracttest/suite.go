@@ -190,6 +190,42 @@ func run(t *testing.T, newHarness func(*testing.T) Harness) {
 				}
 			}
 		}},
+		{"placement_avoid", func(t *testing.T, h Harness) {
+			if !h.Backend.Capabilities().Placement {
+				t.Skip("backend has no authoritative placement")
+			}
+			runtime, oldVolume := deployed(t, h)
+			containers, err := h.Backend.Containers(t.Context(), runtime.Hostname)
+			if err != nil || len(containers) == 0 || containers[0].PlacementGroup == "" {
+				t.Fatalf("authoritative placement unavailable: %+v %v", containers, err)
+			}
+			group := containers[0].PlacementGroup
+			replacement := oldVolume
+			replacement.Hostname = h.Hostname("movevolume")
+			replacement.SpreadReplaces = oldVolume.Hostname
+			replacement.SpreadAvoid = []string{group}
+			op, err := h.Backend.ImportServices(t.Context(), []infra.ServiceSpec{replacement})
+			if errors.Is(err, infra.ErrPlacementUnsatisfiable) {
+				absent(t, h, replacement.Hostname)
+				return
+			}
+			complete(t, h, op, err)
+			runtime.Hostname = h.Hostname("moveruntime")
+			runtime.Volume = replacement.Hostname
+			op, err = h.Backend.ImportServices(t.Context(), []infra.ServiceSpec{runtime})
+			complete(t, h, op, err)
+			op, err = h.Backend.Deploy(t.Context(), runtime.Hostname, deployment(h, replacement.Hostname))
+			complete(t, h, op, err)
+			containers, err = h.Backend.Containers(t.Context(), runtime.Hostname)
+			if err != nil || len(containers) == 0 {
+				t.Fatalf("replacement containers: %+v %v", containers, err)
+			}
+			for _, container := range containers {
+				if container.PlacementGroup == "" || container.PlacementGroup == group {
+					t.Fatalf("replacement ignored exclusion %q: %+v", group, container)
+				}
+			}
+		}},
 		{"invalid_deployment", func(t *testing.T, h Harness) {
 			runtime, volume := imported(t, h)
 			d := deployment(h, volume.Hostname)

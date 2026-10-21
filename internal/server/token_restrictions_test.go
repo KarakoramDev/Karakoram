@@ -46,3 +46,17 @@ func TestTokenRestrictionsRoundTrip(t *testing.T) {
 		t.Fatal(stored, err)
 	}
 }
+
+func TestOpsPermissionsUseRestrictedTokenVocabulary(t *testing.T) {
+	for _, operation := range []string{
+		"getAgentRolloutSettings", "updateAgentRolloutSettings",
+		"getControlPlaneBackupPolicy", "updateControlPlaneBackupPolicy", "listControlPlaneBackups", "createControlPlaneBackup",
+		"listNotificationChannels", "getNotificationChannel", "createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel", "testNotificationChannel",
+		"upgradeClusterAgents", "moveClusterMember", "createBackupDrill", "listBackupDrills", "getBackupDrill",
+	} {
+		rule, ok := api.OperationRBAC[operation]
+		if !ok || !tokenPermissionVocabulary[rule.Resource][rule.Action] {
+			t.Errorf("%s permission absent from restricted token discovery: %+v", operation, rule)
+		}
+	}
+}

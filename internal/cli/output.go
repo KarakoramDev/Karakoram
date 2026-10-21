@@ -226,6 +226,12 @@ func (a *app) table(rows []any) error {
 				fmt.Fprint(w, "\t")
 			}
 			v := m[k]
+			if k == "agent" {
+				if agent, ok := v.(map[string]any); ok {
+					fmt.Fprintf(w, "version=%s build=%s", cell(agent["version"]), cell(agent["build"]))
+					continue
+				}
+			}
 			if k == "status" {
 				if status, ok := v.(map[string]any); ok {
 					v = status["phase"]

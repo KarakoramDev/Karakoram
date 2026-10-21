@@ -20,6 +20,7 @@ import (
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	openBaoFlags(c, s.operation)
+	notificationFlags(c, s.operation)
 	switch {
 	case s.operation == "createAPIToken":
 		tokenFlags(c)
@@ -47,6 +48,16 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().Bool("password-stdin", false, "Read password from standard input; omit to generate a password returned once")
 	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
 		weaviateUserFlags(c)
+	case s.operation == "updateAgentRolloutSettings":
+		c.Flags().Bool("automatic", false, "Automatically roll out outdated agents")
+		c.Flags().Int("max-concurrent-clusters", 1, "Maximum concurrent cluster rollouts (1–5)")
+	case s.operation == "upgradeClusterAgents":
+		c.Flags().Bool("include-current", false, "Redeploy agents even when already current")
+	case s.operation == "updateControlPlaneBackupPolicy":
+		c.Flags().Bool("enabled", false, "Enable scheduled control-plane backups")
+		c.Flags().String("storage", "", "S3 storage reference [namespace/]name")
+		c.Flags().String("schedule", "0 3 * * *", "UTC five-field cron schedule")
+		c.Flags().Int("retain-count", 14, "Successful backups to retain (1–1000)")
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -104,7 +115,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Flags().String("engine-options", "", "Provider options as a JSON object or @file.json")
 			c.Flags().Bool("monitoring", true, "Enable monitoring")
 		}
-	case strings.HasPrefix(s.path, "clusters upgrade"), s.operation == "raiseClusterFCV":
+	case s.path == "clusters upgrade <cluster>", s.operation == "raiseClusterFCV":
 		c.Flags().String("version", "", "Target version")
 	case s.operation == "getClusterConnection":
 		c.Flags().Bool("reveal", false, "Explicitly display database credentials")
@@ -238,6 +249,27 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		return map[string]any{}, nil
 	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
 		return weaviateUserBody(cmd, args)
+	case s.operation == "createBackupDrill":
+		backup, _ := cmd.Flags().GetString("backup")
+		body := map[string]any{}
+		if backup != "" {
+			body["backup"] = backup
+		}
+		return body, nil
+	case s.operation == "createNotificationChannel" || s.operation == "replaceNotificationChannel":
+		return a.notificationBody(cmd, args)
+	case s.operation == "updateAgentRolloutSettings":
+		automatic, _ := cmd.Flags().GetBool("automatic")
+		concurrent, _ := cmd.Flags().GetInt("max-concurrent-clusters")
+		if concurrent < 1 || concurrent > 5 {
+			return nil, usageError("--max-concurrent-clusters must be between 1 and 5")
+		}
+		return map[string]any{"automatic": automatic, "maxConcurrentClusters": concurrent}, nil
+	case s.operation == "upgradeClusterAgents":
+		include, _ := cmd.Flags().GetBool("include-current")
+		return map[string]any{"includeCurrent": include}, nil
+	case s.operation == "updateControlPlaneBackupPolicy":
+		return a.controlPlaneBackupPolicyBody(cmd)
 	case strings.HasPrefix(s.path, "clusters create"):
 		if len(args) != 1 {
 			return nil, usageError("cluster name is required without -f")
@@ -286,11 +318,11 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			}
 			spec["topology"] = map[string]any{"shards": n}
 		}
-		if len(spec) == 0 {
+		if len(spec) == 0 && !cmd.Flags().Changed("maintenance-window") && !cmd.Flags().Changed("maintenance-time-zone") && !drillPolicyChanged(cmd) {
 			return nil, usageError("set a replica, shard or resource flag to scale")
 		}
 		return map[string]any{"spec": spec}, nil
-	case strings.HasPrefix(s.path, "clusters upgrade"):
+	case s.path == "clusters upgrade <cluster>":
 		version, _ := cmd.Flags().GetString("version")
 		if version == "" {
 			return nil, usageError("--version is required")
@@ -364,6 +396,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			body["subject"] = subject
 		}
 		return body, nil
+	case s.operation == "patchCluster" && (cmd.Flags().Changed("maintenance-window") || cmd.Flags().Changed("maintenance-time-zone") || drillPolicyChanged(cmd)):
+		return map[string]any{"spec": map[string]any{}}, nil
 	default:
 		return nil, usageError("--file is required")
 	}

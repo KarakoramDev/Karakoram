@@ -21,6 +21,9 @@ export function SettingsLayout() {
     { to: '/settings/api-tokens', label: 'API tokens', show: true },
     { to: '/settings/connected-apps', label: 'Connected apps', show: grants.data?.enabled === true },
     { to: '/settings/sso', label: 'Single sign-on', show: auth.can('settings', 'read') },
+    { to: '/settings/notifications', label: 'Notifications', show: auth.can('settings', 'read') },
+    { to: '/settings/control-plane-backup', label: 'Control-plane backup', show: auth.can('settings', 'read') },
+    { to: '/settings/agent-rollout', label: 'Agent rollout', show: auth.can('settings', 'read') },
     { to: '/settings/monitoring', label: 'Monitoring', show: true },
   ].filter((i) => i.show);
   return (

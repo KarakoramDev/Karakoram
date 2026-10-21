@@ -37,7 +37,7 @@ import (
 	"syscall"
 )
 
-const usage = "Usage: karakoram server | agent [readiness [args...]] | version | admin reset-password <account>\nServer recovery reads KARAKORAM_RECOVERY_PASSWORD and optional KARAKORAM_RECOVERY_ACCOUNT (default admin) once per changed value.\nOffline reset reads KARAKORAM_RESET_PASSWORD, or prompts securely on a terminal. Stop the server first.\n"
+const usage = "Usage: karakoram server | agent [readiness [args...]] | version | admin reset-password <account> | admin backup-state --out FILE | admin restore-state (--file FILE | --s3-endpoint URL --bucket B --key KEY [--region R] [--path-style]) [--replace]\nServer recovery reads KARAKORAM_RECOVERY_PASSWORD and optional KARAKORAM_RECOVERY_ACCOUNT (default admin) once per changed value.\nOffline reset reads KARAKORAM_RESET_PASSWORD, or prompts securely on a terminal. Stop the server first.\nState administration reads KARAKORAM_DATA_DIR and KARAKORAM_MASTER_KEY. Stop the server before restoring.\n"
 
 // errUsage reports invalid command-line arguments; main prints the usage text.
 var errUsage = errors.New("invalid arguments")
@@ -112,6 +112,9 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		o.Logger = slog.New(slog.NewJSONHandler(errOut, nil))
 		return relay.Run(ctx, o)
 	case "admin":
+		if len(args) >= 2 && (args[1] == "backup-state" || args[1] == "restore-state") {
+			return stateAdmin(ctx, args[1], args[2:], out, errOut)
+		}
 		if len(args) != 3 || args[1] != "reset-password" {
 			return errUsage
 		}

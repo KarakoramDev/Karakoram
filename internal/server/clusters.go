@@ -83,6 +83,7 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	}
 	actor := store.Actor(ctx)
 	op := domain.Operation{Namespace: ref.Namespace, Cluster: ref.Name, Kind: kind, Payload: data, Actor: actor}
+	ApplyMaintenanceOverride(ctx, &op)
 	if err = s.Store.EnqueueOperation(ctx, &op); err != nil {
 		return s.failure(err)
 	}
@@ -216,153 +217,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return listResponse(s, ctx, out, err)
 	case "CreateCluster":
-		b := in.Body.(*api.CreateClusterRequest)
-		namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
-		if err := domain.ValidateClusterName(b.Name); err != nil {
-			return fail(400, "invalid_request", err.Error())
-		}
-		if err := domain.ValidateNamespaceName(namespace); err != nil {
-			return fail(400, "invalid_request", err.Error())
-		}
-		if failure := s.usableNamespace(namespace); failure != nil {
-			return *failure
-		}
-		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, b.Name)); err == nil {
-			return fail(409, "conflict", "Cluster already exists")
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return s.failure(err)
-		}
-		c := domain.Cluster{Namespace: namespace, Name: b.Name, Spec: specDomain(b.Spec)}
-		if c.Spec.Provider == "" {
-			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
-		}
-		if d := c.Spec.DataSource; d != nil {
-			if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
-				return *failure
-			}
-			d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
-			source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
-			if failure := s.restorePermission(ctx, namespace, source); failure != nil {
-				return *failure
-			}
-			if d.Backup != "" {
-				if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
-					return *failure
-				}
-				backup, err := s.Store.GetBackup(ctx, source, d.Backup)
-				if err != nil {
-					return s.backupDependencyFailure(err, source, d.Backup)
-				}
-				if !backup.ProviderMatches(c.Spec.Provider) {
-					return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
-				}
-			}
-			if d.PITRTime != nil && c.Spec.Provider == "pxc" {
-				sourceRC, sourceProvider, e := s.context(ctx, source)
-				if e != nil {
-					return s.failure(e)
-				}
-				if failure := s.providerContext(sourceRC); failure != nil {
-					return *failure
-				}
-				if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
-					if _, e = validator.ValidatePITRRestore(ctx, sourceRC, *d.PITRTime); e != nil {
-						return s.failure(e)
-					}
-				}
-			}
-		}
-		var restoreSource domain.ClusterRef
-		var restoreBackup string
-		if c.Spec.DataSource != nil {
-			restoreSource = domain.ClusterRef{Namespace: c.Spec.DataSource.Namespace, Name: c.Spec.DataSource.Cluster}
-			restoreBackup = c.Spec.DataSource.Backup
-		}
-		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, restoreSource, restoreBackup, "clone", b.OpenbaoUnsealShares)
-		if restoreFailure != nil {
-			return *restoreFailure
-		}
-		p, err := s.Registry.Get(c.Spec.Provider)
-		if err != nil {
-			return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
-		}
-		p.ApplyDefaults(&c.Spec)
-		preserveExplicitSpecValues(&c.Spec, b.Spec)
-		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
-			return s.failure(err)
-		}
-		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
-		if err = validateDataMcp(p, &c); err != nil {
-			return s.failure(err)
-		}
-		var optionValues map[string][]byte
-		if extractor, ok := p.(engine.WriteOnlyOptions); ok {
-			optionValues, err = extractor.ExtractWriteOnlyOptions(nil, &c.Spec)
-			if err != nil {
-				return s.failure(err)
-			}
-		}
-		if err = p.Validate(ctx, nil, &c); err != nil {
-			return s.failure(err)
-		}
-		if failure := s.validateBackendCapabilities(ctx, p, &c, nil); failure != nil {
-			return *failure
-		}
-		if err = s.validateStorages(ctx, &c); err != nil {
-			return s.failure(err)
-		}
-		values, err := tlsValues(b.Spec.Tls)
-		if err != nil {
-			return s.failure(err)
-		}
-		if values == nil {
-			values = make(map[string][]byte, len(optionValues))
-		}
-		for key, value := range optionValues {
-			values[key] = value
-		}
-		for key, value := range restoreValues {
-			values[key] = value
-		}
-		if dryRun {
-			if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
-				return s.failure(err)
-			}
-			return s.dryRunResult("create", nil, &c, nil)
-		}
-		op := domain.Operation{Kind: domain.OperationCreate, Actor: store.Actor(ctx)}
-		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
-			accepted := c
-			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
-			return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
-		})
-		ctx = store.WithOperation(ctx, &op)
-		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
-			c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
-				Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
-				Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
-			})
-		}
-		if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
-			return s.failure(err)
-		}
-		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
-			if err = s.recordAudit(ctx, domain.Event{
-				Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
-				Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
-				Message: rabbitMQ435Warning,
-			}); err != nil {
-				return s.failure(err)
-			}
-		}
-		if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
-			if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
-				return s.failure(err)
-			}
-		}
-		s.trigger(ctx, clusterRef(ctx, c.Name))
-		c.OperationID = op.ID
-		return response{status: 201, body: s.clusterAPI(c), operationID: op.ID}
+		return s.createCluster(ctx, in.Body.(*api.CreateClusterRequest), nil, dryRun)
 	}
 	if name == "ListBackups" || name == "GetBackup" || name == "DeleteBackup" {
 		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, in.Cluster)); errors.Is(err, store.ErrNotFound) {
@@ -398,6 +253,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return fail(409, "conflict", "Rebalance requires distributed topology")
 		}
 	}
+	if name == "ReplaceCluster" || name == "PatchCluster" || name == "DeleteCluster" {
+		if failure := s.drillMutationGuard(ctx, c); failure != nil {
+			return *failure
+		}
+	}
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
 		if name == "RecoverMySQLQuorum" {
 			return failDetails(409, "conflict", "Quorum recovery requires the pxc provider", map[string]any{"field": "spec.provider", "provider": c.Spec.Provider, "reason": domain.ReasonUnsupported})
@@ -417,6 +277,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "GetCluster":
 		return ok(s.clusterAPI(*c))
 	case "GetClusterStatus":
+		s.maintenanceStatus(c)
 		status := s.projectedClusterStatus(*c)
 		if projector, ok := p.(interface {
 			ProjectCredentialsStatus(context.Context, *engine.Context, domain.ClusterStatus) domain.ClusterStatus
@@ -465,7 +326,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		next := *c
 		next.Spec = specDomain(spec)
+		if failure := validateDrillPolicy(&next); failure != nil {
+			return *failure
+		}
 		next.Spec.RetryEpoch = c.Spec.RetryEpoch
+		if failure := validateMaintenance(next.Spec.Maintenance); failure != nil {
+			return *failure
+		}
 		if next.Spec.Provider == "" {
 			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
 		}
@@ -549,6 +416,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.dryRunResult(operation, c, &next, nil)
 		}
 		op := domain.Operation{Kind: kind, Actor: store.Actor(ctx)}
+		ApplyMaintenanceOverride(ctx, &op)
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := next
 			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
@@ -647,6 +515,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			params.Strategy = *b.Strategy
 		}
 		return s.enqueue(ctx, c.Ref(), domain.OperationRebalance, params)
+	case "UpgradeClusterAgents":
+		return s.upgradeAgents(ctx, c, in)
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
 	case "RotateClusterTLS":
@@ -661,17 +531,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return invalidField("version", domain.ReasonRequired, "version is required")
 		}
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "raise-fcv", map[string]string{"version": b.Version})
-	case "ReplaceClusterMember":
-		found := false
-		for _, m := range c.Status.Members {
-			if m.Name == in.Member {
-				found = true
-			}
-		}
-		if !found {
-			return fail(404, "not_found", "Member not found")
-		}
-		return s.enqueue(ctx, clusterRef(ctx, c.Name), "replace-member", map[string]string{"member": in.Member})
+	case "ReplaceClusterMember", "MoveClusterMember":
+		return s.replaceOrMoveMember(ctx, rc, p, in.Member, name == "MoveClusterMember")
 	case "RotateSystemUser":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "rotate-system-user", map[string]string{"user": in.User})
 	case "ListClusterMembers":
@@ -1127,6 +988,8 @@ func sameTLS(a, b domain.TLSConfig) bool {
 
 func operationKind(name string) string {
 	switch name {
+	case "UpgradeClusterAgents":
+		return domain.OperationUpgradeAgents
 	case "RotateSupabaseJWTSecret":
 		return "rotate-jwt-secret"
 	case "RebalancePostgres":
@@ -1139,7 +1002,7 @@ func operationKind(name string) string {
 		return domain.OperationRotateTLS
 	case "RaiseClusterFCV":
 		return domain.OperationRaiseFCV
-	case "ReplaceClusterMember":
+	case "ReplaceClusterMember", "MoveClusterMember":
 		return domain.OperationReplaceMember
 	case "RotateSystemUser":
 		return domain.OperationRotateSystemUser
@@ -1224,4 +1087,163 @@ func (s *Server) crossNamespaceRestoreEvents(ctx context.Context, target, source
 		}
 	}
 	return nil
+}
+
+// createCluster is the shared, validated admission path for HTTP and owned drills.
+// Internal callers supply ownership; ownership is never accepted from HTTP input.
+func (s *Server) createCluster(ctx context.Context, b *api.CreateClusterRequest, managed *domain.ManagedBy, dryRun bool) response {
+	namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
+	if err := domain.ValidateClusterName(b.Name); err != nil {
+		return fail(400, "invalid_request", err.Error())
+	}
+	if err := domain.ValidateNamespaceName(namespace); err != nil {
+		return fail(400, "invalid_request", err.Error())
+	}
+	if failure := s.usableNamespace(namespace); failure != nil {
+		return *failure
+	}
+	if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, b.Name)); err == nil {
+		return fail(409, "conflict", "Cluster already exists")
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return s.failure(err)
+	}
+	c := domain.Cluster{Namespace: namespace, Name: b.Name, Spec: specDomain(b.Spec), ManagedBy: managed}
+	if failure := validateDrillPolicy(&c); failure != nil {
+		return *failure
+	}
+	if failure := validateMaintenance(c.Spec.Maintenance); failure != nil {
+		return *failure
+	}
+	if c.Spec.Provider == "" {
+		return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
+	}
+	if d := c.Spec.DataSource; d != nil {
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
+		d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
+		source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
+		if managed == nil {
+			if failure := s.restorePermission(ctx, namespace, source); failure != nil {
+				return *failure
+			}
+		}
+		if d.Backup != "" {
+			if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
+				return *failure
+			}
+			backup, err := s.Store.GetBackup(ctx, source, d.Backup)
+			if err != nil {
+				return s.backupDependencyFailure(err, source, d.Backup)
+			}
+			if !backup.ProviderMatches(c.Spec.Provider) {
+				return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
+			}
+		}
+		if d.PITRTime != nil && c.Spec.Provider == "pxc" {
+			sourceRC, sourceProvider, e := s.context(ctx, source)
+			if e != nil {
+				return s.failure(e)
+			}
+			if failure := s.providerContext(sourceRC); failure != nil {
+				return *failure
+			}
+			if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
+				if _, e = validator.ValidatePITRRestore(ctx, sourceRC, *d.PITRTime); e != nil {
+					return s.failure(e)
+				}
+			}
+		}
+	}
+	var restoreSource domain.ClusterRef
+	var restoreBackup string
+	if c.Spec.DataSource != nil {
+		restoreSource = domain.ClusterRef{Namespace: c.Spec.DataSource.Namespace, Name: c.Spec.DataSource.Cluster}
+		restoreBackup = c.Spec.DataSource.Backup
+	}
+	restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, restoreSource, restoreBackup, "clone", b.OpenbaoUnsealShares)
+	if restoreFailure != nil {
+		return *restoreFailure
+	}
+	p, err := s.Registry.Get(c.Spec.Provider)
+	if err != nil {
+		return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
+	}
+	p.ApplyDefaults(&c.Spec)
+	preserveExplicitSpecValues(&c.Spec, b.Spec)
+	if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
+		return s.failure(err)
+	}
+	c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
+	if err = validateDataMcp(p, &c); err != nil {
+		return s.failure(err)
+	}
+	var optionValues map[string][]byte
+	if extractor, ok := p.(engine.WriteOnlyOptions); ok {
+		optionValues, err = extractor.ExtractWriteOnlyOptions(nil, &c.Spec)
+		if err != nil {
+			return s.failure(err)
+		}
+	}
+	if err = p.Validate(ctx, nil, &c); err != nil {
+		return s.failure(err)
+	}
+	if failure := s.validateBackendCapabilities(ctx, p, &c, nil); failure != nil {
+		return *failure
+	}
+	if err = s.validateStorages(ctx, &c); err != nil {
+		return s.failure(err)
+	}
+	values, err := tlsValues(b.Spec.Tls)
+	if err != nil {
+		return s.failure(err)
+	}
+	if values == nil {
+		values = make(map[string][]byte, len(optionValues))
+	}
+	for key, value := range optionValues {
+		values[key] = value
+	}
+	for key, value := range restoreValues {
+		values[key] = value
+	}
+	if dryRun {
+		if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
+			return s.failure(err)
+		}
+		return s.dryRunResult("create", nil, &c, nil)
+	}
+	op := domain.Operation{Kind: domain.OperationCreate, Actor: store.Actor(ctx)}
+	setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+		accepted := c
+		accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+		return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
+	})
+	ctx = store.WithOperation(ctx, &op)
+	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+		c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
+			Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
+			Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
+		})
+	}
+	if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
+		return s.failure(err)
+	}
+	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+		if err = s.recordAudit(ctx, domain.Event{
+			Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
+			Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
+			Message: rabbitMQ435Warning,
+		}); err != nil {
+			return s.failure(err)
+		}
+	}
+	if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
+		if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
+			return s.failure(err)
+		}
+	}
+	s.trigger(ctx, clusterRef(ctx, c.Name))
+	c.OperationID = op.ID
+	return response{status: 201, body: s.clusterAPI(c), operationID: op.ID}
 }

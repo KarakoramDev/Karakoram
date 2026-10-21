@@ -248,6 +248,10 @@ func live(ctx context.Context, rc *engine.Context, name string) (pgspec.StatusRe
 	return out, err
 }
 func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	return memberReady(ctx, rc, m, false)
+}
+
+func memberReady(ctx context.Context, rc *engine.Context, m *member, gateRestart bool) (bool, error) {
 	if m.Role == "proxy" {
 		return proxyApplied(ctx, rc, m, m.ConfigVersion, true)
 	}
@@ -293,9 +297,16 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 		}
 		return false, nil
 	}
+	if gateRestart && (m.Stage == "joined" || m.ConfigRestartPending) && st.PendingRestart && m.Role == "data" && rc.WaitForWindow().RequeueAfter > 0 {
+		return false, nil
+	}
 	if st.PendingRestart && m.Role == "data" && m.Topology == "single" {
 		rc.SyncWait = fmt.Sprintf("waiting for member %s pending PostgreSQL restart", m.Name)
-		return false, a.Process(ctx, agentapi.ProcessAction{Process: "postgres", Action: "restart", RequestID: fmt.Sprintf("config/%s/%d/postgres", m.Name, m.ConfigVersion)})
+		err := a.Process(ctx, agentapi.ProcessAction{Process: "postgres", Action: "restart", RequestID: fmt.Sprintf("config/%s/%d/postgres", m.Name, m.ConfigVersion)})
+		if err == nil {
+			m.ConfigRestartPending = false
+		}
+		return false, err
 	}
 	if st.PendingRestart && m.Role == "data" && patroniTopology(m.Topology) {
 		if st.Role == "primary" && m.Topology == "distributed" && rc.Cluster.Spec.Components.Engine.Replicas == 1 {
@@ -309,20 +320,40 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 			}
 			return false, switchAway(ctx, rc, s, m.Name)
 		}
-		return false, a.Engine(ctx, "postgres", "restart", struct{}{}, nil)
+		err := a.Engine(ctx, "postgres", "restart", struct{}{}, nil)
+		if err == nil {
+			m.ConfigRestartPending = false
+		}
+		return false, err
 	}
 	// Learners reject the local member-list RPC, so their status can omit the
 	// ID already learned from the voting member that added them.
 	if st.EtcdMemberID != "" {
 		m.EtcdID = st.EtcdMemberID
 	}
+	m.ConfigRestartPending = false
 	return true, nil
+}
+
+func readyDesired(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	return memberReady(ctx, rc, m, true)
 }
 
 // Sync advances durable infrastructure work and rolls one ready member at a time.
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
 	result.RequeueAfter = 2 * time.Second
 	rc.SyncWait = "loading PostgreSQL convergence state"
+	defer func() {
+		for _, condition := range rc.Cluster.Status.Conditions {
+			if condition.Type == "MaintenanceWindow" && condition.Status == "False" {
+				wait := rc.WaitForWindow()
+				if wait.RequeueAfter > 0 && (result.RequeueAfter == 0 || wait.RequeueAfter < result.RequeueAfter) {
+					result.RequeueAfter = wait.RequeueAfter
+				}
+				break
+			}
+		}
+	}()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return result, err
@@ -516,7 +547,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 						return result, engine.Invalid("incomplete import for %s has no frozen batch; recover the original import intent before continuing", m.Name)
 					}
 					if v == nil {
-						specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
+						spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources)
+						if cp := s.Replacement; cp != nil && cp.New == m.Name && cp.Relocate && cp.AvoidGroup != "" {
+							spec.SpreadAvoid = []string{cp.AvoidGroup}
+						}
+						specs = append(specs, spec)
 					}
 				}
 				runtime, e := rc.Backend.GetService(ctx, m.Name)
@@ -552,6 +587,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			op, e := m.ImportBatch.Submit(ctx, rc, m.Name, tok.Token)
 			if e != nil {
+				if errors.Is(e, infra.ErrPlacementUnsatisfiable) && s.Replacement != nil && s.Replacement.New == m.Name {
+					return result, fmt.Errorf("no other eligible node for %s: %w", s.Replacement.Old, e)
+				}
 				return result, e
 			}
 			p.track(s, m, "import", op)
@@ -658,7 +696,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			if m.Stage == "deployed" {
 				rc.SyncWait = fmt.Sprintf("waiting for deployed member %s readiness", m.Name)
-				ok, e := ready(ctx, rc, m)
+				ok, e := readyDesired(ctx, rc, m)
 				if e != nil {
 					return result, e
 				}
@@ -700,6 +738,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if m.Role == "proxy" && desiredComponent(rc, m).Replicas == 0 {
 			rc.SyncWait = fmt.Sprintf("removing disabled proxy %s", m.Name)
 			if m.ServiceID != "" {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					return wait, nil
+				}
 				if e := rc.Backend.DeletePublicPorts(ctx, m.Name); e != nil {
 					return result, e
 				}
@@ -852,6 +893,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
 		if m.Role == "proxy" && m.Replicas != desired.Replicas && !changed {
 			rc.SyncWait = fmt.Sprintf("scaling proxy %s", m.Name)
+			if desired.Replicas < m.Replicas {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					return wait, nil
+				}
+			}
 			op, e := rc.Backend.SetContainerCount(ctx, m.Name, desired.Replicas, desired.Replicas)
 			if e != nil {
 				return result, e
@@ -877,6 +923,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if !changed {
 			continue
 		}
+		if needsDisruption(p, rc, m, desired) {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return wait, nil
+			}
+		}
 		if roles[m.Name] == "primary" && patroniTopology(s.Topology) && rc.Cluster.Spec.Components.Engine.Replicas > 1 && needsDisruption(p, rc, m, desired) {
 			rc.SyncWait = fmt.Sprintf("switching leadership away from %s", m.Name)
 			return result, switchAwayConfigured(ctx, rc, s, m.Name, true)
@@ -896,6 +947,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		versionChanged := m.Version != rc.Cluster.Spec.Version
 		profilesAdded := p.profilesAdded(m.Options, rc.Cluster.Spec.EngineOptions)
+		m.ConfigRestartPending = m.Role == "data" && !versionChanged && needsDisruption(p, rc, m, desired)
 		m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
 		m.Version = rc.Cluster.Spec.Version
 		m.ConfigVersion = s.ConfigVersion
@@ -963,7 +1015,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				return result, nil
 			}
 			rc.SyncWait = fmt.Sprintf("waiting for post-exposure member %s readiness", m.Name)
-			ok, e := ready(ctx, rc, m)
+			ok, e := readyDesired(ctx, rc, m)
 			if e != nil || !ok {
 				return result, e
 			}

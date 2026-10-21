@@ -143,7 +143,7 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		case "deploy":
 			m.Stage = "deployed"
 			m.Version = v.Version
-		case "upgrade":
+		case "upgrade", "agent":
 			m.Stage = "upgrade-wait"
 			m.Version = v.Version
 		case "resources":
@@ -224,6 +224,9 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 			r := component(rc.Cluster.Spec, m).Resources
 			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, r)
 			spec.SpreadReplaces = m.ReplacesVolume
+			if m.Relocate && m.AvoidGroup != "" {
+				spec.SpreadAvoid = []string{m.AvoidGroup}
+			}
 			if rc.Cluster.Spec.Topology.Type != "replicaSet" {
 				// Each replica set needs its own host separation, including config servers.
 				spec.SpreadGroup = rc.Cluster.Name + "/" + m.Set
@@ -268,6 +271,17 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 	}
 	op, e := m.ImportPlan.Submit(ctx, rc, m.Name, tok.Token)
 	if e != nil {
+		if errors.Is(e, infra.ErrPlacementUnsatisfiable) {
+			m.PlacementRejected = true
+			target := m.Name
+			for _, old := range s.Members {
+				if old.Volume == m.ReplacesVolume {
+					target = old.Name
+					break
+				}
+			}
+			return fmt.Errorf("no other eligible node for %s: %w", target, e)
+		}
 		return e
 	}
 	for _, spec := range specs {
@@ -361,6 +375,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	if e != nil {
 		return result, e
 	}
+	defer func() { mergeMaintenanceWait(rc, &result) }()
 	defer func() {
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
@@ -707,6 +722,11 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			s.Pending = &pending{Op: op, Action: "delete-runtime", Member: m.Name}
 			return result, nil
 		default:
+			if !s.ReplaceActive {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+					return wait, nil
+				}
+			}
 			c, e := p.dial(ctx, rc, s, m.Set, "clusterAdmin")
 			if e != nil {
 				return result, e
@@ -732,6 +752,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	for _, m := range ordered(s) {
 		if m.Version == rc.Cluster.Spec.Version {
 			continue
+		}
+		if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+			return wait, nil
 		}
 		s.Phase = "upgrade"
 		if m.Role != agentapi.RoleRouter && major(m.Version) != major(rc.Cluster.Spec.Version) {
@@ -795,6 +818,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		comp := component(rc.Cluster.Spec, m)
 		r := runtimeResources(comp.Resources)
 		if !reflect.DeepEqual(r, m.Resources) {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+				return wait, nil
+			}
 			s.Phase = "resources"
 			stepped, e := prepareDisruption(ctx, rc, s, m)
 			if e != nil || stepped {
@@ -848,6 +874,11 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 		if m.Role == agentapi.RoleRouter && m.Containers != comp.Replicas {
+			if comp.Replicas < m.Containers {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+					return wait, nil
+				}
+			}
 			if err := requireRouterScaling(rc.Backend, comp.Replicas); err != nil {
 				return result, err
 			}
@@ -873,6 +904,18 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, err
 		}
 		if pending || st.ConfigVersion < s.ConfigVersion || !running(st, m.Role) {
+			// Recovery is never delayed; planned config/certificate restarts are.
+			if running(st, m.Role) {
+				emergency, err := urgentMemberCertificate(ctx, rc, m)
+				if err != nil {
+					return result, err
+				}
+				if !emergency {
+					if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+						return wait, nil
+					}
+				}
+			}
 			s.Phase = "reload"
 			stepped, e := prepareDisruption(ctx, rc, s, m)
 			if e != nil || stepped {

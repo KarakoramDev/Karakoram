@@ -52,6 +52,18 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 	case "DeleteTemporalNamespace":
 		e.Resource = "temporal-namespaces"
 		e.Target = in.Cluster + "/" + in.Name
+	case "UpdateAgentRolloutSettings":
+		e.Target = "agent-rollout"
+	case "UpdateControlPlaneBackupPolicy":
+		e.Target = "control-plane-backup-policy"
+	case "CreateControlPlaneBackup":
+		if b, ok := result.body.(api.ControlPlaneBackup); ok {
+			e.Target = b.Id
+		}
+	case "CreateNotificationChannel":
+		e.Target = in.Body.(*api.NotificationChannel).Name
+	case "ReplaceNotificationChannel", "DeleteNotificationChannel", "TestNotificationChannel":
+		e.Target = in.Name
 	case "GetSupabaseCredentials":
 		e.Reason = "SupabaseCredentialsRevealed"
 	case "PutSupabaseFunction", "DeleteSupabaseFunction":
@@ -90,7 +102,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Reason = "ClusterDeleteRequested"
 		q := request(ctx).URL.Query()
 		e.Message = fmt.Sprintf("Cluster deletion requested for %s (keepVolumes=%t, keepBackups=%t)", in.Cluster, q.Get("keepVolumes") == "true", q.Get("keepBackups") == "true")
-	case "ResumeCluster", "RestartCluster", "RebalancePostgres", "RotateClusterTLS", "ReplaceClusterMember", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
+	case "ResumeCluster", "RestartCluster", "RebalancePostgres", "RotateClusterTLS", "ReplaceClusterMember", "MoveClusterMember", "UpgradeClusterAgents", "CreateBackupDrill", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
 		e.Reason = strings.TrimSuffix(name, "Cluster") + "Requested"
 	case "GetClusterConnection":
 		e.Reason = "ConnectionCredentialsRevealed"

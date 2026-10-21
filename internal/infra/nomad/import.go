@@ -46,7 +46,7 @@ func (b *Backend) reserveImport(ctx context.Context, s infra.ServiceSpec, hash s
 		if err != nil {
 			return nil, err
 		}
-		r.Node, err = chooseNode(nodes, records, r.SpreadGroup, s.SpreadReplaces)
+		r.Node, err = chooseNode(nodes, records, r.SpreadGroup, s.SpreadReplaces, s.SpreadAvoid...)
 		if err != nil {
 			return nil, err
 		}

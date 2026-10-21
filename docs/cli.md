@@ -48,6 +48,8 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags, `--dry-run` and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. Elasticsearch-native role/API-key definition files retain their documented merge/conflict behavior.
 - `--dry-run` previews `clusters create`, `edit`, `patch`, `scale`, `upgrade` and `restores create` on the server using the same request body and namespace, without applying changes. `restores create --into-new --dry-run` previews creation of the cloned cluster. Table output has changes (paths and compact JSON before → after), effects and warnings; `-o json`/`-o yaml` preserves the complete plan. A valid plan exits 0; API validation failures keep the normal error exit status. Dry runs never prompt for destructive confirmation (including `-f -`) and cannot be combined with `--wait`.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
+- Maintenance convenience flags on cluster spec commands: repeat `--maintenance-window 'CRON;DURATION'` and select `--maintenance-time-zone IANA_NAME` (default UTC). `--maintenance-window ''` clears windows. With `-f`, put `spec: {maintenance: {timeZone: UTC, windows: [{schedule: "0 2 * * 0", duration: 2h}]}}` in the file instead; request files remain authoritative.
+- `--ignore-maintenance-window` on restart, rotate-tls, replace-member, members move, raise-fcv, edit, patch, scale, upgrade and upgrade-agents sends the explicit per-operation/per-generation override. It does not bypass quorum or other safety checks. See [maintenance semantics and exemptions](operations.md#maintenance-windows); `clusters get` and `clusters status` include the computed maintenance status.
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - [MySQL and PXC](mysql/README.md) are separate providers with a shared `mysql` access command group. Their backups use `full` or `incremental`, and PITR is GTID/binlog based; see [MySQL backups](mysql/backups.md).
 - Neo4j Community creation, native administrative users and offline outages: [Neo4j](neo4j/README.md). Always pass `--type dump` for Neo4j backups; schedules require `engineOptions.acceptBackupDowntime: true`.
@@ -73,9 +75,11 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `auth` | Advanced cookie/OIDC flows | refresh, oidc-login, oidc-callback | All |
 | `backends` | Registered infrastructure kinds and capabilities | list | All |
 | `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window for providers advertising PITR |
-| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
+| `backup-drills` | [Disposable restore verification and reports](backup-drills.md) | list, get, run | All; RabbitMQ definitions only |
+| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, upgrade-agents, restart, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
 | `config` | Save connection contexts | set-context | Local |
+| `control-plane` | [Coordinator state backups and recovery](control-plane-backup.md) | backup-policy get/set, backups list/run | Installation-wide |
 | `db-roles` | Custom database roles | list, get, create, set, delete | MongoDB only |
 | `db-users` | Database users | list, get, create, set, delete | MongoDB only |
 | `elasticsearch` | Native access | users, roles, api-keys | Elasticsearch only |
@@ -90,6 +94,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `namespaces` | Project registration/token/relay health | list, get, create, update, validate, rotate-token, delete | All |
 | `oauth-grants` | Connected OAuth application grants | list, delete | Control-plane accounts; administrators may manage all grants |
 | `neo4j` | Native administrative users | users list/get/create/delete/password; create/password accept `--password-stdin` | Neo4j Community only; every user is an admin |
+| `notification-channels` | [Durable operational notifications](notifications.md) | list, get, create, replace, delete, test | Installation-wide; settings permissions |
 | `openapi` | Download server specification | — | All |
 | `operations` | Observe/cancel asynchronous work | list, cluster, get, wait, cancel | All; cancellation capability varies |
 | `orphaned-volumes` | Inspect pending platform cleanup | list | All |
@@ -100,7 +105,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `rabbitmq` | Native access | vhosts, users, permissions, topic-permissions, policies, operator-policies | RabbitMQ only |
 | `rbac` | Permission checks and policy | can, policy get/set | All |
 | `restores` | Recovery/clone inventory | create, list, get | All |
-| `settings` | Sign-in configuration | get, set-oidc | All |
+| `settings` | Control-plane configuration | get, set-oidc, agent-rollout get/set | All |
 | `storages` | S3 destination registration/probe | list, get, create, set, delete, verify | All |
 | `system-users` | Provider-managed identities | list, rotate | Provider-supported identities |
 | `supabase` | API credentials, SMTP and edge functions | credentials, smtp-password set, functions list/get/deploy/delete, rotate-jwt-secret | Supabase only |
@@ -111,6 +116,12 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `whoami` | Authenticated identity | — | All |
 
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
+
+`karactl clusters upgrade-agents NAME [--include-current] [--ignore-maintenance-window] [--wait] [--timeout 30m]` rolls out the current agent build without changing engine versions. `clusters get` shows `status.agents` target/outdated/unknown details; member output includes agent version/build. Current agents return HTTP 409 `AgentsCurrent` unless included explicitly. See [rolling out member agents](upgrade.md#rolling-out-member-agents).
+
+`karactl clusters members move NAME MEMBER [--ignore-maintenance-window] [--wait] [--timeout 30m]` requests native member replacement with the current host excluded on placement-capable backends. It asks for confirmation (`--yes` for automation). Nomad/Dokploy require another eligible node; Zerops is best-effort and provides no host guarantee. Unsupported targets and unknown authoritative placement are refused. Inspect `clusters placement NAME` and the returned operation; see [moving a member](operations.md#moving-a-member).
+
+`karactl settings agent-rollout get` shows rollout settings and read-only `currentBuild`. `settings agent-rollout set [--automatic=true|false] [--max-concurrent-clusters N]` replaces settings (defaults: off and 1; range 1–5). Automatic rollout considers outdated, not unknown/legacy agents.
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
 Neo4j user commands, CA trust and direct Bolt connection caveats are in [Neo4j access](neo4j/access-and-tls.md); the managed `neo4j` account uses `system-users rotate`, not native user mutations.
@@ -157,12 +168,21 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 
 | Command | Important flags |
 | --- | --- |
+| `notification-channels create/replace NAME` | create uses `--name`; `--type webhook\|slack\|email`, `--enabled`, repeatable `--category`/`--namespace`, or protected `-f` JSON/YAML; replace takes positional NAME |
+| `notification-channels create/replace` destinations | Webhook: `--url`, `--signing-secret-stdin`; Slack: `--webhook-url-stdin` (secret, never an argument); email: `--smtp-host`, `--smtp-port`, `--security starttls\|tls`, `--username`, `--password-stdin`, `--from`, repeatable `--to` |
+| `notification-channels test NAME` | Prints delivered/error; `-o json`/`-o yaml` retain structured result |
+| `control-plane backup-policy set` | `--enabled`, `--storage [namespace/]name`, `--schedule` (UTC, default `0 3 * * *`), `--retain-count` (1–1000, default 14), `-f`; replaces policy |
+| `control-plane backups list` | `--limit`, `--cursor`; `backups run` queues a manual run |
 | `clusters create [name]` | `-f`, `--provider` (psmdb), `--version`, `--backup-storage`, repeatable `--schedule 'NAME=CRON,type=TYPE,retain=COUNT[,storage=NAME]'`, `--source-namespace`, `--wait`, `--timeout` |
 | `clusters scale NAME` | `-f`, `--replicas`, CPU/RAM/disk `--min-*`/`--max-*`, `--start-cpu`, `--cpu-mode`, `--wait`, `--timeout`; topology/component flags are provider-specific |
 | `clusters patch NAME` | `-f`, `--wait`, `--timeout` |
 | `clusters delete NAME` | `--keep-volumes`, `--keep-backups` (both false unless supplied), `--yes`, `--wait`, `--timeout`; see [delete or suspend](clusters.md#delete-or-suspend) |
 | `backups create CLUSTER [NAME]` | `-f`, `--storage` (cluster default), `--type` (CLI default logical; choose the engine-supported type in [backup guidance](backups.md)) |
 | `backups list CLUSTER` | `--limit`, `--cursor` |
+| `backup-drills list CLUSTER` | `--limit`, `--cursor`; table includes ID, phase, backup, trigger, restore duration, data age and creation time |
+| `backup-drills get CLUSTER DRILL` | Checks, limitations, cleanup and error; `--wait`, `--timeout` (6h client default), `-o json/yaml` |
+| `backup-drills run CLUSTER` | `--backup NAME` (otherwise latest successful eligible backup), `-f`, `--wait`, `--timeout` (6h client default); timeout does not cancel server work |
+| `clusters create/patch` drill policy | `--drill-enabled`, `--drill-schedule` (UTC cron), `--drill-timeout` (server default 6h, range 30m–48h), `--drill-backup-schedule`; files remain authoritative; see [policy shape and scope](backup-drills.md#scheduled-policy) |
 | `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--acknowledge-bound-consumers`, `--yes` |
 | `namespaces create` | `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only); no `-f` |
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |

@@ -58,6 +58,30 @@ const (
 	BackupTypeSnapshot     BackupType = "snapshot"
 )
 
+// Defines values for BackupDrillPhase.
+const (
+	BackupDrillPhaseCleaningUp   BackupDrillPhase = "CleaningUp"
+	BackupDrillPhaseFailed       BackupDrillPhase = "Failed"
+	BackupDrillPhasePending      BackupDrillPhase = "Pending"
+	BackupDrillPhaseProvisioning BackupDrillPhase = "Provisioning"
+	BackupDrillPhaseRestoring    BackupDrillPhase = "Restoring"
+	BackupDrillPhaseSucceeded    BackupDrillPhase = "Succeeded"
+	BackupDrillPhaseVerifying    BackupDrillPhase = "Verifying"
+)
+
+// Defines values for BackupDrillTrigger.
+const (
+	BackupDrillTriggerManual   BackupDrillTrigger = "manual"
+	BackupDrillTriggerSchedule BackupDrillTrigger = "schedule"
+)
+
+// Defines values for BackupDrillCleanupPhase.
+const (
+	BackupDrillCleanupPhaseDone    BackupDrillCleanupPhase = "Done"
+	BackupDrillCleanupPhaseFailed  BackupDrillCleanupPhase = "Failed"
+	BackupDrillCleanupPhasePending BackupDrillCleanupPhase = "Pending"
+)
+
 // Defines values for BackupScheduleType.
 const (
 	BackupScheduleTypeDefinitions  BackupScheduleType = "definitions"
@@ -139,6 +163,20 @@ const (
 	ConditionStatusFalse   ConditionStatus = "False"
 	ConditionStatusTrue    ConditionStatus = "True"
 	ConditionStatusUnknown ConditionStatus = "Unknown"
+)
+
+// Defines values for ControlPlaneBackupPhase.
+const (
+	ControlPlaneBackupPhaseFailed    ControlPlaneBackupPhase = "Failed"
+	ControlPlaneBackupPhasePending   ControlPlaneBackupPhase = "Pending"
+	ControlPlaneBackupPhaseRunning   ControlPlaneBackupPhase = "Running"
+	ControlPlaneBackupPhaseSucceeded ControlPlaneBackupPhase = "Succeeded"
+)
+
+// Defines values for ControlPlaneBackupTrigger.
+const (
+	ControlPlaneBackupTriggerManual   ControlPlaneBackupTrigger = "manual"
+	ControlPlaneBackupTriggerSchedule ControlPlaneBackupTrigger = "schedule"
 )
 
 // Defines values for CreateBackupStorageRequestType.
@@ -244,6 +282,11 @@ const (
 	Ok HealthStatus = "ok"
 )
 
+// Defines values for ManagedByKind.
+const (
+	ManagedByKindBackupDrill ManagedByKind = "backup-drill"
+)
+
 // Defines values for MemberRole.
 const (
 	MemberRoleAnalytics       MemberRole = "analytics"
@@ -329,6 +372,34 @@ const (
 	NamespacePhaseReady    NamespacePhase = "Ready"
 )
 
+// Defines values for NotificationCategory.
+const (
+	NotificationCategoryAgentsOutdated             NotificationCategory = "agents-outdated"
+	NotificationCategoryBackupDrillFailed          NotificationCategory = "backup-drill-failed"
+	NotificationCategoryBackupFailed               NotificationCategory = "backup-failed"
+	NotificationCategoryCertificateExpiring        NotificationCategory = "certificate-expiring"
+	NotificationCategoryClusterDegraded            NotificationCategory = "cluster-degraded"
+	NotificationCategoryClusterRecovered           NotificationCategory = "cluster-recovered"
+	NotificationCategoryControlPlaneBackupFailed   NotificationCategory = "control-plane-backup-failed"
+	NotificationCategoryDeploymentRetriesExhausted NotificationCategory = "deployment-retries-exhausted"
+	NotificationCategoryMembersCoLocated           NotificationCategory = "members-co-located"
+	NotificationCategoryOperationFailed            NotificationCategory = "operation-failed"
+	NotificationCategoryVolumeDeletionRefused      NotificationCategory = "volume-deletion-refused"
+)
+
+// Defines values for NotificationChannelType.
+const (
+	NotificationChannelTypeEmail   NotificationChannelType = "email"
+	NotificationChannelTypeSlack   NotificationChannelType = "slack"
+	NotificationChannelTypeWebhook NotificationChannelType = "webhook"
+)
+
+// Defines values for NotificationEmailSecurity.
+const (
+	NotificationEmailSecurityStarttls NotificationEmailSecurity = "starttls"
+	NotificationEmailSecurityTls      NotificationEmailSecurity = "tls"
+)
+
 // Defines values for OpenBaoDatabaseConnectionPhase.
 const (
 	OpenBaoConnectionDeleting OpenBaoDatabaseConnectionPhase = "deleting"
@@ -391,6 +462,7 @@ const (
 	OperationTypeTls              OperationType = "tls"
 	OperationTypeUpdate           OperationType = "update"
 	OperationTypeUpgrade          OperationType = "upgrade"
+	OperationTypeUpgradeAgents    OperationType = "upgrade-agents"
 )
 
 // Defines values for PermissionEffect.
@@ -399,9 +471,11 @@ const (
 	Deny  PermissionEffect = "deny"
 )
 
-// Defines values for PlacementGuaranteedAntiAffinity.
+// Defines values for PlacementSource.
 const (
-	False PlacementGuaranteedAntiAffinity = false
+	PlacementSourceBackend     PlacementSource = "backend"
+	PlacementSourceBestEffort  PlacementSource = "best-effort"
+	PlacementSourceUnavailable PlacementSource = "unavailable"
 )
 
 // Defines values for PostgresGrantPrivileges.
@@ -778,8 +852,32 @@ type AccountName = string
 // AccountPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 type AccountPassword = string
 
+// AgentBuild defines model for AgentBuild.
+type AgentBuild struct {
+	Build   string `json:"build"`
+	Commit  string `json:"commit"`
+	Version string `json:"version"`
+}
+
+// AgentRolloutSettings defines model for AgentRolloutSettings.
+type AgentRolloutSettings struct {
+	Automatic             bool        `json:"automatic"`
+	CurrentBuild          *AgentBuild `json:"currentBuild,omitempty"`
+	MaxConcurrentClusters int         `json:"maxConcurrentClusters"`
+}
+
+// AgentRolloutStatus defines model for AgentRolloutStatus.
+type AgentRolloutStatus struct {
+	Outdated      []string `json:"outdated"`
+	TargetBuild   string   `json:"targetBuild"`
+	TargetVersion string   `json:"targetVersion"`
+	Unknown       []string `json:"unknown"`
+}
+
 // AgentStatus defines model for AgentStatus.
 type AgentStatus struct {
+	Build         *string    `json:"build,omitempty"`
+	Commit        *string    `json:"commit,omitempty"`
 	ConfigVersion *int64     `json:"configVersion,omitempty"`
 	Connected     bool       `json:"connected"`
 	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
@@ -846,6 +944,79 @@ type BackupTrigger string
 // BackupType defines model for Backup.Type.
 type BackupType string
 
+// BackupDrill defines model for BackupDrill.
+type BackupDrill struct {
+	Backup         *string             `json:"backup,omitempty"`
+	BackupType     *string             `json:"backupType,omitempty"`
+	Checks         *[]BackupDrillCheck `json:"checks,omitempty"`
+	Cleanup        *BackupDrillCleanup `json:"cleanup,omitempty"`
+	Cluster        string              `json:"cluster"`
+	CompletedAt    *time.Time          `json:"completedAt,omitempty"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	DataAgeSeconds *int64              `json:"dataAgeSeconds,omitempty"`
+	Error          *string             `json:"error,omitempty"`
+	Id             string              `json:"id"`
+	Limitations    *string             `json:"limitations,omitempty"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace              NamespaceName      `json:"namespace"`
+	Phase                  BackupDrillPhase   `json:"phase"`
+	ReadyAt                *time.Time         `json:"readyAt,omitempty"`
+	RestoreDurationSeconds *int64             `json:"restoreDurationSeconds,omitempty"`
+	StartedAt              *time.Time         `json:"startedAt,omitempty"`
+	TargetCluster          *string            `json:"targetCluster,omitempty"`
+	TotalDurationSeconds   *int64             `json:"totalDurationSeconds,omitempty"`
+	Trigger                BackupDrillTrigger `json:"trigger"`
+}
+
+// BackupDrillPhase defines model for BackupDrill.Phase.
+type BackupDrillPhase string
+
+// BackupDrillTrigger defines model for BackupDrill.Trigger.
+type BackupDrillTrigger string
+
+// BackupDrillCheck defines model for BackupDrillCheck.
+type BackupDrillCheck struct {
+	Message *string `json:"message,omitempty"`
+	Name    string  `json:"name"`
+	Passed  bool    `json:"passed"`
+}
+
+// BackupDrillCleanup defines model for BackupDrillCleanup.
+type BackupDrillCleanup struct {
+	OrphanedVolumes []string                `json:"orphanedVolumes"`
+	Phase           BackupDrillCleanupPhase `json:"phase"`
+}
+
+// BackupDrillCleanupPhase defines model for BackupDrillCleanup.Phase.
+type BackupDrillCleanupPhase string
+
+// BackupDrillList defines model for BackupDrillList.
+type BackupDrillList struct {
+	Items      []BackupDrill `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// BackupDrillPolicy defines model for BackupDrillPolicy.
+type BackupDrillPolicy struct {
+	BackupSchedule *string `json:"backupSchedule,omitempty"`
+	Enabled        bool    `json:"enabled"`
+	Schedule       string  `json:"schedule"`
+
+	// Timeout Go duration between 30m and 48h.
+	Timeout *string `json:"timeout,omitempty"`
+}
+
+// BackupDrillPolicyPatch defines model for BackupDrillPolicyPatch.
+type BackupDrillPolicyPatch struct {
+	BackupSchedule *string `json:"backupSchedule"`
+	Enabled        *bool   `json:"enabled"`
+	Schedule       *string `json:"schedule"`
+
+	// Timeout Go duration between 30m and 48h.
+	Timeout *string `json:"timeout"`
+}
+
 // BackupList defines model for BackupList.
 type BackupList struct {
 	Items []Backup `json:"items"`
@@ -886,13 +1057,15 @@ type BackupScheduleInputType string
 
 // BackupSpec defines model for BackupSpec.
 type BackupSpec struct {
-	Pitr      *PITRSpec         `json:"pitr,omitempty"`
-	Schedules *[]BackupSchedule `json:"schedules,omitempty"`
-	Storage   *string           `json:"storage,omitempty"`
+	Drill     *BackupDrillPolicy `json:"drill,omitempty"`
+	Pitr      *PITRSpec          `json:"pitr,omitempty"`
+	Schedules *[]BackupSchedule  `json:"schedules,omitempty"`
+	Storage   *string            `json:"storage,omitempty"`
 }
 
 // BackupSpecInput defines model for BackupSpecInput.
 type BackupSpecInput struct {
+	Drill     *BackupDrillPolicy     `json:"drill,omitempty"`
 	Pitr      *PITRSpec              `json:"pitr,omitempty"`
 	Schedules *[]BackupScheduleInput `json:"schedules,omitempty"`
 	Storage   *string                `json:"storage,omitempty"`
@@ -900,9 +1073,10 @@ type BackupSpecInput struct {
 
 // BackupSpecPatch defines model for BackupSpecPatch.
 type BackupSpecPatch struct {
-	Pitr      *PITRSpecPatch         `json:"pitr"`
-	Schedules *[]BackupScheduleInput `json:"schedules"`
-	Storage   *string                `json:"storage"`
+	Drill     *BackupDrillPolicyPatch `json:"drill"`
+	Pitr      *PITRSpecPatch          `json:"pitr"`
+	Schedules *[]BackupScheduleInput  `json:"schedules"`
+	Storage   *string                 `json:"storage"`
 }
 
 // BackupStorage defines model for BackupStorage.
@@ -976,6 +1150,7 @@ type ChangePasswordRequest struct {
 type Cluster struct {
 	CreatedAt  time.Time      `json:"createdAt"`
 	Generation int64          `json:"generation"`
+	ManagedBy  *ManagedBy     `json:"managedBy,omitempty"`
 	Name       string         `json:"name"`
 	Namespace  *NamespaceName `json:"namespace,omitempty"`
 
@@ -1009,6 +1184,7 @@ type ClusterInputSpec struct {
 	EngineConfig  *string                 `json:"engineConfig,omitempty"`
 	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
 	Exposure      *ExposureInput          `json:"exposure,omitempty"`
+	Maintenance   *MaintenancePolicy      `json:"maintenance,omitempty"`
 	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -1055,6 +1231,7 @@ type ClusterPatchSpec struct {
 	EngineConfig  *string                 `json:"engineConfig"`
 	EngineOptions *map[string]interface{} `json:"engineOptions"`
 	Exposure      *ExposurePatch          `json:"exposure"`
+	Maintenance   *MaintenancePolicyPatch `json:"maintenance"`
 	Monitoring    *MonitoringSpecPatch    `json:"monitoring"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -1081,6 +1258,7 @@ type ClusterSpec struct {
 	EngineConfig  *string                 `json:"engineConfig,omitempty"`
 	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
 	Exposure      *Exposure               `json:"exposure,omitempty"`
+	Maintenance   *MaintenancePolicy      `json:"maintenance,omitempty"`
 	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -1097,11 +1275,13 @@ type ClusterSpec struct {
 
 // ClusterStatus defines model for ClusterStatus.
 type ClusterStatus struct {
+	Agents             *AgentRolloutStatus  `json:"agents,omitempty"`
 	Backup             *ClusterBackupStatus `json:"backup,omitempty"`
 	Conditions         []Condition          `json:"conditions"`
 	Connection         *ConnectionSummary   `json:"connection,omitempty"`
 	DataMcp            *DataMcpStatus       `json:"dataMcp,omitempty"`
 	Fcv                *string              `json:"fcv,omitempty"`
+	Maintenance        *MaintenanceStatus   `json:"maintenance,omitempty"`
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
@@ -1109,7 +1289,7 @@ type ClusterStatus struct {
 	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 	Phase ClusterStatusPhase `json:"phase"`
 
-	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
+	// Placement Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct.
 	Placement *Placement `json:"placement,omitempty"`
 
 	// Version Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
@@ -1217,6 +1397,52 @@ type ConnectionSummary struct {
 	Uri string `json:"uri"`
 }
 
+// ControlPlaneBackup defines model for ControlPlaneBackup.
+type ControlPlaneBackup struct {
+	CompletedAt      *time.Time                `json:"completedAt,omitempty"`
+	CreatedAt        time.Time                 `json:"createdAt"`
+	Error            *string                   `json:"error,omitempty"`
+	Id               string                    `json:"id"`
+	KarakoramVersion *string                   `json:"karakoramVersion,omitempty"`
+	KeyFingerprint   *string                   `json:"keyFingerprint,omitempty"`
+	ObjectKey        *string                   `json:"objectKey,omitempty"`
+	Phase            ControlPlaneBackupPhase   `json:"phase"`
+	SchemaVersion    *string                   `json:"schemaVersion,omitempty"`
+	Sha256           *string                   `json:"sha256,omitempty"`
+	SizeBytes        *int64                    `json:"sizeBytes,omitempty"`
+	StartedAt        *time.Time                `json:"startedAt,omitempty"`
+	Storage          ControlPlaneBackupStorage `json:"storage"`
+	Trigger          ControlPlaneBackupTrigger `json:"trigger"`
+}
+
+// ControlPlaneBackupPhase defines model for ControlPlaneBackup.Phase.
+type ControlPlaneBackupPhase string
+
+// ControlPlaneBackupTrigger defines model for ControlPlaneBackup.Trigger.
+type ControlPlaneBackupTrigger string
+
+// ControlPlaneBackupList defines model for ControlPlaneBackupList.
+type ControlPlaneBackupList struct {
+	Items      []ControlPlaneBackup `json:"items"`
+	NextCursor *string              `json:"nextCursor,omitempty"`
+}
+
+// ControlPlaneBackupPolicy defines model for ControlPlaneBackupPolicy.
+type ControlPlaneBackupPolicy struct {
+	Enabled     bool                      `json:"enabled"`
+	RetainCount int                       `json:"retainCount"`
+	Schedule    string                    `json:"schedule"`
+	Storage     ControlPlaneBackupStorage `json:"storage"`
+}
+
+// ControlPlaneBackupStorage defines model for ControlPlaneBackupStorage.
+type ControlPlaneBackupStorage struct {
+	Name string `json:"name"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace NamespaceName `json:"namespace"`
+}
+
 // CreateAPITokenRequest defines model for CreateAPITokenRequest.
 type CreateAPITokenRequest struct {
 	// ExpiresAt Optional RFC 3339 timestamp, strictly in the future.
@@ -1239,6 +1465,11 @@ type CreateAccountRequest struct {
 
 	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 	Password *AccountPassword `json:"password,omitempty"`
+}
+
+// CreateBackupDrillRequest defines model for CreateBackupDrillRequest.
+type CreateBackupDrillRequest struct {
+	Backup *string `json:"backup,omitempty"`
 }
 
 // CreateBackupRequest defines model for CreateBackupRequest.
@@ -1813,6 +2044,46 @@ type LoginRequest struct {
 	Username string  `json:"username"`
 }
 
+// MaintenancePolicy defines model for MaintenancePolicy.
+type MaintenancePolicy struct {
+	// TimeZone IANA time zone.
+	TimeZone *string              `json:"timeZone,omitempty"`
+	Windows  *[]MaintenanceWindow `json:"windows,omitempty"`
+}
+
+// MaintenancePolicyPatch defines model for MaintenancePolicyPatch.
+type MaintenancePolicyPatch struct {
+	// TimeZone IANA time zone.
+	TimeZone *string              `json:"timeZone"`
+	Windows  *[]MaintenanceWindow `json:"windows"`
+}
+
+// MaintenanceStatus defines model for MaintenanceStatus.
+type MaintenanceStatus struct {
+	CurrentWindowEnd *time.Time `json:"currentWindowEnd,omitempty"`
+	NextWindowStart  *time.Time `json:"nextWindowStart,omitempty"`
+	Open             bool       `json:"open"`
+}
+
+// MaintenanceWindow defines model for MaintenanceWindow.
+type MaintenanceWindow struct {
+	// Duration Go duration between 15m and 168h.
+	Duration string `json:"duration"`
+
+	// Schedule Five-field cron expression specifying window start times.
+	Schedule string `json:"schedule"`
+}
+
+// ManagedBy defines model for ManagedBy.
+type ManagedBy struct {
+	Cluster string        `json:"cluster"`
+	Id      string        `json:"id"`
+	Kind    ManagedByKind `json:"kind"`
+}
+
+// ManagedByKind defines model for ManagedBy.Kind.
+type ManagedByKind string
+
 // Member defines model for Member.
 type Member struct {
 	Agent *AgentStatus `json:"agent,omitempty"`
@@ -2101,6 +2372,81 @@ type Neo4jUserPasswordChanged struct {
 	GeneratedPassword *string `json:"generatedPassword,omitempty"`
 }
 
+// NotificationCategory defines model for NotificationCategory.
+type NotificationCategory string
+
+// NotificationChannel defines model for NotificationChannel.
+type NotificationChannel struct {
+	// Categories Empty means all categories.
+	Categories *[]NotificationCategory `json:"categories,omitempty"`
+	CreatedAt  *time.Time              `json:"createdAt,omitempty"`
+	Email      *NotificationEmail      `json:"email,omitempty"`
+	Enabled    bool                    `json:"enabled"`
+	Name       string                  `json:"name"`
+
+	// Namespaces Empty means all namespaces, including installation-wide events.
+	Namespaces *[]string                  `json:"namespaces,omitempty"`
+	Slack      *NotificationSlack         `json:"slack,omitempty"`
+	Status     *NotificationChannelStatus `json:"status,omitempty"`
+	Type       NotificationChannelType    `json:"type"`
+	UpdatedAt  *time.Time                 `json:"updatedAt,omitempty"`
+	Webhook    *NotificationWebhook       `json:"webhook,omitempty"`
+}
+
+// NotificationChannelType defines model for NotificationChannel.Type.
+type NotificationChannelType string
+
+// NotificationChannelList defines model for NotificationChannelList.
+type NotificationChannelList struct {
+	Items      []NotificationChannel `json:"items"`
+	NextCursor *string               `json:"nextCursor,omitempty"`
+}
+
+// NotificationChannelStatus defines model for NotificationChannelStatus.
+type NotificationChannelStatus struct {
+	Failed         *int64     `json:"failed,omitempty"`
+	LastDeliveryAt *time.Time `json:"lastDeliveryAt,omitempty"`
+	LastError      *string    `json:"lastError,omitempty"`
+	LastErrorAt    *time.Time `json:"lastErrorAt,omitempty"`
+	Pending        *int64     `json:"pending,omitempty"`
+}
+
+// NotificationEmail defines model for NotificationEmail.
+type NotificationEmail struct {
+	From               string                    `json:"from"`
+	Host               string                    `json:"host"`
+	Password           *string                   `json:"password,omitempty"`
+	PasswordConfigured *bool                     `json:"passwordConfigured,omitempty"`
+	Port               int                       `json:"port"`
+	Security           NotificationEmailSecurity `json:"security"`
+	To                 []string                  `json:"to"`
+	Username           *string                   `json:"username,omitempty"`
+}
+
+// NotificationEmailSecurity defines model for NotificationEmail.Security.
+type NotificationEmailSecurity string
+
+// NotificationSlack defines model for NotificationSlack.
+type NotificationSlack struct {
+	WebhookUrl           *string `json:"webhookUrl,omitempty"`
+	WebhookUrlConfigured *bool   `json:"webhookUrlConfigured,omitempty"`
+}
+
+// NotificationTestResult defines model for NotificationTestResult.
+type NotificationTestResult struct {
+	Delivered bool    `json:"delivered"`
+	Error     *string `json:"error,omitempty"`
+}
+
+// NotificationWebhook defines model for NotificationWebhook.
+type NotificationWebhook struct {
+	Host                    *string `json:"host,omitempty"`
+	SigningSecret           *string `json:"signingSecret,omitempty"`
+	SigningSecretConfigured *bool   `json:"signingSecretConfigured,omitempty"`
+	Url                     *string `json:"url,omitempty"`
+	UrlConfigured           *bool   `json:"urlConfigured,omitempty"`
+}
+
 // OAuthGrant defines model for OAuthGrant.
 type OAuthGrant struct {
 	ClientHost string     `json:"clientHost"`
@@ -2340,15 +2686,16 @@ type Permissions struct {
 	Subject     string       `json:"subject"`
 }
 
-// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
+// Placement Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct.
 type Placement struct {
-	Groups                 []PlacementGroup                `json:"groups"`
-	GuaranteedAntiAffinity PlacementGuaranteedAntiAffinity `json:"guaranteedAntiAffinity"`
-	Warning                string                          `json:"warning"`
+	Groups                 []PlacementGroup `json:"groups"`
+	GuaranteedAntiAffinity bool             `json:"guaranteedAntiAffinity"`
+	Source                 *PlacementSource `json:"source,omitempty"`
+	Warning                string           `json:"warning"`
 }
 
-// PlacementGuaranteedAntiAffinity defines model for Placement.GuaranteedAntiAffinity.
-type PlacementGuaranteedAntiAffinity bool
+// PlacementSource defines model for Placement.Source.
+type PlacementSource string
 
 // PlacementGroup defines model for PlacementGroup.
 type PlacementGroup struct {
@@ -3123,6 +3470,11 @@ type UpdateDatabaseUserRequest struct {
 	Roles    []RoleReference `json:"roles"`
 }
 
+// UpgradeAgentsRequest defines model for UpgradeAgentsRequest.
+type UpgradeAgentsRequest struct {
+	IncludeCurrent *bool `json:"includeCurrent,omitempty"`
+}
+
 // UpgradePath defines model for UpgradePath.
 type UpgradePath struct {
 	From string `json:"from"`
@@ -3307,6 +3659,9 @@ type Cursor = string
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
+// IgnoreMaintenanceWindow defines model for IgnoreMaintenanceWindow.
+type IgnoreMaintenanceWindow = bool
+
 // Limit defines model for Limit.
 type Limit = int
 
@@ -3351,6 +3706,12 @@ type MethodNotAllowed = Error
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type NotFound = Error
+
+// NotImplemented Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type NotImplemented = Error
 
 // PayloadTooLarge Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -3648,6 +4009,9 @@ type GetClusterParams struct {
 
 // PatchClusterParams defines parameters for PatchCluster.
 type PatchClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -3672,6 +4036,9 @@ type PatchClusterParams struct {
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
 type ReplaceClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -3716,6 +4083,48 @@ type RebalancePostgresParams struct {
 	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
 	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListBackupDrillsParams defines parameters for ListBackupDrills.
+type ListBackupDrillsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateBackupDrillParams defines parameters for CreateBackupDrill.
+type CreateBackupDrillParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetBackupDrillParams defines parameters for GetBackupDrill.
+type GetBackupDrillParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListBackupsParams defines parameters for ListBackups.
@@ -4158,8 +4567,38 @@ type GetMemberLogsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// MoveClusterMemberParams defines parameters for MoveClusterMember.
+type MoveClusterMemberParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -5183,6 +5622,9 @@ type ReplaceRabbitMQVhostParams struct {
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -5207,6 +5649,9 @@ type RaiseClusterFCVParams struct {
 
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -5321,6 +5766,9 @@ type RetryClusterDeploymentsParams struct {
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -5532,6 +5980,33 @@ type SetTemporalUIOIDCClientSecretParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// UpgradeClusterAgentsParams defines parameters for UpgradeClusterAgents.
+type UpgradeClusterAgentsParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListWeaviateRolesParams defines parameters for ListWeaviateRoles.
 type ListWeaviateRolesParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5675,6 +6150,57 @@ type RotateWeaviateUserKeyParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateControlPlaneBackupPolicyParams defines parameters for UpdateControlPlaneBackupPolicy.
+type UpdateControlPlaneBackupPolicyParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListControlPlaneBackupsParams defines parameters for ListControlPlaneBackups.
+type ListControlPlaneBackupsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateControlPlaneBackupParams defines parameters for CreateControlPlaneBackup.
+type CreateControlPlaneBackupParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
@@ -5855,6 +6381,99 @@ type ValidateNamespaceParams struct {
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// ListNotificationChannelsParams defines parameters for ListNotificationChannels.
+type ListNotificationChannelsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNotificationChannelParams defines parameters for CreateNotificationChannel.
+type CreateNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteNotificationChannelParams defines parameters for DeleteNotificationChannel.
+type DeleteNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReplaceNotificationChannelParams defines parameters for ReplaceNotificationChannel.
+type ReplaceNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// TestNotificationChannelParams defines parameters for TestNotificationChannel.
+type TestNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // DeleteOAuthGrantParams defines parameters for DeleteOAuthGrant.
 type DeleteOAuthGrantParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -5905,6 +6524,27 @@ type ReplaceSettingsParams struct {
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// UpdateAgentRolloutSettingsParams defines parameters for UpdateAgentRolloutSettings.
+type UpdateAgentRolloutSettingsParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
@@ -5943,6 +6583,9 @@ type ReplaceClusterJSONRequestBody = ReplaceClusterRequest
 
 // RebalancePostgresJSONRequestBody defines body for RebalancePostgres for application/json ContentType.
 type RebalancePostgresJSONRequestBody = RebalanceRequest
+
+// CreateBackupDrillJSONRequestBody defines body for CreateBackupDrill for application/json ContentType.
+type CreateBackupDrillJSONRequestBody = CreateBackupDrillRequest
 
 // CreateBackupJSONRequestBody defines body for CreateBackup for application/json ContentType.
 type CreateBackupJSONRequestBody = CreateBackupRequest
@@ -6082,6 +6725,9 @@ type IssueTemporalClientCertificateJSONRequestBody = TemporalClientCertificateRe
 // SetTemporalUIOIDCClientSecretJSONRequestBody defines body for SetTemporalUIOIDCClientSecret for application/json ContentType.
 type SetTemporalUIOIDCClientSecretJSONRequestBody = TemporalUIOIDCClientSecret
 
+// UpgradeClusterAgentsJSONRequestBody defines body for UpgradeClusterAgents for application/json ContentType.
+type UpgradeClusterAgentsJSONRequestBody = UpgradeAgentsRequest
+
 // CreateWeaviateRoleJSONRequestBody defines body for CreateWeaviateRole for application/json ContentType.
 type CreateWeaviateRoleJSONRequestBody = WeaviateRole
 
@@ -6093,6 +6739,9 @@ type CreateWeaviateUserJSONRequestBody = WeaviateUserCreate
 
 // UpdateWeaviateUserJSONRequestBody defines body for UpdateWeaviateUser for application/json ContentType.
 type UpdateWeaviateUserJSONRequestBody = WeaviateUserUpdate
+
+// UpdateControlPlaneBackupPolicyJSONRequestBody defines body for UpdateControlPlaneBackupPolicy for application/json ContentType.
+type UpdateControlPlaneBackupPolicyJSONRequestBody = ControlPlaneBackupPolicy
 
 // DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
 type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
@@ -6115,6 +6764,12 @@ type UpdateNamespaceJSONRequestBody = NamespaceUpdate
 // RotateNamespaceTokenJSONRequestBody defines body for RotateNamespaceToken for application/json ContentType.
 type RotateNamespaceTokenJSONRequestBody = NamespaceTokenRotate
 
+// CreateNotificationChannelJSONRequestBody defines body for CreateNotificationChannel for application/json ContentType.
+type CreateNotificationChannelJSONRequestBody = NotificationChannel
+
+// ReplaceNotificationChannelJSONRequestBody defines body for ReplaceNotificationChannel for application/json ContentType.
+type ReplaceNotificationChannelJSONRequestBody = NotificationChannel
+
 // CheckPermissionJSONRequestBody defines body for CheckPermission for application/json ContentType.
 type CheckPermissionJSONRequestBody = CanRequest
 
@@ -6123,6 +6778,9 @@ type ReplaceRBACPolicyJSONRequestBody = RBACPolicy
 
 // ReplaceSettingsJSONRequestBody defines body for ReplaceSettings for application/json ContentType.
 type ReplaceSettingsJSONRequestBody = Settings
+
+// UpdateAgentRolloutSettingsJSONRequestBody defines body for UpdateAgentRolloutSettings for application/json ContentType.
+type UpdateAgentRolloutSettingsJSONRequestBody = AgentRolloutSettings
 
 // Getter for additional properties for EventDetails. Returns the specified
 // element and whether it was found
@@ -7665,6 +8323,17 @@ type ClientInterface interface {
 
 	RebalancePostgres(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListBackupDrills request
+	ListBackupDrills(ctx context.Context, cluster ClusterPath, params *ListBackupDrillsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateBackupDrillWithBody request with any body
+	CreateBackupDrillWithBody(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateBackupDrill(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, body CreateBackupDrillJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetBackupDrill request
+	GetBackupDrill(ctx context.Context, cluster ClusterPath, drill string, params *GetBackupDrillParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListBackups request
 	ListBackups(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -7785,6 +8454,9 @@ type ClientInterface interface {
 
 	// GetMemberLogs request
 	GetMemberLogs(ctx context.Context, cluster ClusterPath, member string, params *GetMemberLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// MoveClusterMember request
+	MoveClusterMember(ctx context.Context, cluster ClusterPath, member string, params *MoveClusterMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReplaceClusterMember request
 	ReplaceClusterMember(ctx context.Context, cluster ClusterPath, member string, params *ReplaceClusterMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8153,6 +8825,11 @@ type ClientInterface interface {
 
 	SetTemporalUIOIDCClientSecret(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpgradeClusterAgentsWithBody request with any body
+	UpgradeClusterAgentsWithBody(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpgradeClusterAgents(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, body UpgradeClusterAgentsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListWeaviateRoles request
 	ListWeaviateRoles(ctx context.Context, cluster ClusterPath, params *ListWeaviateRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -8193,6 +8870,20 @@ type ClientInterface interface {
 
 	// RotateWeaviateUserKey request
 	RotateWeaviateUserKey(ctx context.Context, cluster ClusterPath, user string, params *RotateWeaviateUserKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetControlPlaneBackupPolicy request
+	GetControlPlaneBackupPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateControlPlaneBackupPolicyWithBody request with any body
+	UpdateControlPlaneBackupPolicyWithBody(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateControlPlaneBackupPolicy(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, body UpdateControlPlaneBackupPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListControlPlaneBackups request
+	ListControlPlaneBackups(ctx context.Context, params *ListControlPlaneBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateControlPlaneBackup request
+	CreateControlPlaneBackup(ctx context.Context, params *CreateControlPlaneBackupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DryRunCreateClusterWithBody request with any body
 	DryRunCreateClusterWithBody(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8253,6 +8944,28 @@ type ClientInterface interface {
 	// ValidateNamespace request
 	ValidateNamespace(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListNotificationChannels request
+	ListNotificationChannels(ctx context.Context, params *ListNotificationChannelsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateNotificationChannelWithBody request with any body
+	CreateNotificationChannelWithBody(ctx context.Context, params *CreateNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateNotificationChannel(ctx context.Context, params *CreateNotificationChannelParams, body CreateNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteNotificationChannel request
+	DeleteNotificationChannel(ctx context.Context, channel string, params *DeleteNotificationChannelParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetNotificationChannel request
+	GetNotificationChannel(ctx context.Context, channel string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceNotificationChannelWithBody request with any body
+	ReplaceNotificationChannelWithBody(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceNotificationChannel(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, body ReplaceNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestNotificationChannel request
+	TestNotificationChannel(ctx context.Context, channel string, params *TestNotificationChannelParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListOAuthGrants request
 	ListOAuthGrants(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -8303,6 +9016,14 @@ type ClientInterface interface {
 	ReplaceSettingsWithBody(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReplaceSettings(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentRolloutSettings request
+	GetAgentRolloutSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentRolloutSettingsWithBody request with any body
+	UpdateAgentRolloutSettingsWithBody(ctx context.Context, params *UpdateAgentRolloutSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentRolloutSettings(ctx context.Context, params *UpdateAgentRolloutSettingsParams, body UpdateAgentRolloutSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVersion request
 	GetVersion(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8848,6 +9569,54 @@ func (c *Client) RebalancePostgres(ctx context.Context, cluster ClusterPath, par
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListBackupDrills(ctx context.Context, cluster ClusterPath, params *ListBackupDrillsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBackupDrillsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBackupDrillWithBody(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBackupDrillRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateBackupDrill(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, body CreateBackupDrillJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateBackupDrillRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetBackupDrill(ctx context.Context, cluster ClusterPath, drill string, params *GetBackupDrillParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBackupDrillRequest(c.Server, cluster, drill, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListBackups(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListBackupsRequest(c.Server, cluster, params)
 	if err != nil {
@@ -9366,6 +10135,18 @@ func (c *Client) GetClusterMember(ctx context.Context, cluster ClusterPath, memb
 
 func (c *Client) GetMemberLogs(ctx context.Context, cluster ClusterPath, member string, params *GetMemberLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMemberLogsRequest(c.Server, cluster, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) MoveClusterMember(ctx context.Context, cluster ClusterPath, member string, params *MoveClusterMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMoveClusterMemberRequest(c.Server, cluster, member, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10984,6 +11765,30 @@ func (c *Client) SetTemporalUIOIDCClientSecret(ctx context.Context, cluster Clus
 	return c.Client.Do(req)
 }
 
+func (c *Client) UpgradeClusterAgentsWithBody(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpgradeClusterAgentsRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpgradeClusterAgents(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, body UpgradeClusterAgentsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpgradeClusterAgentsRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListWeaviateRoles(ctx context.Context, cluster ClusterPath, params *ListWeaviateRolesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListWeaviateRolesRequest(c.Server, cluster, params)
 	if err != nil {
@@ -11154,6 +11959,66 @@ func (c *Client) UpdateWeaviateUser(ctx context.Context, cluster ClusterPath, us
 
 func (c *Client) RotateWeaviateUserKey(ctx context.Context, cluster ClusterPath, user string, params *RotateWeaviateUserKeyParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRotateWeaviateUserKeyRequest(c.Server, cluster, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetControlPlaneBackupPolicy(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetControlPlaneBackupPolicyRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateControlPlaneBackupPolicyWithBody(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateControlPlaneBackupPolicyRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateControlPlaneBackupPolicy(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, body UpdateControlPlaneBackupPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateControlPlaneBackupPolicyRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListControlPlaneBackups(ctx context.Context, params *ListControlPlaneBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListControlPlaneBackupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateControlPlaneBackup(ctx context.Context, params *CreateControlPlaneBackupParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateControlPlaneBackupRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -11428,6 +12293,102 @@ func (c *Client) ValidateNamespace(ctx context.Context, namespace NamespacePath,
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListNotificationChannels(ctx context.Context, params *ListNotificationChannelsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListNotificationChannelsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateNotificationChannelWithBody(ctx context.Context, params *CreateNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNotificationChannelRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateNotificationChannel(ctx context.Context, params *CreateNotificationChannelParams, body CreateNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateNotificationChannelRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteNotificationChannel(ctx context.Context, channel string, params *DeleteNotificationChannelParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteNotificationChannelRequest(c.Server, channel, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetNotificationChannel(ctx context.Context, channel string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetNotificationChannelRequest(c.Server, channel)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceNotificationChannelWithBody(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceNotificationChannelRequestWithBody(c.Server, channel, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceNotificationChannel(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, body ReplaceNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceNotificationChannelRequest(c.Server, channel, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) TestNotificationChannel(ctx context.Context, channel string, params *TestNotificationChannelParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestNotificationChannelRequest(c.Server, channel, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListOAuthGrants(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListOAuthGrantsRequest(c.Server)
 	if err != nil {
@@ -11634,6 +12595,42 @@ func (c *Client) ReplaceSettingsWithBody(ctx context.Context, params *ReplaceSet
 
 func (c *Client) ReplaceSettings(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplaceSettingsRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentRolloutSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentRolloutSettingsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentRolloutSettingsWithBody(ctx context.Context, params *UpdateAgentRolloutSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRolloutSettingsRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentRolloutSettings(ctx context.Context, params *UpdateAgentRolloutSettingsParams, body UpdateAgentRolloutSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentRolloutSettingsRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -13454,6 +14451,22 @@ func NewPatchClusterRequestWithBody(server string, cluster ClusterPath, params *
 	if params != nil {
 		queryValues := queryURL.Query()
 
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		if params.Namespace != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
@@ -13548,6 +14561,22 @@ func NewReplaceClusterRequestWithBody(server string, cluster ClusterPath, params
 
 	if params != nil {
 		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
 
 		if params.Namespace != nil {
 
@@ -13694,6 +14723,252 @@ func NewRebalancePostgresRequestWithBody(server string, cluster ClusterPath, par
 			req.Header.Set("Idempotency-Key", headerParam1)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewListBackupDrillsRequest generates requests for ListBackupDrills
+func NewListBackupDrillsRequest(server string, cluster ClusterPath, params *ListBackupDrillsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/backup-drills", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateBackupDrillRequest calls the generic CreateBackupDrill builder with application/json body
+func NewCreateBackupDrillRequest(server string, cluster ClusterPath, params *CreateBackupDrillParams, body CreateBackupDrillJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateBackupDrillRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateBackupDrillRequestWithBody generates requests for CreateBackupDrill with any type of body
+func NewCreateBackupDrillRequestWithBody(server string, cluster ClusterPath, params *CreateBackupDrillParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/backup-drills", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetBackupDrillRequest generates requests for GetBackupDrill
+func NewGetBackupDrillRequest(server string, cluster ClusterPath, drill string, params *GetBackupDrillParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "drill", runtime.ParamLocationPath, drill)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/backup-drills/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -16472,6 +17747,111 @@ func NewGetMemberLogsRequest(server string, cluster ClusterPath, member string, 
 	return req, nil
 }
 
+// NewMoveClusterMemberRequest generates requests for MoveClusterMember
+func NewMoveClusterMemberRequest(server string, cluster ClusterPath, member string, params *MoveClusterMemberParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "member", runtime.ParamLocationPath, member)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/members/%s/move", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewReplaceClusterMemberRequest generates requests for ReplaceClusterMember
 func NewReplaceClusterMemberRequest(server string, cluster ClusterPath, member string, params *ReplaceClusterMemberParams) (*http.Request, error) {
 	var err error
@@ -16507,6 +17887,22 @@ func NewReplaceClusterMemberRequest(server string, cluster ClusterPath, member s
 
 	if params != nil {
 		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
 
 		if params.Namespace != nil {
 
@@ -22630,6 +24026,22 @@ func NewRaiseClusterFCVRequestWithBody(server string, cluster ClusterPath, param
 	if params != nil {
 		queryValues := queryURL.Query()
 
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
 		if params.Namespace != nil {
 
 			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
@@ -22713,6 +24125,22 @@ func NewRestartClusterRequest(server string, cluster ClusterPath, params *Restar
 
 	if params != nil {
 		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
 
 		if params.Namespace != nil {
 
@@ -23205,6 +24633,22 @@ func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *Rota
 
 	if params != nil {
 		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
 
 		if params.Namespace != nil {
 
@@ -24361,6 +25805,117 @@ func NewSetTemporalUIOIDCClientSecretRequestWithBody(server string, cluster Clus
 	return req, nil
 }
 
+// NewUpgradeClusterAgentsRequest calls the generic UpgradeClusterAgents builder with application/json body
+func NewUpgradeClusterAgentsRequest(server string, cluster ClusterPath, params *UpgradeClusterAgentsParams, body UpgradeClusterAgentsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpgradeClusterAgentsRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewUpgradeClusterAgentsRequestWithBody generates requests for UpgradeClusterAgents with any type of body
+func NewUpgradeClusterAgentsRequestWithBody(server string, cluster ClusterPath, params *UpgradeClusterAgentsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/upgrade-agents", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.IgnoreMaintenanceWindow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "ignoreMaintenanceWindow", runtime.ParamLocationQuery, *params.IgnoreMaintenanceWindow); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListWeaviateRolesRequest generates requests for ListWeaviateRoles
 func NewListWeaviateRolesRequest(server string, cluster ClusterPath, params *ListWeaviateRolesParams) (*http.Request, error) {
 	var err error
@@ -25202,6 +26757,217 @@ func NewRotateWeaviateUserKeyRequest(server string, cluster ClusterPath, user st
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetControlPlaneBackupPolicyRequest generates requests for GetControlPlaneBackupPolicy
+func NewGetControlPlaneBackupPolicyRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control-plane/backup-policy")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateControlPlaneBackupPolicyRequest calls the generic UpdateControlPlaneBackupPolicy builder with application/json body
+func NewUpdateControlPlaneBackupPolicyRequest(server string, params *UpdateControlPlaneBackupPolicyParams, body UpdateControlPlaneBackupPolicyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateControlPlaneBackupPolicyRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewUpdateControlPlaneBackupPolicyRequestWithBody generates requests for UpdateControlPlaneBackupPolicy with any type of body
+func NewUpdateControlPlaneBackupPolicyRequestWithBody(server string, params *UpdateControlPlaneBackupPolicyParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control-plane/backup-policy")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListControlPlaneBackupsRequest generates requests for ListControlPlaneBackups
+func NewListControlPlaneBackupsRequest(server string, params *ListControlPlaneBackupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control-plane/backups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateControlPlaneBackupRequest generates requests for CreateControlPlaneBackup
+func NewCreateControlPlaneBackupRequest(server string, params *CreateControlPlaneBackupParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/control-plane/backups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), nil)
@@ -26367,6 +28133,364 @@ func NewValidateNamespaceRequest(server string, namespace NamespacePath, params 
 	return req, nil
 }
 
+// NewListNotificationChannelsRequest generates requests for ListNotificationChannels
+func NewListNotificationChannelsRequest(server string, params *ListNotificationChannelsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "cursor", runtime.ParamLocationQuery, *params.Cursor); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateNotificationChannelRequest calls the generic CreateNotificationChannel builder with application/json body
+func NewCreateNotificationChannelRequest(server string, params *CreateNotificationChannelParams, body CreateNotificationChannelJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateNotificationChannelRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateNotificationChannelRequestWithBody generates requests for CreateNotificationChannel with any type of body
+func NewCreateNotificationChannelRequestWithBody(server string, params *CreateNotificationChannelParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteNotificationChannelRequest generates requests for DeleteNotificationChannel
+func NewDeleteNotificationChannelRequest(server string, channel string, params *DeleteNotificationChannelParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "channel", runtime.ParamLocationPath, channel)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetNotificationChannelRequest generates requests for GetNotificationChannel
+func NewGetNotificationChannelRequest(server string, channel string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "channel", runtime.ParamLocationPath, channel)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceNotificationChannelRequest calls the generic ReplaceNotificationChannel builder with application/json body
+func NewReplaceNotificationChannelRequest(server string, channel string, params *ReplaceNotificationChannelParams, body ReplaceNotificationChannelJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceNotificationChannelRequestWithBody(server, channel, params, "application/json", bodyReader)
+}
+
+// NewReplaceNotificationChannelRequestWithBody generates requests for ReplaceNotificationChannel with any type of body
+func NewReplaceNotificationChannelRequestWithBody(server string, channel string, params *ReplaceNotificationChannelParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "channel", runtime.ParamLocationPath, channel)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewTestNotificationChannelRequest generates requests for TestNotificationChannel
+func NewTestNotificationChannelRequest(server string, channel string, params *TestNotificationChannelParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "channel", runtime.ParamLocationPath, channel)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/notification-channels/%s/test", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListOAuthGrantsRequest generates requests for ListOAuthGrants
 func NewListOAuthGrantsRequest(server string) (*http.Request, error) {
 	var err error
@@ -27022,6 +29146,99 @@ func NewReplaceSettingsRequestWithBody(server string, params *ReplaceSettingsPar
 	return req, nil
 }
 
+// NewGetAgentRolloutSettingsRequest generates requests for GetAgentRolloutSettings
+func NewGetAgentRolloutSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/settings/agent-rollout")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentRolloutSettingsRequest calls the generic UpdateAgentRolloutSettings builder with application/json body
+func NewUpdateAgentRolloutSettingsRequest(server string, params *UpdateAgentRolloutSettingsParams, body UpdateAgentRolloutSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentRolloutSettingsRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewUpdateAgentRolloutSettingsRequestWithBody generates requests for UpdateAgentRolloutSettings with any type of body
+func NewUpdateAgentRolloutSettingsRequestWithBody(server string, params *UpdateAgentRolloutSettingsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/settings/agent-rollout")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetVersionRequest generates requests for GetVersion
 func NewGetVersionRequest(server string) (*http.Request, error) {
 	var err error
@@ -27214,6 +29431,17 @@ type ClientWithResponsesInterface interface {
 
 	RebalancePostgresWithResponse(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*RebalancePostgresResponse, error)
 
+	// ListBackupDrillsWithResponse request
+	ListBackupDrillsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupDrillsParams, reqEditors ...RequestEditorFn) (*ListBackupDrillsResponse, error)
+
+	// CreateBackupDrillWithBodyWithResponse request with any body
+	CreateBackupDrillWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBackupDrillResponse, error)
+
+	CreateBackupDrillWithResponse(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, body CreateBackupDrillJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBackupDrillResponse, error)
+
+	// GetBackupDrillWithResponse request
+	GetBackupDrillWithResponse(ctx context.Context, cluster ClusterPath, drill string, params *GetBackupDrillParams, reqEditors ...RequestEditorFn) (*GetBackupDrillResponse, error)
+
 	// ListBackupsWithResponse request
 	ListBackupsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*ListBackupsResponse, error)
 
@@ -27334,6 +29562,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetMemberLogsWithResponse request
 	GetMemberLogsWithResponse(ctx context.Context, cluster ClusterPath, member string, params *GetMemberLogsParams, reqEditors ...RequestEditorFn) (*GetMemberLogsResponse, error)
+
+	// MoveClusterMemberWithResponse request
+	MoveClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, params *MoveClusterMemberParams, reqEditors ...RequestEditorFn) (*MoveClusterMemberResponse, error)
 
 	// ReplaceClusterMemberWithResponse request
 	ReplaceClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, params *ReplaceClusterMemberParams, reqEditors ...RequestEditorFn) (*ReplaceClusterMemberResponse, error)
@@ -27702,6 +29933,11 @@ type ClientWithResponsesInterface interface {
 
 	SetTemporalUIOIDCClientSecretWithResponse(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTemporalUIOIDCClientSecretResponse, error)
 
+	// UpgradeClusterAgentsWithBodyWithResponse request with any body
+	UpgradeClusterAgentsWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpgradeClusterAgentsResponse, error)
+
+	UpgradeClusterAgentsWithResponse(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, body UpgradeClusterAgentsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpgradeClusterAgentsResponse, error)
+
 	// ListWeaviateRolesWithResponse request
 	ListWeaviateRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListWeaviateRolesParams, reqEditors ...RequestEditorFn) (*ListWeaviateRolesResponse, error)
 
@@ -27742,6 +29978,20 @@ type ClientWithResponsesInterface interface {
 
 	// RotateWeaviateUserKeyWithResponse request
 	RotateWeaviateUserKeyWithResponse(ctx context.Context, cluster ClusterPath, user string, params *RotateWeaviateUserKeyParams, reqEditors ...RequestEditorFn) (*RotateWeaviateUserKeyResponse, error)
+
+	// GetControlPlaneBackupPolicyWithResponse request
+	GetControlPlaneBackupPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetControlPlaneBackupPolicyResponse, error)
+
+	// UpdateControlPlaneBackupPolicyWithBodyWithResponse request with any body
+	UpdateControlPlaneBackupPolicyWithBodyWithResponse(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateControlPlaneBackupPolicyResponse, error)
+
+	UpdateControlPlaneBackupPolicyWithResponse(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, body UpdateControlPlaneBackupPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateControlPlaneBackupPolicyResponse, error)
+
+	// ListControlPlaneBackupsWithResponse request
+	ListControlPlaneBackupsWithResponse(ctx context.Context, params *ListControlPlaneBackupsParams, reqEditors ...RequestEditorFn) (*ListControlPlaneBackupsResponse, error)
+
+	// CreateControlPlaneBackupWithResponse request
+	CreateControlPlaneBackupWithResponse(ctx context.Context, params *CreateControlPlaneBackupParams, reqEditors ...RequestEditorFn) (*CreateControlPlaneBackupResponse, error)
 
 	// DryRunCreateClusterWithBodyWithResponse request with any body
 	DryRunCreateClusterWithBodyWithResponse(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error)
@@ -27802,6 +30052,28 @@ type ClientWithResponsesInterface interface {
 	// ValidateNamespaceWithResponse request
 	ValidateNamespaceWithResponse(ctx context.Context, namespace NamespacePath, params *ValidateNamespaceParams, reqEditors ...RequestEditorFn) (*ValidateNamespaceResponse, error)
 
+	// ListNotificationChannelsWithResponse request
+	ListNotificationChannelsWithResponse(ctx context.Context, params *ListNotificationChannelsParams, reqEditors ...RequestEditorFn) (*ListNotificationChannelsResponse, error)
+
+	// CreateNotificationChannelWithBodyWithResponse request with any body
+	CreateNotificationChannelWithBodyWithResponse(ctx context.Context, params *CreateNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNotificationChannelResponse, error)
+
+	CreateNotificationChannelWithResponse(ctx context.Context, params *CreateNotificationChannelParams, body CreateNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNotificationChannelResponse, error)
+
+	// DeleteNotificationChannelWithResponse request
+	DeleteNotificationChannelWithResponse(ctx context.Context, channel string, params *DeleteNotificationChannelParams, reqEditors ...RequestEditorFn) (*DeleteNotificationChannelResponse, error)
+
+	// GetNotificationChannelWithResponse request
+	GetNotificationChannelWithResponse(ctx context.Context, channel string, reqEditors ...RequestEditorFn) (*GetNotificationChannelResponse, error)
+
+	// ReplaceNotificationChannelWithBodyWithResponse request with any body
+	ReplaceNotificationChannelWithBodyWithResponse(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceNotificationChannelResponse, error)
+
+	ReplaceNotificationChannelWithResponse(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, body ReplaceNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceNotificationChannelResponse, error)
+
+	// TestNotificationChannelWithResponse request
+	TestNotificationChannelWithResponse(ctx context.Context, channel string, params *TestNotificationChannelParams, reqEditors ...RequestEditorFn) (*TestNotificationChannelResponse, error)
+
 	// ListOAuthGrantsWithResponse request
 	ListOAuthGrantsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOAuthGrantsResponse, error)
 
@@ -27852,6 +30124,14 @@ type ClientWithResponsesInterface interface {
 	ReplaceSettingsWithBodyWithResponse(ctx context.Context, params *ReplaceSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
 
 	ReplaceSettingsWithResponse(ctx context.Context, params *ReplaceSettingsParams, body ReplaceSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceSettingsResponse, error)
+
+	// GetAgentRolloutSettingsWithResponse request
+	GetAgentRolloutSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAgentRolloutSettingsResponse, error)
+
+	// UpdateAgentRolloutSettingsWithBodyWithResponse request with any body
+	UpdateAgentRolloutSettingsWithBodyWithResponse(ctx context.Context, params *UpdateAgentRolloutSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentRolloutSettingsResponse, error)
+
+	UpdateAgentRolloutSettingsWithResponse(ctx context.Context, params *UpdateAgentRolloutSettingsParams, body UpdateAgentRolloutSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentRolloutSettingsResponse, error)
 
 	// GetVersionWithResponse request
 	GetVersionWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVersionResponse, error)
@@ -28844,6 +31124,102 @@ func (r RebalancePostgresResponse) StatusCode() int {
 	return 0
 }
 
+type ListBackupDrillsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BackupDrillList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBackupDrillsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBackupDrillsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateBackupDrillResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *BackupDrill
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateBackupDrillResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateBackupDrillResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetBackupDrillResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BackupDrill
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBackupDrillResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBackupDrillResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListBackupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -29823,6 +32199,38 @@ func (r GetMemberLogsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetMemberLogsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type MoveClusterMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Operation
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r MoveClusterMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r MoveClusterMemberResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -32737,6 +35145,38 @@ func (r SetTemporalUIOIDCClientSecretResponse) StatusCode() int {
 	return 0
 }
 
+type UpgradeClusterAgentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Operation
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r UpgradeClusterAgentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpgradeClusterAgentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListWeaviateRolesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -33036,6 +35476,136 @@ func (r RotateWeaviateUserKeyResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RotateWeaviateUserKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetControlPlaneBackupPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlPlaneBackupPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r GetControlPlaneBackupPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetControlPlaneBackupPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateControlPlaneBackupPolicyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlPlaneBackupPolicy
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateControlPlaneBackupPolicyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateControlPlaneBackupPolicyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListControlPlaneBackupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ControlPlaneBackupList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r ListControlPlaneBackupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListControlPlaneBackupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateControlPlaneBackupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *ControlPlaneBackup
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON422      *UnprocessableEntity
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateControlPlaneBackupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateControlPlaneBackupResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -33502,6 +36072,197 @@ func (r ValidateNamespaceResponse) StatusCode() int {
 	return 0
 }
 
+type ListNotificationChannelsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *NotificationChannelList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r ListNotificationChannelsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListNotificationChannelsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateNotificationChannelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *NotificationChannel
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateNotificationChannelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateNotificationChannelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteNotificationChannelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteNotificationChannelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteNotificationChannelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetNotificationChannelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *NotificationChannel
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r GetNotificationChannelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetNotificationChannelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ReplaceNotificationChannelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *NotificationChannel
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceNotificationChannelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceNotificationChannelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type TestNotificationChannelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *NotificationTestResult
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r TestNotificationChannelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestNotificationChannelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListOAuthGrantsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -33941,6 +36702,70 @@ func (r ReplaceSettingsResponse) StatusCode() int {
 	return 0
 }
 
+type GetAgentRolloutSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRolloutSettings
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentRolloutSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentRolloutSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAgentRolloutSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentRolloutSettings
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON501      *NotImplemented
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentRolloutSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentRolloutSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetVersionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -34364,6 +37189,41 @@ func (c *ClientWithResponses) RebalancePostgresWithResponse(ctx context.Context,
 	return ParseRebalancePostgresResponse(rsp)
 }
 
+// ListBackupDrillsWithResponse request returning *ListBackupDrillsResponse
+func (c *ClientWithResponses) ListBackupDrillsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupDrillsParams, reqEditors ...RequestEditorFn) (*ListBackupDrillsResponse, error) {
+	rsp, err := c.ListBackupDrills(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBackupDrillsResponse(rsp)
+}
+
+// CreateBackupDrillWithBodyWithResponse request with arbitrary body returning *CreateBackupDrillResponse
+func (c *ClientWithResponses) CreateBackupDrillWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateBackupDrillResponse, error) {
+	rsp, err := c.CreateBackupDrillWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBackupDrillResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateBackupDrillWithResponse(ctx context.Context, cluster ClusterPath, params *CreateBackupDrillParams, body CreateBackupDrillJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateBackupDrillResponse, error) {
+	rsp, err := c.CreateBackupDrill(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateBackupDrillResponse(rsp)
+}
+
+// GetBackupDrillWithResponse request returning *GetBackupDrillResponse
+func (c *ClientWithResponses) GetBackupDrillWithResponse(ctx context.Context, cluster ClusterPath, drill string, params *GetBackupDrillParams, reqEditors ...RequestEditorFn) (*GetBackupDrillResponse, error) {
+	rsp, err := c.GetBackupDrill(ctx, cluster, drill, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBackupDrillResponse(rsp)
+}
+
 // ListBackupsWithResponse request returning *ListBackupsResponse
 func (c *ClientWithResponses) ListBackupsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*ListBackupsResponse, error) {
 	rsp, err := c.ListBackups(ctx, cluster, params, reqEditors...)
@@ -34747,6 +37607,15 @@ func (c *ClientWithResponses) GetMemberLogsWithResponse(ctx context.Context, clu
 		return nil, err
 	}
 	return ParseGetMemberLogsResponse(rsp)
+}
+
+// MoveClusterMemberWithResponse request returning *MoveClusterMemberResponse
+func (c *ClientWithResponses) MoveClusterMemberWithResponse(ctx context.Context, cluster ClusterPath, member string, params *MoveClusterMemberParams, reqEditors ...RequestEditorFn) (*MoveClusterMemberResponse, error) {
+	rsp, err := c.MoveClusterMember(ctx, cluster, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseMoveClusterMemberResponse(rsp)
 }
 
 // ReplaceClusterMemberWithResponse request returning *ReplaceClusterMemberResponse
@@ -35920,6 +38789,23 @@ func (c *ClientWithResponses) SetTemporalUIOIDCClientSecretWithResponse(ctx cont
 	return ParseSetTemporalUIOIDCClientSecretResponse(rsp)
 }
 
+// UpgradeClusterAgentsWithBodyWithResponse request with arbitrary body returning *UpgradeClusterAgentsResponse
+func (c *ClientWithResponses) UpgradeClusterAgentsWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpgradeClusterAgentsResponse, error) {
+	rsp, err := c.UpgradeClusterAgentsWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpgradeClusterAgentsResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpgradeClusterAgentsWithResponse(ctx context.Context, cluster ClusterPath, params *UpgradeClusterAgentsParams, body UpgradeClusterAgentsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpgradeClusterAgentsResponse, error) {
+	rsp, err := c.UpgradeClusterAgents(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpgradeClusterAgentsResponse(rsp)
+}
+
 // ListWeaviateRolesWithResponse request returning *ListWeaviateRolesResponse
 func (c *ClientWithResponses) ListWeaviateRolesWithResponse(ctx context.Context, cluster ClusterPath, params *ListWeaviateRolesParams, reqEditors ...RequestEditorFn) (*ListWeaviateRolesResponse, error) {
 	rsp, err := c.ListWeaviateRoles(ctx, cluster, params, reqEditors...)
@@ -36049,6 +38935,50 @@ func (c *ClientWithResponses) RotateWeaviateUserKeyWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseRotateWeaviateUserKeyResponse(rsp)
+}
+
+// GetControlPlaneBackupPolicyWithResponse request returning *GetControlPlaneBackupPolicyResponse
+func (c *ClientWithResponses) GetControlPlaneBackupPolicyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetControlPlaneBackupPolicyResponse, error) {
+	rsp, err := c.GetControlPlaneBackupPolicy(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetControlPlaneBackupPolicyResponse(rsp)
+}
+
+// UpdateControlPlaneBackupPolicyWithBodyWithResponse request with arbitrary body returning *UpdateControlPlaneBackupPolicyResponse
+func (c *ClientWithResponses) UpdateControlPlaneBackupPolicyWithBodyWithResponse(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateControlPlaneBackupPolicyResponse, error) {
+	rsp, err := c.UpdateControlPlaneBackupPolicyWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateControlPlaneBackupPolicyResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateControlPlaneBackupPolicyWithResponse(ctx context.Context, params *UpdateControlPlaneBackupPolicyParams, body UpdateControlPlaneBackupPolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateControlPlaneBackupPolicyResponse, error) {
+	rsp, err := c.UpdateControlPlaneBackupPolicy(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateControlPlaneBackupPolicyResponse(rsp)
+}
+
+// ListControlPlaneBackupsWithResponse request returning *ListControlPlaneBackupsResponse
+func (c *ClientWithResponses) ListControlPlaneBackupsWithResponse(ctx context.Context, params *ListControlPlaneBackupsParams, reqEditors ...RequestEditorFn) (*ListControlPlaneBackupsResponse, error) {
+	rsp, err := c.ListControlPlaneBackups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListControlPlaneBackupsResponse(rsp)
+}
+
+// CreateControlPlaneBackupWithResponse request returning *CreateControlPlaneBackupResponse
+func (c *ClientWithResponses) CreateControlPlaneBackupWithResponse(ctx context.Context, params *CreateControlPlaneBackupParams, reqEditors ...RequestEditorFn) (*CreateControlPlaneBackupResponse, error) {
+	rsp, err := c.CreateControlPlaneBackup(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateControlPlaneBackupResponse(rsp)
 }
 
 // DryRunCreateClusterWithBodyWithResponse request with arbitrary body returning *DryRunCreateClusterResponse
@@ -36242,6 +39172,76 @@ func (c *ClientWithResponses) ValidateNamespaceWithResponse(ctx context.Context,
 	return ParseValidateNamespaceResponse(rsp)
 }
 
+// ListNotificationChannelsWithResponse request returning *ListNotificationChannelsResponse
+func (c *ClientWithResponses) ListNotificationChannelsWithResponse(ctx context.Context, params *ListNotificationChannelsParams, reqEditors ...RequestEditorFn) (*ListNotificationChannelsResponse, error) {
+	rsp, err := c.ListNotificationChannels(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListNotificationChannelsResponse(rsp)
+}
+
+// CreateNotificationChannelWithBodyWithResponse request with arbitrary body returning *CreateNotificationChannelResponse
+func (c *ClientWithResponses) CreateNotificationChannelWithBodyWithResponse(ctx context.Context, params *CreateNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateNotificationChannelResponse, error) {
+	rsp, err := c.CreateNotificationChannelWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateNotificationChannelResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateNotificationChannelWithResponse(ctx context.Context, params *CreateNotificationChannelParams, body CreateNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateNotificationChannelResponse, error) {
+	rsp, err := c.CreateNotificationChannel(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateNotificationChannelResponse(rsp)
+}
+
+// DeleteNotificationChannelWithResponse request returning *DeleteNotificationChannelResponse
+func (c *ClientWithResponses) DeleteNotificationChannelWithResponse(ctx context.Context, channel string, params *DeleteNotificationChannelParams, reqEditors ...RequestEditorFn) (*DeleteNotificationChannelResponse, error) {
+	rsp, err := c.DeleteNotificationChannel(ctx, channel, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteNotificationChannelResponse(rsp)
+}
+
+// GetNotificationChannelWithResponse request returning *GetNotificationChannelResponse
+func (c *ClientWithResponses) GetNotificationChannelWithResponse(ctx context.Context, channel string, reqEditors ...RequestEditorFn) (*GetNotificationChannelResponse, error) {
+	rsp, err := c.GetNotificationChannel(ctx, channel, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetNotificationChannelResponse(rsp)
+}
+
+// ReplaceNotificationChannelWithBodyWithResponse request with arbitrary body returning *ReplaceNotificationChannelResponse
+func (c *ClientWithResponses) ReplaceNotificationChannelWithBodyWithResponse(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceNotificationChannelResponse, error) {
+	rsp, err := c.ReplaceNotificationChannelWithBody(ctx, channel, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceNotificationChannelResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceNotificationChannelWithResponse(ctx context.Context, channel string, params *ReplaceNotificationChannelParams, body ReplaceNotificationChannelJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceNotificationChannelResponse, error) {
+	rsp, err := c.ReplaceNotificationChannel(ctx, channel, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceNotificationChannelResponse(rsp)
+}
+
+// TestNotificationChannelWithResponse request returning *TestNotificationChannelResponse
+func (c *ClientWithResponses) TestNotificationChannelWithResponse(ctx context.Context, channel string, params *TestNotificationChannelParams, reqEditors ...RequestEditorFn) (*TestNotificationChannelResponse, error) {
+	rsp, err := c.TestNotificationChannel(ctx, channel, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestNotificationChannelResponse(rsp)
+}
+
 // ListOAuthGrantsWithResponse request returning *ListOAuthGrantsResponse
 func (c *ClientWithResponses) ListOAuthGrantsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListOAuthGrantsResponse, error) {
 	rsp, err := c.ListOAuthGrants(ctx, reqEditors...)
@@ -36399,6 +39399,32 @@ func (c *ClientWithResponses) ReplaceSettingsWithResponse(ctx context.Context, p
 		return nil, err
 	}
 	return ParseReplaceSettingsResponse(rsp)
+}
+
+// GetAgentRolloutSettingsWithResponse request returning *GetAgentRolloutSettingsResponse
+func (c *ClientWithResponses) GetAgentRolloutSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAgentRolloutSettingsResponse, error) {
+	rsp, err := c.GetAgentRolloutSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentRolloutSettingsResponse(rsp)
+}
+
+// UpdateAgentRolloutSettingsWithBodyWithResponse request with arbitrary body returning *UpdateAgentRolloutSettingsResponse
+func (c *ClientWithResponses) UpdateAgentRolloutSettingsWithBodyWithResponse(ctx context.Context, params *UpdateAgentRolloutSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentRolloutSettingsResponse, error) {
+	rsp, err := c.UpdateAgentRolloutSettingsWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentRolloutSettingsResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentRolloutSettingsWithResponse(ctx context.Context, params *UpdateAgentRolloutSettingsParams, body UpdateAgentRolloutSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentRolloutSettingsResponse, error) {
+	rsp, err := c.UpdateAgentRolloutSettings(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentRolloutSettingsResponse(rsp)
 }
 
 // GetVersionWithResponse request returning *GetVersionResponse
@@ -39223,6 +42249,294 @@ func ParseRebalancePostgresResponse(rsp *http.Response) (*RebalancePostgresRespo
 	return response, nil
 }
 
+// ParseListBackupDrillsResponse parses an HTTP response from a ListBackupDrillsWithResponse call
+func ParseListBackupDrillsResponse(rsp *http.Response) (*ListBackupDrillsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBackupDrillsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BackupDrillList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateBackupDrillResponse parses an HTTP response from a CreateBackupDrillWithResponse call
+func ParseCreateBackupDrillResponse(rsp *http.Response) (*CreateBackupDrillResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateBackupDrillResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest BackupDrill
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetBackupDrillResponse parses an HTTP response from a GetBackupDrillWithResponse call
+func ParseGetBackupDrillResponse(rsp *http.Response) (*GetBackupDrillResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBackupDrillResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BackupDrill
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListBackupsResponse parses an HTTP response from a ListBackupsWithResponse call
 func ParseListBackupsResponse(rsp *http.Response) (*ListBackupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -41888,6 +45202,102 @@ func ParseGetMemberLogsResponse(rsp *http.Response) (*GetMemberLogsResponse, err
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseMoveClusterMemberResponse parses an HTTP response from a MoveClusterMemberWithResponse call
+func ParseMoveClusterMemberResponse(rsp *http.Response) (*MoveClusterMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &MoveClusterMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
 
 	}
 
@@ -49470,6 +52880,102 @@ func ParseSetTemporalUIOIDCClientSecretResponse(rsp *http.Response) (*SetTempora
 	return response, nil
 }
 
+// ParseUpgradeClusterAgentsResponse parses an HTTP response from a UpgradeClusterAgentsWithResponse call
+func ParseUpgradeClusterAgentsResponse(rsp *http.Response) (*UpgradeClusterAgentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpgradeClusterAgentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListWeaviateRolesResponse parses an HTTP response from a ListWeaviateRolesWithResponse call
 func ParseListWeaviateRolesResponse(rsp *http.Response) (*ListWeaviateRolesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -50191,6 +53697,404 @@ func ParseRotateWeaviateUserKeyResponse(rsp *http.Response) (*RotateWeaviateUser
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetControlPlaneBackupPolicyResponse parses an HTTP response from a GetControlPlaneBackupPolicyWithResponse call
+func ParseGetControlPlaneBackupPolicyResponse(rsp *http.Response) (*GetControlPlaneBackupPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetControlPlaneBackupPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlPlaneBackupPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateControlPlaneBackupPolicyResponse parses an HTTP response from a UpdateControlPlaneBackupPolicyWithResponse call
+func ParseUpdateControlPlaneBackupPolicyResponse(rsp *http.Response) (*UpdateControlPlaneBackupPolicyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateControlPlaneBackupPolicyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlPlaneBackupPolicy
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListControlPlaneBackupsResponse parses an HTTP response from a ListControlPlaneBackupsWithResponse call
+func ParseListControlPlaneBackupsResponse(rsp *http.Response) (*ListControlPlaneBackupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListControlPlaneBackupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ControlPlaneBackupList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateControlPlaneBackupResponse parses an HTTP response from a CreateControlPlaneBackupWithResponse call
+func ParseCreateControlPlaneBackupResponse(rsp *http.Response) (*CreateControlPlaneBackupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateControlPlaneBackupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest ControlPlaneBackup
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
 
 	}
 
@@ -51497,6 +55401,575 @@ func ParseValidateNamespaceResponse(rsp *http.Response) (*ValidateNamespaceRespo
 	return response, nil
 }
 
+// ParseListNotificationChannelsResponse parses an HTTP response from a ListNotificationChannelsWithResponse call
+func ParseListNotificationChannelsResponse(rsp *http.Response) (*ListNotificationChannelsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListNotificationChannelsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationChannelList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateNotificationChannelResponse parses an HTTP response from a CreateNotificationChannelWithResponse call
+func ParseCreateNotificationChannelResponse(rsp *http.Response) (*CreateNotificationChannelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateNotificationChannelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest NotificationChannel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteNotificationChannelResponse parses an HTTP response from a DeleteNotificationChannelWithResponse call
+func ParseDeleteNotificationChannelResponse(rsp *http.Response) (*DeleteNotificationChannelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteNotificationChannelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetNotificationChannelResponse parses an HTTP response from a GetNotificationChannelWithResponse call
+func ParseGetNotificationChannelResponse(rsp *http.Response) (*GetNotificationChannelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetNotificationChannelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationChannel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceNotificationChannelResponse parses an HTTP response from a ReplaceNotificationChannelWithResponse call
+func ParseReplaceNotificationChannelResponse(rsp *http.Response) (*ReplaceNotificationChannelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceNotificationChannelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationChannel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseTestNotificationChannelResponse parses an HTTP response from a TestNotificationChannelWithResponse call
+func ParseTestNotificationChannelResponse(rsp *http.Response) (*TestNotificationChannelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestNotificationChannelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationTestResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListOAuthGrantsResponse parses an HTTP response from a ListOAuthGrantsWithResponse call
 func ParseListOAuthGrantsResponse(rsp *http.Response) (*ListOAuthGrantsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -52644,6 +57117,198 @@ func ParseReplaceSettingsResponse(rsp *http.Response) (*ReplaceSettingsResponse,
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentRolloutSettingsResponse parses an HTTP response from a GetAgentRolloutSettingsWithResponse call
+func ParseGetAgentRolloutSettingsResponse(rsp *http.Response) (*GetAgentRolloutSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentRolloutSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentRolloutSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentRolloutSettingsResponse parses an HTTP response from a UpdateAgentRolloutSettingsWithResponse call
+func ParseUpdateAgentRolloutSettingsResponse(rsp *http.Response) (*UpdateAgentRolloutSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentRolloutSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentRolloutSettings
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 501:
+		var dest NotImplemented
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON501 = &dest
 
 	}
 

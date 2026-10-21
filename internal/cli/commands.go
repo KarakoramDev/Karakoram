@@ -90,18 +90,21 @@ func (a *app) addCommands(root *cobra.Command) {
 				c.Flags().String(q.name, "", "API "+q.key+" parameter")
 			}
 		}
-		mutable := s.operation == "rebalancePostgres" || s.operation == "recoverMySQLQuorum" || strings.HasPrefix(s.path, "clusters ") && (s.body || strings.HasPrefix(s.operation, "delete") || strings.HasPrefix(s.operation, "resume") || strings.HasPrefix(s.operation, "restart") || strings.HasPrefix(s.operation, "retry") || strings.HasPrefix(s.operation, "replace") || strings.HasPrefix(s.operation, "rotate"))
+		mutable := s.operation == "moveClusterMember" || s.operation == "rebalancePostgres" || s.operation == "recoverMySQLQuorum" || strings.HasPrefix(s.path, "clusters ") && (s.body || strings.HasPrefix(s.operation, "delete") || strings.HasPrefix(s.operation, "resume") || strings.HasPrefix(s.operation, "restart") || strings.HasPrefix(s.operation, "retry") || strings.HasPrefix(s.operation, "replace") || strings.HasPrefix(s.operation, "rotate"))
 		if mutable {
 			c.Flags().Bool("wait", false, "Wait for operation completion and observed cluster generation")
 			c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")
 			c.Annotations[operationAnnotation] += ",getOperation,getCluster"
 		}
 		a.specialFlags(c, s)
+		maintenanceFlags(c, s.operation)
+		backupDrillFlags(c, s.operation)
 		if s.operation == "listEvents" {
 			c.Flags().Lookup("order").Usage = "Event order: asc or desc (server default when omitted)"
 		}
 		c.RunE = func(cmd *cobra.Command, args []string) error { return a.run(cmd, s, args) }
 		parent.AddCommand(c)
+		groups[strings.Join(words[:end], " ")] = c
 	}
 	a.addAuth(root)
 	a.addConfig(root)
@@ -130,6 +133,10 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 			v, _ := cmd.Flags().GetString(f.name)
 			q[f.key] = v
 		}
+	}
+	if maintenanceOverrideOperation(s.operation) && cmd.Flags().Changed("ignore-maintenance-window") {
+		ignore, _ := cmd.Flags().GetBool("ignore-maintenance-window")
+		q["ignoreMaintenanceWindow"] = ignore
 	}
 	if order, ok := q["order"].(string); ok && order != "asc" && order != "desc" {
 		return usageError("--order must be asc or desc")
@@ -163,6 +170,12 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := maintenanceBody(cmd, s.operation, body); err != nil {
+		return err
+	}
+	if err := backupDrillPolicyBody(cmd, s.operation, body); err != nil {
+		return err
+	}
 	if err := a.confirm(cmd, op, args); err != nil {
 		return err
 	}
@@ -193,6 +206,16 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	}
 	if op == "revealOpenBaoUnsealKeys" && a.format == "table" {
 		return a.openBaoUnsealKeysTable(result)
+	}
+	if strings.HasPrefix(s.path, "backup-drills ") {
+		if wait, _ := cmd.Flags().GetBool("wait"); wait {
+			timeout, _ := cmd.Flags().GetDuration("timeout")
+			return a.waitBackupDrill(cmd.Context(), args[0], result, timeout)
+		}
+		return a.printBackupDrill(result, op == "listBackupDrills")
+	}
+	if strings.HasPrefix(s.path, "notification-channels ") && a.format == "table" {
+		return a.notificationTable(result, op)
 	}
 	if s.path == "clusters ca <cluster>" {
 		pem, _ := nested(result, "caCertificate").(string)

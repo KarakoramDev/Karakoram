@@ -34,6 +34,7 @@ const (
 	OperationUpdate           = "update"
 	OperationTLS              = "tls"
 	OperationUpgrade          = "upgrade"
+	OperationUpgradeAgents    = "upgrade-agents"
 	OperationDelete           = "delete"
 	OperationResume           = "resume"
 	OperationBackup           = "backup"
@@ -54,13 +55,15 @@ type RebalanceParams struct {
 
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
-	Namespace   string          `json:"namespace,omitempty"`
-	Name        string          `json:"name"`
-	OperationID string          `json:"operationId,omitempty"`
-	Spec        ClusterSpec     `json:"spec"`
-	Status      ClusterStatus   `json:"status"`
-	Internal    json.RawMessage `json:"-"`
-	Generation  int64           `json:"generation"`
+	ManagedBy                     *ManagedBy      `json:"managedBy,omitempty"`
+	MaintenanceOverrideGeneration int64           `json:"maintenanceOverrideGeneration,omitempty"`
+	Namespace                     string          `json:"namespace,omitempty"`
+	Name                          string          `json:"name"`
+	OperationID                   string          `json:"operationId,omitempty"`
+	Spec                          ClusterSpec     `json:"spec"`
+	Status                        ClusterStatus   `json:"status"`
+	Internal                      json.RawMessage `json:"-"`
+	Generation                    int64           `json:"generation"`
 	// RequestedBy belongs to Generation, not to observed-state updates.
 	// It remains empty for generations whose historical requester is unknown.
 	RequestedBy   string        `json:"-"`
@@ -72,6 +75,7 @@ type Cluster struct {
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
 type ClusterSpec struct {
+	Maintenance *MaintenancePolicy `json:"maintenance,omitempty"`
 	// RetryEpoch is advanced only by the operator deployment retry action.
 	RetryEpoch    int64            `json:"retryEpoch,omitempty"`
 	Provider      string           `json:"provider"`
@@ -122,9 +126,10 @@ type Resources struct {
 
 // BackupConfig configures storage, schedules, and point-in-time recovery.
 type BackupConfig struct {
-	Storage   string           `json:"storage,omitempty"`
-	Schedules []BackupSchedule `json:"schedules"`
-	PITR      PITRConfig       `json:"pitr"`
+	Drill     *BackupDrillPolicy `json:"drill,omitempty"`
+	Storage   string             `json:"storage,omitempty"`
+	Schedules []BackupSchedule   `json:"schedules"`
+	PITR      PITRConfig         `json:"pitr"`
 }
 
 // BackupSchedule defines a named cron backup and count-based retention policy.
@@ -178,6 +183,8 @@ type DeleteOptions struct {
 
 // ClusterStatus captures the latest observed cluster health and connectivity.
 type ClusterStatus struct {
+	Agents      *AgentRolloutStatus `json:"agents,omitempty"`
+	Maintenance *MaintenanceStatus  `json:"maintenance,omitempty"`
 	// DeploymentFailures fences terminal platform deployments independently of provider state.
 	DeploymentFailures map[string]DeploymentFailure `json:"deploymentFailures,omitempty"`
 	Phase              Phase                        `json:"phase"`
@@ -294,6 +301,9 @@ type ObservedResources struct {
 
 // AgentStatus reports agent connectivity and applied configuration.
 type AgentStatus struct {
+	Version       string    `json:"version,omitempty"`
+	Commit        string    `json:"commit,omitempty"`
+	Build         string    `json:"build,omitempty"`
 	Healthy       bool      `json:"healthy"`
 	ConfigVersion int64     `json:"configVersion"`
 	LastSeen      time.Time `json:"lastSeen"`
@@ -328,10 +338,12 @@ type BackupStatus struct {
 	LastBackup *time.Time  `json:"lastBackup,omitempty"`
 }
 
-// Placement reports best-effort host placement without promising anti-affinity.
+// Placement reports observed placement and backend anti-affinity guarantees.
 type Placement struct {
-	Warning string              `json:"warning,omitempty"`
-	Groups  map[string][]string `json:"groups"`
+	Source                 string              `json:"source,omitempty"`
+	GuaranteedAntiAffinity bool                `json:"guaranteedAntiAffinity"`
+	Warning                string              `json:"warning,omitempty"`
+	Groups                 map[string][]string `json:"groups"`
 }
 
 // ProviderInfo describes a provider catalog and supported capabilities.
@@ -593,15 +605,16 @@ func (o Operation) Terminal() bool {
 
 // Operation tracks durable desired-state convergence or a checkpointed action.
 type Operation struct {
-	Namespace          string          `json:"namespace,omitempty"`
-	ID                 string          `json:"id"`
-	Cluster            string          `json:"cluster"`
-	ClusterIncarnation string          `json:"clusterIncarnation,omitempty"`
-	Kind               string          `json:"kind"`
-	Target             OperationTarget `json:"target"`
-	TargetGeneration   int64           `json:"targetGeneration,omitempty"`
-	Failures           int             `json:"failures,omitempty"`
-	LastError          string          `json:"lastError,omitempty"`
+	IgnoreMaintenanceWindow bool            `json:"ignoreMaintenanceWindow,omitempty"`
+	Namespace               string          `json:"namespace,omitempty"`
+	ID                      string          `json:"id"`
+	Cluster                 string          `json:"cluster"`
+	ClusterIncarnation      string          `json:"clusterIncarnation,omitempty"`
+	Kind                    string          `json:"kind"`
+	Target                  OperationTarget `json:"target"`
+	TargetGeneration        int64           `json:"targetGeneration,omitempty"`
+	Failures                int             `json:"failures,omitempty"`
+	LastError               string          `json:"lastError,omitempty"`
 	// BlockingMessage is the latest observed blocker, independent of retry accounting.
 	BlockingMessage         string          `json:"blockingMessage,omitempty"`
 	BlockingObservedAt      *time.Time      `json:"blockingObservedAt,omitempty"`

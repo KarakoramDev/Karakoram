@@ -216,6 +216,8 @@ type Context struct {
 	Dialer    ContextDialer
 	AgentURL  string
 	Cluster   *domain.Cluster
+	// Operation is set only while an imperative operation owns this invocation.
+	Operation *domain.Operation
 	Backend   infra.Backend
 	Secrets   SecretStore
 	Store     ClusterStore
@@ -239,6 +241,8 @@ type Context struct {
 	// SyncWait describes the current generation barrier, independently of health.
 	// Providers replace it on every attempt; it is not an availability condition.
 	SyncWait string
+
+	maintenanceWaitOperation string
 }
 
 // Registry owns providers indexed by their unique names.

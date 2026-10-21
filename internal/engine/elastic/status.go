@@ -114,7 +114,10 @@ func (p *Provider) connectionWithProject(ctx context.Context, rc *engine.Context
 
 // Status combines Elasticsearch health, member agents and infrastructure placement.
 func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return domain.ClusterStatus{}, err
@@ -364,10 +367,12 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			status, e := samples[i].status, samples[i].err
 			if e == nil {
 				allocated = status.Resources
-				ms.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: status.ConfigVersion, LastSeen: samples[i].at}
+				ms.Agent = domain.AgentStatus{Version: status.Agent.Version, Commit: status.Agent.Commit, Build: status.Agent.Build, Healthy: true, ConfigVersion: status.ConfigVersion, LastSeen: samples[i].at}
 				ms.Uptime = status.UptimeSeconds
 				ms.DiskUsage = float64(status.Disk.UsedBytes)
-				ms.PlacementGroup = status.HostFingerprint
+				if !rc.Backend.Capabilities().Placement {
+					ms.PlacementGroup = status.HostFingerprint
+				}
 				if !isES(m) {
 					ms.Version = status.EngineVersion
 				}
@@ -428,7 +433,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 				if isES(m) && !strings.EqualFold(container.Status, infra.ContainerActive) && !strings.EqualFold(container.Status, infra.ContainerRunning) {
 					ms.Health = false
 				}
-				if ms.PlacementGroup == "" && rc.Backend.Capabilities().Placement {
+				if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
 					ms.PlacementGroup = container.PlacementGroup
 				}
 			}
@@ -485,17 +490,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	}
 	if v.Phase == domain.PhaseReady && !allReady {
 		v.Phase = domain.PhaseDegraded
-	}
-	v.Placement = domain.Placement{Warning: "Infrastructure placement is best effort; independent failure domains are not guaranteed", Groups: map[string][]string{}}
-	for i, m := range s.Members {
-		if m.Stage == stagePlanned || inventory.Members[i].Err != nil {
-			continue
-		}
-		for _, container := range inventory.Members[i].Containers {
-			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
-				v.Placement.Groups[container.PlacementGroup] = append(v.Placement.Groups[container.PlacementGroup], m.Name)
-			}
-		}
 	}
 	if rc.Store != nil {
 		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
@@ -560,30 +554,10 @@ func (*Provider) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.Sy
 	return out, nil
 }
 
-// Placement reports best-effort placement without promising anti-affinity.
-// Members whose runtime is not imported yet, or whose containers cannot be
-// listed, are omitted rather than failing status reconciliation.
-func (*Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Placement, error) {
-	s, err := load(rc.Cluster)
-	v := domain.Placement{Warning: "Infrastructure placement is best effort; independent failure domains are not guaranteed", Groups: map[string][]string{}}
-	if err != nil {
-		return v, err
-	}
-	for _, m := range s.Members {
-		if m.Stage == stagePlanned {
-			continue
-		}
-		containers, err := rc.Backend.Containers(ctx, m.Name)
-		if err != nil {
-			continue
-		}
-		for _, container := range containers {
-			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
-				v.Groups[container.PlacementGroup] = append(v.Groups[container.PlacementGroup], m.Name)
-			}
-		}
-	}
-	return v, nil
+// Placement uses the same authoritative groups or agent evidence as status.
+func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Placement, error) {
+	status, err := p.Status(ctx, rc)
+	return status.Placement, err
 }
 
 // MemberLogs reads a bounded, allowlisted member process log.

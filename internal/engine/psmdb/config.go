@@ -196,6 +196,15 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				if !renew {
 					continue
 				}
+				if kind == "members" {
+					urgent, err := pki.NeedsRenewal(existing, 7*24*time.Hour, now(rc))
+					if err != nil {
+						return err
+					}
+					if !urgent && rc.WaitForWindow().RequeueAfter != 0 {
+						continue
+					}
+				}
 			}
 			if renewing && kind == "members" {
 				// Database leaves still require the gated rolling reload.

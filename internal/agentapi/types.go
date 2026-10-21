@@ -71,6 +71,7 @@ type Credentials struct {
 
 // Status reports process, disk, and applied agent configuration state.
 type Status struct {
+	Agent           AgentBuild               `json:"agent"`
 	Processes       map[string]ProcessStatus `json:"processes"`
 	Volume          *VolumeStatus            `json:"volume,omitempty"`
 	EngineVersion   string                   `json:"engineVersion"`
@@ -94,6 +95,13 @@ type Status struct {
 	// Resources is what the container can currently use, read at request
 	// time. Nil from agents that predate the field or could read nothing.
 	Resources *ContainerResources `json:"resources,omitempty"`
+}
+
+// AgentBuild is the running Karakoram executable, not the database version.
+type AgentBuild struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	Build   string `json:"build"`
 }
 
 // ContainerResources reports the CPU, memory, and root disk a member

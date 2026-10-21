@@ -25,13 +25,20 @@ func (s *internalState) resetPlatformRetry(v *pending) {
 // tree and the retry state that survives control-plane restarts.
 func (s *internalState) failPendingCause(rc *engine.Context, cause error) error {
 	v := s.Pending
+	if errors.Is(cause, infra.ErrPlacementUnsatisfiable) && v.Action == "import" {
+		if m := s.find(v.Member); m != nil && m.ReplacesVolume != "" {
+			s.ReplacementFailure = "member relocation failed: no other eligible node"
+			m.Removing = true
+			m.ImportPlan = nil
+		}
+	}
 	var wait *engine.PlatformRetryWait
 	if errors.As(cause, &wait) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause
 	}
-	if errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+	if engine.PlatformFailureDefinitive(cause) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause

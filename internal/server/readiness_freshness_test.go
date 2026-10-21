@@ -20,16 +20,35 @@ func TestStatusAPIWithdrawsExpiredReadinessDuringBlockedReconciliation(t *testin
 		stored := domain.ClusterStatus{
 			Phase: domain.PhaseReady, ObservedAt: sampled,
 			ObservationEpoch: "current-process",
-			Conditions:       []domain.Condition{{Type: "Healthy", Status: "True"}, {Type: "Replication/rs0", Status: "True", Reason: "WritablePrimary"}},
+			Conditions:       []domain.Condition{{Type: "Healthy", Status: "True"}, {Type: "Ready", Status: "True"}, {Type: "Replication/rs0", Status: "True", Reason: "WritablePrimary"}},
 		}
 		got := server.statusAPI(domain.ClusterRef{Name: "demo"}, stored)
 		if string(got.Phase) == "Ready" {
 			t.Fatal("cached Ready survived its observation lease", got)
 		}
+		availability := map[string]bool{"Healthy": false, "Ready": false, "Replication/rs0": false}
+		agentsCurrent := false
 		for _, condition := range got.Conditions {
-			if string(condition.Status) == "True" {
-				t.Fatal("cached positive availability survived lease", condition)
+			if _, required := availability[condition.Type]; required {
+				availability[condition.Type] = true
+				if string(condition.Status) != "Unknown" || condition.Reason != "ObservationStale" {
+					t.Fatal("cached availability survived lease", condition)
+				}
 			}
+			if condition.Type == "AgentsCurrent" {
+				agentsCurrent = true
+				if string(condition.Status) != "True" || condition.Reason != "Current" {
+					t.Fatal("health lease changed informational agent inventory", condition)
+				}
+			}
+		}
+		for name, found := range availability {
+			if !found {
+				t.Fatal("missing stale availability condition", name)
+			}
+		}
+		if !agentsCurrent {
+			t.Fatal("missing informational agent inventory")
 		}
 		if stored.Phase != domain.PhaseReady || stored.Conditions[0].Status != "True" {
 			t.Fatal("API projection mutated stored observation")

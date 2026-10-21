@@ -11,7 +11,7 @@ import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Me
 import { useClusterContext } from './ClusterDetail';
 import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
 import { memberHealthCounts } from '../member-status';
-import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, knownHost, psmdbConnect } from './detail-state';
+import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, psmdbConnect } from './detail-state';
 import { hasCapability, hasReplicaSetDetails } from '@/engines';
 import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
 import { kibanaReady } from '@/engines/elasticsearch/spec';
@@ -26,6 +26,7 @@ import { isPostgres } from '@/engines/postgres/spec';
 import { DataMcpSection } from './DataMcpSection';
 import { supportsDataMcp } from './datamcp';
 import { isMySQL } from '@/engines/mysql/spec';
+import { agentBuildState, placementCopy } from './ops-state';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -54,7 +55,7 @@ export function OverviewTab() {
   const conn = cluster.status.connection;
   const pl = placement.data ?? cluster.status.placement;
   const colocated = colocatedGroups(pl?.groups);
-  const placementUnknown = !pl?.groups.length || pl.groups.some((g) => !knownHost(g.name));
+  const placementNotice = placementCopy(pl);
   const suspended = cluster.status.phase === 'Suspended';
   const elasticMembers = spec.provider === 'elasticsearch' ? elasticMemberSummary(spec.components, list) : undefined;
   const healthNotices = spec.provider === 'elasticsearch' && !suspended ? elasticHealthNotices(cluster.status.conditions) : [];
@@ -114,8 +115,9 @@ export function OverviewTab() {
         </Card>
       </div>
 
-      <Callout tone={colocated.length ? 'warn' : 'info'} title={colocated.length ? 'Members share a physical host' : placementUnknown ? 'Placement unknown until members report' : 'Placement is best effort'}>
-        {placementUnknown ? 'Host information has not been reported for every member. Co-location cannot be determined yet. Zerops does not guarantee physical-host anti-affinity.' : pl?.warning || 'Zerops does not guarantee that members are placed on separate physical hosts; Karakoram cannot promise tolerance to a host failure.'}
+      {placement.error ? <ErrorBlock error={placement.error} retry={() => placement.refetch()} /> : null}
+      <Callout tone={colocated.length ? 'warn' : 'info'} title={placementNotice.title}>
+        {placementNotice.message}
         {colocated.length ? (
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {colocated.map((g) => (
@@ -181,21 +183,18 @@ export function OverviewTab() {
                     <td>{m.diskUsageBytes === undefined ? '—' : <Meter value={m.diskUsageBytes / 2 ** 30} max={m.diskTotalBytes ? m.diskTotalBytes / 2 ** 30 : undefined} unit="GiB" />}</td>
                     <td className="small">{formatDuration(m.uptime)}</td>
                     <td>
-                      {m.agent ? (
-                        <Badge tone={suspended ? 'neutral' : m.agent.connected ? 'ok' : 'warn'} plain title={m.agent.lastSeenAt ? `last seen ${m.agent.lastSeenAt}` : undefined}>
-                          {suspended ? 'historical observation' : m.agent.connected ? 'connected' : 'offline'}
-                          {m.agent.version ? ` ${m.agent.version}` : ''}
-                        </Badge>
-                      ) : (
-                        '—'
-                      )}
+                      <Badge tone={suspended ? 'neutral' : agentBuildState(m.agent, cluster.status.agents?.targetBuild) === 'Current' ? 'ok' : 'warn'} plain>
+                        {agentBuildState(m.agent, cluster.status.agents?.targetBuild)}
+                      </Badge>
+                      <div className="xs muted">{suspended ? 'historical observation' : m.agent?.connected ? 'connected' : 'offline'} · {m.agent?.version || 'version unknown'}</div>
+                      {m.agent?.build || m.agent?.commit ? <details className="xs"><summary>Build identity</summary><div style={{ overflowWrap: 'anywhere' }}>Build: <code>{m.agent.build || 'unknown'}</code><br />Commit: <code>{m.agent.commit || 'unknown'}</code><br />Last seen: <Time iso={m.agent.lastSeenAt} /></div></details> : null}
                     </td>
                     <td className="mono xs">{m.placementGroup ?? '—'}</td>
                   </tr>
                 ))}
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={replicaSetDetails ? 12 : 10} className="table-empty">
+                    <td colSpan={replicaSetDetails ? 14 : 12} className="table-empty">
                       {members.isPending ? <Loading /> : 'No members reported yet.'}
                     </td>
                   </tr>

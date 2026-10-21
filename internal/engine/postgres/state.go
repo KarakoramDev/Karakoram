@@ -55,35 +55,36 @@ type member struct {
 	// ImportBatch preserves the exact original subset across ambiguous imports.
 	// Resources/Replicas are frozen with it; sensitive Env is rebuilt from the
 	// sealed member token, never stored in Cluster.Internal.
-	ImportBatch        *engine.ImportPlan             `json:"importBatch,omitempty"`
-	Stage              string                         `json:"stage"`
-	Version            string                         `json:"version"`
-	Resources          domain.Resources               `json:"resources"`
-	Disk               domain.Resources               `json:"disk"`
-	Replicas           int                            `json:"replicas"`
-	ConfigVersion      int64                          `json:"configVersion"`
-	EtcdState          string                         `json:"etcdState,omitempty"`
-	EtcdID             string                         `json:"etcdId,omitempty"`
-	Public             bool                           `json:"public,omitempty"`
-	Options            json.RawMessage                `json:"options,omitempty"`
-	DeployOp           *infra.Op                      `json:"deployOp,omitempty"`
-	Topology           string                         `json:"topology,omitempty"`
-	Removing           bool                           `json:"removing,omitempty"`
-	ProxyDrainVersion  int64                          `json:"proxyDrainVersion,omitempty"`
-	ProxyReady         bool                           `json:"proxyReady,omitempty"`
-	Retirement         string                         `json:"retirement,omitempty"`
-	RetirementOp       *infra.Op                      `json:"retirementOp,omitempty"`
-	EtcdLearner        bool                           `json:"etcdLearner,omitempty"`
-	InitialCluster     string                         `json:"initialCluster,omitempty"`
-	TLSPending         bool                           `json:"tlsPending,omitempty"`
-	TLSReloadPending   bool                           `json:"tlsReloadPending,omitempty"`
-	TLSReloadVersion   int64                          `json:"tlsReloadVersion,omitempty"`
-	TLSReloadOnly      bool                           `json:"tlsReloadOnly,omitempty"`
-	TLSReloadBlocked   string                         `json:"tlsReloadBlocked,omitempty"`
-	ProxyClockRecovery map[string]*proxyClockRecovery `json:"proxyClockRecovery,omitempty"`
-	Offline            bool                           `json:"offline,omitempty"`
-	RuntimeRecovery    engine.RuntimeRecovery         `json:"runtimeRecovery,omitempty"`
-	UnplacedRetirement *engine.UnplacedRetirement     `json:"unplacedRetirement,omitempty"`
+	ImportBatch          *engine.ImportPlan             `json:"importBatch,omitempty"`
+	Stage                string                         `json:"stage"`
+	Version              string                         `json:"version"`
+	Resources            domain.Resources               `json:"resources"`
+	Disk                 domain.Resources               `json:"disk"`
+	Replicas             int                            `json:"replicas"`
+	ConfigVersion        int64                          `json:"configVersion"`
+	EtcdState            string                         `json:"etcdState,omitempty"`
+	EtcdID               string                         `json:"etcdId,omitempty"`
+	Public               bool                           `json:"public,omitempty"`
+	Options              json.RawMessage                `json:"options,omitempty"`
+	DeployOp             *infra.Op                      `json:"deployOp,omitempty"`
+	Topology             string                         `json:"topology,omitempty"`
+	Removing             bool                           `json:"removing,omitempty"`
+	ProxyDrainVersion    int64                          `json:"proxyDrainVersion,omitempty"`
+	ProxyReady           bool                           `json:"proxyReady,omitempty"`
+	Retirement           string                         `json:"retirement,omitempty"`
+	RetirementOp         *infra.Op                      `json:"retirementOp,omitempty"`
+	EtcdLearner          bool                           `json:"etcdLearner,omitempty"`
+	InitialCluster       string                         `json:"initialCluster,omitempty"`
+	TLSPending           bool                           `json:"tlsPending,omitempty"`
+	TLSReloadPending     bool                           `json:"tlsReloadPending,omitempty"`
+	TLSReloadVersion     int64                          `json:"tlsReloadVersion,omitempty"`
+	TLSReloadOnly        bool                           `json:"tlsReloadOnly,omitempty"`
+	TLSReloadBlocked     string                         `json:"tlsReloadBlocked,omitempty"`
+	ProxyClockRecovery   map[string]*proxyClockRecovery `json:"proxyClockRecovery,omitempty"`
+	Offline              bool                           `json:"offline,omitempty"`
+	RuntimeRecovery      engine.RuntimeRecovery         `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement   *engine.UnplacedRetirement     `json:"unplacedRetirement,omitempty"`
+	ConfigRestartPending bool                           `json:"configRestartPending,omitempty"`
 }
 type pending struct {
 	Op        infra.Op         `json:"op"`

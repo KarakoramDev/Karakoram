@@ -107,7 +107,7 @@ func TestJanitorReplacementIsDroppedWithoutDeletion(t *testing.T) {
 	if err := j.Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 1 || e.items[0].Reason != "OrphanedVolumeRecordRemoved" || e.items[0].Actor != "system" {
+	if len(s.items) != 0 || b.deletes != 0 || b.polls != 0 || len(e.items) != 1 || e.items[0].Reason != "VolumeDeletionRefused" || e.items[0].Type != "Warning" || e.items[0].Actor != "system" {
 		t.Fatal(s.items, b, e.items)
 	}
 }

@@ -49,7 +49,9 @@ func (h *Hub) Subscribe(namespace, cluster string) (<-chan domain.Event, func())
 
 // Publish offers an event to matching subscribers without blocking.
 func (h *Hub) Publish(event domain.Event) {
-	event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	if event.Cluster != "" {
+		event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, s := range h.subscribers {
@@ -79,7 +81,9 @@ func NewRecorder(repository store.EventRepository, hub *Hub) *Recorder {
 
 // Record durably appends an event before broadcasting its assigned ID.
 func (r *Recorder) Record(ctx context.Context, event domain.Event) error {
-	event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	if event.Cluster != "" {
+		event.Namespace = domain.NormalizedNamespace(event.Namespace)
+	}
 	if err := r.store.AppendEvent(ctx, &event); err != nil {
 		return err
 	}

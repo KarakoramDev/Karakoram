@@ -22,11 +22,16 @@ import (
 )
 
 type operationState struct {
-	Done          []string `json:"done"`
-	Waiting       string   `json:"waiting,omitempty"`
-	Stage         string   `json:"stage"`
-	NewMember     string   `json:"newMember,omitempty"`
-	ConfigVersion int64    `json:"configVersion"`
+	Done    []string `json:"done"`
+	Waiting string   `json:"waiting,omitempty"`
+	// Disrupting pins a member after primary step-down until its recovery completes.
+	Disrupting    string                      `json:"disrupting,omitempty"`
+	Stage         string                      `json:"stage"`
+	NewMember     string                      `json:"newMember,omitempty"`
+	Relocate      bool                        `json:"relocate,omitempty"`
+	AvoidGroup    string                      `json:"avoidGroup,omitempty"`
+	ConfigVersion int64                       `json:"configVersion"`
+	AgentTarget   *engine.AgentUpgradePayload `json:"agentTarget,omitempty"`
 }
 
 func decodeJSON(b []byte, v any) error {
@@ -134,7 +139,18 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return engine.OpResult{RequeueAfter: 5 * time.Second, Checkpoint: op.Checkpoint, Message: "Waiting for accepted runtime recovery"}, e
 	}
 	payload := map[string]string{}
-	if e = decodeJSON(op.Payload, &payload); e != nil {
+	var replacement struct {
+		Member     string `json:"member"`
+		Relocate   bool   `json:"relocate"`
+		AvoidGroup string `json:"avoidGroup"`
+	}
+	if op.Kind == domain.OperationReplaceMember {
+		e = decodeJSON(op.Payload, &replacement)
+		payload["member"] = replacement.Member
+	} else if op.Kind != domain.OperationUpgradeAgents {
+		e = decodeJSON(op.Payload, &payload)
+	}
+	if e != nil {
 		return result, invalid("invalid operation payload")
 	}
 	if op.Kind == domain.OperationBackup || op.Kind == domain.OperationDeleteBackup || op.Kind == domain.OperationRestore {
@@ -230,6 +246,22 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, e
 	}
 	switch op.Kind {
+	case domain.OperationUpgradeAgents:
+		if cp.AgentTarget == nil {
+			target, err := engine.AgentUpgradeTarget(op)
+			if err != nil {
+				return result, err
+			}
+			cp.AgentTarget = &target
+			if target.TargetBuild != engine.CurrentAgentBuild().Build {
+				return result, fmt.Errorf("agent upgrade target build differs from the running control plane; re-run upgrade-agents")
+			}
+			return opResult(cp, false, "agent-target-frozen")
+		}
+		if cp.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build {
+			return result, fmt.Errorf("agent upgrade target build differs from the running control plane; re-run upgrade-agents")
+		}
+		return p.rollingOperation(ctx, rc, s, cp, false, op.ID)
 	case domain.OperationRaiseFCV:
 		return p.raiseFCV(ctx, rc, s, cp, payload["version"], p.setFCV)
 	case domain.OperationRestart:
@@ -324,6 +356,8 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			}
 			m := s.add(rc.Cluster.Name, old.Set, old.Role, old.Shard)
 			m.ReplacesVolume = old.Volume
+			cp.Relocate, cp.AvoidGroup = replacement.Relocate, replacement.AvoidGroup
+			m.Relocate, m.AvoidGroup = cp.Relocate, cp.AvoidGroup
 			if e := allocateNewPlans(ctx, rc, s, []*member{m}); e != nil {
 				removeRecord(s, m.Name)
 				return result, e
@@ -412,6 +446,13 @@ func (p *Provider) setFCV(ctx context.Context, rc *engine.Context, s *internalSt
 }
 
 func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, reload bool, requestID string) (engine.OpResult, error) {
+	return p.rollingOperationWithGates(ctx, rc, s, cp, reload, requestID, p.prepareDisruption, p.replication)
+}
+
+func (p *Provider) rollingOperationWithGates(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, reload bool, requestID string,
+	prepare func(context.Context, *engine.Context, *internalState, *member) (bool, error),
+	replication func(context.Context, *engine.Context, *internalState, *member) (mongoadmin.Status, error),
+) (engine.OpResult, error) {
 	// An operation may start while convergence still owns a platform action.
 	// Preserve its checkpoint until that action (including any retry) completes.
 	if s.Pending != nil || s.Retry != nil {
@@ -434,19 +475,39 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		if e != nil || !running(st, m.Role) || reload && st.ConfigVersion < cp.ConfigVersion {
 			return opResult(cp, false, "waiting-agent")
 		}
+		if cp.AgentTarget != nil && st.Agent.Build != cp.AgentTarget.TargetBuild {
+			return opResult(cp, false, "waiting-agent-build")
+		}
 		if m.Role != agentapi.RoleRouter {
-			rs, e := p.replication(ctx, rc, s, m)
+			rs, e := replication(ctx, rc, s, m)
 			if e != nil || !caught(rs, m.Name) {
 				return opResult(cp, false, "waiting-replication")
 			}
 		}
+		if cp.AgentTarget != nil {
+			m.Stage = "active"
+		}
 		cp.Done = append(cp.Done, m.Name)
 		cp.Waiting = ""
+		cp.Disrupting = ""
 		return opResult(cp, false, "member-healthy")
 	}
 	pending := []*member{}
 	for _, m := range ordered(s) {
 		if !m.Removing && !slices.Contains(cp.Done, m.Name) {
+			if cp.AgentTarget != nil && cp.Disrupting != m.Name {
+				observed := domain.MemberStatus{Name: m.Name}
+				for _, status := range rc.Cluster.Status.Members {
+					if status.Name == m.Name {
+						observed = status
+						break
+					}
+				}
+				if !engine.MemberNeedsAgentUpgrade(observed, *cp.AgentTarget) {
+					cp.Done = append(cp.Done, m.Name)
+					continue
+				}
+			}
 			pending = append(pending, m)
 		}
 	}
@@ -454,8 +515,13 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		return opResult(cp, true, "rolling-complete")
 	}
 	candidate := pending[0]
-	if candidate.Role != agentapi.RoleRouter {
-		rs, e := p.replication(ctx, rc, s, candidate)
+	if cp.Disrupting != "" {
+		candidate = s.find(cp.Disrupting)
+		if candidate == nil {
+			return engine.OpResult{}, engine.ErrNotFound
+		}
+	} else if candidate.Role != agentapi.RoleRouter {
+		rs, e := replication(ctx, rc, s, candidate)
 		if e != nil {
 			return engine.OpResult{}, e
 		}
@@ -471,12 +537,34 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 			}
 		}
 	}
-	stepped, e := p.prepareDisruption(ctx, rc, s, candidate)
+	if cp.AgentTarget != nil && engine.DeploymentBlocked(rc, candidate.Name, p.runtimeSpec(rc, candidate, candidate.Version)) {
+		return opResult(cp, false, "waiting-deployment")
+	}
+	// Gate only the next member, before prepare can step down its primary.
+	// Credential rotation is exempt; an already stepped-down member must finish
+	// even if the maintenance window closed while its checkpoint was persisted.
+	if cp.Disrupting == "" && (rc.Operation == nil || rc.Operation.Kind != domain.OperationRotateSystemUser) {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+			result, err := opResult(cp, false, "waiting-maintenance-window")
+			result.Message = "Waiting for maintenance window"
+			result.RequeueAfter = wait.RequeueAfter
+			return result, err
+		}
+	}
+	stepped, e := prepare(ctx, rc, s, candidate)
 	if e != nil {
 		return engine.OpResult{}, e
 	}
 	if stepped {
+		cp.Disrupting = candidate.Name
 		return opResult(cp, false, "primary-stepped-down")
+	}
+	if cp.AgentTarget != nil {
+		if err := p.deploy(ctx, rc, s, candidate, "agent", candidate.Version); err != nil {
+			return engine.OpResult{}, err
+		}
+		cp.Waiting = candidate.Name
+		return opResult(cp, false, "agent-deployed")
 	}
 	if reload {
 		if cp.Stage == "rotate-certificates" {
@@ -630,4 +718,17 @@ func (*Provider) SyncDuringOperation(op *domain.Operation) bool {
 		return false
 	}
 	return cp.Stage == "join" || cp.Stage == "remove"
+}
+
+// ValidateMemberReplacement shares native target admission with fleet moves.
+func (*Provider) ValidateMemberReplacement(c *domain.Cluster, name string) error {
+	s, err := load(c)
+	if err != nil {
+		return err
+	}
+	m := s.find(name)
+	if m == nil || m.Role == agentapi.RoleRouter {
+		return invalid("replacement requires a data/config member")
+	}
+	return nil
 }

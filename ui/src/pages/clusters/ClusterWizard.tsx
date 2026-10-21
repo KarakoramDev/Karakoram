@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
-import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
+import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useNamespaces, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject } from '@/auth/permissions';
 import { useNamespace } from '@/namespaces/useNamespace';
@@ -36,6 +36,7 @@ import { managementIsPublic } from '@/engines/rabbitmq/helpers';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { useLocalRequest } from './use-local-request';
 import { resourceRows as temporalResourceRows } from '@/engines/temporal/spec';
+import { plannedPlacementCopy } from './detail/ops-state';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -69,11 +70,13 @@ export function ClusterWizardPage() {
   const { namespace: selectedNamespace } = useNamespace();
   const providers = useProviders();
   const namespaceOptions = useNamespaceOptions();
+  const namespaces = useNamespaces(auth.can('namespaces', 'read'));
 
   const [step, setStep] = useState<StepId>('basics');
   const [name, setName] = useState('');
   const [targetNamespace, setTargetNamespace] = useState(selectedNamespace ?? '');
   const [spec, setSpec] = useState<ClusterSpec | null>(null);
+  const placementPlan = plannedPlacementCopy(namespaces.data?.items.find((ns) => ns.name === targetNamespace)?.capabilities);
   const [presetName, setPresetName] = useState('');
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
 
@@ -389,9 +392,8 @@ export function ClusterWizardPage() {
           {step === 'topology' ? (
             <Card title={mongo ? (sharded ? 'Sharded topology' : 'Replica set') : rules.topology[topology.type]?.title ?? topology.displayName}>
               <div className="stack" style={{ gap: 16 }}>
-                <Callout tone="warn" title="No host anti-affinity on Zerops">
-                  Zerops does not guarantee that members land on separate physical hosts. More members improve resilience against process and container failures, but host-failure tolerance cannot be
-                  promised. Karakoram reports detected co-location on the cluster overview.
+                <Callout tone="info" title={placementPlan.title}>
+                  {placementPlan.message}
                 </Callout>
                 {!mongo ? (TopologySection ? <TopologySection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : <GenericComponents spec={spec} topology={topology} showErrors={touched.topology} onChange={(next) => update(() => next)} />) : sharded ? (
                   <>
@@ -590,7 +592,7 @@ export function ClusterWizardPage() {
                     ['Total runtime footprint', `${footprint.members} instances · ${footprint.minCpu}–${footprint.maxCpu} CPU cores · ${footprint.minRam}–${footprint.maxRam} GiB RAM`],
                     ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
                     footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
-                    ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
+                    ['Placement', placementPlan.message],
                     ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec, name)),
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],

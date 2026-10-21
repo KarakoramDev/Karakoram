@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"net/http/httptest"
 	"strings"
@@ -36,6 +37,23 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetWeaviateRole", "GET", "/api/v1/clusters/prod/weaviate/roles/app", ""},
 		{"UpdateWeaviateRole", "PUT", "/api/v1/clusters/prod/weaviate/roles/app", `{"name":"app","permissions":[]}`},
 		{"DeleteWeaviateRole", "DELETE", "/api/v1/clusters/prod/weaviate/roles/app", ""},
+		{"UpgradeClusterAgents", "POST", "/api/v1/clusters/prod/upgrade-agents", "{}"},
+		{"MoveClusterMember", "POST", "/api/v1/clusters/prod/members/prodm0/move", ""},
+		{"GetAgentRolloutSettings", "GET", "/api/v1/settings/agent-rollout", ""},
+		{"UpdateAgentRolloutSettings", "PUT", "/api/v1/settings/agent-rollout", "{\"automatic\":false,\"maxConcurrentClusters\":1}"},
+		{"GetControlPlaneBackupPolicy", "GET", "/api/v1/control-plane/backup-policy", ""},
+		{"UpdateControlPlaneBackupPolicy", "PUT", "/api/v1/control-plane/backup-policy", "{\"enabled\":false,\"storage\":{\"namespace\":\"default\",\"name\":\"storage\"},\"schedule\":\"0 3 * * *\",\"retainCount\":14}"},
+		{"ListControlPlaneBackups", "GET", "/api/v1/control-plane/backups", ""},
+		{"CreateControlPlaneBackup", "POST", "/api/v1/control-plane/backups", ""},
+		{"ListNotificationChannels", "GET", "/api/v1/notification-channels", ""},
+		{"CreateNotificationChannel", "POST", "/api/v1/notification-channels", "{\"name\":\"channel\",\"type\":\"webhook\",\"enabled\":false}"},
+		{"GetNotificationChannel", "GET", "/api/v1/notification-channels/channel", ""},
+		{"ReplaceNotificationChannel", "PUT", "/api/v1/notification-channels/channel", "{\"name\":\"channel\",\"type\":\"webhook\",\"enabled\":false}"},
+		{"DeleteNotificationChannel", "DELETE", "/api/v1/notification-channels/channel", ""},
+		{"TestNotificationChannel", "POST", "/api/v1/notification-channels/channel/test", ""},
+		{"CreateBackupDrill", "POST", "/api/v1/clusters/prod/backup-drills", "{}"},
+		{"ListBackupDrills", "GET", "/api/v1/clusters/prod/backup-drills", ""},
+		{"GetBackupDrill", "GET", "/api/v1/clusters/prod/backup-drills/drill", ""},
 		{"GetSupabaseCredentials", "GET", "/api/v1/clusters/prod/supabase/credentials", ""},
 		{"SetSupabaseSMTPPassword", "PUT", "/api/v1/clusters/prod/supabase/smtp-password", `{"password":"test-password"}`},
 		{"ListSupabaseFunctions", "GET", "/api/v1/clusters/prod/supabase/functions", ""},
@@ -236,7 +254,9 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 			r.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			testHandler(s).ServeHTTP(w, r)
-			if w.Code == 501 || w.Code == 500 || strings.Contains(w.Body.String(), "Unknown ") {
+			var problem struct{ Code, Message string }
+			_ = json.Unmarshal(w.Body.Bytes(), &problem)
+			if w.Code == 501 || w.Code == 500 || problem.Code == "not_implemented" || strings.HasPrefix(problem.Message, "Unknown ") {
 				t.Fatalf("missing handler: %d %s", w.Code, w.Body.String())
 			}
 			seen[operationID(route.name)] = true

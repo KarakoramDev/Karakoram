@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	buildversion "github.com/KarakoramDev/Karakoram/internal/version"
 )
 
 // Options configures node identity, its pinned control-plane connection and local storage.
@@ -472,7 +473,8 @@ func (a *nodeAgent) handler() http.Handler {
 		if capability, ok := a.engine.(interface{ SupportsCertificateReloadOnly() bool }); ok {
 			certificateReloadOnly = capability.SupportsCertificateReloadOnly()
 		}
-		respond(w, agentapi.Status{Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
+		agentBuild := agentapi.AgentBuild{Version: buildversion.Version, Commit: buildversion.Commit, Build: buildversion.BuildIdentity()}
+		respond(w, agentapi.Status{Agent: agentBuild, Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())

@@ -25,28 +25,21 @@ operation. Progress survives control-plane restarts.
 
 This restarts **application processes in place**, not the member agent or its
 deployment archive. An unchanged allocation, job version or agent artifact is
-therefore expected. A control-plane upgrade alone does not roll member agents.
+therefore expected. Without opt-in automatic rollout, a control-plane upgrade alone does not roll member agents.
 Release/configuration reconciliation only redeploys components when its desired
 runtime/version requires it; a new control-plane executable is not itself such
 an intent. Restart is not an artifact-upgrade command.
 
-To roll an existing stateless component onto the current control plane's member
-artifact when no version-driven redeployment is pending, schedule maintenance,
-save its desired replica count/settings, disable it with
-`spec.components.extra.COMPONENT.replicas: 0`, and wait for removal to converge.
-Then restore the saved count and wait for deployment and native readiness.
-Disable dependent components first and restore dependencies first; temporarily
-disable public gateway exposure if disabling the gateway. This recreates the
-component service and interrupts its sessions; do not substitute a positive
-replica/resource change, which can retain the existing archive. For example,
-Realtime can be disabled and re-enabled independently at its supported singleton
-count. Verify the new allocation's deployed member artifact/build identity, not
-only operation success or `componentVersion`. Realtime's internal RPC listener
-is bound to loopback and must never be reachable.
+Use the agent rollout command below to update member artifacts without changing
+application versions or recreating component identities. Realtime's internal RPC
+listener remains bound to loopback and must never be reachable.
 
-Explicitly disabling an existing component proceeds even while database readiness
-is failing (including WAL retention caused by that component). Wait for its
-service removal, not just operation success: the generation remains unacknowledged
+Explicitly disabling an existing component can proceed while database readiness
+is failing (including WAL retention caused by that component), but starting
+runtime removal still requires an open maintenance window or an explicit override.
+Public exposure is revoked immediately; already-submitted operations finish even
+after the window closes. Wait for service removal, not just operation success:
+the generation remains unacknowledged
 until the database and remaining components are Ready. Re-enabling waits for core
 Ready; it cannot deploy a replacement or expose a new public route during a core
 readiness failure.
@@ -54,6 +47,30 @@ readiness failure.
 Database member-agent upgrades require a provider-driven database member
 deployment using the PostgreSQL maintenance/recovery procedures; do not disable
 database members or delete their volumes to emulate a component roll.
+
+## Agent rollout and maintenance windows
+
+`karactl -n NS clusters upgrade-agents NAME` first performs the PostgreSQL
+replica-first/primary-switchover rollout, then redeploys enabled optional
+component runtimes one at a time. Each component retains its runtime identity,
+applied application version and published configuration, and must pass native
+readiness and report the frozen target agent build before advancing. A component
+with several instances completes only when every instance agrees on the target.
+Expect a brief interruption for single-instance components.
+
+Already-current agents are skipped unless `--include-current` is supplied.
+Completed members are journaled across control-plane restarts; cancellation
+waits for an in-flight member before stopping. A changed control-plane build
+cannot start another deployment under the previous frozen target. Normal backend
+deploy admission caps and retry budgets apply.
+
+The PostgreSQL maintenance-window rules also apply here. Additionally, component
+version/configuration redeploys or restarts, resource changes, scale-in and
+component removal wait before starting a new disruption. Existing deployments
+continue through readiness after window closure. Component runtime healing,
+initial provisioning/scale-out and agent transport-certificate renewal do not
+wait. See [PostgreSQL operations](../postgres/operations.md#agent-rollout-and-maintenance-windows)
+for database leaf renewal's seven-day emergency exception and policy overrides.
 
 ## Components and health
 

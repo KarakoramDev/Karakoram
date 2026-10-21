@@ -311,9 +311,13 @@ func backupEvent(ctx context.Context, rc *engine.Context, op *domain.Operation, 
 	if rc.Events == nil {
 		return nil
 	}
+	kind := "Normal"
+	if reason == "BackupFailed" {
+		kind = "Warning"
+	}
 	return rc.Events.Record(ctx, domain.Event{
 		Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name,
-		Operation: op.ID, Type: "Normal", Reason: reason,
+		Operation: op.ID, Type: kind, Reason: reason,
 		Message: message, CreatedAt: now(rc),
 	})
 }
@@ -499,6 +503,9 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 				b.Error = fmt.Sprintf("pgBackRest backup failed after %d attempts: %s", cp.BackupAttempt+1, reason)
 			}
 			if err = rc.Store.UpdateBackup(ctx, b); err != nil {
+				return backupResult(cp, false), err
+			}
+			if err = backupEvent(ctx, rc, op, "BackupFailed", "pgBackRest backup failed"); err != nil {
 				return backupResult(cp, false), err
 			}
 			return backupResult(cp, true), errors.New(b.Error)

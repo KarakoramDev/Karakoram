@@ -224,12 +224,15 @@ func UnknownObservation(status domain.ClusterStatus, at time.Time, reason string
 		}
 	}
 	status.Message = "Availability observation unavailable or stale; inspect member reachability"
+	ObserveAgentVersions(&status, CurrentAgentBuild(), at)
 	return status
 }
 
 // FreshStatus applies a lease to a persisted observation, including legacy
 // snapshots with no sample timestamp. Transition times are not sample times.
 func FreshStatus(status domain.ClusterStatus, at time.Time) domain.ClusterStatus {
+	status.Conditions = slices.Clone(status.Conditions)
+	ObserveAgentVersions(&status, CurrentAgentBuild(), at)
 	active := status.Phase == domain.PhaseReady || status.Phase == domain.PhaseDegraded
 	for _, condition := range status.Conditions {
 		active = active || readinessCondition(condition) && condition.Status == "True"
@@ -293,6 +296,7 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 		}
 		if !failed && (!retry || attempt == 1) {
 			status.ObservationEpoch = rc.ObservationEpoch
+			ObserveAgentVersions(&status, CurrentAgentBuild(), clock.Now())
 			return status, nil
 		}
 		if attempt == 1 || ctx.Err() != nil {

@@ -535,13 +535,24 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 	}
 	return true, nil
 }
-func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (engine.Result, error) {
+func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	defer func() {
+		for _, condition := range rc.Cluster.Status.Conditions {
+			if condition.Type == "MaintenanceWindow" && condition.Status == "False" {
+				wait := rc.WaitForWindow()
+				if wait.RequeueAfter > 0 && (result.RequeueAfter == 0 || wait.RequeueAfter < result.RequeueAfter) {
+					result.RequeueAfter = wait.RequeueAfter
+				}
+				break
+			}
+		}
+	}()
 	certificateErr := p.renewPublishedCertificates(ctx, rc)
 	// Restrict exposure and remove explicitly disabled services even when core
 	// recovery is not Ready. New optional work stays behind the readiness gate.
 	busy, componentErr := p.syncGatewayRestrictions(ctx, rc)
 	observed := rc.Cluster.Status.ObservedGeneration
-	result, err := p.Core.Sync(ctx, rc)
+	result, err = p.Core.Sync(ctx, rc)
 	// The core's applied generation does not include the Supabase services.
 	rc.Cluster.Status.ObservedGeneration = observed
 	if busy || componentErr != nil {
@@ -653,6 +664,12 @@ func (p *Provider) syncDisabledComponents(ctx context.Context, rc *engine.Contex
 		if m.ImportBatch != nil {
 			return true, importComponent(ctx, rc, s, m, desired)
 		}
+		// Exposure revocation is immediate, but starting removal of the
+		// retained runtime is a new disruption. Pending receipts were observed
+		// by the caller before reaching this admission boundary.
+		if !m.Public && m.ServiceID != "" && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		return true, deleteComponent(ctx, rc, s, m)
 	}
 	return false, nil
@@ -710,6 +727,13 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			current.Replicas = m.Replicas
 			current.Resources = m.Resources
 		}
+		if m != nil && ((desired.Replicas == 0 && m.ServiceID != "") ||
+			(m.Stage == engine.ComponentJoined && (desired.Replicas < m.Replicas ||
+				(desired.Replicas > 0 && !reflect.DeepEqual(m.Resources, desired.Resources))))) {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
+		}
 		if m != nil && desired.Replicas > 0 && m.Stage == engine.ComponentJoined {
 			o, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
 			if e != nil {
@@ -730,6 +754,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			// Previous Studio runtimes exposed raw port 3000. A config reload
 			// cannot update backend port declarations, so redeploy them too.
 			if def.Name == "studio" && m.RuntimePort != ports[def.Name] {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				m.Stage = engine.ComponentImported
 				return true, nil
 			}
@@ -742,6 +769,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return true, e
 			}
 			if sp.RestartToken != m.ConfigHash || renew {
+				if sp.RestartToken != m.ConfigHash && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				if sp.Version != m.Version {
 					m.Stage = engine.ComponentImported
 					return true, nil
@@ -787,37 +817,11 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return importComponent(ctx, rc, s, m, desired)
 			},
 			Deploy: func(ctx context.Context) error {
-				if _, e := verifyComponent(ctx, rc, m); e != nil {
-					return e
-				}
 				sp, e := p.desiredSpec(ctx, rc, m)
 				if e != nil {
 					return e
 				}
-				if e = p.publishConfig(ctx, rc, m, sp); e != nil {
-					return e
-				}
-				runtime, e := p.runtimeSpec(rc, m)
-				if e != nil {
-					return e
-				}
-				if m.Stage == engine.ComponentImported {
-					if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, desired.Resources, m.Resources); changed || e != nil {
-						if e == nil {
-							s.Pending = &componentPending{Op: op, Component: def.Name, Action: "resize", Resources: desired.Resources, Target: desired}
-						}
-						return e
-					}
-				}
-				op, e := engine.Deploy(ctx, rc, m.Name, runtime)
-				if e != nil {
-					if errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
-						m.DeploymentFailure = &componentDeploymentFailure{Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(e)}
-					}
-					return e
-				}
-				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "deploy", RuntimePort: ports[def.Name], SubmittedAt: clockNow(rc)}
-				return nil
+				return p.deployComponent(ctx, rc, s, m, sp)
 			},
 			AwaitReady: func(ctx context.Context) error {
 				// A configuration correction must reach an instance even when
@@ -880,6 +884,37 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 		}
 	}
 	return false, nil
+}
+
+func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember, sp sbspec.Spec) error {
+	if _, err := verifyComponent(ctx, rc, m); err != nil {
+		return err
+	}
+	if err := p.publishConfig(ctx, rc, m, sp); err != nil {
+		return err
+	}
+	runtime, err := p.runtimeSpec(rc, m)
+	if err != nil {
+		return err
+	}
+	if m.Stage == engine.ComponentImported {
+		desired := rc.Cluster.Spec.Components.Extra[m.Component]
+		if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, desired.Resources, m.Resources); changed || e != nil {
+			if e == nil {
+				s.Pending = &componentPending{Op: op, Component: m.Component, Action: "resize", Resources: desired.Resources, Target: desired}
+			}
+			return e
+		}
+	}
+	op, err := engine.Deploy(ctx, rc, m.Name, runtime)
+	if err != nil {
+		if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
+			m.DeploymentFailure = &componentDeploymentFailure{Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(err)}
+		}
+		return err
+	}
+	s.Pending = &componentPending{Op: op, Component: m.Component, Action: "deploy", RuntimePort: ports[m.Component], SubmittedAt: clockNow(rc)}
+	return nil
 }
 func deleteComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) error {
 	service, err := verifyComponent(ctx, rc, m)
@@ -984,8 +1019,13 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 		instances = append(instances, instance)
 	}
 	sort.Strings(instances)
+	var identity agentapi.AgentBuild
 	for i, instance := range instances {
 		applied := agents[instance]
+		// Select a deterministic non-current identity when instances disagree.
+		if i == 0 || (identity.Build == engine.CurrentAgentBuild().Build && applied.Agent.Build != identity.Build) || (identity.Build != engine.CurrentAgentBuild().Build && applied.Agent.Build != engine.CurrentAgentBuild().Build && applied.Agent.Build < identity.Build) {
+			identity = applied.Agent
+		}
 		if i == 0 || applied.ConfigVersion < status.agent.ConfigVersion {
 			status.agent.ConfigVersion = applied.ConfigVersion
 		}
@@ -1004,7 +1044,13 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 		// cluster snapshot: keep database conditions and other member diagnoses.
 		status.Message = fmt.Sprintf("%v; inspect %s agent and native application health/connectivity; restore observations before serving traffic", err, m.Name)
 	}
+	status.agent.Version, status.agent.Commit, status.agent.Build = identity.Version, identity.Commit, identity.Build
 	return status, nil
+}
+
+func componentStatusObserved(ctx context.Context, rc *engine.Context, m *componentMember) (componentObservation, agentapi.AgentBuild, error) {
+	status, err := componentStatus(ctx, rc, m)
+	return status, agentapi.AgentBuild{Version: status.agent.Version, Commit: status.agent.Commit, Build: status.agent.Build}, err
 }
 func (p *Provider) reloadComponent(ctx context.Context, rc *engine.Context, m *componentMember) {
 	if rc.Agents == nil {

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/cronutil"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -32,6 +33,7 @@ type Options struct {
 	Clock          engine.Clock
 	ReloadInterval time.Duration
 	Logger         *slog.Logger
+	Events         engine.Recorder
 }
 type entry struct {
 	id   cron.EntryID
@@ -62,13 +64,13 @@ func New(opts Options) (*Scheduler, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+	parser := cronutil.Parser()
 	return &Scheduler{opts: opts, parser: parser, cron: cron.New(cron.WithParser(parser), cron.WithLocation(time.UTC)), entries: make(map[string]entry)}, nil
 }
 
 // ValidateCron accepts standard five-field cron expressions and descriptors.
 func ValidateCron(spec string) error {
-	_, err := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor).Parse(spec)
+	_, err := cronutil.Parser().Parse(spec)
 	return err
 }
 
@@ -188,7 +190,12 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 
 // Fire re-reads the current spec, so removed or disabled schedules cannot fire
 // from a stale cron callback. Clock and Trigger are injectable for tests.
-func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedule string) error {
+func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedule string) (err error) {
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, s.scheduleFailed(ctx, cluster, schedule))
+		}
+	}()
 	c, err := s.opts.Store.GetCluster(ctx, cluster)
 	if err != nil {
 		return err
@@ -213,7 +220,12 @@ func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedul
 
 // catchUp admits at most one overdue occurrence per reload/callback. Its cursor
 // advances only with a committed backup operation, including after CP restart.
-func (s *Scheduler) catchUp(ctx context.Context, cluster domain.ClusterRef, schedule string) error {
+func (s *Scheduler) catchUp(ctx context.Context, cluster domain.ClusterRef, schedule string) (err error) {
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, s.scheduleFailed(ctx, cluster, schedule))
+		}
+	}()
 	c, err := s.opts.Store.GetCluster(ctx, cluster)
 	if err != nil {
 		return err
@@ -354,4 +366,12 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 		}
 	}
 	return nil
+}
+
+func (s *Scheduler) scheduleFailed(ctx context.Context, cluster domain.ClusterRef, schedule string) error {
+	event := domain.Event{Namespace: domain.NormalizedNamespace(cluster.Namespace), Cluster: cluster.Name, Type: "Warning", Reason: "BackupScheduleFailed", Message: "Scheduled backup could not be admitted: " + schedule, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
+	if s.opts.Events != nil {
+		return s.opts.Events.Record(ctx, event)
+	}
+	return s.opts.Store.AppendEvent(ctx, &event)
 }

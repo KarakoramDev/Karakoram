@@ -164,6 +164,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		if volume {
 			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, rc.Cluster.Spec.Components.Engine.Resources)
 			spec.SpreadReplaces = m.ReplacesVolume
+			spec.SpreadAvoid = m.PlacementAvoid
 			specs = append(specs, spec)
 		} else {
 			specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{
@@ -245,6 +246,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if e != nil {
 		return result, e
 	}
+	defer func() { mergeMaintenanceWait(rc, &result) }()
 	defer func() {
 		if e := s.save(rc.Cluster); err == nil {
 			err = e
@@ -342,6 +344,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	// Finish an in-flight rolling member before provisioning or changing any other member.
 	for _, m := range ordered(s) {
 		if m.ChangeAction != "" && m.ChangeAction != "password" {
+			if m.ChangeStep == "quorum" || m.ChangeStep == "critical" || m.ChangeStep == "drain" {
+				wait, err := changeWindow(ctx, rc, m)
+				if err != nil || wait.RequeueAfter != 0 {
+					return wait, err
+				}
+			}
 			s.Phase = "upgrade"
 			_, e = p.changeStep(ctx, rc, s, m)
 			// A replacement allocation reports running before its prepare script
@@ -569,11 +577,19 @@ provision:
 	}
 	if removing := removingMembers(s); len(removing) > 0 {
 		s.Phase = "remove"
+		if removing[0].RemoveStep == "" && !s.ReplaceActive {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+				return wait, nil
+			}
+		}
 		return result, p.removeStep(ctx, rc, s, removing[0])
 	}
 	for _, m := range ordered(s) {
 		r := rc.Cluster.Spec.Components.Engine.Resources
 		if !reflect.DeepEqual(m.Resources, runtimeResources(r)) {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter != 0 {
+				return wait, nil
+			}
 			s.Phase = "resources"
 			if resourceUpdatesDeployRuntime(rc.Backend) || m.Resources.CPUMode != r.CPUMode || m.Resources.MinCPU != r.MinCPU || m.Resources.MaxCPU != r.MaxCPU || !reflect.DeepEqual(m.Resources.StartCPU, r.StartCPU) {
 				beginChange(rc, s, m, "resources")
@@ -596,6 +612,10 @@ provision:
 			}
 		}
 		if m.Version != rc.Cluster.Spec.Version || m.TLSMode != rc.Cluster.Spec.TLS.Mode || m.EngineConfig != rc.Cluster.Spec.EngineConfig || hash(m.EngineOptions) != hash(rc.Cluster.Spec.EngineOptions) || !reflect.DeepEqual(m.ConfigResources, m.Resources) || m.ConfigDisk.MinDisk != m.Disk.MinDisk || m.ConfigDisk.MaxDisk != m.Disk.MaxDisk || pending {
+			wait, err := changeWindow(ctx, rc, m)
+			if err != nil || wait.RequeueAfter != 0 {
+				return wait, err
+			}
 			if m.Version != rc.Cluster.Spec.Version {
 				s.FeatureFlags = true
 			}
@@ -741,7 +761,7 @@ func beginChange(rc *engine.Context, s *internalState, m *member, action string)
 	m.TargetTLS = rc.Cluster.Spec.TLS.Mode
 	m.TargetConfig = rc.Cluster.Spec.EngineConfig
 	m.TargetOptions = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
-	if action == "restart" || action == "tls" {
+	if action == "restart" || action == "tls" || action == "agent" {
 		m.TargetVersion = m.Version
 		m.TargetResources = m.ConfigResources
 		m.TargetTLS = m.TLSMode
@@ -761,7 +781,7 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 	// corrected configuration repair that member instead of waiting forever
 	// for the invalid activated configuration to become healthy. Keep the
 	// captured binary version and resources: this is not an implicit downgrade.
-	if (m.ChangeStep == "reload" || m.ChangeStep == "start" || m.ChangeStep == "wait") &&
+	if m.ChangeAction != "agent" && (m.ChangeStep == "reload" || m.ChangeStep == "start" || m.ChangeStep == "wait") &&
 		(m.TargetConfig != rc.Cluster.Spec.EngineConfig || hash(m.TargetOptions) != hash(rc.Cluster.Spec.EngineOptions)) {
 		m.TargetConfig = rc.Cluster.Spec.EngineConfig
 		m.TargetOptions = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
@@ -809,11 +829,15 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 		}
 		m.ChangeStep = "platform"
 	case "platform": // New config and leaves are published only after the old broker is safely stopped.
-		if err := publishRenewedCertificates(ctx, rc, m); err != nil {
-			return false, err
+		if m.ChangeAction != "agent" {
+			if err := publishRenewedCertificates(ctx, rc, m); err != nil {
+				return false, err
+			}
 		}
-		if err := applyProvidedCertificate(ctx, rc, m); err != nil {
-			return false, err
+		if m.ChangeAction != "agent" {
+			if err := applyProvidedCertificate(ctx, rc, m); err != nil {
+				return false, err
+			}
 		}
 		s.ConfigVersion++
 		m.ConfigVersion = s.ConfigVersion
@@ -822,7 +846,9 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 		m.EngineConfig = m.TargetConfig
 		m.EngineOptions = append(json.RawMessage(nil), m.TargetOptions...)
 		m.ConfigResources = m.TargetResources
-		m.ConfigDisk = m.Disk
+		if m.ChangeAction != "agent" {
+			m.ConfigDisk = m.Disk
+		}
 		if err := s.save(rc.Cluster); err != nil {
 			return false, err
 		}

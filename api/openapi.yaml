@@ -55,6 +55,14 @@ tags:
     description: Initialization material and managed database credential connections.
   - name: MySQL
     description: MySQL application users, databases and bounded database privileges.
+  - name: AgentRollout
+    description: Member agent build inventory and rolling upgrades.
+  - name: ControlPlaneBackup
+    description: Control-plane backup policy and durable backup reports.
+  - name: Notifications
+    description: Secret-safe notification channels and delivery tests.
+  - name: BackupDrills
+    description: Restore verification drills and retained reports.
 paths:
   /openapi.yaml:
     get:
@@ -2364,6 +2372,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2435,6 +2444,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2610,6 +2620,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/actions/rebalance:
@@ -2766,6 +2777,7 @@ paths:
         '503':
           $ref: '#/components/responses/Unavailable'
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -2833,6 +2845,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/rotate-tls:
@@ -2888,6 +2901,7 @@ paths:
           $ref: '#/components/responses/InternalError'
       description: For user-provided TLS, supply replacement PEM inputs in the cluster spec before invoking rotation; no certificate private keys are returned.
       parameters:
+        - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
   /clusters/{cluster}/system-users:
@@ -8919,6 +8933,906 @@ paths:
       security:
         - bearerAuth: []
         - cookieSession: []
+  /clusters/{cluster}/upgrade-agents:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: upgradeClusterAgents
+      x-karakoram-agent:
+        tool: cluster_agents_upgrade
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
+      tags:
+      - AgentRollout
+      summary: Upgrade cluster agents
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeAgentsRequest'
+      responses:
+        '202':
+          description: Accepted; track the returned report or operation.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+            Karakoram-Operation-Id:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /clusters/{cluster}/members/{member}/move:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: member
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    post:
+      operationId: moveClusterMember
+      x-karakoram-agent:
+        tool: cluster_member_move
+        risk: destructive
+        confirm: confirm
+        async: operation
+        untrusted: true
+      tags:
+      - AgentRollout
+      summary: Move cluster member
+      description: Replaces a supported data member with a new runtime and volume, excluding its current host on placement-capable backends. Backends without Placement perform a best-effort replacement with no host placement guarantee. Unknown authoritative placement is refused.
+      x-karakoram-rbac:
+        resource: clusters
+        action: update
+        object: cluster
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IgnoreMaintenanceWindow'
+      responses:
+        '202':
+          description: Accepted replace-member operation. On backends without Placement, the operation message states that this is best-effort with no host placement guarantee.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+            Karakoram-Operation-Id:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /settings/agent-rollout:
+    get:
+      operationId: getAgentRolloutSettings
+      x-karakoram-agent:
+        tool: agent_rollout_settings_get
+        risk: read
+        confirm: none
+        async: none
+      tags:
+      - AgentRollout
+      summary: Get agent rollout settings
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRolloutSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    put:
+      operationId: updateAgentRolloutSettings
+      x-karakoram-agent:
+        tool: agent_rollout_settings_update
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+      tags:
+      - AgentRollout
+      summary: Update agent rollout settings
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRolloutSettings'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRolloutSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /control-plane/backup-policy:
+    get:
+      operationId: getControlPlaneBackupPolicy
+      x-karakoram-agent:
+        tool: control_plane_backup_policy_get
+        risk: read
+        confirm: none
+        async: none
+      tags:
+      - ControlPlaneBackup
+      summary: Get control plane backup policy
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlPlaneBackupPolicy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    put:
+      operationId: updateControlPlaneBackupPolicy
+      x-karakoram-agent:
+        tool: control_plane_backup_policy_update
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+      tags:
+      - ControlPlaneBackup
+      summary: Update control plane backup policy
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControlPlaneBackupPolicy'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlPlaneBackupPolicy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /control-plane/backups:
+    get:
+      operationId: listControlPlaneBackups
+      x-karakoram-agent:
+        tool: control_plane_backups_list
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - ControlPlaneBackup
+      summary: List control plane backups
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlPlaneBackupList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      operationId: createControlPlaneBackup
+      x-karakoram-agent:
+        tool: control_plane_backup_create
+        risk: write
+        confirm: none
+        async: record
+      tags:
+      - ControlPlaneBackup
+      summary: Create control plane backup
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted; track the returned report or operation.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControlPlaneBackup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /notification-channels:
+    get:
+      operationId: listNotificationChannels
+      x-karakoram-agent:
+        tool: notification_channels_list
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - Notifications
+      summary: List notification channels
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannelList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      operationId: createNotificationChannel
+      x-karakoram-agent:
+        tool: notification_channel_create
+        risk: destructive
+        confirm: confirm
+        async: none
+        secret: true
+        untrusted: true
+      tags:
+      - Notifications
+      summary: Create notification channel
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannel'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /notification-channels/{channel}:
+    parameters:
+    - name: channel
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    get:
+      operationId: getNotificationChannel
+      x-karakoram-agent:
+        tool: notification_channel_get
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - Notifications
+      summary: Get notification channel
+      x-karakoram-rbac:
+        resource: settings
+        action: read
+        object: '*'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannel'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    put:
+      operationId: replaceNotificationChannel
+      x-karakoram-agent:
+        tool: notification_channel_replace
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+        secret: true
+        untrusted: true
+      tags:
+      - Notifications
+      summary: Replace notification channel
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannel'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationChannel'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    delete:
+      operationId: deleteNotificationChannel
+      x-karakoram-agent:
+        tool: notification_channel_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+      tags:
+      - Notifications
+      summary: Delete notification channel
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /notification-channels/{channel}/test:
+    parameters:
+    - name: channel
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    post:
+      operationId: testNotificationChannel
+      x-karakoram-agent:
+        tool: notification_channel_test
+        risk: write
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - Notifications
+      summary: Test notification channel
+      x-karakoram-rbac:
+        resource: settings
+        action: update
+        object: '*'
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationTestResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /clusters/{cluster}/backup-drills:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: createBackupDrill
+      x-karakoram-agent:
+        tool: backup_drill_create
+        risk: destructive
+        confirm: confirm
+        async: record
+        untrusted: true
+      tags:
+      - BackupDrills
+      summary: Create backup drill
+      x-karakoram-rbac:
+        resource: restores
+        action: create
+        object: cluster
+      parameters:
+      - $ref: '#/components/parameters/CSRF'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBackupDrillRequest'
+      responses:
+        '202':
+          description: Accepted; track the returned report or operation.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupDrill'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    get:
+      operationId: listBackupDrills
+      x-karakoram-agent:
+        tool: backup_drills_list
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - BackupDrills
+      summary: List backup drills
+      x-karakoram-rbac:
+        resource: restores
+        action: read
+        object: cluster
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupDrillList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /clusters/{cluster}/backup-drills/{drill}:
+    parameters:
+    - $ref: '#/components/parameters/ClusterPath'
+    - $ref: '#/components/parameters/NamespaceQuery'
+    - name: drill
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    get:
+      operationId: getBackupDrill
+      x-karakoram-agent:
+        tool: backup_drill_get
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
+      tags:
+      - BackupDrills
+      summary: Get backup drill
+      x-karakoram-rbac:
+        resource: restores
+        action: read
+        object: cluster
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupDrill'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '501':
+          $ref: '#/components/responses/NotImplemented'
 components:
   securitySchemes:
     bearerAuth:
@@ -8932,6 +9846,11 @@ components:
       name: karakoram_access
       description: HttpOnly Secure SameSite=Strict EdDSA access JWT. Renew via the rotating HttpOnly karakoram_refresh cookie at /auth/refresh. X-Karakoram-CSRF is required on unsafe methods.
   parameters:
+    IgnoreMaintenanceWindow:
+      name: ignoreMaintenanceWindow
+      in: query
+      description: Explicitly bypass the cluster maintenance window for this request.
+      schema: {type: boolean, default: false}
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -9011,6 +9930,15 @@ components:
         type: boolean
         enum: [true]
   responses:
+    NotImplemented:
+      description: The requested feature is not implemented.
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
     MethodNotAllowed:
       description: 'method_not_allowed: the route exists but does not support this method.'
       headers:
@@ -10407,6 +11335,8 @@ components:
       type: object
       additionalProperties: false
       properties:
+        drill:
+          $ref: '#/components/schemas/BackupDrillPolicy'
         storage:
           type: string
           minLength: 1
@@ -10674,6 +11604,8 @@ components:
       type: object
       additionalProperties: false
       properties:
+        maintenance:
+          $ref: '#/components/schemas/MaintenancePolicy'
         retryEpoch:
           type: integer
           format: int64
@@ -10752,6 +11684,10 @@ components:
         message:
           type: string
         version:
+          type: string
+        commit:
+          type: string
+        build:
           type: string
       required:
         - connected
@@ -10975,9 +11911,10 @@ components:
             $ref: '#/components/schemas/PlacementGroup'
         guaranteedAntiAffinity:
           type: boolean
-          enum:
-            - false
-      description: Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
+        source:
+          type: string
+          enum: [backend, best-effort, unavailable]
+      description: Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct.
       required:
         - warning
         - groups
@@ -11013,6 +11950,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        agents:
+          $ref: '#/components/schemas/AgentRolloutStatus'
+        maintenance:
+          $ref: '#/components/schemas/MaintenanceStatus'
         phase:
           type: string
           description: Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
@@ -11063,6 +12004,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        managedBy:
+          allOf:
+            - $ref: '#/components/schemas/ManagedBy'
+          readOnly: true
         namespace:
           allOf:
             - $ref: '#/components/schemas/NamespaceName'
@@ -12675,6 +13620,7 @@ components:
             - update
             - tls
             - upgrade
+            - upgrade-agents
             - delete
             - resume
         phase:
@@ -13256,6 +14202,8 @@ components:
     ClusterInputSpec:
       type: object
       properties:
+        maintenance:
+          $ref: '#/components/schemas/MaintenancePolicy'
         retryEpoch:
           type: integer
           format: int64
@@ -13469,6 +14417,8 @@ components:
     ClusterPatchSpec:
       type: object
       properties:
+        maintenance:
+          $ref: '#/components/schemas/MaintenancePolicyPatch'
         provider:
           type: string
           minLength: 1
@@ -13506,6 +14456,8 @@ components:
       type: object
       additionalProperties: false
       properties:
+        drill:
+          $ref: '#/components/schemas/BackupDrillPolicyPatch'
         storage:
           type: string
           minLength: 1
@@ -13611,6 +14563,8 @@ components:
       type: object
       additionalProperties: false
       properties:
+        drill:
+          $ref: '#/components/schemas/BackupDrillPolicy'
         storage:
           type: string
           minLength: 1
@@ -13677,3 +14631,561 @@ components:
         minDisk: {type: number, minimum: 0, nullable: true}
         maxDisk: {type: number, minimum: 0, nullable: true}
         startCpu: {type: number, minimum: 1, nullable: true}
+    UpgradeAgentsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        includeCurrent: {type: boolean, default: false}
+    AgentBuild:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        build:
+          type: string
+      required:
+      - version
+      - commit
+      - build
+    AgentRolloutSettings:
+      type: object
+      additionalProperties: false
+      properties:
+        automatic:
+          type: boolean
+          default: false
+        maxConcurrentClusters:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+        currentBuild:
+          allOf:
+          - $ref: '#/components/schemas/AgentBuild'
+          readOnly: true
+      required:
+      - automatic
+      - maxConcurrentClusters
+    AgentRolloutStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        targetBuild:
+          type: string
+        targetVersion:
+          type: string
+        outdated:
+          type: array
+          items:
+            type: string
+        unknown:
+          type: array
+          items:
+            type: string
+      required:
+      - targetBuild
+      - targetVersion
+      - outdated
+      - unknown
+    MaintenanceWindow:
+      type: object
+      additionalProperties: false
+      properties:
+        schedule:
+          type: string
+          description: Five-field cron expression specifying window start times.
+        duration:
+          type: string
+          description: Go duration between 15m and 168h.
+      required:
+      - schedule
+      - duration
+    MaintenancePolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        timeZone:
+          type: string
+          default: UTC
+          description: IANA time zone.
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceWindow'
+          maxItems: 16
+    MaintenanceStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        open:
+          type: boolean
+        currentWindowEnd:
+          type: string
+          format: date-time
+        nextWindowStart:
+          type: string
+          format: date-time
+      required:
+      - open
+    ManagedBy:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          x-enum-varnames: [ManagedByKindBackupDrill]
+          enum:
+          - backup-drill
+        cluster:
+          type: string
+        id:
+          type: string
+      required:
+      - kind
+      - cluster
+      - id
+    BackupDrillPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        schedule:
+          type: string
+        backupSchedule:
+          type: string
+        timeout:
+          type: string
+          default: 6h
+          description: Go duration between 30m and 48h.
+      required:
+      - enabled
+      - schedule
+    ControlPlaneBackupStorage:
+      type: object
+      additionalProperties: false
+      properties:
+        namespace:
+          $ref: '#/components/schemas/NamespaceName'
+        name:
+          type: string
+      required:
+      - namespace
+      - name
+    ControlPlaneBackupPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        storage:
+          $ref: '#/components/schemas/ControlPlaneBackupStorage'
+        schedule:
+          type: string
+          default: 0 3 * * *
+        retainCount:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 14
+      required:
+      - enabled
+      - storage
+      - schedule
+      - retainCount
+    ControlPlaneBackup:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        trigger:
+          type: string
+          x-enum-varnames: [ControlPlaneBackupTriggerManual, ControlPlaneBackupTriggerSchedule]
+          enum:
+          - manual
+          - schedule
+        phase:
+          type: string
+          x-enum-varnames: [ControlPlaneBackupPhasePending, ControlPlaneBackupPhaseRunning, ControlPlaneBackupPhaseSucceeded, ControlPlaneBackupPhaseFailed]
+          enum:
+          - Pending
+          - Running
+          - Succeeded
+          - Failed
+        storage:
+          $ref: '#/components/schemas/ControlPlaneBackupStorage'
+        objectKey:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        schemaVersion:
+          type: string
+        karakoramVersion:
+          type: string
+        keyFingerprint:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        error:
+          type: string
+      required:
+      - id
+      - trigger
+      - phase
+      - storage
+      - createdAt
+    NotificationCategory:
+      type: string
+      x-enum-varnames: [NotificationCategoryBackupFailed, NotificationCategoryClusterDegraded, NotificationCategoryClusterRecovered, NotificationCategoryVolumeDeletionRefused, NotificationCategoryCertificateExpiring, NotificationCategoryDeploymentRetriesExhausted, NotificationCategoryOperationFailed, NotificationCategoryMembersCoLocated, NotificationCategoryBackupDrillFailed, NotificationCategoryControlPlaneBackupFailed, NotificationCategoryAgentsOutdated]
+      enum:
+      - backup-failed
+      - cluster-degraded
+      - cluster-recovered
+      - volume-deletion-refused
+      - certificate-expiring
+      - deployment-retries-exhausted
+      - operation-failed
+      - members-co-located
+      - backup-drill-failed
+      - control-plane-backup-failed
+      - agents-outdated
+    NotificationWebhook:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: password
+          writeOnly: true
+        signingSecret:
+          type: string
+          format: password
+          writeOnly: true
+        urlConfigured:
+          type: boolean
+          readOnly: true
+        signingSecretConfigured:
+          type: boolean
+          readOnly: true
+        host:
+          type: string
+          readOnly: true
+    NotificationSlack:
+      type: object
+      additionalProperties: false
+      properties:
+        webhookUrl:
+          type: string
+          format: password
+          writeOnly: true
+        webhookUrlConfigured:
+          type: boolean
+          readOnly: true
+    NotificationEmail:
+      type: object
+      additionalProperties: false
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        security:
+          type: string
+          x-enum-varnames: [NotificationEmailSecurityStarttls, NotificationEmailSecurityTls]
+          enum:
+          - starttls
+          - tls
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+          writeOnly: true
+        passwordConfigured:
+          type: boolean
+          readOnly: true
+        from:
+          type: string
+        to:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 20
+      required:
+      - host
+      - port
+      - security
+      - from
+      - to
+    NotificationChannelStatus:
+      type: object
+      additionalProperties: false
+      properties:
+        lastDeliveryAt:
+          type: string
+          format: date-time
+        lastErrorAt:
+          type: string
+          format: date-time
+        lastError:
+          type: string
+        pending:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+    NotificationChannel:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z][a-z0-9-]{0,39}$
+        type:
+          type: string
+          x-enum-varnames: [NotificationChannelTypeWebhook, NotificationChannelTypeSlack, NotificationChannelTypeEmail]
+          enum:
+          - webhook
+          - slack
+          - email
+        enabled:
+          type: boolean
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationCategory'
+          description: Empty means all categories.
+        namespaces:
+          type: array
+          items:
+            type: string
+          description: Empty means all namespaces, including installation-wide events.
+        webhook:
+          $ref: '#/components/schemas/NotificationWebhook'
+        slack:
+          $ref: '#/components/schemas/NotificationSlack'
+        email:
+          $ref: '#/components/schemas/NotificationEmail'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/NotificationChannelStatus'
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - name
+      - type
+      - enabled
+    NotificationTestResult:
+      type: object
+      additionalProperties: false
+      properties:
+        delivered:
+          type: boolean
+        error:
+          type: string
+      required:
+      - delivered
+    CreateBackupDrillRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        backup:
+          type: string
+    BackupDrillCheck:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        passed:
+          type: boolean
+        message:
+          type: string
+      required:
+      - name
+      - passed
+    BackupDrillCleanup:
+      type: object
+      additionalProperties: false
+      properties:
+        phase:
+          type: string
+          x-enum-varnames: [BackupDrillCleanupPhasePending, BackupDrillCleanupPhaseDone, BackupDrillCleanupPhaseFailed]
+          enum:
+          - Pending
+          - Done
+          - Failed
+        orphanedVolumes:
+          type: array
+          items:
+            type: string
+      required:
+      - phase
+      - orphanedVolumes
+    BackupDrill:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        namespace:
+          $ref: '#/components/schemas/NamespaceName'
+        cluster:
+          type: string
+        backup:
+          type: string
+        backupType:
+          type: string
+        trigger:
+          type: string
+          x-enum-varnames: [BackupDrillTriggerManual, BackupDrillTriggerSchedule]
+          enum:
+          - manual
+          - schedule
+        phase:
+          type: string
+          x-enum-varnames: [BackupDrillPhasePending, BackupDrillPhaseProvisioning, BackupDrillPhaseRestoring, BackupDrillPhaseVerifying, BackupDrillPhaseCleaningUp, BackupDrillPhaseSucceeded, BackupDrillPhaseFailed]
+          enum:
+          - Pending
+          - Provisioning
+          - Restoring
+          - Verifying
+          - CleaningUp
+          - Succeeded
+          - Failed
+        targetCluster:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        readyAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        restoreDurationSeconds:
+          type: integer
+          format: int64
+        totalDurationSeconds:
+          type: integer
+          format: int64
+        dataAgeSeconds:
+          type: integer
+          format: int64
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupDrillCheck'
+        limitations:
+          type: string
+        cleanup:
+          $ref: '#/components/schemas/BackupDrillCleanup'
+        error:
+          type: string
+      required:
+      - id
+      - namespace
+      - cluster
+      - trigger
+      - phase
+      - createdAt
+    ControlPlaneBackupList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ControlPlaneBackup'
+        nextCursor:
+          type: string
+      required:
+      - items
+    NotificationChannelList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationChannel'
+        nextCursor:
+          type: string
+      required:
+      - items
+    BackupDrillList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BackupDrill'
+        nextCursor:
+          type: string
+      required:
+      - items
+    MaintenancePolicyPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        timeZone:
+          type: string
+          default: UTC
+          description: IANA time zone.
+          nullable: true
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaintenanceWindow'
+          maxItems: 16
+          nullable: true
+      nullable: true
+    BackupDrillPolicyPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+          nullable: true
+        schedule:
+          type: string
+          nullable: true
+        backupSchedule:
+          type: string
+          nullable: true
+        timeout:
+          type: string
+          default: 6h
+          description: Go duration between 30m and 48h.
+          nullable: true
+      nullable: true

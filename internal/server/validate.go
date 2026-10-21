@@ -171,6 +171,14 @@ func (s *Server) validationMiddleware(next http.Handler) http.Handler {
 			_ = result.write(w)
 			return
 		}
+		// Generated strict handlers decode JSON even when OpenAPI makes the
+		// entire body optional. Preserve absence through schema validation, then
+		// give that decoder the empty object represented by its zero-value input.
+		if body := route.Operation.RequestBody; body != nil && !body.Value.Required && r.ContentLength == 0 && body.Value.Content["application/json"] != nil {
+			r.Body = io.NopCloser(strings.NewReader("{}"))
+			r.ContentLength = 2
+			r.Header.Set("Content-Type", "application/json")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

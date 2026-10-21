@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"net/http"
 	"strconv"
@@ -164,13 +165,20 @@ func (s *Server) observability(ctx context.Context, name string, in input) respo
 	case "StreamEvents":
 		return s.stream(ctx)
 	case "GetPrometheusMetrics":
-		if s.Monitoring == nil {
-			return fail(503, "unavailable", "Monitoring unavailable")
+		snapshot, err := s.stateMetrics(ctx)
+		if err != nil {
+			return s.failure(err)
 		}
 		return response{noStore: true, serve: func(w http.ResponseWriter) error {
 			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			if err := monitoring.WriteStatePrometheus(w, snapshot); err != nil {
+				return err
+			}
+			if s.Monitoring == nil {
+				return nil
+			}
 			return s.Monitoring.WritePrometheus(ctx, w, func(ref domain.ClusterRef) bool {
-				return (namespaceFilter(ctx) == "" || namespaceFilter(ctx) == domain.NormalizedNamespace(ref.Namespace)) && s.allowed(ctx, "monitoring", "read", clusterObject(ref.Namespace, ref.Name))
+				return s.metricsClusterAllowed(ctx, ref)
 			})
 		}}
 	case "GetClusterMetrics":

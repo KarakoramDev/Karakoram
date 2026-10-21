@@ -255,6 +255,9 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 	writer := statuses[primary]
 	if phase.Direction == "decrease" {
 		if !sharedMemoryMatches(writer, options.Parameters) {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return true, nil
+			}
 			journal.Primary, journal.Barrier, journal.Timeline = "", "", 0
 			return true, pgAction(ctx, rc, primary, pgspec.ActionRestart, pgspec.RestartRequest{PrimaryFirst: true}, nil)
 		}
@@ -274,9 +277,15 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 		if phase.Direction == "decrease" && (st.Timeline != journal.Timeline || !walAtLeast(st.WALPosition, journal.Barrier)) {
 			return true, nil
 		}
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return true, nil
+		}
 		return true, pgAction(ctx, rc, m.Name, pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
 	}
 	if !sharedMemoryMatches(writer, options.Parameters) {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return true, nil
+		}
 		if len(group.data()) == 1 {
 			return true, pgAction(ctx, rc, primary, pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
 		}
@@ -317,6 +326,16 @@ func needsDisruption(p *Core, rc *engine.Context, m *member, desired domain.Comp
 	}
 	next, err := p.parseOptions(rc.Cluster.Spec.EngineOptions)
 	if err != nil {
+		return true
+	}
+	// Composed engines can change extension preloads without adding a core
+	// profile. Those libraries are postmaster settings, not reload-only input.
+	oldPreloads, err := p.profilePreloads(m.Options, major(m.Version))
+	if err != nil {
+		return true
+	}
+	nextPreloads, err := p.profilePreloads(rc.Cluster.Spec.EngineOptions, major(rc.Cluster.Spec.Version))
+	if err != nil || !reflect.DeepEqual(oldPreloads, nextPreloads) {
 		return true
 	}
 	for _, key := range sharedMemoryKeys {

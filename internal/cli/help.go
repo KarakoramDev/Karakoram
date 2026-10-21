@@ -59,6 +59,12 @@ var commandGroupDescriptions = map[string]string{
 	"weaviate":                     "Manage Weaviate database users and RBAC roles",
 	"weaviate users":               "Manage Weaviate database users and API keys",
 	"weaviate roles":               "Manage Weaviate RBAC roles",
+	"backup-drills":                "Restore backups into disposable clusters and inspect verification reports",
+	"notification-channels":        "Manage durable webhook, Slack and email notifications",
+	"control-plane":                "Manage control-plane state backups",
+	"control-plane backup-policy":  "Read and configure control-plane backup policy",
+	"control-plane backups":        "List and run control-plane state backups",
+	"settings agent-rollout":       "Read and configure automatic member-agent rollout",
 }
 
 var commandDescriptions = map[string]string{
@@ -176,6 +182,23 @@ var commandDescriptions = map[string]string{
 	"mysql recover-quorum":              "Explicitly recover PXC quorum after fencing absent members",
 	"neo4j users password":              "Set a Neo4j user password from stdin or generate one (returned once)",
 	"weaviate users rotate-key":         "Rotate a Weaviate database user's API key (returned once)",
+	"notification-channels list":        "List notification channels and delivery status",
+	"notification-channels get":         "Show a notification channel without its secrets",
+	"notification-channels create":      "Create a notification channel from flags or a protected YAML/JSON file",
+	"notification-channels replace":     "Replace a notification channel (omitted secrets are kept for unchanged destinations)",
+	"notification-channels delete":      "Delete a notification channel",
+	"notification-channels test":        "Send a test notification and report delivered/error",
+	"clusters upgrade-agents":           "Roll out the current agent build without changing the engine version",
+	"settings agent-rollout get":        "Show agent rollout settings and current control-plane build",
+	"settings agent-rollout set":        "Replace agent rollout settings (defaults: automatic=false, max-concurrent-clusters=1)",
+	"control-plane backup-policy get":   "Show the control-plane backup policy",
+	"control-plane backup-policy set":   "Replace the control-plane backup policy",
+	"control-plane backups list":        "List control-plane state backup runs",
+	"control-plane backups run":         "Queue a control-plane state backup",
+	"backup-drills list":                "List a cluster's backup drill reports",
+	"backup-drills get":                 "Show drill checks, limitations and cleanup",
+	"backup-drills run":                 "Run a backup restore drill in a disposable cluster",
+	"clusters members move":             "Replace a member on another eligible host, or best-effort when placement is unsupported",
 }
 
 type nativeResourceDescription struct{ singular, plural string }

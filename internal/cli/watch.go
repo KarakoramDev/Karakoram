@@ -69,9 +69,13 @@ func observationRetryDelay(ctx context.Context, err error, backoff time.Duration
 
 // Observation retries never resubmit the accepted mutation.
 func (a *app) observe(ctx context.Context, op, id string) (any, error) {
+	return a.observeArgs(ctx, op, []string{id})
+}
+
+func (a *app) observeArgs(ctx context.Context, op string, args []string) (any, error) {
 	delay := 100 * time.Millisecond
 	for {
-		result, err := a.request(ctx, op, []string{id}, nil, nil)
+		result, err := a.request(ctx, op, args, nil, nil)
 		if err == nil || !transientObservationError(err) || ctx.Err() != nil {
 			return result, err
 		}
@@ -193,6 +197,8 @@ func mutationDescription(op string) string {
 		return "member replacement"
 	case "restartCluster":
 		return "restart"
+	case "upgradeClusterAgents", "upgrade-agents":
+		return "agent rollout"
 	case "resumeCluster":
 		return "resume"
 	case "rotateClusterTLS":

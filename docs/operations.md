@@ -4,6 +4,111 @@
 
 Operate the control plane, managed engines and backend infrastructure as separate systems; each has its own health and recovery signals. Backend-specific procedures below are labelled Zerops; [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
 
+## Maintenance windows
+
+Set `spec.maintenance` to permit new member disruptions only during explicit
+windows. The time zone is an IANA name and defaults to `UTC`; at most 16 windows
+are accepted. Each schedule is a five-field cron **start time**, paired with a
+Go duration from `15m` through `168h`:
+
+```yaml
+spec:
+  maintenance:
+    timeZone: Europe/Prague
+    windows:
+      - schedule: "0 2 * * 0"
+        duration: 2h
+      - schedule: "0 23 * * 3"
+        duration: 45m
+```
+
+Starts follow the selected zone's daylight-saving rules: nonexistent local
+times do not fire, repeated times may fire twice. Durations measure elapsed time,
+not local clock hours. A window includes its start and excludes its end.
+Overlapping or touching windows merge. Omitting the policy or using `windows: []`
+permits disruption at any time.
+
+The disruption gate covers restart, TLS rotation, agent upgrades, FCV changes,
+and user-requested member replacement or move. Providers consult the same gate
+before starting each new engine upgrade, rolling resource/configuration change
+or scale-in disruption. Automatic database leaf-certificate renewal is gated only
+while more than seven days remain. A window is permission to **start**, not a
+deadline to finish: work already past a member's stop/drain boundary continues
+through recovery and rejoin.
+
+Healing and system lost-volume replacement, delete/suspend/resume, create and
+scale-out, backup/restore/initial restore, credential rotation, agent transport
+certificate renewal, and certificates with at most seven days remaining are
+exempt. A queued disruptive operation does not block exempt queued work behind
+it. Closed-window operations remain Pending without attempts or execution-budget
+consumption, with a durable `MaintenanceWindowWait` event and next-start message.
+Provider waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
+imperative operation pauses its execution budget only when that invocation
+actually waits at its own next-disruption gate; a stale cluster-wide condition
+cannot pause unrelated backup/restore work. Recovery after a member disruption,
+cancellation and failure cleanup continue consuming their applicable budgets,
+and an override does not create a maintenance pause.
+
+Cluster responses calculate `status.maintenance.open`, `currentWindowEnd` and
+`nextWindowStart` at response time. No status is emitted for an empty policy.
+An absent current end while open means continuously overlapping weekly coverage.
+The next start is the next cron occurrence, which may lie inside an already open
+merged window.
+
+Use `ignoreMaintenanceWindow=true` on a gated action or cluster PUT/PATCH for an
+explicit override. Imperative overrides belong to that operation; desired-state
+overrides apply only to the accepted generation, not future spec changes. They
+never bypass provider quorum, health, placement or deployment-admission checks:
+
+```sh
+karactl clusters restart demo --ignore-maintenance-window
+karactl clusters patch demo -f maintenance.yaml
+karactl clusters edit demo --ignore-maintenance-window
+karactl clusters create demo --maintenance-time-zone UTC \
+  --maintenance-window '0 2 * * 0;2h'
+```
+
+## Moving a member
+
+```sh
+karactl clusters placement demo
+karactl clusters members move demo MEMBER --wait
+# Only when an immediate disruption is intended:
+karactl clusters members move demo MEMBER --ignore-maintenance-window --wait
+```
+
+Moving is a native **replacement**, not an in-place disk migration: it creates a
+new runtime and volume, synchronizes data using the engine's replacement safety
+gates, and retires the predecessor only after it is safe. Allow temporary capacity
+for the extra member. Supported targets are MongoDB data/config members, RabbitMQ
+members, Elasticsearch data/master nodes, and PostgreSQL HA data members
+(including Supabase's PostgreSQL core). Routers, proxies, standalone PostgreSQL,
+and auxiliary Elasticsearch/Supabase components cannot be moved this way.
+
+The API is `POST /clusters/{cluster}/members/{member}/move`; it returns a durable
+`replace-member` operation with `relocate:true` and the observed `avoidGroup`.
+It shares replacement admission, authorization and maintenance-window rules.
+Use the returned operation ID rather than repeating a request after a timeout.
+
+| Backend | Placement and move guarantee |
+| --- | --- |
+| Nomad / Dokploy | Authoritative node placement. Move excludes the predecessor's node; it fails with “no other eligible node” before retiring the old member if capacity is unavailable. An unknown current group returns HTTP 409. |
+| Zerops | Best-effort runtime/volume replacement only: there is **no host placement guarantee**. Re-observe fingerprints afterwards; do not repeatedly recreate members to chase a different fingerprint. |
+
+`placement.source` is `backend` for authoritative node evidence, `best-effort`
+for agent fingerprints only, or `unavailable` when no usable evidence exists.
+`guaranteedAntiAffinity` is true only when the backend supports Placement,
+**every** member has an authoritative group, and those groups are all distinct.
+Nomad/Dokploy can therefore guarantee distinct hosts when eligible capacity and
+observed separation allow it; neither this flag nor fingerprints certify rack
+or zone independence. Missing observations never establish separation.
+
+Durable `Warning MembersCoLocated` events report a newly observed co-located
+group set; unchanged sets are deduplicated across reconciliations and restarts.
+`Normal MembersSeparated` records when co-location is no longer observed.
+Unknown groups (including unknown fingerprints) are not co-location evidence,
+and a cleared warning alone is not proof of host separation.
+
 ## Health and logs
 
 ```sh

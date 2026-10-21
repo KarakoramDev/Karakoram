@@ -62,6 +62,8 @@ func idempotencyCovered(id string) bool {
 		return true
 	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
 		return true
+	case "upgradeClusterAgents", "moveClusterMember", "updateAgentRolloutSettings", "updateControlPlaneBackupPolicy", "createControlPlaneBackup", "createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel", "testNotificationChannel", "createBackupDrill":
+		return true
 	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
 		return true
 	case "createAPIToken", "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createAccount", "createNamespace", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
@@ -134,6 +136,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	case "createOpenBaoDatabaseConnection":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
+		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
+	case "upgradeClusterAgents", "moveClusterMember", "createBackupDrill":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))

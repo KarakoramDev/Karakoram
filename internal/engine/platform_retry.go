@@ -3,7 +3,18 @@
 
 package engine
 
-import "time"
+import (
+	"errors"
+	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+)
+
+// PlatformFailureDefinitive reports failures that cannot be resolved by replaying
+// the same platform intent.
+func PlatformFailureDefinitive(err error) bool {
+	return errors.Is(err, infra.ErrDeploymentRetriesExhausted) || errors.Is(err, infra.ErrPlacementUnsatisfiable)
+}
 
 // PlatformRetryWait reports an already scheduled retry, not a new failed
 // attempt. Reconcilers retain its status message without recording another

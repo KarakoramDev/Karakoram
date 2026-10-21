@@ -192,9 +192,33 @@ p, role:viewer, namespaces, read, **
 
 Without namespace-read grants the UI shows only `default`, even with remote-cluster access. Remote relays update automatically; expect brief management interruptions and check desired/reported versions and connected state in [Namespaces](namespaces.md#relay-health).
 
-## Member-agent updates
+## Rolling out member agents
 
-A control-plane restart alone does not update existing member agents. Members receive the current executable on their next control-plane-managed member deployment. Plan for mixed agent versions, check compatibility before upgrading, and inspect health/version after rollout. Do not copy binaries into running containers or add another supervisor.
+Upgrading or restarting the control plane does **not** replace existing member agents. A member receives the current executable on its next control-plane-managed deployment. Do not copy binaries into running containers or add another supervisor.
+
+Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
+
+```sh
+karactl clusters upgrade-agents NAME --wait --timeout 30m
+# Include agents already reporting the current build:
+karactl clusters upgrade-agents NAME --include-current --wait
+```
+
+The durable `upgrade-agents` operation redeploys the current executable at the **same engine version**, using each engine's safe, one-member-at-a-time rolling sequence and health/quorum gates. Unknown/legacy agents are eligible for a manual run. If every agent is current, the API returns HTTP 409 with code `AgentsCurrent` unless `--include-current` is set. Cancel with `karactl operations cancel ID`; cancellation is cooperative between members, not a rollback of completed deployments.
+
+Rollouts respect [maintenance windows](operations.md#maintenance-windows). Use `--ignore-maintenance-window` for an explicit override; this does not bypass engine safety gates. Timing out or interrupting `--wait` does not cancel the rollout; retain the operation ID and use `operations wait ID`.
+
+Automatic rollout is **off by default**:
+
+```sh
+karactl settings agent-rollout get
+karactl settings agent-rollout set --automatic=true --max-concurrent-clusters 2
+karactl settings agent-rollout set --automatic=false --max-concurrent-clusters 1
+```
+
+These installation-wide settings include a read-only `currentBuild` (`version`, `commit`, `build`). `set` replaces the settings; omitted flags default to `automatic=false` and `maxConcurrentClusters=1` (allowed range **1–5**).
+
+When enabled, the controller checks every **60 seconds**, enqueuing rollouts only for clusters with **outdated** agents, bounded by `maxConcurrentClusters` across the installation and respecting maintenance windows. Unknown/legacy agents alone do not trigger automatic rollout: run manually. A failed rollout for a target build is **not retried automatically** for that build; fix the cause and re-run manually.
 
 ## Rollback
 
@@ -208,6 +232,15 @@ For Weaviate, follow [native upgrade operations](weaviate/operations.md#restart-
 Retain the archive, master key and previous revision until the upgrade and agent transition are accepted.
 
 ## Version notes
+
+### Unreleased: fleet operations and recovery
+
+- Member build identity and explicit rolling agent upgrades keep executable rollout separate from database-version upgrades. Automatic rollout is opt-in; existing and legacy agents are not redeployed merely because the control plane restarts.
+- Optional cluster maintenance windows defer new disruptive work. Emergency healing and near-expiry certificate recovery remain exempt; explicit overrides never bypass engine safety gates.
+- Placement reports distinguish authoritative anti-affinity from best-effort evidence. Member relocation uses native replacement and synchronization, and cannot promise a new host on backends without placement support.
+- Control-plane backup policy, durable notification deliveries and backup-drill reports add forward-only SQLite migrations. Preserve a consistent pre-upgrade snapshot and the original master key; an older binary must not open newer state.
+- State snapshots do not contain the operator master key or external backend credentials. Rebuild with the original key, endpoint identity and valid credentials; review external changes since the snapshot before resuming reconciliation.
+- Import the [Grafana dashboards and Prometheus rules](monitoring.md) and configure [notification channels](notifications.md) deliberately. Existing installations retain their RBAC policy; installation-wide settings still require explicit settings access.
 
 ### v0.1.2
 

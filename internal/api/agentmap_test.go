@@ -23,6 +23,9 @@ func TestSecuritySensitiveOperationsRequireConfirmation(t *testing.T) {
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
 		"createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole", "createElasticAPIKey",
+		"upgradeClusterAgents", "moveClusterMember", "createBackupDrill",
+		"updateAgentRolloutSettings", "updateControlPlaneBackupPolicy",
+		"createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel",
 	} {
 		t.Run(operation, func(t *testing.T) {
 			rule, exists := OperationAgent[operation]
@@ -51,6 +54,14 @@ func TestNeo4jPasswordOperationsAreSecret(t *testing.T) {
 	for _, operation := range []string{"createNeo4jUser", "setNeo4jUserPassword"} {
 		if !OperationAgent[operation].Secret {
 			t.Errorf("%s must require secret access", operation)
+		}
+	}
+}
+
+func TestNotificationCredentialInputsAreSecret(t *testing.T) {
+	for _, operation := range []string{"createNotificationChannel", "replaceNotificationChannel"} {
+		if rule := OperationAgent[operation]; !rule.Secret {
+			t.Errorf("%s credential input must be secret", operation)
 		}
 	}
 }

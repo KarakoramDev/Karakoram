@@ -254,10 +254,13 @@ func TestFreshStatusExpiresAllCurrentAvailabilityConditions(t *testing.T) {
 			t.Fatal("expired availability remained positive", name, got.Conditions[i])
 		}
 	}
-	for _, condition := range got.Conditions[len(availability):] {
+	for _, condition := range got.Conditions[len(availability):len(status.Conditions)] {
 		if condition.Status != "True" {
 			t.Fatal("expiry erased durable or negative diagnostic", condition)
 		}
+	}
+	if condition := got.Conditions[len(status.Conditions)]; condition.Type != "AgentsCurrent" || condition.Status != "Unknown" || condition.Reason != "Unreported" || readinessCondition(condition) {
+		t.Fatal("expired agent inventory must be informational and unreported", condition)
 	}
 }
 

@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useCluster, useProviders, type Cluster, type Provider } from '@/api/hooks';
-import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject, type Action, type Resource } from '@/auth/permissions';
 import { rememberNamespace } from '@/namespaces/useNamespace';
@@ -21,6 +21,9 @@ import { clusterPath } from '../cluster-path';
 import { OperationNotice } from '@/components/OperationNotice';
 import { detailProvider, engines, hasCapability, supportsOperation, tabAvailable } from '@/engines';
 import { detailTabState } from './detail-tab-state';
+import { AgentRollout } from './AgentRollout';
+import { MaintenanceBadge, MaintenanceOverride } from './Maintenance';
+import { useSubmissionKey } from './use-submission-key';
 
 export interface ClusterContext {
   cluster: Cluster;
@@ -55,11 +58,12 @@ export function ClusterDetailLayout() {
   const location = useLocation();
   const [confirm, setConfirm] = useState<null | 'restart' | 'rotate-tls' | 'resume'>(null);
   const base = clusterPath(namespace, name);
-  const submission = useIdempotencyKey();
+  const [ignoreMaintenanceWindow, setIgnoreMaintenanceWindow] = useState(false);
+  const submission = useSubmissionKey(JSON.stringify({ confirm, ignoreMaintenanceWindow }));
 
   const action = useMutation({
     mutationFn: async (kind: 'restart' | 'rotate-tls' | 'resume') => {
-      const path = { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } } };
+      const path = { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace, ignoreMaintenanceWindow: kind === 'resume' ? undefined : ignoreMaintenanceWindow } } };
       if (kind === 'restart') return unwrap(api.POST('/clusters/{cluster}/restart', path));
       if (kind === 'rotate-tls') return unwrap(api.POST('/clusters/{cluster}/rotate-tls', path));
       return unwrap(api.POST('/clusters/{cluster}/resume', path));
@@ -70,6 +74,7 @@ export function ClusterDetailLayout() {
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(<OperationNotice operationId={'operationId' in result ? result.operationId : 'id' in result ? result.id : undefined}>{kind === 'resume' ? 'Resuming cluster.' : kind === 'restart' ? 'Rolling restart started.' : 'TLS rotation started.'}</OperationNotice>);
       setConfirm(null);
+      setIgnoreMaintenanceWindow(false);
       if (kind !== 'resume') navigate(`${base}/operations`);
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -138,9 +143,11 @@ export function ClusterDetailLayout() {
           </>
         }
         title={
-          <span className="row" style={{ gap: 10 }}>
+          <span className="row wrap" style={{ gap: 10 }}>
             <span className="mono">{name}</span>
             <PhaseBadge phase={cluster.status.phase} message={cluster.status.message} />
+            <MaintenanceBadge cluster={cluster} />
+            {cluster.managedBy?.kind === 'backup-drill' ? <Badge tone="accent" title={`Managed recovery test for ${cluster.managedBy.cluster}`}>Managed drill target</Badge> : null}
             {colocated ? (
               <Badge tone="warn" title={cluster.status.placement?.warning}>
                 Co-located members
@@ -175,6 +182,7 @@ export function ClusterDetailLayout() {
         }
       />
       {q.isError ? <Callout tone="warn" title="Cached status — latest refresh failed"><ErrorBlock error={q.error} retry={() => q.refetch()} /></Callout> : null}
+      <AgentRollout key={`${namespace}/${name}`} context={{ cluster, provider, namespace, name, base, can }} />
       {cluster.status.phase === 'Error' || cluster.status.phase === 'Degraded' ? (
         <Callout tone={cluster.status.phase === 'Error' ? 'danger' : 'warn'} title={cluster.status.phase}>
           {cluster.status.message ?? cluster.status.conditions.find((c) => c.status !== 'True')?.message ?? 'See conditions on the overview tab.'}
@@ -199,7 +207,7 @@ export function ClusterDetailLayout() {
 
       <ConfirmDialog
         open={confirm === 'restart'}
-        onClose={() => { setConfirm(null); action.reset(); submission.reset(); }}
+        onClose={() => { setConfirm(null); setIgnoreMaintenanceWindow(false); action.reset(); submission.reset(); }}
         onConfirm={() => action.mutateAsync('restart')}
         title="Rolling restart"
         confirmLabel="Restart members"
@@ -207,10 +215,11 @@ export function ClusterDetailLayout() {
         error={action.error}
       >
         <p className="small">{maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas)}</p>
+        <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
       </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'rotate-tls'}
-        onClose={() => { setConfirm(null); action.reset(); submission.reset(); }}
+        onClose={() => { setConfirm(null); setIgnoreMaintenanceWindow(false); action.reset(); submission.reset(); }}
         onConfirm={() => action.mutateAsync('rotate-tls')}
         title="Rotate TLS certificates"
         confirmLabel="Rotate"
@@ -222,6 +231,7 @@ export function ClusterDetailLayout() {
           {cluster.spec.provider === 'pxc' ? 'PXC traffic rotation requires offline maintenance: all data members stop, replace the dedicated traffic CA and shared leaf/key, then recover from verified Galera positions. Reformed members reject the old traffic credential. Database access is unavailable until recovery completes. Ordinary membership changes do not require this TLS outage.' : 'New member and server certificates are issued and rolled out with a rolling restart.'}
           {cluster.spec.tls?.ca === 'userProvided' ? cluster.spec.provider === 'pxc' ? ' For user-provided SQL TLS, update the PEM inputs under Topology & scaling before rotating.' : ' For user-provided TLS, update the PEM inputs under Topology & scaling before rotating.' : cluster.spec.provider === 'pxc' ? ' SQL client trust remains separate from traffic trust; clients must reconnect after offline recovery.' : ' Clients pinning the CA certificate keep working; the CA itself is retained.'}
         </p>
+        <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
       </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'resume'}

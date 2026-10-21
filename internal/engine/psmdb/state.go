@@ -71,31 +71,34 @@ type member struct {
 	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
 	Volume             string                     `json:"volume,omitempty"`
 	// ReplacesVolume preserves the replacement placement hint across reconciles.
-	ReplacesVolume   string           `json:"replacesVolume,omitempty"`
-	ServiceID        string           `json:"serviceId,omitempty"`
-	VolumeID         string           `json:"volumeId,omitempty"`
-	VolumeOrphaned   bool             `json:"volumeOrphaned,omitempty"`
-	NeedsAllocation  bool             `json:"needsAllocation,omitempty"`
-	Set              string           `json:"set"`
-	Role             string           `json:"role"`
-	Index            int              `json:"index"`
-	Shard            int              `json:"shard"`
-	Stage            string           `json:"stage"`
-	Version          string           `json:"version"`
-	DesiredVersion   string           `json:"desiredVersion"`
-	ConfigVersion    int64            `json:"configVersion"`
-	TLSMode          string           `json:"tlsMode"`
-	EngineConfig     string           `json:"engineConfig"`
-	CacheGB          float64          `json:"cacheGB"`
-	ConfigDB         string           `json:"configDB,omitempty"`
-	ReplacingReady   bool             `json:"replacingReady"`
-	Resources        domain.Resources `json:"resources"`
-	CPUModeChangedAt time.Time        `json:"cpuModeChangedAt,omitempty"`
-	Disk             domain.Resources `json:"disk"`
-	Containers       int              `json:"containers"`
-	Removing         bool             `json:"removing"`
-	PublicPort       int              `json:"publicPort,omitempty"`
-	PublicHash       string           `json:"publicHash"`
+	ReplacesVolume    string           `json:"replacesVolume,omitempty"`
+	Relocate          bool             `json:"relocate,omitempty"`
+	AvoidGroup        string           `json:"avoidGroup,omitempty"`
+	PlacementRejected bool             `json:"placementRejected,omitempty"`
+	ServiceID         string           `json:"serviceId,omitempty"`
+	VolumeID          string           `json:"volumeId,omitempty"`
+	VolumeOrphaned    bool             `json:"volumeOrphaned,omitempty"`
+	NeedsAllocation   bool             `json:"needsAllocation,omitempty"`
+	Set               string           `json:"set"`
+	Role              string           `json:"role"`
+	Index             int              `json:"index"`
+	Shard             int              `json:"shard"`
+	Stage             string           `json:"stage"`
+	Version           string           `json:"version"`
+	DesiredVersion    string           `json:"desiredVersion"`
+	ConfigVersion     int64            `json:"configVersion"`
+	TLSMode           string           `json:"tlsMode"`
+	EngineConfig      string           `json:"engineConfig"`
+	CacheGB           float64          `json:"cacheGB"`
+	ConfigDB          string           `json:"configDB,omitempty"`
+	ReplacingReady    bool             `json:"replacingReady"`
+	Resources         domain.Resources `json:"resources"`
+	CPUModeChangedAt  time.Time        `json:"cpuModeChangedAt,omitempty"`
+	Disk              domain.Resources `json:"disk"`
+	Containers        int              `json:"containers"`
+	Removing          bool             `json:"removing"`
+	PublicPort        int              `json:"publicPort,omitempty"`
+	PublicHash        string           `json:"publicHash"`
 }
 type setState struct {
 	Stage string `json:"stage"`

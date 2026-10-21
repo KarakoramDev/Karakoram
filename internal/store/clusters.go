@@ -63,7 +63,11 @@ func (s *Store) CreateCluster(ctx context.Context, c *domain.Cluster) error {
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by) VALUES(?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy); err != nil {
+	managed, err := json.Marshal(c.ManagedBy)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO clusters(namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by,managed_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", c.Namespace, c.Name, spec, status, []byte(internal), c.Generation, c.Deleting, opts, c.CreatedAt.UnixNano(), c.UpdatedAt.UnixNano(), c.RequestedBy, string(managed)); err != nil {
 		return typed(err)
 	}
 	if err = acceptClusterOperation(ctx, tx, c.Ref()); err != nil {
@@ -90,9 +94,9 @@ func (e *ClusterDataError) Unwrap() error { return e.Err }
 
 func scanCluster(row scanner) (*domain.Cluster, error) {
 	var c domain.Cluster
-	var spec, status, internal, opts []byte
+	var spec, status, internal, opts, managed []byte
 	var created, updated int64
-	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy)
+	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy, &managed, &c.MaintenanceOverrideGeneration)
 	if err != nil {
 		return nil, typed(err)
 	}
@@ -106,6 +110,11 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 			return nil, &ClusterDataError{Namespace: c.Namespace, Name: c.Name, Field: pair.field, Err: err}
 		}
 	}
+	if len(managed) != 0 {
+		if err = json.Unmarshal(managed, &c.ManagedBy); err != nil {
+			return nil, &ClusterDataError{Namespace: c.Namespace, Name: c.Name, Field: "managed_by", Err: err}
+		}
+	}
 	if !json.Valid(internal) {
 		return nil, &ClusterDataError{Namespace: c.Namespace, Name: c.Name, Field: "internal", Err: errors.New("invalid JSON")}
 	}
@@ -115,7 +124,7 @@ func scanCluster(row scanner) (*domain.Cluster, error) {
 	return &c, nil
 }
 
-const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by"
+const clusterColumns = "namespace,name,spec,status,internal,generation,deleting,delete_options,created,updated,requested_by,managed_by,maintenance_override_generation"
 
 // GetCluster loads cluster.
 func (s *Store) GetCluster(ctx context.Context, ref domain.ClusterRef) (*domain.Cluster, error) {
@@ -186,7 +195,7 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE clusters SET generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	result, err := tx.ExecContext(ctx, "UPDATE clusters SET maintenance_override_generation=CASE WHEN ? THEN generation+CASE WHEN spec<>? THEN 1 ELSE 0 END ELSE maintenance_override_generation END,generation=generation+CASE WHEN spec<>? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", maintenanceOverride(ctx), data, data, data, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(result, err); err != nil {
 		return err
 	}
@@ -265,11 +274,22 @@ func affected(result sql.Result, err error) error {
 
 // UpdateClusterState never overwrites concurrent spec edits or deletion flags.
 func (s *Store) UpdateClusterState(ctx context.Context, c *domain.Cluster) error {
-	return updateClusterState(ctx, s.writer, c)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = updateClusterState(ctx, tx, c); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
-func updateClusterState(ctx context.Context, db executor, c *domain.Cluster) error {
+func updateClusterState(ctx context.Context, db *sql.Tx, c *domain.Cluster) error {
 	if err := c.Ref().Validate(); err != nil {
+		return err
+	}
+	if err := recordPlacementTransition(ctx, db, c); err != nil {
 		return err
 	}
 	status, err := json.Marshal(c.Status)
@@ -480,6 +500,8 @@ func (s *Store) ResumeCluster(ctx context.Context, ref domain.ClusterRef) error 
 
 // DeleteCluster removes cluster-owned restore records and atomically fails unfinished
 // operations so recreating its name cannot resume work belonging to the removed cluster.
+// Drill reports and their cleanup bookkeeping outlive the source so the drill
+// controller can still discover and clean up ownership-fenced restore targets.
 func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error {
 	if err := ref.Validate(); err != nil {
 		return err
@@ -508,6 +530,9 @@ func (s *Store) DeleteCluster(ctx context.Context, ref domain.ClusterRef) error 
 	}
 	_, err = tx.ExecContext(ctx, "DELETE FROM records WHERE scope=? AND kind IN ('secret','agent-token','volume','restore','schedule-cursor')", ref.Key())
 	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM records WHERE kind='setting' AND scope='' AND key=?", "drills/schedule/"+ref.Key()); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -110,6 +110,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	// explicit zero before conversion, while nil values remain provider defaults.
 	s := domain.ClusterSpec{Provider: a.Provider, Version: value(a.Version), EngineConfig: value(a.EngineConfig)}
 	s.DataMcp = dataMcpDomain(a.DataMcp)
+	s.Maintenance = maintenanceDomain(a.Maintenance)
 	if a.Topology != nil {
 		s.Topology = domain.Topology{Type: string(value(a.Topology.Type)), Shards: value(a.Topology.Shards)}
 	}
@@ -129,6 +130,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	}
 	if a.Backup != nil {
 		s.Backup.Storage = value(a.Backup.Storage)
+		s.Backup.Drill = drillPolicyDomain(a.Backup.Drill)
 		if a.Backup.Schedules != nil {
 			s.Backup.Schedules = make([]domain.BackupSchedule, 0, len(*a.Backup.Schedules))
 			for _, b := range *a.Backup.Schedules {
@@ -201,6 +203,7 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: optionalString(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, Allowlist: ptr(nonNil(s.Exposure.Allowlist))}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
 	a.RetryEpoch = ptr(s.RetryEpoch)
 	a.DataMcp = dataMcpAPI(s.DataMcp)
+	a.Maintenance = maintenanceAPI(s.Maintenance)
 	if s.Exposure.IPType != "" {
 		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
 	}
@@ -228,6 +231,7 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 		schedules = append(schedules, api.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: api.BackupScheduleType(b.Type), Storage: optionalString(b.Storage), RetainCount: b.RetainCount, Enabled: b.Enabled})
 	}
 	a.Backup = &api.BackupSpec{Storage: optionalString(s.Backup.Storage), Schedules: &schedules}
+	a.Backup.Drill = drillPolicyAPI(s.Backup.Drill)
 	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 {
 		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled}
 		if s.Backup.PITR.OplogSpanMinutes != 0 {
@@ -269,6 +273,9 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 	a.Agent.Message = optionalString(redact.Diagnostic(m.Agent.Message))
 	a.ComponentVersion = optionalString(m.ComponentVersion)
 	a.Group = m.Group
+	a.Agent.Version = optionalString(m.Agent.Version)
+	a.Agent.Commit = optionalString(m.Agent.Commit)
+	a.Agent.Build = optionalString(m.Agent.Build)
 	if usage.CPUPercent != nil {
 		a.CpuUsage = ptr(float32(*usage.CPUPercent))
 	}
@@ -317,7 +324,10 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 }
 func placementAPI(p domain.Placement) api.Placement {
 	p.Warning = redact.Diagnostic(p.Warning)
-	a := api.Placement{Warning: p.Warning, GuaranteedAntiAffinity: false, Groups: []api.PlacementGroup{}}
+	a := api.Placement{Warning: p.Warning, GuaranteedAntiAffinity: p.GuaranteedAntiAffinity, Groups: []api.PlacementGroup{}}
+	if p.Source != "" {
+		a.Source = ptr(api.PlacementSource(p.Source))
+	}
 	names := make([]string, 0, len(p.Groups))
 	for n := range p.Groups {
 		names = append(names, n)
@@ -359,6 +369,12 @@ func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatu
 			a.DataMcp.Access = ptr(api.DataMcpStatusAccess(d.Access))
 		}
 	}
+	if status.Agents != nil {
+		a.Agents = &api.AgentRolloutStatus{TargetBuild: status.Agents.TargetBuild, TargetVersion: status.Agents.TargetVersion, Outdated: nonNil(status.Agents.Outdated), Unknown: nonNil(status.Agents.Unknown)}
+	}
+	if status.Maintenance != nil {
+		a.Maintenance = &api.MaintenanceStatus{Open: status.Maintenance.Open, CurrentWindowEnd: status.Maintenance.CurrentWindowEnd, NextWindowStart: status.Maintenance.NextWindowStart}
+	}
 	for _, c := range status.Conditions {
 		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: redact.Diagnostic(c.Message), LastTransitionTime: c.LastTransitionTime})
 	}
@@ -394,7 +410,11 @@ func (s *Server) projectedClusterStatus(c domain.Cluster) domain.ClusterStatus {
 }
 func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
 	c.Status = s.projectedClusterStatus(c)
+	s.maintenanceStatus(&c)
 	a := api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.ManagedBy != nil {
+		a.ManagedBy = &api.ManagedBy{Kind: api.ManagedByKind(c.ManagedBy.Kind), Cluster: c.ManagedBy.Cluster, Id: c.ManagedBy.ID}
+	}
 	if c.OperationID != "" {
 		a.OperationId = &c.OperationID
 	}
@@ -588,4 +608,40 @@ func providerAPI(p engine.Provider) api.Provider {
 		a.Presets = append(a.Presets, api.Preset{Name: v.Name, DisplayName: v.Name, Description: &v.Description, Spec: specAPI(spec)})
 	}
 	return a
+}
+
+func maintenanceDomain(p *api.MaintenancePolicy) *domain.MaintenancePolicy {
+	if p == nil {
+		return nil
+	}
+	o := &domain.MaintenancePolicy{TimeZone: value(p.TimeZone)}
+	for _, w := range value(p.Windows) {
+		o.Windows = append(o.Windows, domain.MaintenanceWindow{Schedule: w.Schedule, Duration: w.Duration})
+	}
+	return o
+}
+
+func maintenanceAPI(p *domain.MaintenancePolicy) *api.MaintenancePolicy {
+	if p == nil {
+		return nil
+	}
+	windows := make([]api.MaintenanceWindow, 0, len(p.Windows))
+	for _, w := range p.Windows {
+		windows = append(windows, api.MaintenanceWindow{Schedule: w.Schedule, Duration: w.Duration})
+	}
+	return &api.MaintenancePolicy{TimeZone: optionalString(p.TimeZone), Windows: &windows}
+}
+
+func drillPolicyDomain(p *api.BackupDrillPolicy) *domain.BackupDrillPolicy {
+	if p == nil {
+		return nil
+	}
+	return &domain.BackupDrillPolicy{Enabled: p.Enabled, Schedule: p.Schedule, BackupSchedule: value(p.BackupSchedule), Timeout: value(p.Timeout)}
+}
+
+func drillPolicyAPI(p *domain.BackupDrillPolicy) *api.BackupDrillPolicy {
+	if p == nil {
+		return nil
+	}
+	return &api.BackupDrillPolicy{Enabled: p.Enabled, Schedule: p.Schedule, BackupSchedule: optionalString(p.BackupSchedule), Timeout: optionalString(p.Timeout)}
 }

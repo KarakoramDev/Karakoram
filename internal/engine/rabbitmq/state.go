@@ -46,6 +46,7 @@ type internalState struct {
 	RotationSecrets        []string   `json:"rotationSecrets,omitempty"`
 	InterNodeTLS           bool       `json:"interNodeTLS"`
 	DistributionSet        bool       `json:"distributionSet"`
+	ReplacementFailure     string     `json:"replacementFailure,omitempty"`
 }
 type member struct {
 	Name               string                     `json:"name"`
@@ -54,13 +55,14 @@ type member struct {
 	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
 	Volume             string                     `json:"volume"`
 	// ReplacesVolume preserves the replacement placement hint across reconciles.
-	ReplacesVolume string `json:"replacesVolume,omitempty"`
-	Index          int    `json:"index"`
-	Stage          string `json:"stage"`
-	ServiceID      string `json:"serviceId,omitempty"`
-	VolumeID       string `json:"volumeId,omitempty"`
-	VolumeOrphaned bool   `json:"volumeOrphaned,omitempty"`
-	Resume         bool   `json:"resume,omitempty"`
+	ReplacesVolume string   `json:"replacesVolume,omitempty"`
+	PlacementAvoid []string `json:"placementAvoid,omitempty"`
+	Index          int      `json:"index"`
+	Stage          string   `json:"stage"`
+	ServiceID      string   `json:"serviceId,omitempty"`
+	VolumeID       string   `json:"volumeId,omitempty"`
+	VolumeOrphaned bool     `json:"volumeOrphaned,omitempty"`
+	Resume         bool     `json:"resume,omitempty"`
 	// ResumeDeploy checkpoints non-rolling provisioning, both fresh and retained.
 	// The wire name is retained so already accepted receipts survive upgrades.
 	ResumeDeploy     *pending `json:"resumeDeploy,omitempty"`

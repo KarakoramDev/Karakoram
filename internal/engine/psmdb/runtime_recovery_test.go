@@ -17,6 +17,7 @@ func TestMemberRuntimeRecovery(t *testing.T) {
 		t.Run(fault, func(t *testing.T) {
 			p, rc, _, _ := setup(t)
 			rc.Agents = nil
+			closeFleetWindow(rc)
 			b := fake.New(fake.Options{})
 			rc.Backend = b
 			m := &member{Name: "demom0", Volume: "demom0v", Stage: "active", Set: "rs0", Role: "mongod", Containers: 1}

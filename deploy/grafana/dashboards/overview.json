@@ -1,0 +1,724 @@
+{
+  "uid": "karakoram-overview",
+  "title": "Karakoram / Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": [
+    "karakoram",
+    "overview"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "name": "namespace",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(karakoram_cluster_info, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "cluster",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(karakoram_cluster_info{namespace=~\"$namespace\"}, cluster)",
+          "refId": "cluster"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "member",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(karakoram_member_agent_outdated{namespace=~\"$namespace\",cluster=~\"$cluster\"}, member)",
+          "refId": "member"
+        },
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Member scrape success",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_member_scrape_success{namespace=~\"$namespace\",cluster=~\"$cluster\",member=~\"$member\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Cluster ready",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_cluster_ready{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Cluster degraded",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_cluster_degraded{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Cluster inventory",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_cluster_info{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Conditions (status and reason in legend)",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_cluster_condition{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Backup age by schedule",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - karakoram_backup_last_success_timestamp_seconds{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Certificate remaining lifetime",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_certificate_expiry_timestamp_seconds{namespace=~\"$namespace\",cluster=~\"$cluster\"} - time()",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Drill success age",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - karakoram_backup_drill_last_success_timestamp_seconds{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Drill last failure timestamp",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_backup_drill_last_failure_timestamp_seconds{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Drill restore duration",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_backup_drill_last_restore_duration_seconds{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Agents outdated",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_member_agent_outdated{namespace=~\"$namespace\",cluster=~\"$cluster\",member=~\"$member\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Control-plane backup age",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - karakoram_control_plane_backup_last_success_timestamp_seconds",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Notification failures / second",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(karakoram_notification_deliveries_failed_total[$__rate_interval])",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Members co-located",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_cluster_members_co_located{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Deployment retries exhausted",
+      "description": "No data means unknown, unavailable, not applicable, or not authorized; it is never a healthy zero. Timestamp zero means never recorded. Enable member monitoring for engine metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "karakoram_deployment_retries_exhausted{namespace=~\"$namespace\",cluster=~\"$cluster\"}",
+          "legendFormat": "{{namespace}} / {{cluster}} / {{member}} {{database}} {{component}} {{schedule}} {{certificate}} {{channel}} {{type}} {{status}} {{reason}} {{operation}} {{pool}} {{collector}} {{slot}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bool",
+          "noValue": "No data \u2014 unknown",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Authenticated control-plane /metrics. Missing series are unknown, not zero. State metrics include clusters with member monitoring disabled; choose All when no member series exist."
+}

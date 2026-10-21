@@ -93,6 +93,10 @@ func TestNormalizeRestrictions(t *testing.T) {
 	if _, err := NormalizeRestrictions(&domain.TokenRestrictions{Permissions: []string{"backups:export", "cluster-data:read", "cluster-data:write", "cluster-data:*"}}); err != nil {
 		t.Fatal(err)
 	}
+	// Fleet and installation operations reuse the existing route vocabulary.
+	if _, err := NormalizeRestrictions(&domain.TokenRestrictions{Permissions: []string{"settings:read", "settings:update", "clusters:update", "restores:read", "restores:create"}}); err != nil {
+		t.Fatal(err)
+	}
 	clone := CloneRestrictions(got)
 	clone.Namespaces[0] = "changed"
 	if got.Namespaces[0] == "changed" {

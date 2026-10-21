@@ -151,6 +151,10 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase, MySQL and PXC |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
+| Fleet operations | Cluster `/upgrade-agents`, `/members/{member}/move`; `/settings/agent-rollout` | Provider-supported rolling upgrades and relocation |
+| Control-plane recovery | `/control-plane/backup-policy`, `/control-plane/backups` | Installation-wide |
+| Notifications | `/notification-channels`, `/notification-channels/{channel}`, `/notification-channels/{channel}/test` | Installation-wide |
+| Backup verification | Cluster `/backup-drills`, `/backup-drills/{drill}` | Engines with eligible successful backups |
 
 PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
 Neo4j native-user reads use `database-users:read`; create/delete/password changes additionally require `clusters:update` alongside the corresponding `database-users` permission. Password responses are no-store. The managed `neo4j` administrator is hidden from lists and cannot be mutated here. See [Neo4j access and TLS](neo4j/access-and-tls.md).
@@ -169,6 +173,10 @@ Weaviate uses [native users/roles](weaviate/access-and-tls.md), not MongoDB iden
 Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
 
 Temporal certificate issuance requires `cluster-credentials:read`; certificate/namespace listing requires `clusters:read`; namespace deletion and UI OIDC secret writes require `clusters:update`, all scoped to the cluster. Issuance returns private material once with `no-store`; secret writes return no value. See [Temporal access/TLS](temporal/access-and-tls.md) and [namespace/recovery operations](temporal/operations.md).
+
+Fleet disruption requests and cluster updates support `ignoreMaintenanceWindow=true` where declared in the specification. Without an override, accepted operations can remain Pending until the next configured window; acceptance is not permission to interrupt an in-progress member step. See [maintenance and relocation](operations.md) and [agent rollout](upgrade.md).
+
+Installation-wide agent rollout, control-plane backup and notification routes use `settings:read` or `settings:update`, not cluster permissions. Notification destinations and credentials are write-only; omitted secrets on replacement are retained only for an unchanged destination identity. Backup-drill creation uses `restores:create` on the source cluster; report reads use `restores:read`. Drill and control-plane backup responses are durable reports rather than cluster `Operation` resources: poll their respective inventories. See [notifications](notifications.md), [state recovery](control-plane-backup.md) and [restore drills](backup-drills.md).
 
 ## Namespace parameters and lifecycle
 
@@ -223,6 +231,25 @@ ID is allocated, and an existing cluster's generation is unchanged. Admission
 is a point-in-time observation, not a reservation or guarantee that a later
 mutation or restore will succeed. `karactl` exposes these endpoints with
 [`--dry-run`](cli.md).
+
+## Fleet operations and resilience contract
+
+These API groups implement fleet operations and installation resilience:
+
+| Group | Routes | Success contract and permission |
+| --- | --- | --- |
+| Agent rollout | `POST /clusters/{cluster}/upgrade-agents` | Optional `{includeCurrent}`; **202 Operation**, `clusters:update` on the cluster; **409** when agents are already current. |
+| Agent rollout settings | `GET/PUT /settings/agent-rollout` | `AgentRolloutSettings` with `automatic`, `maxConcurrentClusters` (1–5) and read-only `currentBuild`; installation `settings:read/update`. |
+| Member move | `POST /clusters/{cluster}/members/{member}/move` | **202 Operation**, `clusters:update`; placement guarantees depend on backend capabilities. |
+| Control-plane backups | `GET/PUT /control-plane/backup-policy`, `GET/POST /control-plane/backups` | Installation `settings:read/update`; POST returns **202 ControlPlaneBackup**, not a cluster Operation. |
+| Notifications | `GET/POST /notification-channels`, `GET/PUT/DELETE /notification-channels/{channel}`, `POST /notification-channels/{channel}/test` | Installation `settings:read/update`; test returns **200 NotificationTestResult**. |
+| Backup drills | `GET/POST /clusters/{cluster}/backup-drills`, `GET /clusters/{cluster}/backup-drills/{drill}` | `restores:read/create` on the source cluster; POST accepts optional `{backup}` and returns **202 BackupDrill**. |
+
+Lists use `items` and optional `nextCursor`. New mutations declare CSRF and optional `Idempotency-Key` headers. Notification destination URLs, signing secrets and SMTP passwords are **write-only**; responses expose only configured flags and secret-free status.
+
+Cluster desired state adds `spec.maintenance{timeZone, windows[{schedule, duration}]}` and `spec.backup.drill{enabled, schedule, backupSchedule, timeout}`. Agent build identity is exposed alongside existing member agent connectivity as `agent.version`, `agent.commit` and `agent.build`; `status.agents` summarizes outdated/unknown members. `status.maintenance` reports the computed open window. `managedBy` is server-owned. Placement exposes backend-neutral `source` and `guaranteedAntiAffinity`.
+
+The boolean query `ignoreMaintenanceWindow` is declared on cluster PUT/PATCH, restart, TLS rotation, member replacement/move, agent upgrade and FCV raise. It is an explicit per-request override, not a persisted desired-state policy.
 
 ## Safe retries with Idempotency-Key
 

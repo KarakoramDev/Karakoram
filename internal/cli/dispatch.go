@@ -49,6 +49,74 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		return dispatchOpenBao(ctx, c, op, args, q, body)
 	case "issueTemporalClientCertificate", "listTemporalClientCertificates", "listTemporalNamespaces", "deleteTemporalNamespace", "setTemporalUIOIDCClientSecret":
 		return dispatchTemporal(ctx, c, op, args, q, body)
+	case "listBackupDrills":
+		var p client.ListBackupDrillsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListBackupDrills(ctx, args[0], &p)
+	case "getBackupDrill":
+		var p client.GetBackupDrillParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.GetBackupDrill(ctx, args[0], args[1], &p)
+	case "createBackupDrill":
+		var p client.CreateBackupDrillParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.CreateBackupDrillWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
+	case "listNotificationChannels":
+		var p client.ListNotificationChannelsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListNotificationChannels(ctx, &p)
+	case "getNotificationChannel":
+		return c.GetNotificationChannel(ctx, args[0])
+	case "createNotificationChannel":
+		return c.CreateNotificationChannelWithBody(ctx, nil, "application/json", bytes.NewReader(body))
+	case "replaceNotificationChannel":
+		return c.ReplaceNotificationChannelWithBody(ctx, args[0], nil, "application/json", bytes.NewReader(body))
+	case "deleteNotificationChannel":
+		return c.DeleteNotificationChannel(ctx, args[0], nil)
+	case "testNotificationChannel":
+		return c.TestNotificationChannel(ctx, args[0], nil)
+	case "getAgentRolloutSettings":
+		return c.GetAgentRolloutSettings(ctx)
+	case "updateAgentRolloutSettings":
+		var p client.UpdateAgentRolloutSettingsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.UpdateAgentRolloutSettingsWithBody(ctx, &p, "application/json", bytes.NewReader(body))
+	case "upgradeClusterAgents":
+		var p client.UpgradeClusterAgentsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.UpgradeClusterAgentsWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
+	case "getControlPlaneBackupPolicy":
+		return c.GetControlPlaneBackupPolicy(ctx)
+	case "updateControlPlaneBackupPolicy":
+		var p client.UpdateControlPlaneBackupPolicyParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.UpdateControlPlaneBackupPolicyWithBody(ctx, &p, "application/json", bytes.NewReader(body))
+	case "listControlPlaneBackups":
+		var p client.ListControlPlaneBackupsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListControlPlaneBackups(ctx, &p)
+	case "createControlPlaneBackup":
+		var p client.CreateControlPlaneBackupParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.CreateControlPlaneBackup(ctx, &p)
 	case "getSupabaseCredentials", "setSupabaseSMTPPassword", "listSupabaseFunctions", "getSupabaseFunction", "putSupabaseFunction", "deleteSupabaseFunction", "rotateSupabaseJWTSecret":
 		return dispatchSupabase(ctx, c, op, args, q, body)
 	case "listElasticUsers", "getElasticUser", "createElasticUser", "updateElasticUser", "deleteElasticUser", "listElasticRoles", "getElasticRole", "createElasticRole", "updateElasticRole", "deleteElasticRole", "listElasticAPIKeys", "createElasticAPIKey", "invalidateElasticAPIKey":
@@ -459,6 +527,12 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 			return nil, err
 		}
 		return c.ReplaceClusterBalancerWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
+	case "moveClusterMember":
+		var p client.MoveClusterMemberParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.MoveClusterMember(ctx, args[0], args[1], &p)
 	case "replaceClusterMember":
 		var p client.ReplaceClusterMemberParams
 		if err = json.Unmarshal(q, &p); err != nil {

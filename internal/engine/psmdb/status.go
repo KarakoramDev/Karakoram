@@ -47,7 +47,12 @@ func phase(s *internalState) domain.Phase {
 
 // Status combines wire-protocol replication state, agent health and infrastructure observations.
 func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		if status.Placement.Source == "" {
+			engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		}
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	defer func() {
 		statusErr = errors.Join(statusErr, engine.ApplyInitialDataSourceStatus(p, rc.Cluster, &status))
 	}()
@@ -215,7 +220,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		var allocated *agentapi.ContainerResources
 		if e == nil {
 			allocated = st.Resources
-			ms.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: samples[i].at}
+			ms.Agent = domain.AgentStatus{Version: st.Agent.Version, Commit: st.Agent.Commit, Build: st.Agent.Build, Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: samples[i].at}
 			ms.Version = st.EngineVersion
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
@@ -355,15 +360,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			c.Message = details.String()
 		}
 	}
-	v.Placement = domain.Placement{Groups: map[string][]string{}}
-	for _, ms := range v.Members {
-		group := ms.PlacementGroup
-		if group == "" {
-			group = "unknown"
-		}
-		v.Placement.Groups[group] = append(v.Placement.Groups[group], ms.Name)
-	}
-	v.Placement = describePlacement(v.Placement, rc.Backend.Capabilities().Placement)
+	engine.ObservePlacement(&v, rc.Backend.Capabilities().Placement)
 	placementCondition := domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)}
 	if rc.Backend.Capabilities().Placement {
 		placementCondition.Status, placementCondition.Reason = "True", "BackendReported"

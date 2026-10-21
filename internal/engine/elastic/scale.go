@@ -75,6 +75,9 @@ func (p *Provider) scale(ctx context.Context, rc *engine.Context, s *state) (boo
 			return true, nil
 		}
 		if len(ms) > desired {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return true, nil
+			}
 			m := ms[len(ms)-1]
 			m.Removing = true
 			s.Phase = "scaling"
@@ -148,6 +151,11 @@ func blockDrain(ctx context.Context, rc *engine.Context, s *state, m *member, re
 	return nil
 }
 func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if !m.AllocationExcluded && (m.Stage == stageJoined || m.Stage == stageDeployed) {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return nil
+		}
+	}
 	c, err := p.es(ctx, rc, s)
 	if err != nil {
 		return err

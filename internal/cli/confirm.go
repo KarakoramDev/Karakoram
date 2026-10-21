@@ -24,6 +24,9 @@ func destructive(op string) bool {
 	if op == "rotateSupabaseJWTSecret" {
 		return true
 	}
+	if op == "moveClusterMember" {
+		return true
+	}
 	return strings.HasPrefix(op, "delete") || op == "recoverMySQLQuorum" || op == "invalidateElasticAPIKey" || op == "createRestore" || op == "replaceClusterMember" || op == "raiseClusterFCV" || op == "rotateSystemUser" || op == "rotateClusterTLS" || op == "rotateNamespaceToken" || op == "resetAccountPassword" || op == "cancelOperation"
 }
 

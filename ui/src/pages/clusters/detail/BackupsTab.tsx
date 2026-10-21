@@ -23,6 +23,7 @@ import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
 import { isMySQL } from '@/engines/mysql/spec';
+import { BackupDrills } from './BackupDrills';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
@@ -195,6 +196,7 @@ export function BackupsTab() {
       </Card>
 
       <BackupPolicyCard storageNames={storageNames} backupTypes={backupTypes} />
+      <BackupDrills backups={backups.data?.items ?? []} />
 
       {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} provider={cluster.spec.provider} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 

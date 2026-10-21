@@ -99,6 +99,10 @@ type ServiceSpec struct {
 	// SpreadGroup that this volume replaces. Placement-aware backends ignore
 	// the replaced volume when choosing hosts, so the new volume may take its host.
 	SpreadReplaces string `json:"spreadReplaces,omitempty"`
+	// SpreadAvoid excludes authoritative Container.PlacementGroup identities.
+	// Placement-capable backends reject an unsatisfiable exclusion before allocation;
+	// backends without Placement ignore it.
+	SpreadAvoid []string `json:"spreadAvoid,omitempty"`
 }
 
 // Service describes an observed infrastructure service.

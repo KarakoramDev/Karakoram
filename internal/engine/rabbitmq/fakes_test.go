@@ -261,6 +261,7 @@ type fakeBroker struct {
 	membershipError  string
 	runningNodes     []string
 	resources        *agentapi.ContainerResources
+	agentBuild       string
 }
 type fakeAgents struct {
 	mu              sync.Mutex // Broker lookup and client/server caches.
@@ -370,7 +371,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if a.volumeStatus != nil {
 				volume = a.volumeStatus(name)
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: configVersion, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources, Volume: volume})
+			_ = json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Build: b.agentBuild}, EngineVersion: version, ConfigVersion: configVersion, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources, Volume: volume})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {

@@ -4,8 +4,11 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func TestRetryScheduleProvenanceAndMaximum(t *testing.T) {
@@ -96,5 +99,16 @@ func TestRetryScheduleOldCPRoundTrip(t *testing.T) {
 	}
 	if !current.RetryRecordedAt.IsZero() || !current.Waiting(now, current.At) {
 		t.Fatalf("old CP rewrite must retain deadline with legacy scheduling: %+v", current)
+	}
+}
+
+func TestPlatformFailureDefinitive(t *testing.T) {
+	for _, err := range []error{infra.ErrPlacementUnsatisfiable, infra.ErrDeploymentRetriesExhausted} {
+		if !PlatformFailureDefinitive(fmt.Errorf("wrapped: %w", err)) {
+			t.Fatalf("definitive failure classified retryable: %v", err)
+		}
+	}
+	if PlatformFailureDefinitive(infra.ErrUnavailable) || PlatformFailureDefinitive(nil) {
+		t.Fatal("transient or absent failure classified definitive")
 	}
 }

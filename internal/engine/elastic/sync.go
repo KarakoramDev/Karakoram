@@ -93,8 +93,18 @@ func (p *Provider) failPending(ctx context.Context, rc *engine.Context, s *state
 // failPendingCause retains backend reset constraints when platform operations
 // become durable retry records instead of discarding them with Error().
 func (p *Provider) failPendingCause(ctx context.Context, rc *engine.Context, s *state, v *pending, cause error) error {
+	if errors.Is(cause, infra.ErrPlacementUnsatisfiable) && v.Action == "import" {
+		if m := s.find(v.Member); m != nil && m.Replaces != "" {
+			s.ReplacementFailure = "member relocation failed: no other eligible node"
+			m.Removing = true
+			m.ImportPlan = nil
+			// The volume import was definitively refused before deployment.
+			// Reuse exact-ID unplaced cleanup, never native member retirement.
+			m.UnplacedRetirement = &engine.UnplacedRetirement{}
+		}
+	}
 	var wait *engine.PlatformRetryWait
-	if errors.As(cause, &wait) || errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+	if errors.As(cause, &wait) || engine.PlatformFailureDefinitive(cause) {
 		s.Pending, s.Retry = nil, nil
 		delete(s.PlatformRetries, retryKey(v))
 		if s.Rolling != nil && s.Rolling.Current == v.Member && (v.Action == "upgrade" || v.Action == "deploy") {
@@ -351,6 +361,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 		incomplete = incomplete || volume != nil && volume.Importing
 		if volume == nil {
 			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, comp.Resources)
+			spec.SpreadAvoid = m.PlacementAvoid
 			if old := s.find(m.Replaces); old != nil {
 				spec.SpreadReplaces = old.Volume
 			}
@@ -636,6 +647,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	if agentTargetChanged(s.Rolling) {
+		_, _, err = p.rollingStep(ctx, rc, s)
+		return result, err
+	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
@@ -743,6 +758,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 				}
 				return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 			}
+		}
+		if wait := rollingWindowWait(rc, s); wait.RequeueAfter > 0 {
+			return wait, nil
 		}
 		_, _, err = p.rollingStep(ctx, rc, s)
 		return result, err

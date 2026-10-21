@@ -115,6 +115,7 @@ func (p *Core) Describe() domain.ProviderInfo {
 		Capabilities: []string{"tls", "monitoring", "publicExposure", "systemUsers", "backups", "restores", "pitr", "postgresAccess"},
 		Operations: []string{
 			domain.OperationRestart, domain.OperationReplaceMember, "reinit-member",
+			domain.OperationUpgradeAgents,
 			domain.OperationRotateTLS, domain.OperationBackup, domain.OperationRebalance,
 			domain.OperationRotateSystemUser,
 			domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore",

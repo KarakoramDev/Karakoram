@@ -46,4 +46,11 @@
 // Their roles exclude restricted indices, but wildcard grants still match
 // non-restricted dot indices: the native gateway must independently exclude all
 // dot indices and prevent alias or wildcard expansion from reaching them.
+// Agent rollouts freeze their target build. If the control-plane build changes,
+// no new deployment is admitted or retried for that rollout. An already stopped
+// component is started on its existing artifact; an accepted deployment consumes
+// operator-corrected configuration at its existing engine version and waits for
+// service readiness. Elasticsearch allocation and shard health recover before
+// the rolling journal is retired and the operation fails. Recovery never reports
+// the changed artifact as satisfying the old target.
 package elastic

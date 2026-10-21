@@ -140,6 +140,37 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if err := s.Store.CreateRestore(ctx, &restore); err != nil {
 		t.Fatal(err)
 	}
+	completed := time.Now().UTC()
+	started := completed.Add(-time.Minute)
+	drill := domain.BackupDrill{
+		ID: "drill", Namespace: domain.DefaultNamespace, Cluster: "prod",
+		Backup: backup.Name, BackupType: backup.Type, Trigger: "manual", Phase: "Succeeded",
+		CreatedAt: started, StartedAt: &started, ReadyAt: &completed, CompletedAt: &completed,
+		RestoreDurationSeconds: 60, TotalDurationSeconds: 60,
+		Checks:  []domain.BackupDrillCheck{{Name: "restore-ready", Passed: true}},
+		Cleanup: domain.BackupDrillCleanup{Phase: "Done", OrphanedVolumes: []string{}},
+	}
+	if err := s.Store.CreateBackupDrill(ctx, drill); err != nil {
+		t.Fatal(err)
+	}
+	controlPlaneBackup := domain.ControlPlaneBackup{
+		ID: "control-plane", Trigger: "manual", Phase: domain.PhaseSucceeded,
+		Storage:   domain.ControlPlaneBackupStorage{Namespace: domain.DefaultNamespace, Name: storage.Name},
+		ObjectKey: "control-plane/backup.tar", SizeBytes: 1024,
+		CreatedAt: started, StartedAt: &started, CompletedAt: &completed,
+	}
+	if err := s.Store.EnqueueControlPlaneBackup(ctx, &controlPlaneBackup, nil); err != nil {
+		t.Fatal(err)
+	}
+	channel := domain.NotificationChannel{
+		Name: "channel", Type: "webhook", Enabled: false,
+		Webhook:   &domain.NotificationWebhook{URLConfigured: true, Host: "hooks.example"},
+		Secrets:   domain.NotificationChannelSecrets{WebhookURL: "https://hooks.example/notify"},
+		CreatedAt: started, UpdatedAt: started,
+	}
+	if err := s.Store.SaveNotificationChannel(ctx, &channel, true); err != nil {
+		t.Fatal(err)
+	}
 	operation := domain.Operation{Cluster: "prod", Kind: "restart"}
 	if err := s.Store.EnqueueOperation(ctx, &operation); err != nil {
 		t.Fatal(err)
@@ -180,7 +211,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if strings.Contains(path, "/weaviate/") {
 				s.Registry = weaviateRegistry
 			}
-			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
+			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app", "{drill}", drill.ID, "{channel}", channel.Name).Replace(path)
 			if strings.Contains(path, "/postgres/") {
 				s.Registry = postgresRegistry
 				if operationID == "listPostgresBindings" {

@@ -69,9 +69,13 @@ Once terminal and healthy, re-read observed FCV; promote only if still needed an
 
 ## Rolling restart and overrides
 
-`karactl -n default clusters restart demo --wait` checkpoints members, checks quorum/health and processes secondaries before primary. It is not control-plane redeploy or agent binary rollout; current agents receive the executable on their next provider-driven member deployment. Keep protocol compatibility during mixed versions.
+`karactl -n default clusters restart demo --wait` checkpoints members, checks quorum/health and processes secondaries before primary. It restarts database processes, not the agent executable.
 
-Use validated `engineConfig` YAML only for non-managed settings; see the [overview limits](README.md). Restart/replacement/rotation and Running desired-state/deletion work have no safe general abort; [operation semantics](../clusters.md#operations-and-status) distinguish cancellation from rollback.
+Use `karactl -n default clusters upgrade-agents demo --wait` to deploy the current control-plane executable to the **same runtimes and volumes**, without changing MongoDB versions. Config servers precede shards and routers; each replica set rolls secondaries before its primary, with safe-restart, step-down and replication catch-up gates. Members already reporting the target build are skipped unless `--include-current` is set. Completed members are journaled and never repeated after a control-plane restart. Cancellation is safe between members, not during an active member change. If the control plane changes build during a rollout, the operation fails before another deployment; re-run it to freeze the new target.
+
+`spec.maintenance` windows gate new engine upgrades, rolling resources/configuration changes and scale-in, plus automatic database leaf renewal while more than seven days remain. A member already restarting finishes rejoining even if the window closes. Creation/scale-out, healing, agent transport certificates and database leaves within seven days of expiry are exempt. Imperative restart, TLS rotation, FCV promotion, replacement and agent upgrades wait before claim; `--ignore-maintenance-window` explicitly overrides supported actions. See [maintenance policy](../operations.md).
+
+Use validated `engineConfig` YAML only for non-managed settings; see the [overview limits](README.md). Restart/replacement/rotation and Running desired-state/deletion work have no safe general abort; agent rollout cancellation is available only between members. [Operation semantics](../clusters.md#operations-and-status) distinguish cancellation from rollback.
 
 ## Processes, files and readiness
 

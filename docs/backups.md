@@ -4,6 +4,8 @@
 
 Register S3 destinations, manage backup inventory and schedules, and recover into existing or new clusters.
 
+Use [backup drills](backup-drills.md) to restore successful backups into disposable same-namespace clusters, record verification and timing, and clean up the target. Drills consume real infrastructure; they do not replace application-level recovery testing.
+
 ## Engine recovery capabilities
 
 | Engine | Backup types and scope | PITR | Backup data path |

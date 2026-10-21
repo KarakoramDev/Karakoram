@@ -413,6 +413,54 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/backup-drills": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List backup drills */
+        get: operations["listBackupDrills"];
+        put?: never;
+        /** Create backup drill */
+        post: operations["createBackupDrill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/backup-drills/{drill}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                drill: string;
+            };
+            cookie?: never;
+        };
+        /** Get backup drill */
+        get: operations["getBackupDrill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/backups": {
         parameters: {
             query?: {
@@ -839,6 +887,33 @@ export type paths = {
         get: operations["getMemberLogs"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/members/{member}/move": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                member: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move cluster member
+         * @description Replaces a supported data member with a new runtime and volume, excluding its current host on placement-capable backends. Backends without Placement perform a best-effort replacement with no host placement guarantee. Unknown authoritative placement is refused.
+         */
+        post: operations["moveClusterMember"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2293,6 +2368,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/upgrade-agents": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upgrade cluster agents */
+        post: operations["upgradeClusterAgents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/weaviate/roles": {
         parameters: {
             query?: {
@@ -2432,6 +2530,42 @@ export type paths = {
          * @description Requires database-users/update. If the user's current roles include any role other than viewer or read-only, also requires clusters/update on the same cluster because the returned key grants those privileges. Protected system user keys cannot be rotated through this operation.
          */
         post: operations["rotateWeaviateUserKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/control-plane/backup-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get control plane backup policy */
+        get: operations["getControlPlaneBackupPolicy"];
+        /** Update control plane backup policy */
+        put: operations["updateControlPlaneBackupPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/control-plane/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List control plane backups */
+        get: operations["listControlPlaneBackups"];
+        put?: never;
+        /** Create control plane backup */
+        post: operations["createControlPlaneBackup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2699,6 +2833,64 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/notification-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List notification channels */
+        get: operations["listNotificationChannels"];
+        put?: never;
+        /** Create notification channel */
+        post: operations["createNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-channels/{channel}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        /** Get notification channel */
+        get: operations["getNotificationChannel"];
+        /** Replace notification channel */
+        put: operations["replaceNotificationChannel"];
+        post?: never;
+        /** Delete notification channel */
+        delete: operations["deleteNotificationChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-channels/{channel}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test notification channel */
+        post: operations["testNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/oauth-grants": {
         parameters: {
             query?: never;
@@ -2952,6 +3144,24 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/settings/agent-rollout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent rollout settings */
+        get: operations["getAgentRolloutSettings"];
+        /** Update agent rollout settings */
+        put: operations["updateAgentRolloutSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -2994,7 +3204,27 @@ export type components = {
          * @description At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
          */
         AccountPassword: string;
+        AgentBuild: {
+            build: string;
+            commit: string;
+            version: string;
+        };
+        AgentRolloutSettings: {
+            /** @default false */
+            automatic: boolean;
+            readonly currentBuild?: components["schemas"]["AgentBuild"];
+            /** @default 1 */
+            maxConcurrentClusters: number;
+        };
+        AgentRolloutStatus: {
+            outdated: string[];
+            targetBuild: string;
+            targetVersion: string;
+            unknown: string[];
+        };
         AgentStatus: {
+            build?: string;
+            commit?: string;
             /** Format: int64 */
             configVersion?: number;
             connected: boolean;
@@ -3077,6 +3307,70 @@ export type components = {
             /** @enum {string} */
             type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump";
         };
+        BackupDrill: {
+            backup?: string;
+            backupType?: string;
+            checks?: components["schemas"]["BackupDrillCheck"][];
+            cleanup?: components["schemas"]["BackupDrillCleanup"];
+            cluster: string;
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            dataAgeSeconds?: number;
+            error?: string;
+            id: string;
+            limitations?: string;
+            namespace: components["schemas"]["NamespaceName"];
+            /** @enum {string} */
+            phase: "Pending" | "Provisioning" | "Restoring" | "Verifying" | "CleaningUp" | "Succeeded" | "Failed";
+            /** Format: date-time */
+            readyAt?: string;
+            /** Format: int64 */
+            restoreDurationSeconds?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            targetCluster?: string;
+            /** Format: int64 */
+            totalDurationSeconds?: number;
+            /** @enum {string} */
+            trigger: "manual" | "schedule";
+        };
+        BackupDrillCheck: {
+            message?: string;
+            name: string;
+            passed: boolean;
+        };
+        BackupDrillCleanup: {
+            orphanedVolumes: string[];
+            /** @enum {string} */
+            phase: "Pending" | "Done" | "Failed";
+        };
+        BackupDrillList: {
+            items: components["schemas"]["BackupDrill"][];
+            nextCursor?: string;
+        };
+        BackupDrillPolicy: {
+            backupSchedule?: string;
+            enabled: boolean;
+            schedule: string;
+            /**
+             * @description Go duration between 30m and 48h.
+             * @default 6h
+             */
+            timeout: string;
+        };
+        BackupDrillPolicyPatch: {
+            backupSchedule?: string | null;
+            enabled?: boolean | null;
+            schedule?: string | null;
+            /**
+             * @description Go duration between 30m and 48h.
+             * @default 6h
+             */
+            timeout: string | null;
+        } | null;
         BackupList: {
             items: components["schemas"]["Backup"][];
             /** @description Opaque continuation cursor; absent at the end. */
@@ -3106,16 +3400,19 @@ export type components = {
             type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump";
         };
         BackupSpec: {
+            drill?: components["schemas"]["BackupDrillPolicy"];
             pitr?: components["schemas"]["PITRSpec"];
             schedules?: components["schemas"]["BackupSchedule"][];
             storage?: string;
         };
         BackupSpecInput: {
+            drill?: components["schemas"]["BackupDrillPolicy"];
             pitr?: components["schemas"]["PITRSpec"];
             schedules?: components["schemas"]["BackupScheduleInput"][];
             storage?: string;
         };
         BackupSpecPatch: {
+            drill?: components["schemas"]["BackupDrillPolicyPatch"];
             pitr?: components["schemas"]["PITRSpecPatch"];
             schedules?: components["schemas"]["BackupScheduleInput"][] | null;
             storage?: string | null;
@@ -3177,6 +3474,7 @@ export type components = {
             createdAt: string;
             /** Format: int64 */
             generation: number;
+            readonly managedBy?: components["schemas"]["ManagedBy"];
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @description Tracking operation returned on create, PUT, PATCH and resume acceptance. */
@@ -3202,6 +3500,7 @@ export type components = {
                 [key: string]: unknown;
             };
             exposure?: components["schemas"]["ExposureInput"];
+            maintenance?: components["schemas"]["MaintenancePolicy"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
@@ -3242,6 +3541,7 @@ export type components = {
                 [key: string]: unknown;
             } | null;
             exposure?: components["schemas"]["ExposurePatch"];
+            maintenance?: components["schemas"]["MaintenancePolicyPatch"];
             monitoring?: components["schemas"]["MonitoringSpecPatch"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider?: string | null;
@@ -3260,6 +3560,7 @@ export type components = {
                 [key: string]: unknown;
             };
             exposure?: components["schemas"]["Exposure"];
+            maintenance?: components["schemas"]["MaintenancePolicy"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
@@ -3273,11 +3574,13 @@ export type components = {
             version: string;
         };
         ClusterStatus: {
+            agents?: components["schemas"]["AgentRolloutStatus"];
             backup?: components["schemas"]["ClusterBackupStatus"];
             conditions: components["schemas"]["Condition"][];
             connection?: components["schemas"]["ConnectionSummary"];
             dataMcp?: components["schemas"]["DataMcpStatus"];
             fcv?: string;
+            maintenance?: components["schemas"]["MaintenanceStatus"];
             members: components["schemas"]["Member"][];
             message?: string;
             /** Format: int64 */
@@ -3369,6 +3672,44 @@ export type components = {
             /** @description Connection URI without a password. */
             uri: string;
         };
+        ControlPlaneBackup: {
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            error?: string;
+            id: string;
+            karakoramVersion?: string;
+            keyFingerprint?: string;
+            objectKey?: string;
+            /** @enum {string} */
+            phase: "Pending" | "Running" | "Succeeded" | "Failed";
+            schemaVersion?: string;
+            sha256?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            storage: components["schemas"]["ControlPlaneBackupStorage"];
+            /** @enum {string} */
+            trigger: "manual" | "schedule";
+        };
+        ControlPlaneBackupList: {
+            items: components["schemas"]["ControlPlaneBackup"][];
+            nextCursor?: string;
+        };
+        ControlPlaneBackupPolicy: {
+            enabled: boolean;
+            /** @default 14 */
+            retainCount: number;
+            /** @default 0 3 * * * */
+            schedule: string;
+            storage: components["schemas"]["ControlPlaneBackupStorage"];
+        };
+        ControlPlaneBackupStorage: {
+            name: string;
+            namespace: components["schemas"]["NamespaceName"];
+        };
         CreateAccountRequest: {
             /** @default true */
             enabled: boolean;
@@ -3385,6 +3726,9 @@ export type components = {
             expiresAt?: string;
             name: components["schemas"]["APITokenName"];
             restrictions?: components["schemas"]["APITokenRestrictions"];
+        };
+        CreateBackupDrillRequest: {
+            backup?: string;
         };
         CreateBackupRequest: {
             name: string;
@@ -3828,6 +4172,41 @@ export type components = {
             /** Format: date-time */
             timestamp: string;
         };
+        MaintenancePolicy: {
+            /**
+             * @description IANA time zone.
+             * @default UTC
+             */
+            timeZone: string;
+            windows?: components["schemas"]["MaintenanceWindow"][];
+        };
+        MaintenancePolicyPatch: {
+            /**
+             * @description IANA time zone.
+             * @default UTC
+             */
+            timeZone: string | null;
+            windows?: components["schemas"]["MaintenanceWindow"][] | null;
+        } | null;
+        MaintenanceStatus: {
+            /** Format: date-time */
+            currentWindowEnd?: string;
+            /** Format: date-time */
+            nextWindowStart?: string;
+            open: boolean;
+        };
+        MaintenanceWindow: {
+            /** @description Go duration between 15m and 168h. */
+            duration: string;
+            /** @description Five-field cron expression specifying window start times. */
+            schedule: string;
+        };
+        ManagedBy: {
+            cluster: string;
+            id: string;
+            /** @enum {string} */
+            kind: "backup-drill";
+        };
         Member: {
             agent?: components["schemas"]["AgentStatus"];
             /** @description Effective runtime vertical autoscaling configuration read from the platform, distinct from desired spec and current allocation. Disk bounds refer to the disposable runtime root disk, not the persistent database volume. */
@@ -4055,6 +4434,71 @@ export type components = {
         Neo4jUserPasswordChanged: {
             generatedPassword?: string;
         };
+        /** @enum {string} */
+        NotificationCategory: "backup-failed" | "cluster-degraded" | "cluster-recovered" | "volume-deletion-refused" | "certificate-expiring" | "deployment-retries-exhausted" | "operation-failed" | "members-co-located" | "backup-drill-failed" | "control-plane-backup-failed" | "agents-outdated";
+        NotificationChannel: {
+            /** @description Empty means all categories. */
+            categories?: components["schemas"]["NotificationCategory"][];
+            /** Format: date-time */
+            readonly createdAt?: string;
+            email?: components["schemas"]["NotificationEmail"];
+            enabled: boolean;
+            name: string;
+            /** @description Empty means all namespaces, including installation-wide events. */
+            namespaces?: string[];
+            slack?: components["schemas"]["NotificationSlack"];
+            readonly status?: components["schemas"]["NotificationChannelStatus"];
+            /** @enum {string} */
+            type: "webhook" | "slack" | "email";
+            /** Format: date-time */
+            readonly updatedAt?: string;
+            webhook?: components["schemas"]["NotificationWebhook"];
+        };
+        NotificationChannelList: {
+            items: components["schemas"]["NotificationChannel"][];
+            nextCursor?: string;
+        };
+        NotificationChannelStatus: {
+            /** Format: int64 */
+            failed?: number;
+            /** Format: date-time */
+            lastDeliveryAt?: string;
+            lastError?: string;
+            /** Format: date-time */
+            lastErrorAt?: string;
+            /** Format: int64 */
+            pending?: number;
+        };
+        NotificationEmail: {
+            from: string;
+            host: string;
+            /** Format: password */
+            password?: string;
+            readonly passwordConfigured?: boolean;
+            port: number;
+            /** @enum {string} */
+            security: "starttls" | "tls";
+            to: string[];
+            username?: string;
+        };
+        NotificationSlack: {
+            /** Format: password */
+            webhookUrl?: string;
+            readonly webhookUrlConfigured?: boolean;
+        };
+        NotificationTestResult: {
+            delivered: boolean;
+            error?: string;
+        };
+        NotificationWebhook: {
+            readonly host?: string;
+            /** Format: password */
+            signingSecret?: string;
+            readonly signingSecretConfigured?: boolean;
+            /** Format: password */
+            url?: string;
+            readonly urlConfigured?: boolean;
+        };
         OAuthGrant: {
             clientHost: string;
             clientId: string;
@@ -4196,7 +4640,7 @@ export type components = {
              */
             targetGeneration?: number;
             /** @enum {string} */
-            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "rebalance" | "replace-member" | "rotate-system-user" | "rotate-tls" | "rotate-jwt-secret" | "recover-quorum" | "create" | "update" | "tls" | "upgrade" | "delete" | "resume";
+            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "rebalance" | "replace-member" | "rotate-system-user" | "rotate-tls" | "rotate-jwt-secret" | "recover-quorum" | "create" | "update" | "tls" | "upgrade" | "upgrade-agents" | "delete" | "resume";
         };
         OperationList: {
             items: components["schemas"]["Operation"][];
@@ -4260,11 +4704,12 @@ export type components = {
             /** Format: date-time */
             start?: string;
         };
-        /** @description Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee. */
+        /** @description Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct. */
         Placement: {
             groups: components["schemas"]["PlacementGroup"][];
-            /** @enum {boolean} */
-            guaranteedAntiAffinity: false;
+            guaranteedAntiAffinity: boolean;
+            /** @enum {string} */
+            source?: "backend" | "best-effort" | "unavailable";
             warning: string;
         };
         PlacementGroup: {
@@ -4903,6 +5348,10 @@ export type components = {
             password?: string;
             roles: components["schemas"]["RoleReference"][];
         };
+        UpgradeAgentsRequest: {
+            /** @default false */
+            includeCurrent: boolean;
+        };
         UpgradePath: {
             from: string;
             /**
@@ -5100,6 +5549,16 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description The requested feature is not implemented. */
+        NotImplemented: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description payload_too_large: body exceeds the 2 MiB limit. */
         PayloadTooLarge: {
             headers: {
@@ -5173,6 +5632,8 @@ export type components = {
          *     the original mutation failed. Use a fresh key for each intended mutation.
          */
         IdempotencyKey: string;
+        /** @description Explicitly bypass the cluster maintenance window for this request. */
+        IgnoreMaintenanceWindow: boolean;
         /** @description Maximum results per page. Results are authorization-filtered before pagination. */
         Limit: number;
         /** @description Project namespace name; the RBAC object is this name. */
@@ -6318,6 +6779,8 @@ export interface operations {
     replaceCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -6440,6 +6903,8 @@ export interface operations {
     patchCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -6573,6 +7038,145 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listBackupDrills: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrillList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createBackupDrill: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateBackupDrillRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrill"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    getBackupDrill: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                drill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrill"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     listBackups: {
@@ -8049,9 +8653,71 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    moveClusterMember: {
+        parameters: {
+            query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                member: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted replace-member operation. On backends without Placement, the operation message states that this is best-effort with no host placement guarantee. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
     replaceClusterMember: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -11365,6 +12031,8 @@ export interface operations {
     raiseClusterFCV: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -11427,6 +12095,8 @@ export interface operations {
     restartCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -11738,6 +12408,8 @@ export interface operations {
     rotateClusterTLS: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -12417,6 +13089,69 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
+    upgradeClusterAgents: {
+        parameters: {
+            query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpgradeAgentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
     listWeaviateRoles: {
         parameters: {
             query?: {
@@ -12891,6 +13626,179 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getControlPlaneBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    updateControlPlaneBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    listControlPlaneBackups: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createControlPlaneBackup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     dryRunCreateCluster: {
@@ -13495,6 +14403,287 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listNotificationChannels: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannel"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            201: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    getNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    replaceNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannel"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    deleteNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    testNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
     listOAuthGrants: {
         parameters: {
             query?: never;
@@ -13974,6 +15163,91 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getAgentRolloutSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRolloutSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    updateAgentRolloutSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRolloutSettings"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRolloutSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     getVersion: {

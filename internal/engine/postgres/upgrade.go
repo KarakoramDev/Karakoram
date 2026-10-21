@@ -41,6 +41,9 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 		if from == "" {
 			return false, nil
 		}
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return true, nil
+		}
 		if !upgradeAllowed(from, rc.Cluster.Spec.Version) || major(rc.Cluster.Spec.Version) != major(from)+1 {
 			return true, engine.Invalid("major upgrade must target the adjacent supported major")
 		}

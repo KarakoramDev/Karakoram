@@ -156,7 +156,11 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 		}
 		if b.Phase == domain.PhaseSucceeded || b.Phase == domain.PhaseFailed {
 			cp.Step = "target-configure"
-			if err = event(ctx, env, op, "BackupCompleted", "PBM backup "+cp.PBMName+": "+string(b.Phase)); err != nil {
+			reason := "BackupCompleted"
+			if b.Phase == domain.PhaseFailed {
+				reason = "BackupFailed"
+			}
+			if err = event(ctx, env, op, reason, "PBM backup "+cp.PBMName+": "+string(b.Phase)); err != nil {
 				return result(cp, false), err
 			}
 			if b.Phase == domain.PhaseFailed {

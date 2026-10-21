@@ -286,7 +286,7 @@ func TestSyncMajorityUnreachableStillReturnsError(t *testing.T) {
 }
 
 func TestRollingOperationsFinishProvisioningBeforeChangingMembers(t *testing.T) {
-	for _, kind := range []string{domain.OperationRestart, domain.OperationRotateTLS} {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationRotateTLS, domain.OperationUpgradeAgents} {
 		for _, scenario := range []string{"creation/imported", "creation/deployed", "scale-up/imported", "scale-up/deployed"} {
 			t.Run(kind+"/"+scenario, func(t *testing.T) {
 				p, rc, _, a := setup(t)
@@ -306,6 +306,14 @@ func TestRollingOperationsFinishProvisioningBeforeChangingMembers(t *testing.T) 
 				})
 				a.log.clear()
 				op := &domain.Operation{Kind: kind}
+				if kind == domain.OperationUpgradeAgents {
+					op.Payload, _ = json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: true})
+					result, err := p.RunOperation(t.Context(), rc, op)
+					if err != nil || result.Step != "agent-target-frozen" {
+						t.Fatalf("freeze target: %+v %v", result, err)
+					}
+					op.Checkpoint = result.Checkpoint
+				}
 				result, err := p.RunOperation(t.Context(), rc, op)
 				if err != nil || result.Done || result.Step != "waiting-provisioning" {
 					t.Fatalf("out=%+v err=%v", result, err)
@@ -321,6 +329,11 @@ func TestRollingOperationsFinishProvisioningBeforeChangingMembers(t *testing.T) 
 				}
 				done := false
 				for range 300 {
+					if kind == domain.OperationUpgradeAgents {
+						for _, m := range state(t, rc).Members {
+							a.broker(m.Name).agentBuild = engine.CurrentAgentBuild().Build
+						}
+					}
 					if p.SyncDuringOperation(op) {
 						if _, err := p.Sync(t.Context(), rc); err != nil {
 							t.Fatal(err)

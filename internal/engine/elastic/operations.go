@@ -13,19 +13,22 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 // operationState contains only durable, non-secret operation progress.
 type operationState struct {
-	Stage         string   `json:"stage"`
-	Names         []string `json:"names,omitempty"`
-	Index         int      `json:"index,omitempty"`
-	NewMember     string   `json:"newMember,omitempty"`
-	ConfigVersion int64    `json:"configVersion,omitempty"`
-	OldTokenName  string   `json:"oldTokenName,omitempty"`
-	Failure       string   `json:"failure,omitempty"`
-	Pending       *pending `json:"pending,omitempty"`
+	Stage         string                      `json:"stage"`
+	Names         []string                    `json:"names,omitempty"`
+	Index         int                         `json:"index,omitempty"`
+	NewMember     string                      `json:"newMember,omitempty"`
+	ConfigVersion int64                       `json:"configVersion,omitempty"`
+	OldTokenName  string                      `json:"oldTokenName,omitempty"`
+	Failure       string                      `json:"failure,omitempty"`
+	Pending       *pending                    `json:"pending,omitempty"`
+	AgentTarget   *engine.AgentUpgradePayload `json:"agentTarget,omitempty"`
+	Waiting       string                      `json:"waiting,omitempty"`
 }
 
 func operationResult(cp operationState, done bool) engine.OpResult {
@@ -47,7 +50,11 @@ func operationEvent(ctx context.Context, rc *engine.Context, op *domain.Operatio
 	if rc.Events == nil {
 		return nil
 	}
-	return rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Operation: op.ID, Type: "Normal", Reason: reason, Message: message})
+	kind := "Normal"
+	if reason == "BackupFailed" {
+		kind = "Warning"
+	}
+	return rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Operation: op.ID, Type: kind, Reason: reason, Message: message})
 }
 
 func (p *Provider) runOperation(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation) (engine.OpResult, error) {
@@ -64,7 +71,17 @@ func (p *Provider) runOperation(ctx context.Context, rc *engine.Context, s *stat
 		return operationResult(cp, true), nil
 	}
 	payload := map[string]string{}
-	if len(op.Payload) > 0 {
+	var relocation struct {
+		Member     string `json:"member"`
+		Relocate   bool   `json:"relocate"`
+		AvoidGroup string `json:"avoidGroup"`
+	}
+	if op.Kind == domain.OperationReplaceMember {
+		if err := json.Unmarshal(op.Payload, &relocation); err != nil {
+			return operationResult(cp, true), operationInvalid("invalid operation payload")
+		}
+		payload["member"] = relocation.Member
+	} else if len(op.Payload) > 0 && op.Kind != domain.OperationUpgradeAgents {
 		if err := json.Unmarshal(op.Payload, &payload); err != nil {
 			return operationResult(cp, false), operationInvalid("invalid operation payload")
 		}
@@ -88,30 +105,63 @@ func (p *Provider) runOperation(ctx context.Context, rc *engine.Context, s *stat
 		return p.runRotateTLS(ctx, rc, s, cp)
 	case domain.OperationRotateSystemUser:
 		return p.runRotateUser(ctx, rc, s, op, cp, payload["user"])
-	case domain.OperationRestart:
+	case domain.OperationRestart, domain.OperationUpgradeAgents:
 		if cp.Stage == "" {
 			if err := disruptiveOperationReady(rc, s); err != nil {
 				return operationResult(cp, true), err
 			}
 		}
+		reason := "restart"
+		if op.Kind == domain.OperationUpgradeAgents {
+			reason = "agents"
+			if cp.AgentTarget == nil {
+				target, err := engine.AgentUpgradeTarget(op)
+				if err != nil {
+					return operationResult(cp, true), err
+				}
+				cp.AgentTarget = &target
+			}
+			if cp.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build && (s.Rolling == nil || s.Rolling.OperationID != op.ID) {
+				cp.Stage, cp.Waiting, cp.Failure = "done", "", agentBuildChangedError().Error()
+				return operationResult(cp, true), agentBuildChangedError()
+			}
+		}
 		if cp.Stage == "" {
-			if s.Rolling != nil && (s.Rolling.Reason != "restart" || s.Rolling.OperationID != op.ID) {
+			if s.Rolling != nil && (s.Rolling.Reason != reason || s.Rolling.OperationID != op.ID) {
 				_, _, err := p.rollingStep(ctx, rc, s)
 				return operationResult(cp, false), err
 			}
-			p.rollingStart(rc, s, "restart", rc.Cluster.Spec.Version, op.ID)
+			p.rollingStart(rc, s, reason, rc.Cluster.Spec.Version, op.ID)
+			s.Rolling.AgentTarget = cp.AgentTarget
 			cp.Stage = "rolling"
 			return operationResult(cp, false), nil
 		}
+		if wait := rollingWindowWait(rc, s); wait.RequeueAfter > 0 && !agentTargetChanged(s.Rolling) {
+			result := operationResult(cp, false)
+			result.RequeueAfter = wait.RequeueAfter
+			result.Message = "Waiting for maintenance window"
+			return result, nil
+		}
 		done, msg, err := p.rollingStep(ctx, rc, s)
+		cp.Waiting = ""
+		if r := s.Rolling; r != nil && r.Current != "" && r.Step != "prepare" {
+			cp.Waiting = r.Current
+		}
 		if done {
 			cp.Stage = "done"
+			if err != nil {
+				cp.Failure = err.Error()
+			}
 		}
 		result := operationResult(cp, done)
 		result.Message = msg
 		return result, err
 	case domain.OperationReplaceMember:
-		return p.runReplaceMember(ctx, rc, s, cp, payload["member"])
+		var avoid []string
+		if relocation.Relocate && relocation.AvoidGroup != "" {
+			avoid = []string{relocation.AvoidGroup}
+		}
+		return p.runReplaceMember(ctx, rc, s, cp, payload["member"], avoid...)
 	default:
 		return operationResult(cp, true), engine.ErrNotSupported
 	}
@@ -128,33 +178,34 @@ func syncDuringOperation(op *domain.Operation) bool {
 	return cp.Stage == "join" || cp.Stage == "remove"
 }
 
-func (p *Provider) runReplaceMember(ctx context.Context, rc *engine.Context, s *state, cp operationState, name string) (engine.OpResult, error) {
+func (p *Provider) runReplaceMember(ctx context.Context, rc *engine.Context, s *state, cp operationState, name string, avoid ...string) (engine.OpResult, error) {
 	switch cp.Stage {
 	case "":
 		if err := disruptiveOperationReady(rc, s); err != nil {
 			return operationResult(cp, true), err
 		}
+		if err := validateReplacementMember(s, name); err != nil {
+			return operationResult(cp, true), err
+		}
 		old := s.find(name)
-		if old == nil {
-			return operationResult(cp, true), operationInvalid("member does not exist")
-		}
-		if old.Kind != kindNode && old.Kind != kindMaster {
-			return operationResult(cp, true), operationInvalid("component services cannot be replaced; use restart")
-		}
-		if len(s.esNodes()) < 2 {
-			return operationResult(cp, true), operationInvalid("single-node clusters cannot replace members; use snapshot restore")
-		}
-		if old.Removing {
-			return operationResult(cp, true), operationInvalid("member is already being removed")
-		}
 		replacement, err := p.allocate(rc, s, old.Kind)
 		if err != nil {
 			return operationResult(cp, false), err
 		}
 		replacement.Replaces = old.Name
+		replacement.PlacementAvoid = avoid
+		s.ReplacementFailure = ""
 		cp.NewMember = replacement.Name
 		cp.Stage = "join"
 	case "join":
+		if s.ReplacementFailure != "" {
+			if s.find(cp.NewMember) != nil {
+				return operationResult(cp, false), nil
+			}
+			cp.Stage = "done"
+			cp.Failure = s.ReplacementFailure
+			return operationResult(cp, true), fmt.Errorf("%s: %w", cp.Failure, infra.ErrPlacementUnsatisfiable)
+		}
 		replacement := s.find(cp.NewMember)
 		if replacement == nil || replacement.Stage != stageJoined {
 			return operationResult(cp, false), nil
@@ -221,4 +272,30 @@ func (p *Provider) operationRepository(ctx context.Context, rc *engine.Context, 
 		}
 	}
 	return repo, err
+}
+
+// ValidateMemberReplacement rejects components and singleton native clusters.
+func (p *Provider) ValidateMemberReplacement(c *domain.Cluster, name string) error {
+	s, err := load(c)
+	if err != nil {
+		return err
+	}
+	return validateReplacementMember(s, name)
+}
+
+func validateReplacementMember(s *state, name string) error {
+	m := s.find(name)
+	if m == nil {
+		return operationInvalid("member does not exist")
+	}
+	if m.Kind != kindNode && m.Kind != kindMaster {
+		return operationInvalid("component services cannot be replaced; use restart")
+	}
+	if len(s.esNodes()) < 2 {
+		return operationInvalid("single-node clusters cannot replace members; use snapshot restore")
+	}
+	if m.Removing {
+		return operationInvalid("member is already being removed")
+	}
+	return nil
 }

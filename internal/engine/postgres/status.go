@@ -92,7 +92,10 @@ func (p *Core) ProjectCredentialsStatus(ctx context.Context, rc *engine.Context,
 }
 
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return domain.ClusterStatus{}, err
@@ -180,7 +183,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		}
 		if observation.agentHealthy {
 			st := observation.agent
-			member.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
+			if !rc.Backend.Capabilities().Placement {
+				member.PlacementGroup = st.HostFingerprint
+			}
+			member.Agent = domain.AgentStatus{Version: st.Agent.Version, Commit: st.Agent.Commit, Build: st.Agent.Build, Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			member.Uptime = st.UptimeSeconds
 			member.Resources = engine.MemberResources(st.Resources, &m.Resources)
 			if st.Disk.TotalBytes > 0 && st.Disk.FreeBytes < st.Disk.TotalBytes/10 {
@@ -306,6 +312,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 					member.Agent.LastSeen = now(rc)
 					member.Uptime = status.UptimeSeconds
 					member.Resources = engine.MemberResources(status.Resources, &m.Resources)
+					if !rc.Backend.Capabilities().Placement {
+						member.PlacementGroup = status.HostFingerprint
+					}
 				}
 				if first || status.ConfigVersion < member.Agent.ConfigVersion {
 					member.Agent.ConfigVersion = status.ConfigVersion
@@ -389,9 +398,8 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			return out, e
 		}
 		for _, container := range containers {
-			if container.PlacementGroup != "" {
+			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
 				member.PlacementGroup = container.PlacementGroup
-				out.Placement.Groups[container.PlacementGroup] = append(out.Placement.Groups[container.PlacementGroup], m.Name)
 			}
 		}
 		out.Members = append(out.Members, member)

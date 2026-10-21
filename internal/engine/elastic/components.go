@@ -30,6 +30,12 @@ var stackComponents = func() engine.ComponentSet {
 
 func (p *Provider) reconcileComponent(ctx context.Context, rc *engine.Context, s *state, def engine.ComponentDef) (bool, error) {
 	ms := s.members(def.Name)
+	desired := rc.Cluster.Spec.Components.Extra[def.Name].Replicas
+	if len(ms) > 0 && (desired < ms[0].Containers || desired == 0) && ms[0].Stage != "delete-volume" && ms[0].Stage != "removed" {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return true, nil
+		}
+	}
 	var m *member
 	current := engine.ComponentRuntime{HorizontalScaling: rc.Backend.Capabilities().HorizontalScaling}
 	if len(ms) > 0 {

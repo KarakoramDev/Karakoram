@@ -348,7 +348,11 @@ func event(ctx context.Context, env Env, op *domain.Operation, reason, message s
 	if env.RC.Events == nil {
 		return nil
 	}
-	if err := env.RC.Events.Record(ctx, domain.Event{Namespace: env.RC.Cluster.Ref().Namespace, Cluster: env.RC.Cluster.Name, Operation: op.ID, Type: "Normal", Reason: reason, Message: message, CreatedAt: now(env)}); err != nil {
+	kind := "Normal"
+	if reason == "BackupFailed" {
+		kind = "Warning"
+	}
+	if err := env.RC.Events.Record(ctx, domain.Event{Namespace: env.RC.Cluster.Ref().Namespace, Cluster: env.RC.Cluster.Name, Operation: op.ID, Type: kind, Reason: reason, Message: message, CreatedAt: now(env)}); err != nil {
 		return err
 	}
 	if reason == "RestoreStarted" || reason == "RestoreCompleted" {

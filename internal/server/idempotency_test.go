@@ -275,6 +275,8 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 		}
 	}
 	for _, id := range []string{
+		"upgradeClusterAgents", "moveClusterMember", "updateAgentRolloutSettings", "updateControlPlaneBackupPolicy", "createControlPlaneBackup",
+		"createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel", "testNotificationChannel", "createBackupDrill",
 		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV",
 		"replaceClusterMember", "rotateSystemUser", "replaceDatabaseUser",
 		"replaceDatabaseRole", "replaceBackupStorage",
@@ -290,8 +292,8 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 62 {
-		t.Fatalf("covered operations = %d, want 62", len(covered))
+	if len(covered) != 72 {
+		t.Fatalf("covered operations = %d, want 72", len(covered))
 	}
 }
 

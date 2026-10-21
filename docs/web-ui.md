@@ -97,6 +97,15 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 Supported clusters show a **Data MCP** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
 
 Users with cluster update permission can enable/disable data MCP, select read-only/read-write access, set engine-specific scope, deny tools, require write confirmations and opt into recording query text in audit. Save applies `spec.dataMcp` as a cluster merge patch; disabling asks for confirmation. Other users see settings read-only. Enabling data access and requesting writes are security decisions: review the [data MCP guide](data-mcp.md), particularly [all four write switches](data-mcp.md#four-switches-for-writes), before sharing a client configuration.
+### Fleet operations and restore verification
+
+Member agent identity is distinct from the database version. **Upgrade agents** rolls the current control-plane executable through the existing engine safety gates without changing database versions. Unknown agent identities are not proof of a current build; inspect the reported build and operation result. Automatic rollout is opt-in under installation settings.
+
+Configure maintenance time zone, cron starts and durations in the **Topology** maintenance policy editor; the current window badge shows whether disruption can begin. Configured windows gate the start of a new disruption. A pending operation can wait without consuming an execution attempt; an explicit maintenance override bypasses that policy for the requested action, not the engine's quorum or readiness checks. Windows never stop a member halfway through an already-started disruptive step.
+
+Placement evidence is backend-dependent. **Move member** replaces and synchronizes the selected member; it is not a direct disk move. Backends with authoritative placement exclude the predecessor's group, while best-effort backends cannot promise a different host. Review the placement source and warning before confirming.
+
+**Backups → Drills** lists retained reports with pagination and links to individual report details; **Run drill** restores an eligible successful backup into a server-managed throwaway target in the same namespace. The policy editor controls scheduled runs. Reports retain verification checks, data age, restore duration and cleanup outcome. Managed targets are labeled and protected while active. RabbitMQ verification restores definitions only, not messages. See [backup drills](backup-drills.md).
 
 ## Installation settings
 
@@ -107,6 +116,9 @@ Users with cluster update permission can enable/disable data MCP, select read-on
 | Accounts, RBAC, API tokens, SSO | Account lifecycle, policy/effective-permission checks, one-time token creation and OIDC configuration; see [access control](access-control.md) |
 | Monitoring | Collection status and Prometheus guidance; scrape URL is installation-root `/metrics` |
 | Orphaned volumes | Read-only inventory of volumes awaiting platform cleanup; see [operations](operations.md#orphaned-platform-volumes) |
+| Agent rollout | Inspect the current executable build and opt into bounded automatic member rollout; see [upgrade](upgrade.md) |
+| Control-plane backup | Configure S3 snapshot policy, run a snapshot and inspect retained reports; rebuild remains an offline administrative action |
+| Notifications | Configure write-only webhook, Slack or TLS email destinations, filters and test delivery; inspect delivery failures |
 
 The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored backend infrastructure credentials or the operator master key.
 

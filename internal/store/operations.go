@@ -280,15 +280,20 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 		return nil, err
 	}
 	defer tx.Rollback()
-	var data []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.targetGeneration') IS NULL AND (? OR phase='Running') AND (?='' OR json_extract(data,'$.kind')=?) ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending, kind, kind).Scan(&data)
+	selected, wait, err := maintenanceCandidate(ctx, tx, cluster, includePending, kind)
 	if err != nil {
-		return nil, typed(err)
-	}
-	var op domain.Operation
-	if err = json.Unmarshal(data, &op); err != nil {
 		return nil, err
 	}
+	if selected == nil {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		if wait != nil {
+			return nil, wait
+		}
+		return nil, ErrNotFound
+	}
+	op := *selected
 	if (op.Kind == domain.OperationRestore || op.Kind == "initial-restore") && op.Phase != domain.PhaseRunning {
 		if err = claimInitialDataSource(ctx, tx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}); err != nil {
 			return nil, err
@@ -308,7 +313,7 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 			}
 		}
 	}
-	now := time.Now().UTC()
+	now := maintenanceTime(ctx)
 	op.Phase = domain.PhaseRunning
 	op.Attempts++
 	op.UpdatedAt = now

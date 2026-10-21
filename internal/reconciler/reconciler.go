@@ -18,6 +18,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/maintenance"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -317,6 +318,7 @@ func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRe
 	status.ObservedGeneration = c.Status.ObservedGeneration
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(c.Status.Conditions, &status)
+	preserveMaintenance(c, &status)
 	preserveTransitions(c.Status.Conditions, status.Conditions)
 	// Observing old healthy processes cannot finish restore/provisioning.
 	if c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded {
@@ -325,8 +327,12 @@ func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRe
 	if restoring {
 		restoreStatus(&status, domain.PhaseRestoring, "Restoring", c.Status.Message, rc.Clock.Now())
 	}
+	previous := c.Status.Phase
 	c.Status = status
-	return m.opts.Store.UpdateClusterState(ctx, c)
+	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
+		return err
+	}
+	return m.healthTransition(ctx, c, previous)
 }
 func preservePublishedEndpointFailure(previous []domain.Condition, status *domain.ClusterStatus) {
 	for _, condition := range status.Conditions {
@@ -409,6 +415,9 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 		return err
 	}
 	if previous != c.Status.Phase {
+		if err := m.healthTransition(ctx, c, previous); err != nil {
+			return err
+		}
 		return m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: phaseChangeMessage(c, previous)})
 	}
 	return nil
@@ -563,6 +572,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	// operation's bounded budget rather than leaving it Running indefinitely.
 	// Resume active work before convergence: restore may deliberately have every
 	// database process stopped, making ordinary Sync/Status unsafe or impossible.
+	ctx = store.WithMaintenanceTime(ctx, rc.Clock.Now())
 	op, err := m.opts.Store.ClaimRunningOperation(store.WithClusterSnapshot(ctx, c), ref)
 	if err == nil {
 		actor, operation = op.Actor, op.ID
@@ -627,7 +637,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			return result.RequeueAfter, nil
 		}
 	}
-	op, err = m.opts.Store.ClaimOperation(store.WithClusterSnapshot(ctx, c), ref)
+	op, err = m.opts.Store.ClaimOperation(store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now()), ref)
+	var windowWait *store.MaintenanceWindowWait
+	if errors.As(err, &windowWait) {
+		return maintenance.Delay(rc.Clock.Now(), windowWait.NextStart), nil
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		return result.RequeueAfter, nil
 	}
@@ -718,6 +732,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		status.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
 		preservePublishedEndpointFailure(rc.Cluster.Status.Conditions, &status)
+		preserveMaintenance(rc.Cluster, &status)
 		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
 		rc.Cluster.Status = status
 		// This is a distinct completed health sample, not the final Sync
@@ -809,6 +824,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	}
 	status, statusErr := m.observeStatus(ctx, p, rc)
 	engine.ApplyDeploymentStatus(rc, &status)
+	preserveMaintenance(rc.Cluster, &status)
 	if exposureCondition.Type != "" {
 		status.Conditions = append(status.Conditions, exposureCondition)
 	}
@@ -898,6 +914,8 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 }
 
 func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engine.Context, op *domain.Operation) (requeue time.Duration, attemptErr error) {
+	rc.Operation = op
+	defer func() { rc.Operation = nil }()
 	actor := op.Actor
 	if actor == "" {
 		actor = "reconciler"
@@ -1058,6 +1076,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	if opErr == nil && !terminal {
 		op.Failures = 0
 	}
+	m.maintenanceBudget(op, c, rc.WaitingForMaintenance(op))
 	if failing && !cleanupExpired {
 		// Cleanup errors retain the checkpoint and retry with worker backoff,
 		// including errors that would be permanent during ordinary work.
@@ -1135,6 +1154,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		}
 		status.ObservedGeneration = c.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
+		preserveMaintenance(c, &status)
 		preserveTransitions(c.Status.Conditions, status.Conditions)
 		if phase != domain.PhaseReady && phase != domain.PhaseDegraded {
 			status.Phase, status.Message = phase, message
@@ -1176,6 +1196,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		return 0, err
 	}
 	if previous != c.Status.Phase {
+		if err := m.healthTransition(ctx, c, previous); err != nil {
+			return 0, err
+		}
 		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "PhaseChanged", Message: phaseChangeMessage(c, previous)}); err != nil {
 			return 0, err
 		}
@@ -1341,4 +1364,16 @@ func scheduledPlatformWait(err error) *engine.PlatformRetryWait {
 		}
 		return nil
 	}
+}
+
+func (m *Manager) healthTransition(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
+	unhealthy := func(phase domain.Phase) bool { return phase == domain.PhaseDegraded || phase == domain.PhaseError }
+	if unhealthy(previous) == unhealthy(c.Status.Phase) {
+		return nil
+	}
+	kind, reason := "Warning", "ClusterDegraded"
+	if !unhealthy(c.Status.Phase) {
+		kind, reason = "Normal", "ClusterRecovered"
+	}
+	return m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: kind, Reason: reason, Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)})
 }

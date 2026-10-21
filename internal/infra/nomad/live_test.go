@@ -208,7 +208,7 @@ func TestLiveContract(t *testing.T) {
 	contracttest.Run(t, func(t *testing.T) contracttest.Harness {
 		b := liveBackend(t, source)
 		prefix := livePrefix(t)
-		liveCleanup(t, b, []string{prefix + "runtime", prefix + "volume"})
+		liveCleanup(t, b, []string{prefix + "moveruntime", prefix + "runtime", prefix + "movevolume", prefix + "volume"})
 		return contracttest.Harness{Backend: b, Hostname: func(s string) string { return prefix + s }, Artifact: func() infra.Artifact { return testArtifact(archive) }, PollInterval: time.Second, Timeout: 12 * time.Minute}
 	})
 }

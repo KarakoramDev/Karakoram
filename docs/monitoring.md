@@ -116,6 +116,98 @@ separate from the cluster API's 15-second readiness lease; exporter reachability
 does not prove application availability or quorum. Use external retention and
 independent application checks for alerting.
 
+## Control-plane state metrics
+
+The same `/metrics` response includes durable cluster state even when
+`spec.monitoring.enabled` is false or the member collector is unavailable.
+Cluster series require `monitoring:read` on each namespace-qualified cluster.
+Installation-wide backup, notification and certificate series additionally
+require `settings:read` on `*`; a cluster monitoring grant does not grant that
+visibility. An explicit `?namespace=` selection excludes installation-wide
+series. State inventory read errors fail the scrape rather than reporting
+healthy zeroes. These observations reflect stored state, not independent live
+database probes.
+
+Every cluster series has `namespace` and `cluster`; extra labels are listed
+below. All are gauges except the notification failure counter.
+
+| Metric | Extra labels | Meaning |
+| --- | --- | --- |
+| `karakoram_cluster_info` | `provider`, `version`, `phase` | Value 1 with observed engine version and stored phase. |
+| `karakoram_cluster_ready` | — | 1 only for Ready; suspended, creating and deleting clusters also report 0. |
+| `karakoram_cluster_degraded` | — | 1 for Degraded or Error. |
+| `karakoram_cluster_condition` | `type`, `status`, `reason` | Value 1 identifies a current condition, not its health polarity. |
+| `karakoram_cluster_members_co_located` | — | 1 when multiple members share a known observed placement group; 0 does not guarantee anti-affinity. |
+| `karakoram_member_agent_outdated` | `member` | 1 for a member reported outdated; unknown agent builds are not asserted outdated. |
+| `karakoram_backup_last_success_timestamp_seconds` | `schedule` | Latest successful completion; one series per enabled schedule plus `schedule=""` for all backups, including manual ones. |
+| `karakoram_backup_last_failure_timestamp_seconds` | — | Latest failed backup completion. |
+| `karakoram_certificate_expiry_timestamp_seconds` | `certificate` | Certificate expiry; installation certificates use empty cluster identity. |
+| `karakoram_backup_drill_enabled` | — | Whether scheduled drills are enabled. |
+| `karakoram_backup_drill_last_success_timestamp_seconds` | — | Latest successful drill completion. |
+| `karakoram_backup_drill_last_failure_timestamp_seconds` | — | Latest failed drill completion. |
+| `karakoram_backup_drill_last_restore_duration_seconds` | — | Restore duration from the latest successful report, not the longest or latest failed report. |
+| `karakoram_deployment_retries_exhausted` | — | 1 while a deployment is terminally fenced pending a desired-state change or explicit retry. |
+
+Installation metrics have no cluster labels:
+`karakoram_control_plane_backup_enabled`,
+`karakoram_control_plane_backup_last_success_timestamp_seconds`,
+`karakoram_control_plane_backup_last_failure_timestamp_seconds`, and
+`karakoram_notification_deliveries_failed_total{channel}`. Notification counts
+include deliveries that exhausted retries, not transient failed attempts; use
+`increase()` or `rate()` to handle counter resets. Channel credentials and
+delivery destinations are never metric labels.
+
+Timestamp gauges are Unix seconds; zero means no recorded terminal result, not
+the current time or healthy state. Pending/in-progress records cannot renew a
+success timestamp. Backup completion freshness differs from the backup's data
+recovery point. Results summarize retained durable inventory: deleting backup
+records or rotating drill-report retention can remove old evidence. Conditions
+are ternary and condition-specific: `True` can mean a fault, so inspect `type`
+and `reason` rather than treating every true condition as healthy.
+
+## Grafana dashboards and Prometheus alerts
+
+Import the supplied JSON dashboards from
+[`deploy/grafana/dashboards`](../deploy/grafana/dashboards):
+`overview.json`, `mongodb.json`, `rabbitmq.json`, `elasticsearch.json`,
+`postgres.json` and `supabase.json`. Select a Prometheus datasource through the
+`datasource` variable; no fixed datasource UID or credentials are embedded.
+For file provisioning, configure a Grafana dashboard provider for the mounted
+dashboard directory and provision the datasource separately. Namespace,
+cluster and member selectors are populated from member scrape series: select
+**All** to include state-only clusters that do not have member monitoring.
+
+The overview covers readiness, conditions, backup/drill freshness, certificate
+lifetime, placement, agent drift, deployment failures and installation signals.
+Engine dashboards use native metric semantics: reset-aware `rate()`/`increase()`
+for counters, `max` rather than sums for Elasticsearch's repeated cluster-wide
+values, and separate PostgreSQL primary-observed replication lag from
+replica-local replay backlog. Missing series are unknown, not healthy zeroes.
+
+Load [`deploy/prometheus/karakoram-rules.yaml`](../deploy/prometheus/karakoram-rules.yaml)
+through Prometheus `rule_files`, reload Prometheus, and route its `severity`
+labels with Alertmanager. Give the scrape token both cluster monitoring and
+installation settings read permissions if installation alerts are wanted.
+Alert annotations link to the relevant operational runbooks.
+
+Review thresholds before enabling paging: backup freshness assumes daily
+schedules (26 hours), drill freshness assumes weekly schedules (eight days),
+certificate warnings start at 14 days and become critical at three days, and
+agent drift warns after 24 hours. Enabled schedules with no successful result
+are stale. Disable policies intentionally rather than silencing failing runs.
+Cluster-not-ready alerts can include planned suspension or provisioning.
+Monitor Prometheus's own scrape `up` signal too: missing state metrics after a
+failed scrape must not be interpreted as recovery.
+
+For a degraded cluster, inspect conditions and recent operations before
+restarting members. For backup/drill alerts, inspect completed reports,
+verification checks, cleanup inventory and storage access; backup process
+availability alone does not establish recoverability. For deployment retry
+exhaustion, correct the backend error before explicitly retrying. Certificate
+alerts require reviewing certificate identity and renewal conditions, not
+disabling TLS verification.
+
+
 ## Engine metric vocabularies
 
 Metric names, units, availability and engine-specific health interpretation live in:
@@ -143,7 +235,7 @@ than reporting a healthy zero.
 | `tuples_returned_total`, `tuples_fetched_total`, `tuples_inserted_total`, `tuples_updated_total`, `tuples_deleted_total` | Counter | Database tuple activity from `pg_stat_database`. |
 | `connections`, `max_connections` | Gauge | Current database backends and the server connection limit. |
 | `database_size_bytes` | Gauge | Total size of each database. |
-| `replication_lag_bytes` | Gauge | Maximum primary-to-replica replay lag, or received-but-not-replayed WAL on a replica. Replica-local lag does not measure WAL that has not arrived. |
+| `replication_lag_bytes`, `replay_backlog_bytes` | Gauge | Primary-observed transport-plus-replay lag and replica-local received-but-not-replayed WAL respectively. Replica backlog excludes WAL that has not arrived. |
 | `archiver_failed_total` | Counter | Failed WAL archive attempts. |
 | `last_archived_age_seconds` | Gauge | Age of the last successful WAL archive; zero before the first archive. Correlate with archive status and backup configuration. |
 | `patroni_primary`, `patroni_timeline` | Gauge | Patroni's local primary role (1/0) and PostgreSQL timeline on HA members. |
