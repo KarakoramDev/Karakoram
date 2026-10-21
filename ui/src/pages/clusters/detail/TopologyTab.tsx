@@ -187,7 +187,7 @@ export function TopologyTab() {
         <Card title="Monitoring & engine configuration">
           <div className="stack" style={{ gap: 14 }}>
             <Switch label="Collect per-member metrics" checked={draft.monitoring} onChange={(e) => setDraft((d) => ({ ...d, monitoring: e.target.checked }))} />
-            {cluster.spec.provider !== 'elasticsearch' ? <TextAreaField label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML)' : 'Engine configuration overrides')} placeholder={engineUI?.engineConfigPlaceholder} mono rows={6} value={draft.engineConfig} onChange={(e) => setDraft((d) => ({ ...d, engineConfig: e.target.value }))} hint="Validated server-side; applied with a rolling restart." /> : null}
+            {!['elasticsearch', 'weaviate'].includes(cluster.spec.provider) ? <TextAreaField label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML)' : 'Engine configuration overrides')} placeholder={engineUI?.engineConfigPlaceholder} mono rows={6} value={draft.engineConfig} onChange={(e) => setDraft((d) => ({ ...d, engineConfig: e.target.value }))} hint="Validated server-side; applied with a rolling restart." /> : null}
           </div>
         </Card>
       </fieldset>

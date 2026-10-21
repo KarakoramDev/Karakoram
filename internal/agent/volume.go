@@ -236,6 +236,12 @@ func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 			return false, nil
 		}
 		return nonemptyVolumeFile(root, "db/WiredTiger.wt", 4096)
+	case "weaviate":
+		raft, err := nonemptyVolumeFile(root, "weaviate/raft/raft.db", 1)
+		if err != nil || !raft {
+			return false, err
+		}
+		return nonemptyVolumeFile(root, "weaviate/schema.db", 1)
 	case "postgres":
 		version, err := nativeMetadata(root, "postgres/PG_VERSION", 16)
 		if err != nil {

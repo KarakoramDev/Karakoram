@@ -36,6 +36,16 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose Bolt publicly on port 7687',
     configHint: 'Only allowlisted engineOptions.settings are supported; engineConfig is not accepted.',
   };
+  if (provider === 'weaviate') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 1 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      single: { title: 'Single Weaviate member', description: 'One data member and Raft voter. No redundancy; maintenance interrupts access.' },
+      cluster: { title: 'Weaviate cluster', description: '3–9 data members with three fixed Raft voters. Additional members do not automatically rebalance shards.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Weaviate REST on port 8080 and client gRPC on port 50051',
+    configHint: 'Use typed Weaviate engine options; raw configuration is unsupported.',
+  };
   if (provider === 'psmdb') return {
     resourceMinimums: { cpu: 1, ram: 0.5, disk: 5 },
     runtimeDisk: { min: 1, max: 3 },

@@ -10,6 +10,7 @@ Verification checks contracts, real engine behavior and deployed workflows at di
 - **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not backend placement or provisioning.
 - **Native PostgreSQL/Supabase integration:** compiled test binaries run with real installed packages/artifacts in disposable Ubuntu 24.04 Incus/LXC system containers; no application-container runtime or image extraction is required for this path.
 - **Native MySQL/PXC integration:** real Percona Server or PXC, ProxySQL and selected XtraBackup/MinIO scenarios from environment-selected artifacts and disposable scratch paths; [prerequisites and focused commands](mysql/verification.md).
+- **Native Weaviate integration:** official native binaries, loopback singleton/three-member formation, API keys/RBAC, client TLS, full S3 recovery, singleton and three-member adjacent-minor upgrades; no Docker prerequisite.
 - **Deployed checks:** paid platform resources, engine data paths and recovery under the configured prerequisites. Skipped capabilities are unverified, not successful.
 - **Browser checks:** rendered navigation, permissions and workflows. Static checks and backing-API scenarios are not browser automation; no automated browser-workflow suite is supplied.
 
@@ -133,6 +134,31 @@ kernels; non-Linux startup enumerates `/dev/fd`. Parent lock ownership and
 explicitly mapped child stdout/stderr are preserved. External lock wrappers
 should still use `flock --close`.
 
+### Native Weaviate integration
+
+Run the integration-tagged `internal/agent/weaviate` package as an unprivileged user in a disposable isolated Linux environment:
+
+```sh
+export KARAKORAM_WEAVIATE_INSTALL_ROOT=/opt/native-tests
+go test -tags integration -count=1 -v -timeout 30m ./internal/agent/weaviate
+```
+
+The install root must contain official executables at `weaviate-1.39.12/weaviate` and `weaviate-1.40.1/weaviate`; supply the locked bytes described in [native artifacts](native-artifacts.md). Tests create private temporary data directories and real native processes. Root execution fails. A missing install root skips native cases; upgrade cases also skip if either version is absent. Three-member rolling upgrade checks exactly three synchronized voters with one agreed leader and persisted vector reads at `ONE`/`QUORUM` after each step and a later restart. A supplied executable that cannot start fails qualification. Do not point tests at production data.
+
+Full S3 recovery additionally requires **all** of:
+
+| Variable | Value |
+| --- | --- |
+| `KARAKORAM_WEAVIATE_TEST_S3_ENDPOINT` | Native S3 host[:port], without scheme |
+| `KARAKORAM_WEAVIATE_TEST_S3_BUCKET` | Existing disposable test bucket |
+| `KARAKORAM_WEAVIATE_TEST_S3_ACCESS_KEY` | Test access key |
+| `KARAKORAM_WEAVIATE_TEST_S3_SECRET_KEY` | Test secret key |
+| `KARAKORAM_WEAVIATE_TEST_S3_USE_SSL` | `true` for TLS, `false` for plaintext test S3 |
+
+Keep credentials out of logs and use a disposable bucket; native tests need an external S3 endpoint, not a Docker service. `KARAKORAM_WEAVIATE_LOCAL_CLUSTER=true` is a test/development hook for multiple members sharing one network namespace: it enables upstream localhost-cluster mode and translates Raft join RPC ports to consensus ports. The three-member test sets it itself and allocates disjoint ports because internal native listeners bind wildcard. Do not set it for ordinary deployed members.
+
+Missing install-root or S3 prerequisite variables cause relevant tests to **skip, not pass**. Native tests do not establish backend provisioning, private UDP connectivity, placement separation, public ingress or browser behavior; those require separate deployed acceptance.
+
 ## Capability matrix
 
 Coverage descriptions, not evidence that this checkout or deployment passed:
@@ -145,6 +171,8 @@ Coverage descriptions, not evidence that this checkout or deployment passed:
 | RabbitMQ: access/TLS/definitions/metrics | Local API/CLI/rendering; Docker TLS/metrics | Grants, definitions restore/clone, retention, fresh metrics | TLS modes/PKI, denied clients, public management, cleanup |
 | Elasticsearch/Stack: topology/security/lifecycle | Local contracts; Docker TLS/keystore/security APIs | Stack/dedicated masters, replacement, upgrades/scaling, suspend/resume | Component UI, external access, effective configuration |
 | Elasticsearch: snapshots/access/metrics | Local checkpoints; Docker snapshot APIs | Restore/clone, data/credentials, fresh metrics, deletion | Repository compatibility and independent cleanup |
+| Weaviate: lifecycle/access/TLS/metrics | Local replay, ownership, placement-drain, RBAC and metric contracts; native singleton/three-member formation and adjacent-minor upgrade | Provisioning, UDP/private connectivity, non-voter scale-down, replacement, rotations and public ingress | Wizard, access controls, one-time API keys and expired-certificate status |
+| Weaviate: S3 full backup/restore/clone | Local attempt ownership, clock-skew, replay and retention contracts; native S3 backup/restore | Backend member-to-S3 connectivity, in-place and clone data recovery, retained cleanup | Destructive-restore acknowledgement, operation status and independent recovered-data checks |
 | PostgreSQL: access/TLS/proxy/lifecycle | Local contracts; native PostgreSQL/ProxySQL access/reload and upgrade cases | HA fencing/failover, scaling/replacement, resource changes and rolling lifecycle | Driver compatibility, external TLS/allowlists and client reconnection |
 | PostgreSQL: pgBackRest/PITR/restore/clone | Local recovery checkpoints; native inventory compatibility | S3 backup chains, expiry dependencies, PITR/in-place/clone and credential recovery | Conservative-window limits, offline-major rollback, retained-object cleanup |
 | MySQL/PXC: native access, topology, routing and lifecycle | Local contracts/UI rendering; native access, group/Galera runner and routing cases | Independent provider catalogs, quorum/fencing, scale/replace/restart, upgrades and resume | Both wizard modules, MySQL access permissions, typed PXC recovery confirmation and client reconnection |

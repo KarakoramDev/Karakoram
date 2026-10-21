@@ -257,3 +257,60 @@ Cleanup removes test-owned clusters, snapshots, and newly created storage
 objects unless `KARAKORAM_E2E_KEEP=1`. As with other suites, **explicit scenario
 deletions still execute with KEEP**: Clone deletes its clone and Delete deletes
 its source cluster. Existing storage objects and buckets are never deleted.
+
+## Weaviate deployed lifecycle
+
+`TestWeaviateLifecycle` uses generated control-plane API methods and CA-verified
+native HTTPS REST requests through each member's published IPv6 REST endpoint.
+It requires `KARAKORAM_E2E_URL`, `KARAKORAM_E2E_TOKEN`,
+`KARAKORAM_E2E_ALLOW_CIDR`, and either `KARAKORAM_E2E_STORAGE_NAME` or all five
+`KARAKORAM_E2E_STORAGE_{ENDPOINT,BUCKET,ACCESS_KEY,SECRET,REGION}` inputs.
+Missing CIDR/S3 prerequisites skip before member provisioning. Invalid configured
+values, failed storage verification, failed TLS/authentication and missing
+advertised behavior fail rather than skip. The runner needs public IPv6
+connectivity from the allowlisted CIDR. Members require the private network
+ports (including gossip UDP) described in the Weaviate operations guide.
+
+Allow capacity for four members during scale-out/replacement and a simultaneous
+three-member clone, with fixed 2 GiB RAM and 10 GiB disk per member.
+The source starts on 1.39.12 when the deployed catalog offers it, otherwise
+1.40.1; only the unavailable upgrade source skips its phase. Monitoring and
+`requireTLS` are enabled; the verified S3 storage is bound at creation.
+`karactl` is not required: access management uses the generated API.
+
+```sh
+go vet -tags e2e ./test/e2e/
+go test ./test/e2e/ # Ordinary pure helper tests; no deployed resources.
+go test -tags e2e -count=1 -v -timeout 24h ./test/e2e/ \
+  -run '^TestWeaviateLifecycle$'
+```
+
+Phases share one ordered fixture and stop after the first failure. Selecting a
+single phase also creates and seeds its prerequisites:
+
+| Phase | Checks |
+| --- | --- |
+| `Create`, `Ready` | Three-member cluster, requested version/TLS/monitoring, Ready with observed-generation convergence, healthy native nodes. |
+| `TLSData` | Protected admin credential and returned CA, verified chain/hostname, RF=3 collection, eight batch objects with explicit vectors, exact objects and nearVector results through every member using ALL consistency. |
+| `Access` | Viewer DB-user key can read but cannot write; role revocation/restoration, key rotation with old-key 401, custom role create/replace/delete, protected identity and built-in-role rejection. |
+| `Monitoring` | Fresh samples newer than baseline and phase start for every Weaviate catalog metric on every member. |
+| `Restart`, `ReplaceMember` | Successful operations and native healthy membership, original RF=3 data remains readable through every member. Voter replacement preserves identity as required by Weaviate. |
+| `Backup`, `Restore` | Full backup reaches Succeeded (native SUCCESS) with immutable location; delete an object, restore in place, recover original data. |
+| `Clone` | Topology-matched three-member clone contains original data but not the source application user; root credential is fresh. |
+| `Upgrade` | 1.39.12→1.40.1, native version checked on every member, original data persists. |
+| `ScaleOut`, `ScaleDown` | 3→4→3, correct native member counts, ALL-consistency proof through every member and exactly three served replicas per proof shard. ScaleDown alone first scales out. |
+| `RotateSystemUser`, `RotateTLS` | Root-key rotation rejects the old key; TLS rotation presents a different CA-verified leaf; original data remains accessible. |
+| `DeleteKeepBackups`, `Delete` | Explicit cluster deletion, retained backup/location verification then retained-record cleanup; full deletion verifies prior backup records absent. Delete provisions a fresh fixture after DeleteKeepBackups. Assertions concern API inventory, not independent bucket/platform enumeration. |
+
+`KARAKORAM_E2E_WEAVIATE_CLUSTER` explicitly adopts a previously seeded,
+three-member suite cluster bound to the selected storage. Adoption does not
+implicitly delete the source; **explicit deletion phases remain destructive**.
+Use `-run '^TestWeaviateLifecycle$/Restore$'` (or another exact phase) to select
+later phases. Do not adopt unrelated or production data.
+`KARAKORAM_E2E_PREFIX`, `KARAKORAM_E2E_KEEP` and
+`KARAKORAM_E2E_EVIDENCE_DIR` have their usual meanings. KEEP retains owned
+resources except explicit deletion actions. Optional evidence includes native
+node/status, data-proof summaries, operations, backup/restore records, metrics,
+replica counts and timing; connection responses and API keys are never saved.
+These are before/after persistence tests, not continuous availability or
+rendered-browser coverage. A deployed environment is required to run them.

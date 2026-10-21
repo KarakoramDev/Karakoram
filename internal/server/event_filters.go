@@ -15,6 +15,7 @@ import (
 var eventResources = func() []string {
 	resources := map[string]bool{
 		"auth": true, "cluster-data": true, "orphaned-volumes": true, "operations": true,
+		"weaviate-users": true, "weaviate-roles": true,
 		"rabbitmq-vhosts": true, "rabbitmq-users": true, "rabbitmq-permissions": true,
 		"rabbitmq-topic-permissions": true, "rabbitmq-policies": true, "rabbitmq-operator-policies": true,
 	}

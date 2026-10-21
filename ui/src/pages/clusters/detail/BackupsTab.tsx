@@ -69,6 +69,7 @@ export function BackupsTab() {
   return (
     <div className="stack" style={{ gap: 16 }}>
       {isMySQL(cluster.spec.provider) ? <Callout tone="warn" title="XtraBackup and binlog recovery">Incremental backups depend on their full backup and complete LSN chain. PITR ends at continuous archived GTID coverage, not the latest application commit; inspect archive lag and gaps. MySQL and PXC backups are not interchangeable. Test recovery before relying on retention or upgrading.</Callout> : null}
+      {cluster.spec.provider === 'weaviate' ? <Callout>Weaviate uses full native S3 backups from every member to the cluster’s bound storage; no incremental backups or PITR. Restore requires the recorded member count, source storage endpoint/bucket and a supported same-or-forward version. In-place restore deletes existing collections; clones preserve fresh target identities rather than restoring source users and keys. <a href="https://karakoram.dev/docs/weaviate/backups/" target="_blank" rel="noreferrer">Weaviate recovery constraints ↗</a></Callout> : null}
       <div className="grid-3">
         <Card flush>
           <div className="stat">

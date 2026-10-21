@@ -4,6 +4,7 @@
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
 import { postgresMetadata, supabaseMetadata } from './postgres/metadata.ts';
+import { weaviateMetadata } from './weaviate/metadata.ts';
 import { neo4jMetadata } from './neo4j/index.ts';
 import { mysqlMetadata } from './mysql/metadata.ts';
 import { pxcMetadata } from './pxc/metadata.ts';
@@ -22,6 +23,7 @@ export const engines: Record<string, EngineUI> = {
   supabase: supabaseMetadata,
   openbao: openbaoMetadata,
   neo4j: neo4jMetadata,
+  weaviate: weaviateMetadata,
   psmdb: {
     label: 'Percona Server for MongoDB',
     description: 'Replica sets and sharded MongoDB clusters.',

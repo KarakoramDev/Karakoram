@@ -20,6 +20,7 @@ import (
 	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
 	supabaseagent "github.com/KarakoramDev/Karakoram/internal/agent/supabase"
 	temporalagent "github.com/KarakoramDev/Karakoram/internal/agent/temporal"
+	weaviateagent "github.com/KarakoramDev/Karakoram/internal/agent/weaviate"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -90,13 +91,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		if len(args) > 1 {
 			opts, rest := readinessOptions(args[2:])
-			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{})
+			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{}, weaviateagent.New())
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{})
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{}, weaviateagent.New())
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage

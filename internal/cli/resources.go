@@ -45,6 +45,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("collation", "", "Database collation (creation only)")
 	case s.operation == "createNeo4jUser" || s.operation == "setNeo4jUserPassword":
 		c.Flags().Bool("password-stdin", false, "Read password from standard input; omit to generate a password returned once")
+	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
+		weaviateUserFlags(c)
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -234,6 +236,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			return map[string]any{"strategy": strategy}, nil
 		}
 		return map[string]any{}, nil
+	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
+		return weaviateUserBody(cmd, args)
 	case strings.HasPrefix(s.path, "clusters create"):
 		if len(args) != 1 {
 			return nil, usageError("cluster name is required without -f")

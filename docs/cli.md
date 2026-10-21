@@ -51,6 +51,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - [MySQL and PXC](mysql/README.md) are separate providers with a shared `mysql` access command group. Their backups use `full` or `incremental`, and PITR is GTID/binlog based; see [MySQL backups](mysql/backups.md).
 - Neo4j Community creation, native administrative users and offline outages: [Neo4j](neo4j/README.md). Always pass `--type dump` for Neo4j backups; schedules require `engineOptions.acceptBackupDowntime: true`.
+- [Weaviate creation](weaviate/README.md#create) supports `single` and `cluster`; use `--type full` for its backups and its native `weaviate users|roles` groups for application access.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
 - Cluster mutation `--wait` reports acceptance/operation ID on stderr, then phase changes and a fifteen-second heartbeat. The default timeout is **30m**. It waits for the operation and observed cluster generation; an **Error or Degraded cluster fails the wait**. `clusters wait NAME` observes the current desired generation or deletion/suspension without resubmitting.
 - `operations wait ID` succeeds on **Succeeded**, even when the cluster is Degraded; **Failed/Cancelled** fail. Operation success is not a health guarantee. See [operations and status](clusters.md#operations-and-status).
@@ -106,6 +107,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `temporal` | Client certificates, workflow namespaces and write-only UI OIDC secret | client-certificate issue/list, namespace list/delete, ui-oidc-secret set | Temporal only |
 | `tokens` | Control-plane API tokens | list, get, create, set, delete (alias revoke) | All |
 | `version` | Client/server build metadata | — | All |
+| `weaviate` | Native database access | users list/get/create/update/delete/rotate-key; roles list/get/create/update/delete | Weaviate only |
 | `whoami` | Authenticated identity | — | All |
 
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
@@ -171,6 +173,14 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `events watch` | Same scope filters; `--cursor`, `--last-event-id`; no list limit/order |
 | `operations list/cluster` | `--phase`, `--limit`, `--cursor`; list also `--cluster` |
 | `operations wait/cancel ID` | wait: `--timeout` (30m); cancel: `--yes` |
+
+### Weaviate native access
+
+Use `karactl weaviate users create CLUSTER NAME --role viewer`, `users update CLUSTER NAME --role viewer --active` (or `--inactive`), and `users rotate-key CLUSTER NAME --yes`. `--role` is repeatable; update replaces the complete role list, and omission clears roles. User list/get/delete and role list/get/delete take the cluster and, for object actions, the name. Role create uses `roles create CLUSTER -f role.yaml`; replacement uses `roles update CLUSTER NAME -f role.yaml`, with `{name, permissions}`.
+
+Generated user API keys are secret-bearing creation/rotation results, not later GET data; protect terminal output. Do not blindly retry after losing a mutation response: the CLI does not send idempotency keys. Protected identities and extra privilege grants follow the [Weaviate access guide](weaviate/access-and-tls.md#management-authorization); MongoDB `db-users`/`db-roles` do not apply.
+
+Key rotation requires `database-users/update` plus `clusters/update` when the target user's current roles include anything beyond `viewer` or `read-only`. User deletion needs only `database-users/delete`, including for privileged users; protected identities remain excluded.
 
 ### Supabase native access
 

@@ -458,6 +458,8 @@ type Backup struct {
 	// Postgres records pgBackRest's immutable set and dependency metadata.
 	Postgres *PostgresBackup `json:"postgres,omitempty"`
 	MySQL    *MySQLBackup    `json:"mysql,omitempty"`
+	// Weaviate records the immutable native S3 destination and node identities.
+	Weaviate *WeaviateBackup `json:"weaviate,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -471,6 +473,17 @@ type Backup struct {
 	Size             int64      `json:"size"`
 	Error            string     `json:"error,omitempty"`
 	CreatedAt        time.Time  `json:"createdAt"`
+}
+
+// WeaviateBackup is non-secret provenance needed after source-cluster deletion.
+type WeaviateBackup struct {
+	Endpoint    string   `json:"endpoint"`
+	Bucket      string   `json:"bucket"`
+	Path        string   `json:"path"`
+	ID          string   `json:"id"`
+	ClusterUID  string   `json:"clusterUid"`
+	Members     []string `json:"members"`
+	MemberCount int      `json:"memberCount"`
 }
 
 // PostgresBackup describes a consistent pgBackRest backup set.

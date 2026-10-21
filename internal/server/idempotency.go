@@ -52,6 +52,8 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
+	case "createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole":
+		return true
 	case "createNeo4jUser", "setNeo4jUserPassword", "deleteNeo4jUser":
 		return true
 	case "createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum":
@@ -123,6 +125,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	namespace := ""
 	switch id {
+	case "createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole":
+		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "createNeo4jUser", "setNeo4jUserPassword", "deleteNeo4jUser":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum":

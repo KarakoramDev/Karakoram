@@ -451,9 +451,10 @@ func RefusalReason(reason string) string {
 // node agent (9443), MongoDB (27017), RabbitMQ AMQP/AMQPS and management
 // (5672, 5671, 15672, 15671) and Elasticsearch, Kibana, Logstash, APM and
 // Beats (9200, 5601, 9600, 8200, 5044, 8080), plus OpenBao's private mTLS
-// recovery listener (8202). Exact host:port policy membership is still required.
-// Cluster-internal ports such as Erlang distribution are never relayed.
-var relayPorts = map[string]bool{"9443": true, "27017": true, "5672": true, "5671": true, "15672": true, "15671": true, "9200": true, "5601": true, "9600": true, "8200": true, "8202": true, "5044": true, "8080": true}
+// recovery listener (8202) and authenticated Weaviate Raft removal (7947).
+// Exact host:port policy membership is required. Other cluster-internal
+// ports such as Erlang distribution are never relayed.
+var relayPorts = map[string]bool{"9443": true, "27017": true, "5672": true, "5671": true, "15672": true, "15671": true, "9200": true, "5601": true, "9600": true, "8200": true, "8202": true, "5044": true, "8080": true, "7947": true}
 
 func (r *runtime) target(ctx context.Context, s *relaySession, addr, instance string) (net.Conn, error) {
 	s.mu.RLock()

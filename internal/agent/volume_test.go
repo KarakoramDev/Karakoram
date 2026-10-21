@@ -35,6 +35,9 @@ func legacyNativeVolume(t *testing.T, a *nodeAgent, engine string) {
 	case "":
 		volumeFile(t, a, "db/WiredTiger", []byte("WiredTiger 11.3\n"))
 		volumeFile(t, a, "db/WiredTiger.wt", make([]byte, 4096))
+	case "weaviate":
+		volumeFile(t, a, "weaviate/raft/raft.db", []byte{1})
+		volumeFile(t, a, "weaviate/schema.db", []byte{1})
 	case "postgres":
 		volumeFile(t, a, "postgres/PG_VERSION", []byte("18\n"))
 		volumeFile(t, a, "postgres/global/pg_control", make([]byte, 8192))
@@ -60,7 +63,7 @@ func legacyNativeVolume(t *testing.T, a *nodeAgent, engine string) {
 	}
 }
 func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			if err := a.volumeSafety(t.Context(), c); err == nil || !strings.Contains(err.Error(), "VolumeLost") {
@@ -76,7 +79,7 @@ func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
 	}
 }
 func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, false)
 			if err := a.volumeSafety(t.Context(), c); err != nil {
@@ -110,7 +113,7 @@ func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
 	}
 }
 func TestVolumeSafetyLegacyRequiresNativeMetadata(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			volumeFile(t, a, "karakoram/config.json", []byte(`{"cluster":"demo"}`))

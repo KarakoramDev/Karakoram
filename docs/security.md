@@ -129,6 +129,10 @@ Verified runtime-to-volume bindings can establish ownership; conflicting/unverif
 MongoDB and RabbitMQ default to `requireTLS`; their optional `preferTLS` permits plaintext and `disabled` removes engine encryption. Elasticsearch accepts **only `requireTLS`** for Elasticsearch HTTP/transport, not blanket TLS on every stack input.
 Neo4j Community accepts only `requireTLS`: Bolt 7687 and private HTTPS 7473 use the cluster CA; plain HTTP is disabled. Every native user is an administrator. See [Neo4j access and trust](neo4j/access-and-tls.md).
 
+Weaviate defaults to `requireTLS` for HTTPS-only REST and client gRPC; `disabled` is private-only and `preferTLS` is unsupported. Internal gossip, data and Raft transports remain plaintext upstream; require an isolated private/encrypted network. Native metrics port 2112 is wildcard-bound and must remain private. Certificate changes require rolling restarts, not hot PEM replacement.
+
+Weaviate namespace relay/control paths allow exact member targets on REST 8080, authenticated internal Raft-removal HTTP 7947 and agent HTTPS 9443 only, not client gRPC. Native REST/gossip bind `0.0.0.0` on IPv4 backends and `::` otherwise; wildcard binding is not isolation. Rolling recovery observations alone may verify the exact pinned active expired leaf at an in-validity time, retaining CA/hostname/server-auth checks; native administrative mutations keep current-time verification.
+
 | Surface | Default | Network restriction | Authentication |
 | --- | --- | --- | --- |
 | Control-plane UI/API | Installer enables public HTTPS subdomain → private HTTP 8080 | No generated source-IP restriction; review ingress policy | Karakoram local/OIDC session or API token |
@@ -140,6 +144,7 @@ Neo4j Community accepts only `requireTLS`: Bolt 7687 and private HTTPS 7473 use 
 | MySQL / PXC application TCP | Private; `requireTLS` only | Opt-in public 3306 requires CIDR allowlist; private reader/replication channels remain separate | Scoped TLS-only MySQL users |
 | PXC Galera/IST and SST (4567, 4568, 4444) | Explicit channel TLS and peer verification | Never published; member-only reachability is **not enforced** by any registered backend—use a dedicated network/project ([per backend](mysql/access-and-tls.md#replication-ports-and-network-restriction)) | Shared cluster-traffic certificate/key, separate from per-member SQL leaves |
 | Neo4j Bolt | Private; TLS required | Opt-in public TCP requires allowlist policy; HTTPS remains private | Native users; all administrators in Community |
+| Weaviate REST/gRPC | Private; `requireTLS` default | Opt-in public TLS TCP requires CIDR allowlist; internal transports remain private/plaintext | API keys and native RBAC; anonymous off |
 | Kibana HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | Elasticsearch/Kibana authentication |
 | APM HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | APM secret token or authorized API key |
 | Logstash inputs | Private Beats 5044 / HTTP 8080 | No automatic public routes or input TLS/auth | User pipeline must configure needed protection |
@@ -166,6 +171,8 @@ Acknowledgement must be fresh in that request, never inherited from PATCH state.
 ## RBAC and credential reveal
 
 Credential reveal requires **`cluster-credentials/read`** on `<namespace>/<cluster>`, separately from cluster read. Ordinary connection data omits passwords. Explicit reveal returns the provider-defined credential set and CA with `Cache-Control: no-store`: MongoDB `databaseAdmin`, RabbitMQ `admin`, Elasticsearch `elastic` and `apm-secret-token`. These are powerful management/intake credentials, not automatically suitable application identities; use engine-specific least-privilege access.
+
+Weaviate reveal returns the protected `karakoram-admin` root API key. Use [dynamic database users and roles](weaviate/access-and-tls.md) for applications; extra `clusters/update` is required for non-read-only role assignments, key rotation when current roles exceed `viewer`/`read-only`, and every role mutation. User deletion requires only `database-users/delete`, even for privileged users; protected identities remain excluded. Official binaries are mixed-license, with enterprise features forcibly disabled and no license key supplied; see the [license boundary](weaviate/README.md#licensing).
 
 The UI requests reveal explicitly without query-state caching. Authorized users can copy credentials; RBAC cannot recall disclosure. Rotate exposed credentials. Secret inputs and one-time-token responses must not enter shared logs.
 

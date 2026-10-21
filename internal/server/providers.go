@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal"
+	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -48,6 +49,7 @@ func engineProviders(o engineOptions) []engine.Provider {
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: o.Bindings}),
 		neo4j.New(neo4j.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
+		weaviate.New(weaviate.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 	}
 	if o.Bindings != nil {
 		providers = append(providers, keycloak.New(keycloak.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Bindings: o.Bindings}))

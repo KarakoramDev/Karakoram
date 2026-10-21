@@ -821,5 +821,33 @@
       "commit": "eac07229cf6cacc8a22eb79f4929e7fed61338b7"
     },
     "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.40",
+    "version": "1.40.1",
+    "file": "weaviate-v1.40.1-linux-amd64.tar.gz",
+    "sha256": "ed3234edb870310bb0d73f247781f9b597e4ca34e65d95c3ba8d5bed4dcbd13e",
+    "size": 74030635,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.40.1/weaviate-v1.40.1-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "e0c3f76b59d11413f015de897ba035f43c9ecf01"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "weaviate-1.39",
+    "version": "1.39.12",
+    "file": "weaviate-v1.39.12-linux-amd64.tar.gz",
+    "sha256": "82a073d157c6d8e70a54031ece9b090bcaf7f6520796b2fd0eedabccdf9c4c2d",
+    "size": 73267992,
+    "upstreamURL": "https://github.com/weaviate/weaviate/releases/download/v1.39.12/weaviate-v1.39.12-linux-amd64.tar.gz",
+    "license": "BSD-3-Clause AND LicenseRef-Weaviate-Enterprise",
+    "source": {
+      "repo": "https://github.com/weaviate/weaviate",
+      "commit": "6007f7029a40c567a94535e88cfe50445e7e0369"
+    },
+    "build": "upstream-release"
   }
 ]

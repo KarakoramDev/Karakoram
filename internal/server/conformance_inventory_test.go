@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
+	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 )
 
@@ -46,12 +47,16 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	ctx := t.Context()
 	var err error
 	inventoryElastic := newInventoryElasticProvider(t, s)
-	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}), weaviate.New(weaviate.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	elasticRegistry := s.Registry
 	rabbitRegistry, err := engine.NewRegistry(&fakeRabbitMQAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	weaviateRegistry, err := engine.NewRegistry(&fakeWeaviateAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +177,9 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if strings.Contains(path, "/rabbitmq/") {
 				s.Registry = rabbitRegistry
 			}
+			if strings.Contains(path, "/weaviate/") {
+				s.Registry = weaviateRegistry
+			}
 			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
 			if strings.Contains(path, "/postgres/") {
 				s.Registry = postgresRegistry
@@ -253,6 +261,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				}
 			}
 		})
+	}
+	s.Registry = elasticRegistry
+	if w := call(s, "GET", "/api/v1/providers/weaviate", "", token); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
 	}
 	// Exercise the real provider's presets as well as the fake DataPlane catalog.
 	if w := call(s, "GET", "/api/v1/providers/psmdb", "", token); w.Code != 200 {

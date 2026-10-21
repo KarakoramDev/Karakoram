@@ -478,3 +478,41 @@ func TestEnginePortAllowlist(t *testing.T) {
 		t.Fatalf("prohibited port dialed: %v", dialed)
 	}
 }
+
+func TestRelayWeaviateMemberDestinations(t *testing.T) {
+	o := defaults(Options{Hostname: "relayhost"})
+	o.Resolver = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("192.0.2.10")}, nil
+	}
+	dialed := ""
+	o.DialContext = func(_ context.Context, _ string, addr string) (net.Conn, error) {
+		dialed = addr
+		return nil, errors.New("test dial")
+	}
+	r := runtime{o: o}
+	s := &relaySession{targets: map[string]struct{}{
+		"member:8080": {}, "member:7947": {}, "member:9443": {},
+	}}
+	for _, port := range []string{"8080", "7947", "9443"} {
+		dialed = ""
+		_, _ = r.target(t.Context(), s, "member:"+port, "")
+		if dialed != "192.0.2.10:"+port {
+			t.Fatalf("required member destination %s did not dial: %q", port, dialed)
+		}
+	}
+	for _, addr := range []string{"other:7947", "member:50051", "member:7946", "member:8300", "member:8301", "member:2112", "member:9200"} {
+		dialed = ""
+		if _, err := r.target(t.Context(), s, addr, ""); err == nil || dialed != "" {
+			t.Fatalf("destination outside member policy dialed: %s (%v)", addr, err)
+		}
+	}
+	// Even an overbroad namespace policy cannot enable gRPC or peer-only ports.
+	for _, port := range []string{"50051", "7946", "8300", "8301", "2112"} {
+		addr := "member:" + port
+		s.targets[addr] = struct{}{}
+		dialed = ""
+		if _, err := r.target(t.Context(), s, addr, ""); err == nil || !strings.Contains(err.Error(), "port is not allowed") || dialed != "" {
+			t.Fatalf("non-control-plane port accepted: %s (%v)", port, err)
+		}
+	}
+}

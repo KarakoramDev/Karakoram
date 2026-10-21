@@ -98,6 +98,7 @@ Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declaratio
 | MySQL | `mysql` | [Percona Server, Group Replication, ProxySQL and XtraBackup](mysql/README.md) |
 | Percona XtraDB Cluster | `pxc` | [Galera, quorum recovery and separate backup provenance](mysql/README.md) |
 | Neo4j Community | `neo4j` | [TLS-only singleton, native administrative users and offline dumps](neo4j/README.md) |
+| Weaviate | `weaviate` | [Native lifecycle, access management and recovery](weaviate/README.md) |
 
 Supabase wraps the PostgreSQL core rather than duplicating database lifecycle. Internal services use a protocol-transparent leader forwarder rather than ProxySQL; the client proxy retains explicit protocol limits. Native service availability comes from an embedded, checksum-pinned lock with operator mirror precedence, not floating downloads. See [ADRs 0034–0036](adr/README.md) and [native artifacts](native-artifacts.md).
 

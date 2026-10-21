@@ -170,6 +170,20 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = in.Cluster + "/" + b.Database + "/" + b.Name
 	case "ReplaceDatabaseRole", "DeleteDatabaseRole":
 		e.Target = in.Cluster + "/" + in.Database + "/" + in.Role
+	case "CreateWeaviateUser", "UpdateWeaviateUser", "DeleteWeaviateUser", "RotateWeaviateUserKey":
+		e.Resource = "weaviate-users"
+		user := in.Name
+		if body, ok := in.Body.(*api.WeaviateUserCreate); ok {
+			user = body.Name
+		}
+		e.Target = in.Cluster + "/" + user
+	case "CreateWeaviateRole", "UpdateWeaviateRole", "DeleteWeaviateRole":
+		e.Resource = "weaviate-roles"
+		role := in.Name
+		if body, ok := in.Body.(*api.WeaviateRole); ok {
+			role = body.Name
+		}
+		e.Target = in.Cluster + "/" + role
 	case "CreateRabbitMQVhost", "ReplaceRabbitMQVhost", "DeleteRabbitMQVhost":
 		e.Resource = "rabbitmq-vhosts"
 		vhost := in.Name

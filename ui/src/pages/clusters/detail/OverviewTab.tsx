@@ -20,6 +20,7 @@ import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { ConnectionHelp as PostgresConnectionHelp } from '@/engines/postgres/ConnectionHelp';
 import { ConnectionHelp as MySQLConnectionHelp } from '@/engines/mysql/ConnectionHelp';
 import { ConnectionHelp as Neo4jConnectionHelp } from '@/engines/neo4j/ConnectionHelp';
+import { ConnectionHelp as WeaviateConnectionHelp } from '@/engines/weaviate/ConnectionHelp';
 import { SupabaseCredentialsReveal } from '@/engines/supabase/CredentialsReveal';
 import { isPostgres } from '@/engines/postgres/spec';
 import { DataMcpSection } from './DataMcpSection';
@@ -232,6 +233,7 @@ export function OverviewTab() {
           {isPostgres(spec.provider) ? <PostgresConnectionHelp connection={conn} tlsMode={spec.tls?.mode} /> : null}
           {isMySQL(spec.provider) ? <MySQLConnectionHelp connection={conn} /> : null}
           {spec.provider === 'neo4j' ? <Neo4jConnectionHelp connection={conn} /> : null}
+          {spec.provider === 'weaviate' ? <WeaviateConnectionHelp base={base} tlsMode={spec.tls?.mode} /> : null}
           {spec.provider === 'supabase' ? <SupabaseCredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} /> : null}
         </Card>
         <Card title="Specification">
@@ -343,7 +345,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      {provider === 'neo4j' ? <Callout tone="warn">Every Neo4j Community user has full administrative privileges; scoped roles are unavailable. <Link to={`${base}/neo4j-users`}>Manage Neo4j users</Link> separately and rotate the managed neo4j administrator through System users.</Callout> : <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : isMySQL(provider) ? 'mysql' : provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>}
+      {provider === 'neo4j' ? <Callout tone="warn">Every Neo4j Community user has full administrative privileges; scoped roles are unavailable. <Link to={`${base}/neo4j-users`}>Manage Neo4j users</Link> separately and rotate the managed neo4j administrator through System users.</Callout> : <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : isMySQL(provider) ? 'mysql' : provider === 'elasticsearch' ? 'elastic' : provider === 'weaviate' ? 'weaviate' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>}
       <div className="table-wrap">
         <table className="table">
           <thead>

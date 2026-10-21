@@ -42,6 +42,8 @@ OpenBao adds engine options in the Basics step: unseal share count and threshold
 PostgreSQL storage is selectable only when the OpenBao provider advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
 [MySQL and PXC](mysql/README.md) are separate provider choices. MySQL offers single or Group Replication (3/5); PXC offers only Galera `cluster` (3/5), requires ProxySQL and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and provider-specific maintenance review.
 
+[Weaviate](weaviate/README.md) adds single/3–9-member topology with three fixed voters, typed modules/inference and full S3 backups. Review private-network requirements and topology-preserving [restore limits](weaviate/backups.md).
+
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
 ## Cluster detail tabs
@@ -61,6 +63,7 @@ Tabs and actions are gated by engine capabilities and your permissions.
 | Postgres access | PostgreSQL roles, databases and grants | PostgreSQL and Supabase |
 | MySQL access | MySQL users, databases, grants and password rotation | MySQL and PXC |
 | Recovery | Explicit fenced minority quorum recovery with typed danger confirmation | PXC; requires supported operation and cluster update permission |
+| Weaviate access | Native database users, API-key rotation and RBAC roles; capability `weaviateAccess` | Weaviate |
 | Components | Supabase service topology/resources | Supabase |
 | Functions & SMTP | Source deployment/deletion and write-only SMTP password | Supabase |
 | OpenBao | Seal/initialization state per member and Raft voter observations, explicit unseal-key reveal, database credential connections | OpenBao |
@@ -82,6 +85,8 @@ Supabase adds a separately authorized API/dashboard credential reveal; do not ex
 The **OpenBao** tab reveals the unseal (or recovery) shares and the initial root token only after typing the cluster name; it requires `openbao-unseal-keys:reveal` (administrators by default), is audited, and keeps the response in the open panel only — hide it or leave the page and it is gone. Store the shares offline immediately. Database connections list each target, mount, phase and the credential paths of its roles; creating one needs `clusters:update` on the OpenBao cluster and `database-users:create` on the target, deleting one `database-users:delete` on the target. Only PostgreSQL, MongoDB replica-set and RabbitMQ clusters in the same namespace are offered as targets. In-place restores of an OpenBao cluster from another cluster's snapshot accept pasted unseal shares the same way as the creation wizard.
 
 Changing either the cluster name or namespace discards the revealed material and confirmation state immediately. Pending reveal requests are aborted when their panel is removed, and late responses cannot populate a different cluster's panel.
+
+[Weaviate access](weaviate/access-and-tls.md) lists native users/roles and supports user creation, complete role-list replacement, activation, deletion, key rotation and custom role replacement/deletion, subject to management permissions. Protected identities and built-in roles are read-only. This is separate from the MongoDB Users tab and from administrative reveal. Generated database-user keys appear once in a dedicated dialog, bypassing query/mutation caching; closing it or leaving the tab clears the key, and GET cannot retrieve it. Rotation immediately replaces the old key and also requires `clusters/update` if current roles exceed `viewer`/`read-only`; user deletion needs only `database-users/delete`.
 
 JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabase rotate-jwt-secret CLUSTER --yes` or POST `/api/v1/clusters/{cluster}/supabase/rotate-jwt-secret`; follow the [CLI/API rotation procedure](supabase/operations.md#credentials-and-rotation) and coordinate application key replacement.
 

@@ -284,13 +284,14 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 		"setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret",
 		"createOpenBaoDatabaseConnection",
 		"createNeo4jUser", "deleteNeo4jUser", "setNeo4jUserPassword",
+		"createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole",
 	} {
 		if !covered[id] {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 57 {
-		t.Fatalf("covered operations = %d, want 57", len(covered))
+	if len(covered) != 62 {
+		t.Fatalf("covered operations = %d, want 62", len(covered))
 	}
 }
 

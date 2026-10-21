@@ -11,6 +11,7 @@ Register S3 destinations, manage backup inventory and schedules, and recover int
 | [MongoDB](mongodb/backups.md) | PBM `logical` (CLI default) / `physical`; incremental type not exposed; providerless legacy records belong here | Yes | Members write directly to S3 |
 | [RabbitMQ](rabbitmq/backups.md) | `definitions` only; **no queued messages**; restore merges definitions | No | Control plane exports through Management API, then compresses/uploads to S3 |
 | [Elasticsearch](elasticsearch/snapshots.md) | Native `snapshot` | No | Nodes write directly to S3 |
+| [Weaviate](weaviate/backups.md) | Native `full` via `backup-s3`; topology-preserving recovery | No | Members write directly to the cluster's bound S3 storage |
 | [PostgreSQL / Supabase](postgres/backups.md) | pgBackRest `full`, `diff`, `incr`; PostgreSQL data only | When enabled | Current primary writes backups and WAL directly to S3 |
 | [OpenBao](openbao/backups.md) | Native `raft-snapshot`, up to 4 GiB; requires source seal material for recovery | No | Control plane streams native HTTPS snapshot to S3; unavailable with PostgreSQL storage |
 | [Temporal](temporal/operations.md#backups) | Source PostgreSQL `full`, `diff`, `incr` through the binding plus a manifest in Temporal cluster state | No Temporal timestamp restore | PostgreSQL source owns archives/retention; deleting a Temporal record does not delete source archives |

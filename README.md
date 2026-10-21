@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL, MySQL, Percona XtraDB Cluster, Neo4j Community, modular Supabase, Keycloak, OpenBao and Temporal orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, Weaviate, PostgreSQL, MySQL, Percona XtraDB Cluster, Neo4j Community, modular Supabase, Keycloak, OpenBao and Temporal orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
 
 ## Engines
 
@@ -13,6 +13,7 @@ Versions below are catalog defaults; each engine section lists supported version
 | MongoDB | Percona Server for MongoDB 8.0.32-14; Percona Backup for MongoDB (PBM) 2.16.0-1 | Replica sets; sharded clusters | Logical/physical; point-in-time recovery (PITR) | [MongoDB](docs/mongodb/README.md) |
 | RabbitMQ | RabbitMQ 4.3.6 | 1/3/5/7 brokers | Definitions only; no messages or PITR | [RabbitMQ](docs/rabbitmq/README.md) |
 | Elasticsearch | Elasticsearch 9.5.5; optional same-version Kibana, Logstash and APM Server | Combined nodes; dedicated masters | Native S3 snapshots | [Elasticsearch](docs/elasticsearch/README.md) |
+| Weaviate | Official Weaviate 1.40.1; mixed-license binary, community features only | Single; 3–9 data members with three fixed Raft voters | Native S3 full; no PITR | [Weaviate](docs/weaviate/README.md) |
 | PostgreSQL | Percona PostgreSQL 17.11.1 default; majors 16/17/18; extension profiles | Single; Patroni/etcd HA (3/5); Citus distributed; ProxySQL client service | pgBackRest full/diff/incr and PITR | [PostgreSQL](docs/postgres/README.md) |
 | Supabase | PostgreSQL 17 plus release-locked native services | Same database topologies; modular services | PostgreSQL data only; separate S3 object protection required | [Supabase](docs/supabase/README.md) |
 | Keycloak | Official Keycloak 26.8.1; OpenJDK 21 | One native runtime with a PostgreSQL binding | Through the source PostgreSQL cluster | [Keycloak](docs/keycloak/README.md) |
@@ -74,6 +75,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **MongoDB:** [Overview](docs/mongodb/README.md) · [Replica sets](docs/mongodb/replica-sets.md) · [Sharding](docs/mongodb/sharding.md) · [Users, roles and TLS](docs/mongodb/access-and-tls.md) · [Backups and PITR](docs/mongodb/backups.md) · [Operations](docs/mongodb/operations.md)
 - **RabbitMQ:** [Overview](docs/rabbitmq/README.md) · [Access and TLS](docs/rabbitmq/access-and-tls.md) · [Definitions backups](docs/rabbitmq/backups.md) · [Operations](docs/rabbitmq/operations.md)
 - **Elasticsearch:** [Overview](docs/elasticsearch/README.md) · [Kibana, Logstash and APM](docs/elasticsearch/stack.md) · [Access and security](docs/elasticsearch/access-and-security.md) · [Snapshots](docs/elasticsearch/snapshots.md) · [Operations](docs/elasticsearch/operations.md)
+- **Weaviate:** [Overview](docs/weaviate/README.md) · [Access and TLS](docs/weaviate/access-and-tls.md) · [Backups](docs/weaviate/backups.md) · [Operations](docs/weaviate/operations.md)
 - **PostgreSQL:** [Overview](docs/postgres/README.md) · [Access and TLS](docs/postgres/access-and-tls.md) · [Backups and PITR](docs/postgres/backups.md) · [Operations](docs/postgres/operations.md)
 - **Supabase:** [Overview](docs/supabase/README.md) · [Components and availability](docs/supabase/components.md) · [Operations](docs/supabase/operations.md)
 - **Keycloak:** [PostgreSQL binding, routing and administrator recovery](docs/keycloak/README.md)

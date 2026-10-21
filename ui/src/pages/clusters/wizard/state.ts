@@ -4,6 +4,7 @@
 import type { Schemas } from '@/api/client';
 import { normalizeOptions } from '../../../engines/elasticsearch/spec.ts';
 import { normalizeSpec } from '../../../engines/postgres/spec.ts';
+import { normalizeOptions as normalizeWeaviateOptions } from '../../../engines/weaviate/helpers.ts';
 
 export const STEPS = [
   { id: 'basics', label: 'Basics' },
@@ -42,6 +43,7 @@ export function clearDisabledFlags<T extends object>(settings: T, dependencies: 
 export function normalizeWizardSpec(spec: Schemas['ClusterSpec']): Schemas['ClusterSpec'] {
   if (spec.provider === 'elasticsearch') spec = normalizeOptions(spec);
   spec = normalizeSpec(spec);
+  spec = normalizeWeaviateOptions(spec);
   const pitr = spec.backup?.pitr;
   if (!pitr) return spec;
   const normalized = clearDisabledFlags(pitr, { enabled: Boolean(spec.backup?.storage) });

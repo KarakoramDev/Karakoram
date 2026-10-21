@@ -16,6 +16,7 @@ import { temporalUI } from './temporal';
 import { mysqlUI } from './mysql';
 import { pxcUI } from './pxc';
 import { neo4jUI } from './neo4j/ui';
+import { weaviateUI } from './weaviate';
 
 engines.rabbitmq = rabbitmqUI;
 
@@ -28,3 +29,4 @@ engines.temporal = temporalUI;
 engines.mysql = mysqlUI;
 engines.pxc = pxcUI;
 engines.neo4j = neo4jUI;
+engines.weaviate = weaviateUI;

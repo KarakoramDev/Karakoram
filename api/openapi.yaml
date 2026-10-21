@@ -5194,6 +5194,273 @@ paths:
           description: Successful response.
       parameters:
       - $ref: '#/components/parameters/CSRF'
+  /clusters/{cluster}/weaviate/users:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listWeaviateUsers
+      x-karakoram-agent: {tool: weaviate_users_list, risk: read, confirm: none, async: none, untrusted: true}
+      tags: [DatabaseUsers]
+      summary: List Weaviate database users
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Database users.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateUserList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      operationId: createWeaviateUser
+      x-karakoram-agent: {tool: weaviate_user_create, risk: destructive, confirm: confirm, secret: true, async: none}
+      tags: [DatabaseUsers]
+      summary: Create a Weaviate database user
+      description: Requires database-users/create. Assigning any role other than viewer or read-only also requires clusters/update on the same cluster. Protected system users cannot be created.
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WeaviateUserCreate'}
+      responses:
+        '201':
+          description: Generated API key; only matching idempotency retries can retrieve it again.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateUserCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /clusters/{cluster}/weaviate/users/{user}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1}}
+    get:
+      operationId: getWeaviateUser
+      x-karakoram-agent: {tool: weaviate_user_get, risk: read, confirm: none, async: none, untrusted: true}
+      tags: [DatabaseUsers]
+      summary: Get a Weaviate database user
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Database user, without its API key.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    put:
+      operationId: updateWeaviateUser
+      x-karakoram-agent: {tool: weaviate_user_update, risk: destructive, confirm: confirm, async: none}
+      tags: [DatabaseUsers]
+      summary: Update Weaviate database user roles and activation
+      description: Requires database-users/update. Assigning any role other than viewer or read-only also requires clusters/update on the same cluster, including roles already present. Protected system users cannot be updated.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WeaviateUserUpdate'}
+      responses:
+        '204': {description: User updated.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      operationId: deleteWeaviateUser
+      x-karakoram-agent: {tool: weaviate_user_delete, risk: destructive, confirm: name, async: none}
+      tags: [DatabaseUsers]
+      summary: Delete a Weaviate database user
+      description: Requires database-users/delete, including for privileged users, matching PostgreSQL role deletion. Deletion revokes access rather than issuing credentials and does not require clusters/update. Protected system users cannot be deleted.
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204': {description: User deleted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /clusters/{cluster}/weaviate/users/{user}/rotate-key:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1}}
+    post:
+      operationId: rotateWeaviateUserKey
+      x-karakoram-agent: {tool: weaviate_user_key_rotate, risk: destructive, confirm: confirm, secret: true, async: none}
+      tags: [DatabaseUsers]
+      summary: Rotate a Weaviate database user API key
+      description: Requires database-users/update. If the user's current roles include any role other than viewer or read-only, also requires clusters/update on the same cluster because the returned key grants those privileges. Protected system user keys cannot be rotated through this operation.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Generated API key; only matching idempotency retries can retrieve it again.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateAPIKey'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /clusters/{cluster}/weaviate/roles:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listWeaviateRoles
+      x-karakoram-agent: {tool: weaviate_roles_list, risk: read, confirm: none, async: none, untrusted: true}
+      tags: [DatabaseUsers]
+      summary: List Weaviate RBAC roles
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: RBAC roles.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateRoleList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      operationId: createWeaviateRole
+      x-karakoram-agent: {tool: weaviate_role_create, risk: destructive, confirm: confirm, async: none}
+      tags: [DatabaseUsers]
+      summary: Create a Weaviate RBAC role
+      description: Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be created.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WeaviateRole'}
+      responses:
+        '201':
+          description: Role created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateRole'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /clusters/{cluster}/weaviate/roles/{role}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: role, in: path, required: true, schema: {type: string, minLength: 1}}
+    get:
+      operationId: getWeaviateRole
+      x-karakoram-agent: {tool: weaviate_role_get, risk: read, confirm: none, async: none, untrusted: true}
+      tags: [DatabaseUsers]
+      summary: Get a Weaviate RBAC role
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: RBAC role.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateRole'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    put:
+      operationId: updateWeaviateRole
+      x-karakoram-agent: {tool: weaviate_role_update, risk: destructive, confirm: confirm, async: none}
+      tags: [DatabaseUsers]
+      summary: Replace a Weaviate RBAC role
+      description: Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be replaced.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WeaviateRole'}
+      responses:
+        '200':
+          description: Role replaced.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WeaviateRole'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    delete:
+      operationId: deleteWeaviateRole
+      x-karakoram-agent: {tool: weaviate_role_delete, risk: destructive, confirm: name, async: none}
+      tags: [DatabaseUsers]
+      summary: Delete a Weaviate RBAC role
+      description: Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be deleted.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204': {description: Role deleted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
   /clusters/{cluster}/rabbitmq/users:
     parameters:
     - $ref: '#/components/parameters/ClusterPath'
@@ -8346,7 +8613,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings, weaviate-users, weaviate-roles]
   /events/stream:
     parameters:
       - $ref: '#/components/parameters/NamespaceQuery'
@@ -8443,7 +8710,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings, weaviate-users, weaviate-roles]
         - name: cursor
           in: query
           schema:
@@ -11438,6 +11705,137 @@ components:
           type: string
           writeOnly: true
       required: [name, tags]
+    WeaviateUser:
+      type: object
+      additionalProperties: false
+      required: [name, userType, active, roles]
+      properties:
+        name: {type: string}
+        userType: {type: string}
+        active: {type: boolean}
+        roles: {type: array, items: {type: string}}
+        createdAt: {type: string, format: date-time}
+        lastUsedAt: {type: string, format: date-time}
+    WeaviateUserCreate:
+      type: object
+      additionalProperties: false
+      required: [name, roles]
+      properties:
+        name: {type: string, minLength: 1}
+        roles: {type: array, items: {type: string}}
+    WeaviateUserUpdate:
+      type: object
+      additionalProperties: false
+      required: [roles]
+      properties:
+        roles: {type: array, items: {type: string}}
+        active: {type: boolean}
+    WeaviateUserCreated:
+      type: object
+      additionalProperties: false
+      required: [user, apiKey]
+      properties:
+        user: {$ref: '#/components/schemas/WeaviateUser'}
+        apiKey:
+          type: string
+          readOnly: true
+          description: Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
+    WeaviateAPIKey:
+      type: object
+      additionalProperties: false
+      required: [apiKey]
+      properties:
+        apiKey: {type: string, readOnly: true}
+    WeaviateRole:
+      type: object
+      additionalProperties: false
+      required: [name, permissions]
+      properties:
+        name: {type: string, minLength: 1}
+        permissions:
+          type: array
+          items: {$ref: '#/components/schemas/WeaviatePermission'}
+    WeaviatePermission:
+      type: object
+      additionalProperties: true
+      required: [action]
+      properties:
+        action: {type: string, minLength: 1}
+        backups:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+        data:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+            tenant: {type: string}
+            object: {type: string}
+        collections:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+        nodes:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+            verbosity: {type: string}
+        roles:
+          type: object
+          additionalProperties: true
+          properties:
+            role: {type: string}
+            scope: {type: string}
+        users:
+          type: object
+          additionalProperties: true
+          properties:
+            users: {type: string}
+        tenants:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+            tenant: {type: string}
+        replicate:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+            shard: {type: string}
+        aliases:
+          type: object
+          additionalProperties: true
+          properties:
+            collection: {type: string}
+            alias: {type: string}
+        groups:
+          type: object
+          additionalProperties: true
+          properties:
+            group: {type: string}
+            groupType: {type: string}
+        namespaces:
+          type: object
+          additionalProperties: true
+          properties:
+            namespace: {type: string}
+    WeaviateUserList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/WeaviateUser'}}
+    WeaviateRoleList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/WeaviateRole'}}
     CreatedRabbitMQUser:
       type: object
       additionalProperties: false

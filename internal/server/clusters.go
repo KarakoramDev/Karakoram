@@ -953,6 +953,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
 	}
+	if strings.Contains(name, "Weaviate") {
+		return s.weaviate(ctx, name, in, rc, p)
+	}
 	if strings.Contains(name, "RabbitMQ") {
 		return s.rabbitmq(ctx, name, in, rc, p)
 	}

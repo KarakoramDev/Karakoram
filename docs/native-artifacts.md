@@ -69,6 +69,19 @@ MySQL catalog releases pair a versioned `percona-server-<version>` entry with th
 
 Archive extraction retains the upstream top-level directory. Install into `/opt/karakoram/percona-server-<version>`, `/opt/karakoram/percona-xtrabackup-<version>`, or `/opt/karakoram/percona-xtradb-cluster-<version>` and set the member's `serverDir` / `xtraBackupDir` to the contained upstream directory, not the outer installation root. No package service is installed. Member payloads contain sealed-store credentials resolved for authenticated delivery and must be cached with owner-only permissions; never log them. Only allowlisted my.cnf parameters may cross the member boundary.
 
+## Official Weaviate artifacts
+
+The lock includes these upstream Linux amd64 release archives; they are official downloads, not Karakoram source rebuilds:
+
+| Lock entry | Version | Archive |
+| --- | --- | --- |
+| `weaviate-1.40` | `1.40.1` | `weaviate-v1.40.1-linux-amd64.tar.gz` |
+| `weaviate-1.39` | `1.39.12` | `weaviate-v1.39.12-linux-amd64.tar.gz` |
+
+Upstream assets are published at `https://github.com/weaviate/weaviate/releases/download/v<VERSION>/<ARCHIVE>`. The lock records exact byte size, SHA-256 cross-checked against upstream release checksum sidecars, and the dereferenced source tag commit. Member preparation downloads from upstream or an exact-byte operator mirror, verifies the locked digest and installs the root-layout archive into the versioned Weaviate directory. Checksum agreement establishes byte integrity, not an independent maintainer signature.
+
+The executable contains BSD-3-Clause community code and runtime-gated enterprise code: its lock license is `BSD-3-Clause AND LicenseRef-Weaviate-Enterprise`, **not BSD-only**. Karakoram enables only community features, forces namespaces/self-recovery/backup-dedupe off, never supplies a license key, and does **not redistribute Weaviate binaries**. Do not publish these archives as Karakoram release payloads. Review [Weaviate licensing and feature limits](weaviate/README.md#licensing) and the [upstream license map](https://github.com/weaviate/weaviate/blob/v1.40.1/LICENSE).
+
 ## Native rebuild
 
 Prerequisites on the build host: Python 3.11+, sufficient disk space, and either Incus with Ubuntu 24.04 images and an egress-capable network or the [rootless Ubuntu transport](#rootless-ubuntu-transport) for standalone PostgreSQL extensions. No application-container runtime is used.

@@ -12,6 +12,9 @@ import (
 )
 
 func destructive(op string) bool {
+	if op == "rotateWeaviateUserKey" {
+		return true
+	}
 	if op == "revokeMySQLPrivileges" {
 		return true
 	}

@@ -10,26 +10,30 @@ Each cluster selects an immutable provider/engine. Data-bearing members are sing
 
 The provider catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 
-| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) | [Temporal](temporal/README.md) |  [Neo4j Community](neo4j/README.md) |
-| --- | --- | --- | --- | --- | --- |  --- |
-| Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components | Requires PostgreSQL source and binding service |  Yes; single member |
-| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows and needs backend capability | Stateless role resources; durable disk belongs to source |  Yes; disk only grows; memory changes interrupt service |
-| Add/remove members | Yes | Yes | Yes | Single→HA; HA 3↔5; no HA→single | Per-role replicas within topology bounds |  No |
-| Replace member | Yes | Yes | Yes | Yes | No separate replacement operation |  No |
-| Rolling restart | Yes | Yes | Yes | HA; single interrupts service | Ordered by role; singleton roles interrupt service |  Restart interrupts service |
-| Upgrade | Catalog paths | Catalog paths | Catalog paths | Rolling minor; offline adjacent major for postgres; PG17 minor only for Supabase | Catalog paths; no skipped minors/downgrades |  2026.09.0→2026.10.0; offline, fresh backup required |
-| Feature compatibility version (FCV) promotion | Yes | No | No | No | No |  No |
-| TLS rotation | Yes | Yes | Yes | Yes; no CA replacement | Three-phase CA rotation |  Yes; full outage |
-| System-user rotation | Yes | Yes | Yes | Yes | Binding-managed database credentials |  Managed `neo4j` |
-| Public TCP exposure | Yes | Yes | Yes | Yes; selected client service | No; UI HTTPS only with OIDC |  Bolt only |
-| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots | pgBackRest full/diff/incr; database data only | Source full/diff/incr plus state manifest |  Offline `dump`; system + graph; full outage |
-| Point-in-time recovery (PITR) | Yes | No | No | Yes, opt-in | No Temporal timestamp restore |  No |
-| In-place restore | Yes | Merge definitions | Native restore | Destructive/offline | Destructive source restore; shared-source acknowledgement |  Destructive/offline |
-| Clone | Yes | Definitions only | Yes | Same provider and PG major only | No arbitrary destination; original source/name required |  Neo4j dump; target version not older than source |
-| Suspend/resume | Yes | Yes | Yes | Yes | Retain bound databases and disable login role |  Yes |
-| Cross-namespace clone | Yes | Definitions only | Yes | Yes; same provider and PG major | No arbitrary destination |  Yes; Neo4j backup only |
+| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) | [Temporal](temporal/README.md) |  [Neo4j Community](neo4j/README.md) | [Weaviate](weaviate/README.md) |
+| --- | --- | --- | --- | --- | --- |  --- | --- |
+| Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components | Requires PostgreSQL source and binding service |  Yes; single member | Yes |
+| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows and needs backend capability | Stateless role resources; durable disk belongs to source |  Yes; disk only grows; memory changes interrupt service | Yes; disk only grows |
+| Add/remove members | Yes | Yes | Yes | Single→HA; HA 3↔5; no HA→single | Per-role replicas within topology bounds |  No | Cluster 3–9; drain/remove non-voters only; no automatic rebalance |
+| Replace member | Yes | Yes | Yes | Yes | No separate replacement operation |  No | Preserve identity; healthy/quorum or proven surviving replicas required |
+| Rolling restart | Yes | Yes | Yes | HA; single interrupts service | Ordered by role; singleton roles interrupt service |  Restart interrupts service | Non-voters before voters; single interrupts service |
+| Upgrade | Catalog paths | Catalog paths | Catalog paths | Rolling minor; offline adjacent major for postgres; PG17 minor only for Supabase | Catalog paths; no skipped minors/downgrades |  2026.09.0→2026.10.0; offline, fresh backup required | Cataloged patch-forward/one minor forward; no downgrade |
+| Feature compatibility version (FCV) promotion | Yes | No | No | No | No |  No | No |
+| TLS rotation | Yes | Yes | Yes | Yes; no CA replacement | Three-phase CA rotation |  Yes; full outage | Rolling restart |
+| System-user rotation | Yes | Yes | Yes | Yes | Binding-managed database credentials |  Managed `neo4j` | Root key: two rolling passes; internal password: full restart |
+| Public TCP exposure | Yes | Yes | Yes | Yes; selected client service | No; UI HTTPS only with OIDC |  Bolt only | REST/gRPC with TLS; internal ports private |
+| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots | pgBackRest full/diff/incr; database data only | Source full/diff/incr plus state manifest |  Offline `dump`; system + graph; full outage | Native S3 full |
+| Point-in-time recovery (PITR) | Yes | No | No | Yes, opt-in | No Temporal timestamp restore |  No | No |
+| In-place restore | Yes | Merge definitions | Native restore | Destructive/offline | Destructive source restore; shared-source acknowledgement |  Destructive/offline | Destructive; same member count |
+| Clone | Yes | Definitions only | Yes | Same provider and PG major only | No arbitrary destination; original source/name required |  Neo4j dump; target version not older than source | Same member count; fresh target users/roles |
+| Suspend/resume | Yes | Yes | Yes | Yes | Retain bound databases and disable login role |  Yes | Yes |
+| Cross-namespace clone | Yes | Definitions only | Yes | Yes; same provider and PG major | No arbitrary destination |  Yes; Neo4j backup only | Yes; storage/recovery admission applies |
 
 See [Backups and storage](backups.md) for shared recovery mechanics and the engine guides for runtime, compatibility and checkpoint rules.
+
+### Weaviate
+
+[Weaviate](weaviate/README.md) supports immutable `single` or `cluster` topology, fixed voter identities and typed options instead of raw engine configuration. Its internal transports require isolated private networking even when client TLS is enabled. Read [native access/TLS](weaviate/access-and-tls.md), [draining, replacement and rotation](weaviate/operations.md), and [full-backup recovery constraints](weaviate/backups.md) before maintenance.
 
 ### PostgreSQL and Supabase
 

@@ -680,6 +680,8 @@ const (
 	ListEventsParamsResourceRbac                     ListEventsParamsResource = "rbac"
 	ListEventsParamsResourceRestores                 ListEventsParamsResource = "restores"
 	ListEventsParamsResourceSettings                 ListEventsParamsResource = "settings"
+	ListEventsParamsResourceWeaviateRoles            ListEventsParamsResource = "weaviate-roles"
+	ListEventsParamsResourceWeaviateUsers            ListEventsParamsResource = "weaviate-users"
 )
 
 // Defines values for StreamEventsParamsType.
@@ -713,6 +715,8 @@ const (
 	StreamEventsParamsResourceRbac                     StreamEventsParamsResource = "rbac"
 	StreamEventsParamsResourceRestores                 StreamEventsParamsResource = "restores"
 	StreamEventsParamsResourceSettings                 StreamEventsParamsResource = "settings"
+	StreamEventsParamsResourceWeaviateRoles            StreamEventsParamsResource = "weaviate-roles"
+	StreamEventsParamsResourceWeaviateUsers            StreamEventsParamsResource = "weaviate-users"
 )
 
 // APIToken Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
@@ -3148,6 +3152,147 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// WeaviateAPIKey defines model for WeaviateAPIKey.
+type WeaviateAPIKey struct {
+	ApiKey *string `json:"apiKey,omitempty"`
+}
+
+// WeaviatePermission defines model for WeaviatePermission.
+type WeaviatePermission struct {
+	Action               string                          `json:"action"`
+	Aliases              *WeaviatePermission_Aliases     `json:"aliases,omitempty"`
+	Backups              *WeaviatePermission_Backups     `json:"backups,omitempty"`
+	Collections          *WeaviatePermission_Collections `json:"collections,omitempty"`
+	Data                 *WeaviatePermission_Data        `json:"data,omitempty"`
+	Groups               *WeaviatePermission_Groups      `json:"groups,omitempty"`
+	Namespaces           *WeaviatePermission_Namespaces  `json:"namespaces,omitempty"`
+	Nodes                *WeaviatePermission_Nodes       `json:"nodes,omitempty"`
+	Replicate            *WeaviatePermission_Replicate   `json:"replicate,omitempty"`
+	Roles                *WeaviatePermission_Roles       `json:"roles,omitempty"`
+	Tenants              *WeaviatePermission_Tenants     `json:"tenants,omitempty"`
+	Users                *WeaviatePermission_Users       `json:"users,omitempty"`
+	AdditionalProperties map[string]interface{}          `json:"-"`
+}
+
+// WeaviatePermission_Aliases defines model for WeaviatePermission.Aliases.
+type WeaviatePermission_Aliases struct {
+	Alias                *string                `json:"alias,omitempty"`
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Backups defines model for WeaviatePermission.Backups.
+type WeaviatePermission_Backups struct {
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Collections defines model for WeaviatePermission.Collections.
+type WeaviatePermission_Collections struct {
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Data defines model for WeaviatePermission.Data.
+type WeaviatePermission_Data struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Object               *string                `json:"object,omitempty"`
+	Tenant               *string                `json:"tenant,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Groups defines model for WeaviatePermission.Groups.
+type WeaviatePermission_Groups struct {
+	Group                *string                `json:"group,omitempty"`
+	GroupType            *string                `json:"groupType,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Namespaces defines model for WeaviatePermission.Namespaces.
+type WeaviatePermission_Namespaces struct {
+	Namespace            *string                `json:"namespace,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Nodes defines model for WeaviatePermission.Nodes.
+type WeaviatePermission_Nodes struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Verbosity            *string                `json:"verbosity,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Replicate defines model for WeaviatePermission.Replicate.
+type WeaviatePermission_Replicate struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Shard                *string                `json:"shard,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Roles defines model for WeaviatePermission.Roles.
+type WeaviatePermission_Roles struct {
+	Role                 *string                `json:"role,omitempty"`
+	Scope                *string                `json:"scope,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Tenants defines model for WeaviatePermission.Tenants.
+type WeaviatePermission_Tenants struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Tenant               *string                `json:"tenant,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Users defines model for WeaviatePermission.Users.
+type WeaviatePermission_Users struct {
+	Users                *string                `json:"users,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviateRole defines model for WeaviateRole.
+type WeaviateRole struct {
+	Name        string               `json:"name"`
+	Permissions []WeaviatePermission `json:"permissions"`
+}
+
+// WeaviateRoleList defines model for WeaviateRoleList.
+type WeaviateRoleList struct {
+	Items []WeaviateRole `json:"items"`
+}
+
+// WeaviateUser defines model for WeaviateUser.
+type WeaviateUser struct {
+	Active     bool       `json:"active"`
+	CreatedAt  *time.Time `json:"createdAt,omitempty"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Name       string     `json:"name"`
+	Roles      []string   `json:"roles"`
+	UserType   string     `json:"userType"`
+}
+
+// WeaviateUserCreate defines model for WeaviateUserCreate.
+type WeaviateUserCreate struct {
+	Name  string   `json:"name"`
+	Roles []string `json:"roles"`
+}
+
+// WeaviateUserCreated defines model for WeaviateUserCreated.
+type WeaviateUserCreated struct {
+	// ApiKey Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
+	ApiKey *string      `json:"apiKey,omitempty"`
+	User   WeaviateUser `json:"user"`
+}
+
+// WeaviateUserList defines model for WeaviateUserList.
+type WeaviateUserList struct {
+	Items []WeaviateUser `json:"items"`
+}
+
+// WeaviateUserUpdate defines model for WeaviateUserUpdate.
+type WeaviateUserUpdate struct {
+	Active *bool    `json:"active,omitempty"`
+	Roles  []string `json:"roles"`
+}
+
 // CSRF defines model for CSRF.
 type CSRF = string
 
@@ -5385,6 +5530,168 @@ type SetTemporalUIOIDCClientSecretParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListWeaviateRolesParams defines parameters for ListWeaviateRoles.
+type ListWeaviateRolesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateWeaviateRoleParams defines parameters for CreateWeaviateRole.
+type CreateWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteWeaviateRoleParams defines parameters for DeleteWeaviateRole.
+type DeleteWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetWeaviateRoleParams defines parameters for GetWeaviateRole.
+type GetWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateWeaviateRoleParams defines parameters for UpdateWeaviateRole.
+type UpdateWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListWeaviateUsersParams defines parameters for ListWeaviateUsers.
+type ListWeaviateUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateWeaviateUserParams defines parameters for CreateWeaviateUser.
+type CreateWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteWeaviateUserParams defines parameters for DeleteWeaviateUser.
+type DeleteWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetWeaviateUserParams defines parameters for GetWeaviateUser.
+type GetWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateWeaviateUserParams defines parameters for UpdateWeaviateUser.
+type UpdateWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotateWeaviateUserKeyParams defines parameters for RotateWeaviateUserKey.
+type RotateWeaviateUserKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // DryRunCreateClusterParams defines parameters for DryRunCreateCluster.
 type DryRunCreateClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5773,6 +6080,18 @@ type IssueTemporalClientCertificateJSONRequestBody = TemporalClientCertificateRe
 // SetTemporalUIOIDCClientSecretJSONRequestBody defines body for SetTemporalUIOIDCClientSecret for application/json ContentType.
 type SetTemporalUIOIDCClientSecretJSONRequestBody = TemporalUIOIDCClientSecret
 
+// CreateWeaviateRoleJSONRequestBody defines body for CreateWeaviateRole for application/json ContentType.
+type CreateWeaviateRoleJSONRequestBody = WeaviateRole
+
+// UpdateWeaviateRoleJSONRequestBody defines body for UpdateWeaviateRole for application/json ContentType.
+type UpdateWeaviateRoleJSONRequestBody = WeaviateRole
+
+// CreateWeaviateUserJSONRequestBody defines body for CreateWeaviateUser for application/json ContentType.
+type CreateWeaviateUserJSONRequestBody = WeaviateUserCreate
+
+// UpdateWeaviateUserJSONRequestBody defines body for UpdateWeaviateUser for application/json ContentType.
+type UpdateWeaviateUserJSONRequestBody = WeaviateUserUpdate
+
 // DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
 type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
 
@@ -5874,6 +6193,1105 @@ func (a EventDetails) MarshalJSON() ([]byte, error) {
 		object["truncated"], err = json.Marshal(a.Truncated)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'truncated': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission
+func (a *WeaviatePermission) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission to handle AdditionalProperties
+func (a *WeaviatePermission) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["action"]; found {
+		err = json.Unmarshal(raw, &a.Action)
+		if err != nil {
+			return fmt.Errorf("error reading 'action': %w", err)
+		}
+		delete(object, "action")
+	}
+
+	if raw, found := object["aliases"]; found {
+		err = json.Unmarshal(raw, &a.Aliases)
+		if err != nil {
+			return fmt.Errorf("error reading 'aliases': %w", err)
+		}
+		delete(object, "aliases")
+	}
+
+	if raw, found := object["backups"]; found {
+		err = json.Unmarshal(raw, &a.Backups)
+		if err != nil {
+			return fmt.Errorf("error reading 'backups': %w", err)
+		}
+		delete(object, "backups")
+	}
+
+	if raw, found := object["collections"]; found {
+		err = json.Unmarshal(raw, &a.Collections)
+		if err != nil {
+			return fmt.Errorf("error reading 'collections': %w", err)
+		}
+		delete(object, "collections")
+	}
+
+	if raw, found := object["data"]; found {
+		err = json.Unmarshal(raw, &a.Data)
+		if err != nil {
+			return fmt.Errorf("error reading 'data': %w", err)
+		}
+		delete(object, "data")
+	}
+
+	if raw, found := object["groups"]; found {
+		err = json.Unmarshal(raw, &a.Groups)
+		if err != nil {
+			return fmt.Errorf("error reading 'groups': %w", err)
+		}
+		delete(object, "groups")
+	}
+
+	if raw, found := object["namespaces"]; found {
+		err = json.Unmarshal(raw, &a.Namespaces)
+		if err != nil {
+			return fmt.Errorf("error reading 'namespaces': %w", err)
+		}
+		delete(object, "namespaces")
+	}
+
+	if raw, found := object["nodes"]; found {
+		err = json.Unmarshal(raw, &a.Nodes)
+		if err != nil {
+			return fmt.Errorf("error reading 'nodes': %w", err)
+		}
+		delete(object, "nodes")
+	}
+
+	if raw, found := object["replicate"]; found {
+		err = json.Unmarshal(raw, &a.Replicate)
+		if err != nil {
+			return fmt.Errorf("error reading 'replicate': %w", err)
+		}
+		delete(object, "replicate")
+	}
+
+	if raw, found := object["roles"]; found {
+		err = json.Unmarshal(raw, &a.Roles)
+		if err != nil {
+			return fmt.Errorf("error reading 'roles': %w", err)
+		}
+		delete(object, "roles")
+	}
+
+	if raw, found := object["tenants"]; found {
+		err = json.Unmarshal(raw, &a.Tenants)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenants': %w", err)
+		}
+		delete(object, "tenants")
+	}
+
+	if raw, found := object["users"]; found {
+		err = json.Unmarshal(raw, &a.Users)
+		if err != nil {
+			return fmt.Errorf("error reading 'users': %w", err)
+		}
+		delete(object, "users")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission to handle AdditionalProperties
+func (a WeaviatePermission) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["action"], err = json.Marshal(a.Action)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'action': %w", err)
+	}
+
+	if a.Aliases != nil {
+		object["aliases"], err = json.Marshal(a.Aliases)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'aliases': %w", err)
+		}
+	}
+
+	if a.Backups != nil {
+		object["backups"], err = json.Marshal(a.Backups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'backups': %w", err)
+		}
+	}
+
+	if a.Collections != nil {
+		object["collections"], err = json.Marshal(a.Collections)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collections': %w", err)
+		}
+	}
+
+	if a.Data != nil {
+		object["data"], err = json.Marshal(a.Data)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'data': %w", err)
+		}
+	}
+
+	if a.Groups != nil {
+		object["groups"], err = json.Marshal(a.Groups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'groups': %w", err)
+		}
+	}
+
+	if a.Namespaces != nil {
+		object["namespaces"], err = json.Marshal(a.Namespaces)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'namespaces': %w", err)
+		}
+	}
+
+	if a.Nodes != nil {
+		object["nodes"], err = json.Marshal(a.Nodes)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'nodes': %w", err)
+		}
+	}
+
+	if a.Replicate != nil {
+		object["replicate"], err = json.Marshal(a.Replicate)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'replicate': %w", err)
+		}
+	}
+
+	if a.Roles != nil {
+		object["roles"], err = json.Marshal(a.Roles)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'roles': %w", err)
+		}
+	}
+
+	if a.Tenants != nil {
+		object["tenants"], err = json.Marshal(a.Tenants)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenants': %w", err)
+		}
+	}
+
+	if a.Users != nil {
+		object["users"], err = json.Marshal(a.Users)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'users': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Aliases. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Aliases) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Aliases
+func (a *WeaviatePermission_Aliases) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Aliases to handle AdditionalProperties
+func (a *WeaviatePermission_Aliases) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["alias"]; found {
+		err = json.Unmarshal(raw, &a.Alias)
+		if err != nil {
+			return fmt.Errorf("error reading 'alias': %w", err)
+		}
+		delete(object, "alias")
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Aliases to handle AdditionalProperties
+func (a WeaviatePermission_Aliases) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Alias != nil {
+		object["alias"], err = json.Marshal(a.Alias)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'alias': %w", err)
+		}
+	}
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Backups. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Backups) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Backups
+func (a *WeaviatePermission_Backups) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Backups to handle AdditionalProperties
+func (a *WeaviatePermission_Backups) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Backups to handle AdditionalProperties
+func (a WeaviatePermission_Backups) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Collections. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Collections) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Collections
+func (a *WeaviatePermission_Collections) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Collections to handle AdditionalProperties
+func (a *WeaviatePermission_Collections) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Collections to handle AdditionalProperties
+func (a WeaviatePermission_Collections) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Data. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Data) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Data
+func (a *WeaviatePermission_Data) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Data to handle AdditionalProperties
+func (a *WeaviatePermission_Data) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["object"]; found {
+		err = json.Unmarshal(raw, &a.Object)
+		if err != nil {
+			return fmt.Errorf("error reading 'object': %w", err)
+		}
+		delete(object, "object")
+	}
+
+	if raw, found := object["tenant"]; found {
+		err = json.Unmarshal(raw, &a.Tenant)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenant': %w", err)
+		}
+		delete(object, "tenant")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Data to handle AdditionalProperties
+func (a WeaviatePermission_Data) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Object != nil {
+		object["object"], err = json.Marshal(a.Object)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'object': %w", err)
+		}
+	}
+
+	if a.Tenant != nil {
+		object["tenant"], err = json.Marshal(a.Tenant)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenant': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Groups. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Groups) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Groups
+func (a *WeaviatePermission_Groups) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Groups to handle AdditionalProperties
+func (a *WeaviatePermission_Groups) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["group"]; found {
+		err = json.Unmarshal(raw, &a.Group)
+		if err != nil {
+			return fmt.Errorf("error reading 'group': %w", err)
+		}
+		delete(object, "group")
+	}
+
+	if raw, found := object["groupType"]; found {
+		err = json.Unmarshal(raw, &a.GroupType)
+		if err != nil {
+			return fmt.Errorf("error reading 'groupType': %w", err)
+		}
+		delete(object, "groupType")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Groups to handle AdditionalProperties
+func (a WeaviatePermission_Groups) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Group != nil {
+		object["group"], err = json.Marshal(a.Group)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'group': %w", err)
+		}
+	}
+
+	if a.GroupType != nil {
+		object["groupType"], err = json.Marshal(a.GroupType)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'groupType': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Namespaces. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Namespaces) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Namespaces
+func (a *WeaviatePermission_Namespaces) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Namespaces to handle AdditionalProperties
+func (a *WeaviatePermission_Namespaces) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["namespace"]; found {
+		err = json.Unmarshal(raw, &a.Namespace)
+		if err != nil {
+			return fmt.Errorf("error reading 'namespace': %w", err)
+		}
+		delete(object, "namespace")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Namespaces to handle AdditionalProperties
+func (a WeaviatePermission_Namespaces) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Namespace != nil {
+		object["namespace"], err = json.Marshal(a.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'namespace': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Nodes. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Nodes) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Nodes
+func (a *WeaviatePermission_Nodes) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Nodes to handle AdditionalProperties
+func (a *WeaviatePermission_Nodes) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["verbosity"]; found {
+		err = json.Unmarshal(raw, &a.Verbosity)
+		if err != nil {
+			return fmt.Errorf("error reading 'verbosity': %w", err)
+		}
+		delete(object, "verbosity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Nodes to handle AdditionalProperties
+func (a WeaviatePermission_Nodes) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Verbosity != nil {
+		object["verbosity"], err = json.Marshal(a.Verbosity)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'verbosity': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Replicate. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Replicate) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Replicate
+func (a *WeaviatePermission_Replicate) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Replicate to handle AdditionalProperties
+func (a *WeaviatePermission_Replicate) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["shard"]; found {
+		err = json.Unmarshal(raw, &a.Shard)
+		if err != nil {
+			return fmt.Errorf("error reading 'shard': %w", err)
+		}
+		delete(object, "shard")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Replicate to handle AdditionalProperties
+func (a WeaviatePermission_Replicate) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Shard != nil {
+		object["shard"], err = json.Marshal(a.Shard)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'shard': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Roles. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Roles) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Roles
+func (a *WeaviatePermission_Roles) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Roles to handle AdditionalProperties
+func (a *WeaviatePermission_Roles) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["role"]; found {
+		err = json.Unmarshal(raw, &a.Role)
+		if err != nil {
+			return fmt.Errorf("error reading 'role': %w", err)
+		}
+		delete(object, "role")
+	}
+
+	if raw, found := object["scope"]; found {
+		err = json.Unmarshal(raw, &a.Scope)
+		if err != nil {
+			return fmt.Errorf("error reading 'scope': %w", err)
+		}
+		delete(object, "scope")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Roles to handle AdditionalProperties
+func (a WeaviatePermission_Roles) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Role != nil {
+		object["role"], err = json.Marshal(a.Role)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'role': %w", err)
+		}
+	}
+
+	if a.Scope != nil {
+		object["scope"], err = json.Marshal(a.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'scope': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Tenants. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Tenants) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Tenants
+func (a *WeaviatePermission_Tenants) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Tenants to handle AdditionalProperties
+func (a *WeaviatePermission_Tenants) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["tenant"]; found {
+		err = json.Unmarshal(raw, &a.Tenant)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenant': %w", err)
+		}
+		delete(object, "tenant")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Tenants to handle AdditionalProperties
+func (a WeaviatePermission_Tenants) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Tenant != nil {
+		object["tenant"], err = json.Marshal(a.Tenant)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenant': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Users. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Users) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Users
+func (a *WeaviatePermission_Users) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Users to handle AdditionalProperties
+func (a *WeaviatePermission_Users) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["users"]; found {
+		err = json.Unmarshal(raw, &a.Users)
+		if err != nil {
+			return fmt.Errorf("error reading 'users': %w", err)
+		}
+		delete(object, "users")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Users to handle AdditionalProperties
+func (a WeaviatePermission_Users) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Users != nil {
+		object["users"], err = json.Marshal(a.Users)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'users': %w", err)
 		}
 	}
 
@@ -6544,6 +7962,39 @@ type ServerInterface interface {
 	// Seal the write-only Temporal UI OIDC client secret
 	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
 	SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetTemporalUIOIDCClientSecretParams)
+	// List Weaviate RBAC roles
+	// (GET /clusters/{cluster}/weaviate/roles)
+	ListWeaviateRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateRolesParams)
+	// Create a Weaviate RBAC role
+	// (POST /clusters/{cluster}/weaviate/roles)
+	CreateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateRoleParams)
+	// Delete a Weaviate RBAC role
+	// (DELETE /clusters/{cluster}/weaviate/roles/{role})
+	DeleteWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteWeaviateRoleParams)
+	// Get a Weaviate RBAC role
+	// (GET /clusters/{cluster}/weaviate/roles/{role})
+	GetWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetWeaviateRoleParams)
+	// Replace a Weaviate RBAC role
+	// (PUT /clusters/{cluster}/weaviate/roles/{role})
+	UpdateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateWeaviateRoleParams)
+	// List Weaviate database users
+	// (GET /clusters/{cluster}/weaviate/users)
+	ListWeaviateUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateUsersParams)
+	// Create a Weaviate database user
+	// (POST /clusters/{cluster}/weaviate/users)
+	CreateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateUserParams)
+	// Delete a Weaviate database user
+	// (DELETE /clusters/{cluster}/weaviate/users/{user})
+	DeleteWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteWeaviateUserParams)
+	// Get a Weaviate database user
+	// (GET /clusters/{cluster}/weaviate/users/{user})
+	GetWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetWeaviateUserParams)
+	// Update Weaviate database user roles and activation
+	// (PUT /clusters/{cluster}/weaviate/users/{user})
+	UpdateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params UpdateWeaviateUserParams)
+	// Rotate a Weaviate database user API key
+	// (POST /clusters/{cluster}/weaviate/users/{user}/rotate-key)
+	RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateWeaviateUserKeyParams)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams)
@@ -17677,6 +19128,795 @@ func (siw *ServerInterfaceWrapper) SetTemporalUIOIDCClientSecret(w http.Response
 	handler.ServeHTTP(w, r)
 }
 
+// ListWeaviateRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListWeaviateRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWeaviateRolesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWeaviateRoles(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) CreateWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWeaviateRole(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) GetWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWeaviateUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListWeaviateUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWeaviateUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWeaviateUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWeaviateUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) GetWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateWeaviateUserKey operation middleware
+func (siw *ServerInterfaceWrapper) RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateWeaviateUserKeyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateWeaviateUserKey(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DryRunCreateCluster operation middleware
 func (siw *ServerInterfaceWrapper) DryRunCreateCluster(w http.ResponseWriter, r *http.Request) {
 
@@ -19399,6 +21639,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces", wrapper.ListTemporalNamespaces)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces/{temporalNamespace}", wrapper.DeleteTemporalNamespace)
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/temporal/ui/oidc-client-secret", wrapper.SetTemporalUIOIDCClientSecret)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/roles", wrapper.ListWeaviateRoles)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/roles", wrapper.CreateWeaviateRole)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.DeleteWeaviateRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.GetWeaviateRole)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.UpdateWeaviateRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/users", wrapper.ListWeaviateUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/users", wrapper.CreateWeaviateUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.DeleteWeaviateUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.GetWeaviateUser)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.UpdateWeaviateUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}/rotate-key", wrapper.RotateWeaviateUserKey)
 	m.HandleFunc("POST "+options.BaseURL+"/dry-run/clusters", wrapper.DryRunCreateCluster)
 	m.HandleFunc("PATCH "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunPatchCluster)
 	m.HandleFunc("PUT "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunReplaceCluster)
@@ -36391,6 +38642,892 @@ func (response SetTemporalUIOIDCClientSecret503JSONResponse) VisitSetTemporalUIO
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListWeaviateRolesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListWeaviateRolesParams
+}
+
+type ListWeaviateRolesResponseObject interface {
+	VisitListWeaviateRolesResponse(w http.ResponseWriter) error
+}
+
+type ListWeaviateRoles200JSONResponse WeaviateRoleList
+
+func (response ListWeaviateRoles200JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWeaviateRoles400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWeaviateRoles400JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWeaviateRoles401JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWeaviateRoles403JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWeaviateRoles404JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListWeaviateRoles409JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListWeaviateRoles500JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateWeaviateRoleParams
+	Body    *CreateWeaviateRoleJSONRequestBody
+}
+
+type CreateWeaviateRoleResponseObject interface {
+	VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type CreateWeaviateRole201JSONResponse WeaviateRole
+
+func (response CreateWeaviateRole201JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateWeaviateRole400JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateWeaviateRole401JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWeaviateRole403JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateWeaviateRole404JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateWeaviateRole409JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateWeaviateRole500JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  DeleteWeaviateRoleParams
+}
+
+type DeleteWeaviateRoleResponseObject interface {
+	VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type DeleteWeaviateRole204Response struct {
+}
+
+func (response DeleteWeaviateRole204Response) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteWeaviateRole400JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWeaviateRole401JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWeaviateRole403JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWeaviateRole404JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteWeaviateRole409JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteWeaviateRole500JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  GetWeaviateRoleParams
+}
+
+type GetWeaviateRoleResponseObject interface {
+	VisitGetWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type GetWeaviateRole200JSONResponse WeaviateRole
+
+func (response GetWeaviateRole200JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetWeaviateRole400JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWeaviateRole401JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWeaviateRole403JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWeaviateRole404JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetWeaviateRole409JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetWeaviateRole500JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  UpdateWeaviateRoleParams
+	Body    *UpdateWeaviateRoleJSONRequestBody
+}
+
+type UpdateWeaviateRoleResponseObject interface {
+	VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateWeaviateRole200JSONResponse WeaviateRole
+
+func (response UpdateWeaviateRole200JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateWeaviateRole400JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateWeaviateRole401JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWeaviateRole403JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateWeaviateRole404JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateWeaviateRole409JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateWeaviateRole500JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListWeaviateUsersParams
+}
+
+type ListWeaviateUsersResponseObject interface {
+	VisitListWeaviateUsersResponse(w http.ResponseWriter) error
+}
+
+type ListWeaviateUsers200JSONResponse WeaviateUserList
+
+func (response ListWeaviateUsers200JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWeaviateUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWeaviateUsers400JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWeaviateUsers401JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWeaviateUsers403JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWeaviateUsers404JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListWeaviateUsers409JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListWeaviateUsers500JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateWeaviateUserParams
+	Body    *CreateWeaviateUserJSONRequestBody
+}
+
+type CreateWeaviateUserResponseObject interface {
+	VisitCreateWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type CreateWeaviateUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateWeaviateUser201JSONResponse struct {
+	Body    WeaviateUserCreated
+	Headers CreateWeaviateUser201ResponseHeaders
+}
+
+func (response CreateWeaviateUser201JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateWeaviateUser400JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateWeaviateUser401JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWeaviateUser403JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateWeaviateUser404JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateWeaviateUser409JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateWeaviateUser500JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteWeaviateUserParams
+}
+
+type DeleteWeaviateUserResponseObject interface {
+	VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteWeaviateUser204Response struct {
+}
+
+func (response DeleteWeaviateUser204Response) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteWeaviateUser400JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWeaviateUser401JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWeaviateUser403JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWeaviateUser404JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteWeaviateUser409JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteWeaviateUser500JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetWeaviateUserParams
+}
+
+type GetWeaviateUserResponseObject interface {
+	VisitGetWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type GetWeaviateUser200JSONResponse WeaviateUser
+
+func (response GetWeaviateUser200JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetWeaviateUser400JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWeaviateUser401JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWeaviateUser403JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWeaviateUser404JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetWeaviateUser409JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetWeaviateUser500JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  UpdateWeaviateUserParams
+	Body    *UpdateWeaviateUserJSONRequestBody
+}
+
+type UpdateWeaviateUserResponseObject interface {
+	VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type UpdateWeaviateUser204Response struct {
+}
+
+func (response UpdateWeaviateUser204Response) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateWeaviateUser400JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateWeaviateUser401JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWeaviateUser403JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateWeaviateUser404JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateWeaviateUser409JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateWeaviateUser500JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKeyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  RotateWeaviateUserKeyParams
+}
+
+type RotateWeaviateUserKeyResponseObject interface {
+	VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error
+}
+
+type RotateWeaviateUserKey200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type RotateWeaviateUserKey200JSONResponse struct {
+	Body    WeaviateAPIKey
+	Headers RotateWeaviateUserKey200ResponseHeaders
+}
+
+func (response RotateWeaviateUserKey200JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateWeaviateUserKey400JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateWeaviateUserKey401JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateWeaviateUserKey403JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateWeaviateUserKey404JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateWeaviateUserKey409JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateWeaviateUserKey500JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type DryRunCreateClusterRequestObject struct {
 	Params DryRunCreateClusterParams
 	Body   *DryRunCreateClusterJSONRequestBody
@@ -40251,6 +43388,39 @@ type StrictServerInterface interface {
 	// Seal the write-only Temporal UI OIDC client secret
 	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
 	SetTemporalUIOIDCClientSecret(ctx context.Context, request SetTemporalUIOIDCClientSecretRequestObject) (SetTemporalUIOIDCClientSecretResponseObject, error)
+	// List Weaviate RBAC roles
+	// (GET /clusters/{cluster}/weaviate/roles)
+	ListWeaviateRoles(ctx context.Context, request ListWeaviateRolesRequestObject) (ListWeaviateRolesResponseObject, error)
+	// Create a Weaviate RBAC role
+	// (POST /clusters/{cluster}/weaviate/roles)
+	CreateWeaviateRole(ctx context.Context, request CreateWeaviateRoleRequestObject) (CreateWeaviateRoleResponseObject, error)
+	// Delete a Weaviate RBAC role
+	// (DELETE /clusters/{cluster}/weaviate/roles/{role})
+	DeleteWeaviateRole(ctx context.Context, request DeleteWeaviateRoleRequestObject) (DeleteWeaviateRoleResponseObject, error)
+	// Get a Weaviate RBAC role
+	// (GET /clusters/{cluster}/weaviate/roles/{role})
+	GetWeaviateRole(ctx context.Context, request GetWeaviateRoleRequestObject) (GetWeaviateRoleResponseObject, error)
+	// Replace a Weaviate RBAC role
+	// (PUT /clusters/{cluster}/weaviate/roles/{role})
+	UpdateWeaviateRole(ctx context.Context, request UpdateWeaviateRoleRequestObject) (UpdateWeaviateRoleResponseObject, error)
+	// List Weaviate database users
+	// (GET /clusters/{cluster}/weaviate/users)
+	ListWeaviateUsers(ctx context.Context, request ListWeaviateUsersRequestObject) (ListWeaviateUsersResponseObject, error)
+	// Create a Weaviate database user
+	// (POST /clusters/{cluster}/weaviate/users)
+	CreateWeaviateUser(ctx context.Context, request CreateWeaviateUserRequestObject) (CreateWeaviateUserResponseObject, error)
+	// Delete a Weaviate database user
+	// (DELETE /clusters/{cluster}/weaviate/users/{user})
+	DeleteWeaviateUser(ctx context.Context, request DeleteWeaviateUserRequestObject) (DeleteWeaviateUserResponseObject, error)
+	// Get a Weaviate database user
+	// (GET /clusters/{cluster}/weaviate/users/{user})
+	GetWeaviateUser(ctx context.Context, request GetWeaviateUserRequestObject) (GetWeaviateUserResponseObject, error)
+	// Update Weaviate database user roles and activation
+	// (PUT /clusters/{cluster}/weaviate/users/{user})
+	UpdateWeaviateUser(ctx context.Context, request UpdateWeaviateUserRequestObject) (UpdateWeaviateUserResponseObject, error)
+	// Rotate a Weaviate database user API key
+	// (POST /clusters/{cluster}/weaviate/users/{user}/rotate-key)
+	RotateWeaviateUserKey(ctx context.Context, request RotateWeaviateUserKeyRequestObject) (RotateWeaviateUserKeyResponseObject, error)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(ctx context.Context, request DryRunCreateClusterRequestObject) (DryRunCreateClusterResponseObject, error)
@@ -45267,6 +48437,338 @@ func (sh *strictHandler) SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetTemporalUIOIDCClientSecretResponseObject); ok {
 		if err := validResponse.VisitSetTemporalUIOIDCClientSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWeaviateRoles operation middleware
+func (sh *strictHandler) ListWeaviateRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateRolesParams) {
+	var request ListWeaviateRolesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWeaviateRoles(ctx, request.(ListWeaviateRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWeaviateRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWeaviateRolesResponseObject); ok {
+		if err := validResponse.VisitListWeaviateRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWeaviateRole operation middleware
+func (sh *strictHandler) CreateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateRoleParams) {
+	var request CreateWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateWeaviateRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWeaviateRole(ctx, request.(CreateWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitCreateWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWeaviateRole operation middleware
+func (sh *strictHandler) DeleteWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteWeaviateRoleParams) {
+	var request DeleteWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWeaviateRole(ctx, request.(DeleteWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitDeleteWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeaviateRole operation middleware
+func (sh *strictHandler) GetWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetWeaviateRoleParams) {
+	var request GetWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeaviateRole(ctx, request.(GetWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitGetWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWeaviateRole operation middleware
+func (sh *strictHandler) UpdateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateWeaviateRoleParams) {
+	var request UpdateWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	var body UpdateWeaviateRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWeaviateRole(ctx, request.(UpdateWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWeaviateUsers operation middleware
+func (sh *strictHandler) ListWeaviateUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateUsersParams) {
+	var request ListWeaviateUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWeaviateUsers(ctx, request.(ListWeaviateUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWeaviateUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWeaviateUsersResponseObject); ok {
+		if err := validResponse.VisitListWeaviateUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWeaviateUser operation middleware
+func (sh *strictHandler) CreateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateUserParams) {
+	var request CreateWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateWeaviateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWeaviateUser(ctx, request.(CreateWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitCreateWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWeaviateUser operation middleware
+func (sh *strictHandler) DeleteWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteWeaviateUserParams) {
+	var request DeleteWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWeaviateUser(ctx, request.(DeleteWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitDeleteWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeaviateUser operation middleware
+func (sh *strictHandler) GetWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetWeaviateUserParams) {
+	var request GetWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeaviateUser(ctx, request.(GetWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitGetWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWeaviateUser operation middleware
+func (sh *strictHandler) UpdateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params UpdateWeaviateUserParams) {
+	var request UpdateWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body UpdateWeaviateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWeaviateUser(ctx, request.(UpdateWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitUpdateWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateWeaviateUserKey operation middleware
+func (sh *strictHandler) RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateWeaviateUserKeyParams) {
+	var request RotateWeaviateUserKeyRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateWeaviateUserKey(ctx, request.(RotateWeaviateUserKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateWeaviateUserKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateWeaviateUserKeyResponseObject); ok {
+		if err := validResponse.VisitRotateWeaviateUserKeyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

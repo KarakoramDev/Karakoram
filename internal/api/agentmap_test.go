@@ -17,6 +17,8 @@ func TestSecuritySensitiveOperationsRequireConfirmation(t *testing.T) {
 		"discardMySQLUserOldPassword", "grantMySQLPrivileges", "revokeMySQLPrivileges", "recoverMySQLQuorum",
 		"createRabbitMQUser", "replaceRabbitMQUser",
 		"createNeo4jUser", "deleteNeo4jUser", "setNeo4jUserPassword",
+		"createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey",
+		"createWeaviateRole", "updateWeaviateRole",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
