@@ -35,6 +35,7 @@ import { defaultProvider, engines, hasCapability, publicExposureMetadata, replic
 import { managementIsPublic } from '@/engines/rabbitmq/helpers';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { useLocalRequest } from './use-local-request';
+import { resourceRows as temporalResourceRows } from '@/engines/temporal/spec';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -204,13 +205,15 @@ export function ClusterWizardPage() {
       provider: provider.name,
       version: preset.spec.version || s.version,
       dataSource: s.dataSource,
+      // Temporal options (persistence, namespaces, Web UI) do not depend on the topology; presets only size components.
+      ...(provider.name === 'temporal' ? { engineOptions: s.engineOptions } : {}),
     }));
   };
 
   const switchTopology = (type: Topology['type']) => {
     const t = provider.topologies.find((x) => x.type === type);
     if (!t) return;
-    update((s) => ({ ...specFromTopology(provider, t, s.version), backup: s.backup, tls: s.tls, exposure: s.exposure, monitoring: s.monitoring, dataSource: s.dataSource }));
+    update((s) => ({ ...specFromTopology(provider, t, s.version), backup: s.backup, tls: s.tls, exposure: s.exposure, monitoring: s.monitoring, dataSource: s.dataSource, ...(provider.name === 'temporal' ? { engineOptions: s.engineOptions } : {}) }));
     setPresetName('');
   };
 
@@ -449,7 +452,7 @@ export function ClusterWizardPage() {
                     hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
-                {!['elasticsearch', 'postgres', 'supabase'].includes(provider.name) ? <TextAreaField
+                {!engineUI?.engineConfigUnsupported && !['elasticsearch', 'postgres', 'supabase'].includes(provider.name) ? <TextAreaField
                   label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML, optional)' : 'Engine configuration overrides (optional)')}
                   mono
                   rows={5}
@@ -581,14 +584,14 @@ export function ClusterWizardPage() {
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
                     ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${rules.topology[topology.type]?.title ?? topology.displayName}, ${engineSummary}`],
-                    ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
+                    ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : provider.name === 'temporal' ? temporalResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],
                     ['Total runtime footprint', `${footprint.members} instances · ${footprint.minCpu}–${footprint.maxCpu} CPU cores · ${footprint.minRam}–${footprint.maxRam} GiB RAM`],
                     ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
                     footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
                     ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
-                    ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec)),
+                    ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec, name)),
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     pitr && ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],

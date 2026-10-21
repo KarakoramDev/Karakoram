@@ -5,6 +5,7 @@ import type { Schemas } from '@/api/client';
 import { managementIsPublic, PLUGIN_GROUPS, selectedPluginGroups } from '../../../engines/rabbitmq/helpers.ts';
 import { readOptions } from '../../../engines/elasticsearch/spec.ts';
 import { configurationReviewRows as postgresReviewRows, isPostgres, object } from '../../../engines/postgres/spec.ts';
+import { configurationReviewRows as temporalReviewRows } from '../../../engines/temporal/spec.ts';
 import { engineRules } from './engine.ts';
 import { componentEntries } from './validation.ts';
 
@@ -52,8 +53,9 @@ export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, strin
   return rows;
 }
 
-export function configurationReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {
+export function configurationReviewRows(spec: Schemas['ClusterSpec'], clusterName = ''): [string, string][] {
   if (isPostgres(spec.provider)) return postgresReviewRows(spec);
+  if (spec.provider === 'temporal') return temporalReviewRows(spec, clusterName);
   const rows: [string, string][] = [['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults']];
   if (spec.provider === 'rabbitmq') {
     const selected = selectedPluginGroups(spec.engineOptions);

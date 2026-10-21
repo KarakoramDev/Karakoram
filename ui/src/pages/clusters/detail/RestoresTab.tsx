@@ -10,7 +10,7 @@ import { keys } from '@/api/keys';
 import { idempotencyHeaders } from '@/api/idempotency';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { ChoiceGroup, TextField } from '@/components/ui/Field';
+import { Checkbox, ChoiceGroup, TextField } from '@/components/ui/Field';
 import { Callout, Card, ErrorBlock, Loading, Time, formatTime } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 import { OperationNotice } from '@/components/OperationNotice';
@@ -113,6 +113,7 @@ export function RestoresTab() {
           mongo={cluster.spec.provider === 'psmdb'}
           postgres={cluster.spec.provider === 'postgres'}
           engine={engines[cluster.spec.provider]}
+          sharedSource={cluster.spec.provider === 'temporal'}
           onClose={() => {
             setOpen(false);
             if (params.has('backup') || params.has('pitr')) setParams({}, { replace: true });
@@ -123,7 +124,8 @@ export function RestoresTab() {
   );
 }
 
-function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, postgres, engine, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; postgres: boolean; engine: EngineUI | undefined; onClose: () => void }) {
+/** `sharedSource` (Temporal): the restore rewinds the bound PostgreSQL source, so the request must carry `acknowledgeSharedSource`. */
+function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, postgres, engine, sharedSource, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; postgres: boolean; engine: EngineUI | undefined; sharedSource: boolean; onClose: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -133,6 +135,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
   const [sourceCluster, setSourceCluster] = useState(cluster);
   const [backup, setBackup] = useState(initialBackup ?? '');
   const [pitrTime, setPitrTime] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [name, setName] = useState(() => `restore-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
   const [acknowledgeBoundConsumers, setAcknowledgeBoundConsumers] = useState(false);
   const bindings = useQuery({
@@ -142,7 +145,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
   });
   // Write-only engine request fields (e.g. OpenBao unseal shares); dialog state only, sent once.
   const [extras, setExtras] = useState<RestoreExtras>({});
-  const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime, acknowledgeBoundConsumers }));
+  const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime, acknowledgeBoundConsumers, acknowledged }));
   useEffect(() => {
     if (initialBackup) setBackup(initialBackup);
   }, [initialBackup]);
@@ -160,6 +163,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
             ...(cross ? { sourceNamespace } : {}),
             source: { sourceCluster, ...(mode === 'backup' ? { backup } : { pitrTime }) },
             ...extras,
+            ...(sharedSource ? { acknowledgeSharedSource: acknowledged } : {}),
           },
         }),
       ),
@@ -175,7 +179,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
 
   const RestoreSection = engine?.restoreSection;
   const extraErrors = engine?.validateRestore?.(extras) ?? [];
-  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '') && (!postgres || (!bindings.isPending && !bindings.error && (!bindings.data?.items.length || acknowledgeBoundConsumers))) && extraErrors.length === 0;
+  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '') && (!postgres || (!bindings.isPending && !bindings.error && (!bindings.data?.items.length || acknowledgeBoundConsumers))) && extraErrors.length === 0 && (!sharedSource || acknowledged);
 
   return (
     <Dialog
@@ -196,13 +200,21 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
       }
     >
       <Callout tone="danger" title="Current data will be replaced">
-        {mongo ? 'The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.' : 'The cluster becomes unavailable while the engine restores the backup. Take a fresh backup first if you may need the current state.'}
+        {mongo ? 'The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.' : sharedSource ? 'Temporal components stop while the bound PostgreSQL source restores the persistence and visibility databases from the chosen backup. Take a fresh backup first if you may need the current state.' : 'The cluster becomes unavailable while the engine restores the backup. Take a fresh backup first if you may need the current state.'}
       </Callout>
       {postgres && bindings.error ? <ErrorBlock error={bindings.error} retry={() => bindings.refetch()} /> : null}
       {bindings.data?.items.length ? <Callout tone="warn" title="Bound consumers will be affected">
         <ul>{bindings.data.items.map((b) => <li key={b.id}>{b.consumer.kind}/{b.consumer.namespace}/{b.consumer.name}</li>)}</ul>
         <label><input type="checkbox" checked={acknowledgeBoundConsumers} onChange={(e) => setAcknowledgeBoundConsumers(e.target.checked)} required /> I acknowledge that restoring this source rolls back consumer data and can invalidate credentials.</label>
       </Callout> : null}
+      {sharedSource ? (
+        <Checkbox
+          label="I understand that restoring the shared PostgreSQL source rolls back every consumer"
+          description="The backup is a PostgreSQL backup of the source cluster. If other clusters or applications share that source, their data is rewound to the same point as well."
+          checked={acknowledged}
+          onChange={(e) => setAcknowledged(e.target.checked)}
+        />
+      ) : null}
       <TextField label="Restore name" mono value={name} onChange={(e) => setName(e.target.value)} required />
       <SourceClusterPicker
         targetNamespace={namespace}

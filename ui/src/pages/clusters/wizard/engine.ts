@@ -2,6 +2,7 @@
 // Copyright 2026 The Karakoram Authors
 
 import type { Schemas } from '@/api/client';
+import { readOptions as temporalOptions } from '../../../engines/temporal/spec.ts';
 
 /** Provider-specific copy and fallback rules belong here, not in shared controls. */
 export function engineRules(provider: string) {
@@ -45,6 +46,16 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose Elasticsearch HTTPS publicly on port 9200',
     configHint: 'Configure supported settings under Elastic Stack options.',
   };
+  if (provider === 'temporal') return {
+    resourceMinimums: { cpu: 1, ram: 0.25, disk: 1 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      combined: { title: 'Combined server', description: 'One stateless process runs the history, matching, frontend and worker roles. Scale it 1–5 instances; the simplest topology for development and small production clusters.' },
+      split: { title: 'Split services', description: 'History, matching, frontend and worker run as separate components with independent instance counts and resources, as in production Temporal deployments.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Temporal publicly',
+    configHint: 'Temporal is configured through Temporal options; engine configuration overrides are rejected.',
+  };
   return {
     resourceMinimums: { cpu: 1, ram: 0, disk: 0 },
     topology: {} as Record<string, { title: string; description: string }>,
@@ -60,6 +71,15 @@ export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
     'ProxySQL is the application endpoint. Login-role passwords must be managed through Postgres access to synchronize proxy authentication; roles created directly in SQL are not routable through the proxy.',
     spec.backup?.pitr?.enabled ? 'PITR archives WAL to registered backup storage. Coverage requires a completed full backup and a continuous WAL archive.' : 'PITR is disabled; recovery is limited to completed backups.',
   ];
+  if (spec.provider === 'temporal') {
+    const options = temporalOptions(spec);
+    return [
+      'All Temporal roles are stateless; workflow state and visibility live in the bound PostgreSQL cluster, whose availability and backups decide Temporal’s durability.',
+      spec.topology.type === 'split' ? 'History instances own the history shards; scaling history rebalances shards, while frontends and matching scale request capacity.' : 'A single combined server has no redundancy; add instances or switch to the split topology before production use.',
+      options.frontend.requireClientAuth ? 'SDK clients need a client certificate issued from the Client certificates tab (mutual TLS on port 7233).' : 'The frontend accepts any TLS client inside the project network without a client certificate.',
+      options.ui.publicHttps ? 'The Web UI is reachable from the internet behind OIDC login; store the client secret on the Web UI tab after creation.' : 'The Web UI, when enabled, stays private to the project network.',
+    ];
+  }
   if (spec.provider !== 'psmdb') return [];
   return [
     ...(spec.components.engine.replicas === 1 ? ['A single database member has no failover; maintenance makes its database unavailable.'] : []),

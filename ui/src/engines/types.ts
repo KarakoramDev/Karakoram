@@ -67,6 +67,8 @@ export interface EngineUI {
   publicPortLabel?: string | ((spec: Schemas['ClusterSpec']) => string);
   engineConfigLabel?: string;
   engineConfigPlaceholder?: string;
+  /** Provider rejects `spec.engineConfig`; the wizard hides the generic override editor. */
+  engineConfigUnsupported?: boolean;
   /** Additional create-form errors, displayed in the wizard's Basics step. */
   validateSpec?: (spec: Schemas['ClusterSpec']) => string[];
   /** Rendered in the wizard's Basics step below the preset choice. */

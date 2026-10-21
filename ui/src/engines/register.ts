@@ -12,6 +12,7 @@ import { postgresUI } from './postgres';
 import { supabaseUI } from './supabase';
 import { keycloakUI } from './keycloak';
 import { openbaoUI } from './openbao/index.ts';
+import { temporalUI } from './temporal';
 
 engines.rabbitmq = rabbitmqUI;
 
@@ -20,3 +21,4 @@ engines.postgres = postgresUI;
 engines.supabase = supabaseUI;
 engines.keycloak = keycloakUI;
 engines.openbao = openbaoUI;
+engines.temporal = temporalUI;

@@ -27,6 +27,7 @@ export function maintenanceCopy(provider: string, replicas: number, current?: st
       : 'Elasticsearch nodes restart one at a time; availability depends on master quorum and redundant shard copies.';
     return `${availability} Elasticsearch nodes restart first, with the elected master last, followed by Kibana, Logstash and APM Server. Kibana restarts separately and its web UI is temporarily unavailable.`;
   }
+  if (provider === 'temporal') return 'Temporal components roll one instance at a time in the order history, matching, frontend, worker, server, Web UI. A component with a single instance is briefly unavailable; SDK clients retry and workflow state is safe in PostgreSQL.';
   if (replicas === 1) return 'Downtime: the only member becomes unavailable during upgrade or restart. Applications cannot use the database until it returns.';
   const neutral = 'Members restart one at a time; the cluster stays available if a majority/quorum remains.';
   return provider === 'psmdb' ? `${neutral} Secondaries restart first; a primary failover can briefly pause writes.` : neutral;
