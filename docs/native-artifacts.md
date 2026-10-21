@@ -104,3 +104,34 @@ The default bucket/prefix is `kk-artifacts/native`; override with `NATIVE_ARTIFA
 `release.sh build` uses the **tagged** lock, validates all Karakoram-built files in `dist/native-artifacts/` before copying them to `dist/<version>/`, and fails on missing files, size or SHA-256 differences. Release `checksums.txt` covers those files together with the server/CLI and is signed by the existing release signer.
 
 Official artifacts retain upstream provenance rather than being described as source rebuilds. Envoy 1.39.1's clear-signed checksums were verified with the [official maintainers key](https://raw.githubusercontent.com/envoyproxy/envoy/main/envoy-maintainers-public.key), fingerprint `0AFCE836BA4D1D35763C8523D8CDC3750181F31F`. SHA-256 transport integrity alone is not a maintainer signature. Studio's native source selection uses the full Supabase commit in the recipe; it is not represented as a byte-identical rebuild of an independently published image tag. Pin updates require evaluating upstream dependency advisories rather than silently rewriting application lockfiles.
+
+## Data MCP companion artifacts
+
+| Artifact | Version | Origin | License | Runtime |
+| --- | --- | --- | --- | --- |
+| `pgedge-postgres-mcp` | 1.1.0 | Official pgEdge Linux x86_64 server release | PostgreSQL | Native executable at archive root |
+| `mongodb-mcp-server` | 3.1.0 | Karakoram assembly of the published npm package and frozen production dependency tree | Apache-2.0 (dependencies retain their own licenses) | Bundled Node 22.23.3, npm 10.9.9; `ca-certificates`, `libstdc++6` |
+
+The pgEdge archive is [the upstream server tarball](https://github.com/pgEdge/pgedge-postgres-mcp/releases/download/v1.1.0/pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz), not the similarly named CLI release. Its SHA-256 is `ca79e3054455b5505d3ac4ed4bc5d4cd074a57f108b8fe9ddcd3e24d16c5452a` (8,483,086 bytes). GitHub's tag API resolves annotated tag `v1.1.0` through tag object `336174b178e7ddc65a581b2fa5f2e895789f2885` to full source commit `25c2aaed03398584ceea0dd71f7f67631c3dff4e`. The downloaded archive matches the published release digest; this is byte-integrity evidence, not a verified maintainer signature.
+
+MongoDB's [v3.1.0 tag](https://github.com/mongodb-js/mongodb-mcp-server/tree/f369482783bdef116c35d352fd9d92f6c984242f) resolves to `f369482783bdef116c35d352fd9d92f6c984242f`. The recipe assembles the published npm distribution; it does not claim a source rebuild of its JavaScript. `scripts/native-artifacts/mongodb-mcp/package-lock.json` freezes the complete resolved tree with registry URLs and npm integrity values. Installation uses `npm ci --omit=dev --ignore-scripts`: no package lifecycle hooks or native addon builds run. The Node runtime comes from the official Linux x64 tarball pinned in `toolchains.json`, SHA-256 `df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de`. The bundle retains `node/`, `app/`, and executable `bin/start`; the launcher changes to `app/` and execs `node/bin/node dist/esm/index.js`. `LICENSES/` collects distributed license/notice/copyright files (including Node's consolidated notices); `THIRD_PARTY.json` records every locked package's version, license, URL and integrity, and `provenance/` preserves the exact npm inputs.
+
+The normal Incus recipe uses the same staging helper. Where Incus is unavailable, this equivalent unprivileged host command downloads and verifies Node, assembles the same layout, runs native qualification, packages normalized tar metadata, and updates only the qualified MongoDB lock entry:
+
+```sh
+# Requires Python 3.11+, tar, xz, and a native Linux x64 mongod.
+# First download the official fixture and verify its published checksum.
+mkdir -p .tmp-int
+curl -fL https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2404-8.0.16.tgz \
+  -o .tmp-int/mongodb-linux-x86_64-ubuntu2404-8.0.16.tgz
+printf '%s\n' '7d67c164da52d31ec144778b40ec9ab6bdaa0c250be020b44dacdcf91a7de3c0  .tmp-int/mongodb-linux-x86_64-ubuntu2404-8.0.16.tgz' | sha256sum -c -
+tar -xf .tmp-int/mongodb-linux-x86_64-ubuntu2404-8.0.16.tgz -C .tmp-int
+python3 scripts/native-artifacts/mongodb_mcp.py \
+  --mongod .tmp-int/mongodb-linux-x86_64-ubuntu2404-8.0.16/bin/mongod
+```
+
+Use a fresh output stage (the helper refuses to replace an existing stage). Qualification binds mongod and the actual bundle launcher to dynamically selected `127.0.0.1` ports, limits WiredTiger cache to 256 MiB, sets `MDB_MCP_TRANSPORT=http`, then requires successful MCP `initialize` and nonempty `tools/list`. Both child processes are terminated on success or failure. Logs, the complete handshake/tool response, packaged manifest and bundle remain under ignored `dist/native-artifacts/`. A failed qualification never publishes archive bytes or updates the lock. Host qualification is not a clean Ubuntu-runner claim; the Incus path repeats the protocol smoke in a clean Ubuntu 24.04 runner with the documented runtime packages.
+
+The MongoDB bundle has no upstream binary URL: a Karakoram release **must publish the exact locked tarball**. Development deployments require `KARAKORAM_ARTIFACT_MIRROR`; neither npm nor a floating upstream archive is a runtime fallback. Rebuilding may produce different compressed bytes: publish the qualified locked file, or deliberately requalify and update its digest and size.
+
+The qualified MongoDB 3.1.0 tarball is 239,960,287 bytes with SHA-256 `a5c6f723b4c4eaf87ecbc3da336a5c1ec784e47a087e351e89aff65e70018242`. The direct-host smoke returned server version `3.1.0`, negotiated MCP `2025-03-26`, and listed 20 tools in read-only mode against the official MongoDB 8.0.16 Ubuntu 24.04 tarball. These are launcher/protocol qualification results, not evidence that every database tool or optional native dependency has been exercised.

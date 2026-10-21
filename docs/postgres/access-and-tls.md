@@ -283,3 +283,50 @@ ProxySQL 3.0.11 is a PostgreSQL-aware proxy, not a transparent TCP tunnel. The u
 - Failover changes the backend writer; clients must reconnect/retry according to application transaction semantics.
 
 Supabase internal services bypass these limitations using their local raw TCP leader forwarder. This does not change the public application's proxy protocol contract. See [ADR 0034](../adr/0034-postgres-engine.md).
+
+## Data MCP identities
+
+PostgreSQL and Supabase use the `pgedge-postgres-mcp` companion with separate
+`karakoram-mcp-ro` / `karakoram-mcp-rw` system identities, mapped to reserved
+PostgreSQL LOGIN roles `kk_mcp_ro` / `kk_mcp_rw`. Neither has superuser, database
+or role creation, replication, ownership, or RLS bypass privileges. Supabase's
+`supabase_read_only_user` and `service_role` are never reused.
+
+Only database and schema scopes are supported. The default database is
+`postgres`; the default schemas are all non-system schemas. An entirely unset
+scope permits `pg_read_all_data` for the reader; any explicit database or schema
+scope instead uses per-database schema USAGE and table SELECT grants. The writer
+gets SELECT/INSERT/UPDATE/DELETE, not DDL, plus USAGE/SELECT on scoped sequences
+so serial/identity defaults work. Matching default table and sequence privileges
+cover application owner roles. API-driven role catalog changes trigger an immediate
+ACL refresh on the writable member. Objects and owner roles created directly
+through SQL are discovered by an additive refresh every ten minutes while the
+member is observed for readiness. Refreshes issue grants/default ACLs only;
+they do not regenerate password verifiers or revoke privileges. Failed refreshes
+remain retryable at the next observation. All old grants and default ACLs owned by
+these reserved identities are removed when narrowing scope or disabling access.
+Do not transfer application object ownership to these engine-owned roles.
+
+Roles have a connection limit of 10, a 30-second statement timeout and a
+60-second idle-in-transaction timeout. The reader defaults to read-only
+transactions, but SELECT-only grants enforce read-only access even if a client
+turns that default off. Role defaults are not immutable resource limits.
+
+PostgreSQL privileges inherited from PUBLIC are intentionally unchanged:
+CONNECT to other databases and access to PUBLIC-readable objects can remain
+possible. PUBLIC CREATE or function EXECUTE privileges also remain inherited;
+audit application ACLs when a strict DDL or function boundary is required.
+Database scope is not an isolation boundary against existing PUBLIC grants.
+The companion connects only to its selected scoped database (the first entry).
+
+With ProxySQL, the companion reader uses `<cluster>px:5433` (the reader listener
+is enabled with data access), and the writer uses `<cluster>px:5432`. Without a
+proxy, credentials contain all live data-member DNS names and PostgreSQL URIs
+use `target_session_attrs=prefer-standby` for reads and `read-write` for writes.
+TLS-enabled clusters supply their CA and `sslmode=verify-full`; disabled TLS
+uses `sslmode=disable`. The credential consumer must install the supplied CA
+in its connection trust configuration.
+
+`rotate-system-user` accepts either enabled logical identity. A sealed,
+operation-specific staged password is published through member configuration
+and ProxySQL users, and the operation waits for member revision acknowledgements.

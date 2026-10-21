@@ -4,7 +4,9 @@
 import {
   forwardRef,
   useId,
+  useState,
   type InputHTMLAttributes,
+  type KeyboardEvent,
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
@@ -214,5 +216,62 @@ export function ChoiceGroup<T extends string>({ name, legend, value, options, on
       </div>
       {hint ? <span className="field-hint">{hint}</span> : null}
     </fieldset>
+  );
+}
+
+export interface TagListFieldProps {
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+  value: string[];
+  onChange: (value: string[]) => void;
+  placeholder?: string;
+  id?: string;
+  disabled?: boolean;
+}
+
+/** Short string lists as removable tags; Enter, comma or blur commits the typed entry. */
+export function TagListField({ label, hint, error, value, onChange, placeholder, id: idProp, disabled }: TagListFieldProps) {
+  const auto = useId();
+  const id = idProp ?? auto;
+  const [pending, setPending] = useState('');
+  const commit = () => {
+    const entries = pending.split(',').map((s) => s.trim()).filter((s) => s && !value.includes(s));
+    if (entries.length) onChange([...value, ...entries]);
+    setPending('');
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Backspace' && !pending && value.length) {
+      onChange(value.slice(0, -1));
+    }
+  };
+  return (
+    <FieldShell label={label} hint={hint} error={error} id={id}>
+      <div className="taglist" aria-invalid={error ? true : undefined}>
+        {value.map((item) => (
+          <span key={item} className="taglist-item">
+            {item}
+            <button type="button" aria-label={`Remove ${item}`} disabled={disabled} onClick={() => onChange(value.filter((v) => v !== item))}>
+              ×
+            </button>
+          </span>
+        ))}
+        <input
+          id={id}
+          value={pending}
+          placeholder={value.length ? undefined : placeholder}
+          disabled={disabled}
+          aria-describedby={describedBy(id, hint, error)}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setPending(e.target.value)}
+          onKeyDown={onKeyDown}
+          onBlur={commit}
+        />
+      </div>
+    </FieldShell>
   );
 }

@@ -57,6 +57,10 @@ PATCH merges only `{spec: {...}}`; arrays replace the whole previous array. Edit
 
 Omitted PATCH collections retain their stored state, including absence; response-only empty arrays do not create a desired-state change. Supply `backup.schedules: []` or `exposure.allowlist: []` explicitly to clear the corresponding list.
 
+### `spec.dataMcp`
+
+Optional [cluster data MCP](data-mcp.md) exposes a separate token-authenticated data endpoint; it is disabled unless `enabled: true`. Fields are `enabled`, `access` (`read` by default or `readWrite`), engine-specific `scope` (`databases`, `schemas`, `indexPatterns`, `vhosts`), `tools.deny`, `tools.confirmWrites`, `auditQueryText` and companion `resources`. See the [field/default and scope reference](data-mcp.md#enable-and-scope-access) before enabling. The observed `status.dataMcp` is separate from database membership and reports backend/access/readiness, not a token's effective authority.
+
 ## Operations and status
 
 | Layer | Meaning |

@@ -4,6 +4,8 @@
 
 Karakoram operates native Percona PostgreSQL on backend-managed runtimes and per-member persistent volumes. This brief guide describes the implemented interface, not deployment acceptance or an availability guarantee.
 
+Opt-in [cluster data MCP](../data-mcp.md) uses a private pgEdge companion and dedicated `kk_mcp_ro`/`kk_mcp_rw` roles. Configure database/schema scope; the companion connects to the first selected database (default `postgres`). Review the guide's PUBLIC-grant caveat before treating scope as isolation.
+
 ## At a glance
 
 | Setting | Value |

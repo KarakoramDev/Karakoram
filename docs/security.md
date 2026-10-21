@@ -117,6 +117,12 @@ The UI requests reveal explicitly without query-state caching. Authorized users 
 
 Operator is an operational-trust role: disruptive lifecycle, restore and identity-management authority remains powerful without reveal. Full-policy replacement risks lockout; retain unrestricted local break-glass access. See [roles and policy rules](access-control.md#default-roles).
 
+## Cluster data MCP boundary
+
+[Data MCP](data-mcp.md) is off per cluster by default and serves one endpoint per cluster on the existing public listener. It rejects cookies, unrestricted tokens and mismatched origins; explicit token data permission and current owner RBAC are both required. `cluster-data` is not a viewer/operator grant. Writes need [four independent switches](data-mcp.md#four-switches-for-writes), with fail-closed gateway confirmation for destructive tools and optionally all writes.
+
+Managed read/write database identities, scope and reviewed tool manifests constrain access; upstream connection switching and credential tools are unavailable. Companion upstreams remain on loopback behind the private authenticated agent listener, not a new public service. Results are bounded untrusted data, **not protection against prompt injection**. Queries can still load production. Data tool calls have their own `cluster-data` audit events, including denials and argument hashes; `auditQueryText` deliberately adds potentially sensitive arguments. See [limits, identities and audit behavior](data-mcp.md#confirmation-results-and-limits).
+
 ## Audit attribution and durability
 
 Action history records successful management mutations and credential reveal with actor/resource/target metadata, not request/response bodies or secrets. Authentication records successful logins, logout and session refresh; local login failures use validated attempted names. OIDC failures are recorded **only after a verified issuer/subject matches a persisted account**. Malformed local identities, login backoff/admission denials, earlier/unmatched OIDC failures and **failed REST actions, including authorization denials, are not recorded**. This is not a complete intrusion log.

@@ -61,6 +61,8 @@ Assign roles through policy, not account fields. Self-service change is **User m
 
 Operator has no namespace administration, credential reveal, audit or account/token/RBAC/settings administration. It can still disrupt workloads, restore data and change engine identities.
 
+`cluster-data` is separate from lifecycle and credential-reveal access: neither viewer nor operator receives it by default. Its `read` and `write` actions apply to `<namespace>/<cluster>`. A restricted API token must explicitly include matching `cluster-data:read`/`cluster-data:write` permission, and the owner must retain the corresponding RBAC grants. Writes also require cluster and installation opt-in; see [cluster data MCP](data-mcp.md#four-switches-for-writes). For example, add `p, user:analyst, cluster-data, read, prod/appdb` to your complete policy for narrowly scoped data reads.
+
 Defaults apply to **fresh installations**; upgrades retain stored policy. Operator/viewer namespace visibility requires these additions if absent from the existing complete policy:
 
 ```csv
@@ -84,6 +86,7 @@ CSV `p` rules default to allow. Subjects are `user:NAME`, `group:OIDC_GROUP`, `r
 | `namespaces` | create on global `*`; read/update/delete on bare namespace; validation/rotation use update |
 | `clusters`, `database-users` | CRUD as exposed by route; `<namespace>/<cluster>`; database roles share `database-users` |
 | `cluster-credentials` | read reveals credentials; `<namespace>/<cluster>` |
+| `cluster-data` | read/write through the opt-in [data MCP gateway](data-mcp.md); `<namespace>/<cluster>`; not included in viewer/operator defaults |
 | `backups` | create/read/delete/export; `<namespace>/<cluster>` |
 | `restores`, `operations` | Route-defined actions; `<namespace>/<cluster>` |
 | `backup-storages` | CRUD; `<namespace>/<storage>` |

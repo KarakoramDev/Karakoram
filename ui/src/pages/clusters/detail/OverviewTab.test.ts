@@ -14,6 +14,7 @@ import type { ClusterContext } from './ClusterDetail';
 register('../../../../test/tsx-loader.mjs', import.meta.url);
 // Static import runs before loader registration; this test must load TSX afterward.
 const { OverviewTab } = await import('./OverviewTab.tsx');
+const { ToastProvider } = await import('../../../components/ui/Toast.tsx');
 
 for (const scenario of [
   { name: 'capacity', health: 'yellow', message: 'Shard drain blocked for searchn2: insufficient data nodes for index replicas. Restore the node count or lower index replicas; never force removal.' },
@@ -48,7 +49,7 @@ test(`Overview renders the blocked-drain callout above its tables: ${scenario.na
     children: [{ index: true, element: createElement(OverviewTab) }],
   }]);
   try {
-    const markup = renderToString(createElement(QueryClientProvider, { client }, createElement(RouterProvider, { router })));
+    const markup = renderToString(createElement(QueryClientProvider, { client }, createElement(ToastProvider, null, createElement(RouterProvider, { router }))));
     const summary = markup.slice(0, markup.indexOf('<table'));
     assert.match(summary, /callout callout-warn/);
     assert.match(summary, /Shard drain blocked/);

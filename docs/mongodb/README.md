@@ -4,6 +4,8 @@
 
 Manage Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) on Zerops.
 
+Opt-in [cluster data MCP](../data-mcp.md) uses a private `mongodb-mcp-server` companion and separate scoped read/write users. Configure `scope.databases`; system databases cannot be scoped. It is disabled by default and independent of ordinary credential reveal.
+
 ## At a glance
 
 | Setting | Supported value / default |

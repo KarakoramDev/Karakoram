@@ -4,6 +4,8 @@
 
 Karakoram operates RabbitMQ on your Zerops runtimes and Local Storage, not a native Zerops managed service.
 
+Opt-in [cluster data MCP](../data-mcp.md) provides native Management API tools with `scope.vhosts` and separate data identities, without a companion. Every tool needs a permitted vhost. Message peeking consumes/requeues and is a write; queue purge is destructive and always requires confirmation.
+
 ## At a glance
 
 | Setting | Value |

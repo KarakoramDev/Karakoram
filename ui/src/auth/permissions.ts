@@ -6,6 +6,7 @@ import type { Schemas } from '@/api/client';
 export type Resource =
   | 'clusters'
   | 'cluster-credentials'
+  | 'cluster-data'
   | 'database-users'
   | 'backups'
   | 'restores'
@@ -21,7 +22,7 @@ export type Resource =
   | 'settings'
   | 'providers';
 
-export type Action = 'create' | 'read' | 'update' | 'delete' | 'export';
+export type Action = 'create' | 'read' | 'write' | 'update' | 'delete' | 'export';
 
 export const DEFAULT_NAMESPACE = 'default';
 

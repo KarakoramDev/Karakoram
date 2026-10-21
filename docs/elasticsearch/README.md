@@ -4,6 +4,8 @@
 
 Deploy Elasticsearch and its optional, version-coupled Elastic Stack components on Zerops.
 
+Opt-in [cluster data MCP](../data-mcp.md) provides native scoped Elasticsearch tools without a companion. Configure `scope.indexPatterns`; hidden/system/dot indices, including hidden data-stream backing indices, remain unreachable. Writes require four independent opt-ins.
+
 ## At a glance
 
 | Area | Supported configuration |

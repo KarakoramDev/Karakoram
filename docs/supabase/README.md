@@ -4,6 +4,8 @@
 
 The `supabase` provider combines the [PostgreSQL core](../postgres/README.md) with modular native Supabase services. This brief guide describes interfaces and limits, not deployment acceptance or complete parity with every upstream hosting feature.
 
+Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL pgEdge companion and dedicated non-BYPASSRLS roles, not Supabase service credentials. Database/schema scope and PostgreSQL PUBLIC-grant limitations apply; access is disabled by default.
+
 ## At a glance
 
 | Setting | Value |

@@ -71,6 +71,12 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 
 **Cluster → Backups → Backup now** requires a registered storage. Follow the operation and inventory to completion; acceptance does not mean a successful backup. Restore/clone dialogs can select a source namespace; see [backups and recovery](backups.md) for permissions and storage selection. For destructive retention choices, see [delete or suspend](clusters.md#delete-or-suspend).
 
+## Data MCP
+
+Supported clusters show a **Data MCP** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
+
+Users with cluster update permission can enable/disable data MCP, select read-only/read-write access, set engine-specific scope, deny tools, require write confirmations and opt into recording query text in audit. Save applies `spec.dataMcp` as a cluster merge patch; disabling asks for confirmation. Other users see settings read-only. Enabling data access and requesting writes are security decisions: review the [data MCP guide](data-mcp.md), particularly [all four write switches](data-mcp.md#four-switches-for-writes), before sharing a client configuration.
+
 ## Installation settings
 
 | Settings page | Purpose |

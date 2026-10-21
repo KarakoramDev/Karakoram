@@ -20,6 +20,8 @@ import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { ConnectionHelp as PostgresConnectionHelp } from '@/engines/postgres/ConnectionHelp';
 import { SupabaseCredentialsReveal } from '@/engines/supabase/CredentialsReveal';
 import { isPostgres } from '@/engines/postgres/spec';
+import { DataMcpSection } from './DataMcpSection';
+import { supportsDataMcp } from './datamcp';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -243,6 +245,8 @@ export function OverviewTab() {
           />
         </Card>
       </div>
+
+      {supportsDataMcp(spec.provider) ? <DataMcpSection /> : null}
 
       <Card title="Conditions" flush>
         <div className="table-wrap">

@@ -81,7 +81,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `help` | Runtime help | any command path | Local |
 | `login` | Password login and saved API token | — | All |
 | `logout` | Revoke saved token/remove credentials | — | All |
-| `mcp` | Stdio MCP bridge and dedicated client configuration | config | Control-plane management; server policy applies |
+| `mcp` | Stdio MCP bridge; management and per-cluster data MCP client configuration | config, config --cluster NS/NAME | Management: all; data: MongoDB, PostgreSQL, Supabase, Elasticsearch, RabbitMQ |
 | `metrics` | Prometheus exposition | — | All |
 | `namespaces` | Project registration/token/relay health | list, get, create, update, validate, rotate-token, delete | All |
 | `oauth-grants` | Connected OAuth application grants | list, delete | Control-plane accounts; administrators may manage all grants |
@@ -105,6 +105,8 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes).
+
+`karactl mcp config --cluster NS/NAME` mints a restricted API token scoped to that cluster's data reads and prints client configuration for `/mcp/clusters/NS/NAME`. `--write` also requests data writes; cluster, owner RBAC and installation write gates still apply. The default token lifetime is 90 days. The selected server must support restricted API tokens; older servers may reject the request. Output contains the once-shown token secret: treat it as a credential, avoid logs and protect redirected files. Revoke it by ID through `tokens delete` when no longer needed.
 PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
 
 ## MCP clients
@@ -157,6 +159,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
 | `tokens create` | `-f` OR `--name`, `--expires` (RFC3339 or duration), `--read-only`, repeatable `--scope-namespace`, `--scope-cluster ns/name`, `--permission resource:action`, `--allow-credential-reveal` |
 | `tokens set` | `-f` (name/expiry only); list has `--limit`, `--cursor`; delete/revoke has `--yes` |
+| `mcp config` | `--client claude-code\|cursor\|vscode\|codex\|json` (json), `--write`, `--token-name`, `--expires-in` (90d; whole days or Go duration); management: repeatable `-n/--namespace`, `--stdio`, `--output FILE`; data: `--cluster NS/NAME` (codex unsupported) |
 | `events list` | `--cluster`, `--type`, `--operation`, `--actor`, `--resource`, `--order asc\|desc`, `--limit`, `--cursor` |
 | `events watch` | Same scope filters; `--cursor`, `--last-event-id`; no list limit/order |
 | `operations list/cluster` | `--phase`, `--limit`, `--cursor`; list also `--cluster` |
