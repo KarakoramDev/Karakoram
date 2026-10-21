@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL and modular Supabase orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL, modular Supabase and OpenBao orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
 
 ## Engines
 
@@ -16,6 +16,7 @@ Versions below are catalog defaults; each engine section lists supported version
 | PostgreSQL | Percona PostgreSQL 17.11.1 default; majors 16/17/18; extension profiles | Single; Patroni/etcd HA (3/5); Citus distributed; ProxySQL client service | pgBackRest full/diff/incr and PITR | [PostgreSQL](docs/postgres/README.md) |
 | Supabase | PostgreSQL 17 plus release-locked native services | Same database topologies; modular services | PostgreSQL data only; separate S3 object protection required | [Supabase](docs/supabase/README.md) |
 | Keycloak | Official Keycloak 26.8.1; OpenJDK 21 | One native runtime with a PostgreSQL binding | Through the source PostgreSQL cluster | [Keycloak](docs/keycloak/README.md) |
+| OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft | Raft snapshots to S3; no PITR | [OpenBao](docs/openbao/README.md) |
 
 ## Backends
 
@@ -72,6 +73,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **PostgreSQL:** [Overview](docs/postgres/README.md) · [Access and TLS](docs/postgres/access-and-tls.md) · [Backups and PITR](docs/postgres/backups.md) · [Operations](docs/postgres/operations.md)
 - **Supabase:** [Overview](docs/supabase/README.md) · [Components and availability](docs/supabase/components.md) · [Operations](docs/supabase/operations.md)
 - **Keycloak:** [PostgreSQL binding, routing and administrator recovery](docs/keycloak/README.md)
+- **OpenBao:** [Overview](docs/openbao/README.md) · [API access and TLS](docs/openbao/access-and-tls.md) · [Raft backups and recovery](docs/openbao/backups.md) · [Operations and unseal](docs/openbao/operations.md)
 - **Reference:** [Architecture decisions](docs/adr/README.md) · [Native artifacts](docs/native-artifacts.md) · [Verification](docs/verification.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Acknowledgements

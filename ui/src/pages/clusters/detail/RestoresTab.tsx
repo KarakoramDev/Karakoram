@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/api/client';
 import { useNamespaceOptions } from '@/api/hooks';
 import { keys } from '@/api/keys';
@@ -18,7 +18,8 @@ import { BackupPicker, PitrPicker, SourceClusterPicker } from '../ClusterWizard'
 import { OpPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
 import { useSubmissionKey } from './use-submission-key';
-import { hasCapability, supportsOperation } from '@/engines';
+import { engines, hasCapability, supportsOperation, type EngineUI, type RestoreExtras } from '@/engines';
+import { useLocalRequest } from '../use-local-request';
 
 export function RestoresTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -111,6 +112,7 @@ export function RestoresTab() {
           pitr={hasCapability(provider, 'pitr')}
           mongo={cluster.spec.provider === 'psmdb'}
           postgres={cluster.spec.provider === 'postgres'}
+          engine={engines[cluster.spec.provider]}
           onClose={() => {
             setOpen(false);
             if (params.has('backup') || params.has('pitr')) setParams({}, { replace: true });
@@ -121,7 +123,7 @@ export function RestoresTab() {
   );
 }
 
-function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, postgres, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; postgres: boolean; onClose: () => void }) {
+function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, postgres, engine, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; postgres: boolean; engine: EngineUI | undefined; onClose: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -138,14 +140,16 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
     queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/bindings', { params: { path: { cluster }, query: { namespace } } })),
     enabled: postgres,
   });
+  // Write-only engine request fields (e.g. OpenBao unseal shares); dialog state only, sent once.
+  const [extras, setExtras] = useState<RestoreExtras>({});
   const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime, acknowledgeBoundConsumers }));
   useEffect(() => {
     if (initialBackup) setBackup(initialBackup);
   }, [initialBackup]);
 
   const cross = sourceNamespace !== namespace;
-  const create = useMutation({
-    mutationFn: () =>
+  const create = useLocalRequest({
+    request: () =>
       unwrap(
         api.POST('/clusters/{cluster}/restores', {
           headers: idempotencyHeaders(submission.key),
@@ -155,6 +159,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
             acknowledgeBoundConsumers,
             ...(cross ? { sourceNamespace } : {}),
             source: { sourceCluster, ...(mode === 'backup' ? { backup } : { pitrTime }) },
+            ...extras,
           },
         }),
       ),
@@ -165,9 +170,12 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
       onClose();
       navigate(`${base}/operations`);
     },
+    onSettled: () => { setExtras({}); },
   });
 
-  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '') && (!postgres || (!bindings.isPending && !bindings.error && (!bindings.data?.items.length || acknowledgeBoundConsumers)));
+  const RestoreSection = engine?.restoreSection;
+  const extraErrors = engine?.validateRestore?.(extras) ?? [];
+  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '') && (!postgres || (!bindings.isPending && !bindings.error && (!bindings.data?.items.length || acknowledgeBoundConsumers))) && extraErrors.length === 0;
 
   return (
     <Dialog
@@ -177,7 +185,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
       wide
       busy={create.isPending}
       error={create.error}
-      onSubmit={() => valid && create.mutateAsync()}
+      onSubmit={() => valid && create.run()}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -220,6 +228,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, p
         ]}
       />
       {mode === 'backup' ? <BackupPicker namespace={sourceNamespace} cluster={sourceCluster} value={backup} onChange={setBackup} /> : <PitrPicker namespace={sourceNamespace} cluster={sourceCluster} value={pitrTime} onChange={setPitrTime} />}
+      {RestoreSection ? <RestoreSection source={sourceCluster ? { namespace: sourceNamespace, cluster: sourceCluster } : undefined} inPlace={sourceCluster === cluster && sourceNamespace === namespace} value={extras} onChange={(next) => { setExtras(next); create.reset(); }} showErrors /> : null}
     </Dialog>
   );
 }

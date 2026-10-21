@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
@@ -146,6 +147,10 @@ func TestPostgresPrivilegedRoleRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	p.roles = append(p.roles,
+		postgres.Role{Name: "delegator", MemberOf: []string{"pg_read_all_data"}, MemberOfAdmin: []string{"pg_read_all_data"}},
+		postgres.Role{Name: "delegator_child", MemberOf: []string{"delegator"}},
+	)
 	before := p.writes
 	denied := call(s, "POST", "/api/v1/clusters/prod/postgres/roles", `{"name":"newapp","superuser":true}`, clusterManager)
 	if denied.Code != http.StatusForbidden || p.writes != before {
@@ -157,6 +162,8 @@ func TestPostgresPrivilegedRoleRBAC(t *testing.T) {
 		`{"name":"newapp","bypassrls":true}`,
 		`{"name":"newapp","memberOf":["privileged"]}`,
 		`{"name":"newapp","memberOf":["indirect"]}`,
+		`{"name":"newapp","memberOf":["delegator"]}`,
+		`{"name":"newapp","memberOf":["delegator_child"]}`,
 	} {
 		before := p.writes
 		w := call(s, "POST", "/api/v1/clusters/prod/postgres/roles", body, delegated)
@@ -172,6 +179,9 @@ func TestPostgresPrivilegedRoleRBAC(t *testing.T) {
 		{"PUT", "/api/v1/clusters/prod/postgres/roles/privileged", `{"name":"privileged","password":"password-overwrite"}`},
 		{"PATCH", "/api/v1/clusters/prod/postgres/roles/privileged", `{"password":"password-overwrite"}`},
 		{"POST", "/api/v1/clusters/prod/postgres/roles/privileged/password", ""},
+		{"PUT", "/api/v1/clusters/prod/postgres/roles/delegator", `{"name":"delegator","password":"password-overwrite"}`},
+		{"PATCH", "/api/v1/clusters/prod/postgres/roles/delegator", `{"password":"password-overwrite"}`},
+		{"POST", "/api/v1/clusters/prod/postgres/roles/delegator/password", ""},
 	} {
 		before := p.writes
 		w := call(s, tc.method, tc.path, tc.body, delegated)
@@ -216,5 +226,22 @@ func TestPostgresDatabaseExtensions(t *testing.T) {
 	result = call(s, "POST", "/api/v1/clusters/prod/postgres/databases", `{"name":"app","owner":"custom","extensions":["bad;SQL"]}`, token)
 	if result.Code != http.StatusBadRequest || p.writes != before {
 		t.Fatalf("invalid extension reached provider: status=%d", result.Code)
+	}
+}
+
+func TestPostgresInternalAdminMembership(t *testing.T) {
+	role := postgres.Role{Name: "bao", MemberOf: []string{"pg_read_all_data"}, MemberOfAdmin: []string{"pg_read_all_data"}}
+	if !privilegedPostgresRole(role) {
+		t.Fatal("delegatable membership must require administrative RBAC")
+	}
+	public := publicPostgresRole(role)
+	if len(public.MemberOfAdmin) != 0 || len(role.MemberOfAdmin) != 1 {
+		t.Fatal("public projection exposed delegation or mutated internal role")
+	}
+	write := postgres.RoleWrite{Role: role}
+	members := []string{}
+	applyPostgresRole(&write, api.PostgresRolePatch{MemberOf: &members})
+	if len(write.MemberOfAdmin) != 0 {
+		t.Fatal("public membership removal left dangling admin options")
 	}
 }

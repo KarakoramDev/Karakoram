@@ -95,6 +95,11 @@ func (p *Core) validateRole(ctx context.Context, v RoleWrite) error {
 			}
 		}
 	}
+	for _, parent := range v.MemberOfAdmin {
+		if !slices.Contains(v.MemberOf, parent) {
+			return engine.Invalid("memberOfAdmin must be a subset of memberOf")
+		}
+	}
 	if v.ValidUntil != nil {
 		if _, err := time.Parse(time.RFC3339, *v.ValidUntil); err != nil {
 			return engine.Invalid("validUntil must be an RFC3339 timestamp")

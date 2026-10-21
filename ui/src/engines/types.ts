@@ -12,6 +12,19 @@ export interface WizardSectionProps {
   onChange: (spec: Schemas['ClusterSpec']) => void;
 }
 
+/** Write-only top-level request fields shared by cluster creation (clone) and in-place restore, never part of the spec. */
+export type RestoreExtras = Omit<Schemas['CreateRestoreRequest'], 'name' | 'source' | 'sourceNamespace'>;
+
+export interface RestoreSectionProps {
+  /** Source cluster of the restore, when chosen. */
+  source: { namespace: string; cluster: string } | undefined;
+  /** True when the source is the cluster being restored in place. */
+  inPlace: boolean;
+  value: RestoreExtras;
+  onChange: (value: RestoreExtras) => void;
+  showErrors?: boolean;
+}
+
 export interface MonitoringPanel {
   title: string;
   names: string[];
@@ -64,6 +77,10 @@ export interface EngineUI {
   resourcesSection?: ComponentType<WizardSectionProps>;
   /** Replaces the generic replica/resource validation of the Topology and Resources steps. */
   validateComponents?: (spec: Schemas['ClusterSpec'], topology: Schemas['ProviderTopology'] | undefined) => ComponentValidation;
+  /** Rendered beneath the data source of the wizard's Backups step and in the in-place restore dialog; holds write-only request fields in local state only. */
+  restoreSection?: ComponentType<RestoreSectionProps>;
+  /** Errors for the write-only restore fields (wizard Backups step, restore dialog). */
+  validateRestore?: (extras: RestoreExtras) => string[];
   /** Replaces the generic spec editor of the Topology & scaling tab (the replace-member card stays generic). */
   topologyEditor?: ComponentType<TopologyEditorProps>;
   /** Shared Apply dialog: patch construction and consequence copy for this engine. */

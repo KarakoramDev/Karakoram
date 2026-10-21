@@ -200,6 +200,33 @@ func nativeMetadata(root *os.Root, name string, limit int64) ([]byte, error) {
 // Unknown I/O and unbounded layouts are not evidence of data loss.
 func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 	switch engineName(c.Engine) {
+	case "openbao":
+		// Both Raft log and barrier databases are bbolt files. Require the
+		// native meta-page magic, not merely nonempty files or a config cache.
+		for _, name := range []string{"openbao/raft/raft.db", "openbao/raft/vault.db"} {
+			f, err := root.Open(name)
+			if errors.Is(err, fs.ErrNotExist) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			st, statErr := f.Stat()
+			var header [24]byte
+			_, readErr := io.ReadFull(f, header[:])
+			f.Close()
+			if statErr != nil {
+				return false, statErr
+			}
+			if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+				return false, readErr
+			}
+			if readErr != nil || !st.Mode().IsRegular() || st.Size() < 8192 ||
+				!bytes.Equal(header[16:24], []byte{0xed, 0xda, 0x0c, 0xed, 2, 0, 0, 0}) {
+				return false, nil
+			}
+		}
+		return true, nil
 	case "psmdb":
 		header, err := nativeMetadata(root, "db/WiredTiger", 8192)
 		if err != nil {

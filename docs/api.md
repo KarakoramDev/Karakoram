@@ -111,6 +111,7 @@ verification messages also receive this classification. Backup deletion uses
 `async: operation` because its asynchronous response is an Operation, while
 backup and restore creation use `record`. Namespace deletion returns no
 Operation or record, so it uses `none`; observe its lifecycle separately.
+OpenBao's connection response is an exception to the administrative-credential set: it contains HTTPS endpoints and CA only. Initialization material has a separate confirmed reveal route and permission; see [OpenBao access and TLS](openbao/access-and-tls.md).
 
 ## Resource families
 
@@ -130,6 +131,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Native PostgreSQL access | `/postgres/roles`, `/postgres/roles/{role}`, `/postgres/roles/{role}/password`, `/postgres/databases`, `/postgres/databases/{database}`, `/postgres/grants` | PostgreSQL and Supabase |
 | PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
+| OpenBao | `/openbao/unseal-keys/reveal`, `/openbao/database-connections`, `/openbao/database-connections/{connection}` | Confirmed initialization-material reveal; list/create/get/delete managed target connections |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores` | All |
 | Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
@@ -348,3 +350,15 @@ npm install openapi-fetch
 ```
 
 Configure `/api/v1` base URL and bearer authentication. TypeScript generation produces types; pair with `openapi-fetch`, or generate a runtime client with `-g typescript-fetch`. Generated clients still need error handling, polling and SSE parsing. Repository regeneration belongs in [CONTRIBUTING](../CONTRIBUTING.md).
+
+## OpenBao operations
+
+POST `/clusters/{cluster}/openbao/unseal-keys/reveal` accepts `{"confirm":"<cluster name>"}`, requires `openbao-unseal-keys:reveal`, returns no-store initialization material and audits disclosure without response secrets. Database-connection GET/list uses `clusters:read`; POST uses `clusters:update` plus target `database-users:create`; DELETE uses `clusters:update` plus target `database-users:delete`. Connections target Ready, TLS-enabled PostgreSQL, PSMDB replica sets or RabbitMQ in the same namespace.
+
+POST `/clusters/{cluster}/openbao/database-connections` example:
+
+```json
+{"name":"orders","targetCluster":"ordersdb","roles":[{"name":"reader","access":"readonly","defaultTtlSeconds":3600,"maxTtlSeconds":86400}]}
+```
+
+The returned secret-free record can be `pending`; use its final `credentialsPath` with a native OpenBao token once `ready`. OpenBao issues credentials, not Karakoram. Shared restart/replace-member/rotate-tls routes and catalog-bound version patches drive maintenance. Shared backup/restore routes use `raft-snapshot`; cluster-create and restore requests accept top-level write-only `openbaoUnsealShares` for deleted-source recovery. See [operations](openbao/operations.md) and [recovery request examples](openbao/backups.md).

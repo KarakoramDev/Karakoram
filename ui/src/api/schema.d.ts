@@ -892,6 +892,78 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/openbao/database-connections": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List managed database connections */
+        get: operations["listOpenBaoDatabaseConnections"];
+        put?: never;
+        /** Create a managed database connection */
+        post: operations["createOpenBaoDatabaseConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/openbao/database-connections/{connection}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        /** getOpenBaoDatabaseConnection */
+        get: operations["getOpenBaoDatabaseConnection"];
+        put?: never;
+        post?: never;
+        /** Delete a managed database connection */
+        delete: operations["deleteOpenBaoDatabaseConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/openbao/unseal-keys/reveal": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal OpenBao initialization material */
+        post: operations["revealOpenBaoUnsealKeys"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/operations": {
         parameters: {
             query?: {
@@ -2474,7 +2546,7 @@ export type components = {
              */
             trigger: "manual" | "schedule" | "restore" | "pitr";
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr";
         };
         BackupList: {
             items: components["schemas"]["Backup"][];
@@ -2491,7 +2563,7 @@ export type components = {
             /** @description Optional override; when omitted, use backup.storage. */
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr";
         };
         BackupScheduleInput: {
             /** @description Five-field cron expression, evaluated in UTC. */
@@ -2502,7 +2574,7 @@ export type components = {
             retainCount: number;
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr";
         };
         BackupSpec: {
             pitr?: components["schemas"]["PITRSpec"];
@@ -2555,7 +2627,7 @@ export type components = {
         };
         CanRequest: {
             /** @enum {string} */
-            action: "create" | "read" | "update" | "delete" | "export" | "*";
+            action: "create" | "read" | "reveal" | "update" | "delete" | "export" | "*";
             object: string;
             resource: string;
             /** @description Optional subject; checking another subject requires rbac read permission. */
@@ -2810,6 +2882,7 @@ export type components = {
         };
         CreateClusterRequest: {
             name: string;
+            openbaoUnsealShares?: components["schemas"]["OpenBaoRestoreUnsealShares"];
             spec: components["schemas"]["ClusterInputSpec"];
         };
         CreatedAPIToken: {
@@ -2843,6 +2916,7 @@ export type components = {
             /** @description Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials. */
             acknowledgeBoundConsumers?: boolean;
             name: string;
+            openbaoUnsealShares?: components["schemas"]["OpenBaoRestoreUnsealShares"];
             source: components["schemas"]["RestoreSource"];
             /** @description Source namespace; defaults to the target cluster namespace. */
             sourceNamespace?: components["schemas"]["NamespaceName"];
@@ -3386,6 +3460,76 @@ export type components = {
             redirectURL?: string;
             scopes?: string[];
         };
+        OpenBaoDatabaseConnection: {
+            /** Format: date-time */
+            createdAt: string;
+            message?: string;
+            mountPath: string;
+            name: string;
+            /** @enum {string} */
+            phase: "pending" | "ready" | "deleting" | "failed";
+            roles: components["schemas"]["OpenBaoDatabaseRole"][];
+            targetCluster: string;
+            targetProvider: string;
+        };
+        OpenBaoDatabaseConnectionList: {
+            items: components["schemas"]["OpenBaoDatabaseConnection"][];
+        };
+        OpenBaoDatabaseConnectionWrite: {
+            name: string;
+            roles: components["schemas"]["OpenBaoDatabaseRoleWrite"][];
+            targetCluster: string;
+        };
+        OpenBaoDatabaseRole: {
+            /** @enum {string} */
+            access: "readonly" | "readwrite";
+            credentialsPath: string;
+            database?: string;
+            /** Format: int64 */
+            defaultTtlSeconds?: number;
+            /** Format: int64 */
+            maxTtlSeconds?: number;
+            name: string;
+        };
+        OpenBaoDatabaseRoleWrite: {
+            /** @enum {string} */
+            access: "readonly" | "readwrite";
+            database?: string;
+            /**
+             * Format: int64
+             * @default 3600
+             */
+            defaultTtlSeconds: number;
+            /**
+             * Format: int64
+             * @default 86400
+             */
+            maxTtlSeconds: number;
+            name: string;
+        };
+        /** @description Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted. */
+        OpenBaoRestoreUnsealShares: {
+            recovery?: boolean;
+            /** @enum {string} */
+            sealType?: "shamir" | "transit" | "awskms";
+            shares: string[];
+            threshold: number;
+        };
+        OpenBaoUnsealKeys: {
+            /** Format: date-time */
+            initializedAt: string;
+            /** Format: password */
+            initialRootToken: string;
+            recoveryShares: boolean;
+            /** @enum {string} */
+            sealType: "shamir" | "transit" | "awskms";
+            shares: string[];
+            threshold: number;
+        };
+        OpenBaoUnsealKeysReveal: {
+            /** @description Must equal the OpenBao cluster name. */
+            confirm: string;
+        };
         Operation: {
             /** @description Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor. */
             actor?: string;
@@ -3643,7 +3787,7 @@ export type components = {
             db?: string;
         };
         Provider: {
-            backupTypes: ("logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr")[];
+            backupTypes: ("logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr")[];
             capabilities?: string[];
             displayName: string;
             /** @description Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics. */
@@ -7209,6 +7353,215 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listOpenBaoDatabaseConnections: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnectionList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenBaoDatabaseConnectionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful operation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revealOpenBaoUnsealKeys: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenBaoUnsealKeysReveal"];
+            };
+        };
+        responses: {
+            /** @description Secret initialization material; must not be cached. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoUnsealKeys"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listClusterOperations: {

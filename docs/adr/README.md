@@ -49,6 +49,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0044](0044-postgres-profiles.md) | Declarative PostgreSQL profiles (Supabase, PostGIS, pgvector, TimescaleDB Apache-2) over one core |
 | [0045](0045-postgres-bindings.md) | Bindings of dependent services to Karakoram PostgreSQL: least-privilege roles, rotation, deletion guard |
 | [0046](0046-citus-distributed-topology.md) | Citus distributed topology: coordinator and worker Patroni groups, formation DCS, rebalancing, coordinated restore points |
+| [0047](0047-openbao-engine.md) | OpenBao: encrypted initialization receipts, control-plane-held unseal material, Raft membership/snapshots and opt-in credential connections |
 
 ## References and verification
 

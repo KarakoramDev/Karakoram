@@ -458,12 +458,15 @@ func TestEnginePortAllowlist(t *testing.T) {
 		return nil, errors.New("test dial")
 	}
 	r := runtime{o: o}
-	for _, port := range []string{"9443", "27017", "5671", "5672", "15671", "15672", "9200", "5601"} {
+	for _, port := range []string{"9443", "27017", "5671", "5672", "15671", "15672", "9200", "5601", "8202"} {
 		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
 		_, _ = r.target(context.Background(), s, "member:"+port, "")
 	}
-	if len(dialed) != 8 {
+	if len(dialed) != 9 {
 		t.Fatalf("allowed engine ports not dialed: %v", dialed)
+	}
+	if _, err := r.target(context.Background(), &relaySession{targets: map[string]struct{}{}}, "member:8202", ""); err == nil || len(dialed) != 9 {
+		t.Fatal("recovery port without exact namespace policy reached the dialer", err)
 	}
 	for _, port := range []string{"4369", "25672", "15692", "22"} {
 		s := &relaySession{targets: map[string]struct{}{"member:" + port: {}}}
@@ -471,7 +474,7 @@ func TestEnginePortAllowlist(t *testing.T) {
 			t.Fatalf("port %s accepted: %v", port, err)
 		}
 	}
-	if len(dialed) != 8 {
+	if len(dialed) != 9 {
 		t.Fatalf("prohibited port dialed: %v", dialed)
 	}
 }

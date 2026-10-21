@@ -46,35 +46,38 @@ const (
 
 // Defines values for BackupType.
 const (
-	BackupTypeDefinitions BackupType = "definitions"
-	BackupTypeDiff        BackupType = "diff"
-	BackupTypeFull        BackupType = "full"
-	BackupTypeIncr        BackupType = "incr"
-	BackupTypeLogical     BackupType = "logical"
-	BackupTypePhysical    BackupType = "physical"
-	BackupTypeSnapshot    BackupType = "snapshot"
+	BackupTypeDefinitions  BackupType = "definitions"
+	BackupTypeDiff         BackupType = "diff"
+	BackupTypeFull         BackupType = "full"
+	BackupTypeIncr         BackupType = "incr"
+	BackupTypeLogical      BackupType = "logical"
+	BackupTypePhysical     BackupType = "physical"
+	BackupTypeRaftSnapshot BackupType = "raft-snapshot"
+	BackupTypeSnapshot     BackupType = "snapshot"
 )
 
 // Defines values for BackupScheduleType.
 const (
-	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
-	BackupScheduleTypeDiff        BackupScheduleType = "diff"
-	BackupScheduleTypeFull        BackupScheduleType = "full"
-	BackupScheduleTypeIncr        BackupScheduleType = "incr"
-	BackupScheduleTypeLogical     BackupScheduleType = "logical"
-	BackupScheduleTypePhysical    BackupScheduleType = "physical"
-	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
+	BackupScheduleTypeDefinitions  BackupScheduleType = "definitions"
+	BackupScheduleTypeDiff         BackupScheduleType = "diff"
+	BackupScheduleTypeFull         BackupScheduleType = "full"
+	BackupScheduleTypeIncr         BackupScheduleType = "incr"
+	BackupScheduleTypeLogical      BackupScheduleType = "logical"
+	BackupScheduleTypePhysical     BackupScheduleType = "physical"
+	BackupScheduleTypeRaftSnapshot BackupScheduleType = "raft-snapshot"
+	BackupScheduleTypeSnapshot     BackupScheduleType = "snapshot"
 )
 
 // Defines values for BackupScheduleInputType.
 const (
-	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
-	BackupScheduleInputTypeDiff        BackupScheduleInputType = "diff"
-	BackupScheduleInputTypeFull        BackupScheduleInputType = "full"
-	BackupScheduleInputTypeIncr        BackupScheduleInputType = "incr"
-	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
-	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
-	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
+	BackupScheduleInputTypeDefinitions  BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeDiff         BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeFull         BackupScheduleInputType = "full"
+	BackupScheduleInputTypeIncr         BackupScheduleInputType = "incr"
+	BackupScheduleInputTypeLogical      BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical     BackupScheduleInputType = "physical"
+	BackupScheduleInputTypeRaftSnapshot BackupScheduleInputType = "raft-snapshot"
+	BackupScheduleInputTypeSnapshot     BackupScheduleInputType = "snapshot"
 )
 
 // Defines values for BackupStorageType.
@@ -89,6 +92,7 @@ const (
 	CanRequestActionDelete   CanRequestAction = "delete"
 	CanRequestActionExport   CanRequestAction = "export"
 	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionReveal   CanRequestAction = "reveal"
 	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
@@ -275,6 +279,40 @@ const (
 	NamespacePhaseReady    NamespacePhase = "Ready"
 )
 
+// Defines values for OpenBaoDatabaseConnectionPhase.
+const (
+	OpenBaoConnectionDeleting OpenBaoDatabaseConnectionPhase = "deleting"
+	OpenBaoConnectionFailed   OpenBaoDatabaseConnectionPhase = "failed"
+	OpenBaoConnectionPending  OpenBaoDatabaseConnectionPhase = "pending"
+	OpenBaoConnectionReady    OpenBaoDatabaseConnectionPhase = "ready"
+)
+
+// Defines values for OpenBaoDatabaseRoleAccess.
+const (
+	OpenBaoDatabaseRoleAccessReadonly  OpenBaoDatabaseRoleAccess = "readonly"
+	OpenBaoDatabaseRoleAccessReadwrite OpenBaoDatabaseRoleAccess = "readwrite"
+)
+
+// Defines values for OpenBaoDatabaseRoleWriteAccess.
+const (
+	OpenBaoDatabaseRoleWriteAccessReadonly  OpenBaoDatabaseRoleWriteAccess = "readonly"
+	OpenBaoDatabaseRoleWriteAccessReadwrite OpenBaoDatabaseRoleWriteAccess = "readwrite"
+)
+
+// Defines values for OpenBaoRestoreUnsealSharesSealType.
+const (
+	OpenBaoRestoreUnsealSharesSealTypeAwskms  OpenBaoRestoreUnsealSharesSealType = "awskms"
+	OpenBaoRestoreUnsealSharesSealTypeShamir  OpenBaoRestoreUnsealSharesSealType = "shamir"
+	OpenBaoRestoreUnsealSharesSealTypeTransit OpenBaoRestoreUnsealSharesSealType = "transit"
+)
+
+// Defines values for OpenBaoUnsealKeysSealType.
+const (
+	OpenBaoUnsealKeysSealTypeAwskms  OpenBaoUnsealKeysSealType = "awskms"
+	OpenBaoUnsealKeysSealTypeShamir  OpenBaoUnsealKeysSealType = "shamir"
+	OpenBaoUnsealKeysSealTypeTransit OpenBaoUnsealKeysSealType = "transit"
+)
+
 // Defines values for OperationPhase.
 const (
 	OperationPhaseCancelled OperationPhase = "Cancelled"
@@ -326,13 +364,14 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
-	ProviderBackupTypesDiff        ProviderBackupTypes = "diff"
-	ProviderBackupTypesFull        ProviderBackupTypes = "full"
-	ProviderBackupTypesIncr        ProviderBackupTypes = "incr"
-	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
-	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
+	ProviderBackupTypesDefinitions  ProviderBackupTypes = "definitions"
+	ProviderBackupTypesDiff         ProviderBackupTypes = "diff"
+	ProviderBackupTypesFull         ProviderBackupTypes = "full"
+	ProviderBackupTypesIncr         ProviderBackupTypes = "incr"
+	ProviderBackupTypesLogical      ProviderBackupTypes = "logical"
+	ProviderBackupTypesPhysical     ProviderBackupTypes = "physical"
+	ProviderBackupTypesRaftSnapshot ProviderBackupTypes = "raft-snapshot"
+	ProviderBackupTypesSnapshot     ProviderBackupTypes = "snapshot"
 )
 
 // Defines values for ProviderTopologyType.
@@ -1162,7 +1201,8 @@ type CreateBackupStorageRequestType string
 
 // CreateClusterRequest defines model for CreateClusterRequest.
 type CreateClusterRequest struct {
-	Name string `json:"name"`
+	Name                string                      `json:"name"`
+	OpenbaoUnsealShares *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 	Spec ClusterInputSpec `json:"spec"`
@@ -1181,8 +1221,9 @@ type CreateDatabaseUserRequest struct {
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
 	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
-	AcknowledgeBoundConsumers *bool  `json:"acknowledgeBoundConsumers,omitempty"`
-	Name                      string `json:"name"`
+	AcknowledgeBoundConsumers *bool                       `json:"acknowledgeBoundConsumers,omitempty"`
+	Name                      string                      `json:"name"`
+	OpenbaoUnsealShares       *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
@@ -1888,6 +1929,88 @@ type ObservedResources struct {
 
 	// MemoryGB Memory limit in GiB.
 	MemoryGB float32 `json:"memoryGB"`
+}
+
+// OpenBaoDatabaseConnection defines model for OpenBaoDatabaseConnection.
+type OpenBaoDatabaseConnection struct {
+	CreatedAt      time.Time                      `json:"createdAt"`
+	Message        *string                        `json:"message,omitempty"`
+	MountPath      string                         `json:"mountPath"`
+	Name           string                         `json:"name"`
+	Phase          OpenBaoDatabaseConnectionPhase `json:"phase"`
+	Roles          []OpenBaoDatabaseRole          `json:"roles"`
+	TargetCluster  string                         `json:"targetCluster"`
+	TargetProvider string                         `json:"targetProvider"`
+}
+
+// OpenBaoDatabaseConnectionPhase defines model for OpenBaoDatabaseConnection.Phase.
+type OpenBaoDatabaseConnectionPhase string
+
+// OpenBaoDatabaseConnectionList defines model for OpenBaoDatabaseConnectionList.
+type OpenBaoDatabaseConnectionList struct {
+	Items []OpenBaoDatabaseConnection `json:"items"`
+}
+
+// OpenBaoDatabaseConnectionWrite defines model for OpenBaoDatabaseConnectionWrite.
+type OpenBaoDatabaseConnectionWrite struct {
+	Name          string                     `json:"name"`
+	Roles         []OpenBaoDatabaseRoleWrite `json:"roles"`
+	TargetCluster string                     `json:"targetCluster"`
+}
+
+// OpenBaoDatabaseRole defines model for OpenBaoDatabaseRole.
+type OpenBaoDatabaseRole struct {
+	Access            OpenBaoDatabaseRoleAccess `json:"access"`
+	CredentialsPath   string                    `json:"credentialsPath"`
+	Database          *string                   `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                    `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                    `json:"maxTtlSeconds,omitempty"`
+	Name              string                    `json:"name"`
+}
+
+// OpenBaoDatabaseRoleAccess defines model for OpenBaoDatabaseRole.Access.
+type OpenBaoDatabaseRoleAccess string
+
+// OpenBaoDatabaseRoleWrite defines model for OpenBaoDatabaseRoleWrite.
+type OpenBaoDatabaseRoleWrite struct {
+	Access            OpenBaoDatabaseRoleWriteAccess `json:"access"`
+	Database          *string                        `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                         `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                         `json:"maxTtlSeconds,omitempty"`
+	Name              string                         `json:"name"`
+}
+
+// OpenBaoDatabaseRoleWriteAccess defines model for OpenBaoDatabaseRoleWrite.Access.
+type OpenBaoDatabaseRoleWriteAccess string
+
+// OpenBaoRestoreUnsealShares Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted.
+type OpenBaoRestoreUnsealShares struct {
+	Recovery  *bool                               `json:"recovery,omitempty"`
+	SealType  *OpenBaoRestoreUnsealSharesSealType `json:"sealType,omitempty"`
+	Shares    []string                            `json:"shares"`
+	Threshold int                                 `json:"threshold"`
+}
+
+// OpenBaoRestoreUnsealSharesSealType defines model for OpenBaoRestoreUnsealShares.SealType.
+type OpenBaoRestoreUnsealSharesSealType string
+
+// OpenBaoUnsealKeys defines model for OpenBaoUnsealKeys.
+type OpenBaoUnsealKeys struct {
+	InitialRootToken string                    `json:"initialRootToken"`
+	InitializedAt    time.Time                 `json:"initializedAt"`
+	RecoveryShares   bool                      `json:"recoveryShares"`
+	SealType         OpenBaoUnsealKeysSealType `json:"sealType"`
+	Shares           []string                  `json:"shares"`
+	Threshold        int                       `json:"threshold"`
+}
+
+// OpenBaoUnsealKeysSealType defines model for OpenBaoUnsealKeys.SealType.
+type OpenBaoUnsealKeysSealType string
+
+// OpenBaoUnsealKeysReveal defines model for OpenBaoUnsealKeysReveal.
+type OpenBaoUnsealKeysReveal struct {
+	// Confirm Must equal the OpenBao cluster name.
+	Confirm string `json:"confirm"`
 }
 
 // Operation defines model for Operation.
@@ -3656,6 +3779,60 @@ type GetClusterMetricsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListOpenBaoDatabaseConnectionsParams defines parameters for ListOpenBaoDatabaseConnections.
+type ListOpenBaoDatabaseConnectionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateOpenBaoDatabaseConnectionParams defines parameters for CreateOpenBaoDatabaseConnection.
+type CreateOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteOpenBaoDatabaseConnectionParams defines parameters for DeleteOpenBaoDatabaseConnection.
+type DeleteOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetOpenBaoDatabaseConnectionParams defines parameters for GetOpenBaoDatabaseConnection.
+type GetOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevealOpenBaoUnsealKeysParams defines parameters for RevealOpenBaoUnsealKeys.
+type RevealOpenBaoUnsealKeysParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
 type ListClusterOperationsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -4910,6 +5087,12 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
 
+// CreateOpenBaoDatabaseConnectionJSONRequestBody defines body for CreateOpenBaoDatabaseConnection for application/json ContentType.
+type CreateOpenBaoDatabaseConnectionJSONRequestBody = OpenBaoDatabaseConnectionWrite
+
+// RevealOpenBaoUnsealKeysJSONRequestBody defines body for RevealOpenBaoUnsealKeys for application/json ContentType.
+type RevealOpenBaoUnsealKeysJSONRequestBody = OpenBaoUnsealKeysReveal
+
 // CreatePostgresDatabaseJSONRequestBody defines body for CreatePostgresDatabase for application/json ContentType.
 type CreatePostgresDatabaseJSONRequestBody = PostgresDatabase
 
@@ -5574,6 +5757,25 @@ type ClientInterface interface {
 
 	// GetClusterMetrics request
 	GetClusterMetrics(ctx context.Context, cluster ClusterPath, params *GetClusterMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListOpenBaoDatabaseConnections request
+	ListOpenBaoDatabaseConnections(ctx context.Context, cluster ClusterPath, params *ListOpenBaoDatabaseConnectionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateOpenBaoDatabaseConnectionWithBody request with any body
+	CreateOpenBaoDatabaseConnectionWithBody(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, body CreateOpenBaoDatabaseConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOpenBaoDatabaseConnection request
+	DeleteOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, connection string, params *DeleteOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOpenBaoDatabaseConnection request
+	GetOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, connection string, params *GetOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevealOpenBaoUnsealKeysWithBody request with any body
+	RevealOpenBaoUnsealKeysWithBody(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RevealOpenBaoUnsealKeys(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, body RevealOpenBaoUnsealKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusterOperations request
 	ListClusterOperations(ctx context.Context, cluster ClusterPath, params *ListClusterOperationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7016,6 +7218,90 @@ func (c *Client) ReplaceClusterMember(ctx context.Context, cluster ClusterPath, 
 
 func (c *Client) GetClusterMetrics(ctx context.Context, cluster ClusterPath, params *GetClusterMetricsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterMetricsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListOpenBaoDatabaseConnections(ctx context.Context, cluster ClusterPath, params *ListOpenBaoDatabaseConnectionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListOpenBaoDatabaseConnectionsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOpenBaoDatabaseConnectionWithBody(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOpenBaoDatabaseConnectionRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, body CreateOpenBaoDatabaseConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateOpenBaoDatabaseConnectionRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, connection string, params *DeleteOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOpenBaoDatabaseConnectionRequest(c.Server, cluster, connection, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetOpenBaoDatabaseConnection(ctx context.Context, cluster ClusterPath, connection string, params *GetOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOpenBaoDatabaseConnectionRequest(c.Server, cluster, connection, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevealOpenBaoUnsealKeysWithBody(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevealOpenBaoUnsealKeysRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevealOpenBaoUnsealKeys(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, body RevealOpenBaoUnsealKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevealOpenBaoUnsealKeysRequest(c.Server, cluster, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -13574,6 +13860,382 @@ func NewGetClusterMetricsRequest(server string, cluster ClusterPath, params *Get
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListOpenBaoDatabaseConnectionsRequest generates requests for ListOpenBaoDatabaseConnections
+func NewListOpenBaoDatabaseConnectionsRequest(server string, cluster ClusterPath, params *ListOpenBaoDatabaseConnectionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openbao/database-connections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateOpenBaoDatabaseConnectionRequest calls the generic CreateOpenBaoDatabaseConnection builder with application/json body
+func NewCreateOpenBaoDatabaseConnectionRequest(server string, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, body CreateOpenBaoDatabaseConnectionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateOpenBaoDatabaseConnectionRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewCreateOpenBaoDatabaseConnectionRequestWithBody generates requests for CreateOpenBaoDatabaseConnection with any type of body
+func NewCreateOpenBaoDatabaseConnectionRequestWithBody(server string, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openbao/database-connections", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteOpenBaoDatabaseConnectionRequest generates requests for DeleteOpenBaoDatabaseConnection
+func NewDeleteOpenBaoDatabaseConnectionRequest(server string, cluster ClusterPath, connection string, params *DeleteOpenBaoDatabaseConnectionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "connection", runtime.ParamLocationPath, connection)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openbao/database-connections/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetOpenBaoDatabaseConnectionRequest generates requests for GetOpenBaoDatabaseConnection
+func NewGetOpenBaoDatabaseConnectionRequest(server string, cluster ClusterPath, connection string, params *GetOpenBaoDatabaseConnectionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "connection", runtime.ParamLocationPath, connection)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openbao/database-connections/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRevealOpenBaoUnsealKeysRequest calls the generic RevealOpenBaoUnsealKeys builder with application/json body
+func NewRevealOpenBaoUnsealKeysRequest(server string, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, body RevealOpenBaoUnsealKeysJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRevealOpenBaoUnsealKeysRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewRevealOpenBaoUnsealKeysRequestWithBody generates requests for RevealOpenBaoUnsealKeys with any type of body
+func NewRevealOpenBaoUnsealKeysRequestWithBody(server string, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/openbao/unseal-keys/reveal", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -21033,6 +21695,25 @@ type ClientWithResponsesInterface interface {
 	// GetClusterMetricsWithResponse request
 	GetClusterMetricsWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterMetricsParams, reqEditors ...RequestEditorFn) (*GetClusterMetricsResponse, error)
 
+	// ListOpenBaoDatabaseConnectionsWithResponse request
+	ListOpenBaoDatabaseConnectionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListOpenBaoDatabaseConnectionsParams, reqEditors ...RequestEditorFn) (*ListOpenBaoDatabaseConnectionsResponse, error)
+
+	// CreateOpenBaoDatabaseConnectionWithBodyWithResponse request with any body
+	CreateOpenBaoDatabaseConnectionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOpenBaoDatabaseConnectionResponse, error)
+
+	CreateOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, body CreateOpenBaoDatabaseConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOpenBaoDatabaseConnectionResponse, error)
+
+	// DeleteOpenBaoDatabaseConnectionWithResponse request
+	DeleteOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, connection string, params *DeleteOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*DeleteOpenBaoDatabaseConnectionResponse, error)
+
+	// GetOpenBaoDatabaseConnectionWithResponse request
+	GetOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, connection string, params *GetOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*GetOpenBaoDatabaseConnectionResponse, error)
+
+	// RevealOpenBaoUnsealKeysWithBodyWithResponse request with any body
+	RevealOpenBaoUnsealKeysWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevealOpenBaoUnsealKeysResponse, error)
+
+	RevealOpenBaoUnsealKeysWithResponse(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, body RevealOpenBaoUnsealKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*RevealOpenBaoUnsealKeysResponse, error)
+
 	// ListClusterOperationsWithResponse request
 	ListClusterOperationsWithResponse(ctx context.Context, cluster ClusterPath, params *ListClusterOperationsParams, reqEditors ...RequestEditorFn) (*ListClusterOperationsResponse, error)
 
@@ -23420,6 +24101,160 @@ func (r GetClusterMetricsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetClusterMetricsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListOpenBaoDatabaseConnectionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OpenBaoDatabaseConnectionList
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListOpenBaoDatabaseConnectionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListOpenBaoDatabaseConnectionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateOpenBaoDatabaseConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *OpenBaoDatabaseConnection
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateOpenBaoDatabaseConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateOpenBaoDatabaseConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteOpenBaoDatabaseConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOpenBaoDatabaseConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOpenBaoDatabaseConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetOpenBaoDatabaseConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OpenBaoDatabaseConnection
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOpenBaoDatabaseConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOpenBaoDatabaseConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RevealOpenBaoUnsealKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OpenBaoUnsealKeys
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r RevealOpenBaoUnsealKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevealOpenBaoUnsealKeysResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -27104,6 +27939,67 @@ func (c *ClientWithResponses) GetClusterMetricsWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseGetClusterMetricsResponse(rsp)
+}
+
+// ListOpenBaoDatabaseConnectionsWithResponse request returning *ListOpenBaoDatabaseConnectionsResponse
+func (c *ClientWithResponses) ListOpenBaoDatabaseConnectionsWithResponse(ctx context.Context, cluster ClusterPath, params *ListOpenBaoDatabaseConnectionsParams, reqEditors ...RequestEditorFn) (*ListOpenBaoDatabaseConnectionsResponse, error) {
+	rsp, err := c.ListOpenBaoDatabaseConnections(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListOpenBaoDatabaseConnectionsResponse(rsp)
+}
+
+// CreateOpenBaoDatabaseConnectionWithBodyWithResponse request with arbitrary body returning *CreateOpenBaoDatabaseConnectionResponse
+func (c *ClientWithResponses) CreateOpenBaoDatabaseConnectionWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateOpenBaoDatabaseConnectionResponse, error) {
+	rsp, err := c.CreateOpenBaoDatabaseConnectionWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOpenBaoDatabaseConnectionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, params *CreateOpenBaoDatabaseConnectionParams, body CreateOpenBaoDatabaseConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateOpenBaoDatabaseConnectionResponse, error) {
+	rsp, err := c.CreateOpenBaoDatabaseConnection(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateOpenBaoDatabaseConnectionResponse(rsp)
+}
+
+// DeleteOpenBaoDatabaseConnectionWithResponse request returning *DeleteOpenBaoDatabaseConnectionResponse
+func (c *ClientWithResponses) DeleteOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, connection string, params *DeleteOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*DeleteOpenBaoDatabaseConnectionResponse, error) {
+	rsp, err := c.DeleteOpenBaoDatabaseConnection(ctx, cluster, connection, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOpenBaoDatabaseConnectionResponse(rsp)
+}
+
+// GetOpenBaoDatabaseConnectionWithResponse request returning *GetOpenBaoDatabaseConnectionResponse
+func (c *ClientWithResponses) GetOpenBaoDatabaseConnectionWithResponse(ctx context.Context, cluster ClusterPath, connection string, params *GetOpenBaoDatabaseConnectionParams, reqEditors ...RequestEditorFn) (*GetOpenBaoDatabaseConnectionResponse, error) {
+	rsp, err := c.GetOpenBaoDatabaseConnection(ctx, cluster, connection, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOpenBaoDatabaseConnectionResponse(rsp)
+}
+
+// RevealOpenBaoUnsealKeysWithBodyWithResponse request with arbitrary body returning *RevealOpenBaoUnsealKeysResponse
+func (c *ClientWithResponses) RevealOpenBaoUnsealKeysWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RevealOpenBaoUnsealKeysResponse, error) {
+	rsp, err := c.RevealOpenBaoUnsealKeysWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevealOpenBaoUnsealKeysResponse(rsp)
+}
+
+func (c *ClientWithResponses) RevealOpenBaoUnsealKeysWithResponse(ctx context.Context, cluster ClusterPath, params *RevealOpenBaoUnsealKeysParams, body RevealOpenBaoUnsealKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*RevealOpenBaoUnsealKeysResponse, error) {
+	rsp, err := c.RevealOpenBaoUnsealKeys(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevealOpenBaoUnsealKeysResponse(rsp)
 }
 
 // ListClusterOperationsWithResponse request returning *ListClusterOperationsResponse
@@ -33900,6 +34796,444 @@ func ParseGetClusterMetricsResponse(rsp *http.Response) (*GetClusterMetricsRespo
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListOpenBaoDatabaseConnectionsResponse parses an HTTP response from a ListOpenBaoDatabaseConnectionsWithResponse call
+func ParseListOpenBaoDatabaseConnectionsResponse(rsp *http.Response) (*ListOpenBaoDatabaseConnectionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListOpenBaoDatabaseConnectionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OpenBaoDatabaseConnectionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateOpenBaoDatabaseConnectionResponse parses an HTTP response from a CreateOpenBaoDatabaseConnectionWithResponse call
+func ParseCreateOpenBaoDatabaseConnectionResponse(rsp *http.Response) (*CreateOpenBaoDatabaseConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateOpenBaoDatabaseConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest OpenBaoDatabaseConnection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOpenBaoDatabaseConnectionResponse parses an HTTP response from a DeleteOpenBaoDatabaseConnectionWithResponse call
+func ParseDeleteOpenBaoDatabaseConnectionResponse(rsp *http.Response) (*DeleteOpenBaoDatabaseConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOpenBaoDatabaseConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOpenBaoDatabaseConnectionResponse parses an HTTP response from a GetOpenBaoDatabaseConnectionWithResponse call
+func ParseGetOpenBaoDatabaseConnectionResponse(rsp *http.Response) (*GetOpenBaoDatabaseConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOpenBaoDatabaseConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OpenBaoDatabaseConnection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevealOpenBaoUnsealKeysResponse parses an HTTP response from a RevealOpenBaoUnsealKeysWithResponse call
+func ParseRevealOpenBaoUnsealKeysResponse(rsp *http.Response) (*RevealOpenBaoUnsealKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevealOpenBaoUnsealKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OpenBaoUnsealKeys
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

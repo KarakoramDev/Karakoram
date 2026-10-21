@@ -6,6 +6,9 @@ package cli
 import "strings"
 
 var commandGroupDescriptions = map[string]string{
+	"openbao": "Manage OpenBao unseal material and opt-in database credentials",
+	"openbao unseal-keys": "Explicitly reveal OpenBao unseal or recovery material for offline storage",
+	"openbao database-connections": "Manage OpenBao connections to databases in the same namespace",
 	"accounts":                   "Manage local control-plane accounts",
 	"auth":                       "Manage cookie sessions and OpenID Connect sign-in",
 	"backups":                    "Create, inspect and delete database backups",
@@ -47,6 +50,7 @@ var commandGroupDescriptions = map[string]string{
 
 var commandDescriptions = map[string]string{
 	"postgres rebalance":             "Rebalance shards across distributed PostgreSQL worker groups",
+	"openbao unseal-keys reveal":     "Reveal unseal shares and the initial root token; store the output offline",
 	"postgres roles rotate-password": "Generate and rotate a PostgreSQL role password (returned once)",
 	"postgres bindings rotate":       "Rotate a binding password and refresh its managed consumer",
 	"postgres grants grant":          "Grant PostgreSQL database or schema privileges",
@@ -152,6 +156,7 @@ var commandDescriptions = map[string]string{
 type nativeResourceDescription struct{ singular, plural string }
 
 var nativeResourceDescriptions = map[string]nativeResourceDescription{
+	"openbao database-connections": {"an OpenBao database connection", "OpenBao database connections"},
 	"postgres roles":             {"a PostgreSQL application role", "PostgreSQL application roles"},
 	"postgres bindings":          {"a PostgreSQL consumer binding", "PostgreSQL consumer bindings"},
 	"postgres databases":         {"a PostgreSQL database", "PostgreSQL databases"},

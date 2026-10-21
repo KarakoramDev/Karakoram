@@ -51,6 +51,8 @@ tags:
     description: Durable events and server-sent event replay.
   - name: Monitoring
     description: JSON time series, member logs and Prometheus scraping.
+  - name: OpenBao
+    description: Initialization material and managed database credential connections.
 paths:
   /openapi.yaml:
     get:
@@ -3360,6 +3362,141 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Balancer'
+  /clusters/{cluster}/openbao/unseal-keys/reveal:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: revealOpenBaoUnsealKeys
+      tags: [OpenBao]
+      summary: Reveal OpenBao initialization material
+      x-karakoram-rbac: {resource: openbao-unseal-keys, action: reveal, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OpenBaoUnsealKeysReveal'}
+      responses:
+        '200':
+          description: Secret initialization material; must not be cached.
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: [no-store]}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenBaoUnsealKeys'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/openbao/database-connections:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listOpenBaoDatabaseConnections
+      tags: [OpenBao]
+      summary: List managed database connections
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Successful operation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenBaoDatabaseConnectionList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createOpenBaoDatabaseConnection
+      tags: [OpenBao]
+      summary: Create a managed database connection
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: database-users, action: create, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OpenBaoDatabaseConnectionWrite'}
+      responses:
+        '201':
+          description: Successful operation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenBaoDatabaseConnection'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/openbao/database-connections/{connection}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: connection
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      operationId: getOpenBaoDatabaseConnection
+      tags: [OpenBao]
+      summary: getOpenBaoDatabaseConnection
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Successful operation.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenBaoDatabaseConnection'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deleteOpenBaoDatabaseConnection
+      tags: [OpenBao]
+      summary: Delete a managed database connection
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204':
+          description: Successful operation.
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/supabase/credentials:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -8134,6 +8271,74 @@ components:
           type: string
           description: New description; an empty string clears the description.
       required: [description]
+    OpenBaoUnsealKeysReveal:
+      type: object
+      additionalProperties: false
+      required: [confirm]
+      properties:
+        confirm: {type: string, description: Must equal the OpenBao cluster name.}
+    OpenBaoUnsealKeys:
+      type: object
+      additionalProperties: false
+      required: [sealType, recoveryShares, threshold, shares, initialRootToken, initializedAt]
+      properties:
+        sealType: {type: string, enum: [shamir, transit, awskms]}
+        recoveryShares: {type: boolean}
+        threshold: {type: integer}
+        shares: {type: array, items: {type: string, format: password}}
+        initialRootToken: {type: string, format: password}
+        initializedAt: {type: string, format: date-time}
+    OpenBaoDatabaseRoleWrite:
+      type: object
+      additionalProperties: false
+      required: [name, access]
+      properties:
+        name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
+        access: {type: string, enum: [readonly, readwrite]}
+        database: {type: string}
+        defaultTtlSeconds: {type: integer, format: int64, minimum: 1, default: 3600}
+        maxTtlSeconds: {type: integer, format: int64, minimum: 1, default: 86400}
+    OpenBaoDatabaseRole:
+      type: object
+      additionalProperties: false
+      required: [name, access, credentialsPath]
+      properties:
+        name: {type: string}
+        access: {type: string, enum: [readonly, readwrite]}
+        database: {type: string}
+        defaultTtlSeconds: {type: integer, format: int64}
+        maxTtlSeconds: {type: integer, format: int64}
+        credentialsPath: {type: string}
+    OpenBaoDatabaseConnectionWrite:
+      type: object
+      additionalProperties: false
+      required: [name, targetCluster, roles]
+      properties:
+        name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
+        targetCluster: {type: string, minLength: 1}
+        roles: {type: array, minItems: 1, items: {$ref: '#/components/schemas/OpenBaoDatabaseRoleWrite'}}
+    OpenBaoDatabaseConnection:
+      type: object
+      additionalProperties: false
+      required: [name, targetCluster, targetProvider, mountPath, phase, roles, createdAt]
+      properties:
+        name: {type: string}
+        targetCluster: {type: string}
+        targetProvider: {type: string}
+        mountPath: {type: string}
+        phase:
+          type: string
+          enum: [pending, ready, deleting, failed]
+          x-enum-varnames: [OpenBaoConnectionPending, OpenBaoConnectionReady, OpenBaoConnectionDeleting, OpenBaoConnectionFailed]
+        message: {type: string}
+        roles: {type: array, items: {$ref: '#/components/schemas/OpenBaoDatabaseRole'}}
+        createdAt: {type: string, format: date-time}
+    OpenBaoDatabaseConnectionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/OpenBaoDatabaseConnection'}}
     SupabaseCredentials:
       type: object
       additionalProperties: false
@@ -8467,6 +8672,7 @@ components:
           enum:
             - create
             - read
+            - reveal
             - update
             - delete
             - export
@@ -8919,6 +9125,7 @@ components:
               - physical
               - definitions
               - snapshot
+              - raft-snapshot
               - full
               - diff
               - incr
@@ -8968,6 +9175,7 @@ components:
             - physical
             - definitions
             - snapshot
+            - raft-snapshot
             - full
             - diff
             - incr
@@ -9694,10 +9902,29 @@ components:
         - status
         - createdAt
         - updatedAt
+    OpenBaoRestoreUnsealShares:
+      type: object
+      additionalProperties: false
+      writeOnly: true
+      required: [shares, threshold]
+      description: Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted.
+      properties:
+        shares:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: {type: string, minLength: 1, format: password}
+        threshold: {type: integer, minimum: 1, maximum: 10}
+        sealType: {type: string, enum: [shamir, transit, awskms]}
+        recovery: {type: boolean}
     CreateClusterRequest:
       type: object
       additionalProperties: false
       properties:
+        openbaoUnsealShares:
+          allOf:
+            - $ref: '#/components/schemas/OpenBaoRestoreUnsealShares'
+          writeOnly: true
         name:
           type: string
           pattern: ^[a-z][a-z0-9]{1,11}$
@@ -10622,6 +10849,7 @@ components:
             - physical
             - definitions
             - snapshot
+            - raft-snapshot
             - full
             - diff
             - incr
@@ -10790,6 +11018,10 @@ components:
         acknowledgeBoundConsumers:
           type: boolean
           description: Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
+        openbaoUnsealShares:
+          allOf:
+            - $ref: '#/components/schemas/OpenBaoRestoreUnsealShares'
+          writeOnly: true
         sourceNamespace:
           allOf:
             - $ref: '#/components/schemas/NamespaceName'
@@ -11938,6 +12170,7 @@ components:
             - physical
             - definitions
             - snapshot
+            - raft-snapshot
             - full
             - diff
             - incr

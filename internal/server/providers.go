@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/engine/keycloak"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
@@ -23,6 +24,7 @@ type engineOptions struct {
 	ControlPlaneURL, InternalCAPEM string
 	Store                          *store.Store
 	Logger                         *slog.Logger
+	Targets                        func(context.Context, domain.ClusterRef) (openbao.Target, error)
 	Bindings                       pgbinding.Service
 }
 
@@ -30,6 +32,7 @@ func engineProviders(o engineOptions) []engine.Provider {
 	providers := []engine.Provider{
 		psmdb.New(psmdb.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		rabbitmq.New(rabbitmq.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
+		openbao.New(openbao.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Targets: o.Targets, Bindings: o.Bindings}),
 		elastic.New(elastic.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		postgres.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),

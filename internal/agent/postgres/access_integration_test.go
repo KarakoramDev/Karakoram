@@ -128,6 +128,56 @@ func nativeProxy(t *testing.T, p *pgspec.Proxy, host, caPEM string) paths {
 	}
 	return paths
 }
+
+func TestNativeAccessAdminMembership(t *testing.T) {
+	bin := os.Getenv("KARAKORAM_PG_BIN_DIR")
+	if bin == "" {
+		t.Skip("set KARAKORAM_PG_BIN_DIR for native admin membership acceptance")
+	}
+	for _, name := range []string{"postgres", "initdb", "pg_ctl"} {
+		if info, err := os.Stat(filepath.Join(bin, name)); err != nil || info.Mode()&0111 == 0 {
+			t.Skipf("native PostgreSQL binary %s is unavailable", name)
+		}
+	}
+	if os.Geteuid() == 0 {
+		t.Fatal("native PostgreSQL requires an unprivileged runtime user")
+	}
+	s := testSpec()
+	s.BinDir = bin
+	s.Postgres.Parameters = map[string]string{"shared_buffers": "32MB", "max_connections": "30"}
+	h := startNativeAgent(t, s)
+	parents := []string{"pg_read_all_data", "pg_write_all_data"}
+	role := pgspec.RoleWrite{Role: pgspec.Role{Name: "bao_admin", Login: true, Createrole: true, ConnectionLimit: -1, MemberOf: parents, MemberOfAdmin: parents}}
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "create", Role: &role}, nil)
+	check := func(wantAdmin int) {
+		t.Helper()
+		var got pgspec.Role
+		nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "get", Name: role.Name}, &got)
+		if len(got.MemberOf) != 2 || len(got.MemberOfAdmin) != wantAdmin || !got.Login || !got.Createrole {
+			t.Fatalf("membership/admin options did not round trip: %+v", got)
+		}
+	}
+	check(2)
+	// Removing delegation must not revoke ordinary membership.
+	role.MemberOfAdmin = nil
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "update", Name: role.Name, Role: &role}, nil)
+	check(0)
+	role.MemberOfAdmin = parents
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "update", Name: role.Name, Role: &role}, nil)
+	check(2)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	c, err := localConnect(ctx, s, dataPaths(h.dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(context.Background())
+	if _, err = c.Exec(ctx, `SET ROLE bao_admin; CREATE ROLE bao_dynamic; GRANT pg_read_all_data,pg_write_all_data TO bao_dynamic; DROP ROLE bao_dynamic; RESET ROLE`); err != nil {
+		t.Fatal("OpenBao account cannot create, grant and drop dynamic roles", err)
+	}
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "delete", Name: role.Name}, nil)
+}
+
 func TestNativeAccessLifecycle(t *testing.T) {
 	if os.Getenv("KARAKORAM_PG_BIN_DIR") == "" {
 		t.Skip("set KARAKORAM_PG_BIN_DIR for native access acceptance")

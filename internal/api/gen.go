@@ -44,35 +44,38 @@ const (
 
 // Defines values for BackupType.
 const (
-	BackupTypeDefinitions BackupType = "definitions"
-	BackupTypeDiff        BackupType = "diff"
-	BackupTypeFull        BackupType = "full"
-	BackupTypeIncr        BackupType = "incr"
-	BackupTypeLogical     BackupType = "logical"
-	BackupTypePhysical    BackupType = "physical"
-	BackupTypeSnapshot    BackupType = "snapshot"
+	BackupTypeDefinitions  BackupType = "definitions"
+	BackupTypeDiff         BackupType = "diff"
+	BackupTypeFull         BackupType = "full"
+	BackupTypeIncr         BackupType = "incr"
+	BackupTypeLogical      BackupType = "logical"
+	BackupTypePhysical     BackupType = "physical"
+	BackupTypeRaftSnapshot BackupType = "raft-snapshot"
+	BackupTypeSnapshot     BackupType = "snapshot"
 )
 
 // Defines values for BackupScheduleType.
 const (
-	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
-	BackupScheduleTypeDiff        BackupScheduleType = "diff"
-	BackupScheduleTypeFull        BackupScheduleType = "full"
-	BackupScheduleTypeIncr        BackupScheduleType = "incr"
-	BackupScheduleTypeLogical     BackupScheduleType = "logical"
-	BackupScheduleTypePhysical    BackupScheduleType = "physical"
-	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
+	BackupScheduleTypeDefinitions  BackupScheduleType = "definitions"
+	BackupScheduleTypeDiff         BackupScheduleType = "diff"
+	BackupScheduleTypeFull         BackupScheduleType = "full"
+	BackupScheduleTypeIncr         BackupScheduleType = "incr"
+	BackupScheduleTypeLogical      BackupScheduleType = "logical"
+	BackupScheduleTypePhysical     BackupScheduleType = "physical"
+	BackupScheduleTypeRaftSnapshot BackupScheduleType = "raft-snapshot"
+	BackupScheduleTypeSnapshot     BackupScheduleType = "snapshot"
 )
 
 // Defines values for BackupScheduleInputType.
 const (
-	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
-	BackupScheduleInputTypeDiff        BackupScheduleInputType = "diff"
-	BackupScheduleInputTypeFull        BackupScheduleInputType = "full"
-	BackupScheduleInputTypeIncr        BackupScheduleInputType = "incr"
-	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
-	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
-	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
+	BackupScheduleInputTypeDefinitions  BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeDiff         BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeFull         BackupScheduleInputType = "full"
+	BackupScheduleInputTypeIncr         BackupScheduleInputType = "incr"
+	BackupScheduleInputTypeLogical      BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical     BackupScheduleInputType = "physical"
+	BackupScheduleInputTypeRaftSnapshot BackupScheduleInputType = "raft-snapshot"
+	BackupScheduleInputTypeSnapshot     BackupScheduleInputType = "snapshot"
 )
 
 // Defines values for BackupStorageType.
@@ -87,6 +90,7 @@ const (
 	CanRequestActionDelete   CanRequestAction = "delete"
 	CanRequestActionExport   CanRequestAction = "export"
 	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionReveal   CanRequestAction = "reveal"
 	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
@@ -273,6 +277,40 @@ const (
 	NamespacePhaseReady    NamespacePhase = "Ready"
 )
 
+// Defines values for OpenBaoDatabaseConnectionPhase.
+const (
+	OpenBaoConnectionDeleting OpenBaoDatabaseConnectionPhase = "deleting"
+	OpenBaoConnectionFailed   OpenBaoDatabaseConnectionPhase = "failed"
+	OpenBaoConnectionPending  OpenBaoDatabaseConnectionPhase = "pending"
+	OpenBaoConnectionReady    OpenBaoDatabaseConnectionPhase = "ready"
+)
+
+// Defines values for OpenBaoDatabaseRoleAccess.
+const (
+	OpenBaoDatabaseRoleAccessReadonly  OpenBaoDatabaseRoleAccess = "readonly"
+	OpenBaoDatabaseRoleAccessReadwrite OpenBaoDatabaseRoleAccess = "readwrite"
+)
+
+// Defines values for OpenBaoDatabaseRoleWriteAccess.
+const (
+	OpenBaoDatabaseRoleWriteAccessReadonly  OpenBaoDatabaseRoleWriteAccess = "readonly"
+	OpenBaoDatabaseRoleWriteAccessReadwrite OpenBaoDatabaseRoleWriteAccess = "readwrite"
+)
+
+// Defines values for OpenBaoRestoreUnsealSharesSealType.
+const (
+	OpenBaoRestoreUnsealSharesSealTypeAwskms  OpenBaoRestoreUnsealSharesSealType = "awskms"
+	OpenBaoRestoreUnsealSharesSealTypeShamir  OpenBaoRestoreUnsealSharesSealType = "shamir"
+	OpenBaoRestoreUnsealSharesSealTypeTransit OpenBaoRestoreUnsealSharesSealType = "transit"
+)
+
+// Defines values for OpenBaoUnsealKeysSealType.
+const (
+	OpenBaoUnsealKeysSealTypeAwskms  OpenBaoUnsealKeysSealType = "awskms"
+	OpenBaoUnsealKeysSealTypeShamir  OpenBaoUnsealKeysSealType = "shamir"
+	OpenBaoUnsealKeysSealTypeTransit OpenBaoUnsealKeysSealType = "transit"
+)
+
 // Defines values for OperationPhase.
 const (
 	OperationPhaseCancelled OperationPhase = "Cancelled"
@@ -324,13 +362,14 @@ const (
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
-	ProviderBackupTypesDiff        ProviderBackupTypes = "diff"
-	ProviderBackupTypesFull        ProviderBackupTypes = "full"
-	ProviderBackupTypesIncr        ProviderBackupTypes = "incr"
-	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
-	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
+	ProviderBackupTypesDefinitions  ProviderBackupTypes = "definitions"
+	ProviderBackupTypesDiff         ProviderBackupTypes = "diff"
+	ProviderBackupTypesFull         ProviderBackupTypes = "full"
+	ProviderBackupTypesIncr         ProviderBackupTypes = "incr"
+	ProviderBackupTypesLogical      ProviderBackupTypes = "logical"
+	ProviderBackupTypesPhysical     ProviderBackupTypes = "physical"
+	ProviderBackupTypesRaftSnapshot ProviderBackupTypes = "raft-snapshot"
+	ProviderBackupTypesSnapshot     ProviderBackupTypes = "snapshot"
 )
 
 // Defines values for ProviderTopologyType.
@@ -1160,7 +1199,8 @@ type CreateBackupStorageRequestType string
 
 // CreateClusterRequest defines model for CreateClusterRequest.
 type CreateClusterRequest struct {
-	Name string `json:"name"`
+	Name                string                      `json:"name"`
+	OpenbaoUnsealShares *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 	Spec ClusterInputSpec `json:"spec"`
@@ -1179,8 +1219,9 @@ type CreateDatabaseUserRequest struct {
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
 	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
-	AcknowledgeBoundConsumers *bool  `json:"acknowledgeBoundConsumers,omitempty"`
-	Name                      string `json:"name"`
+	AcknowledgeBoundConsumers *bool                       `json:"acknowledgeBoundConsumers,omitempty"`
+	Name                      string                      `json:"name"`
+	OpenbaoUnsealShares       *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
@@ -1886,6 +1927,88 @@ type ObservedResources struct {
 
 	// MemoryGB Memory limit in GiB.
 	MemoryGB float32 `json:"memoryGB"`
+}
+
+// OpenBaoDatabaseConnection defines model for OpenBaoDatabaseConnection.
+type OpenBaoDatabaseConnection struct {
+	CreatedAt      time.Time                      `json:"createdAt"`
+	Message        *string                        `json:"message,omitempty"`
+	MountPath      string                         `json:"mountPath"`
+	Name           string                         `json:"name"`
+	Phase          OpenBaoDatabaseConnectionPhase `json:"phase"`
+	Roles          []OpenBaoDatabaseRole          `json:"roles"`
+	TargetCluster  string                         `json:"targetCluster"`
+	TargetProvider string                         `json:"targetProvider"`
+}
+
+// OpenBaoDatabaseConnectionPhase defines model for OpenBaoDatabaseConnection.Phase.
+type OpenBaoDatabaseConnectionPhase string
+
+// OpenBaoDatabaseConnectionList defines model for OpenBaoDatabaseConnectionList.
+type OpenBaoDatabaseConnectionList struct {
+	Items []OpenBaoDatabaseConnection `json:"items"`
+}
+
+// OpenBaoDatabaseConnectionWrite defines model for OpenBaoDatabaseConnectionWrite.
+type OpenBaoDatabaseConnectionWrite struct {
+	Name          string                     `json:"name"`
+	Roles         []OpenBaoDatabaseRoleWrite `json:"roles"`
+	TargetCluster string                     `json:"targetCluster"`
+}
+
+// OpenBaoDatabaseRole defines model for OpenBaoDatabaseRole.
+type OpenBaoDatabaseRole struct {
+	Access            OpenBaoDatabaseRoleAccess `json:"access"`
+	CredentialsPath   string                    `json:"credentialsPath"`
+	Database          *string                   `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                    `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                    `json:"maxTtlSeconds,omitempty"`
+	Name              string                    `json:"name"`
+}
+
+// OpenBaoDatabaseRoleAccess defines model for OpenBaoDatabaseRole.Access.
+type OpenBaoDatabaseRoleAccess string
+
+// OpenBaoDatabaseRoleWrite defines model for OpenBaoDatabaseRoleWrite.
+type OpenBaoDatabaseRoleWrite struct {
+	Access            OpenBaoDatabaseRoleWriteAccess `json:"access"`
+	Database          *string                        `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                         `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                         `json:"maxTtlSeconds,omitempty"`
+	Name              string                         `json:"name"`
+}
+
+// OpenBaoDatabaseRoleWriteAccess defines model for OpenBaoDatabaseRoleWrite.Access.
+type OpenBaoDatabaseRoleWriteAccess string
+
+// OpenBaoRestoreUnsealShares Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted.
+type OpenBaoRestoreUnsealShares struct {
+	Recovery  *bool                               `json:"recovery,omitempty"`
+	SealType  *OpenBaoRestoreUnsealSharesSealType `json:"sealType,omitempty"`
+	Shares    []string                            `json:"shares"`
+	Threshold int                                 `json:"threshold"`
+}
+
+// OpenBaoRestoreUnsealSharesSealType defines model for OpenBaoRestoreUnsealShares.SealType.
+type OpenBaoRestoreUnsealSharesSealType string
+
+// OpenBaoUnsealKeys defines model for OpenBaoUnsealKeys.
+type OpenBaoUnsealKeys struct {
+	InitialRootToken string                    `json:"initialRootToken"`
+	InitializedAt    time.Time                 `json:"initializedAt"`
+	RecoveryShares   bool                      `json:"recoveryShares"`
+	SealType         OpenBaoUnsealKeysSealType `json:"sealType"`
+	Shares           []string                  `json:"shares"`
+	Threshold        int                       `json:"threshold"`
+}
+
+// OpenBaoUnsealKeysSealType defines model for OpenBaoUnsealKeys.SealType.
+type OpenBaoUnsealKeysSealType string
+
+// OpenBaoUnsealKeysReveal defines model for OpenBaoUnsealKeysReveal.
+type OpenBaoUnsealKeysReveal struct {
+	// Confirm Must equal the OpenBao cluster name.
+	Confirm string `json:"confirm"`
 }
 
 // Operation defines model for Operation.
@@ -3654,6 +3777,60 @@ type GetClusterMetricsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListOpenBaoDatabaseConnectionsParams defines parameters for ListOpenBaoDatabaseConnections.
+type ListOpenBaoDatabaseConnectionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateOpenBaoDatabaseConnectionParams defines parameters for CreateOpenBaoDatabaseConnection.
+type CreateOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteOpenBaoDatabaseConnectionParams defines parameters for DeleteOpenBaoDatabaseConnection.
+type DeleteOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetOpenBaoDatabaseConnectionParams defines parameters for GetOpenBaoDatabaseConnection.
+type GetOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevealOpenBaoUnsealKeysParams defines parameters for RevealOpenBaoUnsealKeys.
+type RevealOpenBaoUnsealKeysParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
 type ListClusterOperationsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -4908,6 +5085,12 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
 
+// CreateOpenBaoDatabaseConnectionJSONRequestBody defines body for CreateOpenBaoDatabaseConnection for application/json ContentType.
+type CreateOpenBaoDatabaseConnectionJSONRequestBody = OpenBaoDatabaseConnectionWrite
+
+// RevealOpenBaoUnsealKeysJSONRequestBody defines body for RevealOpenBaoUnsealKeys for application/json ContentType.
+type RevealOpenBaoUnsealKeysJSONRequestBody = OpenBaoUnsealKeysReveal
+
 // CreatePostgresDatabaseJSONRequestBody defines body for CreatePostgresDatabase for application/json ContentType.
 type CreatePostgresDatabaseJSONRequestBody = PostgresDatabase
 
@@ -5454,6 +5637,21 @@ type ServerInterface interface {
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterMetricsParams)
+	// List managed database connections
+	// (GET /clusters/{cluster}/openbao/database-connections)
+	ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams)
+	// Create a managed database connection
+	// (POST /clusters/{cluster}/openbao/database-connections)
+	CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateOpenBaoDatabaseConnectionParams)
+	// Delete a managed database connection
+	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
+	DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params DeleteOpenBaoDatabaseConnectionParams)
+	// getOpenBaoDatabaseConnection
+	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
+	GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params GetOpenBaoDatabaseConnectionParams)
+	// Reveal OpenBao initialization material
+	// (POST /clusters/{cluster}/openbao/unseal-keys/reveal)
+	RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevealOpenBaoUnsealKeysParams)
 	// List cluster operations
 	// (GET /clusters/{cluster}/operations)
 	ListClusterOperations(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterOperationsParams)
@@ -9999,6 +10197,326 @@ func (siw *ServerInterfaceWrapper) GetClusterMetrics(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterMetrics(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOpenBaoDatabaseConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOpenBaoDatabaseConnectionsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOpenBaoDatabaseConnections(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOpenBaoDatabaseConnection(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection" -------------
+	var connection string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection", r.PathValue("connection"), &connection, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOpenBaoDatabaseConnection(w, r, cluster, connection, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection" -------------
+	var connection string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection", r.PathValue("connection"), &connection, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOpenBaoDatabaseConnection(w, r, cluster, connection, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevealOpenBaoUnsealKeys operation middleware
+func (siw *ServerInterfaceWrapper) RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevealOpenBaoUnsealKeysParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevealOpenBaoUnsealKeys(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16401,6 +16919,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}/logs", wrapper.GetMemberLogs)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/members/{member}/replace", wrapper.ReplaceClusterMember)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/metrics", wrapper.GetClusterMetrics)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.ListOpenBaoDatabaseConnections)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.CreateOpenBaoDatabaseConnection)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.DeleteOpenBaoDatabaseConnection)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.GetOpenBaoDatabaseConnection)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/unseal-keys/reveal", wrapper.RevealOpenBaoUnsealKeys)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/operations", wrapper.ListClusterOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/pitr", wrapper.GetPITRWindow)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/placement", wrapper.GetClusterPlacement)
@@ -24168,6 +24691,562 @@ func (response GetClusterMetrics500JSONResponse) VisitGetClusterMetricsResponse(
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnectionsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListOpenBaoDatabaseConnectionsParams
+}
+
+type ListOpenBaoDatabaseConnectionsResponseObject interface {
+	VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error
+}
+
+type ListOpenBaoDatabaseConnections200JSONResponse OpenBaoDatabaseConnectionList
+
+func (response ListOpenBaoDatabaseConnections200JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListOpenBaoDatabaseConnections400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections400JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections401JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections403JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections404JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections409JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections413JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListOpenBaoDatabaseConnections415JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections500JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections503JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateOpenBaoDatabaseConnectionParams
+	Body    *CreateOpenBaoDatabaseConnectionJSONRequestBody
+}
+
+type CreateOpenBaoDatabaseConnectionResponseObject interface {
+	VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type CreateOpenBaoDatabaseConnection201JSONResponse OpenBaoDatabaseConnection
+
+func (response CreateOpenBaoDatabaseConnection201JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection400JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection401JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection403JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection404JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection409JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection413JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateOpenBaoDatabaseConnection415JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection500JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection503JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster    ClusterPath `json:"cluster"`
+	Connection string      `json:"connection"`
+	Params     DeleteOpenBaoDatabaseConnectionParams
+}
+
+type DeleteOpenBaoDatabaseConnectionResponseObject interface {
+	VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type DeleteOpenBaoDatabaseConnection204Response struct {
+}
+
+func (response DeleteOpenBaoDatabaseConnection204Response) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection400JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection401JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection403JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection404JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection409JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection413JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteOpenBaoDatabaseConnection415JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection500JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection503JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster    ClusterPath `json:"cluster"`
+	Connection string      `json:"connection"`
+	Params     GetOpenBaoDatabaseConnectionParams
+}
+
+type GetOpenBaoDatabaseConnectionResponseObject interface {
+	VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type GetOpenBaoDatabaseConnection200JSONResponse OpenBaoDatabaseConnection
+
+func (response GetOpenBaoDatabaseConnection200JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection400JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection401JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection403JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection404JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection409JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection413JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetOpenBaoDatabaseConnection415JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection500JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection503JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevealOpenBaoUnsealKeysRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RevealOpenBaoUnsealKeysParams
+	Body    *RevealOpenBaoUnsealKeysJSONRequestBody
+}
+
+type RevealOpenBaoUnsealKeysResponseObject interface {
+	VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error
+}
+
+type RevealOpenBaoUnsealKeys200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevealOpenBaoUnsealKeys200JSONResponse struct {
+	Body    OpenBaoUnsealKeys
+	Headers RevealOpenBaoUnsealKeys200ResponseHeaders
+}
+
+func (response RevealOpenBaoUnsealKeys200JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys400JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys401JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys403JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys404JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys409JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys413JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RevealOpenBaoUnsealKeys415JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys500JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys503JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListClusterOperationsRequestObject struct {
@@ -34061,6 +35140,21 @@ type StrictServerInterface interface {
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(ctx context.Context, request GetClusterMetricsRequestObject) (GetClusterMetricsResponseObject, error)
+	// List managed database connections
+	// (GET /clusters/{cluster}/openbao/database-connections)
+	ListOpenBaoDatabaseConnections(ctx context.Context, request ListOpenBaoDatabaseConnectionsRequestObject) (ListOpenBaoDatabaseConnectionsResponseObject, error)
+	// Create a managed database connection
+	// (POST /clusters/{cluster}/openbao/database-connections)
+	CreateOpenBaoDatabaseConnection(ctx context.Context, request CreateOpenBaoDatabaseConnectionRequestObject) (CreateOpenBaoDatabaseConnectionResponseObject, error)
+	// Delete a managed database connection
+	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
+	DeleteOpenBaoDatabaseConnection(ctx context.Context, request DeleteOpenBaoDatabaseConnectionRequestObject) (DeleteOpenBaoDatabaseConnectionResponseObject, error)
+	// getOpenBaoDatabaseConnection
+	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
+	GetOpenBaoDatabaseConnection(ctx context.Context, request GetOpenBaoDatabaseConnectionRequestObject) (GetOpenBaoDatabaseConnectionResponseObject, error)
+	// Reveal OpenBao initialization material
+	// (POST /clusters/{cluster}/openbao/unseal-keys/reveal)
+	RevealOpenBaoUnsealKeys(ctx context.Context, request RevealOpenBaoUnsealKeysRequestObject) (RevealOpenBaoUnsealKeysResponseObject, error)
 	// List cluster operations
 	// (GET /clusters/{cluster}/operations)
 	ListClusterOperations(ctx context.Context, request ListClusterOperationsRequestObject) (ListClusterOperationsResponseObject, error)
@@ -36358,6 +37452,157 @@ func (sh *strictHandler) GetClusterMetrics(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterMetricsResponseObject); ok {
 		if err := validResponse.VisitGetClusterMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOpenBaoDatabaseConnections operation middleware
+func (sh *strictHandler) ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams) {
+	var request ListOpenBaoDatabaseConnectionsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOpenBaoDatabaseConnections(ctx, request.(ListOpenBaoDatabaseConnectionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOpenBaoDatabaseConnections")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOpenBaoDatabaseConnectionsResponseObject); ok {
+		if err := validResponse.VisitListOpenBaoDatabaseConnectionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateOpenBaoDatabaseConnectionParams) {
+	var request CreateOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateOpenBaoDatabaseConnectionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOpenBaoDatabaseConnection(ctx, request.(CreateOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitCreateOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params DeleteOpenBaoDatabaseConnectionParams) {
+	var request DeleteOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Connection = connection
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOpenBaoDatabaseConnection(ctx, request.(DeleteOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitDeleteOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params GetOpenBaoDatabaseConnectionParams) {
+	var request GetOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Connection = connection
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOpenBaoDatabaseConnection(ctx, request.(GetOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitGetOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevealOpenBaoUnsealKeys operation middleware
+func (sh *strictHandler) RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevealOpenBaoUnsealKeysParams) {
+	var request RevealOpenBaoUnsealKeysRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RevealOpenBaoUnsealKeysJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevealOpenBaoUnsealKeys(ctx, request.(RevealOpenBaoUnsealKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevealOpenBaoUnsealKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevealOpenBaoUnsealKeysResponseObject); ok {
+		if err := validResponse.VisitRevealOpenBaoUnsealKeysResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

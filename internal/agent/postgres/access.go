@@ -126,6 +126,13 @@ func validateRoleWrite(role pgspec.RoleWrite) error {
 		}
 		seen[name] = true
 	}
+	adminSeen := map[string]bool{}
+	for _, name := range role.MemberOfAdmin {
+		if !seen[name] || adminSeen[name] {
+			return invalidAccess("memberOfAdmin must be a duplicate-free subset of memberOf")
+		}
+		adminSeen[name] = true
+	}
 	if role.ValidUntil != nil && *role.ValidUntil != "infinity" {
 		if _, err := time.Parse(time.RFC3339, *role.ValidUntil); err != nil {
 			return invalidAccess("validUntil must be RFC3339 or infinity")
@@ -174,6 +181,7 @@ func roleStatement(operation string, role pgspec.RoleWrite) (string, []any, erro
 
 const roleSelect = `SELECT r.rolname,r.rolcanlogin,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls,r.rolconnlimit,
  ARRAY(SELECT DISTINCT parent.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid WHERE membership.member=r.oid ORDER BY parent.rolname),
+ ARRAY(SELECT DISTINCT parent.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid WHERE membership.member=r.oid AND membership.admin_option ORDER BY parent.rolname),
  CASE WHEN pg_catalog.isfinite(r.rolvaliduntil) THEN pg_catalog.to_char(r.rolvaliduntil AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') ELSE NULL END FROM pg_catalog.pg_roles r`
 
 func readRoles(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Role, error) {
@@ -192,7 +200,7 @@ func readRoles(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Role, er
 	result := []pgspec.Role{}
 	for rows.Next() {
 		var role pgspec.Role
-		if err = rows.Scan(&role.Name, &role.Login, &role.Superuser, &role.Createdb, &role.Createrole, &role.Replication, &role.BypassRLS, &role.ConnectionLimit, &role.MemberOf, &role.ValidUntil); err != nil {
+		if err = rows.Scan(&role.Name, &role.Login, &role.Superuser, &role.Createdb, &role.Createrole, &role.Replication, &role.BypassRLS, &role.ConnectionLimit, &role.MemberOf, &role.MemberOfAdmin, &role.ValidUntil); err != nil {
 			return nil, err
 		}
 		result = append(result, role)
@@ -222,15 +230,14 @@ func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.R
 	if _, err = tx.Exec(ctx, sql, args...); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `SELECT parent.rolname,grantor.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid JOIN pg_catalog.pg_roles child ON child.oid=membership.member JOIN pg_catalog.pg_roles grantor ON grantor.oid=membership.grantor WHERE child.rolname=$1`, role.Name)
+	rows, err := tx.Query(ctx, `SELECT parent.rolname,grantor.rolname,membership.admin_option FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid JOIN pg_catalog.pg_roles child ON child.oid=membership.member JOIN pg_catalog.pg_roles grantor ON grantor.oid=membership.grantor WHERE child.rolname=$1`, role.Name)
 	if err != nil {
 		return err
 	}
-	type membership struct{ parent, grantor string }
-	current := []membership{}
+	current := []roleMembership{}
 	for rows.Next() {
-		var row membership
-		if err = rows.Scan(&row.parent, &row.grantor); err != nil {
+		var row roleMembership
+		if err = rows.Scan(&row.parent, &row.grantor, &row.admin); err != nil {
 			rows.Close()
 			return err
 		}
@@ -241,28 +248,52 @@ func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.R
 	if err != nil {
 		return err
 	}
-	desired := map[string]bool{}
-	for _, parent := range role.MemberOf {
-		desired[parent] = true
-	}
-	present := map[string]bool{}
-	for _, membership := range current {
-		present[membership.parent] = true
-		if !desired[membership.parent] {
-			sql := "REVOKE " + pgx.Identifier{membership.parent}.Sanitize() + " FROM " + pgx.Identifier{role.Name}.Sanitize() + " GRANTED BY " + pgx.Identifier{membership.grantor}.Sanitize()
-			if _, err = tx.Exec(ctx, sql); err != nil {
-				return err
-			}
-		}
-	}
-	for _, parent := range role.MemberOf {
-		if !present[parent] {
-			if _, err = tx.Exec(ctx, "GRANT "+pgx.Identifier{parent}.Sanitize()+" TO "+pgx.Identifier{role.Name}.Sanitize()); err != nil {
-				return err
-			}
+	for _, sql := range roleMembershipStatements(role.Role, current) {
+		if _, err = tx.Exec(ctx, sql); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+type roleMembership struct {
+	parent, grantor string
+	admin           bool
+}
+
+func roleMembershipStatements(role pgspec.Role, current []roleMembership) []string {
+	desired, admin := map[string]bool{}, map[string]bool{}
+	for _, parent := range role.MemberOf {
+		desired[parent] = true
+	}
+	for _, parent := range role.MemberOfAdmin {
+		admin[parent] = true
+	}
+	statements := []string{}
+	present, presentAdmin := map[string]bool{}, map[string]bool{}
+	name := pgx.Identifier{role.Name}.Sanitize()
+	for _, membership := range current {
+		parent := pgx.Identifier{membership.parent}.Sanitize()
+		present[membership.parent] = true
+		presentAdmin[membership.parent] = presentAdmin[membership.parent] || membership.admin
+		if !desired[membership.parent] {
+			statements = append(statements, "REVOKE "+parent+" FROM "+name+" GRANTED BY "+pgx.Identifier{membership.grantor}.Sanitize())
+		} else if membership.admin && !admin[membership.parent] {
+			// Preserve membership while removing delegation, including grants
+			// originating from a different grantor.
+			statements = append(statements, "REVOKE ADMIN OPTION FOR "+parent+" FROM "+name+" GRANTED BY "+pgx.Identifier{membership.grantor}.Sanitize())
+		}
+	}
+	for _, parent := range role.MemberOf {
+		if !present[parent] || admin[parent] && !presentAdmin[parent] {
+			sql := "GRANT " + pgx.Identifier{parent}.Sanitize() + " TO " + name
+			if admin[parent] {
+				sql += " WITH ADMIN OPTION"
+			}
+			statements = append(statements, sql)
+		}
+	}
+	return statements
 }
 
 // ROW(d) has the anonymous record type. row_to_json(record) is an exact builtin

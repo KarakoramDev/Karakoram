@@ -45,7 +45,7 @@ func TestBuiltInProviderCatalogConforms(t *testing.T) {
 			t.Fatalf("%s: %d %s", provider.Name, w.Code, w.Body.String())
 		}
 	}
-	want := map[string]bool{"psmdb": true, "rabbitmq": true, "elasticsearch": true, "postgres": true, "supabase": true, "keycloak": true}
+	want := map[string]bool{"psmdb": true, "rabbitmq": true, "openbao": true, "elasticsearch": true, "postgres": true, "supabase": true, "keycloak": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("built-in providers = %v, want %v", got, want)
 	}

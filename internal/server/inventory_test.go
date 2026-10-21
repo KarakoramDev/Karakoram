@@ -181,6 +181,11 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetRabbitMQOperatorPolicy", "GET", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", ``},
 		{"ReplaceRabbitMQOperatorPolicy", "PUT", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", `{"vhost":"app","name":"app","pattern":".*","applyTo":"queues","priority":1,"definition":{}}`},
 		{"DeleteRabbitMQOperatorPolicy", "DELETE", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", ``},
+		{"RevealOpenBaoUnsealKeys", "POST", "/api/v1/clusters/prod/openbao/unseal-keys/reveal", `{"confirm":"prod"}`},
+		{"ListOpenBaoDatabaseConnections", "GET", "/api/v1/clusters/prod/openbao/database-connections", ``},
+		{"CreateOpenBaoDatabaseConnection", "POST", "/api/v1/clusters/prod/openbao/database-connections", `{"name":"app","targetCluster":"db","roles":[{"name":"reader","access":"readonly"}]}`},
+		{"GetOpenBaoDatabaseConnection", "GET", "/api/v1/clusters/prod/openbao/database-connections/app", ``},
+		{"DeleteOpenBaoDatabaseConnection", "DELETE", "/api/v1/clusters/prod/openbao/database-connections/app", ``},
 	}
 	seen := map[string]bool{}
 	for _, route := range routes {

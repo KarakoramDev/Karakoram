@@ -50,6 +50,10 @@ type Artifact struct {
 	// ExtensionFlags qualifies preload and feature restrictions for Extensions.
 	// Like Extensions, the embedded map and its values are read-only.
 	ExtensionFlags map[string]ExtensionFlags `json:"extensionFlags,omitempty"`
+	// ExecutableMembers lists regular archive files to chmod 0755 after
+	// extraction as the runtime owner. Paths must be canonical and relative.
+	// Like Extensions, the embedded slice is read-only.
+	ExecutableMembers []string `json:"executableMembers,omitempty"`
 }
 
 //go:embed lock.json
@@ -152,6 +156,9 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 	// Keep download, verification and every privileged reopen inside one
 	// root-owned private directory, including when prepare runs as a user.
 	script := "set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap 'rm -rf -- \"$stage\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile=" + quote(a.File) + "\ntest ! -e \"$file\" && test ! -L \"$file\"\ncurl -fsSL " + quote(resolvedURL) + " > \"$file\"\nprintf '%s\\n' " + quote(a.SHA256+"  "+a.File) + " | sha256sum -c -\n"
+	if len(a.ExecutableMembers) != 0 && (!isTar || isExtension) {
+		return []string{"printf '%s\\n' 'executable members require an application archive' >&2; exit 1"}
+	}
 	if isTar {
 		kind := "application"
 		validator := legacyPG17Validator
@@ -162,6 +169,14 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 			kind = a.Kind
 			validator = archiveValidator
 			args = fmt.Sprintf(" '%d'", major)
+		}
+		if len(a.ExecutableMembers) != 0 {
+			// Executable-member validation is newer than the frozen validator;
+			// only artifacts that declare members use the generic one.
+			validator = archiveValidator
+			for _, member := range a.ExecutableMembers {
+				args += " " + quote(member)
+			}
 		}
 		script += "python3 -c " + quote(validator) + " \"$file\" " + quote(kind) + args + "\n"
 	}
@@ -195,6 +210,9 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 			extractFlag = "-xJf"
 		}
 		publish := "set -eu\numask 022\nmkdir -p " + quote(destDir) + "\ntar --no-same-owner --no-same-permissions --delay-directory-restore " + extractFlag + " - -C " + quote(destDir)
+		for _, member := range a.ExecutableMembers {
+			publish += "\nchmod 0755 -- " + quote(destDir+"/"+member)
+		}
 		script += "sudo -u " + quote(owner) + " -- sh -c " + quote(publish) + " < \"$file\"\n"
 	default:
 		publish := "set -eu\numask 022\nmkdir -p " + quote(destDir) + "\nbinary=$(mktemp " + quote(path.Join(destDir, ".artifact.XXXXXXXXXX")) + ")\ntrap 'rm -f -- \"$binary\"' EXIT HUP INT TERM\ncat > \"$binary\"\nchmod 0755 \"$binary\"\nmv -fT -- \"$binary\" " + quote(path.Join(destDir, a.Name))

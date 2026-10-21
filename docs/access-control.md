@@ -89,6 +89,7 @@ CSV `p` rules default to allow. Subjects are `user:NAME`, `group:OIDC_GROUP`, `r
 | `clusters`, `database-users` | CRUD as exposed by route; `<namespace>/<cluster>`; database roles share `database-users` |
 | `cluster-credentials` | read reveals credentials; `<namespace>/<cluster>` |
 | `cluster-data` | read/write through the opt-in [data MCP gateway](data-mcp.md); `<namespace>/<cluster>`; not included in viewer/operator defaults |
+| `openbao-unseal-keys` | reveal; `<namespace>/<cluster>`; independent from ordinary credential read |
 | `backups` | create/read/delete/export; `<namespace>/<cluster>` |
 | `restores`, `operations` | Route-defined actions; `<namespace>/<cluster>` |
 | `backup-storages` | CRUD; `<namespace>/<storage>` |
@@ -99,6 +100,8 @@ CSV `p` rules default to allow. Subjects are `user:NAME`, `group:OIDC_GROUP`, `r
 [OpenAPI](../api/openapi.yaml) defines route mappings. Lists, events/streams and `/metrics` filter/check actual objects; filters never widen access. Namespace metadata does not grant audit access. Cross-namespace source export and target permissions are documented in [backups](backups.md); scoped examples are in [namespaces](namespaces.md).
 
 `events:read` or `audit:read` on `<namespace>/<cluster>` permits reading a cluster event, but only **`audit:read`** returns its optional `details` object in lists and streams; viewer/operator event access alone does not grant structured comparisons. Audit readers still receive masked sensitive values, never secrets; see [audit redaction and durability](security.md#audit-attribution-and-durability).
+
+OpenBao initialization-material reveal is administrator-only by default and uses `openbao-unseal-keys:reveal`, not `cluster-credentials:read`. Database-connection list/get requires `clusters:read` on OpenBao; create/delete requires `clusters:update` there **and** `database-users:create` / `database-users:delete` respectively on the target cluster. An OpenBao grant alone cannot authorize target identity changes. See [OpenBao access](openbao/access-and-tls.md).
 
 Normalization at startup/submission changes object `*` to `**`; legacy bare cluster/storage/audit patterns become `default/<pattern>`. Bare namespace objects remain unchanged. Use `dev/**`, not bare `dev`, for namespace-wide audit; inspect the canonical policy after updates.
 

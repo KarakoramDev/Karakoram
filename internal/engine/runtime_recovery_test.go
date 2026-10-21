@@ -52,7 +52,7 @@ func countRecoveryCalls(calls []string, method string) int {
 }
 
 func TestRuntimeRecoveryStopDeleteAndVolumeLoss(t *testing.T) {
-	for _, family := range []string{"mongodb", "rabbitmq", "elasticsearch", "postgresql", "supabase"} {
+	for _, family := range []string{"mongodb", "rabbitmq", "elasticsearch", "postgresql", "supabase", "openbao"} {
 		t.Run(family, func(t *testing.T) {
 			stateful := family != "supabase"
 			t.Run("stopped", func(t *testing.T) {

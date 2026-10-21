@@ -14,6 +14,50 @@
     "build": "upstream-release"
   },
   {
+    "name": "openbao",
+    "version": "2.7.1",
+    "file": "openbao_2.7.1_linux_amd64.tar.gz",
+    "sha256": "0e2f1ce10d124e03112b50dd2fbec6b78003783253bc3a91587938f39d1e2243",
+    "size": 74865426,
+    "upstreamURL": "https://github.com/openbao/openbao/releases/download/v2.7.1/openbao_2.7.1_linux_amd64.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao",
+      "commit": "a5db72cef75c24b920ade02065b18dd8eb666bac"
+    },
+    "build": "upstream-release"
+  },
+  {
+    "name": "openbao-plugin-database-mongodb",
+    "version": "0.0.1",
+    "file": "openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
+    "sha256": "225c89a188052067d896395a344fc40ba951808cb145ddfa6b07b0be296e632d",
+    "size": 7109156,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/database-mongodb-v0.0.1/openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao-plugins",
+      "commit": "f9750bd6c8fb2e5447d2227f65c159a9032b4da0"
+    },
+    "build": "upstream-release",
+    "executableMembers": ["openbao-plugin-database-mongodb_linux_amd64_v1"]
+  },
+  {
+    "name": "openbao-plugin-kms-aws",
+    "version": "0.1.0",
+    "file": "openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "sha256": "cec959c8159045db34ae8ba2f58f89d4e631f9b49f9b5e5cd55e72a0058a69ad",
+    "size": 6422912,
+    "upstreamURL": "https://github.com/openbao/openbao-plugins/releases/download/kms-aws-v0.1.0/openbao-plugin-kms-aws_linux_amd64_v1.tar.gz",
+    "license": "MPL-2.0",
+    "source": {
+      "repo": "https://github.com/openbao/openbao-plugins",
+      "commit": "0c68457d68ae5741013ee30623525303860a8b22"
+    },
+    "build": "upstream-release",
+    "executableMembers": ["openbao-plugin-kms-aws_linux_amd64_v1"]
+  },
+  {
     "name": "proxysql",
     "version": "3.0.11",
     "file": "proxysql_3.0.11-ubuntu24_amd64.deb",

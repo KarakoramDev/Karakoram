@@ -2,6 +2,16 @@
 
 `internal/engine/nativeartifacts/lock.json` is embedded in the control plane. Each entry names exact Linux amd64 bytes, their SHA-256 and size, upstream URL (empty for Karakoram-built files), SPDX license, immutable upstream repository/commit, and build recipe. Source-built entries also record the clean-runner `runtimeDeps`. Extension bundles expose an `extensions` list containing only names that passed native creation smoke; provider catalog/admission must use it rather than advertise failed builds. An unavailable artifact has no lock entry: enabling a component must fail admission rather than download a floating release or install a substitute.
 
+## Artifact inventory
+
+| Artifact | Version | Source | License | Installation |
+| --- | --- | --- | --- | --- |
+| `openbao` | 2.7.1 | [Official release](https://github.com/openbao/openbao/releases/tag/v2.7.1) | MPL-2.0 | `/opt/karakoram/openbao-2.7.1/bao`; archive executable mode is preserved. |
+| `openbao-plugin-database-mongodb` | 0.0.1 | [Official release](https://github.com/openbao/openbao-plugins/releases/tag/database-mongodb-v0.0.1) | MPL-2.0 | Versioned plugin directory; lock `executableMembers` marks `openbao-plugin-database-mongodb_linux_amd64_v1` executable as the runtime owner. |
+| `openbao-plugin-kms-aws` | 0.1.0 | [Official release](https://github.com/openbao/openbao-plugins/releases/tag/kms-aws-v0.1.0) | MPL-2.0 | Versioned plugin directory; lock `executableMembers` marks `openbao-plugin-kms-aws_linux_amd64_v1` executable as the runtime owner. |
+
+OpenBao installs the MongoDB database plugin on every member so the first connection does not need a plugin-install redeployment; the AWS KMS plugin is installed only for `seal.type: awskms`, an immutable creation choice. Plugin registration uses the locked executable/version, not a runtime OCI download. Artifact availability does not establish backend lifecycle or database-connection acceptance; see [OpenBao verification](verification.md#openbao-coverage).
+
 ## Download and verification
 
 Resolution order is:

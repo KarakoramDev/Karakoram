@@ -369,6 +369,12 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 
 // EnqueueRestore creates a restore record and its operation in one transaction.
 func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op *domain.Operation) error {
+	return s.EnqueueRestoreWithSecrets(ctx, restore, op, nil)
+}
+
+// EnqueueRestoreWithSecrets atomically stages write-only restore inputs with
+// the restore record and operation. Inputs are encrypted before the transaction.
+func (s *Store) EnqueueRestoreWithSecrets(ctx context.Context, restore *domain.Restore, op *domain.Operation, values map[string][]byte) error {
 	if err := (domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}).Validate(); err != nil {
 		return err
 	}
@@ -382,6 +388,11 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	}
 	if restore.Phase == "" {
 		restore.Phase = domain.PhasePending
+	}
+	ref := domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}
+	sealed, err := s.sealClusterValues(ref.Key(), values)
+	if err != nil {
+		return err
 	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -414,6 +425,9 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 		return err
 	}
 	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true); err != nil {
+		return err
+	}
+	if err = writeClusterValues(ctx, tx, ref.Key(), sealed); err != nil {
 		return err
 	}
 	return tx.Commit()

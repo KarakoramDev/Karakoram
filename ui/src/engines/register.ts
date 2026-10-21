@@ -11,6 +11,7 @@ import { elasticsearchUI } from './elasticsearch';
 import { postgresUI } from './postgres';
 import { supabaseUI } from './supabase';
 import { keycloakUI } from './keycloak';
+import { openbaoUI } from './openbao/index.ts';
 
 engines.rabbitmq = rabbitmqUI;
 
@@ -18,3 +19,4 @@ engines.elasticsearch = elasticsearchUI;
 engines.postgres = postgresUI;
 engines.supabase = supabaseUI;
 engines.keycloak = keycloakUI;
+engines.openbao = openbaoUI;

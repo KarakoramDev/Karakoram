@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
@@ -103,7 +104,12 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 			bindingServer.Trigger.Trigger(ref)
 		}
 	}})
-	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings})
+	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings, Targets: func(ctx context.Context, ref domain.ClusterRef) (openbao.Target, error) {
+		if bindingServer == nil {
+			return openbao.Target{}, engine.ErrUnavailable
+		}
+		return bindingServer.openbaoConnectionTarget(ctx, ref)
+	}})
 	registry, err := engine.NewRegistry(providers...)
 	if err != nil {
 		return err

@@ -52,6 +52,8 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
+	case "createOpenBaoDatabaseConnection":
+		return true
 	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
 		return true
 	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
@@ -117,6 +119,8 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	}
 	namespace := ""
 	switch id {
+	case "createOpenBaoDatabaseConnection":
+		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":

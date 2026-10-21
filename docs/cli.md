@@ -91,6 +91,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `permissions` | Current effective permissions | — | All |
 | `postgres` | Native database access | roles list/get/create/update/patch/delete/rotate-password, databases list/get/create/delete, grants list/grant/revoke | PostgreSQL and Supabase |
 | `providers` | Catalogs/defaults/limits | list, get | All |
+| `openbao` | Initialization material and dynamic-credential connections | unseal-keys reveal; database-connections list/get/create/delete | OpenBao only |
 | `rabbitmq` | Native access | vhosts, users, permissions, topic-permissions, policies, operator-policies | RabbitMQ only |
 | `rbac` | Permission checks and policy | can, policy get/set | All |
 | `restores` | Recovery/clone inventory | create, list, get | All |
@@ -242,3 +243,18 @@ Repeated cluster deletion with unchanged retention options returns the same in-f
 | 5 | HTTP 401/403 |
 | 6 | HTTP 400/415/422 validation/media error |
 | 7 | Wait deadline or HTTP 408/504; accepted work may continue |
+
+## OpenBao access and recovery
+
+```sh
+karactl -n NS openbao unseal-keys reveal secrets --confirm secrets -o json
+karactl -n NS openbao database-connections create secrets \
+  --name orders --target ordersdb --role reader:readonly \
+  --default-ttl 1h --max-ttl 24h
+karactl -n NS openbao database-connections list secrets -o json
+karactl -n NS openbao database-connections get secrets orders -o json
+karactl -n NS openbao database-connections delete secrets orders --yes
+karactl -n NS backups create secrets beforechange --type raft-snapshot --storage archive
+```
+
+Reveal prints real shares and the initial root token in every output format; protect stdout and offline custody. It requires the distinct `openbao-unseal-keys:reveal` grant and exact `--confirm`. Connection creation accepts `-f` or `--name`, `--target` and repeatable `--role name:readonly|readwrite[:database]`; TTL flags require positive whole seconds and fill roles without explicit TTLs. RabbitMQ roles in one connection must share the same TTL pair. The returned paths are read through OpenBao with native tokens, not through `karactl`. Shared restart/replace-member/rotate-tls commands manage lifecycle; only catalog-listed forward versions are allowed. Use protected request files for write-only `openbaoUnsealShares` on deleted-source restores/clones. See [OpenBao access](openbao/access-and-tls.md), [operations](openbao/operations.md) and [snapshots](openbao/backups.md).

@@ -18,6 +18,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
@@ -72,6 +73,15 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	}
 	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
+		t.Fatal(err)
+	}
+	openbaoRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeOpenBaoAccess{connections: []openbao.DatabaseConnection{{Name: "app", TargetCluster: "prod", TargetProvider: "psmdb", MountPath: "database", Phase: "ready", Roles: []openbao.DatabaseRole{}, CreatedAt: time.Now()}}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	openbaoCluster := domain.Cluster{Name: "bao", Spec: domain.ClusterSpec{Provider: "openbao", Version: "2.7.1", Topology: domain.Topology{Type: "cluster"}}}
+	(&fakeProvider{}).ApplyDefaults(&openbaoCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &openbaoCluster); err != nil {
 		t.Fatal(err)
 	}
 	supabaseCluster := domain.Cluster{Name: "supabase", Spec: domain.ClusterSpec{Provider: "supabase", Version: "17.11", Topology: domain.Topology{Type: "single"}}}
@@ -156,6 +166,11 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if strings.Contains(path, "/supabase/") {
 				s.Registry = supabaseRegistry
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/supabase/", 1)
+			}
+			if strings.Contains(path, "/openbao/") {
+				s.Registry = openbaoRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/bao/", 1)
+				url = strings.ReplaceAll(url, "{connection}", "app")
 			}
 			if path == "/healthz" || path == "/metrics" {
 				url = path

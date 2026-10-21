@@ -32,7 +32,10 @@ type Role struct {
 	BypassRLS       bool     `json:"bypassrls"`
 	ConnectionLimit int      `json:"connectionLimit"`
 	MemberOf        []string `json:"memberOf"`
-	ValidUntil      *string  `json:"validUntil,omitempty"`
+	// MemberOfAdmin is an internal-only subset of MemberOf whose memberships
+	// can be delegated by this role. It is not exposed by the public OpenAPI.
+	MemberOfAdmin []string `json:"memberOfAdmin,omitempty"`
+	ValidUntil    *string  `json:"validUntil,omitempty"`
 }
 
 // RoleWrite carries a client password at admission, and only a SCRAM verifier

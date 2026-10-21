@@ -35,6 +35,10 @@ Engine-specific fields, presets, minimum resources and connection procedures bel
 
 [PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) add single/HA database topology, proxy resources, synchronous policy and engine-specific options. Supabase component versions are release-locked; the [current artifact inventory](supabase/components.md) can reject a catalog preset or component even when its configuration is otherwise valid.
 
+OpenBao adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or AWS KMS auto-unseal, with the transit token and AWS keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
+
+PostgreSQL storage is selectable only when the OpenBao provider advertises `postgresql-storage`, which requires an injected PostgreSQL binding service; merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
+
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
 ## Cluster detail tabs
@@ -54,6 +58,7 @@ Tabs and actions are gated by engine capabilities and your permissions.
 | Postgres access | PostgreSQL roles, databases and grants | PostgreSQL and Supabase |
 | Components | Supabase service topology/resources | Supabase |
 | Functions & SMTP | Source deployment/deletion and write-only SMTP password | Supabase |
+| OpenBao | Seal/initialization state per member and Raft voter observations, explicit unseal-key reveal, database credential connections | OpenBao |
 | Monitoring | Per-member time series and status context | All |
 | Events | Cluster activity and diagnostic messages with actor attribution | All |
 | Operations | Durable asynchronous work, progress, failure and initiating actor | All |
@@ -66,6 +71,10 @@ PostgreSQL major upgrades (16→17 and 17→18) require **offline maintenance**,
 **Reveal credentials** requires `cluster-credentials:read` and is audited. Revealed credentials are the engine's administrative identity, **not an application identity**. Use scoped application access: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). The response is not retained in the query cache. Keep copied passwords/URIs out of logs. Reveal also provides the public CA with copy/download controls; if clipboard access fails, use manual copy or download without losing PEM line breaks.
 
 Supabase adds a separately authorized API/dashboard credential reveal; do not expose service-role/secret keys to application browsers. [PostgreSQL access](postgres/access-and-tls.md) describes database identities and ProxySQL limits; [Supabase operations](supabase/operations.md) covers source visibility and key rotation. Functions source controls do not supply an absent runtime artifact.
+
+The **OpenBao** tab reveals the unseal (or recovery) shares and the initial root token only after typing the cluster name; it requires `openbao-unseal-keys:reveal` (administrators by default), is audited, and keeps the response in the open panel only — hide it or leave the page and it is gone. Store the shares offline immediately. Database connections list each target, mount, phase and the credential paths of its roles; creating one needs `clusters:update` on the OpenBao cluster and `database-users:create` on the target, deleting one `database-users:delete` on the target. Only PostgreSQL, MongoDB replica-set and RabbitMQ clusters in the same namespace are offered as targets. In-place restores of an OpenBao cluster from another cluster's snapshot accept pasted unseal shares the same way as the creation wizard.
+
+Changing either the cluster name or namespace discards the revealed material and confirmation state immediately. Pending reveal requests are aborted when their panel is removed, and late responses cannot populate a different cluster's panel.
 
 JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabase rotate-jwt-secret CLUSTER --yes` or POST `/api/v1/clusters/{cluster}/supabase/rotate-jwt-secret`; follow the [CLI/API rotation procedure](supabase/operations.md#credentials-and-rotation) and coordinate application key replacement.
 

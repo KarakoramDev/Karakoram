@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
@@ -31,9 +31,10 @@ import { validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
-import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable } from '@/engines';
+import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable, type RestoreExtras } from '@/engines';
 import { managementIsPublic } from '@/engines/rabbitmq/helpers';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
+import { useLocalRequest } from './use-local-request';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -76,6 +77,8 @@ export function ClusterWizardPage() {
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
 
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
+  // Write-only request fields (e.g. OpenBao unseal shares for a deleted source); never part of the spec or any cache.
+  const [restoreExtras, setRestoreExtras] = useState<RestoreExtras>({});
   const submissionLocked = useRef(false);
   const submitted = useRef(false);
   const idempotency = useIdempotencyKey();
@@ -125,11 +128,12 @@ export function ClusterWizardPage() {
     if (!spec) return null;
     const result = validateWizard(name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed);
     if (spec.dataSource?.pitrTime) result.backups.push(...(pitrSource.error ? [errorMessage(pitrSource.error)] : validatePitrPoint(spec.dataSource.pitrTime, pitrSource.data ?? null)));
+    if (spec.dataSource) result.backups.push(...(engines[spec.provider]?.validateRestore?.(restoreExtras) ?? []));
     return result;
-  }, [name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed, pitrSource.data, pitrSource.error]);
+  }, [name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed, pitrSource.data, pitrSource.error, restoreExtras]);
 
-  const create = useMutation({
-    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, headers: idempotencyHeaders(idempotency.key), body })),
+  const create = useLocalRequest({
+    request: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, headers: idempotencyHeaders(idempotency.key), body })),
     onSuccess: (c) => {
       idempotency.reset();
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
@@ -137,7 +141,7 @@ export function ClusterWizardPage() {
       navigate(clusterPath(c.namespace || targetNamespace, c.name));
     },
     onError: () => { setStep('review'); },
-    onSettled: () => { submissionLocked.current = false; },
+    onSettled: () => { submissionLocked.current = false; setRestoreExtras({}); },
   });
 
   if (!auth.can('clusters', 'create')) {
@@ -180,6 +184,7 @@ export function ClusterWizardPage() {
   const WizardSection = engineUI?.wizardSection;
   const TopologySection = engineUI?.topologySection;
   const ResourcesSection = engineUI?.resourcesSection;
+  const RestoreSection = engineUI?.restoreSection;
   const engineSummary = engineUI?.specSummary?.(spec) ?? `${spec.components.engine.replicas} nodes`;
 
   const goto = (id: StepId, clickCount: number) => {
@@ -216,8 +221,8 @@ export function ClusterWizardPage() {
     }, () => {
       submitted.current = true;
       button.disabled = true;
-      const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed) };
-      create.mutate(body);
+      const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed), ...(spec.dataSource ? restoreExtras : {}) };
+      void create.run(body);
     });
   };
 
@@ -538,6 +543,7 @@ export function ClusterWizardPage() {
               </Card>
               {hasCapability(provider, 'restores') ? <Card title="Seed data (optional)">
                 <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} targetNamespace={targetNamespace || DEFAULT_NAMESPACE} namespaces={namespaceOptions} showErrors={touched.backups} pitr={pitr} />
+                {RestoreSection && spec.dataSource ? <RestoreSection source={{ namespace: spec.dataSource.namespace || targetNamespace || DEFAULT_NAMESPACE, cluster: spec.dataSource.cluster }} inPlace={false} value={restoreExtras} onChange={(extras) => { editAttempt(); setRestoreExtras(extras); }} showErrors={touched.backups} /> : null}
               </Card> : null}
             </div>
           ) : null}

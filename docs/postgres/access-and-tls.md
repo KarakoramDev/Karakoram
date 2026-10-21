@@ -114,6 +114,19 @@ Creation without a supplied login password returns `generatedPassword` once; rot
 
 Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable; Supabase protects its service identities too. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
 
+In-process callers of `postgres.Access.CreateRole` / `UpdateRole` may additionally
+set `Role.MemberOfAdmin` (`memberOfAdmin,omitempty` on the internal agent/journal
+protocol). Every entry must also appear in `MemberOf`; the same target allowlist
+applies. This is intentionally absent from the public OpenAPI and public role
+responses. OpenBao's dedicated `LOGIN CREATEROLE` account uses both
+`pg_read_all_data` and `pg_write_all_data` in both lists so it can delegate those
+memberships to dynamic roles. Grants use `WITH ADMIN OPTION`; removing only an
+admin entry uses `REVOKE ADMIN OPTION FOR`, preserving ordinary membership.
+Admin-option roles (and their effective membership graph) require the same
+additional administrative RBAC checks as other privileged roles. Empty admin
+lists are omitted, preserving existing journal request bytes and receipt hashes.
+
+
 Managed login passwords are sealed and loaded into all proxies because ProxySQL needs recoverable passwords. SQL-created roles/password changes are not automatically imported; manage proxy-facing identities through this API. Access mutations use a freshly resolved writable primary, and HA actions require Patroni's leader lock. No current primary returns unavailable rather than directing writes to a replica. This is direct access administration, not continuous reconciliation of arbitrary SQL changes.
 
 **Proxy publication is asynchronous.** A role-create `201`, update/rotation

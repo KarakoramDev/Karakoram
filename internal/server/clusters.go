@@ -237,6 +237,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
 		}
 		if d := c.Spec.DataSource; d != nil {
+			if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+				return *failure
+			}
 			d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
 			source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 			if failure := s.restorePermission(ctx, namespace, source); failure != nil {
@@ -255,6 +258,16 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				}
 			}
 		}
+		var restoreSource domain.ClusterRef
+		var restoreBackup string
+		if c.Spec.DataSource != nil {
+			restoreSource = domain.ClusterRef{Namespace: c.Spec.DataSource.Namespace, Name: c.Spec.DataSource.Cluster}
+			restoreBackup = c.Spec.DataSource.Backup
+		}
+		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, restoreSource, restoreBackup, "clone", b.OpenbaoUnsealShares)
+		if restoreFailure != nil {
+			return *restoreFailure
+		}
 		p, err := s.Registry.Get(c.Spec.Provider)
 		if err != nil {
 			return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
@@ -268,6 +281,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = validateDataMcp(p, &c); err != nil {
 			return s.failure(err)
 		}
+		var optionValues map[string][]byte
+		if extractor, ok := p.(engine.WriteOnlyOptions); ok {
+			optionValues, err = extractor.ExtractWriteOnlyOptions(nil, &c.Spec)
+			if err != nil {
+				return s.failure(err)
+			}
+		}
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
@@ -280,6 +300,15 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		values, err := tlsValues(b.Spec.Tls)
 		if err != nil {
 			return s.failure(err)
+		}
+		if values == nil {
+			values = make(map[string][]byte, len(optionValues))
+		}
+		for key, value := range optionValues {
+			values[key] = value
+		}
+		for key, value := range restoreValues {
+			values[key] = value
 		}
 		if dryRun {
 			if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
@@ -440,6 +469,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = validateDataMcp(p, &next); err != nil {
 			return s.failure(err)
 		}
+		var optionValues map[string][]byte
+		if extractor, ok := p.(engine.WriteOnlyOptions); ok {
+			optionValues, err = extractor.ExtractWriteOnlyOptions(&c.Spec, &next.Spec)
+			if err != nil {
+				return s.failure(err)
+			}
+		}
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}
@@ -458,6 +494,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
+		tlsChanged := len(values) != 0
+		if values == nil {
+			values = make(map[string][]byte, len(optionValues))
+		}
+		for key, value := range optionValues {
+			values[key] = value
+		}
 		// Existing clusters retain their active trust root. Leaf rotation does not
 		// implement a CA trust-overlap rollout, so CA replacement must fail closed.
 		for _, key := range []string{"tls/ca.crt", "tls/ca.key"} {
@@ -474,7 +517,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		kind := domain.OperationUpdate
 		if next.Spec.Version != c.Spec.Version {
 			kind = domain.OperationUpgrade
-		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || len(values) != 0 {
+		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || tlsChanged {
 			kind = domain.OperationTLS
 		}
 		if dryRun {
@@ -512,6 +555,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		updated.OperationID = op.ID
 		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
 	case "DeleteCluster":
+		if failure := s.openbaoDeletionGuard(ctx, c); failure != nil {
+			return *failure
+		}
 		q := request(ctx).URL.Query()
 		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}
 		op := domain.Operation{Kind: domain.OperationDelete, Actor: store.Actor(ctx)}
@@ -649,6 +695,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(backupAPI(*b))
 	case "CreateBackup":
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
 		b := in.Body.(*api.CreateBackupRequest)
 		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
 			state := string(c.Status.Phase)
@@ -715,6 +764,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(restoreAPI(*r))
 	case "CreateRestore":
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
 		b := in.Body.(*api.CreateRestoreRequest)
 		source := value(b.Source.SourceCluster)
 		if source == "" {
@@ -783,6 +835,10 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				return s.failure(engine.Invalid("restore source is not a successful RabbitMQ definitions backup"))
 			}
 		}
+		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, sourceRef, value(b.Source.Backup), b.Name, b.OpenbaoUnsealShares)
+		if restoreFailure != nil {
+			return *restoreFailure
+		}
 		if b.Source.PitrTime != nil {
 			sourceRC, sourceProvider, err := s.context(ctx, sourceRef)
 			if err != nil {
@@ -829,7 +885,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 		})
-		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
+		if err = s.Store.EnqueueRestoreWithSecrets(ctx, &r, &op, restoreValues); err != nil {
 			var bound *store.BoundConsumersError
 			if errors.As(err, &bound) {
 				consumers := make([]any, 0, len(bound.Consumers))
@@ -859,6 +915,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	}
 	if strings.Contains(name, "Supabase") {
 		return s.supabase(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "OpenBao") {
+		return s.openbao(ctx, name, in, rc, p)
 	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {

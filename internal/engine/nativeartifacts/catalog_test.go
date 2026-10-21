@@ -103,6 +103,11 @@ func TestLock(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(got, a) {
 			t.Fatalf("Get(%s) = %+v, %v", a.Name, got, err)
 		}
+		for _, member := range a.ExecutableMembers {
+			if member == "" || path.IsAbs(member) || path.Clean(member) != member || member == "." || member == ".." || strings.HasPrefix(member, "../") {
+				t.Fatalf("invalid executable member for %s: %q", a.Name, member)
+			}
+		}
 	}
 	if _, err := Get("unknown"); err == nil {
 		t.Fatal("unknown artifact accepted")
@@ -473,5 +478,115 @@ func TestArchiveValidatorExtensionMajors(t *testing.T) {
 				t.Fatalf("validation did not fail closed: %s", output)
 			}
 		}
+	}
+}
+
+func TestPrepareExecutableMembers(t *testing.T) {
+	member := "bin/plugin's executable"
+	file := writeArchiveFixture(t, []tar.Header{{Name: member, Typeflag: tar.TypeReg, Mode: 0644}})
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := Artifact{Name: "example", File: "fixture.tar.gz", SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), ExecutableMembers: []string{member}}
+	dest := t.TempDir()
+	command := prepareScript(t, PrepareCommands(a, "file://"+file, dest, "runtime")[0])
+	chmod := "chmod 0755 -- " + quote(dest+"/"+member)
+	if !strings.Contains(command, strings.ReplaceAll(chmod, "'", "'\"'\"'")) || strings.Index(command, "sudo -u 'runtime'") > strings.Index(command, "chmod 0755") {
+		t.Fatal("chmod must be quoted inside unprivileged publication")
+	}
+	runUnprivilegedPrepare(t, a, file, dest)
+	info, err := os.Stat(filepath.Join(dest, member))
+	if err != nil || info.Mode().Perm() != 0755 {
+		t.Fatalf("executable mode: %v, %v", info, err)
+	}
+}
+
+func TestPrepareRejectsUnsafeExecutableMembers(t *testing.T) {
+	file := writeArchiveFixture(t, []tar.Header{
+		{Name: "plugin", Typeflag: tar.TypeReg, Mode: 0644},
+		{Name: "link", Typeflag: tar.TypeSymlink, Linkname: "plugin"},
+		{Name: "hardlink", Typeflag: tar.TypeLink, Linkname: "plugin"},
+		{Name: "directory", Typeflag: tar.TypeDir, Mode: 0755},
+	})
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, member := range []string{"", ".", "/plugin", "../plugin", "bin/../../plugin", "./plugin", "bin/../plugin", "bin//plugin", "plugin\n", "missing", "link", "hardlink", "directory"} {
+		t.Run(fmt.Sprintf("%q", member), func(t *testing.T) {
+			a := Artifact{Name: "example", File: "fixture.tar.gz", SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), ExecutableMembers: []string{member}}
+			dest := filepath.Join(t.TempDir(), "install")
+			script := prepareScript(t, PrepareCommands(a, "file://"+file, dest, "unused")[0])
+			output, err := exec.Command("sh", "-c", script).CombinedOutput()
+			if err == nil || !strings.Contains(string(output), "unsafe archive member") {
+				t.Fatalf("unsafe executable accepted: %v\n%s", err, output)
+			}
+			if _, err := os.Stat(dest); !os.IsNotExist(err) {
+				t.Fatal("rejected executable reached installation")
+			}
+		})
+	}
+	for _, a := range []Artifact{
+		{Name: "example", File: "example.deb", ExecutableMembers: []string{"plugin"}},
+		{Name: "example", File: "example", ExecutableMembers: []string{"plugin"}},
+		{Name: "supabase-pg17-extensions", File: "example.tar.gz", ExecutableMembers: []string{"plugin"}},
+	} {
+		output, err := exec.Command("sh", "-c", PrepareCommands(a, "", "", "")[0]).CombinedOutput()
+		if err == nil || !strings.Contains(string(output), "require an application archive") {
+			t.Fatalf("nonapplication executable members accepted: %v\n%s", err, output)
+		}
+	}
+}
+
+// Exercise the emitted publication commands as the current unprivileged user.
+// The destination already exists, so no ownership handoff is necessary.
+func runUnprivilegedPrepare(t *testing.T, a Artifact, file, dest string) {
+	t.Helper()
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\n[ \"$1\" = '-u' ] || exit 1\nshift 3\nexec \"$@\"\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	script := prepareScript(t, PrepareCommands(a, "file://"+file, dest, "runtime")[0])
+	cmd := exec.Command("sh", "-c", script)
+	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("prepare: %v\n%s", err, output)
+	}
+}
+
+func TestPrepareRealOpenBaoArchives(t *testing.T) {
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"openbao", "openbao-plugin-database-mongodb", "openbao-plugin-kms-aws"} {
+		t.Run(name, func(t *testing.T) {
+			a, err := Get(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := filepath.Join(cache, "kk-openbao-artifacts", a.File)
+			info, err := os.Stat(file)
+			if os.IsNotExist(err) {
+				t.Skip("cached upstream archive unavailable")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Size() != a.Size {
+				t.Fatalf("cached archive size = %d, want %d", info.Size(), a.Size)
+			}
+			dest := t.TempDir()
+			runUnprivilegedPrepare(t, a, file, dest)
+			member := "bao"
+			if name != "openbao" {
+				member = a.ExecutableMembers[0]
+			}
+			info, err = os.Stat(filepath.Join(dest, member))
+			if err != nil || info.Mode().Perm() != 0755 {
+				t.Fatalf("installed %s mode: %v, %v", member, info, err)
+			}
+		})
 	}
 }

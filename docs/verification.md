@@ -68,6 +68,30 @@ Inside the prepared guest, set `KARAKORAM_PG_BIN_DIR` to the installed PostgreSQ
 
 Run the copied binary with its normal `-test.v`/`-test.run` options after provisioning these prerequisites. Consult the integration source for the exact selected case's inputs; missing variables mean **skipped**, not passed. Native artifact build/qualification commands and resource safeguards are in [native artifacts](native-artifacts.md). Remove disposable guests and objects after capturing private, redacted evidence. Native protocol tests do not establish backend provisioning, public networking, independent placement or complete restore/clone behavior; those need deployment-level scenarios.
 
+### OpenBao coverage
+
+OpenBao coverage has separate layers; test existence is not a claim that this checkout or your deployment passed:
+
+- **Unit/API/CLI tests:** option admission, encrypted initialization receipts, secret-free configuration/status, reveal authorization/audit, connection target authorization, quorum-safe membership and rolling ordering, resumable snapshot backup/restore/clone, and seal/storage seams.
+- **Native agent integration:** `TestNativeOpenBao` in `internal/agent/openbao/integration_test.go` runs three real OpenBao members with TLS, encrypted initialization receipt replay/acknowledgement, Raft formation, process crash/restart, explicit re-unseal, certificate hot reload and metrics. Declarative MongoDB plugin registration is optional; this is not a database-credential issuance test.
+- **Native control-plane integration:** `TestNativeControlPlane` in `internal/engine/openbao/native_integration_test.go` drives provider reconciliation with real member agents/OpenBao: formation and reveal, secret-leak checks, automatic re-unseal after a child restart, rolling restart, 3→5→3 scaling, replacement, snapshot backup/restore through a signed S3 test endpoint, and a native PostgreSQL connection with real credential issuance and cleanup while dynamic leases remain outstanding. PostgreSQL target identity operations use a SQL-backed test adapter against the native server, not a deployed PostgreSQL member-agent path. Its infrastructure/S3 harness does not establish real backend or external S3 acceptance.
+- **Native PostgreSQL-storage integration:** `TestNativeControlPlanePostgresStorage` uses real agents/OpenBao and a SQL-backed binding adapter to create the PostgreSQL database/role, initialize and unseal three HA peers, check native storage/HA tables, recover data after every local member volume is replaced, and verify destructive versus retained-data/NOLOGIN release. It does not establish production binding inventory, source deletion protection or credential custody; concrete PgPlatform manager injection and merged API/CLI/UI composition acceptance remain prerequisites.
+- **Native deleted-source clone integration:** `TestNativeControlPlaneCloneDeletedSource` exports a snapshot from a real singleton source, deletes its processes/volumes/secrets/record, then force-restores three native members using offline supplied shares. It checks differing source/target thresholds, recovered data, explicit native seal/unseal, management authentication and cleanup. Infrastructure and the signed S3 endpoint are test fakes, not production backend or real S3 acceptance.
+- **Manual native development proofs:** MongoDB TLS replica-set configuration, independent hyphenated connection/role names, root rotation and readonly/readwrite credential issuance/revocation; RabbitMQ HTTPS management and TLS AMQP issuance, readonly versus readwrite authorization, vhost isolation and revocation. Native target processes and OpenBao were real; these scratch development checks are not permanent automated-suite or deployed control-plane coverage.
+- **Pending live verification:** all Nomad/Dokploy/Zerops workflows, production binding-service composition, real S3 restore/clone, transit/KMS external dependencies and external access. A newer-version rolling upgrade also awaits a newer catalog entry.
+
+Native tests require an unprivileged Linux user, disposable directories and unused loopback ports, not Docker or production data. Set `KARAKORAM_OPENBAO_BIN` to the native `bao` executable and `KARAKORAM_PG_BIN_DIR` to the native PostgreSQL binary directory for the control-plane credential scenario. The agent's optional plugin case uses `KARAKORAM_OPENBAO_MONGODB_PLUGIN`; the control-plane harness requires the locked MongoDB plugin archive beside `bao` or this explicit executable override. Consult the integration sources for exact binary prerequisites and skip conditions. An unset opt-in variable can skip a native case; a prerequisite missing from an enabled scenario can fail it. Skipped is not passed.
+
+```sh
+go test ./internal/engine/openbao/... ./internal/agent/openbao
+go test -tags integration -count=1 -timeout 30m \
+  ./internal/engine/openbao ./internal/agent/openbao \
+  -run '^(TestNativeControlPlane|TestNativeControlPlanePostgresStorage|TestNativeControlPlaneCloneDeletedSource|TestNativeOpenBao)$'
+```
+
+Use [OpenBao operations](openbao/operations.md), [access](openbao/access-and-tls.md) and [recovery](openbao/backups.md) as the deployment checklist. Exercise a three-member create, kill/re-unseal, restart, scale 3→5→3, replacement, catalog-available upgrade, snapshot backup/restore/clone, transit auto-unseal, PostgreSQL/MongoDB/RabbitMQ credential issuance, and delete/keepVolumes resume. Confirm both data and native authentication after recovery; require separate allowed/denied external-client checks.
+
+
 ## Capability matrix
 
 Coverage descriptions, not evidence that this checkout or deployment passed:
@@ -83,6 +107,9 @@ Coverage descriptions, not evidence that this checkout or deployment passed:
 | PostgreSQL: access/TLS/proxy/lifecycle | Local contracts; native PostgreSQL/ProxySQL access/reload and upgrade cases | HA fencing/failover, scaling/replacement, resource changes and rolling lifecycle | Driver compatibility, external TLS/allowlists and client reconnection |
 | PostgreSQL: pgBackRest/PITR/restore/clone | Local recovery checkpoints; native inventory compatibility | S3 backup chains, expiry dependencies, PITR/in-place/clone and credential recovery | Conservative-window limits, offline-major rollback, retained-object cleanup |
 | Supabase: modular API/services | Local option/key/SQL/rendering contracts; native API, Envoy, Vector and available component cases | Enabled-component dependency/configuration, API data paths, service reconnect and logs | Credential/function/SMTP UI, object protection and unavailable-artifact rejection |
+| OpenBao: Raft, init/unseal, TLS and membership | Unit state machines; native three-member agents and control-plane create/restart/scale/replace/snapshot workflows | Backend provisioning, real S3, catalog-newer upgrade and external seal dependencies pending | Fixture-backed browser create forms, capability gating, explicit reveal identity/async isolation and secret-cache checks |
+| OpenBao: snapshots, clone and PostgreSQL storage | Native snapshot restore/replay evidence, deleted-source forced clone and SQL-backed storage/HA integration cases | Concrete shared binding-manager composition and deployment recovery acceptance pending | Supplied-share validation/clearing and restore failure/retry workflows |
+| OpenBao: database credential connections | Provider/API/CLI authorization and replay tests; native PostgreSQL issuance | Deployed PostgreSQL/MongoDB/RabbitMQ connectivity and lifecycle acceptance pending | Native MongoDB/RabbitMQ TLS issuance, least privilege, rotation/revocation and cleanup development proofs |
 | All: monitoring/API/CLI | Local handlers/auth/filtering; real agent integration | Namespace isolation, API/CLI workflows | Charts, events/logs, pending/error states |
 | Control plane: auth/RBAC/OIDC, namespaces/relays | Local identity/policy/transport | Accounts/OIDC, second-project management/recovery | Restricted direct navigation, group grants, relay health |
 | Installation/state/admin recovery | Local startup/recovery contracts | No dedicated installer scenario | Complete checklist below |

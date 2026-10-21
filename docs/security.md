@@ -94,6 +94,14 @@ Use a strong random master key of at least 32 characters; installation generates
 
 **Warning:** If `KARAKORAM_ADMIN_PASSWORD` is unset on initial bootstrap, the generated admin password is logged once. Set it through a protected service secret to avoid that fallback; the installer does this. Audit-event redaction does not mean all application logs are secret-free. Never put secrets in names, shell traces, request logs or support archives.
 
+### OpenBao initialization and unseal custody
+
+Karakoram is the custodian of OpenBao unseal/recovery shares, the initial root token and its management token. These are sealed in the control-plane secret store under the installation master key. The initialization owner retains only an encrypted receipt until acknowledgement; unseal shares and management/root tokens do not enter member configuration or runtime environment. Auto-unseal credentials are different: they are write-only in the API but must be delivered to OpenBao members. Protect their volumes and configuration.
+
+Loss of consistent control-plane state or the original master key can prevent automatic Shamir re-unseal. Back up both separately and [reveal shares for secure offline custody](openbao/access-and-tls.md#reveal-and-store-recovery-material-offline). Recovery shares do not replace the external transit/KMS key. OpenBao connection details publish endpoints and CA only; they never expose a management token.
+
+Explicit key reveal requires `openbao-unseal-keys:reveal` on the namespace-qualified cluster, administrator-only by default, and exact cluster-name confirmation. It returns `Cache-Control: no-store` and records `OpenBaoUnsealKeysRevealed` without response secrets. Do not capture the output in shared logs, screenshots or support reports.
+
 ## Service ownership
 
 Karakoram requires recorded service/volume IDs, its own import evidence, a matching nonsecret ownership marker or readable legacy identity evidence before adoption/deletion. A hostname alone never proves ownership. Member `KARAKORAM_OWNER` is service-bound and derived from the agent token without disclosing it; relay `KARAKORAM_RELAY_OWNER` is a random namespace marker. Neither grants authentication. Agent tokens, certificates and keys remain sensitive.

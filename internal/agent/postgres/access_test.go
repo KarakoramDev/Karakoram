@@ -55,6 +55,47 @@ func TestRoleSQLSafety(t *testing.T) {
 		t.Fatal("plaintext password accepted on agent protocol")
 	}
 }
+
+func TestRoleAdminMembershipValidation(t *testing.T) {
+	role := pgspec.RoleWrite{Role: pgspec.Role{Name: "app", MemberOf: []string{"pg_read_all_data"}, MemberOfAdmin: []string{"pg_read_all_data"}}}
+	if err := validateRoleWrite(role); err != nil {
+		t.Fatal(err)
+	}
+	for _, admin := range [][]string{{"pg_write_all_data"}, {"pg_read_all_data", "pg_read_all_data"}, {"postgres"}} {
+		role.MemberOfAdmin = admin
+		if err := validateRoleWrite(role); err == nil {
+			t.Fatalf("accepted invalid admin membership %v", admin)
+		}
+	}
+}
+
+func TestRoleAdminMembershipSQL(t *testing.T) {
+	role := pgspec.Role{Name: `app"name`, MemberOf: []string{`read"ers`}, MemberOfAdmin: []string{`read"ers`}}
+	for _, tc := range []struct {
+		name    string
+		current []roleMembership
+		admin   []string
+		members []string
+		want    string
+	}{
+		{"create", nil, role.MemberOfAdmin, role.MemberOf, `GRANT "read""ers" TO "app""name" WITH ADMIN OPTION`},
+		{"upgrade", []roleMembership{{parent: `read"ers`, grantor: "postgres"}}, role.MemberOfAdmin, role.MemberOf, `GRANT "read""ers" TO "app""name" WITH ADMIN OPTION`},
+		{"unchanged", []roleMembership{{parent: `read"ers`, grantor: "postgres", admin: true}}, role.MemberOfAdmin, role.MemberOf, ""},
+		{"revoke-admin", []roleMembership{{parent: `read"ers`, grantor: `grant"or`, admin: true}}, nil, role.MemberOf, `REVOKE ADMIN OPTION FOR "read""ers" FROM "app""name" GRANTED BY "grant""or"`},
+		{"revoke-membership", []roleMembership{{parent: `read"ers`, grantor: "postgres", admin: true}}, nil, nil, `REVOKE "read""ers" FROM "app""name" GRANTED BY "postgres"`},
+		{"ordinary-create", nil, nil, role.MemberOf, `GRANT "read""ers" TO "app""name"`},
+		{"ordinary-unchanged", []roleMembership{{parent: `read"ers`, grantor: "postgres"}}, nil, role.MemberOf, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			desired := role
+			desired.MemberOf, desired.MemberOfAdmin = tc.members, tc.admin
+			got := strings.Join(roleMembershipStatements(desired, tc.current), ";")
+			if got != tc.want {
+				t.Fatalf("SQL = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
 func TestVerifierValidation(t *testing.T) {
 	if !validVerifier(testVerifier()) {
 		t.Fatal("valid verifier rejected")

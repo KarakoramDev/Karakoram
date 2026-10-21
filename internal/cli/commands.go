@@ -190,6 +190,9 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if dryRun {
 		return a.printDryRun(result)
 	}
+	if op == "revealOpenBaoUnsealKeys" && a.format == "table" {
+		return a.openBaoUnsealKeysTable(result)
+	}
 	if s.path == "clusters ca <cluster>" {
 		pem, _ := nested(result, "caCertificate").(string)
 		return printPEM(a.opts.Out, pem)

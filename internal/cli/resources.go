@@ -19,6 +19,7 @@ import (
 )
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
+	openBaoFlags(c, s.operation)
 	switch {
 	case s.operation == "createAPIToken":
 		tokenFlags(c)
@@ -114,6 +115,9 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error) {
 	if s.operation == "createAPIToken" {
 		return a.tokenBody(cmd)
+	}
+	if strings.Contains(s.operation, "OpenBao") {
+		return a.openBaoBody(cmd, s.operation)
 	}
 	if strings.HasPrefix(s.path, "namespaces ") {
 		return a.namespaceBody(cmd, s.operation)
@@ -611,7 +615,11 @@ func (a *app) clone(cmd *cobra.Command, cluster, name string, body any) error {
 	if dryRun {
 		op = dryRunOperation(op)
 	}
-	result, err := a.request(cmd.Context(), op, nil, nil, map[string]any{"name": name, "spec": spec})
+	request := map[string]any{"name": name, "spec": spec}
+	if shares := nested(body, "openbaoUnsealShares"); shares != nil {
+		request["openbaoUnsealShares"] = shares
+	}
+	result, err := a.request(cmd.Context(), op, nil, nil, request)
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,8 @@
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
 import { postgresMetadata, supabaseMetadata } from './postgres/metadata.ts';
-export type { EngineUI, MonitoringPanel, TopologyEditorProps, WizardSectionProps } from './types';
+import { openbaoMetadata } from './openbao/metadata.ts';
+export type { EngineUI, MonitoringPanel, RestoreExtras, RestoreSectionProps, TopologyEditorProps, WizardSectionProps } from './types';
 export { reviewChanges } from './changes.ts';
 
 /**
@@ -14,6 +15,7 @@ export { reviewChanges } from './changes.ts';
 export const engines: Record<string, EngineUI> = {
   postgres: postgresMetadata,
   supabase: supabaseMetadata,
+  openbao: openbaoMetadata,
   psmdb: {
     label: 'Percona Server for MongoDB',
     description: 'Replica sets and sharded MongoDB clusters.',

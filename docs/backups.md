@@ -12,6 +12,7 @@ Register S3 destinations, manage backup inventory and schedules, and recover int
 | [RabbitMQ](rabbitmq/backups.md) | `definitions` only; **no queued messages**; restore merges definitions | No | Control plane exports through Management API, then compresses/uploads to S3 |
 | [Elasticsearch](elasticsearch/snapshots.md) | Native `snapshot` | No | Nodes write directly to S3 |
 | [PostgreSQL / Supabase](postgres/backups.md) | pgBackRest `full`, `diff`, `incr`; PostgreSQL data only | When enabled | Current primary writes backups and WAL directly to S3 |
+| [OpenBao](openbao/backups.md) | Native `raft-snapshot`, up to 4 GiB; requires source seal material for recovery | No | Control plane streams native HTTPS snapshot to S3; unavailable with PostgreSQL storage |
 
 Backup payload transfer to S3 does not use the management relay; remote administration requests may. Control-plane storage verification does not prove member connectivity. Engine backups and [control-plane state backups](operations.md#control-plane-state-backup-and-recovery) protect different assets. Zerops live volume archives are not consistent engine backups.
 
@@ -249,6 +250,7 @@ preserved source; do not discard its live data or force an implicit replay.
 Own backup operations remain queueable because they do not supersede the restore
 owner and share the serialized native worker; this also permits the required
 post-restore fresh-base backup without reopening conflicting mutation admission.
+OpenBao foreign/deleted-source recovery additionally needs the source's unseal/recovery material. The top-level write-only `openbaoUnsealShares` field is accepted in restore and cluster-create requests, not persisted in desired spec. See [Raft restore, clone and supplied-share examples](openbao/backups.md); a snapshot alone cannot recover a sealed server.
 
 ### Cross-namespace recovery
 
