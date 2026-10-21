@@ -162,6 +162,9 @@ func (a *app) waitMutation(ctx context.Context, op string, args []string, result
 		generation, _ = nested(result, "targetGeneration").(float64)
 	}
 	if id != "" {
+		if op == "rebalancePostgres" {
+			return a.waitOperation(ctx, id, timeout, true)
+		}
 		fmt.Fprintf(a.opts.Err, "Accepted %s for cluster %s; operation %s.\n", mutationDescription(op), cluster, id)
 		if err := a.waitOperation(ctx, id, timeout, cluster == ""); err != nil {
 			return err

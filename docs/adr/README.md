@@ -46,6 +46,9 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0040](0040-agent-interface-mcp.md) | Agent operation metadata, server-side dry-run and the embedded dual-era MCP server with server-enforced confirmation |
 | [0041](0041-restricted-api-tokens.md) | Restricted API tokens as a deny overlay intersected with owner RBAC |
 | [0042](0042-oauth-authorization-server.md) | Embedded OAuth 2.1 authorization server with per-authorization consent for MCP clients |
+| [0044](0044-postgres-profiles.md) | Declarative PostgreSQL profiles (Supabase, PostGIS, pgvector, TimescaleDB Apache-2) over one core |
+| [0045](0045-postgres-bindings.md) | Bindings of dependent services to Karakoram PostgreSQL: least-privilege roles, rotation, deletion guard |
+| [0046](0046-citus-distributed-topology.md) | Citus distributed topology: coordinator and worker Patroni groups, formation DCS, rebalancing, coordinated restore points |
 
 ## References and verification
 

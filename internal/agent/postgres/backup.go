@@ -381,6 +381,8 @@ func (e *Runner) backup(ctx context.Context, s pgspec.Spec, p paths, r pgspec.Ba
 	if err != nil {
 		return pgspec.BackupResponse{}, err
 	}
+	observeOnly := r.ObserveOnly
+	r.ObserveOnly = false // Observation must preserve the original request digest.
 	digest := fmt.Sprintf("%x", hash(r))
 	var receipt backupReceipt
 	data, err := os.ReadFile(name)
@@ -417,6 +419,9 @@ func (e *Runner) backup(ctx context.Context, s pgspec.Spec, p paths, r pgspec.Ba
 	}
 	if !os.IsNotExist(err) {
 		return receipt.Response, err
+	}
+	if observeOnly {
+		return pgspec.BackupResponse{State: "absent"}, nil
 	}
 	st := e.status(ctx, s, p)
 	if !st.Running || (st.Role != "primary" && st.Role != "standalone") {
@@ -616,7 +621,7 @@ func prepareRestore(ctx context.Context, n *agent.Node, s pgspec.Spec, p paths, 
 		return err
 	}
 	process := "postgres"
-	if s.Topology == pgspec.TopologyHA {
+	if usesPatroni(s) {
 		process = "patroni"
 	}
 	if err = n.Stop(ctx, process); err != nil {
@@ -742,7 +747,7 @@ func finishRestore(ctx context.Context, n *agent.Node, s pgspec.Spec, p paths) e
 	if _, err = connection.Exec(ctx, "ALTER SYSTEM RESET archive_mode"); err != nil {
 		return errors.New("remove clone bootstrap archive override")
 	}
-	if s.Topology == pgspec.TopologyHA {
+	if usesPatroni(s) {
 		return patroniRequest(ctx, s, "POST", "/restart", map[string]any{}, nil)
 	}
 	return n.Action(ctx, "postgres", "restart")

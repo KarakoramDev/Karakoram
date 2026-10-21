@@ -46,8 +46,8 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 			err = e
 		}
 	}()
-	if s.Topology != "ha" {
-		return result, engine.Invalid("member replacement requires an HA cluster")
+	if !patroniTopology(s.Topology) || rc.Cluster.Spec.Components.Engine.Replicas < 2 {
+		return result, engine.Invalid("member replacement requires a replicated group")
 	}
 	if s.Replacement == nil {
 		// A completed checkpoint is authoritative if the final response was lost.
@@ -70,10 +70,10 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if old == nil || old.Role != "data" {
 			return result, engine.Invalid("replacement target must be a data member")
 		}
-		if !s.Formed || s.Pending != nil || len(s.data()) != rc.Cluster.Spec.Components.Engine.Replicas {
+		if !s.Formed || s.Pending != nil || len(s.group(old.Group).data()) != rc.Cluster.Spec.Components.Engine.Replicas {
 			return result, engine.ErrUnavailable
 		}
-		m := s.newDataMember(rc.Cluster)
+		m := s.newGroupMember(rc.Cluster, old.Group)
 		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join"}
 	}
 	cp := s.Replacement
@@ -189,17 +189,23 @@ func replacementResult(cp *replacementState) engine.OpResult {
 // started, completing that same cutover is safer than trying to undo stop holds
 // or an etcd removal whose response may have been lost.
 func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
-	return op.Kind == domain.OperationReplaceMember || restoreOperation(op)
+	return op.Kind == domain.OperationReplaceMember || op.Kind == "rebalance" || op.Kind == domain.OperationBackup || restoreOperation(op)
 }
 
 func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
-	if op.Kind != domain.OperationReplaceMember {
+	if op.Kind != domain.OperationReplaceMember && op.Kind != "rebalance" {
 		return engine.Invalid("operation does not support cancellation")
 	}
 	return nil
 }
 
-func (p *Core) CancelOperation(_ context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if op.Kind == "rebalance" {
+		return p.runCitusRebalance(ctx, rc, op, true)
+	}
+	if op.Kind == domain.OperationBackup {
+		return handoffCitusBackupRecovery(rc, op)
+	}
 	if restoreOperation(op) {
 		return handoffRestoreRecovery(rc, op)
 	}
@@ -314,7 +320,7 @@ func switchAwayConfigured(ctx context.Context, rc *engine.Context, s *state, old
 		return engine.Invalid("invalid synchronous replication options")
 	}
 	candidate := ""
-	for _, m := range s.data() {
+	for _, m := range s.memberGroup(old).data() {
 		if m.Name == old || m.Removing || m.Retirement != "" || m.EtcdLearner || m.DeployOp != nil || m.Stage != "joined" || currentConfig && m.ConfigVersion != s.ConfigVersion {
 			continue
 		}

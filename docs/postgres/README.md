@@ -12,10 +12,10 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private pgEdge companion and de
 | --- | --- |
 | Provider | `postgres` |
 | Versions | 16.14.1, 16.15.1; 17.10.1, **17.11.1** (default); 18.4.1, 18.6.1 |
-| Topology | `single`: one PostgreSQL member; `ha`: three or five members with Patroni and co-located etcd |
+| Topology | `single`: one member; `ha`: three or five with Patroni; [`distributed`](distributed.md): Citus coordinator + worker groups, gated by artifact availability |
 | Presets | `dev`: single; `prod`: three-member HA; both include one ProxySQL replica |
 | Data defaults / minima | Shared 1 CPU, 2 GiB RAM, 5 GB data disk / 1 GiB RAM and 5 GB disk |
-| Client service | ProxySQL 3.0.11; `components.extra.proxy`, default 1, enabled range 1–5; zero only with `single` |
+| Client service | ProxySQL 3.0.11; `components.extra.proxy`, default 1, enabled range 1–5; zero only with single-member topology/groups |
 | TLS | `requireTLS`, `selfSigned` by default |
 | Recovery | pgBackRest `full` / `diff` / `incr`, opt-in PITR; [backups](backups.md) |
 
@@ -69,13 +69,26 @@ Quote `"off"` in YAML if your YAML tooling interprets it as a boolean. For HA, s
 `engineOptions` is a strict object: unknown fields and `null` are rejected. `engineConfig` is not accepted.
 
 - `synchronousMode`: `off` (default), `on`, `strict`. Strict HA can block writes when a synchronous standby is unavailable; it is not protection against every client durability override.
+- `profiles`: additive workload set such as `[postgis, pgvector]`; absent means none. See [profiles, availability and upgrade rules](profiles.md).
 - `parameters`: string-valued allowlisted PostgreSQL settings, including connection/memory, planner, logging, timeout and selected WAL/checkpoint tuning. Engine-owned networking, TLS, archiving, replication and preload settings cannot be overridden. See [`options.go`](../../internal/engine/postgres/options.go) for the exact allowlist.
 - `proxy.readWriteSplit`: default false; SELECT-pattern reader routing is opt-in, not a general SQL classifier or read-after-write guarantee.
 - `proxy.readerPort`: default false; enables the private reader listener on 5433. The managed public endpoint is 5432.
 
+The catalog also describes `distributed` admission for Citus formations (see
+[distributed operations guide](distributed.md) and [ADR 0046](../adr/0046-citus-distributed-topology.md)). This topology requires a
+locked, resolvable `citus-pg<major>` native artifact for PostgreSQL 16–18; builds
+without that artifact reject it. `components.engine.replicas` is the per-group
+count, either 1 or 3 (default 3), and three-member groups require a proxy.
+`engineOptions.citus` is a strict object with `workerGroups` (1–8, default 2)
+and `database` (nonempty, at most 63 bytes, default `app`). Citus options are not
+accepted for single/HA clusters. Conversion to or from distributed topology
+and distributed major upgrades are rejected.
+
 ## Access and ports
 
 Use [native roles, databases, grants and TLS](access-and-tls.md), not MongoDB-shaped `db-users`/`db-roles`. Ordinary connection summaries contain no password; credential reveal is separately authorized. Managed login passwords are synchronized into ProxySQL; SQL-created roles are not automatically routable through it.
+
+Managed services use [consumer bindings](bindings.md) for owned databases, sealed credentials, rotation and dependency guards.
 
 | Listener | Port | Scope |
 | --- | --- | --- |

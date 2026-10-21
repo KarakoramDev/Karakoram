@@ -25,7 +25,7 @@ func sourceForRestore(r *domain.Restore, target *domain.Cluster) restoreSource {
 	if cluster == "" {
 		cluster = target.Name
 	}
-	source := restoreSource{Namespace: ns, Cluster: cluster, Backup: r.Source.Backup}
+	source := restoreSource{Namespace: ns, Cluster: cluster, Backup: r.Source.Backup, RestorePoint: r.Source.RestorePoint}
 	if r.Source.PITRTime != nil {
 		source.Time = r.Source.PITRTime.UTC().Format(time.RFC3339Nano)
 	}
@@ -34,6 +34,24 @@ func sourceForRestore(r *domain.Restore, target *domain.Cluster) restoreSource {
 func (p *Core) resolveRestore(ctx context.Context, rc *engine.Context, source restoreSource) (*domain.Backup, pgspec.Restore, error) {
 	ref := domain.ClusterRef{Namespace: source.Namespace, Name: source.Cluster}
 	var b *domain.Backup
+	if source.Time != "" && rc.Cluster.Spec.Topology.Type == "distributed" {
+		return nil, pgspec.Restore{}, engine.Invalid("distributed PostgreSQL requires a named restore point, not timestamp PITR")
+	}
+	if source.RestorePoint != "" && source.Backup == "" {
+		items, e := rc.Store.ListBackups(ctx, ref)
+		if e != nil {
+			return nil, pgspec.Restore{}, e
+		}
+		for _, item := range items {
+			if item.Phase == domain.PhaseSucceeded && item.Postgres != nil && item.Postgres.RestorePoint == source.RestorePoint {
+				source.Backup = item.Name
+				break
+			}
+		}
+		if source.Backup == "" {
+			return nil, pgspec.Restore{}, engine.Invalid("unknown coordinated restore point")
+		}
+	}
 	var err error
 	if source.Backup != "" {
 		b, err = rc.Store.GetBackup(ctx, ref, source.Backup)
@@ -56,38 +74,9 @@ func (p *Core) resolveRestore(ctx context.Context, rc *engine.Context, source re
 		if _, e = p.ValidatePITRRestore(ctx, &sourceContext, target); e != nil {
 			return nil, pgspec.Restore{}, e
 		}
-		sourceState, e := load(sourceCluster)
-		if e != nil {
-			return nil, pgspec.Restore{}, e
-		}
-		sourceBackupState, e := loadBackupState(sourceCluster)
-		if e != nil {
-			return nil, pgspec.Restore{}, e
-		}
-		sourceStorage, e := p.backupStorage(ctx, rc, sourceCluster.Spec.Backup.Storage, ref.Namespace)
-		if e != nil {
-			return nil, pgspec.Restore{}, e
-		}
-		currentRepository := repoPrefix(sourceStorage, sourceCluster, sourceState)
-		// Prefer the latest consistent set not newer than the requested target.
-		for i := range items {
-			item := &items[i]
-			if item.Phase != domain.PhaseSucceeded || item.Postgres == nil || item.CompletedAt == nil || item.CompletedAt.After(target) {
-				continue
-			}
-			if item.Storage != sourceStorage.Name || item.Postgres.Repository != currentRepository {
-				continue
-			}
-			if sourceBackupState.LineageStart != nil && item.CompletedAt.Before(*sourceBackupState.LineageStart) {
-				continue
-			}
-			if b == nil || item.CompletedAt.After(*b.CompletedAt) {
-				copy := *item
-				b = &copy
-			}
-		}
-		if b == nil {
-			return nil, pgspec.Restore{}, engine.Invalid("no consistent backup precedes the restore target")
+		b, err = p.selectPITRBackup(ctx, rc, sourceCluster, target, items)
+		if err != nil {
+			return nil, pgspec.Restore{}, err
 		}
 	}
 	if err != nil {
@@ -102,12 +91,64 @@ func (p *Core) resolveRestore(ctx context.Context, rc *engine.Context, source re
 	if major(b.SourceVersion) != major(rc.Cluster.Spec.Version) {
 		return nil, pgspec.Restore{}, engine.Invalid("restore requires the source PostgreSQL major version")
 	}
+	if err := p.validateBackupProfiles(b, rc.Cluster); err != nil {
+		return nil, pgspec.Restore{}, err
+	}
+	if rc.Cluster.Spec.Topology.Type == "distributed" {
+		opts, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
+		if e != nil {
+			return nil, pgspec.Restore{}, e
+		}
+		if b.SourceTopology.Type != "distributed" || len(b.Postgres.Groups) != 1+opts.citusOptions().WorkerGroups {
+			return nil, pgspec.Restore{}, engine.Invalid("distributed restore requires exactly matching source and target group counts")
+		}
+		if b.Postgres.RestorePoint == "" {
+			return nil, pgspec.Restore{}, engine.Invalid("backup has no coordinated restore point")
+		}
+	} else if len(b.Postgres.Groups) > 0 {
+		return nil, pgspec.Restore{}, engine.Invalid("distributed backups require a distributed target")
+	}
 	storage, err := p.backupStorage(ctx, rc, b.Storage, b.Namespace)
 	if err != nil {
 		return nil, pgspec.Restore{}, err
 	}
 	repo, err := repository(storage, b.Postgres.Repository)
-	return b, pgspec.Restore{Source: repo, Set: b.Postgres.Label, TargetTime: source.Time}, err
+	return b, pgspec.Restore{Source: repo, Set: b.Postgres.Label, TargetTime: source.Time, TargetName: b.Postgres.RestorePoint}, err
+}
+
+// selectPITRBackup shares immutable base-set selection between clone admission
+// and execution. Requirements never come from the current source specification.
+func (p *Core) selectPITRBackup(ctx context.Context, rc *engine.Context, source *domain.Cluster, target time.Time, items []domain.Backup) (*domain.Backup, error) {
+	s, err := load(source)
+	if err != nil {
+		return nil, err
+	}
+	bs, err := loadBackupState(source)
+	if err != nil {
+		return nil, err
+	}
+	storage, err := p.backupStorage(ctx, rc, source.Spec.Backup.Storage, source.Ref().Namespace)
+	if err != nil {
+		return nil, err
+	}
+	repo := repoPrefix(storage, source, s)
+	var selected *domain.Backup
+	for i := range items {
+		b := &items[i]
+		if b.Phase != domain.PhaseSucceeded || b.Postgres == nil || b.CompletedAt == nil || b.CompletedAt.After(target) {
+			continue
+		}
+		if b.Storage != storage.Name || b.Postgres.Repository != repo || bs.LineageStart != nil && b.CompletedAt.Before(*bs.LineageStart) {
+			continue
+		}
+		if selected == nil || b.CompletedAt.After(*selected.CompletedAt) {
+			selected = b
+		}
+	}
+	if selected == nil {
+		return nil, engine.Invalid("no consistent backup precedes the restore target")
+	}
+	return selected, nil
 }
 func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state, sp *pgspec.Spec) error {
 	bs, err := loadBackupState(rc.Cluster)
@@ -123,7 +164,11 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 		if err != nil {
 			return err
 		}
-		repo, err := repository(storage, repoPrefix(storage, rc.Cluster, s))
+		prefix := repoPrefix(storage, rc.Cluster, s)
+		if s.Topology == "distributed" && sp.Citus != nil {
+			prefix = groupRepoPrefix(storage, rc.Cluster, s, sp.Citus.Group)
+		}
+		repo, err := repository(storage, prefix)
 		if err != nil {
 			return err
 		}
@@ -149,6 +194,9 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
 			return err
 		}
+		if err = p.configureCitusRestore(ctx, rc, sp, b, &restore); err != nil {
+			return err
+		}
 		recovery, err := recoverySuperuser(ctx, rc, b)
 		if err != nil {
 			return err
@@ -169,6 +217,9 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
 			return err
 		}
+		if err = p.configureCitusRestore(ctx, rc, sp, b, &restore); err != nil {
+			return err
+		}
 		recovery, err := recoverySuperuser(ctx, rc, b)
 		if err != nil {
 			return err
@@ -186,7 +237,7 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 func recoverySuperuser(ctx context.Context, rc *engine.Context, b *domain.Backup) (*pgspec.Credentials, error) {
 	// Patroni's custom-bootstrap lifecycle rekeys its configured target
 	// superuser before invoking post_bootstrap; it needs no source password.
-	if rc.Cluster.Spec.Topology.Type == "ha" {
+	if patroniTopology(rc.Cluster.Spec.Topology.Type) {
 		return nil, nil
 	}
 	if b.RecoveryIdentity == "" {
@@ -299,6 +350,9 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 	}
 	identity := storage.Name + ":" + repoPrefix(storage, rc.Cluster, s) + ":" + strconvMajor(rc.Cluster.Spec.Version)
 	if bs.Stanza == identity {
+		if s.Topology == "distributed" {
+			return p.scheduleCitusPoint(ctx, rc, s)
+		}
 		return false, nil
 	}
 	for _, member := range s.data() {
@@ -328,6 +382,9 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return backupResult(cp, false), err
+	}
+	if s.Topology == "distributed" {
+		return p.runCitusRestore(ctx, rc, op, cp, s, r)
 	}
 	bs, err := loadBackupState(rc.Cluster)
 	if err != nil {
@@ -712,6 +769,9 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 // PITRWindow reports a deliberately conservative observable interval, not WAL
 // filename timestamps or a promise that an external actor has not removed WAL.
 func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, error) {
+	if rc.Cluster.Spec.Topology.Type == "distributed" {
+		return nil, nil
+	}
 	if !rc.Cluster.Spec.Backup.PITR.Enabled {
 		return nil, nil
 	}
@@ -770,6 +830,9 @@ func consistentWindow(items []domain.Backup, provider, systemID string, end time
 	return []domain.TimeWindow{{Start: start, End: end}}
 }
 func (p *Core) ValidatePITRRestore(ctx context.Context, rc *engine.Context, target time.Time) ([]domain.TimeWindow, error) {
+	if rc.Cluster.Spec.Topology.Type == "distributed" {
+		return nil, engine.InvalidField("source.pitrTime", domain.ReasonUnsupported, "distributed PostgreSQL requires a coordinated named restore point")
+	}
 	if !rc.Cluster.Spec.Backup.PITR.Enabled {
 		return nil, engine.Invalid("PITR is not enabled for the source cluster")
 	}

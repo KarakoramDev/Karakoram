@@ -16,6 +16,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -44,9 +45,30 @@ func TestBuiltInProviderCatalogConforms(t *testing.T) {
 			t.Fatalf("%s: %d %s", provider.Name, w.Code, w.Body.String())
 		}
 	}
-	want := map[string]bool{"psmdb": true, "rabbitmq": true, "elasticsearch": true, "postgres": true, "supabase": true}
+	want := map[string]bool{"psmdb": true, "rabbitmq": true, "elasticsearch": true, "postgres": true, "supabase": true, "keycloak": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("built-in providers = %v, want %v", got, want)
+	}
+}
+
+func TestKeycloakCatalogWithBindingService(t *testing.T) {
+	s, _, token := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	var err error
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: bindings})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "GET", "/api/v1/providers/keycloak", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var provider api.Provider
+	if err := json.Unmarshal(w.Body.Bytes(), &provider); err != nil {
+		t.Fatal(err)
+	}
+	if provider.Name != "keycloak" || len(provider.Topologies) != 1 {
+		t.Fatal(provider)
 	}
 }
 

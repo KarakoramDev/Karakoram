@@ -31,6 +31,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/oauth"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -59,14 +60,16 @@ type Options struct {
 	MCPResourceMetadata string
 	// DataMcpUpstreams overrides provider-backed upstreams, primarily for embedding.
 	DataMcpUpstreams datamcp.UpstreamFactory
+	Bindings         *pgbinding.Manager
 }
 
 // Server implements all generated strict operations.
 type Server struct {
 	Options
-	namespaces engine.Namespaces
-	mcpHandler http.Handler
-	dataMcp    *datamcp.Gateway
+	namespaces       engine.Namespaces
+	mcpHandler       http.Handler
+	dataMcp          *datamcp.Gateway
+	postgresBindings *pgbinding.Manager
 }
 
 // New assembles HTTP handlers over initialized dependencies.
@@ -89,7 +92,10 @@ func New(o Options) (*Server, error) {
 	if o.Namespaces == nil {
 		o.Namespaces = engine.StaticNamespaces{DefaultBackend: o.Context.Backend, DefaultAgentURL: o.Context.AgentURL}
 	}
-	s := &Server{Options: o, namespaces: o.Namespaces}
+	s := &Server{Options: o, namespaces: o.Namespaces, postgresBindings: o.Bindings}
+	if s.postgresBindings == nil {
+		s.postgresBindings = pgbinding.New(s.bindingOptions())
+	}
 	handler, err := s.newMCPHandler()
 	if err != nil {
 		return nil, err

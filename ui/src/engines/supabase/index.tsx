@@ -11,7 +11,8 @@ import { FunctionsTab } from './FunctionsTab';
 export const supabaseUI: EngineUI = {
   ...postgresUI, ...supabaseMetadata, wizardSection: SupabaseOptions,
   detailTabs: [
-    ...(postgresUI.detailTabs ?? []),
+    // Bindings are sourced only from plain postgres clusters (ADR 0045).
+    ...(postgresUI.detailTabs ?? []).filter((tab) => tab.id !== 'bindings'),
     { id: 'components', label: 'Components', element: <TopologyTab /> },
     { id: 'functions', label: 'Functions & SMTP', element: <FunctionsTab /> },
   ],

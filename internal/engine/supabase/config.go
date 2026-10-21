@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -232,50 +231,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		err = json.Unmarshal(raw, &out)
 		return out, err
 	}
-	config, err := p.Core.MemberConfig(ctx, rc, name)
-	if err != nil {
-		return config, err
-	}
-	var pg pgspec.Spec
-	if err = json.Unmarshal(config.EngineSpec, &pg); err != nil {
-		return config, err
-	}
-	if pg.Postgres != nil {
-		o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
-		if err != nil {
-			return config, err
-		}
-		bundle, _ := nativeartifacts.Get("supabase-pg17-extensions")
-		for _, extension := range selectedExtensionPreloads(o.Extensions, bundle) {
-			if !slices.Contains(pg.Postgres.SharedPreloadLibraries, extension) {
-				pg.Postgres.SharedPreloadLibraries = append(pg.Postgres.SharedPreloadLibraries, extension)
-			}
-		}
-		raw, err := json.Marshal(pg)
-		if err != nil {
-			return config, err
-		}
-		config.EngineSpec = raw
-	}
-	return config, nil
-}
-
-func selectedExtensionPreloads(selected []string, bundle nativeartifacts.Artifact) []string {
-	var preloads []string
-	for _, extension := range selected {
-		switch extension {
-		case "pg_cron", "pgaudit", "pg_stat_monitor":
-			// Percona packages are qualified independently of the native bundle.
-		default:
-			if !slices.Contains(bundle.Extensions, extension) || !bundle.ExtensionFlags[extension].Preload {
-				continue
-			}
-		}
-		if !slices.Contains(preloads, extension) {
-			preloads = append(preloads, extension)
-		}
-	}
-	return preloads
+	return p.Core.MemberConfig(ctx, rc, name)
 }
 
 func componentCertificateNeedsRenewal(ctx context.Context, rc *engine.Context, m *componentMember) (bool, error) {

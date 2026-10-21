@@ -18,6 +18,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
 	"github.com/KarakoramDev/Karakoram/internal/oauth"
 	"github.com/KarakoramDev/Karakoram/internal/orphanvolumes"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/reconciler"
 	"github.com/KarakoramDev/Karakoram/internal/scheduler"
@@ -91,7 +92,18 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return err
 	}
 	logTokenCapability(ctx, logger, backend)
-	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger})
+	var bindingServer *Server
+	bindings := pgbinding.New(pgbinding.Options{Store: st, Source: func(ctx context.Context, ref domain.ClusterRef) (*engine.Context, pgbinding.Access, error) {
+		if bindingServer == nil {
+			return nil, nil, engine.ErrUnavailable
+		}
+		return bindingServer.bindingSource(ctx, ref)
+	}, Trigger: func(ref domain.ClusterRef) {
+		if bindingServer != nil && bindingServer.Trigger != nil {
+			bindingServer.Trigger.Trigger(ref)
+		}
+	}})
+	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings})
 	registry, err := engine.NewRegistry(providers...)
 	if err != nil {
 		return err
@@ -158,11 +170,12 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if c.OAuth == "on" {
 		oauthServer = oauth.New(oauth.Options{Store: st, Auth: a, PublicURL: c.PublicURL, DCR: c.OAuthDCR == "on", ClientHosts: c.OAuthClientHosts})
 	}
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPSealer: sealer, OAuth: oauthServer})
+	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPSealer: sealer, OAuth: oauthServer, Bindings: bindings})
 	if err != nil {
 		return err
 	}
 	defer server.Close()
+	bindingServer = server
 	publicListener, err := net.Listen("tcp", c.PublicListen)
 	if err != nil {
 		return err

@@ -5,6 +5,15 @@ import type { Schemas } from '@/api/client';
 
 /** Provider-specific copy and fallback rules belong here, not in shared controls. */
 export function engineRules(provider: string) {
+  if (provider === 'keycloak') return {
+    resourceMinimums: { cpu: 1, ram: 1.5, disk: 1 },
+    runtimeDisk: { min: 1, max: 3 },
+    topology: {
+      single: { title: 'Single Keycloak runtime', description: 'One identity-service runtime with a dedicated PostgreSQL binding. Maintenance interrupts authentication.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Use Keycloak public HTTPS routing under engine options',
+    configHint: 'Configure the source PostgreSQL binding and ingress under engine options.',
+  };
   if (provider === 'psmdb') return {
     resourceMinimums: { cpu: 1, ram: 0.5, disk: 5 },
     runtimeDisk: { min: 1, max: 3 },
@@ -21,6 +30,7 @@ export function engineRules(provider: string) {
     topology: {
       single: { title: 'Single PostgreSQL member', description: 'One database member without failover. Maintenance causes downtime.' },
       ha: { title: 'Highly available PostgreSQL', description: 'Three or five Patroni members with etcd quorum and a stable ProxySQL endpoint.' },
+      ...(provider === 'postgres' ? { distributed: { title: 'Distributed PostgreSQL (Citus)', description: 'A coordinator and worker groups, with Patroni failover per group and coordinator-only ProxySQL access.' } } : {}),
     } as Record<string, { title: string; description: string }>,
     exposureLabel: 'Expose PostgreSQL publicly on port 5432',
     configHint: 'Configure supported PostgreSQL parameters under engine options.',

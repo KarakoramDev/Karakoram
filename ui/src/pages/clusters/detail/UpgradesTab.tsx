@@ -36,6 +36,11 @@ export function UpgradesTab() {
     refetchInterval: 15_000,
   });
   const lastSuccessful = latestSuccessfulBackup(backups.data?.items ?? []);
+  const bindings = useQuery({
+    queryKey: keys.clusterSub(namespace, name, 'postgres-bindings'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/bindings', { params: { path: { cluster: name }, query: { namespace } } })),
+    enabled: isPostgres(cluster.spec.provider) && can('read', 'database-users'),
+  });
 
   const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
   const running = observedVersion(cluster.status);
@@ -138,6 +143,11 @@ export function UpgradesTab() {
       </div>
 
       <Callout tone={cluster.spec.components.engine.replicas === 1 ? 'warn' : 'info'} title={isPostgres(cluster.spec.provider) ? 'Minor upgrade and restart availability' : 'Upgrade and restart availability'}>{maintenance}</Callout>
+      {bindings.error ? <ErrorBlock error={bindings.error} retry={() => bindings.refetch()} /> : null}
+      {bindings.data?.items.length ? <Callout tone="warn" title="Major upgrades affect bound consumers">
+        Verify every consumer supports the target major. The server rejects upgrades outside a consumer's declared range.
+        <ul>{bindings.data.items.map((b) => <li key={b.id}>{b.consumer.kind}/{b.consumer.namespace}/{b.consumer.name}: maximum major {b.maxMajor ?? 'not constrained'} (minimum {b.minMajor ?? 'not constrained'})</li>)}</ul>
+      </Callout> : null}
       {upgrading ? (
         <Callout tone="info" title="Upgrade in progress">
           {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.

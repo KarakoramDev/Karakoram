@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -21,6 +22,7 @@ type receiptSQL struct {
 	rejectMembership bool
 	loseCommit       bool
 	beginError       error
+	requireRoleLock  bool
 }
 type receiptTx struct {
 	pgx.Tx
@@ -29,6 +31,7 @@ type receiptTx struct {
 	digest     string
 	receiptOID uint32
 	rolledBack bool
+	roleLocked bool
 }
 
 func (s *receiptSQL) Begin(context.Context) (pgx.Tx, error) {
@@ -39,6 +42,14 @@ func (s *receiptSQL) Begin(context.Context) (pgx.Tx, error) {
 }
 func (tx *receiptTx) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	switch {
+	case sql == "LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE":
+		tx.roleLocked = true
+	case strings.HasPrefix(sql, "DROP ROLE"):
+		if tx.db.requireRoleLock && !tx.roleLocked {
+			panic("binding drop without role catalog lock")
+		}
+		tx.oid = 0
+		tx.db.mutations++
 	case strings.HasPrefix(sql, "CREATE ROLE"):
 		if tx.oid != 0 {
 			return pgconn.CommandTag{}, &pgconn.PgError{Code: "42710"}
@@ -46,6 +57,9 @@ func (tx *receiptTx) Exec(_ context.Context, sql string, args ...any) (pgconn.Co
 		tx.oid = 17001
 		tx.db.mutations++
 	case strings.HasPrefix(sql, "ALTER ROLE"):
+		if tx.db.requireRoleLock && !tx.roleLocked {
+			panic("binding update without role catalog lock")
+		}
 		tx.db.mutations++
 	case strings.HasPrefix(sql, "GRANT "):
 		if tx.db.rejectMembership {
@@ -68,6 +82,9 @@ func (tx *receiptTx) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
 			}
 			*dest[0].(*string), *dest[1].(*uint32) = tx.digest, tx.receiptOID
 		} else {
+			if tx.db.requireRoleLock && !tx.roleLocked {
+				panic("binding OID comparison without role catalog lock")
+			}
 			if tx.oid == 0 {
 				return pgx.ErrNoRows
 			}
@@ -187,5 +204,95 @@ func TestCredentialReceiptCommitClassification(t *testing.T) {
 	}
 	if definitiveRoleCommitRejection(errors.New("connection lost")) {
 		t.Fatal("transport ambiguity treated as rollback")
+	}
+}
+
+func bindingJournalRequest(operation string, oid uint32) pgspec.AccessRequest {
+	req := journalTestRequest()
+	req.Binding = true
+	req.Role.Binding = true
+	req.Role.Name = "kb_0123456789abcdef0123456789abcdef"
+	req.Role.ConnectionLimit = 10
+	req.RoleOperation = operation
+	req.ExpectedRoleOID = oid
+	return req
+}
+
+func TestBindingReceiptMutationIdentity(t *testing.T) {
+	for _, operation := range []string{"update", "delete"} {
+		for _, oid := range []uint32{0, 19001, 17001} {
+			t.Run(operation+"/"+strconv.FormatUint(uint64(oid), 10), func(t *testing.T) {
+				db := &receiptSQL{oid: oid, requireRoleLock: true}
+				req := bindingJournalRequest(operation, 17001)
+				result := journalRole(t.Context(), db, req)
+				if oid != 17001 {
+					if result.Outcome != "rejected" || result.Code != "role_identity_changed" || db.mutations != 0 || db.oid != oid {
+						t.Fatalf("foreign or missing role mutated: %+v db=%+v", result, db)
+					}
+					return
+				}
+				if result.Outcome != "applied" || result.RoleOID != oid || db.mutations != 1 {
+					t.Fatalf("original role mutation failed: %+v db=%+v", result, db)
+				}
+			})
+		}
+	}
+}
+
+func TestBindingReceiptDropReplay(t *testing.T) {
+	db := &receiptSQL{oid: 17001, loseCommit: true, requireRoleLock: true}
+	req := bindingJournalRequest("delete", 17001)
+	if result := journalRole(t.Context(), db, req); result.Outcome != "unknown" || db.oid != 0 || db.receiptOID != 17001 {
+		t.Fatalf("drop commit ambiguity guessed: %+v db=%+v", result, db)
+	}
+	if result := journalRole(t.Context(), db, req); result.Outcome != "applied" || result.RoleOID != 17001 || db.mutations != 1 {
+		t.Fatalf("drop receipt not replayed: %+v db=%+v", result, db)
+	}
+	db.oid = 19001
+	if result := journalRole(t.Context(), db, req); result.Outcome != "rejected" || result.Code != "role_identity_changed" || db.oid != 19001 || db.mutations != 1 {
+		t.Fatalf("drop replay touched replacement: %+v db=%+v", result, db)
+	}
+}
+
+func TestBindingAccessMutationValidation(t *testing.T) {
+	for _, operation := range []string{"update", "delete"} {
+		req := bindingJournalRequest(operation, 0)
+		if err := validateAccessRequest(pgspec.ActionRoles, req); err == nil {
+			t.Fatalf("%s accepted zero expected OID", operation)
+		}
+		req.ExpectedRoleOID = 17001
+		if err := validateAccessRequest(pgspec.ActionRoles, req); err != nil {
+			t.Fatalf("%s refused fenced journal: %v", operation, err)
+		}
+	}
+	for _, operation := range []string{"update", "password", "delete"} {
+		req := bindingJournalRequest("update", 17001)
+		req.Operation, req.Name = operation, req.Role.Name
+		if err := validateAccessRequest(pgspec.ActionRoles, req); err == nil {
+			t.Fatalf("legacy binding %s bypassed journal fence", operation)
+		}
+	}
+	req := bindingJournalRequest("update", 17001)
+	req.Role.Login = false
+	sql, _, err := roleStatement("update", *req.Role)
+	if err != nil || !strings.HasPrefix(sql, `ALTER ROLE "kb_0123456789abcdef0123456789abcdef" WITH NOLOGIN`) {
+		t.Fatalf("keep-data release rendering: %q %v", sql, err)
+	}
+}
+
+func TestBindingReceiptUpdateReplay(t *testing.T) {
+	db := &receiptSQL{oid: 17001, loseCommit: true, requireRoleLock: true}
+	req := bindingJournalRequest("update", 17001)
+	if result := journalRole(t.Context(), db, req); result.Outcome != "unknown" {
+		t.Fatalf("update commit ambiguity guessed: %+v", result)
+	}
+	if result := journalRole(t.Context(), db, req); result.Outcome != "applied" || result.RoleOID != 17001 || db.mutations != 1 {
+		t.Fatalf("update receipt replay mutated role: %+v db=%+v", result, db)
+	}
+	for _, oid := range []uint32{0, 19001} {
+		db.oid = oid
+		if result := journalRole(t.Context(), db, req); result.Outcome != "rejected" || result.Code != "role_identity_changed" || db.mutations != 1 || db.oid != oid {
+			t.Fatalf("update receipt adopted missing/replacement role: %+v db=%+v", result, db)
+		}
 	}
 }

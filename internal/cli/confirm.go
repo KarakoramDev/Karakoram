@@ -12,7 +12,7 @@ import (
 )
 
 func destructive(op string) bool {
-	if op == "rotatePostgresRolePassword" || op == "revokePostgresPrivileges" {
+	if op == "rotatePostgresRolePassword" || op == "rotatePostgresBinding" || op == "revokePostgresPrivileges" {
 		return true
 	}
 	if op == "rotateSupabaseJWTSecret" {

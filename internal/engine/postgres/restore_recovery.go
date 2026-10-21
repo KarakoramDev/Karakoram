@@ -81,6 +81,10 @@ func (p *Core) reconcileRestoreRecovery(ctx context.Context, rc *engine.Context,
 	}
 	s.RestoreRecovery = op
 	if runErr != nil {
+		if op.Kind == domain.OperationBackup {
+			op.Message = fmt.Sprintf("Coordinated backup abort %s: %v; formation remains fenced until original native receipts are terminal", op.ID, runErr)
+			return true, fmt.Errorf("%s", op.Message)
+		}
 		op.Message = fmt.Sprintf("Restore recovery %s at %s: %v; restore the unavailable dependency to resume the same backup and generation", op.ID, result.Step, runErr)
 		return true, fmt.Errorf("%s", op.Message)
 	}

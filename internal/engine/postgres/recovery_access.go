@@ -53,7 +53,7 @@ func (p *Core) restoreManagedRoles(ctx context.Context, rc *engine.Context, back
 	}
 	names := make([]string, 0, len(manifest))
 	for name, password := range manifest {
-		if err = p.writableRole(name); err != nil {
+		if err = p.writableRole(BindingContext(ctx), name); err != nil {
 			return err
 		}
 		if err = p.ValidateDatabasePassword(password); err != nil {
@@ -108,7 +108,7 @@ func (p *Core) reconcileRecoveredRoles(ctx context.Context, rc *engine.Context) 
 		if err != nil {
 			return err
 		}
-		if err = p.accessAction(ctx, rc, "roles", pgspec.AccessRequest{Operation: "password", Role: &RoleWrite{Role: Role{Name: name}, Password: &verifier}}, nil); err != nil {
+		if err = p.accessAction(BindingContext(ctx), rc, "roles", pgspec.AccessRequest{Operation: "password", Role: &RoleWrite{Role: Role{Name: name}, Password: &verifier}}, nil); err != nil {
 			return err
 		}
 		kept = append(kept, name)

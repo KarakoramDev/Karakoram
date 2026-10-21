@@ -32,7 +32,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 	if err := verifyMember(ctx, rc, m); err != nil {
 		return false, err
 	}
-	if m.Role == "data" && m.ServiceID != "" {
+	if m.Role == "data" && m.Group == 0 && m.ServiceID != "" {
 		drained, err := drainProxyBackend(ctx, rc, s, m)
 		if err != nil || !drained {
 			return false, err

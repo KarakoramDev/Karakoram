@@ -85,6 +85,9 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 			return true, err
 		}
 		if u.Stage == "finalize" {
+			if err := p.updateProfileExtensions(ctx, rc); err != nil {
+				return true, err
+			}
 			s.Upgrade = nil
 			return true, nil
 		}

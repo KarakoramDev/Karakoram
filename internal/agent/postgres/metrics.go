@@ -122,7 +122,7 @@ func (e *Runner) Metrics(ctx context.Context, n *agent.Node) []agent.Metric {
 	}
 	defer c.Close(ctx)
 	result := databaseMetrics(ctx, c)
-	if s.Topology == pgspec.TopologyHA {
+	if usesPatroni(s) {
 		var state struct {
 			Role     string  `json:"role"`
 			Timeline float64 `json:"timeline"`

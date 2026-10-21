@@ -24,7 +24,7 @@ func rekeyRecoveredSystemRoles(ctx context.Context, s pgspec.Spec, p paths) erro
 	if err = c.QueryRow(ctx, "SELECT pg_catalog.pg_is_in_recovery()").Scan(&recovery); err != nil || recovery {
 		return errors.New("system-role rekey requires the recovered primary")
 	}
-	if s.Topology == pgspec.TopologyHA {
+	if usesPatroni(s) {
 		if err = patroniRequest(ctx, s, "GET", "/primary", nil, nil); err != nil {
 			return errors.New("system-role rekey requires the Patroni primary")
 		}

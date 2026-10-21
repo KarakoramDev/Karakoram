@@ -6,8 +6,10 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tarfile
 import tempfile
@@ -17,6 +19,9 @@ from unittest.mock import MagicMock, patch
 spec = importlib.util.spec_from_file_location('native_build',Path(__file__).with_name('build.py'))
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
+pg_spec = importlib.util.spec_from_file_location('native_pgextension',build.HERE/'pgextension.py')
+pgextension = importlib.util.module_from_spec(pg_spec)
+pg_spec.loader.exec_module(pgextension)
 
 
 class OtpGuest:
@@ -82,7 +87,12 @@ EOF
             script = script.replace('/root/',str(self.root/'root')+'/')
             script = script.replace('/opt/',str(self.root/'opt')+'/')
             script = script.replace('dpkg-query',str(self.root/'dpkg-query'))
-            subprocess.run(['bash','-euc',script],check=True,capture_output=True,text=True)
+            try:
+                subprocess.run(['bash','-euc',script],check=True,capture_output=True,text=True,
+                               env={**os.environ,'TMPDIR':str(self.root)})
+            except subprocess.CalledProcessError as error:
+                error.add_note(f'OTP guest stdout:\n{error.stdout}\nOTP guest stderr:\n{error.stderr}')
+                raise
         elif 'native-recipe.sh' in script:
             self.bundled.append((self.prefix/'bin/erl').read_text().strip())
         elif 'git init' not in script:
@@ -265,6 +275,17 @@ class NativeBuilder(unittest.TestCase):
         start = product.index('ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage')
         self.assertIn(product[start:].strip(),smoke)
         self.assertIn('GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;',smoke)
+    def test_otp_guest_isolates_shell_temporary_files_and_reports_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            guest = OtpGuest(Path(directory))
+            failure = subprocess.CalledProcessError(1,['bash'],output='archive verified',stderr='receipt write failed')
+            with patch.object(subprocess,'run',side_effect=failure) as run:
+                with self.assertRaises(subprocess.CalledProcessError) as caught:
+                    guest.guest('sha256sum -c -')
+            self.assertIs(caught.exception,failure)
+            self.assertEqual(run.call_args.kwargs['env']['TMPDIR'],str(guest.root))
+            self.assertIn('archive verified',failure.__notes__[0])
+            self.assertIn('receipt write failed',failure.__notes__[0])
 
     def test_otp_reuse_requires_matching_successful_build_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -514,6 +535,107 @@ class NativeBuilder(unittest.TestCase):
             self.assertEqual(lock.read_text(),original)
             run.assert_any_call('incus','delete',build.RUNNER,'--force')
 
+    def test_standalone_extension_recipe_parity(self):
+        names = {f'{product}-pg{major}' for product in ('timescaledb','citus') for major in (16,17,18)}
+        self.assertEqual({name for name, recipe in build.RECIPES.items() if recipe.get('kind') == 'pg-extension'},names)
+        self.assertEqual(set(build.ALL_ORDER),set(build.RECIPES))
+        self.assertEqual(len(build.ALL_ORDER),len(build.RECIPES))
+        self.assertEqual(build.ALL_ORDER[5:11],['timescaledb-pg16','timescaledb-pg17','timescaledb-pg18','citus-pg16','citus-pg17','citus-pg18'])
+        pins = {16:'2:16.15-1.noble',17:'2:17.11-1.noble',18:'3:18.6-1.noble'}
+        for name in sorted(names):
+            with self.subTest(name=name):
+                recipe = build.RECIPES[name] | {'name':name}
+                product = name.split('-')[0]
+                major = recipe['pgMajor']
+                self.assertEqual(name,f'{product}-pg{major}')
+                self.assertEqual(len(bytes.fromhex(recipe['commit'])),20)
+                self.assertEqual(recipe['health'],'postgresql')
+                self.assertEqual(recipe['pgVersion'],pins[major])
+                self.assertEqual(pgextension.packages(recipe),[
+                    f'percona-postgresql-{major}={pins[major]}',
+                    f'percona-postgresql-server-dev-{major}={pins[major]}'])
+                self.assertEqual(set(recipe['extensions']),{product})
+                self.assertTrue(recipe['extensions'][product]['preload'])
+                metadata = f'usr/share/postgresql/{major}/karakoram-native-artifacts/{name}'
+                self.assertEqual(build.metadata_path(name),metadata)
+                self.assertEqual(pgextension.metadata_path(recipe),metadata)
+                commands = pgextension.build_commands(recipe,Path('/output'))
+                self.assertIn(f'PG_CONFIG=/usr/lib/postgresql/{major}/bin/pg_config',' '.join(commands[0]))
+                if product == 'timescaledb':
+                    self.assertEqual(recipe['license'],'Apache-2.0')
+                    self.assertEqual(recipe['buildSystem'],'cmake')
+                    self.assertEqual(commands[0][0],'./bootstrap')
+                    for flag in ('-DAPACHE_ONLY=1','-DREGRESS_CHECKS=OFF','-DSEND_TELEMETRY_DEFAULT=OFF','-DWARNINGS_AS_ERRORS=OFF'):
+                        self.assertIn(flag,commands[0])
+                    self.assertEqual(commands[-1],('cmake','--install','build'))
+                    self.assertEqual(recipe['extensions'][product]['unavailableFeatures'],['tsl'])
+                else:
+                    self.assertEqual(recipe['license'],'AGPL-3.0-only')
+                    self.assertEqual(recipe['buildSystem'],'autoconf')
+                    self.assertEqual(commands[0][0],'./configure')
+                    self.assertIn('--with-libcurl' if major == 18 else '--without-libcurl',commands[0])
+                    self.assertNotIn('--without-lz4',commands[0])
+                    self.assertNotIn('--without-zstd',commands[0])
+                    self.assertEqual(commands[-1],('make','install','DESTDIR=/output'))
+                    self.assertEqual('libcurl4t64' in recipe['runtimeDeps'], major == 18)
+
+    def test_extension_helper_transport_and_metadata_validation(self):
+        with patch.object(build,'run') as run:
+            build.push_build_inputs()
+        run.assert_any_call('incus','file','push',str(build.HERE/'pgextension.py'),build.BUILDER+'/root/pgextension.py')
+        with self.assertRaises(ValueError):
+            pgextension.metadata_path({'name':'citus-pg15','pgMajor':15})
+        with self.assertRaises(ValueError):
+            pgextension.build_commands({'pgMajor':17,'buildSystem':'unknown'},Path('/output'))
+
+    def test_extension_qualification_publishes_only_matching_success(self):
+        for name, recipe in build.RECIPES.items():
+            if recipe.get('kind') != 'pg-extension':
+                continue
+            for failure in (None,'smoke','provenance','capability'):
+                with self.subTest(name=name,failure=failure), tempfile.TemporaryDirectory() as directory:
+                    out = Path(directory)
+                    filename = name+'.tar.gz'
+                    candidate = out/(filename+'.candidate')
+                    report = {extension:{key:recipe[key] for key in ('repo','commit','version','license')} | {'build':'passed'} for extension in recipe['extensions']}
+                    if failure == 'provenance':
+                        next(iter(report.values()))['commit'] = '0'*40
+                    if failure == 'capability':
+                        report = {}
+                    payload = json.dumps(report).encode()
+                    with tarfile.open(candidate,'w:gz') as archive:
+                        member = tarfile.TarInfo('./'+build.metadata_path(name)+'/extensions.json')
+                        member.size = len(payload)
+                        archive.addfile(member,io.BytesIO(payload))
+                    lock = out/'lock.json'
+                    lock.write_text('[]\n')
+                    fixtures = []
+
+                    def run(*args, **kwargs):
+                        if args[:3] == ('incus','file','push') and args[4].endswith('/smoke-env.json'):
+                            fixtures.append(json.loads(Path(args[3]).read_text()))
+                        if args[:2] == ('incus','exec') and failure == 'smoke':
+                            raise subprocess.CalledProcessError(1,args)
+
+                    with patch.object(build,'OUT',out), patch.object(build,'LOCK',lock), patch.object(build,'get_instances',return_value=[]), patch.object(build,'memory_guard'), patch.object(build,'run',side_effect=run), patch.object(build.subprocess,'run'):
+                        if failure:
+                            with self.assertRaises((RuntimeError,subprocess.CalledProcessError)):
+                                build.qualify(name,candidate,0)
+                        else:
+                            result = build.qualify(name,candidate,0)
+                    self.assertEqual(fixtures[0]['pgExtension'],recipe | {'name':name})
+                    if failure:
+                        self.assertTrue(candidate.exists())
+                        self.assertFalse((out/filename).exists())
+                        self.assertEqual(lock.read_text(),'[]\n')
+                    else:
+                        self.assertFalse(candidate.exists())
+                        self.assertEqual(result['kind'],'pg-extension')
+                        self.assertEqual(result['pgMajor'],recipe['pgMajor'])
+                        self.assertEqual(result['extensionFlags'],recipe['extensions'])
+                        self.assertEqual(result['extensions'],sorted(recipe['extensions']))
+                        self.assertEqual(json.loads(lock.read_text())[0]['sha256'],hashlib.sha256((out/filename).read_bytes()).hexdigest())
+
     def test_heavy_build_waits_for_available_memory(self):
         readings = ['Mem: 64000 50000 1000 0 0 14335\n','Mem: 64000 40000 1000 0 0 14336\n']
         with patch.object(build.subprocess,'check_output',side_effect=readings) as check, patch.object(build.time,'sleep') as sleep, patch('builtins.print'):
@@ -521,6 +643,35 @@ class NativeBuilder(unittest.TestCase):
         self.assertEqual(check.call_count,2)
         self.assertEqual(check.call_args.args[0],['free','-m'])
         sleep.assert_called_once_with(30)
+
+class RootlessTransport(unittest.TestCase):
+    def test_namespace_command_contains_only_rootfs_and_resolver_mounts(self):
+        transport_spec = importlib.util.spec_from_file_location('native_rootless', build.HERE/'rootless.py')
+        module = importlib.util.module_from_spec(transport_spec)
+        transport_spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            transport = module.Rootless(directory)
+            with patch.object(module.subprocess, 'run'):
+                command = transport.command('builder', ['true'])
+        self.assertEqual(command[:6], ['unshare', '--user', '--map-root-user', '--map-auto', '--mount', '--fork'])
+        script = command[-1]
+        self.assertIn('--unshare-pid', script)
+        self.assertIn('--clearenv', script)
+        self.assertIn('--ro-bind /etc/resolv.conf /etc/resolv.conf', script)
+        tokens = shlex.split(script)
+        bindings = [tokens[i + 1:i + 3] for i, token in enumerate(tokens) if token == '--bind']
+        self.assertEqual(bindings, [[str(Path(directory)/'builder'), '/']])
+
+    def test_rootless_dispatch_does_not_invoke_incus(self):
+        with patch.object(build, 'ROOTLESS') as transport, patch.object(build, 'run') as run:
+            build.execute('builder', 'true')
+            build.push('/tmp/input', 'builder', '/root/input')
+            build.pull('runner', '/tmp/log', '/tmp/output')
+            run.assert_not_called()
+            transport.execute.assert_called_once_with('builder', 'true')
+            transport.push.assert_called_once_with('/tmp/input', 'builder', '/root/input')
+            transport.pull.assert_called_once_with('runner', '/tmp/log', '/tmp/output')
+
 
 
 if __name__=='__main__': unittest.main()

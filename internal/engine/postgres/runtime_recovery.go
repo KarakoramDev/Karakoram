@@ -34,12 +34,12 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 			if s.Replacement != nil && s.Replacement.Old == m.Name {
 				continue
 			}
-			if s.Topology == "ha" && m.Role == "data" {
+			if patroniTopology(s.Topology) && m.Role == "data" {
 				if err := p.volumeRecoverySafe(ctx, rc, s, m); err != nil {
 					return true, err
 				}
 			}
-			return true, engine.RecoverLostVolume(ctx, rc, m.Name, m.Volume, m.VolumeID, s.Topology == "ha" && m.Role == "data")
+			return true, engine.RecoverLostVolume(ctx, rc, m.Name, m.Volume, m.VolumeID, patroniTopology(s.Topology) && m.Role == "data")
 		}
 		if out.Imported {
 			m.Stage = "imported"
@@ -54,7 +54,7 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 	return false, nil
 }
 func (p *Core) volumeRecoverySafe(ctx context.Context, rc *engine.Context, s *state, lost *member) error {
-	for _, m := range s.data() {
+	for _, m := range s.group(lost.Group).data() {
 		if m.Name == lost.Name || m.Removing || m.Offline || m.RuntimeRecovery.VolumeLost {
 			continue
 		}

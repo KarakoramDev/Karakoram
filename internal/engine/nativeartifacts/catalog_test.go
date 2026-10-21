@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,6 +22,29 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/version"
 )
+
+var updateGolden = flag.Bool("update", false, "update native artifact command goldens")
+
+func TestSupabasePrepareCommandsGolden(t *testing.T) {
+	a, err := Get("supabase-pg17-extensions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(PrepareCommands(a, "https://example.test/"+a.File, "/", "postgres"), "\n") + "\n"
+	const filename = "testdata/supabase-pg17-prepare.golden"
+	if *updateGolden {
+		if err := os.WriteFile(filename, []byte(got), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != string(want) {
+		t.Fatal("Supabase prepare command bytes changed")
+	}
+}
 
 func TestLock(t *testing.T) {
 	var entries []Artifact
@@ -34,6 +58,18 @@ func TestLock(t *testing.T) {
 	for _, a := range entries {
 		if a.Name == "" || a.Version == "" || a.File == "" || a.Size <= 0 || a.License == "" || a.Build == "" {
 			t.Fatalf("incomplete artifact: %+v", a)
+		}
+		switch a.Kind {
+		case "":
+			if a.PGMajor != 0 || (len(a.Extensions) != 0 && !legacyExtensionArtifact(a)) {
+				t.Fatalf("extension metadata requires kind and major: %+v", a)
+			}
+		case "pg-extension":
+			if !validPGMajor(a.PGMajor) || !(strings.HasSuffix(a.File, ".tar.gz") || strings.HasSuffix(a.File, ".tar.xz")) || len(a.Extensions) == 0 {
+				t.Fatalf("invalid PostgreSQL extension artifact: %+v", a)
+			}
+		default:
+			t.Fatalf("unknown artifact kind %q for %s", a.Kind, a.Name)
 		}
 		if path.Base(a.File) != a.File {
 			t.Fatalf("non-basename filename: %s", a.File)
@@ -127,7 +163,7 @@ func TestPrepareCommands(t *testing.T) {
 			install = "DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\""
 		} else if strings.Contains(file, ".tar.") {
 			install = "tar --no-same-owner --no-same-permissions --delay-directory-restore"
-			for _, want := range []string{"python3 -c", archiveValidator, "\"$file\" 'application'", "sudo -u 'runtime' -- sh -c", " < \"$file\""} {
+			for _, want := range []string{"python3 -c", legacyPG17Validator, "\"$file\" 'application'", "sudo -u 'runtime' -- sh -c", " < \"$file\""} {
 				if !strings.Contains(command, want) {
 					t.Fatalf("missing safe extraction %q in %s", want, command)
 				}
@@ -221,7 +257,7 @@ func TestShellQuoting(t *testing.T) {
 func TestFilesystemRootArtifact(t *testing.T) {
 	a := Artifact{Name: "supabase-pg17-extensions", File: "extensions.tar.gz", SHA256: strings.Repeat("a", 64)}
 	command := prepareScript(t, PrepareCommands(a, "https://example.test/extensions.tar.gz", "/", "runtime")[0])
-	for _, want := range []string{"python3 -c", archiveValidator, "\"$file\" 'extensions'", "--no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore", "cp -a --no-preserve=ownership unpacked/usr/lib/postgresql/17/. '/usr/lib/postgresql/17/'", "cp -a --no-preserve=ownership unpacked/usr/share/postgresql/17/. '/usr/share/postgresql/17/'"} {
+	for _, want := range []string{"python3 -c", legacyPG17Validator, "\"$file\" 'extensions'", "--no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore", "cp -a --no-preserve=ownership unpacked/usr/lib/postgresql/17/. '/usr/lib/postgresql/17/'", "cp -a --no-preserve=ownership unpacked/usr/share/postgresql/17/. '/usr/share/postgresql/17/'"} {
 		if !strings.Contains(command, want) {
 			t.Fatalf("missing restricted extension installation %q in %s", want, command)
 		}
@@ -246,6 +282,14 @@ func TestPrepareRejectsUnsafeArchiveMembers(t *testing.T) {
 		{"extension-symlink", "./usr/lib/postgresql/17/unsafe", "supabase-pg17-extensions", tar.TypeSymlink},
 		{"extension-hardlink", "./usr/lib/postgresql/17/unsafe", "supabase-pg17-extensions", tar.TypeLink},
 		{"extension-device", "./usr/lib/postgresql/17/unsafe", "supabase-pg17-extensions", tar.TypeChar},
+		{"new-extension-absolute", "/etc/unsafe", "fixture-pg17", tar.TypeReg},
+		{"new-extension-parent", "../unsafe", "fixture-pg17", tar.TypeReg},
+		{"new-extension-nested-parent", "usr/lib/postgresql/17/../../unsafe", "fixture-pg17", tar.TypeReg},
+		{"new-extension-path", "./etc/unsafe", "fixture-pg17", tar.TypeReg},
+		{"new-extension-symlink", "./usr/lib/postgresql/17/unsafe", "fixture-pg17", tar.TypeSymlink},
+		{"new-extension-hardlink", "./usr/lib/postgresql/17/unsafe", "fixture-pg17", tar.TypeLink},
+		{"new-extension-device", "./usr/lib/postgresql/17/unsafe", "fixture-pg17", tar.TypeChar},
+		{"new-extension-wrong-major", "./usr/lib/postgresql/16/unsafe", "fixture-pg17", tar.TypeReg},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file := writeArchiveFixture(t, []tar.Header{{Name: tc.member, Typeflag: tc.kind, Mode: 0644, Linkname: "/etc/unsafe"}})
@@ -254,6 +298,9 @@ func TestPrepareRejectsUnsafeArchiveMembers(t *testing.T) {
 				t.Fatal(err)
 			}
 			a := Artifact{Name: tc.artifact, File: "fixture.tar.gz", SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+			if tc.artifact == "fixture-pg17" {
+				a.Kind, a.PGMajor = "pg-extension", 17
+			}
 			dest := filepath.Join(t.TempDir(), "install")
 			script := prepareScript(t, PrepareCommands(a, "file://"+file, dest, "unused")[0])
 			output, err := exec.Command("sh", "-c", script).CombinedOutput()
@@ -341,5 +388,90 @@ func TestArchiveValidatorLinkBoundaries(t *testing.T) {
 				t.Fatalf("allowed=%v, error=%v\n%s", tc.allowed, err, output)
 			}
 		})
+	}
+}
+
+func TestExtensionArtifact(t *testing.T) {
+	const name = "test-extension-pg17"
+	t.Cleanup(func() { delete(artifacts, name) })
+	for _, a := range []Artifact{
+		{Name: name},
+		{Name: name, Kind: "pg-extension", PGMajor: 16},
+		{Name: name, Kind: "application", PGMajor: 17},
+		{Name: name, Kind: "pg-extension", PGMajor: 17},
+	} {
+		artifacts[name] = a
+		got, err := ExtensionArtifact("test-extension", 17)
+		allowed := a.Kind == "pg-extension" && a.PGMajor == 17
+		if (err == nil) != allowed || (allowed && !reflect.DeepEqual(got, a)) {
+			t.Fatalf("artifact=%+v, got=%+v, error=%v", a, got, err)
+		}
+	}
+	for _, major := range []int{0, 15, 16, 18, 19} {
+		if _, err := ExtensionArtifact("test-extension", major); err == nil {
+			t.Fatalf("unavailable major %d accepted", major)
+		}
+	}
+}
+
+func TestPrepareExtensionMajors(t *testing.T) {
+	for _, major := range []int{16, 17, 18} {
+		t.Run(fmt.Sprint(major), func(t *testing.T) {
+			a := Artifact{Name: fmt.Sprintf("example-pg%d", major), Kind: "pg-extension", PGMajor: major, File: "extensions.tar.xz", SHA256: strings.Repeat("a", 64)}
+			command := prepareScript(t, PrepareCommands(a, "https://example.test/"+a.File, "/", "runtime")[0])
+			for _, want := range []string{
+				archiveValidator, fmt.Sprintf("\"$file\" 'pg-extension' '%d'", major),
+				"umask 077", "mkdir unpacked", "--keep-old-files",
+				fmt.Sprintf("cp -a --no-preserve=ownership unpacked/usr/lib/postgresql/%d/. '/usr/lib/postgresql/%d/'", major, major),
+				fmt.Sprintf("cp -a --no-preserve=ownership unpacked/usr/share/postgresql/%d/. '/usr/share/postgresql/%d/'", major, major),
+			} {
+				if !strings.Contains(command, want) {
+					t.Fatalf("missing %q in %s", want, command)
+				}
+			}
+			if strings.Contains(command, "chown") || strings.Contains(command, "-C '/'") || strings.Contains(command, "sudo -u") {
+				t.Fatal("extension installation must use restricted root publication without ownership handoff")
+			}
+		})
+	}
+}
+
+func TestPrepareExtensionInvalidMetadata(t *testing.T) {
+	for _, a := range []Artifact{
+		{Kind: "pg-extension"},
+		{Kind: "pg-extension", PGMajor: 15},
+		{Kind: "pg-extension", PGMajor: 19},
+		{Kind: "pg-extension", PGMajor: 17, File: "extension.deb"},
+		{Kind: "pg-extension", PGMajor: 17, File: "extension"},
+		{PGMajor: 17},
+		{Kind: "unknown", PGMajor: 17},
+	} {
+		script := prepareScript(t, PrepareCommands(a, "https://example.test/", "/", "runtime")[0])
+		output, err := exec.Command("sh", "-c", script).CombinedOutput()
+		if err == nil || !strings.Contains(string(output), "invalid native artifact") || strings.Contains(script, "curl") {
+			t.Fatalf("invalid metadata did not fail closed: %+v: %v\n%s", a, err, output)
+		}
+	}
+}
+
+func TestArchiveValidatorExtensionMajors(t *testing.T) {
+	for _, major := range []string{"16", "17", "18"} {
+		file := writeArchiveFixture(t, []tar.Header{
+			{Name: "usr/lib/postgresql/" + major + "/extension.so", Typeflag: tar.TypeReg, Mode: 0644},
+			{Name: "usr/share/postgresql/" + major + "/extension.control", Typeflag: tar.TypeReg, Mode: 0644},
+		})
+		for _, requested := range []string{"", "0", "15", "16", "17", "18", "19", "../17", "017"} {
+			args := []string{"-c", archiveValidator, file, "pg-extension"}
+			if requested != "" {
+				args = append(args, requested)
+			}
+			output, err := exec.Command("python3", args...).CombinedOutput()
+			if (err == nil) != (requested == major) {
+				t.Fatalf("archive PG%s, requested %q: %v\n%s", major, requested, err, output)
+			}
+			if err != nil && !strings.Contains(string(output), "unsafe archive member") {
+				t.Fatalf("validation did not fail closed: %s", output)
+			}
+		}
 	}
 }

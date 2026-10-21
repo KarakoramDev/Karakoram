@@ -1,0 +1,231 @@
+{
+  "ConfigHash": "445d9b73e07250e57d67d60dc175503d08cf5cd517ed861c805d2aa886fe71d7",
+  "Members": [
+    {
+      "Name": "demop0",
+      "EngineSpec": "{\"role\":\"data\",\"topology\":\"ha\",\"flavour\":\"postgres\",\"scope\":\"demo-compatibility-fixture\",\"major\":17,\"binDir\":\"/usr/lib/postgresql/17/bin\",\"version\":\"17.11.1\",\"member\":\"demop0\",\"peers\":[{\"name\":\"demop0\",\"host\":\"demop0\",\"etcd\":\"voter\"},{\"name\":\"demop1\",\"host\":\"demop1\",\"etcd\":\"voter\"},{\"name\":\"demop2\",\"host\":\"demop2\",\"etcd\":\"voter\"}],\"listenHost\":\"0.0.0.0\",\"etcd\":{\"initialCluster\":\"demop0=https://demop0:2380,demop1=https://demop1:2380,demop2=https://demop2:2380\",\"state\":\"new\",\"token\":\"compatibility-fixture\"},\"postgres\":{\"requireTls\":true,\"clientCidrs\":[\"0.0.0.0/0\"],\"synchronous\":\"off\"},\"bootstrap\":{\"method\":\"initdb\",\"generation\":1},\"superuser\":{\"username\":\"postgres\",\"password\":\"fixture-password-postgres\"},\"replication\":{\"username\":\"kk_replicator\",\"password\":\"fixture-password-kk_replicator\"},\"rewind\":{\"username\":\"kk_rewind\",\"password\":\"fixture-password-kk_rewind\"},\"monitor\":{\"username\":\"kk_monitor\",\"password\":\"fixture-password-kk_monitor\"},\"patroniRest\":{\"username\":\"kk_admin\",\"password\":\"fixture-password-kk_admin\"},\"caPEM\":\"fixture-ca\",\"serverCert\":{\"certPEM\":\"fixture-tls/servers/demop0.crt\",\"keyPEM\":\"fixture-tls/servers/demop0.key\"}}",
+      "EngineSpecSHA256": "5f03cc51862ab6c7dcda41439079675c4407bfd9c18787e8fc489ce194aa6918",
+      "Runtime": {
+        "base": "ubuntu-24.04",
+        "prepare": [
+          "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
+          "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+          "sudo percona-release setup -y ppg-17",
+          "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
+          "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2"
+        ],
+        "env": {
+          "KARAKORAM_CLUSTER": "demo",
+          "KARAKORAM_DATA_DIR": "/srv/volumes/demop0v",
+          "KARAKORAM_ENGINE": "postgres",
+          "KARAKORAM_INTERNAL_CA": "",
+          "KARAKORAM_MEMBER": "demop0",
+          "KARAKORAM_URL": ""
+        },
+        "args": [
+          "agent"
+        ],
+        "ports": [
+          {
+            "port": 5432,
+            "protocol": "tcp"
+          },
+          {
+            "port": 9443,
+            "protocol": "tcp"
+          },
+          {
+            "port": 8008,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2379,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2380,
+            "protocol": "tcp"
+          }
+        ],
+        "volume": "demop0v",
+        "readiness": {
+          "args": [
+            "agent",
+            "readiness",
+            "--startup",
+            "--data-dir=/srv/volumes/demop0v"
+          ],
+          "failureTimeout": 300000000000,
+          "retryPeriod": 10000000000
+        },
+        "stopBeforeStart": true
+      }
+    },
+    {
+      "Name": "demop1",
+      "EngineSpec": "{\"role\":\"data\",\"topology\":\"ha\",\"flavour\":\"postgres\",\"scope\":\"demo-compatibility-fixture\",\"major\":17,\"binDir\":\"/usr/lib/postgresql/17/bin\",\"version\":\"17.11.1\",\"member\":\"demop1\",\"peers\":[{\"name\":\"demop0\",\"host\":\"demop0\",\"etcd\":\"voter\"},{\"name\":\"demop1\",\"host\":\"demop1\",\"etcd\":\"voter\"},{\"name\":\"demop2\",\"host\":\"demop2\",\"etcd\":\"voter\"}],\"listenHost\":\"0.0.0.0\",\"etcd\":{\"initialCluster\":\"demop0=https://demop0:2380,demop1=https://demop1:2380,demop2=https://demop2:2380\",\"state\":\"new\",\"token\":\"compatibility-fixture\"},\"postgres\":{\"requireTls\":true,\"clientCidrs\":[\"0.0.0.0/0\"],\"synchronous\":\"off\"},\"bootstrap\":{\"method\":\"initdb\",\"generation\":1},\"superuser\":{\"username\":\"postgres\",\"password\":\"fixture-password-postgres\"},\"replication\":{\"username\":\"kk_replicator\",\"password\":\"fixture-password-kk_replicator\"},\"rewind\":{\"username\":\"kk_rewind\",\"password\":\"fixture-password-kk_rewind\"},\"monitor\":{\"username\":\"kk_monitor\",\"password\":\"fixture-password-kk_monitor\"},\"patroniRest\":{\"username\":\"kk_admin\",\"password\":\"fixture-password-kk_admin\"},\"caPEM\":\"fixture-ca\",\"serverCert\":{\"certPEM\":\"fixture-tls/servers/demop1.crt\",\"keyPEM\":\"fixture-tls/servers/demop1.key\"}}",
+      "EngineSpecSHA256": "904f196927c39d5e3d5b4c49f6d0e195f92d9ad9927b755711cfdb2cfdc2f13f",
+      "Runtime": {
+        "base": "ubuntu-24.04",
+        "prepare": [
+          "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
+          "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+          "sudo percona-release setup -y ppg-17",
+          "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
+          "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2"
+        ],
+        "env": {
+          "KARAKORAM_CLUSTER": "demo",
+          "KARAKORAM_DATA_DIR": "/srv/volumes/demop1v",
+          "KARAKORAM_ENGINE": "postgres",
+          "KARAKORAM_INTERNAL_CA": "",
+          "KARAKORAM_MEMBER": "demop1",
+          "KARAKORAM_URL": ""
+        },
+        "args": [
+          "agent"
+        ],
+        "ports": [
+          {
+            "port": 5432,
+            "protocol": "tcp"
+          },
+          {
+            "port": 9443,
+            "protocol": "tcp"
+          },
+          {
+            "port": 8008,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2379,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2380,
+            "protocol": "tcp"
+          }
+        ],
+        "volume": "demop1v",
+        "readiness": {
+          "args": [
+            "agent",
+            "readiness",
+            "--startup",
+            "--data-dir=/srv/volumes/demop1v"
+          ],
+          "failureTimeout": 300000000000,
+          "retryPeriod": 10000000000
+        },
+        "stopBeforeStart": true
+      }
+    },
+    {
+      "Name": "demop2",
+      "EngineSpec": "{\"role\":\"data\",\"topology\":\"ha\",\"flavour\":\"postgres\",\"scope\":\"demo-compatibility-fixture\",\"major\":17,\"binDir\":\"/usr/lib/postgresql/17/bin\",\"version\":\"17.11.1\",\"member\":\"demop2\",\"peers\":[{\"name\":\"demop0\",\"host\":\"demop0\",\"etcd\":\"voter\"},{\"name\":\"demop1\",\"host\":\"demop1\",\"etcd\":\"voter\"},{\"name\":\"demop2\",\"host\":\"demop2\",\"etcd\":\"voter\"}],\"listenHost\":\"0.0.0.0\",\"etcd\":{\"initialCluster\":\"demop0=https://demop0:2380,demop1=https://demop1:2380,demop2=https://demop2:2380\",\"state\":\"new\",\"token\":\"compatibility-fixture\"},\"postgres\":{\"requireTls\":true,\"clientCidrs\":[\"0.0.0.0/0\"],\"synchronous\":\"off\"},\"bootstrap\":{\"method\":\"initdb\",\"generation\":1},\"superuser\":{\"username\":\"postgres\",\"password\":\"fixture-password-postgres\"},\"replication\":{\"username\":\"kk_replicator\",\"password\":\"fixture-password-kk_replicator\"},\"rewind\":{\"username\":\"kk_rewind\",\"password\":\"fixture-password-kk_rewind\"},\"monitor\":{\"username\":\"kk_monitor\",\"password\":\"fixture-password-kk_monitor\"},\"patroniRest\":{\"username\":\"kk_admin\",\"password\":\"fixture-password-kk_admin\"},\"caPEM\":\"fixture-ca\",\"serverCert\":{\"certPEM\":\"fixture-tls/servers/demop2.crt\",\"keyPEM\":\"fixture-tls/servers/demop2.key\"}}",
+      "EngineSpecSHA256": "5230efbf41b57f3d6fe5c762ab3a5361862ca721889a35ad26a4b4fe12c6c2d0",
+      "Runtime": {
+        "base": "ubuntu-24.04",
+        "prepare": [
+          "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
+          "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+          "sudo percona-release setup -y ppg-17",
+          "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
+          "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2"
+        ],
+        "env": {
+          "KARAKORAM_CLUSTER": "demo",
+          "KARAKORAM_DATA_DIR": "/srv/volumes/demop2v",
+          "KARAKORAM_ENGINE": "postgres",
+          "KARAKORAM_INTERNAL_CA": "",
+          "KARAKORAM_MEMBER": "demop2",
+          "KARAKORAM_URL": ""
+        },
+        "args": [
+          "agent"
+        ],
+        "ports": [
+          {
+            "port": 5432,
+            "protocol": "tcp"
+          },
+          {
+            "port": 9443,
+            "protocol": "tcp"
+          },
+          {
+            "port": 8008,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2379,
+            "protocol": "tcp"
+          },
+          {
+            "port": 2380,
+            "protocol": "tcp"
+          }
+        ],
+        "volume": "demop2v",
+        "readiness": {
+          "args": [
+            "agent",
+            "readiness",
+            "--startup",
+            "--data-dir=/srv/volumes/demop2v"
+          ],
+          "failureTimeout": 300000000000,
+          "retryPeriod": 10000000000
+        },
+        "stopBeforeStart": true
+      }
+    },
+    {
+      "Name": "demopx",
+      "EngineSpec": "{\"role\":\"proxy\",\"topology\":\"ha\",\"flavour\":\"postgres\",\"scope\":\"demo-compatibility-fixture\",\"major\":17,\"binDir\":\"/usr/lib/postgresql/17/bin\",\"version\":\"17.11.1\",\"member\":\"demopx\",\"peers\":[{\"name\":\"demop0\",\"host\":\"demop0\",\"etcd\":\"voter\"},{\"name\":\"demop1\",\"host\":\"demop1\",\"etcd\":\"voter\"},{\"name\":\"demop2\",\"host\":\"demop2\",\"etcd\":\"voter\"}],\"listenHost\":\"0.0.0.0\",\"proxy\":{\"servers\":[\"demop0\",\"demop1\",\"demop2\"],\"users\":[{\"username\":\"postgres\",\"password\":\"fixture-password-postgres\",\"requireTls\":true}],\"monitor\":{\"username\":\"kk_monitor\",\"password\":\"fixture-password-kk_monitor\"},\"admin\":{\"username\":\"kk_proxy_admin\",\"password\":\"fixture-password-kk_proxy_admin\"},\"threads\":2,\"maxConnections\":43,\"serverCert\":{\"certPEM\":\"fixture-tls/servers/demopx.crt\",\"keyPEM\":\"fixture-tls/servers/demopx.key\"},\"backendTls\":true},\"superuser\":{\"username\":\"\",\"password\":\"\"},\"replication\":{\"username\":\"\",\"password\":\"\"},\"rewind\":{\"username\":\"\",\"password\":\"\"},\"monitor\":{\"username\":\"\",\"password\":\"\"},\"patroniRest\":{\"username\":\"\",\"password\":\"\"},\"caPEM\":\"fixture-ca\",\"serverCert\":{\"certPEM\":\"fixture-tls/servers/demopx.crt\",\"keyPEM\":\"fixture-tls/servers/demopx.key\"}}",
+      "EngineSpecSHA256": "982e7ed94b4b5342fccb2f0ab207daf3f9665df53d3378b95693f4d23fdaed68",
+      "Runtime": {
+        "base": "ubuntu-24.04",
+        "prepare": [
+          "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl",
+          "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d",
+          "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://github.com/sysown/proxysql/releases/download/v3.0.11/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+          "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service \u0026\u0026 sudo systemctl mask proxysql.service; fi"
+        ],
+        "env": {
+          "KARAKORAM_CLUSTER": "demo",
+          "KARAKORAM_DATA_DIR": "/srv/application/karakoram-data",
+          "KARAKORAM_ENGINE": "postgres",
+          "KARAKORAM_INTERNAL_CA": "",
+          "KARAKORAM_MEMBER": "demopx",
+          "KARAKORAM_URL": ""
+        },
+        "args": [
+          "agent"
+        ],
+        "ports": [
+          {
+            "port": 5432,
+            "protocol": "tcp"
+          },
+          {
+            "port": 9443,
+            "protocol": "tcp"
+          }
+        ],
+        "readiness": {
+          "args": [
+            "agent",
+            "readiness",
+            "--startup",
+            "--data-dir=/srv/application/karakoram-data"
+          ],
+          "failureTimeout": 300000000000,
+          "retryPeriod": 10000000000
+        },
+        "stopBeforeStart": true
+      }
+    }
+  ]
+}

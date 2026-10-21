@@ -50,7 +50,7 @@ func (e *Runner) Shutdown(ctx context.Context, n *agent.Node) error {
 type patroniRequester func(context.Context, pgspec.Spec, string, string, any, any) error
 
 func gracefulHandoff(ctx context.Context, s pgspec.Spec, request patroniRequester) error {
-	if s.Role == pgspec.RoleProxy || s.Topology != pgspec.TopologyHA || s.Retiring {
+	if s.Role == pgspec.RoleProxy || !usesPatroni(s) || s.Retiring {
 		return nil
 	}
 	var cluster patroniCluster

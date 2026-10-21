@@ -76,6 +76,7 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 	rc.Clock = clock
 	// Desired major may already differ while a queued old-major backup runs.
 	rc.Cluster.Spec.Version = "18.6.1"
+	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["postgis","pgvector","postgis"]}`)
 	calls := 0
 	inventory := pgspec.BackupInfoResponse{Backups: []pgspec.BackupInfo{{Label: "20261017-021859F", Type: "full", StartedAt: "2026-10-17T02:18:59Z", StoppedAt: "2026-10-17T02:19:06Z", WALStart: "00000001000000000000000A", WALStop: "00000001000000000000000A", SystemID: "1234567890123456789", Version: "17", SizeBytes: 500, RepoBytes: 100}}}
 	installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +126,8 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 		}
 		op.Checkpoint = result.Checkpoint
 		clock.at = clock.at.Add(result.RequeueAfter)
+		// A later source selection must not rewrite the snapshot requirements.
+		rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["pgvector"]}`)
 		if result.Done {
 			break
 		}
@@ -138,6 +141,9 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 	}
 	if b.SourceVersion != "17.11.1" || b.Postgres.Version != "17" {
 		t.Fatalf("backup stamped desired instead of observed/native version: %+v", b)
+	}
+	if strings.Join(b.Postgres.Profiles, ",") != "pgvector,postgis" {
+		t.Fatalf("snapshot profile requirements lost or rewritten: %+v", b.Postgres)
 	}
 	bs, err := loadBackupState(rc.Cluster)
 	if err != nil || !bs.Replicas {
@@ -608,12 +614,22 @@ func TestRetentionPreservesNativeChains(t *testing.T) {
 		{"whole-old-chain", []domain.Backup{full, diff, incr, newFull}, []domain.Backup{full, diff, incr}, 3},
 		{"skipped-until-new-full", []domain.Backup{full, diff, incr}, []domain.Backup{full}, 0},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := p.FilterRetention(tc.backups, append([]domain.Backup(nil), tc.candidates...))
-			if len(got) != tc.want {
-				t.Fatalf("got %v candidates, want %d", got, tc.want)
-			}
-		})
+		for _, topology := range []string{"single", "ha"} {
+			t.Run(topology+"/"+tc.name, func(t *testing.T) {
+				backups := append([]domain.Backup(nil), tc.backups...)
+				candidates := append([]domain.Backup(nil), tc.candidates...)
+				for i := range backups {
+					backups[i].SourceTopology.Type = topology
+				}
+				for i := range candidates {
+					candidates[i].SourceTopology.Type = topology
+				}
+				got := p.FilterRetention(backups, candidates)
+				if len(got) != tc.want {
+					t.Fatalf("got %v candidates, want %d", got, tc.want)
+				}
+			})
+		}
 	}
 }
 

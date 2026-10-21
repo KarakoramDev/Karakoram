@@ -14,33 +14,41 @@ import (
 )
 
 type state struct {
-	UID                          string            `json:"uid"`
-	NextIndex                    int               `json:"nextIndex"`
-	ConfigVersion                int64             `json:"configVersion"`
-	ConfigHash                   string            `json:"configHash,omitempty"`
-	BootstrapGeneration          int               `json:"bootstrapGeneration"`
-	RepositoryGeneration         int               `json:"repositoryGeneration,omitempty"`
-	RetiredRepositoryGenerations []int             `json:"retiredRepositoryGenerations,omitempty"`
-	BackupCleanupStarted         *time.Time        `json:"backupCleanupStarted,omitempty"`
-	CleanedBackupRepositories    []string          `json:"cleanedBackupRepositories,omitempty"`
-	RetainedBackupStorages       []string          `json:"retainedBackupStorages,omitempty"`
-	Topology                     string            `json:"topology"`
-	Members                      []*member         `json:"members"`
-	ConversionSeed               string            `json:"conversionSeed,omitempty"`
-	Pending                      *pending          `json:"pending,omitempty"`
-	Suspended                    bool              `json:"suspended,omitempty"`
-	Formed                       bool              `json:"formed,omitempty"`
-	Replacement                  *replacementState `json:"replacement,omitempty"`
-	Upgrade                      *upgradeState     `json:"upgrade,omitempty"`
-	Rolling                      *rollingState     `json:"rolling,omitempty"`
-	RestoreRecovery              *domain.Operation `json:"restoreRecovery,omitempty"`
-	SwitchoverBlocked            string            `json:"switchoverBlocked,omitempty"`
+	ExtensionsPending            bool                      `json:"extensionsPending,omitempty"`
+	UID                          string                    `json:"uid"`
+	NextIndex                    int                       `json:"nextIndex"`
+	GroupIndexes                 map[int]int               `json:"groupIndexes,omitempty"`
+	ConfigVersion                int64                     `json:"configVersion"`
+	ConfigHash                   string                    `json:"configHash,omitempty"`
+	BootstrapGeneration          int                       `json:"bootstrapGeneration"`
+	RepositoryGeneration         int                       `json:"repositoryGeneration,omitempty"`
+	RetiredRepositoryGenerations []int                     `json:"retiredRepositoryGenerations,omitempty"`
+	Topology                     string                    `json:"topology"`
+	Members                      []*member                 `json:"members"`
+	ConversionSeed               string                    `json:"conversionSeed,omitempty"`
+	Pending                      *pending                  `json:"pending,omitempty"`
+	Suspended                    bool                      `json:"suspended,omitempty"`
+	Formed                       bool                      `json:"formed,omitempty"`
+	GroupFormed                  map[int]bool              `json:"groupFormed,omitempty"`
+	GroupRepositoryIncarnations  map[int]int               `json:"groupRepositoryIncarnations,omitempty"`
+	CitusScale                   *citusScaleState          `json:"citusScale,omitempty"`
+	Replacement                  *replacementState         `json:"replacement,omitempty"`
+	Upgrade                      *upgradeState             `json:"upgrade,omitempty"`
+	Rolling                      *rollingState             `json:"rolling,omitempty"`
+	RestoreRecovery              *domain.Operation         `json:"restoreRecovery,omitempty"`
+	Rebalance                    *citusRebalanceCheckpoint `json:"rebalance,omitempty"`
+	CitusOperation               string                    `json:"citusOperation,omitempty"`
+	SwitchoverBlocked            string                    `json:"switchoverBlocked,omitempty"`
+	BackupCleanupStarted         *time.Time                `json:"backupCleanupStarted,omitempty"`
+	CleanedBackupRepositories    []string                  `json:"cleanedBackupRepositories,omitempty"`
+	RetainedBackupStorages       []string                  `json:"retainedBackupStorages,omitempty"`
 }
 type member struct {
 	Name            string `json:"name"`
 	NativeReadiness *bool  `json:"nativeReadiness,omitempty"`
 	Role            string `json:"role"`
 	Index           int    `json:"index"`
+	Group           int    `json:"group,omitempty"`
 	Volume          string `json:"volume,omitempty"`
 	ServiceID       string `json:"serviceId,omitempty"`
 	VolumeID        string `json:"volumeId,omitempty"`
@@ -134,24 +142,34 @@ func (s *state) data() []*member {
 	return out
 }
 func (s *state) allocate(c *domain.Cluster) {
-	for len(s.data()) < c.Spec.Components.Engine.Replicas {
-		if s.Formed {
-			for _, m := range s.data() {
-				if m.Stage != "joined" || m.EtcdLearner {
-					return
+	groups := 1
+	if s.Topology == "distributed" {
+		o, err := ParseOptions(c.Spec.EngineOptions)
+		if err != nil {
+			return // Admission rejects invalid options before reconciliation.
+		}
+		groups += o.citusOptions().WorkerGroups
+	}
+	for group := range groups {
+		for len(s.group(group).data()) < c.Spec.Components.Engine.Replicas {
+			if s.Formed {
+				for _, m := range s.group(group).data() {
+					if m.Stage != "joined" || m.EtcdLearner {
+						return
+					}
 				}
 			}
-		}
-		i := s.NextIndex
-		s.NextIndex++
-		name := fmt.Sprintf("%sp%d", c.Name, i)
-		etcdState := "new"
-		if s.Formed && s.Topology == "ha" {
-			etcdState = "pending"
-		}
-		s.Members = append(s.Members, &member{Name: name, Role: "data", Index: i, Volume: name + "v", Stage: "planned", ConfigVersion: s.ConfigVersion, EtcdState: etcdState})
-		if s.Formed {
-			break
+			m := s.newGroupMember(c, group)
+			m.EtcdState = ""
+			if group == 0 {
+				m.EtcdState = "new"
+				if s.Formed && s.Topology != "single" {
+					m.EtcdState = "pending"
+				}
+			}
+			if s.Formed {
+				return
+			}
 		}
 	}
 	if c.Spec.Components.Extra["proxy"].Replicas > 0 && s.find(c.Name+"px") == nil {
@@ -162,12 +180,28 @@ func (s *state) allocate(c *domain.Cluster) {
 // newDataMember reserves a monotonic identity before any infrastructure is
 // created. Retrying after a crash therefore cannot reuse a retired member.
 func (s *state) newDataMember(c *domain.Cluster) *member {
+	return s.newGroupMember(c, 0)
+}
+
+func (s *state) newGroupMember(c *domain.Cluster, group int) *member {
 	i := s.NextIndex
-	s.NextIndex++
 	name := fmt.Sprintf("%sp%d", c.Name, i)
+	if group == 0 {
+		s.NextIndex++
+	} else {
+		if s.GroupIndexes == nil {
+			s.GroupIndexes = map[int]int{}
+		}
+		i = s.GroupIndexes[group]
+		s.GroupIndexes[group] = i + 1
+		name = fmt.Sprintf("%sw%dp%d", c.Name, group, i)
+	}
 	m := &member{
-		Name: name, Role: "data", Index: i, Volume: name + "v",
-		Stage: "planned", ConfigVersion: s.ConfigVersion, EtcdState: "pending",
+		Name: name, Role: "data", Index: i, Group: group, Volume: name + "v",
+		Stage: "planned", ConfigVersion: s.ConfigVersion,
+	}
+	if group == 0 {
+		m.EtcdState = "pending"
 	}
 	s.Members = append(s.Members, m)
 	return m

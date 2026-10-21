@@ -7,12 +7,19 @@ import sys
 import tarfile
 
 
-def validate(filename, extensions):
+def validate(filename, kind, major=None):
+    if kind not in ("application", "pg-extension"):
+        raise ValueError("invalid archive kind")
+    extensions = kind == "pg-extension"
+    if extensions and major not in ("16", "17", "18"):
+        raise ValueError("missing or invalid PostgreSQL major")
+    if not extensions and major is not None:
+        raise ValueError("unexpected PostgreSQL major")
     with tarfile.open(filename, "r:*") as archive:
         members = archive.getmembers()
     entries = {}
     symlinks = {}
-    roots = ("usr/lib/postgresql/17", "usr/share/postgresql/17")
+    roots = (f"usr/lib/postgresql/{major}", f"usr/share/postgresql/{major}")
     ancestors = {".", "usr", "usr/lib", "usr/share", "usr/lib/postgresql", "usr/share/postgresql"}
     for member in members:
         name = member.name
@@ -84,6 +91,8 @@ def validate(filename, extensions):
 
 if __name__ == "__main__":
     try:
-        validate(sys.argv[1], sys.argv[2] == "extensions")
+        if len(sys.argv) not in (3, 4):
+            raise ValueError("expected archive, kind and optional PostgreSQL major")
+        validate(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) == 4 else None)
     except (OSError, ValueError, tarfile.TarError) as error:
         sys.exit("unsafe archive member: " + str(error))

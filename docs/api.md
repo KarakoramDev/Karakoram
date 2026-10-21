@@ -128,6 +128,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Native access | `/rabbitmq/vhosts`, `/rabbitmq/users`, `/rabbitmq/permissions`, `/rabbitmq/topic-permissions`, `/rabbitmq/policies`, `/rabbitmq/operator-policies` | RabbitMQ only |
 | Native access | `/elasticsearch/users`, `/elasticsearch/roles`, `/elasticsearch/api-keys` | Elasticsearch only |
 | Native PostgreSQL access | `/postgres/roles`, `/postgres/roles/{role}`, `/postgres/roles/{role}/password`, `/postgres/databases`, `/postgres/databases/{database}`, `/postgres/grants` | PostgreSQL and Supabase |
+| PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores` | All |
 | Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase |
@@ -135,6 +136,10 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
 
 PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
+
+See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade guards. In-place restores of a bound PostgreSQL source require `acknowledgeBoundConsumers: true`; otherwise HTTP 409 `bound_consumers` lists affected consumer identities.
+
+Distributed PostgreSQL exposes `POST /clusters/{cluster}/actions/rebalance` with `{strategy?: string}` and returns 202 Operation (`type: rebalance`). It uses `clusters:update`, CSRF and idempotency conventions. Members expose a read-only `group` (0 coordinator); `CitusTopology` conditions report metadata drift. See [distributed PostgreSQL](postgres/distributed.md).
 
 Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
 

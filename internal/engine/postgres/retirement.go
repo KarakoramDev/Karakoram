@@ -225,7 +225,7 @@ func retirementRuntimeStopped(ctx context.Context, rc *engine.Context, s *state,
 }
 
 func survivingPrimary(ctx context.Context, rc *engine.Context, s *state, old string) (bool, error) {
-	for _, m := range s.data() {
+	for _, m := range s.memberGroup(old).data() {
 		if m.Name == old || m.Removing || m.Retirement != "" {
 			continue
 		}

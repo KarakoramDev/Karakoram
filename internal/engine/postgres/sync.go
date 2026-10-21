@@ -260,7 +260,7 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 		rc.SyncWait = fmt.Sprintf("waiting for member %s native process to run", m.Name)
 		return false, nil
 	}
-	if m.Role == "data" && m.Topology == "ha" && st.Role != "primary" && (st.Role != "replica" || !st.Streaming) {
+	if m.Role == "data" && patroniTopology(m.Topology) && st.Role != "primary" && (st.Role != "replica" || !st.Streaming) {
 		rc.SyncWait = fmt.Sprintf("waiting for member %s primary or streaming replica role", m.Name)
 		return false, nil
 	}
@@ -297,7 +297,10 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 		rc.SyncWait = fmt.Sprintf("waiting for member %s pending PostgreSQL restart", m.Name)
 		return false, a.Process(ctx, agentapi.ProcessAction{Process: "postgres", Action: "restart", RequestID: fmt.Sprintf("config/%s/%d/postgres", m.Name, m.ConfigVersion)})
 	}
-	if st.PendingRestart && m.Role == "data" && m.Topology == "ha" {
+	if st.PendingRestart && m.Role == "data" && patroniTopology(m.Topology) {
+		if st.Role == "primary" && m.Topology == "distributed" && rc.Cluster.Spec.Components.Engine.Replicas == 1 {
+			return false, a.Engine(ctx, "postgres", pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
+		}
 		rc.SyncWait = fmt.Sprintf("waiting for member %s pending PostgreSQL restart or switchover", m.Name)
 		if st.Role == "primary" {
 			s, err := load(rc.Cluster)
@@ -338,6 +341,17 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	s.SwitchoverBlocked = ""
 	rc.SyncWait = "retiring unplaced scale-down members"
+	if s.CitusOperation != "" {
+		if s.RestoreRecovery != nil {
+			_, err = p.reconcileRestoreRecovery(ctx, rc, s)
+		}
+		s.SwitchoverBlocked = "Citus restore owns the formation"
+		return result, err
+	}
+	if s.Rebalance != nil {
+		s.SwitchoverBlocked = "Citus rebalance owns the formation"
+		return result, nil
+	}
 	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
@@ -363,7 +377,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	// A durable shared-memory journal owns its current membership. Allocate
 	// scale-up identities only after it finishes, never before agent probes
 	// that would otherwise preempt provisioning those identities.
-	if s.Rolling == nil && s.RestoreRecovery == nil {
+	if s.Rolling == nil && s.RestoreRecovery == nil && s.CitusScale == nil {
 		s.allocate(rc.Cluster)
 	}
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
@@ -384,6 +398,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		rc.SyncWait = "observing pending infrastructure operation"
+		return result, e
+	}
+	if handled, e := p.reconcileCitusScaleDown(ctx, rc, s); handled || e != nil {
 		return result, e
 	}
 	if s.Suspended {
@@ -459,7 +476,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		s.ConfigHash = hash
 		s.ConfigVersion++
 	}
-	if s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
+	if s.Topology != "distributed" && s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
 		rc.SyncWait = "scaling down data members"
 		return p.scaleDown(ctx, rc, s, result)
 	}
@@ -698,7 +715,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, nil
 		}
 	}
-	if s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
+	if s.Topology != "distributed" && s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
 		rc.SyncWait = "scaling down excess data members"
 		return p.scaleDown(ctx, rc, s, result)
 	}
@@ -776,7 +793,16 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		return 1
 	}
-	sort.SliceStable(order, func(i, j int) bool { return rank(order[i]) < rank(order[j]) })
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := order[i], order[j]
+		if s.Topology == "distributed" && a.Role == "data" && b.Role == "data" && a.Group != b.Group {
+			if a.Group == 0 || b.Group == 0 {
+				return b.Group == 0
+			}
+			return a.Group < b.Group
+		}
+		return rank(a) < rank(b)
+	})
 	for _, m := range order {
 		if _, failed := rc.Cluster.Status.DeploymentFailures[m.Name]; failed {
 			if spec, specErr := p.runtimeSpec(rc, m); specErr == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
@@ -851,7 +877,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if !changed {
 			continue
 		}
-		if roles[m.Name] == "primary" && s.Topology == "ha" && needsDisruption(p, rc, m, desired) {
+		if roles[m.Name] == "primary" && patroniTopology(s.Topology) && rc.Cluster.Spec.Components.Engine.Replicas > 1 && needsDisruption(p, rc, m, desired) {
 			rc.SyncWait = fmt.Sprintf("switching leadership away from %s", m.Name)
 			return result, switchAwayConfigured(ctx, rc, s, m.Name, true)
 		}
@@ -869,13 +895,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, fmt.Errorf("%w: major upgrade requires the PostgreSQL upgrade operation", engine.ErrConflict)
 		}
 		versionChanged := m.Version != rc.Cluster.Spec.Version
+		profilesAdded := p.profilesAdded(m.Options, rc.Cluster.Spec.EngineOptions)
 		m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
 		m.Version = rc.Cluster.Spec.Version
 		m.ConfigVersion = s.ConfigVersion
 		// ProxySQL packages and process configuration are independent of the
 		// PostgreSQL release. Publish proxy metadata through reload instead.
-		if versionChanged && m.Role == "data" {
-			rc.SyncWait = fmt.Sprintf("redeploying member %s version", m.Name)
+		if (versionChanged || profilesAdded) && m.Role == "data" {
+			s.ExtensionsPending = s.ExtensionsPending || versionChanged
+			rc.SyncWait = fmt.Sprintf("redeploying member %s version or profiles", m.Name)
 			m.Stage = "imported"
 			return result, nil
 		}
@@ -948,10 +976,22 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, e
 		}
 	}
+	if s.ExtensionsPending {
+		if err = p.updateProfileExtensions(ctx, rc); err != nil {
+			return result, err
+		}
+		s.ExtensionsPending = false
+	}
 	if p.options.Flavour != nil {
 		if err = p.options.Flavour.PostReady(ctx, rc); err != nil {
 			return result, err
 		}
+	}
+	if err = p.postReadyProfiles(ctx, rc); err != nil {
+		return result, err
+	}
+	if handled, e := p.reconcileCitusRegistration(ctx, rc, s); handled || e != nil {
+		return result, e
 	}
 	if !s.Formed {
 		s.Formed = true

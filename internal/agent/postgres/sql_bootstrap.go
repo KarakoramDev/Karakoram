@@ -15,6 +15,7 @@ import (
 )
 
 func (e *Runner) sqlBootstrapRoute(mux *http.ServeMux, n *agent.Node) {
+	e.profileBootstrapRoute(mux, n)
 	mux.HandleFunc("POST /v1/postgres/"+pgspec.ActionSQLBootstrap, func(w http.ResponseWriter, r *http.Request) {
 		var req pgspec.SQLBootstrapRequest
 		if err := decodeAction(w, r, &req); err != nil {

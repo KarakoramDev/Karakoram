@@ -328,7 +328,7 @@ func performUpgrade(ctx context.Context, n *agent.Node, request pgspec.UpgradeRe
 	if s.Role != pgspec.RoleData {
 		return response, errors.New("upgrade requires a data member")
 	}
-	if request.Replica && s.Topology != pgspec.TopologyHA {
+	if request.Replica && !usesPatroni(s) {
 		return response, errors.New("replica rebuilding requires an HA data member")
 	}
 	p := dataPaths(n.DataDir())
@@ -508,7 +508,7 @@ func (e *Runner) upgradeRoutes(mux *http.ServeMux, n *agent.Node) {
 				if action == "upgrade-stop" {
 					return stopForUpgrade(r.Context(), locked, s, dataPaths(locked.DataDir()))
 				}
-				if s.Topology != pgspec.TopologyHA {
+				if !usesPatroni(s) {
 					return errors.New("upgrade pause requires Patroni")
 				}
 				return patroniRequest(r.Context(), s, "PATCH", "/config", map[string]any{"pause": true}, nil)

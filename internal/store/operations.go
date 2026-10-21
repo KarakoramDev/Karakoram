@@ -407,6 +407,9 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	if err = admitRestoreBackup(ctx, tx, domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}, domain.ClusterRef{Namespace: restore.SourceNamespace, Name: restore.Source.SourceCluster}, restore.Source.Backup, restore.Source.PITRTime != nil); err != nil {
 		return err
 	}
+	if err = guardRestoreBindings(ctx, tx, domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}); err != nil {
+		return err
+	}
 	if err = put(ctx, tx, "restore", domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}.Key(), restore.Name, restore, "", "", string(restore.Phase), true); err != nil {
 		return err
 	}

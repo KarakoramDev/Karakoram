@@ -198,6 +198,9 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 
 // preserveRetryEpoch keeps deployment budgets exclusively under the action's control.
 func preserveRetryEpoch(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef, spec domain.ClusterSpec) ([]byte, domain.ClusterSpec, error) {
+	if err := guardBindingMajor(ctx, tx, ref, spec); err != nil {
+		return nil, spec, err
+	}
 	if err := tx.QueryRowContext(ctx, "SELECT coalesce(json_extract(spec,'$.retryEpoch'),0) FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&spec.RetryEpoch); err != nil {
 		return nil, spec, typed(err)
 	}
@@ -310,6 +313,9 @@ func (s *Store) MarkClusterDeleting(ctx context.Context, ref domain.ClusterRef, 
 	if err = refuseBackupDependents(ctx, tx, ref, "", true, opts.KeepBackups); err != nil {
 		return err
 	}
+	if err = guardPostgresBindings(ctx, tx, ref); err != nil {
+		return err
+	}
 	if op, ok := ctx.Value(operationContextKey{}).(*domain.Operation); ok && op != nil && op.Kind == domain.OperationDelete && deleting {
 		var current domain.DeleteOptions
 		if err = json.Unmarshal(currentOptions, &current); err != nil {
@@ -365,7 +371,15 @@ func (s *Store) StartClusterCleanup(ctx context.Context, c *domain.Cluster) erro
 	if err := c.Ref().Validate(); err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "UPDATE clusters SET status=json_set(status,'$.cleanupStarted',json('true')) WHERE namespace=? AND name=? AND generation=? AND created=? AND deleting=1", domain.NormalizedNamespace(c.Namespace), c.Name, c.Generation, c.CreatedAt.UnixNano())
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = guardPostgresBindings(ctx, tx, c.Ref()); err != nil {
+		return err
+	}
+	r, err := tx.ExecContext(ctx, "UPDATE clusters SET status=json_set(status,'$.cleanupStarted',json('true')) WHERE namespace=? AND name=? AND generation=? AND created=? AND deleting=1", domain.NormalizedNamespace(c.Namespace), c.Name, c.Generation, c.CreatedAt.UnixNano())
 	if err != nil {
 		return typed(err)
 	}
@@ -375,6 +389,9 @@ func (s *Store) StartClusterCleanup(ctx context.Context, c *domain.Cluster) erro
 	}
 	if n == 0 {
 		return ErrConflict
+	}
+	if err = tx.Commit(); err != nil {
+		return err
 	}
 	c.Status.CleanupStarted = true
 	return nil

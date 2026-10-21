@@ -14,7 +14,7 @@ import (
 // client. A replacement's predecessor may be unreachable but still be joined.
 func etcdVoter(ctx context.Context, rc *engine.Context, s *state, exclude string) (*agentapi.Client, pgspec.EtcdMemberResponse, error) {
 	lastErr := engine.ErrUnavailable
-	for _, m := range s.data() {
+	for _, m := range s.group(0).data() {
 		if m.Name == exclude || m.Removing || m.EtcdLearner || m.Stage != "joined" || s.Replacement != nil && m.Name == s.Replacement.Old {
 			continue
 		}
@@ -36,6 +36,9 @@ func etcdVoter(ctx context.Context, rc *engine.Context, s *state, exclude string
 	return nil, pgspec.EtcdMemberResponse{}, lastErr
 }
 func (p *Core) addLearner(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if m.Group != 0 {
+		return nil
+	}
 	a, response, err := etcdVoter(ctx, rc, s, m.Name)
 	if err != nil {
 		return err
@@ -72,6 +75,9 @@ func (p *Core) addLearner(ctx context.Context, rc *engine.Context, s *state, m *
 	return nil
 }
 func (p *Core) promoteLearner(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if m.Group != 0 {
+		return nil
+	}
 	a, response, err := etcdVoter(ctx, rc, s, m.Name)
 	if err != nil {
 		return err
@@ -106,6 +112,9 @@ func (p *Core) promoteLearner(ctx context.Context, rc *engine.Context, s *state,
 // removeEtcdMember observes membership first so a crash after the removal RPC
 // does not turn its retry into an unrecoverable member-not-found response.
 func removeEtcdMember(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if m.Group != 0 {
+		return nil
+	}
 	a, response, err := etcdVoter(ctx, rc, s, m.Name)
 	if err != nil {
 		return err

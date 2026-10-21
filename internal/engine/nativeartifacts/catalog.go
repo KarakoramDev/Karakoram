@@ -30,7 +30,10 @@ type ExtensionFlags struct {
 
 // Artifact describes verified Linux amd64 bytes, not a floating release channel.
 type Artifact struct {
-	Name        string `json:"name"`
+	Name string `json:"name"`
+	// Kind selects restricted installation for PostgreSQL extension archives.
+	Kind        string `json:"kind,omitempty"`
+	PGMajor     int    `json:"pgMajor,omitempty"`
 	Version     string `json:"version"`
 	File        string `json:"file"`
 	SHA256      string `json:"sha256"`
@@ -55,6 +58,11 @@ var lock []byte
 //go:embed validate_archive.py
 var archiveValidator string
 
+// Frozen for deployed application and Supabase prepare-command contracts.
+// New extension artifacts use archiveValidator and explicit kind/major metadata.
+//
+//go:embed validate_archive_pg17.py
+var legacyPG17Validator string
 var artifacts = func() map[string]Artifact {
 	var entries []Artifact
 	if err := json.Unmarshal(lock, &entries); err != nil {
@@ -77,6 +85,27 @@ func Get(name string) (Artifact, error) {
 		return Artifact{}, fmt.Errorf("native artifact %q is unavailable in this build", name)
 	}
 	return a, nil
+}
+
+// ExtensionArtifact returns a locked per-major extension artifact. Recipes
+// alone never establish availability; the lock must declare the matching ABI.
+func ExtensionArtifact(product string, major int) (Artifact, error) {
+	a, err := Get(fmt.Sprintf("%s-pg%d", product, major))
+	if err != nil {
+		return Artifact{}, err
+	}
+	if a.Kind != "pg-extension" || a.PGMajor != major || !validPGMajor(major) {
+		return Artifact{}, fmt.Errorf("native artifact %q is not a PostgreSQL %d extension artifact", a.Name, major)
+	}
+	return a, nil
+}
+
+func validPGMajor(major int) bool { return major == 16 || major == 17 || major == 18 }
+
+// The pre-profile bundle has no kind/major fields in its lock entry. Keep its
+// original validator invocation and bytes so existing members do not redeploy.
+func legacyExtensionArtifact(a Artifact) bool {
+	return a.Name == "supabase-pg17-extensions" && a.Kind == "" && a.PGMajor == 0
 }
 
 // MissingMirrorError is an admission failure for a source build that cannot
@@ -110,18 +139,33 @@ func quote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'")
 // is the immutable installation root (normally /opt/karakoram/name-version).
 // Tar archives preserve their full layout; debs use apt to resolve dependencies.
 func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
+	legacy := legacyExtensionArtifact(a)
+	isExtension := a.Kind == "pg-extension" || legacy
+	major := a.PGMajor
+	if legacy {
+		major = 17
+	}
+	isTar := strings.HasSuffix(a.File, ".tar.gz") || strings.HasSuffix(a.File, ".tar.xz")
+	if (a.Kind != "" && a.Kind != "pg-extension") || (a.Kind == "" && a.PGMajor != 0) || (isExtension && (!validPGMajor(major) || !isTar)) {
+		return []string{"sudo sh -c " + quote("echo 'invalid native artifact kind or PostgreSQL major' >&2\nexit 1")}
+	}
 	// Keep download, verification and every privileged reopen inside one
 	// root-owned private directory, including when prepare runs as a user.
 	script := "set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap 'rm -rf -- \"$stage\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile=" + quote(a.File) + "\ntest ! -e \"$file\" && test ! -L \"$file\"\ncurl -fsSL " + quote(resolvedURL) + " > \"$file\"\nprintf '%s\\n' " + quote(a.SHA256+"  "+a.File) + " | sha256sum -c -\n"
-	isTar := strings.HasSuffix(a.File, ".tar.gz") || strings.HasSuffix(a.File, ".tar.xz")
 	if isTar {
 		kind := "application"
-		if a.Name == "supabase-pg17-extensions" {
+		validator := legacyPG17Validator
+		args := ""
+		if legacy {
 			kind = "extensions"
+		} else if isExtension {
+			kind = a.Kind
+			validator = archiveValidator
+			args = fmt.Sprintf(" '%d'", major)
 		}
-		script += "python3 -c " + quote(archiveValidator) + " \"$file\" " + quote(kind) + "\n"
+		script += "python3 -c " + quote(validator) + " \"$file\" " + quote(kind) + args + "\n"
 	}
-	if !strings.HasSuffix(a.File, ".deb") && a.Name != "supabase-pg17-extensions" {
+	if !strings.HasSuffix(a.File, ".deb") && !isExtension {
 		// Fresh hosts may not have an application hierarchy yet. Only grant
 		// ownership when mkdir created the leaf; never chown an existing tree
 		// or follow a destination symlink when doing this initial handoff.
@@ -135,10 +179,10 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 		// script semantics. Set this inside the privileged shell: sudo may
 		// discard an environment variable set by the caller.
 		script += "if DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '%s\\n' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" >&2\nexit \"$status\"\nfi\n"
-	case a.Name == "supabase-pg17-extensions":
+	case isExtension:
 		// Never extract into / or copy the archive's ancestor directories.
 		script += "umask 022\nmkdir unpacked\ntar --no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore -xf \"$file\" -C unpacked\n"
-		for _, dir := range []string{"usr/lib/postgresql/17", "usr/share/postgresql/17"} {
+		for _, dir := range []string{fmt.Sprintf("usr/lib/postgresql/%d", major), fmt.Sprintf("usr/share/postgresql/%d", major)} {
 			dest := path.Join(destDir, dir)
 			script += "test -d unpacked/" + dir + " && test ! -L unpacked/" + dir + "\nmkdir -p " + quote(dest) + "\ncp -a --no-preserve=ownership unpacked/" + dir + "/. " + quote(dest+"/") + "\n"
 		}

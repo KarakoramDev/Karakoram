@@ -2608,6 +2608,52 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
+  /clusters/{cluster}/actions/rebalance:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: rebalancePostgres
+      tags: [Postgres]
+      summary: Rebalance shards across distributed PostgreSQL worker groups
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RebalanceRequest'
+      responses:
+        '202':
+          description: Accepted; track the returned operation.
+          headers:
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/retry-deployments:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -3773,6 +3819,61 @@ paths:
                 required: [generatedPassword]
                 properties:
                   generatedPassword: {type: string}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/bindings:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listPostgresBindings
+      tags: [Postgres]
+      summary: List inbound PostgreSQL consumer bindings without credentials
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Inbound consumer bindings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/PostgresBinding'}}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/postgres/bindings/{binding}/rotate:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: binding, in: path, required: true, schema: {type: string, minLength: 1}}
+    post:
+      operationId: rotatePostgresBinding
+      tags: [Postgres]
+      summary: Rotate binding credentials and refresh the consumer
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '200':
+          description: Updated binding metadata; credentials are never returned.
+          headers:
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PostgresBinding'}
         '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/postgres/databases:
     parameters:
@@ -8660,6 +8761,7 @@ components:
             - dedicatedMasters
             - single
             - ha
+            - distributed
         shards:
           type: integer
           minimum: 1
@@ -8725,6 +8827,7 @@ components:
             - dedicatedMasters
             - single
             - ha
+            - distributed
         displayName:
           type: string
         defaults:
@@ -9241,6 +9344,11 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+        group:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Distributed PostgreSQL group; 0 is coordinator, positive groups are workers. Absent for other members.
         set:
           type: string
         role:
@@ -9996,6 +10104,29 @@ components:
             type: string
             enum: [management, policymaker, monitoring, administrator, impersonator]
       required: [name, tags]
+    PostgresBinding:
+      type: object
+      additionalProperties: false
+      required: [id, consumer, databases, extensions, role, credentialGeneration, state, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        consumer:
+          type: object
+          additionalProperties: false
+          required: [kind, namespace, name]
+          properties:
+            kind: {type: string}
+            namespace: {type: string}
+            name: {type: string}
+        databases: {type: array, items: {type: string}}
+        extensions: {type: array, items: {type: string}}
+        role: {type: string}
+        minMajor: {type: integer}
+        maxMajor: {type: integer}
+        credentialGeneration: {type: integer, format: int64}
+        state: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
     PostgresRole:
       type: object
       additionalProperties: false
@@ -10067,6 +10198,10 @@ components:
         encoding: {type: string, default: UTF8}
         locale: {type: string, default: C.UTF-8}
         allowConnections: {type: boolean, default: true}
+        extensions:
+          type: array
+          maxItems: 32
+          items: {type: string, pattern: '^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$'}
     PostgresGrant:
       type: object
       additionalProperties: false
@@ -10394,12 +10529,44 @@ components:
         repoBytes:
           type: integer
           format: int64
+        profiles:
+          type: array
+          readOnly: true
+          uniqueItems: true
+          description: Normalized snapshot-time runtime profile requirements. Physical recovery targets must select a superset; absent legacy metadata requires no profiles.
+          items:
+            type: string
+        restorePoint:
+          type: string
+          readOnly: true
+          description: Coordinated Citus named recovery target.
+        groups:
+          type: array
+          readOnly: true
+          items:
+            $ref: '#/components/schemas/PostgresBackupGroup'
       required:
         - label
         - repository
         - systemId
         - version
         - repoBytes
+    PostgresBackupGroup:
+      type: object
+      additionalProperties: false
+      properties:
+        group:
+          type: integer
+        primary:
+          type: string
+        timeline:
+          type: integer
+        backup:
+          $ref: '#/components/schemas/PostgresBackup'
+        lsn:
+          type: string
+          description: Archive fence; worker positions are conservative post-marker upper bounds.
+      required: [group, backup, lsn]
     Backup:
       type: object
       additionalProperties: false
@@ -10449,11 +10616,13 @@ components:
             - manual
             - schedule
             - restore
+            - pitr
           # Keep existing Go constant names independent of new enum collisions.
           x-enum-varnames:
             - Manual
             - Schedule
             - BackupTriggerRestore
+            - BackupTriggerPITR
         schedule:
           type: string
           minLength: 1
@@ -10522,19 +10691,32 @@ components:
         pitrTime:
           type: string
           format: date-time
+        restorePoint:
+          type: string
+          minLength: 1
+          maxLength: 128
         sourceCluster:
           type: string
           pattern: ^[a-z][a-z0-9]{1,11}$
           minLength: 2
           maxLength: 12
-      description: Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+      description: Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
       oneOf:
         - required: [backup]
           not:
-            required: [pitrTime]
+            anyOf:
+              - required: [pitrTime]
+              - required: [restorePoint]
         - required: [pitrTime]
           not:
-            required: [backup]
+            anyOf:
+              - required: [backup]
+              - required: [restorePoint]
+        - required: [restorePoint]
+          not:
+            anyOf:
+              - required: [backup]
+              - required: [pitrTime]
     Restore:
       type: object
       additionalProperties: false
@@ -10589,6 +10771,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        acknowledgeBoundConsumers:
+          type: boolean
+          description: Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
         sourceNamespace:
           allOf:
             - $ref: '#/components/schemas/NamespaceName'
@@ -10783,6 +10968,13 @@ components:
           type: string
           minLength: 1
       required: [kind, name]
+    RebalanceRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        strategy:
+          type: string
+          description: Optional installed Citus rebalance strategy; omitted uses the Citus default.
     Operation:
       type: object
       additionalProperties: false
@@ -10817,6 +11009,7 @@ components:
             - restore
             - raise-fcv
             - restart
+            - rebalance
             - replace-member
             - rotate-system-user
             - rotate-tls
@@ -11338,6 +11531,7 @@ components:
             - dedicatedMasters
             - single
             - ha
+            - distributed
         shards:
           type: integer
           minimum: 1
@@ -11532,6 +11726,7 @@ components:
             - dedicatedMasters
             - single
             - ha
+            - distributed
           nullable: true
         shards:
           type: integer

@@ -10,9 +10,11 @@ import { rabbitmqUI } from './rabbitmq/index.ts';
 import { elasticsearchUI } from './elasticsearch';
 import { postgresUI } from './postgres';
 import { supabaseUI } from './supabase';
+import { keycloakUI } from './keycloak';
 
 engines.rabbitmq = rabbitmqUI;
 
 engines.elasticsearch = elasticsearchUI;
 engines.postgres = postgresUI;
 engines.supabase = supabaseUI;
+engines.keycloak = keycloakUI;

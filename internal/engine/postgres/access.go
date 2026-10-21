@@ -56,11 +56,11 @@ func (p *Core) reservedRole(v string) bool {
 	return v == "postgres" || strings.HasPrefix(v, "pg_") || strings.HasPrefix(v, "kk_") || p.options.ReservedRole != nil && p.options.ReservedRole(v)
 }
 
-func (p *Core) writableRole(v string) error {
+func (p *Core) writableRole(ctx context.Context, v string) error {
 	if err := identifier(v); err != nil {
 		return err
 	}
-	if p.reservedRole(v) {
+	if p.reservedRole(v) || strings.HasPrefix(v, "kb_") && !bindingAccess(ctx) {
 		return fmt.Errorf("%w: role is reserved and managed by the engine", engine.ErrConflict)
 	}
 	return nil
@@ -78,8 +78,8 @@ func (*Core) ValidateDatabasePassword(v string) error {
 
 var predefinedMemberships = []string{"pg_read_all_data", "pg_write_all_data", "pg_monitor", "pg_read_all_stats", "pg_signal_backend"}
 
-func (p *Core) validateRole(v RoleWrite) error {
-	if err := p.writableRole(v.Name); err != nil {
+func (p *Core) validateRole(ctx context.Context, v RoleWrite) error {
+	if err := p.writableRole(ctx, v.Name); err != nil {
 		return err
 	}
 	if v.ConnectionLimit < -1 {
@@ -90,7 +90,7 @@ func (p *Core) validateRole(v RoleWrite) error {
 			return engine.Invalid("a role cannot be a member of itself")
 		}
 		if !slices.Contains(predefinedMemberships, parent) {
-			if err := p.writableRole(parent); err != nil {
+			if err := p.writableRole(ctx, parent); err != nil {
 				return engine.Invalid("memberOf contains a reserved or invalid role")
 			}
 		}
@@ -109,6 +109,7 @@ func (p *Core) validateRole(v RoleWrite) error {
 // accessAction re-observes leadership for every call; stale cluster status is not
 // used as an authority. The agent checks recovery/leader lock again before SQL.
 func (p *Core) accessAction(ctx context.Context, rc *engine.Context, action string, request pgspec.AccessRequest, output any) error {
+	request.Binding = request.Binding || bindingAccess(ctx)
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return err
@@ -116,7 +117,7 @@ func (p *Core) accessAction(ctx context.Context, rc *engine.Context, action stri
 	if rc.Agents == nil {
 		return engine.ErrUnavailable
 	}
-	for _, m := range s.data() {
+	for _, m := range s.group(0).data() {
 		if m.Removing {
 			continue
 		}
@@ -251,8 +252,11 @@ func (p *Core) proxyUsers(ctx context.Context, rc *engine.Context) ([]pgspec.Pro
 // writeRole sends only a verifier to PostgreSQL and seals the applied password
 // before publishing the matching ProxySQL configuration revision.
 func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v RoleWrite) (string, error) {
-	if err := p.validateRole(v); err != nil {
-		return "", err
+	v.Binding = bindingAccess(ctx)
+	if op != "delete" {
+		if err := p.validateRole(ctx, v); err != nil {
+			return "", err
+		}
 	}
 	if err := p.finishPendingAccess(ctx, rc); err != nil {
 		return "", err
@@ -260,6 +264,18 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 	receipts, err := p.credentialReceipts(ctx, rc)
 	if err != nil {
 		return "", err
+	}
+	var expectedOID uint32
+	if bindingAccess(ctx) {
+		if !receipts {
+			return "", fmt.Errorf("%w: binding role mutations require credential receipts", engine.ErrUnavailable)
+		}
+		if op != "create" {
+			expectedOID, err = p.bindingRoleOID(ctx, rc, v.Name)
+			if err != nil {
+				return "", err
+			}
+		}
 	}
 	names, err := p.managedRoleNames(ctx, rc)
 	if err != nil {
@@ -274,7 +290,7 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		v.Password = &generated
 	}
 	password := ""
-	if v.Login && v.Password == nil {
+	if op != "delete" && v.Login && v.Password == nil {
 		if _, err := secret(ctx, rc, rolePasswordKey(v.Name)); missing(err) {
 			return "", engine.Invalid("a password is required when enabling login for a role without a managed password")
 		} else if err != nil {
@@ -289,7 +305,7 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		}
 		v.Password = &verifier
 	}
-	if v.Login {
+	if op != "delete" && v.Login {
 		if !slices.Contains(names, v.Name) {
 			names = append(names, v.Name)
 		}
@@ -302,7 +318,8 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		return "", err
 	}
 	intent := &accessIntent{
-		Request: pgspec.AccessRequest{Operation: op, Role: &v},
+		// The trusted binding scope survives credential-journal recovery.
+		Request: pgspec.AccessRequest{Operation: op, Role: &v, Binding: bindingAccess(ctx), ExpectedRoleOID: expectedOID},
 		Names:   names, Revision: revision, Generated: generated != "",
 	}
 	if v.Password != nil {
@@ -318,6 +335,11 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		return generated, p.publishAccessIntent(ctx, rc, intent)
 	}
 	intent.Request.RequestID = revision
+	if intent.Request.Binding {
+		// The role name hashes binding ID + incarnation; never reuse another
+		// incarnation's native receipt identity.
+		intent.Request.RequestID = v.Name + "/" + revision
+	}
 	intent.Previous, err = accessSnapshot(ctx, rc, v.Name)
 	if err != nil {
 		return "", err
@@ -338,7 +360,7 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 func (p *Core) CreateRole(ctx context.Context, rc *engine.Context, v RoleWrite) (string, error) {
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
-	if err := p.validateRole(v); err != nil {
+	if err := p.validateRole(ctx, v); err != nil {
 		return "", err
 	}
 	if intent, err := loadAccessIntent(ctx, rc); err != nil {
@@ -366,7 +388,7 @@ func (p *Core) CreateRole(ctx context.Context, rc *engine.Context, v RoleWrite) 
 func (p *Core) UpdateRole(ctx context.Context, rc *engine.Context, v RoleWrite) error {
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
-	if err := p.validateRole(v); err != nil {
+	if err := p.validateRole(ctx, v); err != nil {
 		return err
 	}
 	if _, err := p.GetRole(ctx, rc, v.Name); err != nil {
@@ -379,13 +401,21 @@ func (p *Core) UpdateRole(ctx context.Context, rc *engine.Context, v RoleWrite) 
 func (p *Core) DeleteRole(ctx context.Context, rc *engine.Context, name string) error {
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
-	if err := p.writableRole(name); err != nil {
+	if err := p.writableRole(ctx, name); err != nil {
 		return err
 	}
 	if err := p.finishPendingAccess(ctx, rc); err != nil {
 		return err
 	}
-	if err := p.accessAction(ctx, rc, "roles", pgspec.AccessRequest{Operation: "delete", Name: name}, nil); err != nil {
+	if bindingAccess(ctx) {
+		if _, err := p.GetRole(ctx, rc, name); err == nil {
+			if _, err := p.writeRole(ctx, rc, "delete", RoleWrite{Role: Role{Name: name}}); err != nil {
+				return err
+			}
+		} else if !missing(err) {
+			return err
+		}
+	} else if err := p.accessAction(ctx, rc, "roles", pgspec.AccessRequest{Operation: "delete", Name: name}, nil); err != nil {
 		return err
 	}
 	names, err := p.managedRoleNames(ctx, rc)
@@ -403,13 +433,18 @@ func (p *Core) DeleteRole(ctx context.Context, rc *engine.Context, name string) 
 	if err = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), rolePasswordKey(name)); err != nil && !missing(err) {
 		return err
 	}
+	if bindingAccess(ctx) {
+		if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), "bindings/roles/"+name); err != nil && !missing(err) {
+			return err
+		}
+	}
 	return p.bumpAccessRevision(ctx, rc)
 }
 
 func (p *Core) RotateRolePassword(ctx context.Context, rc *engine.Context, name string) (string, error) {
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
-	if err := p.writableRole(name); err != nil {
+	if err := p.writableRole(ctx, name); err != nil {
 		return "", err
 	}
 	if intent, err := loadAccessIntent(ctx, rc); err != nil {
@@ -485,7 +520,17 @@ func (p *Core) CreateDatabase(ctx context.Context, rc *engine.Context, v Databas
 	if v.Locale == "" {
 		v.Locale = "C.UTF-8"
 	}
-	return p.accessAction(ctx, rc, "databases", pgspec.AccessRequest{Operation: "create", Database: &v}, nil)
+	available, err := p.availableExtensions(ctx, rc)
+	if err != nil {
+		return err
+	}
+	if err := validateExtensions(v.Extensions, available); err != nil {
+		return err
+	}
+	if len(v.Extensions) != 0 && !v.AllowConnections {
+		return engine.Invalid("database extensions require allowConnections")
+	}
+	return p.accessAction(ctx, rc, "databases", pgspec.AccessRequest{Operation: "create", Database: &v, AvailableExtensions: available}, nil)
 }
 
 func (p *Core) DeleteDatabase(ctx context.Context, rc *engine.Context, name string, force bool) error {
@@ -510,7 +555,7 @@ func (p *Core) ListGrants(ctx context.Context, rc *engine.Context, database stri
 }
 
 func (p *Core) writeGrant(ctx context.Context, rc *engine.Context, op string, v Grant) error {
-	if err := p.writableRole(v.Role); err != nil {
+	if err := p.writableRole(ctx, v.Role); err != nil {
 		return err
 	}
 	if err := identifier(v.Database); err != nil {

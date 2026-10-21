@@ -28,6 +28,7 @@ type rollingState struct {
 	Target   json.RawMessage `json:"target"`
 	Phases   []rollingPhase  `json:"phases"`
 	Phase    int             `json:"phase"`
+	Group    int             `json:"group,omitempty"`
 	Version  int64           `json:"version,omitempty"`
 	Primary  string          `json:"primary,omitempty"`
 	Timeline int             `json:"timeline,omitempty"`
@@ -48,10 +49,14 @@ func sharedMemoryValue(parameters map[string]string, key string) (int64, error) 
 
 func (p *Core) sharedMemoryOptions(raw json.RawMessage) (EngineOptions, error) {
 	options, err := p.parseOptions(raw)
-	if err != nil || p.options.Flavour == nil {
+	if err != nil {
 		return options, err
 	}
-	for key, value := range p.options.Flavour.Parameters() {
+	parameters, err := p.profileParameters(raw)
+	if err != nil {
+		return options, err
+	}
+	for key, value := range parameters {
 		if _, ok := pgspec.SharedMemoryDefault(key); ok {
 			if options.Parameters == nil {
 				options.Parameters = map[string]string{}
@@ -97,6 +102,9 @@ func (p *Core) planSharedMemory(rc *engine.Context, s *state) (*rollingState, er
 		return nil, nil
 	}
 	journal := &rollingState{Target: append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)}
+	if s.Topology == "distributed" {
+		journal.Group = s.maintenanceGroups()[0].id
+	}
 	for _, direction := range []string{"increase", "decrease"} {
 		if direction == "increase" && !increase || direction == "decrease" && !decrease {
 			continue
@@ -158,7 +166,7 @@ func walAtLeast(position, barrier string) bool {
 
 func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	if s.Rolling == nil {
-		if !s.Formed || s.Topology != "ha" || s.Replacement != nil {
+		if !s.Formed || !patroniTopology(s.Topology) || s.Replacement != nil {
 			return false, nil
 		}
 		for _, m := range s.data() {
@@ -220,9 +228,10 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 			return true, reloadPublished(ctx, rc, s, m)
 		}
 	}
-	statuses := make(map[string]pgspec.StatusResponse, len(s.data()))
+	group := s.group(journal.Group)
+	statuses := make(map[string]pgspec.StatusResponse, len(group.data()))
 	primary := ""
-	for _, m := range s.data() {
+	for _, m := range group.data() {
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
 			return true, err
@@ -257,7 +266,7 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 			return true, nil
 		}
 	}
-	for _, m := range s.data() {
+	for _, m := range group.data() {
 		st := statuses[m.Name]
 		if m.Name == primary || sharedMemoryMatches(st, options.Parameters) {
 			continue
@@ -268,10 +277,22 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 		return true, pgAction(ctx, rc, m.Name, pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
 	}
 	if !sharedMemoryMatches(writer, options.Parameters) {
+		if len(group.data()) == 1 {
+			return true, pgAction(ctx, rc, primary, pgspec.ActionRestart, pgspec.RestartRequest{}, nil)
+		}
 		// Every standby is already at the increased values. Only those peers
 		// may take over before restarting the former primary as a replica.
 		return true, switchAway(ctx, rc, s, primary)
 	}
+	groups := s.maintenanceGroups()
+	for i, g := range groups {
+		if g.id == journal.Group && i+1 < len(groups) {
+			journal.Group = groups[i+1].id
+			journal.Primary, journal.Timeline, journal.Barrier = "", 0, ""
+			return true, nil
+		}
+	}
+	journal.Group = groups[0].id
 	journal.Phase++
 	journal.Version, journal.Primary, journal.Timeline, journal.Barrier = 0, "", 0, ""
 	if journal.Phase == len(journal.Phases) {
@@ -287,7 +308,7 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 // needsDisruption distinguishes reloadable config (including proxy-only changes
 // and certificates) from changes that require moving the writable primary.
 func needsDisruption(p *Core, rc *engine.Context, m *member, desired domain.ComponentSpec) bool {
-	if m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources) {
+	if m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources) || p.profilesAdded(m.Options, rc.Cluster.Spec.EngineOptions) {
 		return true
 	}
 	old, err := p.parseOptions(m.Options)

@@ -15,6 +15,9 @@ import (
 
 func postgresCommandSpecs() []commandSpec {
 	return []commandSpec{
+		{"postgres bindings list <cluster>", "listPostgresBindings", 1, false, nil},
+		{"postgres bindings rotate <cluster> <id>", "rotatePostgresBinding", 2, false, nil},
+		{"postgres rebalance <cluster>", "rebalancePostgres", 1, true, nil},
 		{"postgres roles list <cluster>", "listPostgresRoles", 1, false, nil},
 		{"postgres roles get <cluster> <name>", "getPostgresRole", 2, false, nil},
 		{"postgres roles create <cluster>", "createPostgresRole", 1, true, nil},
@@ -34,6 +37,24 @@ func postgresCommandSpecs() []commandSpec {
 
 func dispatchPostgres(ctx context.Context, c *apiclient.Client, op string, args []string, q, body []byte) (*http.Response, error) {
 	switch op {
+	case "listPostgresBindings":
+		var p apiclient.ListPostgresBindingsParams
+		if err := json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.ListPostgresBindings(ctx, args[0], &p)
+	case "rotatePostgresBinding":
+		var p apiclient.RotatePostgresBindingParams
+		if err := json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.RotatePostgresBinding(ctx, args[0], args[1], &p)
+	case "rebalancePostgres":
+		var p apiclient.RebalancePostgresParams
+		if err := json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.RebalancePostgresWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "patchPostgresRole":
 		var p apiclient.PatchPostgresRoleParams
 		if err := json.Unmarshal(q, &p); err != nil {

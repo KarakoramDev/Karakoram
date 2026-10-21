@@ -40,18 +40,18 @@ func TestSCRAMVerifier(t *testing.T) {
 
 func TestAccessRoleValidation(t *testing.T) {
 	p := New(Options{ReservedRole: func(name string) bool { return name == "anon" || strings.HasPrefix(name, "supabase_") }})
-	for _, name := range []string{"postgres", "kk_monitor", "pg_execute_server_program", "anon", "supabase_admin", "", strings.Repeat("x", 64), "nul\x00role"} {
-		if err := p.validateRole(RoleWrite{Role: Role{Name: name}}); err == nil {
+	for _, name := range []string{"postgres", "kk_monitor", "kb_0123456789abcdef0123456789abcdef", "pg_execute_server_program", "anon", "supabase_admin", "", strings.Repeat("x", 64), "nul\x00role"} {
+		if err := p.validateRole(t.Context(), RoleWrite{Role: Role{Name: name}}); err == nil {
 			t.Errorf("accepted protected/invalid role %q", name)
 		}
 	}
 	for _, name := range predefinedMemberships {
-		if err := p.validateRole(RoleWrite{Role: Role{Name: "app", MemberOf: []string{name}}}); err != nil {
+		if err := p.validateRole(t.Context(), RoleWrite{Role: Role{Name: "app", MemberOf: []string{name}}}); err != nil {
 			t.Fatal(name, err)
 		}
 	}
 	for _, name := range []string{"postgres", "kk_monitor", "pg_execute_server_program", "anon", "app"} {
-		if err := p.validateRole(RoleWrite{Role: Role{Name: "app", MemberOf: []string{name}}}); err == nil {
+		if err := p.validateRole(t.Context(), RoleWrite{Role: Role{Name: "app", MemberOf: []string{name}}}); err == nil {
 			t.Errorf("accepted protected/circular membership %q", name)
 		}
 	}

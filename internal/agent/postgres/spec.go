@@ -58,12 +58,22 @@ func validHost(h string) bool {
 func credentials(c pgspec.Credentials) bool {
 	return identifier.MatchString(c.Username) && len(c.Password) > 0 && safeValue(c.Password, 1024)
 }
+
+func usesPatroni(s pgspec.Spec) bool {
+	return s.Topology == pgspec.TopologyHA || s.Topology == pgspec.TopologyDistributed
+}
 func validate(s pgspec.Spec) error {
 	if s.Role != pgspec.RoleData && s.Role != pgspec.RoleProxy {
 		return errors.New("invalid postgres member role")
 	}
-	if s.Topology != pgspec.TopologySingle && s.Topology != pgspec.TopologyHA {
+	if s.Topology != pgspec.TopologySingle && !usesPatroni(s) {
 		return errors.New("invalid postgres topology")
+	}
+	if s.Role == pgspec.RoleData && s.Topology == pgspec.TopologyDistributed && s.Citus == nil || s.Citus != nil && s.Topology != pgspec.TopologyDistributed {
+		return errors.New("distributed data members require Citus configuration")
+	}
+	if s.Citus != nil && (s.Citus.Group < 0 || !validSQLName(s.Citus.Database)) {
+		return errors.New("invalid Citus group or database")
 	}
 	if s.ListenHost != "" && s.ListenHost != "0.0.0.0" && s.ListenHost != "::" {
 		return errors.New("invalid PostgreSQL listener address")
@@ -163,19 +173,28 @@ func validate(s pgspec.Spec) error {
 	if p.RequireTLS && s.ServerCert == nil {
 		return errors.New("postgres TLS requires certificate")
 	}
-	if s.Bootstrap != nil && s.Bootstrap.SeedMember != "" && (s.Topology != pgspec.TopologyHA || !seen[s.Bootstrap.SeedMember]) {
+	if s.Bootstrap != nil && s.Bootstrap.SeedMember != "" && (!usesPatroni(s) || !seen[s.Bootstrap.SeedMember]) {
 		return errors.New("bootstrap seed must be an HA data member")
 	}
-	if s.Topology == pgspec.TopologyHA {
-		if !seen[s.Member] || s.Etcd == nil || !credentials(s.PatroniREST) || s.ServerCert == nil || (s.Etcd.State != "new" && s.Etcd.State != "existing") || !safeValue(s.Etcd.Token, 255) || s.Etcd.Token == "" {
+	if usesPatroni(s) {
+		if !seen[s.Member] || s.Etcd == nil || !credentials(s.PatroniREST) || s.ServerCert == nil || len(s.Etcd.Endpoints) == 0 && ((s.Etcd.State != "new" && s.Etcd.State != "existing") || !safeValue(s.Etcd.Token, 255) || s.Etcd.Token == "") {
 			return errors.New("invalid HA configuration")
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM([]byte(s.CAPEM)) {
 			return errors.New("HA CA required")
 		}
-		parts := strings.Split(s.Etcd.InitialCluster, ",")
-		if len(parts) > 16 || len(parts) == 0 {
+		for _, endpoint := range s.Etcd.Endpoints {
+			host, port, err := net.SplitHostPort(endpoint)
+			if err != nil || !validHost(host) || port != "2379" {
+				return errors.New("invalid etcd client endpoint")
+			}
+		}
+		parts := []string{}
+		if len(s.Etcd.Endpoints) == 0 {
+			parts = strings.Split(s.Etcd.InitialCluster, ",")
+		}
+		if len(parts) > 16 || len(s.Etcd.Endpoints) > 16 {
 			return errors.New("invalid initial etcd cluster")
 		}
 		for _, v := range parts {
@@ -204,7 +223,7 @@ func validate(s pgspec.Spec) error {
 			if err := validateRepository(b.Restore.Source); err != nil {
 				return err
 			}
-			if !safeValue(b.Restore.Set, 128) || !safeValue(b.Restore.TargetTime, 64) {
+			if !safeValue(b.Restore.Set, 128) || !safeValue(b.Restore.TargetTime, 64) || !safeValue(b.Restore.TargetName, 63) || b.Restore.TargetTime != "" && b.Restore.TargetName != "" {
 				return errors.New("invalid restore target")
 			}
 		}

@@ -15,10 +15,63 @@ type EngineOptions struct {
 	SynchronousMode string            `json:"synchronousMode,omitempty"`
 	Parameters      map[string]string `json:"parameters,omitempty"`
 	Proxy           ProxyOptions      `json:"proxy,omitempty"`
+	Profiles        []string          `json:"profiles,omitempty"`
+	Citus           *CitusOptions     `json:"citus,omitempty"`
 }
 type ProxyOptions struct {
 	ReadWriteSplit bool `json:"readWriteSplit,omitempty"`
 	ReaderPort     bool `json:"readerPort,omitempty"`
+}
+
+// CitusOptions controls formation membership, not members per replication group.
+type CitusOptions struct {
+	WorkerGroups int    `json:"workerGroups"`
+	Database     string `json:"database"`
+}
+
+func (o *CitusOptions) UnmarshalJSON(raw []byte) error {
+	value := struct {
+		WorkerGroups json.RawMessage `json:"workerGroups"`
+		Database     json.RawMessage `json:"database"`
+	}{}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&value); err != nil {
+		return err
+	}
+	result := CitusOptions{WorkerGroups: 2, Database: "app"}
+	if len(value.WorkerGroups) != 0 {
+		if bytes.Equal(bytes.TrimSpace(value.WorkerGroups), []byte("null")) {
+			return engine.Invalid("citus.workerGroups must be an integer")
+		}
+		if err := json.Unmarshal(value.WorkerGroups, &result.WorkerGroups); err != nil {
+			return err
+		}
+	}
+	if len(value.Database) != 0 {
+		if bytes.Equal(bytes.TrimSpace(value.Database), []byte("null")) {
+			return engine.Invalid("citus.database must be a string")
+		}
+		if err := json.Unmarshal(value.Database, &result.Database); err != nil {
+			return err
+		}
+	}
+	if result.WorkerGroups < 1 || result.WorkerGroups > 8 {
+		return engine.Invalid("citus.workerGroups must be 1..8")
+	}
+	if result.Database == "" || len(result.Database) > 63 || strings.ContainsRune(result.Database, '\x00') {
+		return engine.Invalid("citus.database must be a nonempty PostgreSQL identifier of at most 63 bytes")
+	}
+	*o = result
+	return nil
+}
+
+// citusOptions applies defaults without adding Citus fields to single/HA options.
+func (o EngineOptions) citusOptions() CitusOptions {
+	if o.Citus == nil {
+		return CitusOptions{WorkerGroups: 2, Database: "app"}
+	}
+	return *o.Citus
 }
 
 var allowedParameters = map[string]bool{
@@ -43,6 +96,15 @@ func ParseOptions(raw json.RawMessage) (EngineOptions, error) {
 	}
 	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return o, engine.Invalid("engineOptions must be an object")
+	}
+	if o.Citus == nil {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return o, engine.Invalid("engineOptions must be an object")
+		}
+		if _, present := fields["citus"]; present {
+			return o, engine.Invalid("citus must be an object")
+		}
 	}
 	if o.SynchronousMode != "off" && o.SynchronousMode != "on" && o.SynchronousMode != "strict" {
 		return o, engine.Invalid("synchronousMode must be off, on or strict")

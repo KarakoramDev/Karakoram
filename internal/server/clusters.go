@@ -347,6 +347,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		rc.Cluster = c
 	}
 	ctx = store.WithClusterSnapshot(ctx, c)
+	if name == "RebalancePostgres" {
+		if c.Spec.Provider != "postgres" {
+			return fail(400, "invalid_request", "Rebalance requires the postgres provider")
+		}
+		if c.Spec.Topology.Type != "distributed" {
+			return fail(409, "conflict", "Rebalance requires distributed topology")
+		}
+	}
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
 		return s.unsupportedClusterAction(name, p)
 	}
@@ -570,6 +578,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, c.Ref())
 		updated.OperationID = op.ID
 		return response{status: 202, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
+	case "RebalancePostgres":
+		params := domain.RebalanceParams{}
+		if b := in.Body.(*api.RebalanceRequest); b.Strategy != nil {
+			params.Strategy = *b.Strategy
+		}
+		return s.enqueue(ctx, c.Ref(), domain.OperationRebalance, params)
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
 	case "RotateClusterTLS":
@@ -713,11 +727,46 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if b.Name == "" {
 			return invalidField("name", domain.ReasonRequired, "name is required")
 		}
-		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
-			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
+		selectors := 0
+		if value(b.Source.Backup) != "" {
+			selectors++
+		}
+		if b.Source.PitrTime != nil {
+			selectors++
+		}
+		if value(b.Source.RestorePoint) != "" {
+			selectors++
+		}
+		if selectors != 1 {
+			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime or source.restorePoint")
 		}
 		if b.Source.PitrTime != nil && !slices.Contains(p.Describe().Capabilities, "pitr") {
 			return s.failure(engine.Invalid("%s does not support PITR (point-in-time restore)", p.Describe().DisplayName))
+		}
+		if b.Source.PitrTime != nil && c.Spec.Provider == "postgres" && c.Spec.Topology.Type == "distributed" {
+			return invalidField("source.pitrTime", domain.ReasonUnsupported, "distributed PostgreSQL requires a named restore point")
+		}
+		if b.Source.RestorePoint != nil {
+			if c.Spec.Provider != "postgres" || c.Spec.Topology.Type != "distributed" {
+				return invalidField("source.restorePoint", domain.ReasonUnsupported, "named restore points require distributed PostgreSQL")
+			}
+			backups, err := s.Store.ListBackups(ctx, sourceRef)
+			if err != nil {
+				return s.failure(err)
+			}
+			found := false
+			for _, backup := range backups {
+				if backup.Phase == domain.PhaseSucceeded && backup.Postgres != nil && backup.Postgres.RestorePoint == *b.Source.RestorePoint && backup.ProviderMatches(c.Spec.Provider) {
+					if failure := s.retainedRestoreSource(ctx, sourceRef, backup.Name); failure != nil {
+						return *failure
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				return invalidField("source.restorePoint", domain.ReasonNotFound, "coordinated restore point does not exist")
+			}
 		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
@@ -766,7 +815,10 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				}
 			}
 		}
-		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: source}, Phase: domain.PhasePending}
+		if value(b.AcknowledgeBoundConsumers) {
+			ctx = store.WithRestoreAcknowledgement(ctx)
+		}
+		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, RestorePoint: value(b.Source.RestorePoint), SourceCluster: source}, Phase: domain.PhasePending}
 		if dryRun {
 			if err := s.Store.CheckRestore(ctx, &r); err != nil {
 				return s.failure(err)
@@ -778,6 +830,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 		})
 		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
+			var bound *store.BoundConsumersError
+			if errors.As(err, &bound) {
+				consumers := make([]any, 0, len(bound.Consumers))
+				for _, binding := range bound.Consumers {
+					consumers = append(consumers, postgresBindingAPI(binding).Consumer)
+				}
+				return failDetails(409, "bound_consumers", bound.Error(), map[string]any{"consumers": consumers})
+			}
 			return s.failure(err)
 		}
 		if sourceRef.Namespace != c.Namespace {
@@ -952,6 +1012,8 @@ func operationKind(name string) string {
 	switch name {
 	case "RotateSupabaseJWTSecret":
 		return "rotate-jwt-secret"
+	case "RebalancePostgres":
+		return domain.OperationRebalance
 	case "RestartCluster":
 		return domain.OperationRestart
 	case "RotateClusterTLS":

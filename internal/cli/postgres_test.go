@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +19,8 @@ func TestPostgresCommands(t *testing.T) {
 		body                           bool
 	}{
 		{"roles", "list", "GET", "", false},
+		{"bindings", "list", "GET", "", false},
+		{"bindings", "rotate", "POST", "/app%2Fa/rotate", false},
 		{"roles", "get", "GET", "/app%2Fa", false},
 		{"roles", "create", "POST", "", true},
 		{"roles", "update", "PUT", "/app%2Fa", true},
@@ -65,7 +68,7 @@ func TestPostgresCommands(t *testing.T) {
 			if tc.body {
 				args = append(args, "-f", "-")
 			}
-			if tc.verb == "delete" || tc.verb == "revoke" || tc.verb == "rotate-password" {
+			if tc.verb == "delete" || tc.verb == "revoke" || tc.verb == "rotate-password" || tc.verb == "rotate" {
 				args = append(args, "--yes")
 			}
 			if tc.resource == "databases" && tc.verb == "delete" {
@@ -90,6 +93,7 @@ func TestPostgresDestructiveConfirmation(t *testing.T) {
 	for _, args := range [][]string{
 		{"postgres", "roles", "delete", "pg", "app"},
 		{"postgres", "roles", "rotate-password", "pg", "app"},
+		{"postgres", "bindings", "rotate", "pg", "binding"},
 		{"postgres", "databases", "delete", "pg", "app"},
 		{"postgres", "grants", "revoke", "pg", "-f", "-"},
 	} {
@@ -117,5 +121,49 @@ func TestPostgresGrantsListRequiresDatabase(t *testing.T) {
 				t.Fatal("missing database submitted an API request")
 			}
 		})
+	}
+}
+
+func TestPostgresDatabaseExtensionFlags(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		var body struct {
+			Extensions []string `json:"extensions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if strings.Join(body.Extensions, ",") != "hstore,pgcrypto,uuid-ossp" {
+			t.Errorf("extensions=%v", body.Extensions)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"app"}`)
+	}))
+	defer server.Close()
+	_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), `{"name":"app","owner":"appuser","extensions":["hstore"]}`, "postgres", "databases", "create", "pg", "-f", "-", "--extension", "pgcrypto", "--extension", "uuid-ossp")
+	if err != nil || !called {
+		t.Fatal("extension flags failed", err)
+	}
+}
+
+func TestRestoreBoundConsumerAcknowledgementFlag(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["acknowledgeBoundConsumers"] != true {
+			t.Errorf("missing acknowledgement: %+v", body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"name":"restore","phase":"Pending"}`)
+	}))
+	defer server.Close()
+	_, _, err := execute(t, server.URL, filepath.Join(t.TempDir(), "config.yaml"), "", "restores", "create", "pg", "--backup", "saved", "--acknowledge-bound-consumers", "--yes", "-o", "json")
+	if err != nil || !called {
+		t.Fatal("restore failed", err, called)
 	}
 }

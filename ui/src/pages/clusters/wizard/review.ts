@@ -12,7 +12,8 @@ export function totalFootprint(spec: Schemas['ClusterSpec']) {
   const totals = { members: 0, volumes: 0, minCpu: 0, maxCpu: 0, minRam: 0, maxRam: 0, minDisk: 0, maxDisk: 0, runtimeMinDisk: 0, runtimeMaxDisk: 0 };
   for (const [name, component] of componentEntries(spec.components)) {
     if (!component) continue;
-    const count = component.replicas * (name === 'engine' && spec.topology.type === 'sharded' ? spec.topology.shards ?? 0 : 1);
+    const groups = spec.provider === 'postgres' && spec.topology.type === 'distributed' ? Number(object(spec.engineOptions?.citus).workerGroups ?? 2) + 1 : 1;
+    const count = component.replicas * (name === 'engine' ? spec.topology.type === 'sharded' ? spec.topology.shards ?? 0 : groups : 1);
     totals.members += count;
     totals.minCpu += count * component.resources.minCpu;
     totals.maxCpu += count * component.resources.maxCpu;

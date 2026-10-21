@@ -200,6 +200,20 @@ Credential DDL carries SCRAM-SHA-256 verifiers, never plaintext passwords. Syste
 {"name":"app","owner":"appuser","encoding":"UTF8","locale":"C.UTF-8","allowConnections":true}
 ```
 
+Optional `extensions` is an ordered list of up to 32 extension identifiers. The
+control plane checks the cluster profile's available set (or its conservative
+contrib baseline); the primary repeats identifier and allowlist validation.
+After database creation the management identity connects to that database and
+runs quoted `CREATE EXTENSION IF NOT EXISTS ... CASCADE` statements in order.
+A failed extension step can be retried against the same database owner; completed
+extensions are left intact. The database must permit management connections.
+Database reads omit installed extensions rather than opening every database.
+CLI callers can add extensions to the request file with repeatable
+`--extension pgcrypto --extension uuid-ossp` flags.
+The database form accepts comma-separated extension names, preserving in-progress
+input (including trailing commas) while editing. Submission trims names and omits
+empty entries.
+
 ```sh
 karactl -n NS postgres databases create appdb -f database.json
 karactl -n NS postgres grants grant appdb -f grant.json

@@ -90,8 +90,9 @@ Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declaratio
 | MongoDB | `psmdb` | [Overview](mongodb/README.md) |
 | RabbitMQ | `rabbitmq` | [Overview](rabbitmq/README.md) |
 | Elasticsearch | `elasticsearch` | [Overview](elasticsearch/README.md) |
-| PostgreSQL | `postgres` | [Percona, Patroni/etcd HA, ProxySQL and pgBackRest](postgres/README.md) |
+| PostgreSQL | `postgres` | [Percona, extension profiles, Patroni/etcd HA, Citus, ProxySQL and pgBackRest](postgres/README.md) |
 | Supabase | `supabase` | [PostgreSQL core plus modular native services](supabase/README.md) |
+| Keycloak | `keycloak` | [Native identity service with a managed PostgreSQL binding](keycloak/README.md) |
 
 Supabase wraps the PostgreSQL core rather than duplicating database lifecycle. Internal services use a protocol-transparent leader forwarder rather than ProxySQL; the client proxy retains explicit protocol limits. Native service availability comes from an embedded, checksum-pinned lock with operator mirror precedence, not floating downloads. See [ADRs 0034–0036](adr/README.md) and [native artifacts](native-artifacts.md).
 

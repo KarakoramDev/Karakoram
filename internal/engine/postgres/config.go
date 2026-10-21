@@ -58,15 +58,39 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 		// The package enables its systemd unit directly, bypassing policy-rc.d.
 		// Only the member agent may supervise the proxy and own its listeners.
 		prepare = append(prepare, "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service && sudo systemctl mask proxysql.service; fi")
-	} else if p.options.Flavour != nil {
-		extra, err := p.options.Flavour.PrepareCommands(rc.Backend.Layout(), major(rc.Cluster.Spec.Version))
+	} else {
+		profiles, err := p.profiles(rc.Cluster.Spec.EngineOptions, major(rc.Cluster.Spec.Version))
 		if err != nil {
 			return infra.RuntimeSpec{}, err
 		}
-		prepare = append(prepare, extra...)
+		for _, profile := range profiles {
+			extra, err := profile.PrepareCommands(rc.Backend.Layout(), major(rc.Cluster.Spec.Version))
+			if err != nil {
+				return infra.RuntimeSpec{}, err
+			}
+			prepare = append(prepare, extra...)
+			if profile.UpgradeRules().InstallBothMajors && m.Role == "data" && s.Upgrade != nil && major(s.Upgrade.From) != major(rc.Cluster.Spec.Version) && s.Upgrade.Stage != "finalize" {
+				old, err := profile.PrepareCommands(rc.Backend.Layout(), major(s.Upgrade.From))
+				if err != nil {
+					return infra.RuntimeSpec{}, err
+				}
+				prepare = append(prepare, old...)
+			}
+		}
+	}
+	if m.Role == "data" && rc.Cluster.Spec.Topology.Type == "distributed" {
+		a, err := p.citusArtifact("citus", major(rc.Cluster.Spec.Version))
+		if err != nil {
+			return infra.RuntimeSpec{}, err
+		}
+		u, err := nativeartifacts.ResolveURL(a)
+		if err != nil {
+			return infra.RuntimeSpec{}, err
+		}
+		prepare = append(prepare, nativeartifacts.PrepareCommands(a, u, "/", "root")...)
 	}
 	ports := []infra.Port{{Port: 5432, Protocol: "tcp"}, {Port: 9443, Protocol: "tcp"}}
-	if m.Role == "data" && rc.Cluster.Spec.Topology.Type == "ha" {
+	if m.Role == "data" && patroniTopology(rc.Cluster.Spec.Topology.Type) {
 		for _, port := range []int{8008, 2379, 2380} {
 			ports = append(ports, infra.Port{Port: port, Protocol: "tcp"})
 		}
@@ -146,11 +170,17 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if sp.Topology == "" {
 		sp.Topology = rc.Cluster.Spec.Topology.Type
 	}
+	if sp.Topology == "distributed" && m.Role == "data" {
+		sp.Citus = &pgspec.Citus{Group: m.Group, Database: o.citusOptions().Database}
+	}
 	if p.options.Flavour != nil {
 		sp.Flavour = p.options.Flavour.Name()
 	}
 	agentCert := cert("agents")
 	for _, peer := range s.data() {
+		if sp.Topology == "distributed" && (m.Role == "proxy" && peer.Group != 0 || m.Role == "data" && peer.Group != m.Group) {
+			continue
+		}
 		if m.Role == "proxy" {
 			// Planned and deploying identities may not have a resolvable
 			// runtime yet. Publishing them can block ProxySQL's shared
@@ -168,7 +198,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			}
 		}
 		etcd := ""
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) && peer.Group == 0 {
 			etcd = "voter"
 			if peer.EtcdLearner {
 				etcd = "learner"
@@ -192,36 +222,72 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			cidrs = []string{"0.0.0.0/0"}
 		}
 		sp.Postgres = &pgspec.Postgres{Parameters: o.Parameters, RequireTLS: rc.Cluster.Spec.TLS.Mode == "requireTLS", ClientCIDRs: cidrs, Synchronous: o.SynchronousMode}
-		if p.options.Flavour != nil {
+		parameters, err := p.profileParameters(m.Options)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+		for k, v := range parameters {
 			if sp.Postgres.Parameters == nil {
 				sp.Postgres.Parameters = map[string]string{}
 			}
-			for k, v := range p.options.Flavour.Parameters() {
-				sp.Postgres.Parameters[k] = v
-			}
-			sp.Postgres.SharedPreloadLibraries = p.options.Flavour.SharedPreloadLibraries()
+			sp.Postgres.Parameters[k] = v
 		}
-		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: !s.Formed && !engine.InitialDataSourceUnproven(rc.Cluster), Generation: s.BootstrapGeneration}
+		// Supabase historically selected preloads from desired wrapper options,
+		// even while core member options were still on an applied rolling phase.
+		preloadOptions := m.Options
+		if p.options.Flavour != nil {
+			preloadOptions = rc.Cluster.Spec.EngineOptions
+		}
+		sp.Postgres.SharedPreloadLibraries, err = p.profilePreloads(preloadOptions, sp.Major)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+		if p.options.Flavour == nil {
+			sp.Profiles = o.Profiles
+		}
+		if sp.Citus != nil {
+			if sp.Postgres.Parameters == nil {
+				sp.Postgres.Parameters = map[string]string{}
+			}
+			sp.Postgres.Parameters["wal_level"] = "logical"
+			sp.Postgres.SharedPreloadLibraries = append([]string{"citus"}, sp.Postgres.SharedPreloadLibraries...)
+		}
+		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: !s.group(m.Group).formed() && !engine.InitialDataSourceUnproven(rc.Cluster), Generation: s.BootstrapGeneration}
 		if !s.Formed {
 			sp.Bootstrap.SeedMember = s.ConversionSeed
 		}
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) {
 			entries := []string{}
-			for _, peer := range sp.Peers {
-				entries = append(entries, peer.Name+"=https://"+peer.Host+":2380")
+			for _, peer := range s.group(0).data() {
+				entries = append(entries, peer.Name+"=https://"+peer.Name+":2380")
 			}
 			sp.Etcd = &pgspec.Etcd{InitialCluster: strings.Join(entries, ","), State: m.EtcdState, Token: s.UID}
 			if m.InitialCluster != "" {
 				sp.Etcd.InitialCluster = m.InitialCluster
 			}
 			desired = []string{"etcd", "patroni"}
+			if sp.Citus != nil {
+				for _, peer := range s.group(0).data() {
+					if !peer.Removing && !peer.EtcdLearner {
+						sp.Etcd.Endpoints = append(sp.Etcd.Endpoints, "https://"+peer.Name+":2379")
+					}
+				}
+				if m.Group != 0 {
+					sp.Etcd.InitialCluster, sp.Etcd.State = "", ""
+					desired = []string{"patroni"}
+				}
+			}
 		}
 		if storageName := rc.Cluster.Spec.Backup.Storage; storageName != "" {
 			storage, err := p.backupStorage(ctx, rc, storageName, rc.Cluster.Ref().Namespace)
 			if err != nil {
 				return agentapi.MemberConfig{}, err
 			}
-			repo, err := repository(storage, repoPrefix(storage, rc.Cluster, s))
+			prefix := repoPrefix(storage, rc.Cluster, s)
+			if s.Topology == "distributed" {
+				prefix = groupRepoPrefix(storage, rc.Cluster, s, m.Group)
+			}
+			repo, err := repository(storage, prefix)
 			if err != nil {
 				return agentapi.MemberConfig{}, err
 			}
@@ -270,7 +336,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	if m.Role == "data" && m.Offline {
 		desired = []string{}
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) && m.Group == 0 {
 			desired = []string{"etcd"}
 		}
 	}

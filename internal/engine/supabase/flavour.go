@@ -9,59 +9,30 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent/supabase/initsql"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
-	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 type supabaseFlavour struct{ core *postgres.Core }
+
+var supabaseProfile = func() pgprofile.Descriptor {
+	d, _ := pgprofile.Get("supabase")
+	return d
+}()
 
 func (supabaseFlavour) Name() string { return "supabase" }
 func (supabaseFlavour) PostgresOptions(raw json.RawMessage) (json.RawMessage, error) {
 	return postgresOptions(raw)
 }
-func (supabaseFlavour) PrepareCommands(l infra.Layout, major int) ([]string, error) {
-	if major != 17 {
-		return nil, engine.Invalid("Supabase requires PostgreSQL 17")
-	}
-	packages := []string{
-		"ca-certificates", "curl", "xz-utils",
-		"percona-postgresql-17-cron='1:1.6.8-1.noble'",
-		"percona-postgresql-17-pgaudit='1:17.1-4.noble'",
-		"percona-postgresql-17-pgvector='1:0.8.6-1.noble'",
-		"percona-postgresql-17-postgis-3='2:3.5.7-2.noble'",
-		"percona-postgresql-17-repack='1:1.5.3-5.noble'",
-		"percona-pg-stat-monitor17='1:2.4.0-1.noble'",
-		"percona-pgaudit17-set-user='1:4.2.0-6.noble'",
-		"percona-postgresql-17-wal2json='1:2.6-4.noble'",
-	}
-	commands := []string{"sudo apt-get update && sudo apt-get install -y " + strings.Join(packages, " ")}
-	if a, err := nativeartifacts.Get("supabase-pg17-extensions"); err == nil {
-		commands = append(commands, "sudo apt-get install -y libcurl4t64 libsodium23 libssl3t64")
-		u, err := nativeartifacts.ResolveURL(a)
-		if err != nil {
-			return nil, err
-		}
-		commands = append(commands, nativeartifacts.PrepareCommands(a, u, "/", l.User)...)
-	}
-	return commands, nil
+func (supabaseFlavour) SelectedExtensions(raw json.RawMessage) ([]string, error) {
+	o, err := ParseOptions(raw)
+	return o.Extensions, err
 }
-func (supabaseFlavour) Parameters() map[string]string {
-	return map[string]string{
-		"wal_level": "logical", "max_replication_slots": "32", "max_wal_senders": "32",
-		"cron.database_name": "postgres",
-		// Percona restricts logical decoding to explicitly trusted output plugins.
-		// Realtime requires wal2json in addition to PostgreSQL's default plugins.
-		"output_plugin_libraries": "pgoutput, test_decoding, wal2json",
-	}
-}
-func (supabaseFlavour) SharedPreloadLibraries() []string { return []string{"pg_stat_statements"} }
 func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) error {
 	if err := ensureCredentials(ctx, rc); err != nil {
 		return err
@@ -100,7 +71,7 @@ func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) erro
 		Request    pgspec.SQLBootstrapRequest
 		Generation int
 		Plan       []initsql.Step
-	}{Request: request, Generation: generation, Plan: initsql.Plan(request.Components, request.Extensions)})
+	}{Request: request, Generation: generation, Plan: supabaseProfile.Plan(request.Components, request.Extensions, 17)})
 	applied, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/bootstrap-digest")
 	if err == nil && string(applied) == hash {
 		return nil

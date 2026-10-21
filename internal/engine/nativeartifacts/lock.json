@@ -326,5 +326,207 @@
       "ca-certificates",
       "libstdc++6"
     ]
+  },
+  {
+    "name": "keycloak",
+    "version": "26.8.1",
+    "file": "keycloak-26.8.1.tar.gz",
+    "sha256": "4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8",
+    "size": 173928500,
+    "upstreamURL": "https://github.com/keycloak/keycloak/releases/download/26.8.1/keycloak-26.8.1.tar.gz",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/keycloak/keycloak",
+      "commit": "24ed1dadf3f246a555adb6d3d4a99e9b3003fb3b"
+    },
+    "build": "official",
+    "runtimeDeps": [
+      "ca-certificates",
+      "openjdk-21-jre-headless"
+    ]
+  },
+  {
+    "name": "timescaledb-pg16",
+    "version": "2.31.0",
+    "file": "timescaledb-pg16-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "abd38f5faeaa45536a954d7aa87af633dcf4c5b549693507a4fa3136b717c6f4",
+    "size": 6791940,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 16,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "timescaledb-pg17",
+    "version": "2.31.0",
+    "file": "timescaledb-pg17-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "bbadda2e2f91aa0363445cef13463f5e8e800211fc6d87333f79680e87ae92a1",
+    "size": 7147772,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 17,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "timescaledb-pg18",
+    "version": "2.31.0",
+    "file": "timescaledb-pg18-2.31.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "f3b0206b1e9fd84223ae7bb824d41e9d553998ed43dcaa45d340e08612708c1a",
+    "size": 7217107,
+    "upstreamURL": "",
+    "license": "Apache-2.0",
+    "source": {
+      "repo": "https://github.com/timescale/timescaledb",
+      "commit": "4fa2a7c6b579171a1a8966fd87a0d4189ebab43b"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 18,
+    "extensions": [
+      "timescaledb"
+    ],
+    "extensionFlags": {
+      "timescaledb": {
+        "preload": true,
+        "unavailableFeatures": [
+          "tsl"
+        ]
+      }
+    }
+  },
+  {
+    "name": "citus-pg16",
+    "version": "14.2.0",
+    "file": "citus-pg16-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "a8023dbb392902e05df92fde20c8e7388d07d5717ac643bd85e7c69c07ad03ab",
+    "size": 9819524,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 16,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
+  },
+  {
+    "name": "citus-pg17",
+    "version": "14.2.0",
+    "file": "citus-pg17-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "aaed83af3e0a6629a501b6ef763dfa28ea568e3cb1b02bb89e73c9619e9a4b56",
+    "size": 10461169,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 17,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
+  },
+  {
+    "name": "citus-pg18",
+    "version": "14.2.0",
+    "file": "citus-pg18-14.2.0-ubuntu24.04-amd64.tar.gz",
+    "sha256": "6cff2bf55781c16d54fd6aa07647d39bc3359bdd435b464e470748c7387910b8",
+    "size": 10643223,
+    "upstreamURL": "",
+    "license": "AGPL-3.0-only",
+    "source": {
+      "repo": "https://github.com/citusdata/citus",
+      "commit": "58702e722c6efbae45e3cade885b476e4fddc7e1"
+    },
+    "build": "native-v1",
+    "runtimeDeps": [
+      "libc6",
+      "libpq5",
+      "libssl3t64",
+      "liblz4-1",
+      "libzstd1",
+      "libcurl4t64"
+    ],
+    "kind": "pg-extension",
+    "pgMajor": 18,
+    "extensions": [
+      "citus"
+    ],
+    "extensionFlags": {
+      "citus": {
+        "preload": true
+      }
+    }
   }
 ]

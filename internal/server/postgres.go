@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
@@ -127,6 +128,29 @@ func (s *Server) postgres(ctx context.Context, name string, in input, rc *engine
 		return response{status: status, body: body, noStore: noStore}
 	}
 	switch name {
+	case "ListPostgresBindings":
+		bindings, err := s.Store.ListPostgresBindings(ctx, rc.Cluster.Ref())
+		out := make([]api.PostgresBinding, 0, len(bindings))
+		for _, binding := range bindings {
+			out = append(out, postgresBindingAPI(binding))
+		}
+		return listResponse(s, ctx, out, err)
+	case "RotatePostgresBinding":
+		binding, err := s.Store.GetPostgresBinding(ctx, in.Name)
+		if err != nil {
+			return s.failure(err)
+		}
+		if binding.SourceRef() != rc.Cluster.Ref() || binding.SourceUID != strconv.FormatInt(rc.Cluster.CreatedAt.UnixNano(), 10) {
+			return fail(404, "not_found", "binding not found on this source")
+		}
+		if _, err := s.postgresBindings.Rotate(ctx, binding.ID); err != nil {
+			return s.failure(err)
+		}
+		binding, err = s.Store.GetPostgresBinding(ctx, binding.ID)
+		if err != nil {
+			return s.failure(err)
+		}
+		return ok(postgresBindingAPI(*binding))
 	case "ListPostgresRoles":
 		roles, err := access.ListRoles(ctx, rc)
 		if err != nil {
@@ -216,6 +240,9 @@ func (s *Server) postgres(ctx context.Context, name string, in input, rc *engine
 	case "CreatePostgresDatabase":
 		body := in.Body.(*api.PostgresDatabase)
 		database := postgres.Database{Name: body.Name, Owner: body.Owner, Encoding: "UTF8", Locale: "C.UTF-8", AllowConnections: true}
+		if body.Extensions != nil {
+			database.Extensions = *body.Extensions
+		}
 		if body.Encoding != nil {
 			database.Encoding = *body.Encoding
 		}
@@ -318,3 +345,29 @@ func (s *Server) RevokePostgresPrivileges(ctx context.Context, r api.RevokePostg
 func (r response) VisitRevokePostgresPrivilegesResponse(w http.ResponseWriter) error {
 	return r.write(w)
 }
+
+func postgresBindingAPI(b domain.PostgresBinding) api.PostgresBinding {
+	out := api.PostgresBinding{
+		Id: b.ID, Databases: nonNil(b.Databases), Extensions: nonNil(b.Extensions),
+		Role: b.RoleName, CredentialGeneration: b.CredentialGeneration, State: b.State,
+		CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt,
+	}
+	out.Consumer.Kind, out.Consumer.Namespace, out.Consumer.Name = b.ConsumerKind, b.ConsumerNamespace, b.ConsumerName
+	if b.MinMajor != 0 {
+		out.MinMajor = ptr(b.MinMajor)
+	}
+	if b.MaxMajor != 0 {
+		out.MaxMajor = ptr(b.MaxMajor)
+	}
+	return out
+}
+
+func (s *Server) ListPostgresBindings(ctx context.Context, r api.ListPostgresBindingsRequestObject) (api.ListPostgresBindingsResponseObject, error) {
+	return s.handle(ctx, "ListPostgresBindings", input{Cluster: r.Cluster}), nil
+}
+func (r response) VisitListPostgresBindingsResponse(w http.ResponseWriter) error { return r.write(w) }
+
+func (s *Server) RotatePostgresBinding(ctx context.Context, r api.RotatePostgresBindingRequestObject) (api.RotatePostgresBindingResponseObject, error) {
+	return s.handle(ctx, "RotatePostgresBinding", input{Cluster: r.Cluster, Name: r.Binding}), nil
+}
+func (r response) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error { return r.write(w) }

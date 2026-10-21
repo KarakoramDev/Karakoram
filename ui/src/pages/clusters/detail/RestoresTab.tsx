@@ -110,6 +110,7 @@ export function RestoresTab() {
           initialBackup={params.get('backup') ?? undefined}
           pitr={hasCapability(provider, 'pitr')}
           mongo={cluster.spec.provider === 'psmdb'}
+          postgres={cluster.spec.provider === 'postgres'}
           onClose={() => {
             setOpen(false);
             if (params.has('backup') || params.has('pitr')) setParams({}, { replace: true });
@@ -120,7 +121,7 @@ export function RestoresTab() {
   );
 }
 
-function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; onClose: () => void }) {
+function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, postgres, onClose }: { namespace: string; cluster: string; base: string; initialBackup?: string; pitr: boolean; mongo: boolean; postgres: boolean; onClose: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -131,7 +132,13 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, o
   const [backup, setBackup] = useState(initialBackup ?? '');
   const [pitrTime, setPitrTime] = useState('');
   const [name, setName] = useState(() => `restore-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`);
-  const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime }));
+  const [acknowledgeBoundConsumers, setAcknowledgeBoundConsumers] = useState(false);
+  const bindings = useQuery({
+    queryKey: keys.clusterSub(namespace, cluster, 'postgres-bindings'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/bindings', { params: { path: { cluster }, query: { namespace } } })),
+    enabled: postgres,
+  });
+  const submission = useSubmissionKey(JSON.stringify({ name, sourceNamespace, sourceCluster, mode, backup, pitrTime, acknowledgeBoundConsumers }));
   useEffect(() => {
     if (initialBackup) setBackup(initialBackup);
   }, [initialBackup]);
@@ -145,6 +152,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, o
           params: { path: { cluster }, query: { namespace } },
           body: {
             name,
+            acknowledgeBoundConsumers,
             ...(cross ? { sourceNamespace } : {}),
             source: { sourceCluster, ...(mode === 'backup' ? { backup } : { pitrTime }) },
           },
@@ -159,7 +167,7 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, o
     },
   });
 
-  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '');
+  const valid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(name) && sourceCluster !== '' && (mode === 'backup' ? backup !== '' : pitrTime !== '') && (!postgres || (!bindings.isPending && !bindings.error && (!bindings.data?.items.length || acknowledgeBoundConsumers)));
 
   return (
     <Dialog
@@ -182,6 +190,11 @@ function RestoreDialog({ namespace, cluster, base, initialBackup, pitr, mongo, o
       <Callout tone="danger" title="Current data will be replaced">
         {mongo ? 'The cluster becomes unavailable while the restore runs. Members are stopped (physical) or data is dropped and reloaded (logical). Take a fresh backup first if you may need the current state.' : 'The cluster becomes unavailable while the engine restores the backup. Take a fresh backup first if you may need the current state.'}
       </Callout>
+      {postgres && bindings.error ? <ErrorBlock error={bindings.error} retry={() => bindings.refetch()} /> : null}
+      {bindings.data?.items.length ? <Callout tone="warn" title="Bound consumers will be affected">
+        <ul>{bindings.data.items.map((b) => <li key={b.id}>{b.consumer.kind}/{b.consumer.namespace}/{b.consumer.name}</li>)}</ul>
+        <label><input type="checkbox" checked={acknowledgeBoundConsumers} onChange={(e) => setAcknowledgeBoundConsumers(e.target.checked)} required /> I acknowledge that restoring this source rolls back consumer data and can invalidate credentials.</label>
+      </Callout> : null}
       <TextField label="Restore name" mono value={name} onChange={(e) => setName(e.target.value)} required />
       <SourceClusterPicker
         targetNamespace={namespace}

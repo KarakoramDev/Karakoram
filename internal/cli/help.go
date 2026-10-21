@@ -29,6 +29,7 @@ var commandGroupDescriptions = map[string]string{
 	"tokens":                     "Create, inspect and revoke control-plane API credentials",
 	"postgres":                   "Manage PostgreSQL application roles, databases and grants",
 	"postgres roles":             "Manage PostgreSQL application roles and passwords",
+	"postgres bindings":          "Inspect PostgreSQL consumer bindings and rotate their credentials",
 	"postgres databases":         "Manage PostgreSQL application databases",
 	"postgres grants":            "Manage PostgreSQL database and schema privileges",
 	"rabbitmq":                   "Manage RabbitMQ vhosts, users, permissions and policies",
@@ -45,7 +46,9 @@ var commandGroupDescriptions = map[string]string{
 }
 
 var commandDescriptions = map[string]string{
+	"postgres rebalance":             "Rebalance shards across distributed PostgreSQL worker groups",
 	"postgres roles rotate-password": "Generate and rotate a PostgreSQL role password (returned once)",
+	"postgres bindings rotate":       "Rotate a binding password and refresh its managed consumer",
 	"postgres grants grant":          "Grant PostgreSQL database or schema privileges",
 	"postgres grants revoke":         "Revoke PostgreSQL database or schema privileges",
 	"whoami":                         "Show the authenticated control-plane identity",
@@ -150,6 +153,7 @@ type nativeResourceDescription struct{ singular, plural string }
 
 var nativeResourceDescriptions = map[string]nativeResourceDescription{
 	"postgres roles":             {"a PostgreSQL application role", "PostgreSQL application roles"},
+	"postgres bindings":          {"a PostgreSQL consumer binding", "PostgreSQL consumer bindings"},
 	"postgres databases":         {"a PostgreSQL database", "PostgreSQL databases"},
 	"postgres grants":            {"a PostgreSQL privilege grant", "PostgreSQL privilege grants"},
 	"rabbitmq vhosts":            {"a RabbitMQ virtual host", "RabbitMQ virtual hosts"},

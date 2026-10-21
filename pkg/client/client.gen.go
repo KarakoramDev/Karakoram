@@ -38,6 +38,7 @@ const (
 
 // Defines values for BackupTrigger.
 const (
+	BackupTriggerPITR    BackupTrigger = "pitr"
 	BackupTriggerRestore BackupTrigger = "restore"
 	Manual               BackupTrigger = "manual"
 	Schedule             BackupTrigger = "schedule"
@@ -290,6 +291,7 @@ const (
 	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
+	OperationTypeRebalance        OperationType = "rebalance"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
@@ -337,6 +339,7 @@ const (
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
@@ -504,6 +507,7 @@ const (
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeDistributed      TopologyType = "distributed"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
@@ -514,6 +518,7 @@ const (
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeDistributed      TopologyInputType = "distributed"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
@@ -524,6 +529,7 @@ const (
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
@@ -1174,9 +1180,11 @@ type CreateDatabaseUserRequest struct {
 
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
-	Name string `json:"name"`
+	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
+	AcknowledgeBoundConsumers *bool  `json:"acknowledgeBoundConsumers,omitempty"`
+	Name                      string `json:"name"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
 
 	// SourceNamespace Source namespace; defaults to the target cluster namespace.
@@ -1697,15 +1705,18 @@ type Member struct {
 	Autoscaling *Resources `json:"autoscaling,omitempty"`
 
 	// ComponentVersion Service-component version, independent of the PostgreSQL data-member version.
-	ComponentVersion *string    `json:"componentVersion,omitempty"`
-	CpuUsage         *float32   `json:"cpuUsage,omitempty"`
-	DiskTotalBytes   *int64     `json:"diskTotalBytes,omitempty"`
-	DiskUsageBytes   *int64     `json:"diskUsageBytes,omitempty"`
-	Health           bool       `json:"health"`
-	LagSeconds       *float32   `json:"lagSeconds,omitempty"`
-	Name             string     `json:"name"`
-	Optime           *time.Time `json:"optime,omitempty"`
-	PlacementGroup   *string    `json:"placementGroup,omitempty"`
+	ComponentVersion *string  `json:"componentVersion,omitempty"`
+	CpuUsage         *float32 `json:"cpuUsage,omitempty"`
+	DiskTotalBytes   *int64   `json:"diskTotalBytes,omitempty"`
+	DiskUsageBytes   *int64   `json:"diskUsageBytes,omitempty"`
+
+	// Group Distributed PostgreSQL group; 0 is coordinator, positive groups are workers. Absent for other members.
+	Group          *int       `json:"group,omitempty"`
+	Health         bool       `json:"health"`
+	LagSeconds     *float32   `json:"lagSeconds,omitempty"`
+	Name           string     `json:"name"`
+	Optime         *time.Time `json:"optime,omitempty"`
+	PlacementGroup *string    `json:"placementGroup,omitempty"`
 
 	// PublicHost Member public host:port when public exposure is enabled.
 	PublicHost    *string `json:"publicHost,omitempty"`
@@ -2011,13 +2022,20 @@ type PlacementGroup struct {
 
 // PostgresBackup Immutable pgBackRest backup-set provenance and dependency metadata.
 type PostgresBackup struct {
-	Label      string    `json:"label"`
-	Prior      *string   `json:"prior,omitempty"`
+	Groups *[]PostgresBackupGroup `json:"groups,omitempty"`
+	Label  string                 `json:"label"`
+	Prior  *string                `json:"prior,omitempty"`
+
+	// Profiles Normalized snapshot-time runtime profile requirements. Physical recovery targets must select a superset; absent legacy metadata requires no profiles.
+	Profiles   *[]string `json:"profiles,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	RepoBytes  int64     `json:"repoBytes"`
 
 	// Repository Snapshot-time repository object prefix, excluding bucket.
 	Repository string `json:"repository"`
+
+	// RestorePoint Coordinated Citus named recovery target.
+	RestorePoint *string `json:"restorePoint,omitempty"`
 
 	// SystemId PostgreSQL system identifier, encoded as a string without precision loss.
 	SystemId string `json:"systemId"`
@@ -2028,13 +2046,45 @@ type PostgresBackup struct {
 	WalStop  *string `json:"walStop,omitempty"`
 }
 
+// PostgresBackupGroup defines model for PostgresBackupGroup.
+type PostgresBackupGroup struct {
+	// Backup Immutable pgBackRest backup-set provenance and dependency metadata.
+	Backup PostgresBackup `json:"backup"`
+	Group  int            `json:"group"`
+
+	// Lsn Archive fence; worker positions are conservative post-marker upper bounds.
+	Lsn      string  `json:"lsn"`
+	Primary  *string `json:"primary,omitempty"`
+	Timeline *int    `json:"timeline,omitempty"`
+}
+
+// PostgresBinding defines model for PostgresBinding.
+type PostgresBinding struct {
+	Consumer struct {
+		Kind      string `json:"kind"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	} `json:"consumer"`
+	CreatedAt            time.Time `json:"createdAt"`
+	CredentialGeneration int64     `json:"credentialGeneration"`
+	Databases            []string  `json:"databases"`
+	Extensions           []string  `json:"extensions"`
+	Id                   string    `json:"id"`
+	MaxMajor             *int      `json:"maxMajor,omitempty"`
+	MinMajor             *int      `json:"minMajor,omitempty"`
+	Role                 string    `json:"role"`
+	State                string    `json:"state"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+}
+
 // PostgresDatabase defines model for PostgresDatabase.
 type PostgresDatabase struct {
-	AllowConnections *bool   `json:"allowConnections,omitempty"`
-	Encoding         *string `json:"encoding,omitempty"`
-	Locale           *string `json:"locale,omitempty"`
-	Name             string  `json:"name"`
-	Owner            string  `json:"owner"`
+	AllowConnections *bool     `json:"allowConnections,omitempty"`
+	Encoding         *string   `json:"encoding,omitempty"`
+	Extensions       *[]string `json:"extensions,omitempty"`
+	Locale           *string   `json:"locale,omitempty"`
+	Name             string    `json:"name"`
+	Owner            string    `json:"owner"`
 }
 
 // PostgresGrant defines model for PostgresGrant.
@@ -2292,6 +2342,12 @@ type RaiseFCVRequest struct {
 	Version string `json:"version"`
 }
 
+// RebalanceRequest defines model for RebalanceRequest.
+type RebalanceRequest struct {
+	// Strategy Optional installed Citus rebalance strategy; omitted uses the Citus default.
+	Strategy *string `json:"strategy,omitempty"`
+}
+
 // RelayStatus Relay health; the default namespace uses direct networking.
 type RelayStatus struct {
 	CertNotAfter   *time.Time       `json:"certNotAfter,omitempty"`
@@ -2414,7 +2470,7 @@ type Restore struct {
 	OperationId *string      `json:"operationId,omitempty"`
 	Phase       RestorePhase `json:"phase"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source    RestoreSource `json:"source"`
 	StartedAt *time.Time    `json:"startedAt,omitempty"`
 }
@@ -2430,10 +2486,11 @@ type RestoreList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// RestoreSource Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+// RestoreSource Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 type RestoreSource struct {
 	Backup        *string    `json:"backup,omitempty"`
 	PitrTime      *time.Time `json:"pitrTime,omitempty"`
+	RestorePoint  *string    `json:"restorePoint,omitempty"`
 	SourceCluster *string    `json:"sourceCluster,omitempty"`
 	union         json.RawMessage
 }
@@ -2443,6 +2500,9 @@ type RestoreSource0 = interface{}
 
 // RestoreSource1 defines model for .
 type RestoreSource1 = interface{}
+
+// RestoreSource2 defines model for .
+type RestoreSource2 = interface{}
 
 // RoleReference defines model for RoleReference.
 type RoleReference struct {
@@ -3096,6 +3156,30 @@ type ReplaceClusterParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RebalancePostgresParams defines parameters for RebalancePostgres.
+type RebalancePostgresParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListBackupsParams defines parameters for ListBackups.
 type ListBackupsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -3595,6 +3679,36 @@ type GetPITRWindowParams struct {
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListPostgresBindingsParams defines parameters for ListPostgresBindings.
+type ListPostgresBindingsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RotatePostgresBindingParams defines parameters for RotatePostgresBinding.
+type RotatePostgresBindingParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListPostgresDatabasesParams defines parameters for ListPostgresDatabases.
@@ -4760,6 +4874,9 @@ type PatchClusterApplicationMergePatchPlusJSONRequestBody = ClusterMergePatch
 // ReplaceClusterJSONRequestBody defines body for ReplaceCluster for application/json ContentType.
 type ReplaceClusterJSONRequestBody = ReplaceClusterRequest
 
+// RebalancePostgresJSONRequestBody defines body for RebalancePostgres for application/json ContentType.
+type RebalancePostgresJSONRequestBody = RebalanceRequest
+
 // CreateBackupJSONRequestBody defines body for CreateBackup for application/json ContentType.
 type CreateBackupJSONRequestBody = CreateBackupRequest
 
@@ -5024,6 +5141,32 @@ func (t *RestoreSource) MergeRestoreSource1(v RestoreSource1) error {
 	return err
 }
 
+// AsRestoreSource2 returns the union data inside the RestoreSource as a RestoreSource2
+func (t RestoreSource) AsRestoreSource2() (RestoreSource2, error) {
+	var body RestoreSource2
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRestoreSource2 overwrites any union data inside the RestoreSource as the provided RestoreSource2
+func (t *RestoreSource) FromRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRestoreSource2 performs a merge with any union data inside the RestoreSource, using the provided RestoreSource2
+func (t *RestoreSource) MergeRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RestoreSource) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	if err != nil {
@@ -5048,6 +5191,13 @@ func (t RestoreSource) MarshalJSON() ([]byte, error) {
 		object["pitrTime"], err = json.Marshal(t.PitrTime)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'pitrTime': %w", err)
+		}
+	}
+
+	if t.RestorePoint != nil {
+		object["restorePoint"], err = json.Marshal(t.RestorePoint)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'restorePoint': %w", err)
 		}
 	}
 
@@ -5083,6 +5233,13 @@ func (t *RestoreSource) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.PitrTime)
 		if err != nil {
 			return fmt.Errorf("error reading 'pitrTime': %w", err)
+		}
+	}
+
+	if raw, found := object["restorePoint"]; found {
+		err = json.Unmarshal(raw, &t.RestorePoint)
+		if err != nil {
+			return fmt.Errorf("error reading 'restorePoint': %w", err)
 		}
 	}
 
@@ -5286,6 +5443,11 @@ type ClientInterface interface {
 
 	ReplaceCluster(ctx context.Context, cluster ClusterPath, params *ReplaceClusterParams, body ReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RebalancePostgresWithBody request with any body
+	RebalancePostgresWithBody(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RebalancePostgres(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListBackups request
 	ListBackups(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -5421,6 +5583,12 @@ type ClientInterface interface {
 
 	// GetClusterPlacement request
 	GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPostgresBindings request
+	ListPostgresBindings(ctx context.Context, cluster ClusterPath, params *ListPostgresBindingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotatePostgresBinding request
+	RotatePostgresBinding(ctx context.Context, cluster ClusterPath, binding string, params *RotatePostgresBindingParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPostgresDatabases request
 	ListPostgresDatabases(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6282,6 +6450,30 @@ func (c *Client) ReplaceCluster(ctx context.Context, cluster ClusterPath, params
 	return c.Client.Do(req)
 }
 
+func (c *Client) RebalancePostgresWithBody(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRebalancePostgresRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RebalancePostgres(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRebalancePostgresRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListBackups(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListBackupsRequest(c.Server, cluster, params)
 	if err != nil {
@@ -6860,6 +7052,30 @@ func (c *Client) GetPITRWindow(ctx context.Context, cluster ClusterPath, params 
 
 func (c *Client) GetClusterPlacement(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetClusterPlacementRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListPostgresBindings(ctx context.Context, cluster ClusterPath, params *ListPostgresBindingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPostgresBindingsRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotatePostgresBinding(ctx context.Context, cluster ClusterPath, binding string, params *RotatePostgresBindingParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotatePostgresBindingRequest(c.Server, cluster, binding, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10318,6 +10534,101 @@ func NewReplaceClusterRequestWithBody(server string, cluster ClusterPath, params
 	return req, nil
 }
 
+// NewRebalancePostgresRequest calls the generic RebalancePostgres builder with application/json body
+func NewRebalancePostgresRequest(server string, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRebalancePostgresRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewRebalancePostgresRequestWithBody generates requests for RebalancePostgres with any type of body
+func NewRebalancePostgresRequestWithBody(server string, cluster ClusterPath, params *RebalancePostgresParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/actions/rebalance", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListBackupsRequest generates requests for ListBackups
 func NewListBackupsRequest(server string, cluster ClusterPath, params *ListBackupsParams) (*http.Request, error) {
 	var err error
@@ -13479,6 +13790,151 @@ func NewGetClusterPlacementRequest(server string, cluster ClusterPath, params *G
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPostgresBindingsRequest generates requests for ListPostgresBindings
+func NewListPostgresBindingsRequest(server string, cluster ClusterPath, params *ListPostgresBindingsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/bindings", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotatePostgresBindingRequest generates requests for RotatePostgresBinding
+func NewRotatePostgresBindingRequest(server string, cluster ClusterPath, binding string, params *RotatePostgresBindingParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "binding", runtime.ParamLocationPath, binding)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/postgres/bindings/%s/rotate", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
 	}
 
 	return req, nil
@@ -20445,6 +20901,11 @@ type ClientWithResponsesInterface interface {
 
 	ReplaceClusterWithResponse(ctx context.Context, cluster ClusterPath, params *ReplaceClusterParams, body ReplaceClusterJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceClusterResponse, error)
 
+	// RebalancePostgresWithBodyWithResponse request with any body
+	RebalancePostgresWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RebalancePostgresResponse, error)
+
+	RebalancePostgresWithResponse(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*RebalancePostgresResponse, error)
+
 	// ListBackupsWithResponse request
 	ListBackupsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*ListBackupsResponse, error)
 
@@ -20580,6 +21041,12 @@ type ClientWithResponsesInterface interface {
 
 	// GetClusterPlacementWithResponse request
 	GetClusterPlacementWithResponse(ctx context.Context, cluster ClusterPath, params *GetClusterPlacementParams, reqEditors ...RequestEditorFn) (*GetClusterPlacementResponse, error)
+
+	// ListPostgresBindingsWithResponse request
+	ListPostgresBindingsWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresBindingsParams, reqEditors ...RequestEditorFn) (*ListPostgresBindingsResponse, error)
+
+	// RotatePostgresBindingWithResponse request
+	RotatePostgresBindingWithResponse(ctx context.Context, cluster ClusterPath, binding string, params *RotatePostgresBindingParams, reqEditors ...RequestEditorFn) (*RotatePostgresBindingResponse, error)
 
 	// ListPostgresDatabasesWithResponse request
 	ListPostgresDatabasesWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresDatabasesParams, reqEditors ...RequestEditorFn) (*ListPostgresDatabasesResponse, error)
@@ -21881,6 +22348,37 @@ func (r ReplaceClusterResponse) StatusCode() int {
 	return 0
 }
 
+type RebalancePostgresResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Operation
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r RebalancePostgresResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RebalancePostgresResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListBackupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -23015,6 +23513,66 @@ func (r GetClusterPlacementResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetClusterPlacementResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListPostgresBindingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Items []PostgresBinding `json:"items"`
+	}
+	JSON400 *BadRequest
+	JSON401 *Unauthorized
+	JSON403 *Forbidden
+	JSON404 *NotFound
+	JSON409 *Conflict
+	JSON500 *InternalError
+	JSON503 *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPostgresBindingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPostgresBindingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotatePostgresBindingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *PostgresBinding
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON500      *InternalError
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r RotatePostgresBindingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotatePostgresBindingResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -26128,6 +26686,23 @@ func (c *ClientWithResponses) ReplaceClusterWithResponse(ctx context.Context, cl
 	return ParseReplaceClusterResponse(rsp)
 }
 
+// RebalancePostgresWithBodyWithResponse request with arbitrary body returning *RebalancePostgresResponse
+func (c *ClientWithResponses) RebalancePostgresWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RebalancePostgresResponse, error) {
+	rsp, err := c.RebalancePostgresWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRebalancePostgresResponse(rsp)
+}
+
+func (c *ClientWithResponses) RebalancePostgresWithResponse(ctx context.Context, cluster ClusterPath, params *RebalancePostgresParams, body RebalancePostgresJSONRequestBody, reqEditors ...RequestEditorFn) (*RebalancePostgresResponse, error) {
+	rsp, err := c.RebalancePostgres(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRebalancePostgresResponse(rsp)
+}
+
 // ListBackupsWithResponse request returning *ListBackupsResponse
 func (c *ClientWithResponses) ListBackupsWithResponse(ctx context.Context, cluster ClusterPath, params *ListBackupsParams, reqEditors ...RequestEditorFn) (*ListBackupsResponse, error) {
 	rsp, err := c.ListBackups(ctx, cluster, params, reqEditors...)
@@ -26556,6 +27131,24 @@ func (c *ClientWithResponses) GetClusterPlacementWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseGetClusterPlacementResponse(rsp)
+}
+
+// ListPostgresBindingsWithResponse request returning *ListPostgresBindingsResponse
+func (c *ClientWithResponses) ListPostgresBindingsWithResponse(ctx context.Context, cluster ClusterPath, params *ListPostgresBindingsParams, reqEditors ...RequestEditorFn) (*ListPostgresBindingsResponse, error) {
+	rsp, err := c.ListPostgresBindings(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPostgresBindingsResponse(rsp)
+}
+
+// RotatePostgresBindingWithResponse request returning *RotatePostgresBindingResponse
+func (c *ClientWithResponses) RotatePostgresBindingWithResponse(ctx context.Context, cluster ClusterPath, binding string, params *RotatePostgresBindingParams, reqEditors ...RequestEditorFn) (*RotatePostgresBindingResponse, error) {
+	rsp, err := c.RotatePostgresBinding(ctx, cluster, binding, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotatePostgresBindingResponse(rsp)
 }
 
 // ListPostgresDatabasesWithResponse request returning *ListPostgresDatabasesResponse
@@ -30375,6 +30968,95 @@ func ParseReplaceClusterResponse(rsp *http.Response) (*ReplaceClusterResponse, e
 	return response, nil
 }
 
+// ParseRebalancePostgresResponse parses an HTTP response from a RebalancePostgresWithResponse call
+func ParseRebalancePostgresResponse(rsp *http.Response) (*RebalancePostgresResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RebalancePostgresResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Operation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListBackupsResponse parses an HTTP response from a ListBackupsWithResponse call
 func ParseListBackupsResponse(rsp *http.Response) (*ListBackupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -33485,6 +34167,158 @@ func ParseGetClusterPlacementResponse(rsp *http.Response) (*GetClusterPlacementR
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPostgresBindingsResponse parses an HTTP response from a ListPostgresBindingsWithResponse call
+func ParseListPostgresBindingsResponse(rsp *http.Response) (*ListPostgresBindingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPostgresBindingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Items []PostgresBinding `json:"items"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotatePostgresBindingResponse parses an HTTP response from a RotatePostgresBindingWithResponse call
+func ParseRotatePostgresBindingResponse(rsp *http.Response) (*RotatePostgresBindingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotatePostgresBindingResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PostgresBinding
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

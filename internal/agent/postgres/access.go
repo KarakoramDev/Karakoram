@@ -66,7 +66,7 @@ func validSQLName(name string) bool {
 	return true
 }
 func managedRole(name string) bool {
-	return validSQLName(name) && name != "postgres" && !strings.HasPrefix(name, "pg_") && !strings.HasPrefix(name, "kk_")
+	return validSQLName(name) && name != "postgres" && !strings.HasPrefix(name, "pg_") && !strings.HasPrefix(name, "kk_") && !strings.HasPrefix(name, "kb_")
 }
 func managedDatabase(name string) bool {
 	return validSQLName(name) && name != "postgres" && name != "template0" && name != "template1"
@@ -107,8 +107,11 @@ func validVerifier(verifier string) bool {
 	return true
 }
 func validateRoleWrite(role pgspec.RoleWrite) error {
-	if !managedRole(role.Name) {
+	if !managedRole(role.Name) && !(role.Binding && bindingRole(role.Name)) {
 		return invalidAccess("invalid or protected role name")
+	}
+	if role.Binding && (role.Superuser || role.Createdb || role.Createrole || role.Replication || role.BypassRLS || len(role.MemberOf) != 0 || role.ConnectionLimit < 1) {
+		return invalidAccess("binding roles must be bounded least-privilege roles")
 	}
 	if role.ConnectionLimit < -1 || role.ConnectionLimit > 1000000 {
 		return invalidAccess("invalid role connection limit")
@@ -264,7 +267,7 @@ func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.R
 
 // ROW(d) has the anonymous record type. row_to_json(record) is an exact builtin
 // match, so even an old named pg_database overload cannot intercept this call.
-const databaseSelect = `SELECT d.datname,pg_catalog.pg_get_userbyid(d.datdba),pg_catalog.pg_encoding_to_char(d.encoding),COALESCE(pg_catalog.row_to_json(ROW(d))->'f1'->>'datlocale',pg_catalog.row_to_json(ROW(d))->'f1'->>'daticulocale',d.datcollate),d.datallowconn FROM pg_catalog.pg_database d`
+const databaseSelect = `SELECT d.datname,pg_catalog.pg_get_userbyid(d.datdba),d.datdba,pg_catalog.pg_encoding_to_char(d.encoding),COALESCE(pg_catalog.row_to_json(ROW(d))->'f1'->>'datlocale',pg_catalog.row_to_json(ROW(d))->'f1'->>'daticulocale',d.datcollate),d.datallowconn FROM pg_catalog.pg_database d`
 
 func readDatabases(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Database, error) {
 	query := databaseSelect
@@ -282,7 +285,7 @@ func readDatabases(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Data
 	result := []pgspec.Database{}
 	for rows.Next() {
 		var db pgspec.Database
-		if err = rows.Scan(&db.Name, &db.Owner, &db.Encoding, &db.Locale, &db.AllowConnections); err != nil {
+		if err = rows.Scan(&db.Name, &db.Owner, &db.OwnerOID, &db.Encoding, &db.Locale, &db.AllowConnections); err != nil {
 			return nil, err
 		}
 		result = append(result, db)
@@ -426,18 +429,37 @@ func readGrants(ctx context.Context, c *pgx.Conn, database string) ([]pgspec.Gra
 	return result, rows.Err()
 }
 func validateAccessRequest(action string, req pgspec.AccessRequest) error {
+	if req.Role != nil {
+		req.Role.Binding = req.Binding
+	}
 	if req.Name != "" && !validSQLName(req.Name) {
 		return invalidAccess("invalid PostgreSQL object name")
 	}
 	switch action {
+	case pgspec.ActionUpdateExtensions:
+		return validateExtensionNames(req.Extensions, req.AvailableExtensions)
 	case pgspec.ActionRoles:
+		if req.Binding && req.Operation != "journal" && (req.Operation == "update" || req.Operation == "password" || req.Operation == "delete") {
+			return invalidAccess("binding role mutations require a journaled OID-fenced request")
+		}
 		switch req.Operation {
 		case "capabilities":
 			return nil
 		case "journal":
 			if req.RequestID == "" || !safeValue(req.RequestID, 256) || req.Role == nil ||
-				(req.RoleOperation != "create" && req.RoleOperation != "update") {
+				(req.RoleOperation != "create" && req.RoleOperation != "update" && !(req.Binding && req.RoleOperation == "delete")) {
 				return invalidAccess("invalid journaled role request")
+			}
+			if req.Binding && req.RoleOperation != "create" {
+				if req.ExpectedRoleOID == 0 {
+					return invalidAccess("binding role mutations require the original role OID")
+				}
+				if req.RoleOperation == "delete" {
+					if !bindingRole(req.Role.Name) {
+						return invalidAccess("invalid binding role name")
+					}
+					return nil
+				}
 			}
 			return validateRoleWrite(*req.Role)
 		case "list":
@@ -447,11 +469,11 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 				return nil
 			}
 		case "delete":
-			if managedRole(req.Name) {
+			if managedRole(req.Name) || req.Binding && bindingRole(req.Name) {
 				return nil
 			}
 		case "password":
-			if req.Role != nil && managedRole(req.Role.Name) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
+			if req.Role != nil && (managedRole(req.Role.Name) || req.Binding && bindingRole(req.Role.Name)) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
 				return nil
 			}
 		case "create", "update":
@@ -461,6 +483,10 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 		}
 	case pgspec.ActionDatabases:
 		switch req.Operation {
+		case "public-owner":
+			if req.Binding && req.Database != nil && managedDatabase(req.Database.Name) && bindingRole(req.Database.Owner) {
+				return nil
+			}
 		case "list":
 			return nil
 		case "get":
@@ -471,8 +497,11 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 			if managedDatabase(req.Name) {
 				return nil
 			}
-		case "create", "update":
+		case "create", "update", "extensions":
 			if req.Database != nil && (req.Name == "" || req.Name == req.Database.Name) {
+				if err := validateExtensionNames(req.Database.Extensions, req.AvailableExtensions); err != nil {
+					return err
+				}
 				return validateDatabase(*req.Database)
 			}
 		}
@@ -495,6 +524,8 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 }
 func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.AccessRequest) (any, error) {
 	switch action {
+	case pgspec.ActionUpdateExtensions:
+		return updateInstalledExtensions(ctx, c, req.Extensions)
 	case pgspec.ActionRoles:
 		if req.Operation == "capabilities" {
 			return pgspec.AccessCapabilities{CredentialReceipts: true}, nil
@@ -526,6 +557,8 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 		}
 	case pgspec.ActionDatabases:
 		switch req.Operation {
+		case "public-owner":
+			return struct{}{}, ownBindingPublicSchema(ctx, c, *req.Database)
 		case "list", "get":
 			databases, err := readDatabases(ctx, c, req.Name)
 			if err != nil {
@@ -539,14 +572,41 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			}
 			return databases, nil
 		case "create":
+			if len(req.Database.Extensions) > 0 && !req.Database.AllowConnections {
+				return nil, invalidAccess("database extensions require allowConnections")
+			}
 			sql, args, err := createDatabaseStatement(*req.Database)
 			if err != nil {
 				return nil, err
 			}
 			_, err = c.Exec(ctx, sql, args...)
-			return struct{}{}, err
+			if err != nil {
+				var pg *pgconn.PgError
+				if len(req.Database.Extensions) == 0 || !errors.As(err, &pg) || pg.Code != "42P04" {
+					return nil, err
+				}
+				// CREATE DATABASE is not transactional. A retry after extension
+				// failure may resume only against the requested owner.
+				existing, readErr := readDatabases(ctx, c, req.Database.Name)
+				if readErr != nil {
+					return nil, readErr
+				}
+				if len(existing) != 1 || existing[0].Owner != req.Database.Owner {
+					return nil, err
+				}
+			}
+			return struct{}{}, createDatabaseExtensions(ctx, c, *req.Database, req.AvailableExtensions)
 		case "update":
 			return struct{}{}, updateDatabase(ctx, c, *req.Database)
+		case "extensions":
+			existing, err := readDatabases(ctx, c, req.Database.Name)
+			if err != nil {
+				return nil, err
+			}
+			if len(existing) != 1 || existing[0].Owner != req.Database.Owner {
+				return nil, &accessError{http.StatusConflict, "database owner does not match extension request"}
+			}
+			return struct{}{}, createDatabaseExtensions(ctx, c, *req.Database, req.AvailableExtensions)
 		case "delete":
 			sql := "DROP DATABASE " + pgx.Identifier{req.Name}.Sanitize()
 			if req.Force {
@@ -581,7 +641,7 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 	return nil, invalidAccess("invalid PostgreSQL access action")
 }
 func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{pgspec.ActionRoles, pgspec.ActionDatabases, pgspec.ActionGrants} {
+	for _, action := range []string{pgspec.ActionRoles, pgspec.ActionDatabases, pgspec.ActionGrants, pgspec.ActionUpdateExtensions} {
 		mux.HandleFunc("POST /v1/postgres/"+action, func(w http.ResponseWriter, r *http.Request) {
 			var req pgspec.AccessRequest
 			if err := decodeAction(w, r, &req); err != nil {
@@ -607,7 +667,7 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if s.Role != pgspec.RoleData {
 					return &accessError{http.StatusServiceUnavailable, "access action requires a data member"}
 				}
-				if s.Topology == pgspec.TopologyHA {
+				if usesPatroni(s) {
 					if err = patroniRequest(ctx, s, http.MethodGet, "/primary", nil, nil); err != nil {
 						return &accessError{http.StatusServiceUnavailable, "access action requires the Patroni primary with its leader lock"}
 					}

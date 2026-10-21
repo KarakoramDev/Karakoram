@@ -23,6 +23,20 @@ test('single and HA member counts and proxy constraints are PostgreSQL-native', 
   assert.match(validateComponents({ ...spec, components: { ...spec.components, extra: { proxy: { ...proxy, replicas: -1 } } } }).topology.join(' '), /proxy/);
 });
 
+test('distributed options bound worker groups and preserve group-local replica semantics', () => {
+  const distributed: Schemas['ClusterSpec'] = { ...spec, topology: { type: 'distributed' }, components: { ...spec.components, engine: { ...data, replicas: 3 } } };
+  assert.deepEqual(validateComponents(distributed).topology, []);
+  assert.deepEqual(validateSpec(distributed), []);
+  for (const workerGroups of [0, 9, 1.5]) assert.match(validateSpec({ ...distributed, engineOptions: { citus: { workerGroups } } }).join(' '), /Worker groups/);
+  for (const workerGroups of [1, 2, 8]) assert.deepEqual(validateSpec({ ...distributed, engineOptions: { citus: { workerGroups, database: 'app' } } }), []);
+  assert.match(validateSpec({ ...distributed, engineOptions: { citus: { database: '' } } }).join(' '), /Citus database/);
+  assert.ok(validateComponents({ ...distributed, components: { engine: { ...data, replicas: 3 } } }).topology.length);
+  assert.deepEqual(validateComponents({ ...distributed, components: { engine: { ...data, replicas: 1 } } }).topology, []);
+  assert.ok(validateComponents({ ...distributed, components: { ...spec.components, engine: { ...data, replicas: 5 } } }).topology.length);
+  assert.equal(engineRules('postgres').topology.distributed?.title, 'Distributed PostgreSQL (Citus)');
+  assert.equal(engineRules('supabase').topology.distributed, undefined);
+});
+
 test('safe engine options validate and single topology clears HA-only synchronous mode without Elastic rewriting', () => {
   const options = { synchronousMode: 'strict', parameters: { max_connections: '250' }, proxy: { readWriteSplit: true, readerPort: true } };
   const ha = { ...spec, topology: { type: 'ha' as const }, engineOptions: options };

@@ -268,6 +268,7 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 	a := api.Member{Name: m.Name, Set: m.Set, Role: memberRole(m), State: m.State, Health: m.Health, Version: &m.Version, LagSeconds: ptr(float32(m.LagSeconds)), Optime: &m.Optime, Uptime: &m.Uptime, RamUsageBytes: usage.RAMBytes, DiskUsageBytes: usage.DiskBytes, DiskTotalBytes: usage.DiskTotalBytes, PlacementGroup: &m.PlacementGroup, Agent: &api.AgentStatus{Connected: m.Agent.Healthy, ConfigVersion: &m.Agent.ConfigVersion, LastSeenAt: &m.Agent.LastSeen}}
 	a.Agent.Message = optionalString(redact.Diagnostic(m.Agent.Message))
 	a.ComponentVersion = optionalString(m.ComponentVersion)
+	a.Group = m.Group
 	if usage.CPUPercent != nil {
 		a.CpuUsage = ptr(float32(*usage.CPUPercent))
 	}
@@ -439,12 +440,29 @@ func backupAPI(b domain.Backup) api.Backup {
 		if len(metadata.References) > 0 {
 			a.Postgres.References = &metadata.References
 		}
+		if len(metadata.Profiles) > 0 {
+			a.Postgres.Profiles = &metadata.Profiles
+		}
+		a.Postgres.RestorePoint = optionalString(metadata.RestorePoint)
+		if len(metadata.Groups) > 0 {
+			groups := make([]api.PostgresBackupGroup, 0, len(metadata.Groups))
+			for _, group := range metadata.Groups {
+				item := group.Backup
+				groups = append(groups, api.PostgresBackupGroup{Group: group.Group, Primary: optionalString(group.Primary), Timeline: ptr(group.Timeline), Lsn: group.LSN, Backup: api.PostgresBackup{
+					Label: item.Label, Repository: item.Repository, Prior: optionalString(item.Prior),
+					References: &item.References, WalStart: optionalString(item.WALStart), WalStop: optionalString(item.WALStop),
+					SystemId: item.SystemID, Version: item.Version, RepoBytes: item.RepoBytes,
+					Profiles: &item.Profiles,
+				}})
+			}
+			a.Postgres.Groups = &groups
+		}
 	}
 	return a
 }
 func restoreAPI(r domain.Restore) api.Restore {
 	r.Error = redact.Diagnostic(r.Error)
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, RestorePoint: optionalString(r.Source.RestorePoint), SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
 }
 func eventAPI(e domain.Event) api.Event {
 	e.Message = redact.Diagnostic(e.Message)

@@ -77,7 +77,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Reason = "ClusterDeleteRequested"
 		q := request(ctx).URL.Query()
 		e.Message = fmt.Sprintf("Cluster deletion requested for %s (keepVolumes=%t, keepBackups=%t)", in.Cluster, q.Get("keepVolumes") == "true", q.Get("keepBackups") == "true")
-	case "ResumeCluster", "RestartCluster", "RotateClusterTLS", "ReplaceClusterMember", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
+	case "ResumeCluster", "RestartCluster", "RebalancePostgres", "RotateClusterTLS", "ReplaceClusterMember", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
 		e.Reason = strings.TrimSuffix(name, "Cluster") + "Requested"
 	case "GetClusterConnection":
 		e.Reason = "ConnectionCredentialsRevealed"
@@ -123,6 +123,8 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresRoleWrite).Name
 	case "PatchPostgresRole", "DeletePostgresRole", "RotatePostgresRolePassword":
 		e.Target = in.Cluster + "/" + in.Role
+	case "RotatePostgresBinding":
+		e.Target = in.Cluster + "/" + in.Name
 	case "CreatePostgresDatabase":
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresDatabase).Name
 	case "DeletePostgresDatabase":

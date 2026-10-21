@@ -22,6 +22,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	switch {
 	case s.operation == "createAPIToken":
 		tokenFlags(c)
+	case s.operation == "createPostgresDatabase":
+		c.Flags().StringArray("extension", nil, "Extension to create in the database (repeatable; added to the request file)")
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -35,6 +37,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			}
 			return nil
 		}
+	case s.operation == "rebalancePostgres":
+		c.Flags().String("strategy", "", "Installed Citus rebalance strategy (default: Citus default)")
 	case strings.HasPrefix(s.path, "namespaces "):
 		a.namespaceFlags(c, s.operation)
 	case strings.HasPrefix(s.path, "clusters create"), strings.HasPrefix(s.path, "clusters scale"):
@@ -93,6 +97,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("source-cluster", "", "Source cluster (defaults to target)")
 		c.Flags().String("source-namespace", "", "Source namespace (defaults to target namespace)")
 		c.Flags().String("into-new", "", "Clone source spec and restore into a new cluster")
+		c.Flags().Bool("acknowledge-bound-consumers", false, "Acknowledge the impact of an in-place restore on bound consumers")
 	case strings.HasPrefix(s.path, "operations wait"), s.path == "clusters wait <cluster>":
 		c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")
 	case s.operation == "checkPermission":
@@ -115,6 +120,21 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	}
 	if !s.body {
 		return nil, nil
+	}
+	if s.operation == "createPostgresDatabase" {
+		body, err := a.fileBody(cmd)
+		if err != nil {
+			return nil, err
+		}
+		extensions, _ := cmd.Flags().GetStringArray("extension")
+		if len(extensions) > 0 {
+			existing, _ := body["extensions"].([]any)
+			for _, name := range extensions {
+				existing = append(existing, name)
+			}
+			body["extensions"] = existing
+		}
+		return body, nil
 	}
 	file, _ := cmd.Flags().GetString("file")
 	if file != "" {
@@ -164,6 +184,12 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		return a.fileBody(cmd)
 	}
 	switch {
+	case s.operation == "rebalancePostgres":
+		strategy, _ := cmd.Flags().GetString("strategy")
+		if strategy != "" {
+			return map[string]any{"strategy": strategy}, nil
+		}
+		return map[string]any{}, nil
 	case strings.HasPrefix(s.path, "clusters create"):
 		if len(args) != 1 {
 			return nil, usageError("cluster name is required without -f")
@@ -270,6 +296,9 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		body := map[string]any{"name": name, "source": source}
+		if acknowledge, _ := cmd.Flags().GetBool("acknowledge-bound-consumers"); acknowledge {
+			body["acknowledgeBoundConsumers"] = true
+		}
 		if ns, _ := cmd.Flags().GetString("source-namespace"); ns != "" {
 			body["sourceNamespace"] = ns
 		}

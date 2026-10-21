@@ -1,0 +1,8 @@
+citus:
+    database: application
+    group: 2
+etcd_hosts:
+    - dcs.example:2379
+parameters:
+    shared_preload_libraries: citus,pg_stat_statements,pg_tde
+    wal_level: logical

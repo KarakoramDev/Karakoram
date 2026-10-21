@@ -97,6 +97,13 @@ func clearAccessIntent(ctx context.Context, rc *engine.Context) error {
 }
 
 func (p *Core) publishAccessIntent(ctx context.Context, rc *engine.Context, intent *accessIntent) error {
+	if intent.Request.Binding && intent.Request.Operation == "delete" {
+		for _, key := range []string{rolePasswordKey(intent.Request.Role.Name), "bindings/roles/" + intent.Request.Role.Name} {
+			if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key); err != nil && !missing(err) {
+				return err
+			}
+		}
+	}
 	if intent.Password != nil {
 		if err := putSecret(ctx, rc, rolePasswordKey(intent.Request.Role.Name), []byte(*intent.Password)); err != nil {
 			return fmt.Errorf("sealing selected role password: %w", err)
@@ -185,6 +192,15 @@ func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, int
 		return fmt.Errorf("credential transaction outcome is unknown; replaying the same sealed intent: %w", engine.ErrUnavailable)
 	default:
 		return fmt.Errorf("unsupported credential transaction outcome: %w", engine.ErrUnavailable)
+	}
+	if intent.Request.Binding && intent.Request.Operation == "create" {
+		raw, err := json.Marshal(intent.Request)
+		if err != nil {
+			return err
+		}
+		if err := putSecret(ctx, rc, "bindings/roles/"+intent.Request.Role.Name, raw); err != nil {
+			return err
+		}
 	}
 	if err := p.publishAccessIntent(ctx, rc, intent); err != nil {
 		return err

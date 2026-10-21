@@ -20,7 +20,7 @@ func connectionMember(rc *engine.Context, s *state) string {
 	if rc.Cluster.Spec.Components.Extra["proxy"].Replicas > 0 {
 		return rc.Cluster.Name + "px"
 	}
-	data := s.data()
+	data := s.group(0).data()
 	if len(data) > 0 {
 		return data[0].Name
 	}
@@ -29,6 +29,11 @@ func connectionMember(rc *engine.Context, s *state) string {
 func discovery(rc *engine.Context, s *state) domain.Connection {
 	host := net.JoinHostPort(connectionMember(rc, s), "5432")
 	u := url.URL{Scheme: "postgresql", Host: host, Path: "/postgres"}
+	if s.Topology == "distributed" {
+		if o, err := ParseOptions(rc.Cluster.Spec.EngineOptions); err == nil {
+			u.Path = "/" + o.citusOptions().Database
+		}
+	}
 	q := u.Query()
 	mode := "verify-full"
 	if rc.Cluster.Spec.TLS.Mode == "disabled" {
@@ -99,7 +104,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	credentialsPending, err := accessIntentPending(ctx, rc)
 	credentialsKnown := err == nil
-	healthy := credentialsKnown && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
+	healthy := credentialsKnown && len(s.data()) == s.desiredDataCount(rc) && len(s.Members) > 0
 	writer := false
 	quorumHealthy := false
 	quorumRequired := false
@@ -153,6 +158,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	for i, m := range s.Members {
 		member := domain.MemberStatus{Name: m.Name, Set: "postgres", Role: "unknown", State: "starting", Version: m.Version}
+		if s.Topology == "distributed" && m.Role == "data" {
+			group := m.Group
+			member.Group = &group
+		}
 		if m.Role == "proxy" {
 			member.Set = "proxy"
 			member.Role = "proxy"
@@ -191,7 +200,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				member.Role = st.Role
 				member.Health = st.Running
 				member.State = st.Role
-				if m.Role == "data" && s.Topology == "ha" {
+				if m.Role == "data" && patroniTopology(s.Topology) {
 					quorumHealthy = quorumHealthy || st.EtcdHealthy
 					if capabilities.LocalEtcd {
 						quorumRequired = true
@@ -385,12 +394,11 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		}
 		out.Members = append(out.Members, member)
 	}
-	if s.Topology == "ha" {
-		var primary pgspec.StatusResponse
-		for _, st := range observations {
-			if st.Running && st.Role == "primary" {
-				primary = st
-				break
+	if patroniTopology(s.Topology) {
+		primaries := map[int]pgspec.StatusResponse{}
+		for name, st := range observations {
+			if m := s.find(name); m != nil && m.Role == "data" && st.Running && st.Role == "primary" {
+				primaries[m.Group] = st
 			}
 		}
 		for i := range out.Members {
@@ -399,6 +407,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			if !ok || st.Role != "replica" {
 				continue
 			}
+			primary := primaries[s.find(m.Name).Group]
 			if primary.HealthCapabilities == nil || !primary.HealthCapabilities.ReplicationDistance || st.HealthCapabilities == nil || !st.HealthCapabilities.ReplicationDistance {
 				distanceUnsupported = append(distanceUnsupported, m.Name)
 				continue
@@ -418,6 +427,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 	}
+	var citusCondition domain.Condition
+	if s.Topology == "distributed" {
+		citusCondition = citusTopology(ctx, rc, s, observations)
+		if citusCondition.Status != "True" {
+			healthy, healthProbeFailed, writer = false, true, false
+		}
+	}
 	if s.Formed && s.Topology == "ha" && !writer && s.Upgrade == nil && s.RestoreRecovery == nil {
 		bs, backupErr := loadBackupState(rc.Cluster)
 		allMissing := backupErr == nil && !bs.ManagedRolesHeld && bs.Restore == nil && len(s.data()) > 0
@@ -432,7 +448,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 	}
-	if healthy && !credentialsPending && writer && s.Pending == nil && s.Formed && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (s.Topology != "ha" || !quorumRequired || quorumHealthy) {
+	// Member health alone cannot acknowledge a profile generation: curated SQL
+	// is a post-readiness prerequisite and may still be pending or have failed.
+	profilesReady, err := p.profileBootstrapApplied(ctx, rc, s)
+	if err != nil {
+		return out, err
+	}
+	if healthy && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy) {
 		out.Phase = domain.PhaseReady
 		out.ObservedGeneration = rc.Cluster.Generation
 	} else if rc.Cluster.Status.ObservedGeneration > 0 {
@@ -449,6 +471,12 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if out.Phase == domain.PhaseReady {
 		condition = "True"
 		reason = "MembersReady"
+	}
+	if !profilesReady {
+		reason = "ProfileBootstrapPending"
+	}
+	if s.ExtensionsPending {
+		reason = "ExtensionUpdatePending"
 	}
 	if healthProbeFailed {
 		reason = "HealthObservationFailed"
@@ -515,6 +543,12 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			Type: "ProxyRollout", Status: "False", Reason: "ProxyRolloutFailed", Message: message, LastTransitionTime: now(rc),
 		})
 	}
+	if s.ExtensionsPending {
+		out.Conditions = append(out.Conditions, domain.Condition{Type: "ExtensionsUpdated", Status: "False", Reason: "ExtensionUpdatePending", Message: "Installed profile extension updates have not completed. Restore extension availability and database connectivity so reconciliation can retry.", LastTransitionTime: now(rc)})
+	}
+	if s.Topology == "distributed" {
+		out.Conditions = append(out.Conditions, citusCondition)
+	}
 	if s.SwitchoverBlocked != "" {
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "Switchover", Status: "False", Reason: "SwitchoverBlocked", Message: s.SwitchoverBlocked, LastTransitionTime: now(rc)})
 	}
@@ -554,6 +588,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				source += ", set " + checkpoint.Label
 			}
 			out.Message = fmt.Sprintf("Resuming restore %s at checkpoint %s (generation %d; %s); repair the source repository or member dependency. Client and process holds remain until the same restore completes.", s.RestoreRecovery.ID, checkpoint.Step, checkpoint.Generation, source)
+			if s.RestoreRecovery.Kind == domain.OperationBackup {
+				out.Message = fmt.Sprintf("Aborting coordinated backup %s; formation membership remains fenced until all original native backup receipts are terminal.", s.RestoreRecovery.ID)
+			}
 		}
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "RestoreRecovery", Status: "False", Reason: "RestoreRecoveryPending", Message: out.Message, LastTransitionTime: now(rc)})
 	}
@@ -579,7 +616,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		capacity.Message = "Less than 10 percent data filesystem space remains on: " + strings.Join(capacityIssues, ", ") + ". Inspect WAL archive backlog and replication slots; restore dependencies or grow the volume. Do not remove PostgreSQL WAL files."
 	}
 	out.Conditions = append(out.Conditions, capacity)
-	if s.Topology == "ha" {
+	if patroniTopology(s.Topology) {
 		quorum := domain.Condition{
 			Type: "EtcdQuorum", Status: "True", Reason: "QuorumAvailable",
 			LastTransitionTime: now(rc),

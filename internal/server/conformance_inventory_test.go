@@ -58,6 +58,18 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := postgresRegistry.Register(&bindingAccessProvider{fakePostgresAccess: &fakePostgresAccess{}}); err != nil {
+		t.Fatal(err)
+	}
+	bindingSource := domain.Cluster{Name: "bindingsrc", Spec: domain.ClusterSpec{Provider: "postgres", Version: "17.11.1"}}
+	(&fakeProvider{}).ApplyDefaults(&bindingSource.Spec)
+	if err := s.Store.CreateCluster(ctx, &bindingSource); err != nil {
+		t.Fatal(err)
+	}
+	binding := domain.PostgresBinding{ID: "identity-binding", SourceCluster: bindingSource.Name, ConsumerKind: "keycloak", ConsumerName: "identity", Databases: []string{"identity"}, Extensions: []string{}, RoleName: "kb_identity", State: "ready"}
+	if _, err := s.Store.EnsurePostgresBinding(ctx, &binding); err != nil {
+		t.Fatal(err)
+	}
 	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +143,9 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
 			if strings.Contains(path, "/postgres/") {
 				s.Registry = postgresRegistry
+				if operationID == "listPostgresBindings" {
+					url = strings.Replace(url, "/clusters/prod/", "/clusters/bindingsrc/", 1)
+				}
 				if operationID == "listPostgresGrants" {
 					url += "?database=app"
 				}

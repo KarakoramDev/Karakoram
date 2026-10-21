@@ -58,6 +58,14 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 	if _, err = tx.Exec(ctx, accessReceiptDDL); err != nil {
 		return unknown
 	}
+	// Native CREATE/ALTER/DROP ROLE take RowExclusiveLock on pg_authid.
+	// Hold a conflicting lock through COMMIT so no native DROP/CREATE can
+	// replace the checked role between the OID comparison and our mutation.
+	if req.Binding && req.RoleOperation != "create" {
+		if _, err = tx.Exec(ctx, "LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+			return unknown
+		}
+	}
 	var savedDigest string
 	var savedOID uint32
 	err = tx.QueryRow(ctx, `SELECT request_hash,role_oid FROM _karakoram.access_receipts WHERE operation_id=$1`, req.RequestID).Scan(&savedDigest, &savedOID)
@@ -67,6 +75,9 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 		}
 		var currentOID uint32
 		err = tx.QueryRow(ctx, `SELECT oid FROM pg_catalog.pg_roles WHERE rolname=$1`, req.Role.Name).Scan(&currentOID)
+		if req.Binding && req.RoleOperation == "delete" && errors.Is(err, pgx.ErrNoRows) {
+			return pgspec.AccessResult{Outcome: "applied", RoleOID: savedOID}
+		}
 		if errors.Is(err, pgx.ErrNoRows) || err == nil && currentOID != savedOID {
 			return accessRejected("role_identity_changed", "Credential recovery refused: the original role was removed or replaced by a different native role", http.StatusConflict)
 		}
@@ -83,12 +94,28 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 	// Only after positively establishing receipt absence can a rejected SQL
 	// transaction prove this intent never committed. Transport errors and
 	// failures before lookup remain unknown regardless of HTTP status.
-	if err = writeRoleTx(ctx, tx, req.RoleOperation, *req.Role); err != nil {
+	var oid uint32
+	if req.Binding && req.RoleOperation != "create" {
+		err = tx.QueryRow(ctx, `SELECT oid FROM pg_catalog.pg_roles WHERE rolname=$1`, req.Role.Name).Scan(&oid)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && oid != req.ExpectedRoleOID {
+			return accessRejected("role_identity_changed", "Binding role mutation refused: the original role was removed or replaced by a different native role", http.StatusConflict)
+		}
+		if err != nil {
+			return unknown
+		}
+	}
+	if req.RoleOperation == "delete" {
+		_, err = tx.Exec(ctx, "DROP ROLE "+pgx.Identifier{req.Role.Name}.Sanitize())
+	} else {
+		err = writeRoleTx(ctx, tx, req.RoleOperation, *req.Role)
+	}
+	if err != nil {
 		return rejectedRoleTransaction(ctx, tx, err, req.RoleOperation)
 	}
-	var oid uint32
-	if err = tx.QueryRow(ctx, `SELECT oid FROM pg_catalog.pg_roles WHERE rolname=$1`, req.Role.Name).Scan(&oid); err != nil {
-		return unknown
+	if req.RoleOperation != "delete" {
+		if err = tx.QueryRow(ctx, `SELECT oid FROM pg_catalog.pg_roles WHERE rolname=$1`, req.Role.Name).Scan(&oid); err != nil {
+			return unknown
+		}
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO _karakoram.access_receipts(operation_id,request_hash,role_oid) VALUES($1,$2,$3)`, req.RequestID, digest, oid); err != nil {
 		return unknown

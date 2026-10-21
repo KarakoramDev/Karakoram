@@ -98,6 +98,9 @@ func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error
 	cfg.User = s.Superuser.Username
 	cfg.Password = s.Superuser.Password
 	cfg.Database = "postgres"
+	if s.Citus != nil {
+		cfg.Database = s.Citus.Database
+	}
 	cfg.TLSConfig = nil
 	cfg.Fallbacks = nil
 	cfg.ConnectTimeout = 3 * time.Second
@@ -334,7 +337,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, err
 	}
 	renderSpec := e.retirementConfig(ctx, n, s, p)
-	if s.Role == pgspec.RoleData && s.Topology == pgspec.TopologyHA && s.Bootstrap != nil && s.Bootstrap.Method != "restore" {
+	if s.Role == pgspec.RoleData && usesPatroni(s) && s.Bootstrap != nil && s.Bootstrap.Method != "restore" {
 		if _, statErr := os.Stat(filepath.Join(p.pgdata, "PG_VERSION")); statErr == nil {
 			if err = recordInitialization(p); err != nil {
 				return nil, err
@@ -486,17 +489,23 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		if err = stopConfigured(ctx, n, "postgres"); err != nil {
 			return nil, err
 		}
-		if err = prepareEtcd(n, s, p); err != nil {
-			return nil, err
-		}
-		if err = n.Configure("etcd", etcdProcess(s, p)); err != nil {
+		if len(s.Etcd.Endpoints) == 0 {
+			if err = prepareEtcd(n, s, p); err != nil {
+				return nil, err
+			}
+			if err = n.Configure("etcd", etcdProcess(s, p)); err != nil {
+				return nil, err
+			}
+		} else if err = stopConfigured(ctx, n, "etcd"); err != nil {
 			return nil, err
 		}
 		if err = n.Configure("patroni", patroniProcess(p)); err != nil {
 			return nil, err
 		}
-		if err = n.Action(ctx, "etcd", "start"); err != nil {
-			return nil, err
+		if len(s.Etcd.Endpoints) == 0 {
+			if err = n.Action(ctx, "etcd", "start"); err != nil {
+				return nil, err
+			}
 		}
 		if err = n.Action(ctx, "patroni", "start"); err != nil {
 			return nil, err
@@ -552,7 +561,7 @@ func (*Runner) Readiness(ctx context.Context, o agent.Options, args []string) er
 	process := "postgres"
 	if s.Role == pgspec.RoleProxy {
 		process = "proxysql"
-	} else if s.Topology == pgspec.TopologyHA {
+	} else if usesPatroni(s) {
 		process = "patroni"
 	}
 	if c.Maintenance || controls.Maintenance || controls.Stopped[process] {

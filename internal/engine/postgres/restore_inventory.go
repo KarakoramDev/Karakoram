@@ -25,18 +25,29 @@ func (p *Core) preflightRestoreSet(ctx context.Context, rc *engine.Context, b *d
 	if err != nil {
 		return err
 	}
-	prefix := strings.Trim(b.Postgres.Repository, "/") + "/backup/kk/" + b.Postgres.Label + "/"
 	present := p.restoreSetPresent
 	if present == nil {
 		present = storedRestoreSetPresent
 	}
-	found, err := present(ctx, storage, prefix)
-	if err != nil {
-		return fmt.Errorf("list source pgBackRest backup set: %w", err)
+	check := func(repository, label string) error {
+		prefix := strings.Trim(repository, "/") + "/backup/kk/" + label + "/"
+		found, err := present(ctx, storage, prefix)
+		if err != nil {
+			return fmt.Errorf("list source pgBackRest backup set: %w", err)
+		}
+		if !found {
+			return engine.InvalidField("source.backup", domain.ReasonNotFound,
+				"source backup %q pgBackRest set %q is absent from storage; select an existing backup or create a new backup before restoring", b.Name, label)
+		}
+		return nil
 	}
-	if !found {
-		return engine.InvalidField("source.backup", domain.ReasonNotFound,
-			"source backup %q pgBackRest set %q is absent from storage; select an existing backup or create a new backup before restoring", b.Name, b.Postgres.Label)
+	if len(b.Postgres.Groups) == 0 {
+		return check(b.Postgres.Repository, b.Postgres.Label)
+	}
+	for _, group := range b.Postgres.Groups {
+		if err := check(group.Backup.Repository, group.Backup.Label); err != nil {
+			return err
+		}
 	}
 	return nil
 }

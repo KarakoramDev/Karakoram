@@ -41,10 +41,16 @@ const (
 	OperationRestore          = "restore"
 	OperationRaiseFCV         = "raise-fcv"
 	OperationRestart          = "restart"
+	OperationRebalance        = "rebalance"
 	OperationReplaceMember    = "replace-member"
 	OperationRotateSystemUser = "rotate-system-user"
 	OperationRotateTLS        = "rotate-tls"
 )
+
+// RebalanceParams selects the Citus shard placement strategy.
+type RebalanceParams struct {
+	Strategy string `json:"strategy,omitempty"`
+}
 
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
@@ -250,8 +256,10 @@ type Condition struct {
 
 // MemberStatus reports the state and resource usage of one database member.
 type MemberStatus struct {
-	Name    string `json:"name"`
-	Set     string `json:"set"`
+	Name string `json:"name"`
+	Set  string `json:"set"`
+	// Group identifies a distributed PostgreSQL data group (0 is coordinator).
+	Group   *int   `json:"group,omitempty"`
 	Role    string `json:"role"`
 	State   string `json:"state"`
 	Health  bool   `json:"health"`
@@ -475,6 +483,21 @@ type PostgresBackup struct {
 	SystemID   string   `json:"systemId"`
 	Version    string   `json:"version"`
 	RepoBytes  int64    `json:"repoBytes"`
+	// Profiles snapshots required runtime packages; empty legacy sets require none.
+	Profiles []string `json:"profiles,omitempty"`
+	// RestorePoint and Groups form one coordinated Citus recovery target.
+	RestorePoint string                `json:"restorePoint,omitempty"`
+	Groups       []PostgresBackupGroup `json:"groups,omitempty"`
+}
+
+// PostgresBackupGroup is an independently archived replication-group backup.
+// Worker LSNs are conservative post-marker upper bounds, not exact marker LSNs.
+type PostgresBackupGroup struct {
+	Group    int            `json:"group"`
+	Primary  string         `json:"primary,omitempty"`
+	Timeline int            `json:"timeline,omitempty"`
+	Backup   PostgresBackup `json:"backup"`
+	LSN      string         `json:"lsn"`
 }
 
 // ProviderMatches reports whether a backup can be consumed by the target engine.
@@ -509,6 +532,7 @@ type Restore struct {
 type RestoreSource struct {
 	Backup        string     `json:"backup,omitempty"`
 	PITRTime      *time.Time `json:"pitrTime,omitempty"`
+	RestorePoint  string     `json:"restorePoint,omitempty"`
 	SourceCluster string     `json:"sourceCluster,omitempty"`
 }
 

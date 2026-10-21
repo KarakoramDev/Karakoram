@@ -17,10 +17,11 @@ import (
 
 type fakePostgresAccess struct {
 	fakeProvider
-	roles    []postgres.Role
-	writes   int
-	lastRole postgres.RoleWrite
-	err      error
+	roles        []postgres.Role
+	writes       int
+	lastRole     postgres.RoleWrite
+	lastDatabase postgres.Database
+	err          error
 }
 
 func (p *fakePostgresAccess) ListRoles(context.Context, *engine.Context) ([]postgres.Role, error) {
@@ -58,7 +59,8 @@ func (p *fakePostgresAccess) ListDatabases(context.Context, *engine.Context) ([]
 func (p *fakePostgresAccess) GetDatabase(context.Context, *engine.Context, string) (*postgres.Database, error) {
 	return &postgres.Database{Name: "app", Owner: "custom", Encoding: "UTF8", Locale: "C.UTF-8", AllowConnections: true}, p.err
 }
-func (p *fakePostgresAccess) CreateDatabase(context.Context, *engine.Context, postgres.Database) error {
+func (p *fakePostgresAccess) CreateDatabase(_ context.Context, _ *engine.Context, database postgres.Database) error {
+	p.lastDatabase = database
 	p.writes++
 	return p.err
 }
@@ -201,5 +203,18 @@ func TestPostgresPatchAndUnavailable(t *testing.T) {
 	w = call(s, "GET", "/api/v1/clusters/prod/postgres/roles", "", token)
 	if w.Code != http.StatusServiceUnavailable || strings.Contains(w.Body.String(), "password") {
 		t.Fatal("primary unavailability not mapped safely", w.Code)
+	}
+}
+
+func TestPostgresDatabaseExtensions(t *testing.T) {
+	s, token, p := postgresTestServer(t)
+	result := call(s, "POST", "/api/v1/clusters/prod/postgres/databases", `{"name":"app","owner":"custom","extensions":["pgcrypto","uuid-ossp"]}`, token)
+	if result.Code != http.StatusCreated || strings.Join(p.lastDatabase.Extensions, ",") != "pgcrypto,uuid-ossp" {
+		t.Fatalf("extensions not forwarded: status=%d body=%s database=%+v", result.Code, result.Body.String(), p.lastDatabase)
+	}
+	before := p.writes
+	result = call(s, "POST", "/api/v1/clusters/prod/postgres/databases", `{"name":"app","owner":"custom","extensions":["bad;SQL"]}`, token)
+	if result.Code != http.StatusBadRequest || p.writes != before {
+		t.Fatalf("invalid extension reached provider: status=%d", result.Code)
 	}
 }

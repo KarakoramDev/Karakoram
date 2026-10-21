@@ -36,6 +36,7 @@ const (
 
 // Defines values for BackupTrigger.
 const (
+	BackupTriggerPITR    BackupTrigger = "pitr"
 	BackupTriggerRestore BackupTrigger = "restore"
 	Manual               BackupTrigger = "manual"
 	Schedule             BackupTrigger = "schedule"
@@ -288,6 +289,7 @@ const (
 	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
+	OperationTypeRebalance        OperationType = "rebalance"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
@@ -335,6 +337,7 @@ const (
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
@@ -502,6 +505,7 @@ const (
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeDistributed      TopologyType = "distributed"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
@@ -512,6 +516,7 @@ const (
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeDistributed      TopologyInputType = "distributed"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
@@ -522,6 +527,7 @@ const (
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
@@ -1172,9 +1178,11 @@ type CreateDatabaseUserRequest struct {
 
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
-	Name string `json:"name"`
+	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
+	AcknowledgeBoundConsumers *bool  `json:"acknowledgeBoundConsumers,omitempty"`
+	Name                      string `json:"name"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
 
 	// SourceNamespace Source namespace; defaults to the target cluster namespace.
@@ -1695,15 +1703,18 @@ type Member struct {
 	Autoscaling *Resources `json:"autoscaling,omitempty"`
 
 	// ComponentVersion Service-component version, independent of the PostgreSQL data-member version.
-	ComponentVersion *string    `json:"componentVersion,omitempty"`
-	CpuUsage         *float32   `json:"cpuUsage,omitempty"`
-	DiskTotalBytes   *int64     `json:"diskTotalBytes,omitempty"`
-	DiskUsageBytes   *int64     `json:"diskUsageBytes,omitempty"`
-	Health           bool       `json:"health"`
-	LagSeconds       *float32   `json:"lagSeconds,omitempty"`
-	Name             string     `json:"name"`
-	Optime           *time.Time `json:"optime,omitempty"`
-	PlacementGroup   *string    `json:"placementGroup,omitempty"`
+	ComponentVersion *string  `json:"componentVersion,omitempty"`
+	CpuUsage         *float32 `json:"cpuUsage,omitempty"`
+	DiskTotalBytes   *int64   `json:"diskTotalBytes,omitempty"`
+	DiskUsageBytes   *int64   `json:"diskUsageBytes,omitempty"`
+
+	// Group Distributed PostgreSQL group; 0 is coordinator, positive groups are workers. Absent for other members.
+	Group          *int       `json:"group,omitempty"`
+	Health         bool       `json:"health"`
+	LagSeconds     *float32   `json:"lagSeconds,omitempty"`
+	Name           string     `json:"name"`
+	Optime         *time.Time `json:"optime,omitempty"`
+	PlacementGroup *string    `json:"placementGroup,omitempty"`
 
 	// PublicHost Member public host:port when public exposure is enabled.
 	PublicHost    *string `json:"publicHost,omitempty"`
@@ -2009,13 +2020,20 @@ type PlacementGroup struct {
 
 // PostgresBackup Immutable pgBackRest backup-set provenance and dependency metadata.
 type PostgresBackup struct {
-	Label      string    `json:"label"`
-	Prior      *string   `json:"prior,omitempty"`
+	Groups *[]PostgresBackupGroup `json:"groups,omitempty"`
+	Label  string                 `json:"label"`
+	Prior  *string                `json:"prior,omitempty"`
+
+	// Profiles Normalized snapshot-time runtime profile requirements. Physical recovery targets must select a superset; absent legacy metadata requires no profiles.
+	Profiles   *[]string `json:"profiles,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	RepoBytes  int64     `json:"repoBytes"`
 
 	// Repository Snapshot-time repository object prefix, excluding bucket.
 	Repository string `json:"repository"`
+
+	// RestorePoint Coordinated Citus named recovery target.
+	RestorePoint *string `json:"restorePoint,omitempty"`
 
 	// SystemId PostgreSQL system identifier, encoded as a string without precision loss.
 	SystemId string `json:"systemId"`
@@ -2026,13 +2044,45 @@ type PostgresBackup struct {
 	WalStop  *string `json:"walStop,omitempty"`
 }
 
+// PostgresBackupGroup defines model for PostgresBackupGroup.
+type PostgresBackupGroup struct {
+	// Backup Immutable pgBackRest backup-set provenance and dependency metadata.
+	Backup PostgresBackup `json:"backup"`
+	Group  int            `json:"group"`
+
+	// Lsn Archive fence; worker positions are conservative post-marker upper bounds.
+	Lsn      string  `json:"lsn"`
+	Primary  *string `json:"primary,omitempty"`
+	Timeline *int    `json:"timeline,omitempty"`
+}
+
+// PostgresBinding defines model for PostgresBinding.
+type PostgresBinding struct {
+	Consumer struct {
+		Kind      string `json:"kind"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	} `json:"consumer"`
+	CreatedAt            time.Time `json:"createdAt"`
+	CredentialGeneration int64     `json:"credentialGeneration"`
+	Databases            []string  `json:"databases"`
+	Extensions           []string  `json:"extensions"`
+	Id                   string    `json:"id"`
+	MaxMajor             *int      `json:"maxMajor,omitempty"`
+	MinMajor             *int      `json:"minMajor,omitempty"`
+	Role                 string    `json:"role"`
+	State                string    `json:"state"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+}
+
 // PostgresDatabase defines model for PostgresDatabase.
 type PostgresDatabase struct {
-	AllowConnections *bool   `json:"allowConnections,omitempty"`
-	Encoding         *string `json:"encoding,omitempty"`
-	Locale           *string `json:"locale,omitempty"`
-	Name             string  `json:"name"`
-	Owner            string  `json:"owner"`
+	AllowConnections *bool     `json:"allowConnections,omitempty"`
+	Encoding         *string   `json:"encoding,omitempty"`
+	Extensions       *[]string `json:"extensions,omitempty"`
+	Locale           *string   `json:"locale,omitempty"`
+	Name             string    `json:"name"`
+	Owner            string    `json:"owner"`
 }
 
 // PostgresGrant defines model for PostgresGrant.
@@ -2290,6 +2340,12 @@ type RaiseFCVRequest struct {
 	Version string `json:"version"`
 }
 
+// RebalanceRequest defines model for RebalanceRequest.
+type RebalanceRequest struct {
+	// Strategy Optional installed Citus rebalance strategy; omitted uses the Citus default.
+	Strategy *string `json:"strategy,omitempty"`
+}
+
 // RelayStatus Relay health; the default namespace uses direct networking.
 type RelayStatus struct {
 	CertNotAfter   *time.Time       `json:"certNotAfter,omitempty"`
@@ -2412,7 +2468,7 @@ type Restore struct {
 	OperationId *string      `json:"operationId,omitempty"`
 	Phase       RestorePhase `json:"phase"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source    RestoreSource `json:"source"`
 	StartedAt *time.Time    `json:"startedAt,omitempty"`
 }
@@ -2428,10 +2484,11 @@ type RestoreList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// RestoreSource Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+// RestoreSource Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 type RestoreSource struct {
 	Backup        *string    `json:"backup,omitempty"`
 	PitrTime      *time.Time `json:"pitrTime,omitempty"`
+	RestorePoint  *string    `json:"restorePoint,omitempty"`
 	SourceCluster *string    `json:"sourceCluster,omitempty"`
 	union         json.RawMessage
 }
@@ -2441,6 +2498,9 @@ type RestoreSource0 = interface{}
 
 // RestoreSource1 defines model for .
 type RestoreSource1 = interface{}
+
+// RestoreSource2 defines model for .
+type RestoreSource2 = interface{}
 
 // RoleReference defines model for RoleReference.
 type RoleReference struct {
@@ -3094,6 +3154,30 @@ type ReplaceClusterParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RebalancePostgresParams defines parameters for RebalancePostgres.
+type RebalancePostgresParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListBackupsParams defines parameters for ListBackups.
 type ListBackupsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -3593,6 +3677,36 @@ type GetPITRWindowParams struct {
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListPostgresBindingsParams defines parameters for ListPostgresBindings.
+type ListPostgresBindingsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RotatePostgresBindingParams defines parameters for RotatePostgresBinding.
+type RotatePostgresBindingParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListPostgresDatabasesParams defines parameters for ListPostgresDatabases.
@@ -4758,6 +4872,9 @@ type PatchClusterApplicationMergePatchPlusJSONRequestBody = ClusterMergePatch
 // ReplaceClusterJSONRequestBody defines body for ReplaceCluster for application/json ContentType.
 type ReplaceClusterJSONRequestBody = ReplaceClusterRequest
 
+// RebalancePostgresJSONRequestBody defines body for RebalancePostgres for application/json ContentType.
+type RebalancePostgresJSONRequestBody = RebalanceRequest
+
 // CreateBackupJSONRequestBody defines body for CreateBackup for application/json ContentType.
 type CreateBackupJSONRequestBody = CreateBackupRequest
 
@@ -5022,6 +5139,32 @@ func (t *RestoreSource) MergeRestoreSource1(v RestoreSource1) error {
 	return err
 }
 
+// AsRestoreSource2 returns the union data inside the RestoreSource as a RestoreSource2
+func (t RestoreSource) AsRestoreSource2() (RestoreSource2, error) {
+	var body RestoreSource2
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRestoreSource2 overwrites any union data inside the RestoreSource as the provided RestoreSource2
+func (t *RestoreSource) FromRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRestoreSource2 performs a merge with any union data inside the RestoreSource, using the provided RestoreSource2
+func (t *RestoreSource) MergeRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RestoreSource) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	if err != nil {
@@ -5046,6 +5189,13 @@ func (t RestoreSource) MarshalJSON() ([]byte, error) {
 		object["pitrTime"], err = json.Marshal(t.PitrTime)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'pitrTime': %w", err)
+		}
+	}
+
+	if t.RestorePoint != nil {
+		object["restorePoint"], err = json.Marshal(t.RestorePoint)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'restorePoint': %w", err)
 		}
 	}
 
@@ -5081,6 +5231,13 @@ func (t *RestoreSource) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.PitrTime)
 		if err != nil {
 			return fmt.Errorf("error reading 'pitrTime': %w", err)
+		}
+	}
+
+	if raw, found := object["restorePoint"]; found {
+		err = json.Unmarshal(raw, &t.RestorePoint)
+		if err != nil {
+			return fmt.Errorf("error reading 'restorePoint': %w", err)
 		}
 	}
 
@@ -5189,6 +5346,9 @@ type ServerInterface interface {
 	// Replace the full cluster desired spec
 	// (PUT /clusters/{cluster})
 	ReplaceCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ReplaceClusterParams)
+	// Rebalance shards across distributed PostgreSQL worker groups
+	// (POST /clusters/{cluster}/actions/rebalance)
+	RebalancePostgres(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RebalancePostgresParams)
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupsParams)
@@ -5303,6 +5463,12 @@ type ServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams)
+	// List inbound PostgreSQL consumer bindings without credentials
+	// (GET /clusters/{cluster}/postgres/bindings)
+	ListPostgresBindings(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresBindingsParams)
+	// Rotate binding credentials and refresh the consumer
+	// (POST /clusters/{cluster}/postgres/bindings/{binding}/rotate)
+	RotatePostgresBinding(w http.ResponseWriter, r *http.Request, cluster ClusterPath, binding string, params RotatePostgresBindingParams)
 	// List PostgreSQL application databases
 	// (GET /clusters/{cluster}/postgres/databases)
 	ListPostgresDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresDatabasesParams)
@@ -7262,6 +7428,90 @@ func (siw *ServerInterfaceWrapper) ReplaceCluster(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceCluster(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RebalancePostgres operation middleware
+func (siw *ServerInterfaceWrapper) RebalancePostgres(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RebalancePostgresParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RebalancePostgres(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9905,6 +10155,143 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterPlacement(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPostgresBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListPostgresBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPostgresBindingsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPostgresBindings(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotatePostgresBinding operation middleware
+func (siw *ServerInterfaceWrapper) RotatePostgresBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "binding" -------------
+	var binding string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "binding", r.PathValue("binding"), &binding, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotatePostgresBindingParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotatePostgresBinding(w, r, cluster, binding, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15978,6 +16365,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}", wrapper.GetCluster)
 	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}", wrapper.PatchCluster)
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}", wrapper.ReplaceCluster)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/actions/rebalance", wrapper.RebalancePostgres)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/backups", wrapper.ListBackups)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/backups", wrapper.CreateBackup)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/backups/{backup}", wrapper.DeleteBackup)
@@ -16016,6 +16404,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/operations", wrapper.ListClusterOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/pitr", wrapper.GetPITRWindow)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/placement", wrapper.GetClusterPlacement)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/bindings", wrapper.ListPostgresBindings)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/bindings/{binding}/rotate", wrapper.RotatePostgresBinding)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.ListPostgresDatabases)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.CreatePostgresDatabase)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/postgres/databases/{database}", wrapper.DeletePostgresDatabase)
@@ -19907,6 +20297,126 @@ func (response ReplaceCluster415JSONResponse) VisitReplaceClusterResponse(w http
 type ReplaceCluster500JSONResponse struct{ InternalErrorJSONResponse }
 
 func (response ReplaceCluster500JSONResponse) VisitReplaceClusterResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgresRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RebalancePostgresParams
+	Body    *RebalancePostgresJSONRequestBody
+}
+
+type RebalancePostgresResponseObject interface {
+	VisitRebalancePostgresResponse(w http.ResponseWriter) error
+}
+
+type RebalancePostgres202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RebalancePostgres202JSONResponse struct {
+	Body    Operation
+	Headers RebalancePostgres202ResponseHeaders
+}
+
+func (response RebalancePostgres202JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RebalancePostgres400JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RebalancePostgres401JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RebalancePostgres403JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RebalancePostgres404JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RebalancePostgres405JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RebalancePostgres409JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RebalancePostgres413JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RebalancePostgres415JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RebalancePostgres500JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
 	w.WriteHeader(500)
@@ -24015,6 +24525,191 @@ func (response GetClusterPlacement500JSONResponse) VisitGetClusterPlacementRespo
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindingsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListPostgresBindingsParams
+}
+
+type ListPostgresBindingsResponseObject interface {
+	VisitListPostgresBindingsResponse(w http.ResponseWriter) error
+}
+
+type ListPostgresBindings200JSONResponse struct {
+	Items []PostgresBinding `json:"items"`
+}
+
+func (response ListPostgresBindings200JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresBindings400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPostgresBindings400JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPostgresBindings401JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPostgresBindings403JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPostgresBindings404JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListPostgresBindings409JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPostgresBindings500JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListPostgresBindings503JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotatePostgresBindingRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Binding string      `json:"binding"`
+	Params  RotatePostgresBindingParams
+}
+
+type RotatePostgresBindingResponseObject interface {
+	VisitRotatePostgresBindingResponse(w http.ResponseWriter) error
+}
+
+type RotatePostgresBinding200ResponseHeaders struct {
+	IdempotentReplayed bool
+}
+
+type RotatePostgresBinding200JSONResponse struct {
+	Body    PostgresBinding
+	Headers RotatePostgresBinding200ResponseHeaders
+}
+
+func (response RotatePostgresBinding200JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotatePostgresBinding400JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotatePostgresBinding401JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotatePostgresBinding403JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotatePostgresBinding404JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotatePostgresBinding409JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotatePostgresBinding500JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotatePostgresBinding503JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListPostgresDatabasesRequestObject struct {
@@ -33258,6 +33953,9 @@ type StrictServerInterface interface {
 	// Replace the full cluster desired spec
 	// (PUT /clusters/{cluster})
 	ReplaceCluster(ctx context.Context, request ReplaceClusterRequestObject) (ReplaceClusterResponseObject, error)
+	// Rebalance shards across distributed PostgreSQL worker groups
+	// (POST /clusters/{cluster}/actions/rebalance)
+	RebalancePostgres(ctx context.Context, request RebalancePostgresRequestObject) (RebalancePostgresResponseObject, error)
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(ctx context.Context, request ListBackupsRequestObject) (ListBackupsResponseObject, error)
@@ -33372,6 +34070,12 @@ type StrictServerInterface interface {
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(ctx context.Context, request GetClusterPlacementRequestObject) (GetClusterPlacementResponseObject, error)
+	// List inbound PostgreSQL consumer bindings without credentials
+	// (GET /clusters/{cluster}/postgres/bindings)
+	ListPostgresBindings(ctx context.Context, request ListPostgresBindingsRequestObject) (ListPostgresBindingsResponseObject, error)
+	// Rotate binding credentials and refresh the consumer
+	// (POST /clusters/{cluster}/postgres/bindings/{binding}/rotate)
+	RotatePostgresBinding(ctx context.Context, request RotatePostgresBindingRequestObject) (RotatePostgresBindingResponseObject, error)
 	// List PostgreSQL application databases
 	// (GET /clusters/{cluster}/postgres/databases)
 	ListPostgresDatabases(ctx context.Context, request ListPostgresDatabasesRequestObject) (ListPostgresDatabasesResponseObject, error)
@@ -34581,6 +35285,40 @@ func (sh *strictHandler) ReplaceCluster(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// RebalancePostgres operation middleware
+func (sh *strictHandler) RebalancePostgres(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RebalancePostgresParams) {
+	var request RebalancePostgresRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RebalancePostgresJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RebalancePostgres(ctx, request.(RebalancePostgresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RebalancePostgres")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RebalancePostgresResponseObject); ok {
+		if err := validResponse.VisitRebalancePostgresResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListBackups operation middleware
 func (sh *strictHandler) ListBackups(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupsParams) {
 	var request ListBackupsRequestObject
@@ -35701,6 +36439,61 @@ func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterPlacementResponseObject); ok {
 		if err := validResponse.VisitGetClusterPlacementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPostgresBindings operation middleware
+func (sh *strictHandler) ListPostgresBindings(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresBindingsParams) {
+	var request ListPostgresBindingsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPostgresBindings(ctx, request.(ListPostgresBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPostgresBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPostgresBindingsResponseObject); ok {
+		if err := validResponse.VisitListPostgresBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotatePostgresBinding operation middleware
+func (sh *strictHandler) RotatePostgresBinding(w http.ResponseWriter, r *http.Request, cluster ClusterPath, binding string, params RotatePostgresBindingParams) {
+	var request RotatePostgresBindingRequestObject
+
+	request.Cluster = cluster
+	request.Binding = binding
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotatePostgresBinding(ctx, request.(RotatePostgresBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotatePostgresBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotatePostgresBindingResponseObject); ok {
+		if err := validResponse.VisitRotatePostgresBindingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

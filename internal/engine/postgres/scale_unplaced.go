@@ -9,6 +9,9 @@ import (
 )
 
 func (p *Core) retireUnplacedScaleDown(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if s.Topology == "distributed" {
+		return false, nil // Group drain/removal owns every distributed retirement.
+	}
 	for _, m := range s.Members {
 		if m.UnplacedRetirement != nil {
 			// A learner can have been added by a surviving voter before its runtime

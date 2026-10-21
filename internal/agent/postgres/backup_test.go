@@ -53,6 +53,12 @@ func TestDurableBackupReceiptReplay(t *testing.T) {
 	if err != nil || out != saved.Response {
 		t.Fatal(out, err)
 	}
+	req.ObserveOnly = true
+	out, err = New().backup(context.Background(), testSpec(), p, req)
+	if err != nil || out != saved.Response {
+		t.Fatal("observation changed receipt identity", out, err)
+	}
+	req.ObserveOnly = false
 	req.Type = "incr"
 	if _, err = New().backup(context.Background(), testSpec(), p, req); err == nil {
 		t.Fatal("receipt reused for another request")
@@ -62,6 +68,22 @@ func TestDurableBackupReceiptReplay(t *testing.T) {
 	}
 	if !strings.HasPrefix(name, filepath.Join(p.root, "receipts", "backup")) {
 		t.Fatal("receipt escaped protected state directory")
+	}
+}
+
+func TestObserveAbsentBackupDoesNotStart(t *testing.T) {
+	p := dataPaths(t.TempDir())
+	req := pgspec.BackupRequest{Receipt: "never-started", Type: "full", ObserveOnly: true}
+	out, err := New().backup(context.Background(), testSpec(), p, req)
+	if err != nil || out.State != "absent" {
+		t.Fatal(out, err)
+	}
+	name, err := receiptPath(p, "backup", req.Receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Stat(name); !os.IsNotExist(err) {
+		t.Fatal("observation created a receipt", err)
 	}
 }
 func hashString(v any) string {

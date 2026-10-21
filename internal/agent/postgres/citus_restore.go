@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/jackc/pgx/v5"
+)
+
+func createCitusRestorePoint(ctx context.Context, c *pgx.Conn, s pgspec.Spec, name string) (pgspec.CitusRestorePointResponse, error) {
+	out := pgspec.CitusRestorePointResponse{Nodes: []pgspec.CitusRestorePoint{}}
+	// The dedicated connection is closed by the caller, releasing this lock even
+	// when cancellation prevents an explicit unlock. Share start/stop's lock key.
+	if _, err := c.Exec(ctx, "SELECT pg_catalog.pg_advisory_lock(1514886211,1)"); err != nil {
+		return out, err
+	}
+	if _, err := c.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS _karakoram; REVOKE ALL ON SCHEMA _karakoram FROM PUBLIC; CREATE TABLE IF NOT EXISTS _karakoram.citus_restore_points(name text PRIMARY KEY, response jsonb); REVOKE ALL ON _karakoram.citus_restore_points FROM PUBLIC`); err != nil {
+		return out, err
+	}
+	var saved []byte
+	err := c.QueryRow(ctx, "SELECT response FROM _karakoram.citus_restore_points WHERE name=$1", name).Scan(&saved)
+	if err == nil {
+		if len(saved) == 0 {
+			return out, errors.New("restore point outcome is uncertain; use a new name only after reconciling the failed coordinated operation")
+		}
+		err = json.Unmarshal(saved, &out)
+		return out, err
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	// WAL restore points cannot roll back. Commit intent BEFORE calling Citus so
+	// a partial failure can never silently create duplicate named points on retry.
+	if _, err = c.Exec(ctx, "INSERT INTO _karakoram.citus_restore_points(name) VALUES($1)", name); err != nil {
+		return out, err
+	}
+	coordinator := pgspec.CitusRestorePoint{Host: localHost(s), Port: pgspec.PortPostgres}
+	if err = c.QueryRow(ctx, "SELECT pg_catalog.citus_create_restore_point($1)::text", name).Scan(&coordinator.LSN); err != nil {
+		return out, err
+	}
+	var node pgspec.CitusRestorePoint
+	err = c.QueryRow(ctx, "SELECT nodeid,nodename,nodeport FROM pg_catalog.pg_dist_node WHERE groupid=0 AND noderole='primary'").Scan(&node.NodeID, &node.Host, &node.Port)
+	if err == nil {
+		coordinator.NodeID = node.NodeID
+		coordinator.Host = node.Host
+		coordinator.Port = node.Port
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	out.Nodes = append(out.Nodes, coordinator)
+	// Citus returns only the coordinator's exact point. Worker positions are
+	// conservative post-point upper bounds, sufficient for archive fencing.
+	rows, err := c.Query(ctx, `SELECT n.nodeid,n.nodename,n.nodeport,r.success,r.result FROM pg_catalog.run_command_on_all_nodes('SELECT pg_catalog.pg_current_wal_insert_lsn()::text') r JOIN pg_catalog.pg_dist_node n ON n.nodeid=r.nodeid WHERE n.groupid<>0 ORDER BY n.nodeid`)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var point pgspec.CitusRestorePoint
+		var success bool
+		if err = rows.Scan(&point.NodeID, &point.Host, &point.Port, &success, &point.LSN); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if !success || !walLSN.MatchString(point.LSN) {
+			rows.Close()
+			return out, errors.New("restore point WAL observation failed")
+		}
+		out.Nodes = append(out.Nodes, point)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return out, err
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return out, err
+	}
+	if _, err = c.Exec(ctx, "UPDATE _karakoram.citus_restore_points SET response=$2::jsonb WHERE name=$1", name, encoded); err != nil {
+		return out, err
+	}
+	return out, nil
+}

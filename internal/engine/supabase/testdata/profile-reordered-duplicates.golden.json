@@ -1,0 +1,228 @@
+{
+  "Prepare": {
+    "demoau": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl xz-utils python3",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'auth-v2.197.0-amd64.tar.xz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/auth-v2.197.0-amd64.tar.xz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'b5c2991d1df760c9b099c1c2395a94bd1c2f83ed58901934921997179dc9f7ea  auth-v2.197.0-amd64.tar.xz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/supabase-auth-2.197.0'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'app:app'\"'\"' '\"'\"'/opt/karakoram/supabase-auth-2.197.0'\"'\"'\nfi\nsudo -u '\"'\"'app'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-auth-2.197.0'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xJf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-auth-2.197.0'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+    ],
+    "demogw": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl xz-utils python3",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'envoy-1.39.1-linux-x86_64'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/envoy-1.39.1-linux-x86_64'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'002c6e1c69ed0fa0ea381887247cadadfaec9481375fa8d8d2b1731eeabf40b8  envoy-1.39.1-linux-x86_64'\"'\"' | sha256sum -c -\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/supabase-gateway-1.39.1'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'app:app'\"'\"' '\"'\"'/opt/karakoram/supabase-gateway-1.39.1'\"'\"'\nfi\nsudo -u '\"'\"'app'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-gateway-1.39.1'\"'\"'\"'\"'\"'\"'\"'\"'\nbinary=$(mktemp '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-gateway-1.39.1/.artifact.XXXXXXXXXX'\"'\"'\"'\"'\"'\"'\"'\"')\ntrap '\"'\"'\"'\"'\"'\"'\"'\"'rm -f -- \"$binary\"'\"'\"'\"'\"'\"'\"'\"'\"' EXIT HUP INT TERM\ncat \u003e \"$binary\"\nchmod 0755 \"$binary\"\nmv -fT -- \"$binary\" '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-gateway-1.39.1/supabase-gateway'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+    ],
+    "demop0": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "sudo percona-release setup -y ppg-17",
+      "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
+      "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2",
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl xz-utils percona-postgresql-17-cron='1:1.6.8-1.noble' percona-postgresql-17-pgaudit='1:17.1-4.noble' percona-postgresql-17-pgvector='1:0.8.6-1.noble' percona-postgresql-17-postgis-3='2:3.5.7-2.noble' percona-postgresql-17-repack='1:1.5.3-5.noble' percona-pg-stat-monitor17='1:2.4.0-1.noble' percona-pgaudit17-set-user='1:4.2.0-6.noble' percona-postgresql-17-wal2json='1:2.6-4.noble'",
+      "sudo apt-get install -y libcurl4t64 libsodium23 libssl3t64",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'346b262fc170192010ae39798299a38599fcf01d5e67f84c577079f0f4423b0b  supabase-pg17-extensions-17.11.1-1-ubuntu24.04-amd64.tar.gz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'extensions'\"'\"'\numask 022\nmkdir unpacked\ntar --no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore -xf \"$file\" -C unpacked\ntest -d unpacked/usr/lib/postgresql/17 \u0026\u0026 test ! -L unpacked/usr/lib/postgresql/17\nmkdir -p '\"'\"'/usr/lib/postgresql/17'\"'\"'\ncp -a --no-preserve=ownership unpacked/usr/lib/postgresql/17/. '\"'\"'/usr/lib/postgresql/17/'\"'\"'\ntest -d unpacked/usr/share/postgresql/17 \u0026\u0026 test ! -L unpacked/usr/share/postgresql/17\nmkdir -p '\"'\"'/usr/share/postgresql/17'\"'\"'\ncp -a --no-preserve=ownership unpacked/usr/share/postgresql/17/. '\"'\"'/usr/share/postgresql/17/'\"'\"'\n'"
+    ],
+    "demopx": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl",
+      "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service \u0026\u0026 sudo systemctl mask proxysql.service; fi"
+    ],
+    "demors": [
+      "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl xz-utils python3",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'postgrest-v14.18-linux-static-x86-64.tar.xz'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/postgrest-v14.18-linux-static-x86-64.tar.xz'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'98de1c0be7787aea5f5e11a25f303ea0077634d6fc1000b687bfa825fd27d299  postgrest-v14.18-linux-static-x86-64.tar.xz'\"'\"' | sha256sum -c -\npython3 -c '\"'\"'# SPDX-License-Identifier: Apache-2.0\n# Copyright 2026 The Karakoram Authors\n\"\"\"Validate tar headers, not locale-dependent human-readable tar listings.\"\"\"\nfrom collections import deque\nimport posixpath\nimport sys\nimport tarfile\n\n\ndef validate(filename, extensions):\n    with tarfile.open(filename, \"r:*\") as archive:\n        members = archive.getmembers()\n    entries = {}\n    symlinks = {}\n    roots = (\"usr/lib/postgresql/17\", \"usr/share/postgresql/17\")\n    ancestors = {\".\", \"usr\", \"usr/lib\", \"usr/share\", \"usr/lib/postgresql\", \"usr/share/postgresql\"}\n    for member in members:\n        name = member.name\n        if not name or name.startswith(\"/\") or \"..\" in name.split(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in name):\n            raise ValueError(\"invalid path: \" + repr(name))\n        name = posixpath.normpath(name)\n        if name in entries and not (member.isdir() and entries[name].isdir()):\n            raise ValueError(\"duplicate path: \" + repr(name))\n        entries[name] = member\n        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):\n            raise ValueError(\"unsupported file type: \" + repr(name))\n        if extensions:\n            if not (member.isfile() or member.isdir()):\n                raise ValueError(\"unexpected extension archive type: \" + repr(name))\n            if not (any(name == root or name.startswith(root + \"/\") for root in roots) or (name in ancestors and member.isdir())):\n                raise ValueError(\"unexpected extension archive member: \" + repr(name))\n        if member.issym() or member.islnk():\n            if not member.linkname or member.linkname.startswith(\"/\") or any(ord(c) \u003c 32 or ord(c) == 127 for c in member.linkname):\n                raise ValueError(\"invalid link target: \" + repr(name))\n        if member.issym():\n            symlinks[name] = member.linkname\n\n    def resolve(path, follow_final=True):\n        pending = deque(path.split(\"/\"))\n        resolved = []\n        followed = 0\n        while pending:\n            part = pending.popleft()\n            if part in (\"\", \".\"):\n                continue\n            if part == \"..\":\n                if not resolved:\n                    raise ValueError(\"link escapes destination: \" + repr(path))\n                resolved.pop()\n                continue\n            candidate = \"/\".join([*resolved, part])\n            if candidate in symlinks and (pending or follow_final):\n                followed += 1\n                if followed \u003e 40:\n                    raise ValueError(\"too many symbolic links: \" + repr(path))\n                pending.extendleft(reversed(symlinks[candidate].split(\"/\")))\n            else:\n                resolved.append(part)\n        return \"/\".join(resolved) or \".\"\n\n    for name, member in entries.items():\n        parent = posixpath.dirname(name)\n        while parent not in (\"\", \".\"):\n            if parent in symlinks:\n                raise ValueError(\"member traverses a symbolic link: \" + repr(name))\n            parent = posixpath.dirname(parent)\n        resolve(name)\n        if member.islnk():\n            # Hardlink targets are archive-root-relative, unlike symlinks.\n            target = member.linkname\n            seen = {name}\n            while True:\n                target = resolve(target, follow_final=False)\n                if target in seen or target not in entries:\n                    raise ValueError(\"invalid hardlink: \" + repr(name))\n                seen.add(target)\n                linked = entries[target]\n                if linked.isfile():\n                    break\n                if not linked.islnk():\n                    raise ValueError(\"hardlink must reference a regular file: \" + repr(name))\n                target = linked.linkname\n\n\nif __name__ == \"__main__\":\n    try:\n        validate(sys.argv[1], sys.argv[2] == \"extensions\")\n    except (OSError, ValueError, tarfile.TarError) as error:\n        sys.exit(\"unsafe archive member: \" + str(error))\n'\"'\"' \"$file\" '\"'\"'application'\"'\"'\nmkdir -p -m 0755 '\"'\"'/opt/karakoram'\"'\"'\nif mkdir -m 0755 '\"'\"'/opt/karakoram/supabase-rest-14.18'\"'\"' 2\u003e/dev/null; then\nchown -h '\"'\"'app:app'\"'\"' '\"'\"'/opt/karakoram/supabase-rest-14.18'\"'\"'\nfi\nsudo -u '\"'\"'app'\"'\"' -- sh -c '\"'\"'set -eu\numask 022\nmkdir -p '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-rest-14.18'\"'\"'\"'\"'\"'\"'\"'\"'\ntar --no-same-owner --no-same-permissions --delay-directory-restore -xJf - -C '\"'\"'\"'\"'\"'\"'\"'\"'/opt/karakoram/supabase-rest-14.18'\"'\"'\"'\"'\"'\"'\"'\"''\"'\"' \u003c \"$file\"\n'"
+    ]
+  },
+  "Members": {
+    "demop0": {
+      "role": "data",
+      "topology": "single",
+      "flavour": "supabase",
+      "scope": "demo-golden-incarnation",
+      "major": 17,
+      "binDir": "/usr/lib/postgresql/17/bin",
+      "version": "17.11.1",
+      "member": "demop0",
+      "peers": [
+        {
+          "name": "demop0",
+          "host": "demop0"
+        }
+      ],
+      "listenHost": "0.0.0.0",
+      "postgres": {
+        "parameters": {
+          "cron.database_name": "postgres",
+          "max_replication_slots": "32",
+          "max_wal_senders": "32",
+          "output_plugin_libraries": "pgoutput, test_decoding, wal2json",
+          "wal_level": "logical"
+        },
+        "sharedPreloadLibraries": [
+          "pg_stat_statements",
+          "pg_stat_monitor",
+          "pg_cron",
+          "pg_net"
+        ],
+        "requireTls": true,
+        "clientCidrs": [
+          "0.0.0.0/0"
+        ],
+        "synchronous": "off"
+      },
+      "bootstrap": {
+        "method": "initdb",
+        "generation": 1
+      },
+      "superuser": {
+        "username": "postgres",
+        "password": "fixture-users/postgres"
+      },
+      "replication": {
+        "username": "kk_replicator",
+        "password": "fixture-users/kk_replicator"
+      },
+      "rewind": {
+        "username": "kk_rewind",
+        "password": "fixture-users/kk_rewind"
+      },
+      "monitor": {
+        "username": "kk_monitor",
+        "password": "fixture-users/kk_monitor"
+      },
+      "patroniRest": {
+        "username": "kk_admin",
+        "password": "fixture-users/kk_admin"
+      },
+      "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBWTCCAQugAwIBAgIUKml0U6EMHdpce6Fv3QRvK0z/nOcwBQYDK2VwMCExHzAd\nBgNVBAMMFnByb2ZpbGUtZ29sZGVuLWZpeHR1cmUwIBcNMjYxMDIxMDcxNjQ3WhgP\nMjEyNjA5MjcwNzE2NDdaMCExHzAdBgNVBAMMFnByb2ZpbGUtZ29sZGVuLWZpeHR1\ncmUwKjAFBgMrZXADIQBhwN0EUJt8aoOO1mI3i9cm6VpADN9L2JyuvCJXhKllM6NT\nMFEwHQYDVR0OBBYEFMx4KZYbkCIoCmrm5qWxRv9tG412MB8GA1UdIwQYMBaAFMx4\nKZYbkCIoCmrm5qWxRv9tG412MA8GA1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EApg/j\ny0YAD9cjhjQ/Bg6AmeMgqfTYNeqyM0mF4XSx/LTnz4BRKR0UyvJDqEFQXDCWAbfp\niAIaJqbqp0310Zg0Dw==\n-----END CERTIFICATE-----\n",
+      "serverCert": {
+        "certPEM": "fixture-tls/servers/demop0.crt",
+        "keyPEM": "fixture-tls/servers/demop0.key"
+      }
+    },
+    "demopx": {
+      "role": "proxy",
+      "topology": "single",
+      "flavour": "supabase",
+      "scope": "demo-golden-incarnation",
+      "major": 17,
+      "binDir": "/usr/lib/postgresql/17/bin",
+      "version": "17.11.1",
+      "member": "demopx",
+      "peers": [
+        {
+          "name": "demop0",
+          "host": "demop0"
+        }
+      ],
+      "listenHost": "0.0.0.0",
+      "proxy": {
+        "servers": [
+          "demop0"
+        ],
+        "users": [
+          {
+            "username": "postgres",
+            "password": "fixture-users/postgres",
+            "requireTls": true
+          }
+        ],
+        "monitor": {
+          "username": "kk_monitor",
+          "password": "fixture-users/kk_monitor"
+        },
+        "admin": {
+          "username": "kk_proxy_admin",
+          "password": "fixture-users/kk_proxy_admin"
+        },
+        "threads": 2,
+        "maxConnections": 43,
+        "serverCert": {
+          "certPEM": "fixture-tls/servers/demopx.crt",
+          "keyPEM": "fixture-tls/servers/demopx.key"
+        },
+        "backendTls": true
+      },
+      "superuser": {
+        "username": "",
+        "password": ""
+      },
+      "replication": {
+        "username": "",
+        "password": ""
+      },
+      "rewind": {
+        "username": "",
+        "password": ""
+      },
+      "monitor": {
+        "username": "",
+        "password": ""
+      },
+      "patroniRest": {
+        "username": "",
+        "password": ""
+      },
+      "caPEM": "-----BEGIN CERTIFICATE-----\nMIIBWTCCAQugAwIBAgIUKml0U6EMHdpce6Fv3QRvK0z/nOcwBQYDK2VwMCExHzAd\nBgNVBAMMFnByb2ZpbGUtZ29sZGVuLWZpeHR1cmUwIBcNMjYxMDIxMDcxNjQ3WhgP\nMjEyNjA5MjcwNzE2NDdaMCExHzAdBgNVBAMMFnByb2ZpbGUtZ29sZGVuLWZpeHR1\ncmUwKjAFBgMrZXADIQBhwN0EUJt8aoOO1mI3i9cm6VpADN9L2JyuvCJXhKllM6NT\nMFEwHQYDVR0OBBYEFMx4KZYbkCIoCmrm5qWxRv9tG412MB8GA1UdIwQYMBaAFMx4\nKZYbkCIoCmrm5qWxRv9tG412MA8GA1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EApg/j\ny0YAD9cjhjQ/Bg6AmeMgqfTYNeqyM0mF4XSx/LTnz4BRKR0UyvJDqEFQXDCWAbfp\niAIaJqbqp0310Zg0Dw==\n-----END CERTIFICATE-----\n",
+      "serverCert": {
+        "certPEM": "fixture-tls/servers/demopx.crt",
+        "keyPEM": "fixture-tls/servers/demopx.key"
+      }
+    }
+  },
+  "Plan": [
+    {
+      "ID": "001-base-v1",
+      "Database": "",
+      "SQL": "-- Curated from Supabase PostgreSQL 17 bootstrap; application tables remain service-owned.\nDO $bootstrap$\nDECLARE item text;\nBEGIN\n  FOREACH item IN ARRAY ARRAY['supabase_admin','anon','authenticated','service_role','authenticator','supabase_auth_admin','dashboard_user','supabase_read_only_user'] LOOP\n    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = item) THEN\n      EXECUTE format('CREATE ROLE %I', item);\n    END IF;\n  END LOOP;\nEND\n$bootstrap$;\nALTER ROLE supabase_admin LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS;\nALTER ROLE supabase_admin SET search_path = public, extensions;\nALTER ROLE anon NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\nALTER ROLE authenticated NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\nALTER ROLE service_role NOLOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;\nALTER ROLE authenticator LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;\nALTER ROLE supabase_auth_admin LOGIN NOINHERIT NOSUPERUSER NOCREATEDB CREATEROLE NOREPLICATION NOBYPASSRLS;\nALTER ROLE dashboard_user NOLOGIN NOSUPERUSER CREATEDB CREATEROLE REPLICATION NOBYPASSRLS;\nALTER ROLE supabase_read_only_user LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;\nALTER ROLE supabase_read_only_user SET default_transaction_read_only = on;\nGRANT pg_read_all_data TO supabase_read_only_user;\nGRANT anon, authenticated, service_role TO authenticator;\nREVOKE supabase_admin FROM authenticator;\nALTER ROLE anon SET statement_timeout = '3s';\nALTER ROLE authenticated SET statement_timeout = '8s';\nCREATE SCHEMA IF NOT EXISTS extensions AUTHORIZATION supabase_admin;\nREVOKE CREATE ON SCHEMA public FROM PUBLIC;\nREVOKE ALL ON SCHEMA extensions FROM PUBLIC;\nGRANT USAGE ON SCHEMA public, extensions TO anon, authenticated, service_role;\n-- API DML is deliberate; callers must enable RLS and install policies on exposed tables.\n-- TRUNCATE is not granted to client roles because it bypasses row policies.\nALTER DEFAULT PRIVILEGES FOR ROLE postgres, supabase_admin IN SCHEMA public\n  GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES ON TABLES TO anon, authenticated, service_role;\nALTER DEFAULT PRIVILEGES FOR ROLE postgres, supabase_admin IN SCHEMA public\n  GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;\nALTER DEFAULT PRIVILEGES FOR ROLE postgres, supabase_admin IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;\nALTER DEFAULT PRIVILEGES FOR ROLE postgres, supabase_admin IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;\n"
+    },
+    {
+      "ID": "002-api-schemas-v1",
+      "Database": "",
+      "SQL": "-- SPDX-License-Identifier: Apache-2.0\n-- Copyright 2026 The Karakoram Authors\n-- PostgREST's upstream default exposes this schema even without pg_graphql.\n-- The optional extension migration supplies its GraphQL wrapper separately.\nCREATE SCHEMA IF NOT EXISTS graphql_public AUTHORIZATION supabase_admin;\nREVOKE ALL ON SCHEMA graphql_public FROM PUBLIC;\nGRANT USAGE ON SCHEMA graphql_public TO anon, authenticated, service_role;\n"
+    },
+    {
+      "ID": "005-extension-pgcrypto-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\" WITH SCHEMA extensions;\n"
+    },
+    {
+      "ID": "005-extension-uuid-ossp-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" WITH SCHEMA extensions;\n"
+    },
+    {
+      "ID": "005-extension-pgsodium-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"pgsodium\";\n"
+    },
+    {
+      "ID": "005-extension-pg_cron-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"pg_cron\";\n"
+    },
+    {
+      "ID": "005-extension-pg_stat_monitor-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"pg_stat_monitor\" WITH SCHEMA extensions;\n"
+    },
+    {
+      "ID": "005-extension-pg_net-v1",
+      "Database": "",
+      "SQL": "CREATE EXTENSION IF NOT EXISTS \"pg_net\" WITH SCHEMA extensions;\n"
+    },
+    {
+      "ID": "010-auth-v1",
+      "Database": "",
+      "SQL": "-- Helpers exist even without the Auth HTTP component for REST and Storage policies.\n-- GoTrue owns its tables and migration ledger; do not seed a divergent table snapshot.\nCREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;\nALTER SCHEMA auth OWNER TO supabase_auth_admin;\nALTER ROLE supabase_auth_admin SET search_path = auth, extensions;\nREVOKE ALL ON SCHEMA auth FROM PUBLIC;\nGRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;\nCREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$\n  SELECT coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),\n    nullif(current_setting('request.jwt.claims', true), '')::jsonb -\u003e\u003e 'sub')::uuid;\n$$;\nCREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $$\n  SELECT coalesce(nullif(current_setting('request.jwt.claim.role', true), ''),\n    nullif(current_setting('request.jwt.claims', true), '')::jsonb -\u003e\u003e 'role');\n$$;\nCREATE OR REPLACE FUNCTION auth.email() RETURNS text LANGUAGE sql STABLE AS $$\n  SELECT coalesce(nullif(current_setting('request.jwt.claim.email', true), ''),\n    nullif(current_setting('request.jwt.claims', true), '')::jsonb -\u003e\u003e 'email');\n$$;\nCREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$\n  SELECT coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb);\n$$;\n-- Ownership is necessary for GoTrue's CREATE OR REPLACE FUNCTION migrations.\nALTER FUNCTION auth.uid() OWNER TO supabase_auth_admin;\nALTER FUNCTION auth.role() OWNER TO supabase_auth_admin;\nALTER FUNCTION auth.email() OWNER TO supabase_auth_admin;\nALTER FUNCTION auth.jwt() OWNER TO supabase_auth_admin;\nREVOKE ALL ON FUNCTION auth.uid(), auth.role(), auth.email(), auth.jwt() FROM PUBLIC;\nGRANT EXECUTE ON FUNCTION auth.uid(), auth.role(), auth.email(), auth.jwt() TO anon, authenticated, service_role;\n"
+    },
+    {
+      "ID": "060-webhooks-v1",
+      "Database": "",
+      "SQL": "-- Port of the pinned upstream webhook overlay. Enabled only with pg_net.\nDO $bootstrap$ BEGIN\n  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_functions_admin') THEN\n    CREATE ROLE supabase_functions_admin;\n  END IF;\nEND $bootstrap$;\nALTER ROLE supabase_functions_admin LOGIN NOINHERIT NOSUPERUSER NOCREATEDB CREATEROLE NOREPLICATION NOBYPASSRLS;\nALTER ROLE supabase_functions_admin SET search_path = supabase_functions;\nCREATE SCHEMA IF NOT EXISTS supabase_functions AUTHORIZATION supabase_functions_admin;\nREVOKE ALL ON SCHEMA supabase_functions FROM PUBLIC;\nGRANT USAGE ON SCHEMA supabase_functions TO anon, authenticated, service_role;\nGRANT USAGE ON SCHEMA extensions TO supabase_functions_admin;\nCREATE TABLE IF NOT EXISTS supabase_functions.migrations (\n  version text PRIMARY KEY, inserted_at timestamptz NOT NULL DEFAULT now());\nCREATE TABLE IF NOT EXISTS supabase_functions.hooks (\n  id bigserial PRIMARY KEY, hook_table_id integer NOT NULL, hook_name text NOT NULL,\n  created_at timestamptz NOT NULL DEFAULT now(), request_id bigint);\nCREATE INDEX IF NOT EXISTS supabase_functions_hooks_request_id_idx ON supabase_functions.hooks(request_id);\nCREATE INDEX IF NOT EXISTS supabase_functions_hooks_h_table_id_h_name_idx ON supabase_functions.hooks(hook_table_id, hook_name);\nALTER TABLE supabase_functions.migrations OWNER TO supabase_functions_admin;\nALTER TABLE supabase_functions.hooks OWNER TO supabase_functions_admin;\nCREATE OR REPLACE FUNCTION supabase_functions.http_request()\nRETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = supabase_functions AS $function$\nDECLARE\n  request_id bigint;\n  payload jsonb;\n  url text := TG_ARGV[0];\n  method text := TG_ARGV[1];\n  headers jsonb := coalesce(nullif(TG_ARGV[2], 'null')::jsonb, '{\"Content-Type\":\"application/json\"}'::jsonb);\n  params jsonb := coalesce(nullif(TG_ARGV[3], 'null')::jsonb, '{}'::jsonb);\n  timeout_ms integer := coalesce(nullif(TG_ARGV[4], 'null')::integer, 1000);\nBEGIN\n  IF url IS NULL OR url = 'null' THEN RAISE EXCEPTION 'url argument is missing'; END IF;\n  IF method IS NULL OR method = 'null' THEN RAISE EXCEPTION 'method argument is missing'; END IF;\n  CASE method\n    WHEN 'GET' THEN\n      SELECT net.http_get(url, params, headers, timeout_ms) INTO request_id;\n    WHEN 'POST' THEN\n      payload := jsonb_build_object('old_record', OLD, 'record', NEW,\n        'type', TG_OP, 'table', TG_TABLE_NAME, 'schema', TG_TABLE_SCHEMA);\n      SELECT net.http_post(url, payload, params, headers, timeout_ms) INTO request_id;\n    ELSE RAISE EXCEPTION 'method argument % is invalid', method;\n  END CASE;\n  INSERT INTO supabase_functions.hooks(hook_table_id, hook_name, request_id)\n    VALUES (TG_RELID, TG_NAME, request_id);\n  RETURN NEW;\nEND $function$;\nALTER FUNCTION supabase_functions.http_request() OWNER TO supabase_functions_admin;\nREVOKE ALL ON FUNCTION supabase_functions.http_request() FROM PUBLIC;\nGRANT EXECUTE ON FUNCTION supabase_functions.http_request() TO anon, authenticated, service_role;\nGRANT SELECT ON supabase_functions.hooks TO service_role;\n-- Shared grant implementation is superuser-owned and unavailable to API roles.\n-- An extension recreation event restores precisely the same pg_net permissions.\nCREATE OR REPLACE FUNCTION extensions.configure_pg_net_access()\nRETURNS void LANGUAGE plpgsql SET search_path = pg_catalog AS $function$\nBEGIN\n  IF EXISTS (SELECT FROM pg_extension WHERE extname = 'pg_net') THEN\n    GRANT USAGE ON SCHEMA net TO supabase_functions_admin, anon, authenticated, service_role;\n    ALTER FUNCTION net.http_get(text, jsonb, jsonb, integer) SECURITY DEFINER;\n    ALTER FUNCTION net.http_post(text, jsonb, jsonb, jsonb, integer) SECURITY DEFINER;\n    ALTER FUNCTION net.http_get(text, jsonb, jsonb, integer) SET search_path = net;\n    ALTER FUNCTION net.http_post(text, jsonb, jsonb, jsonb, integer) SET search_path = net;\n    REVOKE ALL ON FUNCTION net.http_get(text, jsonb, jsonb, integer), net.http_post(text, jsonb, jsonb, jsonb, integer) FROM PUBLIC;\n    GRANT EXECUTE ON FUNCTION net.http_get(text, jsonb, jsonb, integer), net.http_post(text, jsonb, jsonb, jsonb, integer)\n      TO supabase_functions_admin, anon, authenticated, service_role;\n  END IF;\nEND $function$;\nREVOKE ALL ON FUNCTION extensions.configure_pg_net_access() FROM PUBLIC;\nSELECT extensions.configure_pg_net_access();\nCREATE OR REPLACE FUNCTION extensions.grant_pg_net_access()\nRETURNS event_trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $function$\nBEGIN\n  IF EXISTS (SELECT FROM pg_event_trigger_ddl_commands() AS command\n    JOIN pg_extension AS extension ON extension.oid = command.objid\n    WHERE extension.extname = 'pg_net') THEN\n    PERFORM extensions.configure_pg_net_access();\n  END IF;\nEND $function$;\nREVOKE ALL ON FUNCTION extensions.grant_pg_net_access() FROM PUBLIC;\nDO $bootstrap$ BEGIN\n  IF NOT EXISTS (SELECT FROM pg_event_trigger WHERE evtname = 'issue_pg_net_access') THEN\n    CREATE EVENT TRIGGER issue_pg_net_access ON ddl_command_end WHEN TAG IN ('CREATE EXTENSION')\n      EXECUTE FUNCTION extensions.grant_pg_net_access();\n  END IF;\nEND $bootstrap$;\nINSERT INTO supabase_functions.migrations(version) VALUES ('initial'), ('20210809183423_update_grants') ON CONFLICT DO NOTHING;\n"
+    }
+  ],
+  "BootstrapDigest": "9e16b56444a73ccf5b6e821822d23f2e70450f597f001cac350cec537e667b6e",
+  "RestartTokens": {
+    "auth": "67e97079d826b3449c9a7ca36bc9c618b79545150353d92b7a1a9cba1dd34027",
+    "gateway": "616455745e54a9ddddcab9c0afb7e1ab8f6a476dc58f50980fd044b92cec8f59",
+    "rest": "02e4b5e5911ac998ece819ec5d231f1da4af6bc8e417c0ab238ce1189874f3ba"
+  },
+  "CoreSpecDigest": "457aa75c4d5d2b617cba6cae16ff00af7622d937594fd021cc00c979c380bcd9"
+}

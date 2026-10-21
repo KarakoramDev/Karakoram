@@ -19,8 +19,9 @@ const (
 
 // Topologies.
 const (
-	TopologySingle = "single"
-	TopologyHA     = "ha"
+	TopologySingle      = "single"
+	TopologyHA          = "ha"
+	TopologyDistributed = "distributed"
 )
 
 // Flavours select engine-specific additions on data members.
@@ -71,13 +72,22 @@ type Peer struct {
 	Etcd string `json:"etcd,omitempty"`
 }
 
-// Etcd configures the co-located etcd member (ha only).
+// Etcd configures a local DCS member or a client-only Patroni member.
 type Etcd struct {
 	// InitialCluster is the name=https://host:2380 list for first start.
 	InitialCluster string `json:"initialCluster"`
 	// State is "new" for bootstrap members or "existing" for members added at runtime.
 	State string `json:"state"`
 	Token string `json:"token"`
+	// Endpoints are host:2379 addresses; a nonempty list selects client-only
+	// mode, so this member runs no local etcd and ignores bootstrap fields.
+	Endpoints []string `json:"endpoints,omitempty"`
+}
+
+// Citus identifies a Patroni-managed distributed PostgreSQL group.
+type Citus struct {
+	Group    int    `json:"group"`
+	Database string `json:"database"`
 }
 
 // Postgres holds server settings rendered by the agent.
@@ -156,6 +166,8 @@ type Restore struct {
 	Set string `json:"set,omitempty"`
 	// TargetTime is an RFC 3339 PITR target; empty restores to the end of the set/WAL.
 	TargetTime string `json:"targetTime,omitempty"`
+	// TargetName is a coordinated restore point, mutually exclusive with TargetTime.
+	TargetName string `json:"targetName,omitempty"`
 }
 
 // ProxyUser is a login role routed by ProxySQL.
@@ -189,6 +201,7 @@ type Spec struct {
 	Role       string           `json:"role"`
 	Topology   string           `json:"topology"`
 	Flavour    string           `json:"flavour,omitempty"`
+	Profiles   []string         `json:"profiles,omitempty"`
 	// Scope is the Patroni scope / etcd key namespace (cluster identity).
 	Scope string `json:"scope"`
 	// Major is the PostgreSQL major version; BinDir its binaries.
@@ -205,6 +218,7 @@ type Spec struct {
 	Retiring bool `json:"retiring,omitempty"`
 
 	Etcd      *Etcd      `json:"etcd,omitempty"`
+	Citus     *Citus     `json:"citus,omitempty"`
 	Postgres  *Postgres  `json:"postgres,omitempty"`
 	Backup    *Backup    `json:"backup,omitempty"`
 	Bootstrap *Bootstrap `json:"bootstrap,omitempty"`
@@ -225,29 +239,41 @@ type Spec struct {
 
 // Action names under /v1/postgres/<action>.
 const (
-	ActionStatus       = "status"
-	ActionBackup       = "backup"
-	ActionBackupInfo   = "backup-info"
-	ActionExpire       = "expire"
-	ActionStanzaCreate = "stanza-create"
-	ActionRestore      = "restore"
-	ActionDCSReset     = "dcs-reset"
-	ActionSwitchover   = "switchover"
-	ActionReinit       = "reinit"
-	ActionRestart      = "restart"
-	ActionRetireStop   = "retire-stop"
-	ActionRetireFence  = "retire-fence"
-	ActionEtcdMember   = "etcd-member"
-	ActionRoles        = "roles"
-	ActionDatabases    = "databases"
-	ActionGrants       = "grants"
-	ActionSQLBootstrap = "sql-bootstrap"
-	ActionUpgradeCheck = "upgrade-check"
-	ActionUpgradeRun   = "upgrade-run"
+	ActionStatus               = "status"
+	ActionBackup               = "backup"
+	ActionBackupInfo           = "backup-info"
+	ActionExpire               = "expire"
+	ActionStanzaCreate         = "stanza-create"
+	ActionRestore              = "restore"
+	ActionDCSReset             = "dcs-reset"
+	ActionSwitchover           = "switchover"
+	ActionReinit               = "reinit"
+	ActionRestart              = "restart"
+	ActionRetireStop           = "retire-stop"
+	ActionRetireFence          = "retire-fence"
+	ActionEtcdMember           = "etcd-member"
+	ActionRoles                = "roles"
+	ActionDatabases            = "databases"
+	ActionGrants               = "grants"
+	ActionSQLBootstrap         = "sql-bootstrap"
+	ActionProfileBootstrap     = "profile-bootstrap"
+	ActionUpgradeCheck         = "upgrade-check"
+	ActionUpgradeRun           = "upgrade-run"
+	ActionCitusStatus          = "citus-status"
+	ActionCitusRebalanceStart  = "citus-rebalance-start"
+	ActionCitusRebalanceStatus = "citus-rebalance-status"
+	ActionCitusRebalanceStop   = "citus-rebalance-stop"
+	ActionCitusDrainNode       = "citus-drain-node"
+	ActionCitusRemoveNode      = "citus-remove-node"
+	ActionCitusRestorePoint    = "citus-restore-point"
+	ActionWALSwitch            = "wal-switch"
+	ActionArchiveCovers        = "archive-covers"
 )
 
 // StatusResponse is the live member state.
 type StatusResponse struct {
+	Citus              *Citus `json:"citus,omitempty"`
+	CitusIsCoordinator bool   `json:"citusIsCoordinator,omitempty"`
 	// HealthCapabilities distinguishes unsupported observations in older
 	// member protocols from failed probes in a capable implementation.
 	HealthCapabilities *HealthCapabilities `json:"healthCapabilities,omitempty"`
@@ -362,6 +388,8 @@ type BackupRequest struct {
 	Receipt    string      `json:"receipt"`
 	Type       string      `json:"type"` // full, diff, incr
 	Repository *Repository `json:"repository,omitempty"`
+	// ObserveOnly polls an existing receipt without starting an absent backup.
+	ObserveOnly bool `json:"observeOnly,omitempty"`
 }
 
 // BackupResponse reports a backup started/finished under a receipt.
@@ -430,6 +458,12 @@ type SQLBootstrapRequest struct {
 	Passwords  map[string]string `json:"passwords"`
 }
 
+// ProfileBootstrapRequest can select only profiles authorized by member config.
+// SQL bytes are supplied exclusively by the immutable profile registry.
+type ProfileBootstrapRequest struct {
+	Profiles []string `json:"profiles"`
+}
+
 // SwitchoverRequest moves leadership (ha).
 type SwitchoverRequest struct {
 	Candidate string `json:"candidate,omitempty"`
@@ -479,4 +513,75 @@ type UpgradeRequest struct {
 type UpgradeResponse struct {
 	Checked bool `json:"checked"`
 	Done    bool `json:"done"`
+}
+
+// CitusNode is a pg_dist_node catalog row.
+type CitusNode struct {
+	NodeID  int    `json:"nodeId"`
+	GroupID int    `json:"groupId"`
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	Role    string `json:"role"`
+	Active  bool   `json:"active"`
+}
+
+type CitusStatusResponse struct {
+	Group         int                     `json:"group"`
+	IsCoordinator bool                    `json:"isCoordinator"`
+	Nodes         []CitusNode             `json:"nodes"`
+	Rebalance     *CitusRebalanceResponse `json:"rebalance,omitempty"`
+}
+
+type CitusRebalanceStartRequest struct {
+	Strategy string `json:"strategy"`
+	Receipt  string `json:"receipt"`
+}
+
+type CitusRebalanceRequest struct {
+	JobID int64 `json:"jobId"`
+}
+
+type CitusRebalanceResponse struct {
+	JobID int64  `json:"jobId"`
+	State string `json:"state"`
+}
+
+type CitusNodeRequest struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+type CitusRestorePointRequest struct {
+	Name string `json:"name"`
+}
+
+type CitusRestorePoint struct {
+	NodeID int    `json:"nodeId"`
+	Host   string `json:"host"`
+	Port   int    `json:"port"`
+	// LSN is the exact coordinator marker position, or a conservative
+	// post-marker WAL insertion upper bound on a worker primary.
+	LSN string `json:"lsn"`
+}
+
+type CitusRestorePointResponse struct {
+	Nodes []CitusRestorePoint `json:"nodes"`
+}
+
+type WALSwitchResponse struct {
+	LSN string `json:"lsn"`
+}
+
+type ArchiveCoversRequest struct {
+	LSN string `json:"lsn"`
+}
+
+type ArchiveCoversResponse struct {
+	Covers bool `json:"covers"`
+}
+
+// DCSResetRequest defaults to a single Patroni group. Formation must be
+// explicitly authorized to erase the complete distributed DCS namespace.
+type DCSResetRequest struct {
+	Formation bool `json:"formation,omitempty"`
 }

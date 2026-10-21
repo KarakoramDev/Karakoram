@@ -498,6 +498,12 @@ reconnect to another healthy proxy rather than pinning one allocation address.
 
 Use catalog paths from `karactl providers get postgres -o json`. Minor changes redeploy exact packages through replicas, switch over and redeploy the former primary; single topology interrupts service.
 
+At minor- and major-upgrade completion, configured profile extensions are
+updated on the writable primary in each connectable non-template database.
+Only installed names are altered; absent extensions are not created. Extension
+update failure keeps completion pending and surfaces an error for retry.
+Repeated `ALTER EXTENSION ... UPDATE` calls are idempotent.
+
 PostgreSQL-version-only changes, minor or major, do not redeploy ProxySQL.
 Its pinned package and advertised protocol version are independent of the
 PostgreSQL package release; the proxy does not emulate the backend's version.

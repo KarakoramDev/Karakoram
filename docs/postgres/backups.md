@@ -32,9 +32,35 @@ karactl -n NS backups list appdb
 
 `full` is independent; `diff` needs an existing full; `incr` needs a consistent predecessor chain. Backups run on the current primary with operation-bound durable receipts. Acceptance is not completion: follow the operation and resulting backup status. Once a usable base exists, replicas may bootstrap from pgBackRest with basebackup fallback.
 
+Distributed Citus backups coordinate a base backup from every replication group
+before creating and archiving the common restore point. A primary/timeline change
+invalidates that attempt. Failure cleanup retains the formation membership fence
+and observes receipts on the original members without starting absent backups.
+Once every native receipt is terminal, it records the failed aggregate and
+releases the fence; a subsequent backup captures the new primaries/timelines.
+An unreachable original agent keeps the fence until receipt observation is
+possible; do not manually clear it while a native backup may still be writing.
+
+Each Citus group has a persistent repository incarnation. Initial group paths end
+in `/g<group>`; retiring and recreating a worker advances its path to
+`/g<group>-i<incarnation>` before new database initialization. Coordinator and
+unaffected worker paths do not change. Retired repositories and recorded backup
+provenance remain intact for recovery. HA and single-node repository paths are
+unchanged.
+
 ## Retention and deletion
 
 Karakoram schedules own count retention; pgBackRest automatic expiration is disabled. Retention defers expiration of the newest full until a newer successful full exists in that repository. It also preserves ancestors needed by retained backups, including newer backups from other schedules and manual backups. A skipped set remains eligible for a later retention pass, so counts may temporarily exceed the configured limit. Live `delete-backup` uses `pgbackrest expire --set=<label>`; explicit deletion can remove dependent differentials/incrementals and their records, regardless of schedule. The newest full cannot be explicitly deleted until a newer full exists. Failed or rejected expiration fails its operation and releases the serialized queue rather than blocking future backups. Expiration prunes WAL no longer needed by the oldest retained full chain.
+
+For coordinated Citus backups, scheduled retention evaluates every coordinator
+and worker dependency chain, not just the coordinator label. A retained manual
+or scheduled differential/incremental protects its ancestors in each group,
+including when a partially failed full left different full bases across groups.
+An aggregate is eligible only when every group can be expired safely; ancestors
+and descendants may expire together when all affected aggregates are candidates.
+Labels are scoped to the recorded storage, source, repository generation and
+group incarnation, so an identical label in another repository cannot affect
+eligibility.
 
 After source deletion, retained cleanup uses recorded repository/dependency metadata and checksummed native inventory, and removes the isolated repository when its last set is deleted. Cleanup validates the recorded repository's namespace and cluster incarnation, independently of later changes to the registered storage prefix. Interrupted expiration plans are rebased onto current inventory before resuming, preserving deletions completed by other expiration operations. Keep registered storage and sealed backup credentials available until cleanup/recovery is finished. Externally deleting or changing repository objects can invalidate inventory and recovery.
 
@@ -43,6 +69,11 @@ Retained expiration tracks surviving backups separately for each database-histor
 Whole-cluster deletion (including Supabase's PostgreSQL core) retires runtime services and non-retained volumes before touching backup objects. The control plane then removes only the exact current/retired incarnation repositories using the registered backup-store binding; no working PostgreSQL/pgBackRest member credentials are required. `--keep-backups` skips artifact and inventory removal. Active restore/clone dependencies still refuse destructive deletion with **409**, including the stricter PITR live-source fence.
 
 Object cleanup retries transient binding/storage/authentication failures within a durable **two-minute total window**, checkpointing each confirmed repository removal. The window survives controller restarts. At exhaustion, **`BackupArtifactsRetained`** identifies the storage, bucket/repositories when known, and cluster incarnation; affected inventory remains while cluster-record deletion completes. Terminal cluster deletion therefore does not alone prove empty remote storage. Restore the original storage binding, verify the recorded incarnation ownership, remove only its exact repository prefixes with object-store tooling, then delete retained backup records. Never infer an unknown prefix from a reused cluster name. Resume from a retained-volume suspension clears cleanup deadlines/outcomes so a later deletion receives a new bounded attempt.
+Coordinated sets may span both active and retired worker incarnations. Expiration
+uses native pgBackRest operations for still-active group repositories and offline
+retained cleanup only for retired group repositories. Dependency matching uses
+the full repository identity, so labels from recreated workers cannot expire
+the retired incarnation's backups (or vice versa).
 
 ## PITR
 
@@ -52,7 +83,24 @@ Restore and clone `pitrTime` inputs use RFC 3339, including `Z` or numeric offse
 
 GET `/api/v1/clusters/{cluster}/pitr` reports a conservative interval from the oldest successful consistent base's stop time to a committed primary WAL watermark covered by an archived segment. Archive upload completion time is never treated as WAL-content coverage. Status sampling emits a small committed WAL heartbeat at most every ten seconds, so idle clusters continue advancing with `archive_timeout` (one minute by default). After a member restart or failover, the window remains unavailable until a sample from the current database system and primary timeline is archived. No interval is advertised when disabled or archiving is failing; external removal of repository objects can still invalidate recovery. Without configured storage, the archive command is a no-op and provides no recovery history.
 
+Citus schedules quarter-hour named restore points only when a successful base
+aggregate covers exactly the current formation groups and each group's current
+repository incarnation. After worker scale-up, scale-down or recreation, point
+scheduling waits for a matching coordinated backup instead of queuing an
+unrecoverable target from an obsolete group layout.
+
 ## Restore and clone
+
+Physical recovery requires matching providers and PostgreSQL majors, plus a target
+`engineOptions.profiles` set containing every profile recorded in the backup's
+`postgres.profiles`. Ordering and duplicates do not matter; additional target
+profiles are allowed. The snapshot is retained independently of source deletion
+or later source profile additions. Timestamp recovery uses the selected consistent
+base's requirements; coordinated scheduled PITR points retain requirements for
+their bases and point-time selection. Missing legacy metadata means no required
+profiles, not an instruction to inspect today's source selection. These checks
+precede clone provisioning and destructive restore work. Supabase retains its
+existing provider-specific runtime contract.
 
 **In-place restore is destructive and offline.** Quiesce applications and retain a recovery copy. PITR requests are checked against the source's live conservative WAL watermark before any member is stopped or lineage state changes. Single topology stops PostgreSQL, performs a delta restore and starts/promotes. HA fences every data member, resets only its Patroni DCS scope, restores a seed by custom bootstrap and rebuilds replicas before completing. System identities remain target-owned: recovered database roles are rekeyed to the target's existing passwords, never published as source credentials. Cross-source recovery keeps archiving disabled until target repository configuration and archive-override removal reach every member. When PITR is enabled, a new full is queued; it is not protection until successful.
 

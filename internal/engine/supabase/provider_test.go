@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -114,6 +115,7 @@ type testBackend struct {
 	stopped      map[string]bool
 	gatewayHosts map[string]int
 	nativeStatus map[string]pgspec.StatusResponse
+	prepares     map[string][]string
 }
 
 func (*testBackend) Name() string { return "test" }
@@ -155,6 +157,10 @@ func (b *testBackend) Deploy(_ context.Context, name string, d infra.Deployment)
 		return infra.Op{}, err
 	}
 	_, err := io.Copy(io.Discard, d.Artifact.Reader)
+	if b.prepares == nil {
+		b.prepares = map[string][]string{}
+	}
+	b.prepares[name] = append([]string(nil), d.Runtime.Prepare...)
 	b.deployed[name] = true
 	return infra.Op{}, err
 }
@@ -322,11 +328,11 @@ func TestPgsodiumDoesNotPreloadWithoutRootKeyManagement(t *testing.T) {
 		},
 	}
 	selected := []string{"pgsodium", "pg_net", "unflagged", "not-qualified", "pg_net"}
-	qualified := selectedExtensionPreloads(selected, bundle)
+	qualified := pgprofile.SelectedExtensionPreloads(selected, bundle)
 	if len(qualified) != 1 || qualified[0] != "pg_net" {
 		t.Fatal("preloads must follow qualified flags, excluding crypto-only pgsodium and duplicates")
 	}
-	if got := selectedExtensionPreloads(selected, nativeartifacts.Artifact{}); len(got) != 0 {
+	if got := pgprofile.SelectedExtensionPreloads(selected, nativeartifacts.Artifact{}); len(got) != 0 {
 		t.Fatal("absent bundle metadata must not enable built extension preloads")
 	}
 }

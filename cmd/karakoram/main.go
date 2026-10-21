@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	datamcpagent "github.com/KarakoramDev/Karakoram/internal/agent/datamcp"
 	elasticagent "github.com/KarakoramDev/Karakoram/internal/agent/elastic"
+	keycloakagent "github.com/KarakoramDev/Karakoram/internal/agent/keycloak"
 	postgresagent "github.com/KarakoramDev/Karakoram/internal/agent/postgres"
 	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
 	supabaseagent "github.com/KarakoramDev/Karakoram/internal/agent/supabase"
@@ -85,13 +86,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		if len(args) > 1 {
 			opts, rest := readinessOptions(args[2:])
-			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New())
+			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{})
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New())
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{})
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage

@@ -126,6 +126,8 @@ karactl --context production mcp config --cluster production/appdb --client clau
 For [OAuth-connected applications](mcp.md#connect-with-oauth), use `karactl oauth-grants list -o json` to inspect visible grants and `karactl oauth-grants delete GRANT_ID` to revoke a connection. Non-administrators see their own grants; administrators with the required API-token permissions may inspect and revoke all accounts' grants. Deletion uses the normal destructive confirmation; pass `--yes` for noninteractive automation. These commands manage account-level grants, not namespace resources.
 
 
+Use `karactl postgres bindings list CLUSTER` and `karactl postgres bindings rotate CLUSTER ID` for [managed consumer bindings](postgres/bindings.md); neither returns credentials.
+
 ## Global flags
 
 | Flag | Use |
@@ -152,7 +154,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `clusters delete NAME` | `--keep-volumes`, `--keep-backups` (both false unless supplied), `--yes`, `--wait`, `--timeout`; see [delete or suspend](clusters.md#delete-or-suspend) |
 | `backups create CLUSTER [NAME]` | `-f`, `--storage` (cluster default), `--type` (CLI default logical; choose the engine-supported type in [backup guidance](backups.md)) |
 | `backups list CLUSTER` | `--limit`, `--cursor` |
-| `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--yes` |
+| `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--acknowledge-bound-consumers`, `--yes` |
 | `namespaces create` | `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only); no `-f` |
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
 | `tokens create` | `-f` OR `--name`, `--expires` (RFC3339 or duration), `--read-only`, repeatable `--scope-namespace`, `--scope-cluster ns/name`, `--permission resource:action`, `--allow-credential-reveal` |
@@ -222,6 +224,7 @@ to disabled, including on otherwise read-only tokens. List/get/create table outp
 summarizes restrictions; JSON/YAML retain the full fields. `karactl login` creates
 an unrestricted token. See [restricted API tokens](access-control.md#restricted-api-tokens)
 for scope, permission, issuance and OIDC rules.
+Distributed PostgreSQL adds `karactl postgres rebalance CLUSTER [--strategy NAME] [--wait]` (PostgreSQL only, not Supabase). `--wait` follows the returned operation; timeout does not cancel it. Worker groups scale through `clusters patch` using `spec.engineOptions.citus.workerGroups`. See [distributed PostgreSQL](postgres/distributed.md) for artifact availability, coordinated recovery and limits.
 
 ## Safety and exit statuses
 
