@@ -14,7 +14,7 @@ import (
 )
 
 func TestClusteredRuntimeStartupReadiness(t *testing.T) {
-	for _, name := range []string{"postgres", "supabase", "psmdb", "rabbitmq", "elasticsearch", "openbao", "mysql"} {
+	for _, name := range []string{"postgres", "supabase", "psmdb", "rabbitmq", "elasticsearch", "openbao", "mysql", "neo4j"} {
 		t.Run(name, func(t *testing.T) {
 			b := fake.New(fake.Options{})
 			spec := (AgentRuntime{Engine: name, Member: "member", Volume: "data"}).Spec(b.Layout())

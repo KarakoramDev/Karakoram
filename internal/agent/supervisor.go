@@ -27,10 +27,11 @@ import (
 const supervisorLogDrainGrace = 250 * time.Millisecond
 
 type processSpec struct {
-	binary     string
-	args, env  []string
-	dir        string
-	stopSignal syscall.Signal
+	binary      string
+	args, env   []string
+	dir         string
+	stopSignal  syscall.Signal
+	stopTimeout time.Duration
 	// cleanEnv starts the child from a minimal environment instead of the
 	// agent's, so member credentials such as the agent token are not inherited.
 	cleanEnv           bool
@@ -441,12 +442,9 @@ func (s *supervisor) shutdown(ctx context.Context) error {
 		name := names[i]
 		s.mu.Lock()
 		p := s.children[name]
-		cmd, done := p.cmd, p.done
+		cmd, done, budget := p.cmd, p.done, p.spec.stopTimeout
 		s.mu.Unlock()
-		timeout := 10 * time.Second
-		if deadline, ok := ctx.Deadline(); ok {
-			timeout = min(timeout, max(time.Until(deadline), 0)/time.Duration(i+1))
-		}
+		timeout := shutdownChildTimeout(ctx, budget, i+1)
 		childCtx, cancel := context.WithTimeout(ctx, timeout)
 		err := s.stopChild(childCtx, p)
 		cancel()
@@ -478,6 +476,17 @@ func (s *supervisor) shutdown(ctx context.Context) error {
 	}
 	s.outputStop.Do(func() { close(s.outputDone) })
 	return errors.Join(errs...)
+}
+
+func shutdownChildTimeout(ctx context.Context, budget time.Duration, remaining int) time.Duration {
+	timeout := 10 * time.Second
+	if budget > timeout {
+		timeout = min(budget, 45*time.Second)
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = min(timeout, max(time.Until(deadline), 0)/time.Duration(remaining))
+	}
+	return timeout
 }
 
 const supervisorLogLineBytes = 16 << 10

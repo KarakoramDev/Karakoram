@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic"
 	"github.com/KarakoramDev/Karakoram/internal/engine/keycloak"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql"
+	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j"
 	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
@@ -46,6 +47,7 @@ func engineProviders(o engineOptions) []engine.Provider {
 		pxc.New(mysql.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: o.Bindings}),
+		neo4j.New(neo4j.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 	}
 	if o.Bindings != nil {
 		providers = append(providers, keycloak.New(keycloak.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Bindings: o.Bindings}))

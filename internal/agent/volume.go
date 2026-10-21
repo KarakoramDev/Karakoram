@@ -276,6 +276,22 @@ func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 			}
 		}
 		return nonemptyVolumeFile(root, "mysql/mysql.ibd", 16384)
+	case "neo4j":
+		dir := "karakoram/neo4j/data/databases/system"
+		metadata, err := nativeMetadata(root, filepath.Join(dir, "neostore"), 65536)
+		if err != nil {
+			return false, err
+		}
+		// The pinned Community record store writes its format names into
+		// neostore; a lock file or a directory alone is not native evidence.
+		if len(metadata) < 8192 || !bytes.Contains(metadata, []byte("record")) || !bytes.Contains(metadata, []byte("aligned")) {
+			return false, nil
+		}
+		nodes, err := nonemptyVolumeFile(root, filepath.Join(dir, "neostore.nodestore.db"), 8192)
+		if err != nil || !nodes {
+			return false, err
+		}
+		return nonemptyVolumeFile(root, filepath.Join(dir, "database_lock"), 0)
 	case "elasticsearch":
 		for _, dir := range []string{"karakoram/data/_state", "karakoram/data/nodes/0/_state"} {
 			f, err := root.Open(dir)

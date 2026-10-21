@@ -52,7 +52,7 @@ func countRecoveryCalls(calls []string, method string) int {
 }
 
 func TestRuntimeRecoveryStopDeleteAndVolumeLoss(t *testing.T) {
-	for _, family := range []string{"mongodb", "rabbitmq", "elasticsearch", "postgresql", "supabase", "openbao"} {
+	for _, family := range []string{"mongodb", "rabbitmq", "elasticsearch", "postgresql", "supabase", "openbao", "neo4j"} {
 		t.Run(family, func(t *testing.T) {
 			stateful := family != "supabase"
 			t.Run("stopped", func(t *testing.T) {
@@ -363,7 +363,7 @@ func TestRuntimeRecoveryBoundsReadOnlyStatusProbe(t *testing.T) {
 }
 
 func TestRuntimeRecoveryUnknownNativeDataNeverAuthorizesReplacement(t *testing.T) {
-	for _, scenario := range []string{"mongodb-relations", "postgres-partial", "postgres-old-retired", "elasticsearch-indices", "rabbitmq-messages"} {
+	for _, scenario := range []string{"mongodb-relations", "postgres-partial", "postgres-old-retired", "elasticsearch-indices", "rabbitmq-messages", "neo4j-partial-store"} {
 		t.Run(scenario, func(t *testing.T) {
 			rc, b, m := recoveryFixture(t, true)
 			m.Recovery.Initialized = true

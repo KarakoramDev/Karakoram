@@ -143,8 +143,19 @@ func NewClient(s domain.BackupStorage, c domain.StorageCredentials) (*minio.Clie
 	return newClient(s, c, nil)
 }
 
+// NewClientWithAllowlist constructs a client using an explicit private-endpoint
+// allowlist instead of the control plane's environment. Loopback and metadata
+// destinations remain forbidden.
+func NewClientWithAllowlist(s domain.BackupStorage, c domain.StorageCredentials, allowlist string) (*minio.Client, func(), error) {
+	return newClientWithAllowlist(s, c, nil, allowlist)
+}
+
 // newClient shares the verifier's outbound policy with retained-snapshot cleanup.
 func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTransport http.RoundTripper) (*minio.Client, func(), error) {
+	return newClientWithAllowlist(s, c, probeTransport, os.Getenv("KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST"))
+}
+
+func newClientWithAllowlist(s domain.BackupStorage, c domain.StorageCredentials, probeTransport http.RoundTripper, allowlist string) (*minio.Client, func(), error) {
 	if s.Type != "s3" {
 		return nil, nil, fmt.Errorf("unsupported backup storage type %q", s.Type)
 	}
@@ -160,7 +171,7 @@ func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTranspo
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil // Proxy dialing would bypass endpoint address checks.
-	transport.DialContext = endpointDialer(u, os.Getenv("KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST"))
+	transport.DialContext = endpointDialer(u, allowlist)
 	transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: !s.VerifyTLS} // Explicit user-selected S3 verification policy.
 	if probeTransport == nil {
 		probeTransport = noRedirectTransport{transport}
