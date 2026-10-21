@@ -96,7 +96,7 @@ func TestIdempotentTokenCreationReplaysEncryptedSecret(t *testing.T) {
 	assertIdempotencyConflict(t, conflict, domain.ReasonConflict)
 	// Separate bearer identities do not share cached credentials, even when
 	// they belong to the same account and use the same request key.
-	otherToken, _, err := s.Auth.CreateToken(t.Context(), "admin", "other", nil)
+	otherToken, _, err := s.Auth.CreateToken(t.Context(), "admin", "other", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

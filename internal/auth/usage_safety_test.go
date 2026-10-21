@@ -23,7 +23,7 @@ func TestBusyUsageMaintenanceDoesNotBypassTokenLifecycle(t *testing.T) {
 	defer func() { <-s.tokenUsage }()
 	for _, mode := range []string{"expiry", "revocation", "disabled-owner"} {
 		t.Run(mode, func(t *testing.T) {
-			value, token, err := s.CreateToken(t.Context(), "usage-owner", mode, nil)
+			value, token, err := s.CreateToken(t.Context(), "usage-owner", mode, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

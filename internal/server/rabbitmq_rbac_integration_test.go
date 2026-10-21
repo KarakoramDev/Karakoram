@@ -103,11 +103,11 @@ func TestRabbitMQUserTagAuthorizationIntegration(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, basePolicy); err != nil {
 		t.Fatal(err)
 	}
-	delegated, _, err := s.Auth.CreateToken(ctx, "user-manager", "integration", nil)
+	delegated, _, err := s.Auth.CreateToken(ctx, "user-manager", "integration", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	highOnly, _, err := s.Auth.CreateToken(ctx, "cluster-manager", "integration", nil)
+	highOnly, _, err := s.Auth.CreateToken(ctx, "cluster-manager", "integration", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

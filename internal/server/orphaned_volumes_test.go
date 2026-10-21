@@ -42,11 +42,11 @@ func TestOrphanedVolumesFilteredByClusterRead(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, role:orphan-reader, clusters, read, cluster-a, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	reader, _, err := s.Auth.CreateToken(ctx, "orphan-reader", "test", nil)
+	reader, _, err := s.Auth.CreateToken(ctx, "orphan-reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	noAccess, _, err := s.Auth.CreateToken(ctx, "orphan-no-access", "test", nil)
+	noAccess, _, err := s.Auth.CreateToken(ctx, "orphan-no-access", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

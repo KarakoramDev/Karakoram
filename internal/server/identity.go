@@ -26,7 +26,47 @@ func accountAPI(a domain.Account) api.Account {
 	return api.Account{Name: a.Name, Enabled: !a.Disabled, MustChangePassword: a.MustChangePassword, CreatedAt: a.CreatedAt, UpdatedAt: updated}
 }
 func tokenAPI(t domain.ApiToken) api.APIToken {
-	return api.APIToken{Id: t.ID, Name: t.Name, Owner: t.Owner, CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt, LastUsedAt: t.LastUsedAt, Prefix: "kk_"}
+	return api.APIToken{Id: t.ID, Name: t.Name, Owner: t.Owner, CreatedAt: t.CreatedAt, ExpiresAt: t.ExpiresAt, LastUsedAt: t.LastUsedAt, Prefix: "kk_", Restrictions: restrictionsAPI(t.Restrictions)}
+}
+
+func restrictionsAPI(r *domain.TokenRestrictions) *api.APITokenRestrictions {
+	if r == nil {
+		return nil
+	}
+	out := &api.APITokenRestrictions{ReadOnly: &r.ReadOnly, AllowCredentialReveal: &r.AllowCredentialReveal}
+	if len(r.Namespaces) > 0 {
+		out.Namespaces = &r.Namespaces
+	}
+	if len(r.Clusters) > 0 {
+		out.Clusters = &r.Clusters
+	}
+	if len(r.Permissions) > 0 {
+		out.Permissions = &r.Permissions
+	}
+	return out
+}
+
+func restrictionsDomain(r *api.APITokenRestrictions) *domain.TokenRestrictions {
+	if r == nil {
+		return nil
+	}
+	out := &domain.TokenRestrictions{}
+	if r.ReadOnly != nil {
+		out.ReadOnly = *r.ReadOnly
+	}
+	if r.AllowCredentialReveal != nil {
+		out.AllowCredentialReveal = *r.AllowCredentialReveal
+	}
+	if r.Namespaces != nil {
+		out.Namespaces = *r.Namespaces
+	}
+	if r.Clusters != nil {
+		out.Clusters = *r.Clusters
+	}
+	if r.Permissions != nil {
+		out.Permissions = *r.Permissions
+	}
+	return out
 }
 func currentUser(p *auth.Principal) api.CurrentUser {
 	groups := []string{}
@@ -163,7 +203,7 @@ func (s *Server) identity(ctx context.Context, name string, in input) response {
 		return listResponse(s, ctx, out, err)
 	case "CreateAPIToken":
 		b := in.Body.(*api.CreateAPITokenRequest)
-		secret, t, err := s.Auth.CreateToken(ctx, p.Account, b.Name, b.ExpiresAt)
+		secret, t, err := s.Auth.CreateToken(ctx, p.Account, b.Name, b.ExpiresAt, restrictionsDomain(b.Restrictions))
 		if err != nil {
 			return s.failure(err)
 		}

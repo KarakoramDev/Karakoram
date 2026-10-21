@@ -7194,6 +7194,30 @@ components:
       required:
         - enabled
         - mustChangePassword
+    APITokenRestrictions:
+      type: object
+      additionalProperties: false
+      description: Immutable deny overlay intersected with the owner's current permissions. Omission means unrestricted.
+      properties:
+        readOnly:
+          type: boolean
+        namespaces:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
+        clusters:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]/[a-z][a-z0-9]{1,11}$'
+        permissions:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-z][a-z-]*:([a-z][a-z-]*|\*)$'
+        allowCredentialReveal:
+          type: boolean
     APIToken:
       type: object
       additionalProperties: false
@@ -7221,6 +7245,8 @@ components:
         lastUsedAt:
           type: string
           format: date-time
+        restrictions:
+          $ref: '#/components/schemas/APITokenRestrictions'
       description: Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
       required:
         - id
@@ -7238,6 +7264,8 @@ components:
           type: string
           format: date-time
           description: Optional RFC 3339 timestamp, strictly in the future.
+        restrictions:
+          $ref: '#/components/schemas/APITokenRestrictions'
       required:
         - name
     UpdateAPITokenRequest:

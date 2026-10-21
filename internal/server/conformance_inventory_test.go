@@ -103,7 +103,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, apiToken, err := s.Auth.CreateToken(ctx, "admin", "inventory", nil)
+	_, apiToken, err := s.Auth.CreateToken(ctx, "admin", "inventory", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

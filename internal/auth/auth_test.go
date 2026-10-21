@@ -192,7 +192,7 @@ func TestRefreshRotationReuseAndLogout(t *testing.T) {
 func TestTokensPasswordInvalidationAndAccounts(t *testing.T) {
 	s := setup(t)
 	ctx := context.Background()
-	secret, tok, err := s.CreateToken(ctx, "admin", "cli", nil)
+	secret, tok, err := s.CreateToken(ctx, "admin", "cli", nil, nil)
 	if err != nil || !strings.HasPrefix(secret, "kk_") || tok.Hash != "" {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestTokensPasswordInvalidationAndAccounts(t *testing.T) {
 	if _, err = s.Login(ctx, httptest.NewRecorder(), "viewer", password); err == nil {
 		t.Fatal("disabled login")
 	}
-	if _, _, err = s.CreateToken(ctx, "viewer", "disabled", nil); err == nil {
+	if _, _, err = s.CreateToken(ctx, "viewer", "disabled", nil, nil); err == nil {
 		t.Fatal("disabled token")
 	}
 	if err = s.ResetPassword(ctx, "viewer", "reset-long-password"); err != nil {
@@ -261,7 +261,7 @@ func TestTokenExpiryAndDisabledOwner(t *testing.T) {
 	s := setup(t)
 	ctx := context.Background()
 	expiry := time.Now().Add(time.Hour)
-	secret, tok, err := s.CreateToken(ctx, "admin", "expiring", &expiry)
+	secret, tok, err := s.CreateToken(ctx, "admin", "expiring", &expiry, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestRefreshCSRFExpiryAndMandatoryChange(t *testing.T) {
 
 func TestDeletedAccountCredentialsCannotBeAdopted(t *testing.T) {
 	s := setup(t)
-	secret, _, err := s.CreateToken(t.Context(), "admin", "cli", nil)
+	secret, _, err := s.CreateToken(t.Context(), "admin", "cli", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

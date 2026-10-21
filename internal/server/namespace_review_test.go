@@ -85,7 +85,7 @@ func TestInvalidPathIdentitiesCannotReadRetainedBackups(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:limited, *, *, default/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRetainedBackupAuthorizesPersistedIdentity(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:limited, backups, *, default/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestOperationByIDAuthorizesStoredNamespace(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:limited, operations, read, default/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestNamespacesPaginateAfterAuthorization(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, user:limited, namespaces, read, alpha, allow\np, user:limited, namespaces, read, omega, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "limited", "test", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

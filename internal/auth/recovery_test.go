@@ -56,7 +56,7 @@ func TestAdminRecoveryAppliesOnceAcrossRestarts(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookies, _ := login(t, s)
-	secret, token, err := s.CreateToken(ctx, "admin", "after-recovery", nil)
+	secret, token, err := s.CreateToken(ctx, "admin", "after-recovery", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestAdminRecoveryReenablesAndRevokesCredentials(t *testing.T) {
 	if _, err := s.Refresh(ctx, rotated, request("POST", cookies, info.CSRFToken)); err != nil {
 		t.Fatal(err)
 	}
-	secret, token, err := s.CreateToken(ctx, "admin", "old", nil)
+	secret, token, err := s.CreateToken(ctx, "admin", "old", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestAdminRecoveryReenablesAndRevokesCredentials(t *testing.T) {
 	if _, err = s.CreateAccount(ctx, domain.Account{Name: "other"}, password); err != nil {
 		t.Fatal(err)
 	}
-	otherSecret, _, err := s.CreateToken(ctx, "other", "untouched", nil)
+	otherSecret, _, err := s.CreateToken(ctx, "other", "untouched", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestAdminRecoveryInvalidInputDoesNotChangeState(t *testing.T) {
 	s := setup(t)
 	ctx := t.Context()
 	login(t, s)
-	if _, _, err := s.CreateToken(ctx, "admin", "unchanged", nil); err != nil {
+	if _, _, err := s.CreateToken(ctx, "admin", "unchanged", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.o.Store.CreateAccount(ctx, &domain.Account{Name: "oidc", OIDC: true}); err != nil {

@@ -189,7 +189,7 @@ func TestAccountAuthorizationDenialExplainsRequiredGrant(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "reader"}, "reader-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "reader", "automation", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "reader", "automation", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

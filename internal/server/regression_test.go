@@ -289,7 +289,7 @@ func TestSSEUsesCurrentAccountSubjects(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, role:changed, events, read, dev, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "reader", "test", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

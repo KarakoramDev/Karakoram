@@ -62,7 +62,7 @@ func TestPasswordResetAcceptsCurrentPasswordAndInvalidatesAuthority(t *testing.T
 		t.Fatal(err)
 	}
 	cookies, _ := login(t, s)
-	secret, _, err := s.CreateToken(ctx, "admin", "before-reset", nil)
+	secret, _, err := s.CreateToken(ctx, "admin", "before-reset", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,14 +130,14 @@ func TestTokenValidationAppliesToCreationAndUpdate(t *testing.T) {
 		{"automation", &past, "expiresAt", domain.ReasonOutOfRange},
 		{"automation", &now, "expiresAt", domain.ReasonOutOfRange},
 	} {
-		_, _, err := s.CreateToken(ctx, "admin", tc.name, tc.expiry)
+		_, _, err := s.CreateToken(ctx, "admin", tc.name, tc.expiry, nil)
 		requireField(t, err, tc.field, tc.reason)
 	}
-	_, token, err := s.CreateToken(ctx, "admin", "  automation  ", &future)
+	_, token, err := s.CreateToken(ctx, "admin", "  automation  ", &future, nil)
 	if err != nil || token.Name != "automation" {
 		t.Fatal(token, err)
 	}
-	_, duplicate, err := s.CreateToken(ctx, "admin", token.Name, nil)
+	_, duplicate, err := s.CreateToken(ctx, "admin", token.Name, nil, nil)
 	if err != nil || duplicate.ID == token.ID {
 		t.Fatal("duplicate names must have distinct IDs", err)
 	}

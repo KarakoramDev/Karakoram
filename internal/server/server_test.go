@@ -84,15 +84,15 @@ func TestRBACCredentialSeparationAndFilteredCollections(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	viewer, _, err := s.Auth.CreateToken(ctx, "viewer", "test", nil)
+	viewer, _, err := s.Auth.CreateToken(ctx, "viewer", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	operator, _, err := s.Auth.CreateToken(ctx, "operator", "test", nil)
+	operator, _, err := s.Auth.CreateToken(ctx, "operator", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	limited, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	limited, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestEventPagesUseDurableAuthorizedCursors(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:limited, events, read, prod, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

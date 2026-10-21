@@ -144,7 +144,7 @@ func TestNamespaceListPerItemFiltering(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, role:limited, namespaces, read, testing, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "limited", "testing", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "limited", "testing", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestBackendDiscoveryAndNamespaceConfig(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "unprivileged"}, "long-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	unprivileged, _, err := s.Auth.CreateToken(t.Context(), "unprivileged", "testing", nil)
+	unprivileged, _, err := s.Auth.CreateToken(t.Context(), "unprivileged", "testing", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

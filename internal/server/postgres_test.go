@@ -136,11 +136,11 @@ func TestPostgresPrivilegedRoleRBAC(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	delegated, _, err := s.Auth.CreateToken(ctx, "role-manager", "roles", nil)
+	delegated, _, err := s.Auth.CreateToken(ctx, "role-manager", "roles", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	clusterManager, _, err := s.Auth.CreateToken(ctx, "cluster-manager", "clusters", nil)
+	clusterManager, _, err := s.Auth.CreateToken(ctx, "cluster-manager", "clusters", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

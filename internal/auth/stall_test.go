@@ -53,7 +53,7 @@ func TestBearerAuthenticationDoesNotWaitForUsageWriter(t *testing.T) {
 	if _, err = s.CreateAccount(t.Context(), domain.Account{Name: "reader"}, password); err != nil {
 		t.Fatal(err)
 	}
-	value, _, err := s.CreateToken(t.Context(), "reader", "test", nil)
+	value, _, err := s.CreateToken(t.Context(), "reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

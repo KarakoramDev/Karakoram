@@ -560,6 +560,9 @@ type APIToken struct {
 	Name       string     `json:"name"`
 	Owner      string     `json:"owner"`
 	Prefix     string     `json:"prefix"`
+
+	// Restrictions Immutable deny overlay intersected with the owner's current permissions. Omission means unrestricted.
+	Restrictions *APITokenRestrictions `json:"restrictions,omitempty"`
 }
 
 // APITokenList defines model for APITokenList.
@@ -572,6 +575,15 @@ type APITokenList struct {
 
 // APITokenName Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID.
 type APITokenName = string
+
+// APITokenRestrictions Immutable deny overlay intersected with the owner's current permissions. Omission means unrestricted.
+type APITokenRestrictions struct {
+	AllowCredentialReveal *bool     `json:"allowCredentialReveal,omitempty"`
+	Clusters              *[]string `json:"clusters,omitempty"`
+	Namespaces            *[]string `json:"namespaces,omitempty"`
+	Permissions           *[]string `json:"permissions,omitempty"`
+	ReadOnly              *bool     `json:"readOnly,omitempty"`
+}
 
 // Account defines model for Account.
 type Account struct {
@@ -1031,6 +1043,9 @@ type CreateAPITokenRequest struct {
 
 	// Name Required non-blank name, trimmed before storage, 1–128 characters. Duplicate names are allowed; identify tokens by their unique ID.
 	Name APITokenName `json:"name"`
+
+	// Restrictions Immutable deny overlay intersected with the owner's current permissions. Omission means unrestricted.
+	Restrictions *APITokenRestrictions `json:"restrictions,omitempty"`
 }
 
 // CreateAccountRequest defines model for CreateAccountRequest.

@@ -594,15 +594,25 @@ type Account struct {
 	OIDCSubject        string    `json:"oidcSubject,omitempty"`
 }
 
+// TokenRestrictions limits a token to a subset of its owner's authority.
+type TokenRestrictions struct {
+	ReadOnly              bool     `json:"readOnly,omitempty"`
+	Namespaces            []string `json:"namespaces,omitempty"`
+	Clusters              []string `json:"clusters,omitempty"`
+	Permissions           []string `json:"permissions,omitempty"`
+	AllowCredentialReveal bool     `json:"allowCredentialReveal,omitempty"`
+}
+
 // ApiToken stores API token ownership and lifecycle metadata.
 type ApiToken struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Hash       string     `json:"-"`
-	Owner      string     `json:"owner"`
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
-	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
-	CreatedAt  time.Time  `json:"createdAt"`
+	ID           string             `json:"id"`
+	Name         string             `json:"name"`
+	Hash         string             `json:"-"`
+	Owner        string             `json:"owner"`
+	ExpiresAt    *time.Time         `json:"expiresAt,omitempty"`
+	LastUsedAt   *time.Time         `json:"lastUsedAt,omitempty"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	Restrictions *TokenRestrictions `json:"restrictions,omitempty"`
 }
 
 // Session stores a rotating refresh-token session.

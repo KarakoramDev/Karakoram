@@ -122,7 +122,7 @@ func TestNamespaceExistenceRequiresScopedPermission(t *testing.T) {
 			if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\n"+tc.rules); err != nil {
 				t.Fatal(err)
 			}
-			token, _, err := s.Auth.CreateToken(ctx, tc.name, "test", nil)
+			token, _, err := s.Auth.CreateToken(ctx, tc.name, "test", nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -328,7 +328,7 @@ func TestObservationFilterValidationAndExplicitAuditDenial(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "viewer", Roles: []string{"role:viewer"}}, "viewer-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	viewer, _, err := s.Auth.CreateToken(t.Context(), "viewer", "test", nil)
+	viewer, _, err := s.Auth.CreateToken(t.Context(), "viewer", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

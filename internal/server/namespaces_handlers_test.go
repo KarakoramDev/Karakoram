@@ -109,7 +109,7 @@ func TestNamespaceCollectionAuthorization(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:developer, *, read, dev/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "developer", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "developer", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestCrossNamespaceRestoreAndCloneExportPermission(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "cloner", "test", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "cloner", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestNamespaceStorageIsolationAndCreateValidation(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, user:storage-reader, backup-storages, read, dev/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	reader, _, err := s.Auth.CreateToken(t.Context(), "storage-reader", "test", nil)
+	reader, _, err := s.Auth.CreateToken(t.Context(), "storage-reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestNamespaceEventStreamFiltersPerEvent(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+"\np, user:event-reader, events, read, dev/**, allow\np, user:event-reader, audit, read, dev/**, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "event-reader", "test", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "event-reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

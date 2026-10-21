@@ -131,7 +131,7 @@ func TestAuditVisibilityAndExactFilters(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: "reader", Roles: []string{"role:viewer"}}, "reader-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	reader, _, err := s.Auth.CreateToken(ctx, "reader", "test", nil)
+	reader, _, err := s.Auth.CreateToken(ctx, "reader", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestAuditStreamVisibility(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "viewer", Roles: []string{"role:viewer"}}, "viewer-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "viewer", "stream", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "viewer", "stream", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestNamespaceAuditListAndStreamIsolation(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:auditor, audit, read, dev/**, allow\np, user:auditor, audit, read, dev/private, deny\n"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(ctx, "auditor", "audit", nil)
+	token, _, err := s.Auth.CreateToken(ctx, "auditor", "audit", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

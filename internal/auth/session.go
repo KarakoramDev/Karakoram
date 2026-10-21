@@ -184,7 +184,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 			return nil, ErrUnauthenticated
 		}
 		s.touchTokenUsage(t.ID, s.now())
-		return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword}, nil
+		return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword, Restrictions: CloneRestrictions(t.Restrictions)}, nil
 	}
 	c, err := r.Cookie(AccessCookie)
 	if err != nil {

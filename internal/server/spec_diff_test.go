@@ -281,7 +281,7 @@ func TestEventDetailsListAndStreamVisibility(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			token, _, err := s.Auth.CreateToken(t.Context(), "reader", "events", nil)
+			token, _, err := s.Auth.CreateToken(t.Context(), "reader", "events", nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

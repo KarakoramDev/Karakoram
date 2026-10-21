@@ -18,11 +18,11 @@ func TestAPITokenSelfServiceOwnership(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	viewer, _, err := s.Auth.CreateToken(t.Context(), "viewer", "initial", nil)
+	viewer, _, err := s.Auth.CreateToken(t.Context(), "viewer", "initial", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, other, err := s.Auth.CreateToken(t.Context(), "operator", "other", nil)
+	_, other, err := s.Auth.CreateToken(t.Context(), "operator", "other", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

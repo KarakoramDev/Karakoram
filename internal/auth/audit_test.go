@@ -64,7 +64,7 @@ func TestAuthenticatedTokenActorsAreDistinct(t *testing.T) {
 	s := setup(t)
 	actors := make(map[string]bool)
 	for range 2 {
-		secret, token, err := s.CreateToken(t.Context(), "admin", "deployment", nil)
+		secret, token, err := s.CreateToken(t.Context(), "admin", "deployment", nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -282,7 +282,7 @@ func TestOIDCSessionAndTokenAuditsKeepIssuerScope(t *testing.T) {
 		t.Fatalf("OIDC principal actor = %q, want %q", principal.Actor(), actor)
 	}
 	csrfToken := principal.CSRFToken
-	secret, token, err := s.CreateToken(t.Context(), "sso-user", "deployment", nil)
+	secret, token, err := s.CreateToken(t.Context(), "sso-user", "deployment", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

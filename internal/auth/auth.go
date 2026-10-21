@@ -81,6 +81,7 @@ type Principal struct {
 	TokenName          string
 	OIDCIssuer         string
 	CSRFToken          string
+	Restrictions       *domain.TokenRestrictions
 }
 
 // Actor returns the persisted account identity scoped to its OIDC issuer,
@@ -411,7 +412,7 @@ func validateAccountPassword(field, password string) error {
 }
 
 // CreateToken issues a kk_-prefixed secret exactly once.
-func (s *Service) CreateToken(ctx context.Context, owner, name string, expires *time.Time) (string, domain.ApiToken, error) {
+func (s *Service) CreateToken(ctx context.Context, owner, name string, expires *time.Time, restrictions *domain.TokenRestrictions) (string, domain.ApiToken, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, err := s.o.Store.GetAccount(ctx, owner)
@@ -425,6 +426,10 @@ func (s *Service) CreateToken(ctx context.Context, owner, name string, expires *
 	if err != nil {
 		return "", domain.ApiToken{}, err
 	}
+	restrictions, err = NormalizeRestrictions(restrictions)
+	if err != nil {
+		return "", domain.ApiToken{}, err
+	}
 	secret, err := secrets.Token()
 	if err != nil {
 		return "", domain.ApiToken{}, err
@@ -433,7 +438,7 @@ func (s *Service) CreateToken(ctx context.Context, owner, name string, expires *
 	if err != nil {
 		return "", domain.ApiToken{}, err
 	}
-	t := domain.ApiToken{ID: id, Name: name, Owner: owner, Hash: secrets.Hash(secret), ExpiresAt: expires, CreatedAt: s.now()}
+	t := domain.ApiToken{ID: id, Name: name, Owner: owner, Hash: secrets.Hash(secret), ExpiresAt: expires, CreatedAt: s.now(), Restrictions: restrictions}
 	if err = s.o.Store.CreateApiToken(ctx, &t); err != nil {
 		return "", domain.ApiToken{}, err
 	}

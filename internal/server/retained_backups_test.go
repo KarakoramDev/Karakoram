@@ -196,7 +196,7 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, role:retained-test, backups, read, other, allow\np, role:retained-test, backups, delete, other, allow\n"); err != nil {
 		t.Fatal(err)
 	}
-	limited, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil)
+	limited, _, err := s.Auth.CreateToken(ctx, "limited", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -188,7 +188,7 @@ func TestRabbitMQMissingNamespaceAuthorization(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "denied"}, "test-password-long"); err != nil {
 		t.Fatal(err)
 	}
-	denied, _, err := s.Auth.CreateToken(t.Context(), "denied", "test", nil)
+	denied, _, err := s.Auth.CreateToken(t.Context(), "denied", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

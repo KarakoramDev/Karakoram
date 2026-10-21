@@ -225,7 +225,7 @@ func TestElasticAccessRBACAndNamespace(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "viewer", Roles: []string{"role:viewer"}}, "viewer-password"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "viewer", "test", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "viewer", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
