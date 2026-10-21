@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
+	"github.com/KarakoramDev/Karakoram/internal/engine/temporal"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -36,6 +37,8 @@ func engineProviders(o engineOptions) []engine.Provider {
 		elastic.New(elastic.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		postgres.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
+		// PostgreSQL bindings are wired at integration; nil rejects admission safely.
+		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: nil}),
 	}
 	if o.Bindings != nil {
 		providers = append(providers, keycloak.New(keycloak.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Bindings: o.Bindings}))

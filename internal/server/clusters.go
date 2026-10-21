@@ -881,7 +881,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			}
 			return s.dryRunResult("restore", c, c, &r)
 		}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: store.Actor(ctx), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		payload, err := json.Marshal(struct {
+			Restore string `json:"restore"`
+			AcknowledgeSharedSource bool `json:"acknowledgeSharedSource,omitempty"`
+		}{r.Name, value(b.AcknowledgeSharedSource)})
+		if err != nil {
+			return s.failure(err)
+		}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: store.Actor(ctx), Payload: payload}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 		})
@@ -918,6 +925,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	}
 	if strings.Contains(name, "OpenBao") {
 		return s.openbao(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "Temporal") {
+		return s.temporal(ctx, name, in, rc, p)
 	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {

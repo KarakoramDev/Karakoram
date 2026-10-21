@@ -375,12 +375,14 @@ const (
 // Defines values for ProviderTopologyType.
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
+	ProviderTopologyTypeCombined         ProviderTopologyType = "combined"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
 	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
 	ProviderTopologyTypeSingle           ProviderTopologyType = "single"
+	ProviderTopologyTypeSplit            ProviderTopologyType = "split"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -543,34 +545,40 @@ const (
 // Defines values for TopologyType.
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
+	TopologyTypeCombined         TopologyType = "combined"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
 	TopologyTypeDistributed      TopologyType = "distributed"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
 	TopologyTypeSingle           TopologyType = "single"
+	TopologyTypeSplit            TopologyType = "split"
 )
 
 // Defines values for TopologyInputType.
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
+	TopologyInputTypeCombined         TopologyInputType = "combined"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
 	TopologyInputTypeDistributed      TopologyInputType = "distributed"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
 	TopologyInputTypeSingle           TopologyInputType = "single"
+	TopologyInputTypeSplit            TopologyInputType = "split"
 )
 
 // Defines values for TopologyPatchType.
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
+	TopologyPatchTypeCombined         TopologyPatchType = "combined"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
 	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
 	TopologyPatchTypeSingle           TopologyPatchType = "single"
+	TopologyPatchTypeSplit            TopologyPatchType = "split"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -1219,9 +1227,12 @@ type CreateDatabaseUserRequest struct {
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
 	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
-	AcknowledgeBoundConsumers *bool                       `json:"acknowledgeBoundConsumers,omitempty"`
-	Name                      string                      `json:"name"`
-	OpenbaoUnsealShares       *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
+	AcknowledgeBoundConsumers *bool `json:"acknowledgeBoundConsumers,omitempty"`
+
+	// AcknowledgeSharedSource Only Temporal reads this flag. Explicitly acknowledge that restoring its shared PostgreSQL source rolls back every consumer.
+	AcknowledgeSharedSource *bool                       `json:"acknowledgeSharedSource,omitempty"`
+	Name                    string                      `json:"name"`
+	OpenbaoUnsealShares     *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
@@ -2761,6 +2772,67 @@ type TLSPatchCa string
 
 // TLSPatchMode defines model for TLSPatch.Mode.
 type TLSPatchMode string
+
+// TemporalClientCertificate defines model for TemporalClientCertificate.
+type TemporalClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	Serial            string    `json:"serial"`
+}
+
+// TemporalClientCertificateList defines model for TemporalClientCertificateList.
+type TemporalClientCertificateList struct {
+	Items []TemporalClientCertificate `json:"items"`
+}
+
+// TemporalClientCertificateRequest defines model for TemporalClientCertificateRequest.
+type TemporalClientCertificateRequest struct {
+	CommonName string `json:"commonName"`
+	TtlHours   *int   `json:"ttlHours,omitempty"`
+}
+
+// TemporalIssuedClientCertificate defines model for TemporalIssuedClientCertificate.
+type TemporalIssuedClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CaPem               string `json:"caPem"`
+	CertificatePem      string `json:"certificatePem"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	FrontendAddress   string    `json:"frontendAddress"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	PrivateKeyPem     string    `json:"privateKeyPem"`
+	Serial            string    `json:"serial"`
+	ServerName        string    `json:"serverName"`
+}
+
+// TemporalNamespace defines model for TemporalNamespace.
+type TemporalNamespace struct {
+	Description *string `json:"description,omitempty"`
+	Managed     bool    `json:"managed"`
+	Name        string  `json:"name"`
+	Retention   string  `json:"retention"`
+	State       string  `json:"state"`
+}
+
+// TemporalNamespaceList defines model for TemporalNamespaceList.
+type TemporalNamespaceList struct {
+	Items []TemporalNamespace `json:"items"`
+}
+
+// TemporalUIOIDCClientSecret defines model for TemporalUIOIDCClientSecret.
+type TemporalUIOIDCClientSecret struct {
+	ClientSecret *string `json:"clientSecret,omitempty"`
+}
 
 // TokenStatus Secret-safe token health; never contains a token or fingerprint.
 type TokenStatus struct {
@@ -4802,6 +4874,36 @@ type RotateSystemUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListTemporalClientCertificatesParams defines parameters for ListTemporalClientCertificates.
+type ListTemporalClientCertificatesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// IssueTemporalClientCertificateParams defines parameters for IssueTemporalClientCertificate.
+type IssueTemporalClientCertificateParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListTemporalNamespacesParams defines parameters for ListTemporalNamespaces.
+type ListTemporalNamespacesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// DeleteTemporalNamespaceParams defines parameters for DeleteTemporalNamespace.
+type DeleteTemporalNamespaceParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// SetTemporalUIOIDCClientSecretParams defines parameters for SetTemporalUIOIDCClientSecret.
+type SetTemporalUIOIDCClientSecretParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // DryRunCreateClusterParams defines parameters for DryRunCreateCluster.
 type DryRunCreateClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5156,6 +5258,12 @@ type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
 
 // SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
 type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
+
+// IssueTemporalClientCertificateJSONRequestBody defines body for IssueTemporalClientCertificate for application/json ContentType.
+type IssueTemporalClientCertificateJSONRequestBody = TemporalClientCertificateRequest
+
+// SetTemporalUIOIDCClientSecretJSONRequestBody defines body for SetTemporalUIOIDCClientSecret for application/json ContentType.
+type SetTemporalUIOIDCClientSecretJSONRequestBody = TemporalUIOIDCClientSecret
 
 // DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
 type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
@@ -5853,6 +5961,21 @@ type ServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateSystemUserParams)
+	// List non-secret Temporal client certificate metadata
+	// (GET /clusters/{cluster}/temporal/client-certificates)
+	ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalClientCertificatesParams)
+	// Issue a Temporal client certificate and return its private key once
+	// (POST /clusters/{cluster}/temporal/client-certificates)
+	IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params IssueTemporalClientCertificateParams)
+	// List Temporal namespaces
+	// (GET /clusters/{cluster}/temporal/namespaces)
+	ListTemporalNamespaces(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalNamespacesParams)
+	// Request asynchronous deletion of an unmanaged Temporal namespace
+	// (DELETE /clusters/{cluster}/temporal/namespaces/{temporalNamespace})
+	DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request, cluster ClusterPath, temporalNamespace string, params DeleteTemporalNamespaceParams)
+	// Seal the write-only Temporal UI OIDC client secret
+	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
+	SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetTemporalUIOIDCClientSecretParams)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams)
@@ -15294,6 +15417,235 @@ func (siw *ServerInterfaceWrapper) RotateSystemUser(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListTemporalClientCertificates operation middleware
+func (siw *ServerInterfaceWrapper) ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTemporalClientCertificatesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTemporalClientCertificates(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueTemporalClientCertificate operation middleware
+func (siw *ServerInterfaceWrapper) IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssueTemporalClientCertificateParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueTemporalClientCertificate(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTemporalNamespaces operation middleware
+func (siw *ServerInterfaceWrapper) ListTemporalNamespaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTemporalNamespacesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTemporalNamespaces(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTemporalNamespace operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "temporalNamespace" -------------
+	var temporalNamespace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "temporalNamespace", r.PathValue("temporalNamespace"), &temporalNamespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "temporalNamespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTemporalNamespaceParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTemporalNamespace(w, r, cluster, temporalNamespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTemporalUIOIDCClientSecret operation middleware
+func (siw *ServerInterfaceWrapper) SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetTemporalUIOIDCClientSecretParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTemporalUIOIDCClientSecret(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DryRunCreateCluster operation middleware
 func (siw *ServerInterfaceWrapper) DryRunCreateCluster(w http.ResponseWriter, r *http.Request) {
 
@@ -16991,6 +17343,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/supabase/smtp-password", wrapper.SetSupabaseSMTPPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/system-users", wrapper.ListSystemUsers)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/system-users/{user}/rotate", wrapper.RotateSystemUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/temporal/client-certificates", wrapper.ListTemporalClientCertificates)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/temporal/client-certificates", wrapper.IssueTemporalClientCertificate)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces", wrapper.ListTemporalNamespaces)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces/{temporalNamespace}", wrapper.DeleteTemporalNamespace)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/temporal/ui/oidc-client-secret", wrapper.SetTemporalUIOIDCClientSecret)
 	m.HandleFunc("POST "+options.BaseURL+"/dry-run/clusters", wrapper.DryRunCreateCluster)
 	m.HandleFunc("PATCH "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunPatchCluster)
 	m.HandleFunc("PUT "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunReplaceCluster)
@@ -31571,6 +31928,392 @@ func (response RotateSystemUser500JSONResponse) VisitRotateSystemUserResponse(w 
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListTemporalClientCertificatesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListTemporalClientCertificatesParams
+}
+
+type ListTemporalClientCertificatesResponseObject interface {
+	VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error
+}
+
+type ListTemporalClientCertificates200JSONResponse TemporalClientCertificateList
+
+func (response ListTemporalClientCertificates200JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalClientCertificates401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTemporalClientCertificates401JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTemporalClientCertificates403JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTemporalClientCertificates404JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListTemporalClientCertificates503JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueTemporalClientCertificateRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  IssueTemporalClientCertificateParams
+	Body    *IssueTemporalClientCertificateJSONRequestBody
+}
+
+type IssueTemporalClientCertificateResponseObject interface {
+	VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error
+}
+
+type IssueTemporalClientCertificate201ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssueTemporalClientCertificate201JSONResponse struct {
+	Body    TemporalIssuedClientCertificate
+	Headers IssueTemporalClientCertificate201ResponseHeaders
+}
+
+func (response IssueTemporalClientCertificate201JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response IssueTemporalClientCertificate400JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response IssueTemporalClientCertificate401JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response IssueTemporalClientCertificate403JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response IssueTemporalClientCertificate404JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response IssueTemporalClientCertificate409JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response IssueTemporalClientCertificate422JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response IssueTemporalClientCertificate503JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalNamespacesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListTemporalNamespacesParams
+}
+
+type ListTemporalNamespacesResponseObject interface {
+	VisitListTemporalNamespacesResponse(w http.ResponseWriter) error
+}
+
+type ListTemporalNamespaces200JSONResponse TemporalNamespaceList
+
+func (response ListTemporalNamespaces200JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTemporalNamespaces401JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTemporalNamespaces403JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTemporalNamespaces404JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListTemporalNamespaces503JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTemporalNamespaceRequestObject struct {
+	Cluster           ClusterPath `json:"cluster"`
+	TemporalNamespace string      `json:"temporalNamespace"`
+	Params            DeleteTemporalNamespaceParams
+}
+
+type DeleteTemporalNamespaceResponseObject interface {
+	VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error
+}
+
+type DeleteTemporalNamespace202Response struct {
+}
+
+func (response DeleteTemporalNamespace202Response) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type DeleteTemporalNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteTemporalNamespace401JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTemporalNamespace403JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTemporalNamespace404JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteTemporalNamespace409JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DeleteTemporalNamespace422JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteTemporalNamespace503JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetTemporalUIOIDCClientSecretRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  SetTemporalUIOIDCClientSecretParams
+	Body    *SetTemporalUIOIDCClientSecretJSONRequestBody
+}
+
+type SetTemporalUIOIDCClientSecretResponseObject interface {
+	VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error
+}
+
+type SetTemporalUIOIDCClientSecret204ResponseHeaders struct {
+	CacheControl string
+}
+
+type SetTemporalUIOIDCClientSecret204Response struct {
+	Headers SetTemporalUIOIDCClientSecret204ResponseHeaders
+}
+
+func (response SetTemporalUIOIDCClientSecret204Response) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetTemporalUIOIDCClientSecret400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret400JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret401JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret403JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret404JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret409JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SetTemporalUIOIDCClientSecret422JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret503JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type DryRunCreateClusterRequestObject struct {
 	Params DryRunCreateClusterParams
 	Body   *DryRunCreateClusterJSONRequestBody
@@ -35356,6 +36099,21 @@ type StrictServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(ctx context.Context, request RotateSystemUserRequestObject) (RotateSystemUserResponseObject, error)
+	// List non-secret Temporal client certificate metadata
+	// (GET /clusters/{cluster}/temporal/client-certificates)
+	ListTemporalClientCertificates(ctx context.Context, request ListTemporalClientCertificatesRequestObject) (ListTemporalClientCertificatesResponseObject, error)
+	// Issue a Temporal client certificate and return its private key once
+	// (POST /clusters/{cluster}/temporal/client-certificates)
+	IssueTemporalClientCertificate(ctx context.Context, request IssueTemporalClientCertificateRequestObject) (IssueTemporalClientCertificateResponseObject, error)
+	// List Temporal namespaces
+	// (GET /clusters/{cluster}/temporal/namespaces)
+	ListTemporalNamespaces(ctx context.Context, request ListTemporalNamespacesRequestObject) (ListTemporalNamespacesResponseObject, error)
+	// Request asynchronous deletion of an unmanaged Temporal namespace
+	// (DELETE /clusters/{cluster}/temporal/namespaces/{temporalNamespace})
+	DeleteTemporalNamespace(ctx context.Context, request DeleteTemporalNamespaceRequestObject) (DeleteTemporalNamespaceResponseObject, error)
+	// Seal the write-only Temporal UI OIDC client secret
+	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
+	SetTemporalUIOIDCClientSecret(ctx context.Context, request SetTemporalUIOIDCClientSecretRequestObject) (SetTemporalUIOIDCClientSecretResponseObject, error)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(ctx context.Context, request DryRunCreateClusterRequestObject) (DryRunCreateClusterResponseObject, error)
@@ -39609,6 +40367,156 @@ func (sh *strictHandler) RotateSystemUser(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RotateSystemUserResponseObject); ok {
 		if err := validResponse.VisitRotateSystemUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTemporalClientCertificates operation middleware
+func (sh *strictHandler) ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalClientCertificatesParams) {
+	var request ListTemporalClientCertificatesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTemporalClientCertificates(ctx, request.(ListTemporalClientCertificatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTemporalClientCertificates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTemporalClientCertificatesResponseObject); ok {
+		if err := validResponse.VisitListTemporalClientCertificatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssueTemporalClientCertificate operation middleware
+func (sh *strictHandler) IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params IssueTemporalClientCertificateParams) {
+	var request IssueTemporalClientCertificateRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body IssueTemporalClientCertificateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IssueTemporalClientCertificate(ctx, request.(IssueTemporalClientCertificateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssueTemporalClientCertificate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IssueTemporalClientCertificateResponseObject); ok {
+		if err := validResponse.VisitIssueTemporalClientCertificateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTemporalNamespaces operation middleware
+func (sh *strictHandler) ListTemporalNamespaces(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalNamespacesParams) {
+	var request ListTemporalNamespacesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTemporalNamespaces(ctx, request.(ListTemporalNamespacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTemporalNamespaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTemporalNamespacesResponseObject); ok {
+		if err := validResponse.VisitListTemporalNamespacesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTemporalNamespace operation middleware
+func (sh *strictHandler) DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request, cluster ClusterPath, temporalNamespace string, params DeleteTemporalNamespaceParams) {
+	var request DeleteTemporalNamespaceRequestObject
+
+	request.Cluster = cluster
+	request.TemporalNamespace = temporalNamespace
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTemporalNamespace(ctx, request.(DeleteTemporalNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTemporalNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTemporalNamespaceResponseObject); ok {
+		if err := validResponse.VisitDeleteTemporalNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetTemporalUIOIDCClientSecret operation middleware
+func (sh *strictHandler) SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetTemporalUIOIDCClientSecretParams) {
+	var request SetTemporalUIOIDCClientSecretRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body SetTemporalUIOIDCClientSecretJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetTemporalUIOIDCClientSecret(ctx, request.(SetTemporalUIOIDCClientSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetTemporalUIOIDCClientSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetTemporalUIOIDCClientSecretResponseObject); ok {
+		if err := validResponse.VisitSetTemporalUIOIDCClientSecretResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -572,5 +572,56 @@
         "preload": true
       }
     }
+  },
+  {
+    "name": "temporal-server-1.31",
+    "version": "1.31.4",
+    "file": "temporal_1.31.4_linux_amd64.tar.gz",
+    "sha256": "85f4b9405d934239415e3a8de9594ec6844f269401645fca6565a6abfc1cbc5d",
+    "size": 93836793,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.31.4/temporal_1.31.4_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "9a9a1f0fa8a5a4edf29a90c4069352da094920fc"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "temporal-server-1.32",
+    "version": "1.32.1",
+    "file": "temporal_1.32.1_linux_amd64.tar.gz",
+    "sha256": "4260448d650c1ba7ee7683ff0c93d5c6a1709260e3a7ef543bfa34e06cff6051",
+    "size": 100242778,
+    "upstreamURL": "https://github.com/temporalio/temporal/releases/download/v1.32.1/temporal_1.32.1_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/temporal",
+      "commit": "af08a5e5f2dd40f545f2afac7780daaa6987001e"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
+  },
+  {
+    "name": "temporal-ui-server",
+    "version": "2.56.0",
+    "file": "ui-server_2.56.0_linux_amd64.tar.gz",
+    "sha256": "c9d767a49815d475f00e4882f4cf4b00ff89d3253c9d410f41c93b40b739e2ec",
+    "size": 10082262,
+    "upstreamURL": "https://github.com/temporalio/ui-server/releases/download/v2.56.0/ui-server_2.56.0_linux_amd64.tar.gz",
+    "license": "MIT",
+    "source": {
+      "repo": "https://github.com/temporalio/ui-server",
+      "commit": "1a0c78c9022cbd985c61fa92be6c4d9fef5cac5c"
+    },
+    "build": "upstream-release",
+    "runtimeDeps": [
+      "ca-certificates"
+    ]
   }
 ]

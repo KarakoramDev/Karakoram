@@ -3525,6 +3525,118 @@ paths:
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/temporal/client-certificates:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: issueTemporalClientCertificate
+      tags: [temporal]
+      summary: Issue a Temporal client certificate and return its private key once
+      x-karakoram-rbac: {resource: cluster-credentials, action: read, object: cluster}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TemporalClientCertificateRequest'}
+      responses:
+        '201':
+          description: Client certificate issued. The private key is not retained.
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: [no-store]}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemporalIssuedClientCertificate'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    get:
+      operationId: listTemporalClientCertificates
+      tags: [temporal]
+      summary: List non-secret Temporal client certificate metadata
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Issued certificate metadata.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemporalClientCertificateList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/temporal/namespaces:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listTemporalNamespaces
+      tags: [temporal]
+      summary: List Temporal namespaces
+      x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      responses:
+        '200':
+          description: Temporal namespaces.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TemporalNamespaceList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/temporal/namespaces/{temporalNamespace}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - name: temporalNamespace
+        in: path
+        required: true
+        schema: {type: string, minLength: 1}
+    delete:
+      operationId: deleteTemporalNamespace
+      tags: [temporal]
+      summary: Request asynchronous deletion of an unmanaged Temporal namespace
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      responses:
+        '202': {description: Namespace deletion accepted.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/temporal/ui/oidc-client-secret:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    put:
+      operationId: setTemporalUIOIDCClientSecret
+      tags: [temporal]
+      summary: Seal the write-only Temporal UI OIDC client secret
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TemporalUIOIDCClientSecret'}
+      responses:
+        '204':
+          description: Client secret stored without returning its value.
+          headers:
+            Cache-Control:
+              schema: {type: string, enum: [no-store]}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/supabase/credentials:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -8367,6 +8479,78 @@ components:
       required: [items]
       properties:
         items: {type: array, items: {$ref: '#/components/schemas/OpenBaoDatabaseConnection'}}
+    TemporalClientCertificateRequest:
+      type: object
+      additionalProperties: false
+      required: [commonName]
+      properties:
+        commonName: {type: string, minLength: 1, maxLength: 253}
+        ttlHours: {type: integer, minimum: 1, maximum: 9528, default: 720}
+    TemporalClientCertificate:
+      type: object
+      additionalProperties: false
+      required: [serial, commonName, fingerprintSha256, issuedAt, notAfter, caFingerprintSha256, currentCa]
+      properties:
+        serial: {type: string}
+        commonName: {type: string}
+        fingerprintSha256: {type: string}
+        issuedAt: {type: string, format: date-time}
+        notAfter: {type: string, format: date-time}
+        caFingerprintSha256: {type: string}
+        currentCa:
+          type: boolean
+          description: Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+    TemporalIssuedClientCertificate:
+      type: object
+      additionalProperties: false
+      required: [serial, commonName, fingerprintSha256, issuedAt, notAfter, caFingerprintSha256, currentCa, certificatePem, privateKeyPem, caPem, frontendAddress, serverName]
+      properties:
+        serial: {type: string}
+        commonName: {type: string}
+        fingerprintSha256: {type: string}
+        issuedAt: {type: string, format: date-time}
+        notAfter: {type: string, format: date-time}
+        caFingerprintSha256: {type: string}
+        currentCa:
+          type: boolean
+          description: Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+        certificatePem: {type: string}
+        privateKeyPem: {type: string, format: password}
+        caPem: {type: string}
+        frontendAddress: {type: string}
+        serverName: {type: string}
+    TemporalClientCertificateList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/TemporalClientCertificate'}
+    TemporalNamespace:
+      type: object
+      additionalProperties: false
+      required: [name, retention, state, managed]
+      properties:
+        name: {type: string}
+        retention: {type: string}
+        description: {type: string}
+        state: {type: string}
+        managed: {type: boolean}
+    TemporalNamespaceList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/TemporalNamespace'}
+    TemporalUIOIDCClientSecret:
+      type: object
+      additionalProperties: false
+      required: [clientSecret]
+      properties:
+        clientSecret: {type: string, minLength: 1, format: password, writeOnly: true}
     SupabaseCredentials:
       type: object
       additionalProperties: false
@@ -9012,6 +9196,8 @@ components:
             - single
             - ha
             - distributed
+            - combined
+            - split
         shards:
           type: integer
           minimum: 1
@@ -9078,6 +9264,8 @@ components:
             - single
             - ha
             - distributed
+            - combined
+            - split
         displayName:
           type: string
         defaults:
@@ -11050,6 +11238,9 @@ components:
           allOf:
             - $ref: '#/components/schemas/OpenBaoRestoreUnsealShares'
           writeOnly: true
+        acknowledgeSharedSource:
+          type: boolean
+          description: Only Temporal reads this flag. Explicitly acknowledge that restoring its shared PostgreSQL source rolls back every consumer.
         sourceNamespace:
           allOf:
             - $ref: '#/components/schemas/NamespaceName'
@@ -11808,6 +11999,8 @@ components:
             - single
             - ha
             - distributed
+            - combined
+            - split
         shards:
           type: integer
           minimum: 1
@@ -12003,6 +12196,8 @@ components:
             - single
             - ha
             - distributed
+            - combined
+            - split
           nullable: true
         shards:
           type: integer

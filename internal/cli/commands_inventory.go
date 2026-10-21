@@ -102,3 +102,12 @@ var commandSpecs = append(append(append([]commandSpec{
 	{"auth oidc-login", "oidcLogin", 0, false, []queryFlag{{"return-to", "returnTo", "string"}}},
 	{"auth oidc-callback", "oidcCallback", 0, false, []queryFlag{{"code", "code", "string"}, {"state", "state", "string"}}},
 }, rabbitMQCommandSpecs()...), postgresCommandSpecs()...), openBaoCommandSpecs()...)
+
+// Temporal commands have dedicated safe credential input/output handling.
+var temporalCommandSpecs = []commandSpec{
+	{"temporal client-certificate issue <cluster>", "issueTemporalClientCertificate", 1, false, nil},
+	{"temporal client-certificate list <cluster>", "listTemporalClientCertificates", 1, false, nil},
+	{"temporal namespace list <cluster>", "listTemporalNamespaces", 1, false, nil},
+	{"temporal namespace delete <cluster> <name>", "deleteTemporalNamespace", 2, false, nil},
+	{"temporal ui-oidc-secret set <cluster>", "setTemporalUIOIDCClientSecret", 1, false, nil},
+}

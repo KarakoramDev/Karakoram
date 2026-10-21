@@ -108,6 +108,7 @@ func (a *app) addCommands(root *cobra.Command) {
 	a.addElastic(root)
 	a.addSupabase(root)
 	addMCPCommands(a, root)
+	a.addTemporal(root)
 }
 func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 	if s.operation == "getVersion" {

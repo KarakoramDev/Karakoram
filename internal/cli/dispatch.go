@@ -47,6 +47,8 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		return c.DryRunCreateRestoreWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
 	case "revealOpenBaoUnsealKeys", "listOpenBaoDatabaseConnections", "getOpenBaoDatabaseConnection", "createOpenBaoDatabaseConnection", "deleteOpenBaoDatabaseConnection":
 		return dispatchOpenBao(ctx, c, op, args, q, body)
+	case "issueTemporalClientCertificate", "listTemporalClientCertificates", "listTemporalNamespaces", "deleteTemporalNamespace", "setTemporalUIOIDCClientSecret":
+		return dispatchTemporal(ctx, c, op, args, q, body)
 	case "getSupabaseCredentials", "setSupabaseSMTPPassword", "listSupabaseFunctions", "getSupabaseFunction", "putSupabaseFunction", "deleteSupabaseFunction", "rotateSupabaseJWTSecret":
 		return dispatchSupabase(ctx, c, op, args, q, body)
 	case "listElasticUsers", "getElasticUser", "createElasticUser", "updateElasticUser", "deleteElasticUser", "listElasticRoles", "getElasticRole", "createElasticRole", "updateElasticRole", "deleteElasticRole", "listElasticAPIKeys", "createElasticAPIKey", "invalidateElasticAPIKey":

@@ -140,6 +140,9 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
 | OpenBao | `/openbao/unseal-keys/reveal`, `/openbao/database-connections`, `/openbao/database-connections/{connection}` | Confirmed initialization-material reveal; list/create/get/delete managed target connections |
+| Temporal certificates | `POST /temporal/client-certificates` (issue once); `GET /temporal/client-certificates` (metadata) | Temporal |
+| Temporal namespaces | `GET /temporal/namespaces`; `DELETE /temporal/namespaces/{temporalNamespace}` (asynchronous) | Temporal |
+| Temporal UI secret | `PUT /temporal/ui/oidc-client-secret` (write-only) | Temporal |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores` | All |
 | Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
@@ -152,6 +155,8 @@ See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade 
 Distributed PostgreSQL exposes `POST /clusters/{cluster}/actions/rebalance` with `{strategy?: string}` and returns 202 Operation (`type: rebalance`). It uses `clusters:update`, CSRF and idempotency conventions. Members expose a read-only `group` (0 coordinator); `CitusTopology` conditions report metadata drift. See [distributed PostgreSQL](postgres/distributed.md).
 
 Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
+
+Temporal certificate issuance requires `cluster-credentials:read`; certificate/namespace listing requires `clusters:read`; namespace deletion and UI OIDC secret writes require `clusters:update`, all scoped to the cluster. Issuance returns private material once with `no-store`; secret writes return no value. See [Temporal access/TLS](temporal/access-and-tls.md) and [namespace/recovery operations](temporal/operations.md).
 
 ## Namespace parameters and lifecycle
 

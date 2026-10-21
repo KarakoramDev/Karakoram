@@ -377,12 +377,14 @@ const (
 // Defines values for ProviderTopologyType.
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
+	ProviderTopologyTypeCombined         ProviderTopologyType = "combined"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
 	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
 	ProviderTopologyTypeSingle           ProviderTopologyType = "single"
+	ProviderTopologyTypeSplit            ProviderTopologyType = "split"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -545,34 +547,40 @@ const (
 // Defines values for TopologyType.
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
+	TopologyTypeCombined         TopologyType = "combined"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
 	TopologyTypeDistributed      TopologyType = "distributed"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
 	TopologyTypeSingle           TopologyType = "single"
+	TopologyTypeSplit            TopologyType = "split"
 )
 
 // Defines values for TopologyInputType.
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
+	TopologyInputTypeCombined         TopologyInputType = "combined"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
 	TopologyInputTypeDistributed      TopologyInputType = "distributed"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
 	TopologyInputTypeSingle           TopologyInputType = "single"
+	TopologyInputTypeSplit            TopologyInputType = "split"
 )
 
 // Defines values for TopologyPatchType.
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
+	TopologyPatchTypeCombined         TopologyPatchType = "combined"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
 	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
 	TopologyPatchTypeSingle           TopologyPatchType = "single"
+	TopologyPatchTypeSplit            TopologyPatchType = "split"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -1221,9 +1229,12 @@ type CreateDatabaseUserRequest struct {
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
 	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
-	AcknowledgeBoundConsumers *bool                       `json:"acknowledgeBoundConsumers,omitempty"`
-	Name                      string                      `json:"name"`
-	OpenbaoUnsealShares       *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
+	AcknowledgeBoundConsumers *bool `json:"acknowledgeBoundConsumers,omitempty"`
+
+	// AcknowledgeSharedSource Only Temporal reads this flag. Explicitly acknowledge that restoring its shared PostgreSQL source rolls back every consumer.
+	AcknowledgeSharedSource *bool                       `json:"acknowledgeSharedSource,omitempty"`
+	Name                    string                      `json:"name"`
+	OpenbaoUnsealShares     *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
@@ -2763,6 +2774,67 @@ type TLSPatchCa string
 
 // TLSPatchMode defines model for TLSPatch.Mode.
 type TLSPatchMode string
+
+// TemporalClientCertificate defines model for TemporalClientCertificate.
+type TemporalClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	Serial            string    `json:"serial"`
+}
+
+// TemporalClientCertificateList defines model for TemporalClientCertificateList.
+type TemporalClientCertificateList struct {
+	Items []TemporalClientCertificate `json:"items"`
+}
+
+// TemporalClientCertificateRequest defines model for TemporalClientCertificateRequest.
+type TemporalClientCertificateRequest struct {
+	CommonName string `json:"commonName"`
+	TtlHours   *int   `json:"ttlHours,omitempty"`
+}
+
+// TemporalIssuedClientCertificate defines model for TemporalIssuedClientCertificate.
+type TemporalIssuedClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CaPem               string `json:"caPem"`
+	CertificatePem      string `json:"certificatePem"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	FrontendAddress   string    `json:"frontendAddress"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	PrivateKeyPem     string    `json:"privateKeyPem"`
+	Serial            string    `json:"serial"`
+	ServerName        string    `json:"serverName"`
+}
+
+// TemporalNamespace defines model for TemporalNamespace.
+type TemporalNamespace struct {
+	Description *string `json:"description,omitempty"`
+	Managed     bool    `json:"managed"`
+	Name        string  `json:"name"`
+	Retention   string  `json:"retention"`
+	State       string  `json:"state"`
+}
+
+// TemporalNamespaceList defines model for TemporalNamespaceList.
+type TemporalNamespaceList struct {
+	Items []TemporalNamespace `json:"items"`
+}
+
+// TemporalUIOIDCClientSecret defines model for TemporalUIOIDCClientSecret.
+type TemporalUIOIDCClientSecret struct {
+	ClientSecret *string `json:"clientSecret,omitempty"`
+}
 
 // TokenStatus Secret-safe token health; never contains a token or fingerprint.
 type TokenStatus struct {
@@ -4804,6 +4876,36 @@ type RotateSystemUserParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListTemporalClientCertificatesParams defines parameters for ListTemporalClientCertificates.
+type ListTemporalClientCertificatesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// IssueTemporalClientCertificateParams defines parameters for IssueTemporalClientCertificate.
+type IssueTemporalClientCertificateParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListTemporalNamespacesParams defines parameters for ListTemporalNamespaces.
+type ListTemporalNamespacesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// DeleteTemporalNamespaceParams defines parameters for DeleteTemporalNamespace.
+type DeleteTemporalNamespaceParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// SetTemporalUIOIDCClientSecretParams defines parameters for SetTemporalUIOIDCClientSecret.
+type SetTemporalUIOIDCClientSecretParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
 // DryRunCreateClusterParams defines parameters for DryRunCreateCluster.
 type DryRunCreateClusterParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5158,6 +5260,12 @@ type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
 
 // SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
 type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
+
+// IssueTemporalClientCertificateJSONRequestBody defines body for IssueTemporalClientCertificate for application/json ContentType.
+type IssueTemporalClientCertificateJSONRequestBody = TemporalClientCertificateRequest
+
+// SetTemporalUIOIDCClientSecretJSONRequestBody defines body for SetTemporalUIOIDCClientSecret for application/json ContentType.
+type SetTemporalUIOIDCClientSecretJSONRequestBody = TemporalUIOIDCClientSecret
 
 // DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
 type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
@@ -6021,6 +6129,25 @@ type ClientInterface interface {
 
 	// RotateSystemUser request
 	RotateSystemUser(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTemporalClientCertificates request
+	ListTemporalClientCertificates(ctx context.Context, cluster ClusterPath, params *ListTemporalClientCertificatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// IssueTemporalClientCertificateWithBody request with any body
+	IssueTemporalClientCertificateWithBody(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	IssueTemporalClientCertificate(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, body IssueTemporalClientCertificateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTemporalNamespaces request
+	ListTemporalNamespaces(ctx context.Context, cluster ClusterPath, params *ListTemporalNamespacesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteTemporalNamespace request
+	DeleteTemporalNamespace(ctx context.Context, cluster ClusterPath, temporalNamespace string, params *DeleteTemporalNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTemporalUIOIDCClientSecretWithBody request with any body
+	SetTemporalUIOIDCClientSecretWithBody(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetTemporalUIOIDCClientSecret(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DryRunCreateClusterWithBody request with any body
 	DryRunCreateClusterWithBody(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -8370,6 +8497,90 @@ func (c *Client) ListSystemUsers(ctx context.Context, cluster ClusterPath, param
 
 func (c *Client) RotateSystemUser(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRotateSystemUserRequest(c.Server, cluster, user, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListTemporalClientCertificates(ctx context.Context, cluster ClusterPath, params *ListTemporalClientCertificatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTemporalClientCertificatesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) IssueTemporalClientCertificateWithBody(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueTemporalClientCertificateRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) IssueTemporalClientCertificate(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, body IssueTemporalClientCertificateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueTemporalClientCertificateRequest(c.Server, cluster, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListTemporalNamespaces(ctx context.Context, cluster ClusterPath, params *ListTemporalNamespacesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTemporalNamespacesRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteTemporalNamespace(ctx context.Context, cluster ClusterPath, temporalNamespace string, params *DeleteTemporalNamespaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTemporalNamespaceRequest(c.Server, cluster, temporalNamespace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTemporalUIOIDCClientSecretWithBody(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTemporalUIOIDCClientSecretRequestWithBody(c.Server, cluster, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTemporalUIOIDCClientSecret(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTemporalUIOIDCClientSecretRequest(c.Server, cluster, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -19592,6 +19803,319 @@ func NewRotateSystemUserRequest(server string, cluster ClusterPath, user string,
 	return req, nil
 }
 
+// NewListTemporalClientCertificatesRequest generates requests for ListTemporalClientCertificates
+func NewListTemporalClientCertificatesRequest(server string, cluster ClusterPath, params *ListTemporalClientCertificatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/temporal/client-certificates", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewIssueTemporalClientCertificateRequest calls the generic IssueTemporalClientCertificate builder with application/json body
+func NewIssueTemporalClientCertificateRequest(server string, cluster ClusterPath, params *IssueTemporalClientCertificateParams, body IssueTemporalClientCertificateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewIssueTemporalClientCertificateRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewIssueTemporalClientCertificateRequestWithBody generates requests for IssueTemporalClientCertificate with any type of body
+func NewIssueTemporalClientCertificateRequestWithBody(server string, cluster ClusterPath, params *IssueTemporalClientCertificateParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/temporal/client-certificates", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListTemporalNamespacesRequest generates requests for ListTemporalNamespaces
+func NewListTemporalNamespacesRequest(server string, cluster ClusterPath, params *ListTemporalNamespacesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/temporal/namespaces", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteTemporalNamespaceRequest generates requests for DeleteTemporalNamespace
+func NewDeleteTemporalNamespaceRequest(server string, cluster ClusterPath, temporalNamespace string, params *DeleteTemporalNamespaceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "temporalNamespace", runtime.ParamLocationPath, temporalNamespace)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/temporal/namespaces/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetTemporalUIOIDCClientSecretRequest calls the generic SetTemporalUIOIDCClientSecret builder with application/json body
+func NewSetTemporalUIOIDCClientSecretRequest(server string, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTemporalUIOIDCClientSecretRequestWithBody(server, cluster, params, "application/json", bodyReader)
+}
+
+// NewSetTemporalUIOIDCClientSecretRequestWithBody generates requests for SetTemporalUIOIDCClientSecret with any type of body
+func NewSetTemporalUIOIDCClientSecretRequestWithBody(server string, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/temporal/ui/oidc-client-secret", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewDryRunCreateClusterRequest calls the generic DryRunCreateCluster builder with application/json body
 func NewDryRunCreateClusterRequest(server string, params *DryRunCreateClusterParams, body DryRunCreateClusterJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -21958,6 +22482,25 @@ type ClientWithResponsesInterface interface {
 
 	// RotateSystemUserWithResponse request
 	RotateSystemUserWithResponse(ctx context.Context, cluster ClusterPath, user string, params *RotateSystemUserParams, reqEditors ...RequestEditorFn) (*RotateSystemUserResponse, error)
+
+	// ListTemporalClientCertificatesWithResponse request
+	ListTemporalClientCertificatesWithResponse(ctx context.Context, cluster ClusterPath, params *ListTemporalClientCertificatesParams, reqEditors ...RequestEditorFn) (*ListTemporalClientCertificatesResponse, error)
+
+	// IssueTemporalClientCertificateWithBodyWithResponse request with any body
+	IssueTemporalClientCertificateWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueTemporalClientCertificateResponse, error)
+
+	IssueTemporalClientCertificateWithResponse(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, body IssueTemporalClientCertificateJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueTemporalClientCertificateResponse, error)
+
+	// ListTemporalNamespacesWithResponse request
+	ListTemporalNamespacesWithResponse(ctx context.Context, cluster ClusterPath, params *ListTemporalNamespacesParams, reqEditors ...RequestEditorFn) (*ListTemporalNamespacesResponse, error)
+
+	// DeleteTemporalNamespaceWithResponse request
+	DeleteTemporalNamespaceWithResponse(ctx context.Context, cluster ClusterPath, temporalNamespace string, params *DeleteTemporalNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteTemporalNamespaceResponse, error)
+
+	// SetTemporalUIOIDCClientSecretWithBodyWithResponse request with any body
+	SetTemporalUIOIDCClientSecretWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTemporalUIOIDCClientSecretResponse, error)
+
+	SetTemporalUIOIDCClientSecretWithResponse(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTemporalUIOIDCClientSecretResponse, error)
 
 	// DryRunCreateClusterWithBodyWithResponse request with any body
 	DryRunCreateClusterWithBodyWithResponse(ctx context.Context, params *DryRunCreateClusterParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DryRunCreateClusterResponse, error)
@@ -26216,6 +26759,142 @@ func (r RotateSystemUserResponse) StatusCode() int {
 	return 0
 }
 
+type ListTemporalClientCertificatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TemporalClientCertificateList
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTemporalClientCertificatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTemporalClientCertificatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type IssueTemporalClientCertificateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *TemporalIssuedClientCertificate
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r IssueTemporalClientCertificateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r IssueTemporalClientCertificateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListTemporalNamespacesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TemporalNamespaceList
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTemporalNamespacesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTemporalNamespacesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteTemporalNamespaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTemporalNamespaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTemporalNamespaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetTemporalUIOIDCClientSecretResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON409      *Conflict
+	JSON422      *UnprocessableEntity
+	JSON503      *Unavailable
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTemporalUIOIDCClientSecretResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTemporalUIOIDCClientSecretResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type DryRunCreateClusterResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -28779,6 +29458,67 @@ func (c *ClientWithResponses) RotateSystemUserWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseRotateSystemUserResponse(rsp)
+}
+
+// ListTemporalClientCertificatesWithResponse request returning *ListTemporalClientCertificatesResponse
+func (c *ClientWithResponses) ListTemporalClientCertificatesWithResponse(ctx context.Context, cluster ClusterPath, params *ListTemporalClientCertificatesParams, reqEditors ...RequestEditorFn) (*ListTemporalClientCertificatesResponse, error) {
+	rsp, err := c.ListTemporalClientCertificates(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTemporalClientCertificatesResponse(rsp)
+}
+
+// IssueTemporalClientCertificateWithBodyWithResponse request with arbitrary body returning *IssueTemporalClientCertificateResponse
+func (c *ClientWithResponses) IssueTemporalClientCertificateWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueTemporalClientCertificateResponse, error) {
+	rsp, err := c.IssueTemporalClientCertificateWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueTemporalClientCertificateResponse(rsp)
+}
+
+func (c *ClientWithResponses) IssueTemporalClientCertificateWithResponse(ctx context.Context, cluster ClusterPath, params *IssueTemporalClientCertificateParams, body IssueTemporalClientCertificateJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueTemporalClientCertificateResponse, error) {
+	rsp, err := c.IssueTemporalClientCertificate(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueTemporalClientCertificateResponse(rsp)
+}
+
+// ListTemporalNamespacesWithResponse request returning *ListTemporalNamespacesResponse
+func (c *ClientWithResponses) ListTemporalNamespacesWithResponse(ctx context.Context, cluster ClusterPath, params *ListTemporalNamespacesParams, reqEditors ...RequestEditorFn) (*ListTemporalNamespacesResponse, error) {
+	rsp, err := c.ListTemporalNamespaces(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTemporalNamespacesResponse(rsp)
+}
+
+// DeleteTemporalNamespaceWithResponse request returning *DeleteTemporalNamespaceResponse
+func (c *ClientWithResponses) DeleteTemporalNamespaceWithResponse(ctx context.Context, cluster ClusterPath, temporalNamespace string, params *DeleteTemporalNamespaceParams, reqEditors ...RequestEditorFn) (*DeleteTemporalNamespaceResponse, error) {
+	rsp, err := c.DeleteTemporalNamespace(ctx, cluster, temporalNamespace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTemporalNamespaceResponse(rsp)
+}
+
+// SetTemporalUIOIDCClientSecretWithBodyWithResponse request with arbitrary body returning *SetTemporalUIOIDCClientSecretResponse
+func (c *ClientWithResponses) SetTemporalUIOIDCClientSecretWithBodyWithResponse(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTemporalUIOIDCClientSecretResponse, error) {
+	rsp, err := c.SetTemporalUIOIDCClientSecretWithBody(ctx, cluster, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTemporalUIOIDCClientSecretResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetTemporalUIOIDCClientSecretWithResponse(ctx context.Context, cluster ClusterPath, params *SetTemporalUIOIDCClientSecretParams, body SetTemporalUIOIDCClientSecretJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTemporalUIOIDCClientSecretResponse, error) {
+	rsp, err := c.SetTemporalUIOIDCClientSecret(ctx, cluster, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTemporalUIOIDCClientSecretResponse(rsp)
 }
 
 // DryRunCreateClusterWithBodyWithResponse request with arbitrary body returning *DryRunCreateClusterResponse
@@ -40283,6 +41023,318 @@ func ParseRotateSystemUserResponse(rsp *http.Response) (*RotateSystemUserRespons
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListTemporalClientCertificatesResponse parses an HTTP response from a ListTemporalClientCertificatesWithResponse call
+func ParseListTemporalClientCertificatesResponse(rsp *http.Response) (*ListTemporalClientCertificatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTemporalClientCertificatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TemporalClientCertificateList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseIssueTemporalClientCertificateResponse parses an HTTP response from a IssueTemporalClientCertificateWithResponse call
+func ParseIssueTemporalClientCertificateResponse(rsp *http.Response) (*IssueTemporalClientCertificateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &IssueTemporalClientCertificateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest TemporalIssuedClientCertificate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListTemporalNamespacesResponse parses an HTTP response from a ListTemporalNamespacesWithResponse call
+func ParseListTemporalNamespacesResponse(rsp *http.Response) (*ListTemporalNamespacesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTemporalNamespacesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TemporalNamespaceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteTemporalNamespaceResponse parses an HTTP response from a DeleteTemporalNamespaceWithResponse call
+func ParseDeleteTemporalNamespaceResponse(rsp *http.Response) (*DeleteTemporalNamespaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTemporalNamespaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTemporalUIOIDCClientSecretResponse parses an HTTP response from a SetTemporalUIOIDCClientSecretWithResponse call
+func ParseSetTemporalUIOIDCClientSecretResponse(rsp *http.Response) (*SetTemporalUIOIDCClientSecretResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTemporalUIOIDCClientSecretResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

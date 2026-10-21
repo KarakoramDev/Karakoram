@@ -89,6 +89,15 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if err := s.Store.CreateCluster(ctx, &supabaseCluster); err != nil {
 		t.Fatal(err)
 	}
+	temporalRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeTemporalAccess{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporalCluster := domain.Cluster{Name: "temporal", Spec: domain.ClusterSpec{Provider: "temporal", Version: "1.32.1", Topology: domain.Topology{Type: "combined"}}}
+	(&fakeProvider{}).ApplyDefaults(&temporalCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &temporalCluster); err != nil {
+		t.Fatal(err)
+	}
 	cluster, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +180,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				s.Registry = openbaoRegistry
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/bao/", 1)
 				url = strings.ReplaceAll(url, "{connection}", "app")
+			}
+			if strings.Contains(path, "/temporal/") {
+				s.Registry = temporalRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/temporal/", 1)
 			}
 			if path == "/healthz" || path == "/metrics" {
 				url = path

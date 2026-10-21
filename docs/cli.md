@@ -99,6 +99,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `storages` | S3 destination registration/probe | list, get, create, set, delete, verify | All |
 | `system-users` | Provider-managed identities | list, rotate | Provider-supported identities |
 | `supabase` | API credentials, SMTP and edge functions | credentials, smtp-password set, functions list/get/deploy/delete, rotate-jwt-secret | Supabase only |
+| `temporal` | Client certificates, workflow namespaces and write-only UI OIDC secret | client-certificate issue/list, namespace list/delete, ui-oidc-secret set | Temporal only |
 | `tokens` | Control-plane API tokens | list, get, create, set, delete (alias revoke) | All |
 | `version` | Client/server build metadata | — | All |
 | `whoami` | Authenticated identity | — | All |
@@ -226,6 +227,18 @@ summarizes restrictions; JSON/YAML retain the full fields. `karactl login` creat
 an unrestricted token. See [restricted API tokens](access-control.md#restricted-api-tokens)
 for scope, permission, issuance and OIDC rules.
 Distributed PostgreSQL adds `karactl postgres rebalance CLUSTER [--strategy NAME] [--wait]` (PostgreSQL only, not Supabase). `--wait` follows the returned operation; timeout does not cancel it. Worker groups scale through `clusters patch` using `spec.engineOptions.citus.workerGroups`. See [distributed PostgreSQL](postgres/distributed.md) for artifact availability, coordinated recovery and limits.
+
+### Temporal native access
+
+```sh
+karactl temporal client-certificate issue CLUSTER --common-name worker --ttl 720h --out-dir DIR
+karactl temporal client-certificate list CLUSTER
+karactl temporal namespace list CLUSTER
+karactl temporal namespace delete CLUSTER NAME --yes
+karactl temporal ui-oidc-secret set CLUSTER --from-file FILE
+```
+
+Certificate issuance requires exactly one of `--out-dir DIR` or `--stdout`; stdout contains the private key, so protect redirected output. Existing files are not overwritten. Secret input requires exactly one of `--from-file FILE` or `--from-stdin`; there is no argv secret flag. All commands accept `-n NS` for the Karakoram namespace, not the workflow namespace. See [Temporal access/TLS](temporal/access-and-tls.md) for permissions, output modes, SDK configuration and [operations](temporal/operations.md) for destructive namespace deletion.
 
 ## Safety and exit statuses
 

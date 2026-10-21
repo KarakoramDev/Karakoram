@@ -164,7 +164,11 @@ func (s *Server) validationMiddleware(next http.Handler) http.Handler {
 			SchemaValidationOptions: []openapi3.SchemaValidationOption{openapi3.EnableFormatValidation()},
 		}}
 		if e := openapi3filter.ValidateRequest(r.Context(), input); e != nil {
-			_ = schemaFailure(e).write(w)
+			result := schemaFailure(e)
+			if strings.Contains(route.Operation.OperationID, "Temporal") {
+				result.status = http.StatusUnprocessableEntity
+			}
+			_ = result.write(w)
 			return
 		}
 		next.ServeHTTP(w, r)

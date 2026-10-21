@@ -11,6 +11,7 @@
 | `openbao-plugin-kms-aws` | 0.1.0 | [Official release](https://github.com/openbao/openbao-plugins/releases/tag/kms-aws-v0.1.0) | MPL-2.0 | Versioned plugin directory; lock `executableMembers` marks `openbao-plugin-kms-aws_linux_amd64_v1` executable as the runtime owner. |
 
 OpenBao installs the MongoDB database plugin on every member so the first connection does not need a plugin-install redeployment; the AWS KMS plugin is installed only for `seal.type: awskms`, an immutable creation choice. Plugin registration uses the locked executable/version, not a runtime OCI download. Artifact availability does not establish backend lifecycle or database-connection acceptance; see [OpenBao verification](verification.md#openbao-coverage).
+Temporal uses official locked `temporal-server-1.31` (1.31.4), `temporal-server-1.32` (1.32.1), and `temporal-ui-server` (2.56.0) artifacts. Server archives contain `temporal-server`, `temporal-sql-tool`, `tdbg` and configuration; the UI archive supplies `ui-server`. The UI version follows the release lock, not `spec.version`. See [Temporal prerequisites](temporal/README.md).
 
 ## Download and verification
 

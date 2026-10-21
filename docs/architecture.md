@@ -94,6 +94,7 @@ Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declaratio
 | Supabase | `supabase` | [PostgreSQL core plus modular native services](supabase/README.md) |
 | Keycloak | `keycloak` | [Native identity service with a managed PostgreSQL binding](keycloak/README.md) |
 | OpenBao | `openbao` | [Native secrets clusters, Raft recovery and leased database credentials](openbao/README.md) |
+| Temporal | `temporal` | [Stateless workflow roles on bound PostgreSQL](temporal/README.md); requires the PostgreSQL binding service |
 
 Supabase wraps the PostgreSQL core rather than duplicating database lifecycle. Internal services use a protocol-transparent leader forwarder rather than ProxySQL; the client proxy retains explicit protocol limits. Native service availability comes from an embedded, checksum-pinned lock with operator mirror precedence, not floating downloads. See [ADRs 0034–0036](adr/README.md) and [native artifacts](native-artifacts.md).
 

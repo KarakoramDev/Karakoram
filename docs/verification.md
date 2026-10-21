@@ -53,6 +53,16 @@ go test -tags e2e -count=1 -v -timeout 4h ./test/e2e \
   -run '^TestRabbitMQCluster$/Restart$'
 ```
 
+### Native Temporal integration
+
+Use an isolated disposable environment with the locked server/UI artifacts and PostgreSQL binaries; the test starts native services on fixed ports and must not share production data or important host databases. Set `KARAKORAM_TEMPORAL_DIR` to the extracted 1.32.1 server root, `KARAKORAM_TEMPORAL_PREV_DIR` to the extracted 1.31.4 root, `KARAKORAM_TEMPORAL_UI_DIR` to the extracted ui-server 2.56.0 root, and `KARAKORAM_PG_BIN_DIR` to the PostgreSQL binary directory:
+
+```sh
+go test -tags integration -run Native -v ./internal/agent/temporal/
+```
+
+Missing server/UI/PostgreSQL environment variables skip the test: **skip is not pass**. The previous-version directory enables 1.31.4 → 1.32.1 upgrade assertions; omitting it does not establish upgrade coverage. Native assertions cover local engine protocols, schema, TLS, namespaces and UI connectivity, not backend deployment or binding-service acceptance.
+
 ### Native PostgreSQL and Supabase integration
 
 Compile on a compatible Linux host, then copy the test binaries into an isolated Ubuntu 24.04 Incus/LXC guest with native Percona packages and required locked artifacts. Run as an unprivileged runtime user, with private disposable data directories and an isolated network namespace: tests own fixed PostgreSQL/service loopback ports. Never run them against production data or alongside important host databases.

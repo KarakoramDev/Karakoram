@@ -20,7 +20,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		return nil
 	}
 	rule, exists := api.OperationRBAC[operationID(name)]
-	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials" && name != "RevealOpenBaoUnsealKeys") {
+	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials" && name != "RevealOpenBaoUnsealKeys" && name != "IssueTemporalClientCertificate") {
 		return nil
 	}
 	if result.status >= 300 {
@@ -44,6 +44,13 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 	case "CreateOpenBaoDatabaseConnection":
 		e.Target = in.Cluster + "/" + in.Body.(*api.OpenBaoDatabaseConnectionWrite).Name
 	case "DeleteOpenBaoDatabaseConnection":
+		e.Target = in.Cluster + "/" + in.Name
+	case "IssueTemporalClientCertificate":
+		e.Reason = "TemporalClientCertificateIssued"
+	case "SetTemporalUIOIDCClientSecret":
+		e.Reason = "TemporalUIOIDCClientSecretUpdated"
+	case "DeleteTemporalNamespace":
+		e.Resource = "temporal-namespaces"
 		e.Target = in.Cluster + "/" + in.Name
 	case "GetSupabaseCredentials":
 		e.Reason = "SupabaseCredentialsRevealed"
