@@ -83,11 +83,15 @@ func TestNormalizeRestrictions(t *testing.T) {
 		t.Fatal(got, err, source)
 	}
 	for _, r := range []*domain.TokenRestrictions{
-		{Namespaces: []string{""}}, {Clusters: []string{"team/no/slash"}}, {Permissions: []string{"unknown:read"}}, {Permissions: []string{"clusters:unknown"}},
+		{Namespaces: []string{""}}, {Clusters: []string{"team/no/slash"}}, {Permissions: []string{"unknown:read"}}, {Permissions: []string{"clusters:unknown"}}, {Permissions: []string{"cluster-data:update"}},
 	} {
 		if _, err := NormalizeRestrictions(r); err == nil {
 			t.Fatalf("accepted %+v", r)
 		}
+	}
+	// Permissions outside OpenAPI routes come from the RBAC vocabulary.
+	if _, err := NormalizeRestrictions(&domain.TokenRestrictions{Permissions: []string{"backups:export", "cluster-data:read", "cluster-data:write", "cluster-data:*"}}); err != nil {
+		t.Fatal(err)
 	}
 	clone := CloneRestrictions(got)
 	clone.Namespaces[0] = "changed"

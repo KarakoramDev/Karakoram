@@ -70,6 +70,13 @@ func DefaultPolicy() string {
 	}
 	return b.String()
 }
+
+// KnownPermission reports whether resource:action belongs to the RBAC
+// vocabulary; action "*" matches any action of a known resource.
+func KnownPermission(resource, action string) bool {
+	actions := vocabulary()[resource]
+	return len(actions) > 0 && (action == "*" || actions[action])
+}
 func vocabulary() map[string]map[string]bool {
 	out := map[string]map[string]bool{}
 	for _, r := range api.OperationRBAC {

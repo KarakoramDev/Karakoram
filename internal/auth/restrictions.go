@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 )
@@ -55,20 +54,7 @@ func NormalizeRestrictions(r *domain.TokenRestrictions) (*domain.TokenRestrictio
 	}
 	r.Permissions, err = normalize(r.Permissions, "permissions", func(v string) bool {
 		res, action, ok := strings.Cut(v, ":")
-		if !ok || action == "" {
-			return false
-		}
-		for _, rule := range api.OperationRBAC {
-			if rule.Resource == res && (action == "*" || rule.Action == action) {
-				return true
-			}
-		}
-		for _, rule := range api.AdditionalRBAC {
-			if rule.Resource == res && (action == "*" || rule.Action == action) {
-				return true
-			}
-		}
-		return res == "backups" && action == "export"
+		return ok && action != "" && rbac.KnownPermission(res, action)
 	})
 	return r, err
 }
