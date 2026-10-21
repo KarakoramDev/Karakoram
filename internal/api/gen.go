@@ -46,6 +46,7 @@ const (
 const (
 	BackupTypeDefinitions  BackupType = "definitions"
 	BackupTypeDiff         BackupType = "diff"
+	BackupTypeDump         BackupType = "dump"
 	BackupTypeFull         BackupType = "full"
 	BackupTypeIncr         BackupType = "incr"
 	BackupTypeIncremental  BackupType = "incremental"
@@ -59,6 +60,7 @@ const (
 const (
 	BackupScheduleTypeDefinitions  BackupScheduleType = "definitions"
 	BackupScheduleTypeDiff         BackupScheduleType = "diff"
+	BackupScheduleTypeDump         BackupScheduleType = "dump"
 	BackupScheduleTypeFull         BackupScheduleType = "full"
 	BackupScheduleTypeIncr         BackupScheduleType = "incr"
 	BackupScheduleTypeIncremental  BackupScheduleType = "incremental"
@@ -72,6 +74,7 @@ const (
 const (
 	BackupScheduleInputTypeDefinitions  BackupScheduleInputType = "definitions"
 	BackupScheduleInputTypeDiff         BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeDump         BackupScheduleInputType = "dump"
 	BackupScheduleInputTypeFull         BackupScheduleInputType = "full"
 	BackupScheduleInputTypeIncr         BackupScheduleInputType = "incr"
 	BackupScheduleInputTypeIncremental  BackupScheduleInputType = "incremental"
@@ -412,6 +415,7 @@ const (
 const (
 	Definitions  ProviderBackupTypes = "definitions"
 	Diff         ProviderBackupTypes = "diff"
+	Dump         ProviderBackupTypes = "dump"
 	Full         ProviderBackupTypes = "full"
 	Incr         ProviderBackupTypes = "incr"
 	Incremental  ProviderBackupTypes = "incremental"
@@ -2055,6 +2059,40 @@ type NamespaceTokenRotate struct {
 type NamespaceUpdate struct {
 	// Description New description; an empty string clears the description.
 	Description string `json:"description"`
+}
+
+// Neo4jUser A Neo4j Community user. Every user has full administrative privileges.
+type Neo4jUser struct {
+	Name                   string `json:"name"`
+	PasswordChangeRequired bool   `json:"passwordChangeRequired"`
+}
+
+// Neo4jUserCreate defines model for Neo4jUserCreate.
+type Neo4jUserCreate struct {
+	// Name The managed neo4j administrator is reserved.
+	Name string `json:"name"`
+
+	// Password Omit to generate a password returned once.
+	Password *string `json:"password,omitempty"`
+}
+
+// Neo4jUserCreated defines model for Neo4jUserCreated.
+type Neo4jUserCreated struct {
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
+
+	// User A Neo4j Community user. Every user has full administrative privileges.
+	User Neo4jUser `json:"user"`
+}
+
+// Neo4jUserPassword defines model for Neo4jUserPassword.
+type Neo4jUserPassword struct {
+	// Password Omit to generate a password returned once.
+	Password *string `json:"password,omitempty"`
+}
+
+// Neo4jUserPasswordChanged defines model for Neo4jUserPasswordChanged.
+type Neo4jUserPasswordChanged struct {
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
 }
 
 // OAuthGrant defines model for OAuthGrant.
@@ -4184,6 +4222,90 @@ type DiscardMySQLUserOldPasswordParams struct {
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// ListNeo4jUsersParams defines parameters for ListNeo4jUsers.
+type ListNeo4jUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateNeo4jUserParams defines parameters for CreateNeo4jUser.
+type CreateNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteNeo4jUserParams defines parameters for DeleteNeo4jUser.
+type DeleteNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetNeo4jUserParams defines parameters for GetNeo4jUser.
+type GetNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// SetNeo4jUserPasswordParams defines parameters for SetNeo4jUserPassword.
+type SetNeo4jUserPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListOpenBaoDatabaseConnectionsParams defines parameters for ListOpenBaoDatabaseConnections.
 type ListOpenBaoDatabaseConnectionsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5567,6 +5689,12 @@ type PatchMySQLUserJSONRequestBody = MySQLUserPatch
 // RotateMySQLUserPasswordJSONRequestBody defines body for RotateMySQLUserPassword for application/json ContentType.
 type RotateMySQLUserPasswordJSONRequestBody RotateMySQLUserPasswordJSONBody
 
+// CreateNeo4jUserJSONRequestBody defines body for CreateNeo4jUser for application/json ContentType.
+type CreateNeo4jUserJSONRequestBody = Neo4jUserCreate
+
+// SetNeo4jUserPasswordJSONRequestBody defines body for SetNeo4jUserPassword for application/json ContentType.
+type SetNeo4jUserPasswordJSONRequestBody = Neo4jUserPassword
+
 // CreateOpenBaoDatabaseConnectionJSONRequestBody defines body for CreateOpenBaoDatabaseConnection for application/json ContentType.
 type CreateOpenBaoDatabaseConnectionJSONRequestBody = OpenBaoDatabaseConnectionWrite
 
@@ -6170,6 +6298,21 @@ type ServerInterface interface {
 	// Discard a MySQL user's retained password
 	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
 	DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DiscardMySQLUserOldPasswordParams)
+	// List Neo4j Community users
+	// (GET /clusters/{cluster}/neo4j/users)
+	ListNeo4jUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListNeo4jUsersParams)
+	// Create a Neo4j Community user
+	// (POST /clusters/{cluster}/neo4j/users)
+	CreateNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateNeo4jUserParams)
+	// Delete a Neo4j Community user
+	// (DELETE /clusters/{cluster}/neo4j/users/{user})
+	DeleteNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteNeo4jUserParams)
+	// Read a Neo4j Community user
+	// (GET /clusters/{cluster}/neo4j/users/{user})
+	GetNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetNeo4jUserParams)
+	// Set or generate a Neo4j Community user password
+	// (POST /clusters/{cluster}/neo4j/users/{user}/password)
+	SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params SetNeo4jUserPasswordParams)
 	// List managed database connections
 	// (GET /clusters/{cluster}/openbao/database-connections)
 	ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams)
@@ -11759,6 +11902,373 @@ func (siw *ServerInterfaceWrapper) DiscardMySQLUserOldPassword(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DiscardMySQLUserOldPassword(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNeo4jUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListNeo4jUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNeo4jUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNeo4jUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNeo4jUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNeo4jUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) GetNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNeo4jUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetNeo4jUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetNeo4jUserPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetNeo4jUserPassword(w, r, cluster, user, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18807,6 +19317,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.PatchMySQLUser)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password", wrapper.RotateMySQLUserPassword)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password/discard-old", wrapper.DiscardMySQLUserOldPassword)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/neo4j/users", wrapper.ListNeo4jUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/neo4j/users", wrapper.CreateNeo4jUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}", wrapper.DeleteNeo4jUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}", wrapper.GetNeo4jUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}/password", wrapper.SetNeo4jUserPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.ListOpenBaoDatabaseConnections)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.CreateOpenBaoDatabaseConnection)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.DeleteOpenBaoDatabaseConnection)
@@ -28095,6 +28610,517 @@ func (response DiscardMySQLUserOldPassword500JSONResponse) VisitDiscardMySQLUser
 type DiscardMySQLUserOldPassword503JSONResponse struct{ UnavailableJSONResponse }
 
 func (response DiscardMySQLUserOldPassword503JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNeo4jUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListNeo4jUsersParams
+}
+
+type ListNeo4jUsersResponseObject interface {
+	VisitListNeo4jUsersResponse(w http.ResponseWriter) error
+}
+
+type ListNeo4jUsers200JSONResponse struct {
+	Items []Neo4jUser `json:"items"`
+}
+
+func (response ListNeo4jUsers200JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNeo4jUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListNeo4jUsers400JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListNeo4jUsers401JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNeo4jUsers403JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListNeo4jUsers404JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListNeo4jUsers409JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListNeo4jUsers500JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListNeo4jUsers503JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateNeo4jUserParams
+	Body    *CreateNeo4jUserJSONRequestBody
+}
+
+type CreateNeo4jUserResponseObject interface {
+	VisitCreateNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type CreateNeo4jUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateNeo4jUser201JSONResponse struct {
+	Body    Neo4jUserCreated
+	Headers CreateNeo4jUser201ResponseHeaders
+}
+
+func (response CreateNeo4jUser201JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateNeo4jUser400JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateNeo4jUser401JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateNeo4jUser403JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateNeo4jUser404JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateNeo4jUser409JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateNeo4jUser413JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateNeo4jUser415JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateNeo4jUser500JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateNeo4jUser503JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteNeo4jUserParams
+}
+
+type DeleteNeo4jUserResponseObject interface {
+	VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteNeo4jUser204ResponseHeaders struct {
+	IdempotentReplayed bool
+}
+
+type DeleteNeo4jUser204Response struct {
+	Headers DeleteNeo4jUser204ResponseHeaders
+}
+
+func (response DeleteNeo4jUser204Response) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteNeo4jUser400JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteNeo4jUser401JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteNeo4jUser403JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteNeo4jUser404JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteNeo4jUser409JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteNeo4jUser500JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteNeo4jUser503JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetNeo4jUserParams
+}
+
+type GetNeo4jUserResponseObject interface {
+	VisitGetNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type GetNeo4jUser200JSONResponse Neo4jUser
+
+func (response GetNeo4jUser200JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetNeo4jUser400JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetNeo4jUser401JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetNeo4jUser403JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetNeo4jUser404JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetNeo4jUser409JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetNeo4jUser500JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetNeo4jUser503JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetNeo4jUserPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  SetNeo4jUserPasswordParams
+	Body    *SetNeo4jUserPasswordJSONRequestBody
+}
+
+type SetNeo4jUserPasswordResponseObject interface {
+	VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type SetNeo4jUserPassword200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type SetNeo4jUserPassword200JSONResponse struct {
+	Body    Neo4jUserPasswordChanged
+	Headers SetNeo4jUserPassword200ResponseHeaders
+}
+
+func (response SetNeo4jUserPassword200JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetNeo4jUserPassword400JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetNeo4jUserPassword401JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetNeo4jUserPassword403JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetNeo4jUserPassword404JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetNeo4jUserPassword409JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response SetNeo4jUserPassword413JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SetNeo4jUserPassword415JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetNeo4jUserPassword500JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response SetNeo4jUserPassword503JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
 
@@ -38979,6 +40005,21 @@ type StrictServerInterface interface {
 	// Discard a MySQL user's retained password
 	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
 	DiscardMySQLUserOldPassword(ctx context.Context, request DiscardMySQLUserOldPasswordRequestObject) (DiscardMySQLUserOldPasswordResponseObject, error)
+	// List Neo4j Community users
+	// (GET /clusters/{cluster}/neo4j/users)
+	ListNeo4jUsers(ctx context.Context, request ListNeo4jUsersRequestObject) (ListNeo4jUsersResponseObject, error)
+	// Create a Neo4j Community user
+	// (POST /clusters/{cluster}/neo4j/users)
+	CreateNeo4jUser(ctx context.Context, request CreateNeo4jUserRequestObject) (CreateNeo4jUserResponseObject, error)
+	// Delete a Neo4j Community user
+	// (DELETE /clusters/{cluster}/neo4j/users/{user})
+	DeleteNeo4jUser(ctx context.Context, request DeleteNeo4jUserRequestObject) (DeleteNeo4jUserResponseObject, error)
+	// Read a Neo4j Community user
+	// (GET /clusters/{cluster}/neo4j/users/{user})
+	GetNeo4jUser(ctx context.Context, request GetNeo4jUserRequestObject) (GetNeo4jUserResponseObject, error)
+	// Set or generate a Neo4j Community user password
+	// (POST /clusters/{cluster}/neo4j/users/{user}/password)
+	SetNeo4jUserPassword(ctx context.Context, request SetNeo4jUserPasswordRequestObject) (SetNeo4jUserPasswordResponseObject, error)
 	// List managed database connections
 	// (GET /clusters/{cluster}/openbao/database-connections)
 	ListOpenBaoDatabaseConnections(ctx context.Context, request ListOpenBaoDatabaseConnectionsRequestObject) (ListOpenBaoDatabaseConnectionsResponseObject, error)
@@ -41767,6 +42808,158 @@ func (sh *strictHandler) DiscardMySQLUserOldPassword(w http.ResponseWriter, r *h
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DiscardMySQLUserOldPasswordResponseObject); ok {
 		if err := validResponse.VisitDiscardMySQLUserOldPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNeo4jUsers operation middleware
+func (sh *strictHandler) ListNeo4jUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListNeo4jUsersParams) {
+	var request ListNeo4jUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNeo4jUsers(ctx, request.(ListNeo4jUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNeo4jUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNeo4jUsersResponseObject); ok {
+		if err := validResponse.VisitListNeo4jUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNeo4jUser operation middleware
+func (sh *strictHandler) CreateNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateNeo4jUserParams) {
+	var request CreateNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateNeo4jUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNeo4jUser(ctx, request.(CreateNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitCreateNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteNeo4jUser operation middleware
+func (sh *strictHandler) DeleteNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteNeo4jUserParams) {
+	var request DeleteNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteNeo4jUser(ctx, request.(DeleteNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitDeleteNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNeo4jUser operation middleware
+func (sh *strictHandler) GetNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetNeo4jUserParams) {
+	var request GetNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNeo4jUser(ctx, request.(GetNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitGetNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetNeo4jUserPassword operation middleware
+func (sh *strictHandler) SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params SetNeo4jUserPasswordParams) {
+	var request SetNeo4jUserPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body SetNeo4jUserPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetNeo4jUserPassword(ctx, request.(SetNeo4jUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetNeo4jUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetNeo4jUserPasswordResponseObject); ok {
+		if err := validResponse.VisitSetNeo4jUserPasswordResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

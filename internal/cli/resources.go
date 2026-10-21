@@ -43,6 +43,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	case s.operation == "createMySQLDatabase":
 		c.Flags().String("character-set", "", "Database character set (creation only)")
 		c.Flags().String("collation", "", "Database collation (creation only)")
+	case s.operation == "createNeo4jUser" || s.operation == "setNeo4jUserPassword":
+		c.Flags().Bool("password-stdin", false, "Read password from standard input; omit to generate a password returned once")
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -136,6 +138,9 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	}
 	if strings.Contains(s.operation, "OpenBao") {
 		return a.openBaoBody(cmd, s.operation)
+	}
+	if strings.HasPrefix(s.path, "neo4j ") {
+		return a.neo4jBody(cmd, s.operation, args)
 	}
 	if strings.HasPrefix(s.path, "namespaces ") {
 		return a.namespaceBody(cmd, s.operation)

@@ -386,6 +386,14 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 		if strings.HasPrefix(name, "DryRun") {
 			return next(ctx, w, r.WithContext(ctx), v)
 		}
+		// Community user mutations always grant administrative access. Recheck
+		// the additional permission before secret replay as well as execution.
+		if id == "createNeo4jUser" || id == "setNeo4jUserPassword" || id == "deleteNeo4jUser" {
+			extra, exists := api.OperationAdditionalRBAC[id]
+			if !exists || extra.Public || extra.ObjectParam != "cluster" || !s.allowed(ctx, extra.Resource, extra.Action, clusterObject(r.URL.Query().Get("namespace"), r.PathValue("cluster"))) {
+				return fail(403, "forbidden", "Neo4j Community user mutations require clusters/update permission because every user is an administrator"), nil
+			}
+		}
 		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
 	}
 }
@@ -435,6 +443,8 @@ func (m operationMux) HandleFunc(pattern string, handler func(http.ResponseWrite
 		pattern = "GET /healthz"
 	case "GET /api/v1/metrics":
 		pattern = "GET /metrics"
+	case "POST /api/v1/clusters/{cluster}/neo4j/users/{user}/password":
+		handler = neo4jOptionalPasswordBody(handler)
 	}
 	m.ServeMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		if original, ok := r.Context().Value(wireURLKey{}).(*url.URL); ok {

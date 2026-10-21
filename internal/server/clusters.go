@@ -959,6 +959,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if strings.Contains(name, "MySQL") {
 		return s.mysql(ctx, name, in, rc, p)
 	}
+	if strings.Contains(name, "Neo4j") {
+		return s.neo4j(ctx, name, in, rc, p)
+	}
 	if strings.Contains(name, "Postgres") {
 		return s.postgres(ctx, name, in, rc, p)
 	}

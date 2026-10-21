@@ -15,6 +15,7 @@ import { openbaoUI } from './openbao/index.ts';
 import { temporalUI } from './temporal';
 import { mysqlUI } from './mysql';
 import { pxcUI } from './pxc';
+import { neo4jUI } from './neo4j/ui';
 
 engines.rabbitmq = rabbitmqUI;
 
@@ -26,3 +27,4 @@ engines.openbao = openbaoUI;
 engines.temporal = temporalUI;
 engines.mysql = mysqlUI;
 engines.pxc = pxcUI;
+engines.neo4j = neo4jUI;

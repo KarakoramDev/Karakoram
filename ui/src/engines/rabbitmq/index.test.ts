@@ -20,7 +20,7 @@ const cluster: Schemas['Cluster'] = {
 };
 
 test('registration attaches all built-in engines to the shared registry', () => {
-  assert.deepEqual(Object.keys(engines).sort(), ['elasticsearch', 'keycloak', 'mysql', 'openbao', 'postgres', 'psmdb', 'pxc', 'rabbitmq', 'supabase', 'temporal']);
+  assert.deepEqual(Object.keys(engines).sort(), ['elasticsearch', 'keycloak', 'mysql', 'neo4j', 'openbao', 'postgres', 'psmdb', 'pxc', 'rabbitmq', 'supabase', 'temporal']);
   assert.equal(engines.rabbitmq, rabbitmqUI);
   assert.equal(engines.elasticsearch, elasticsearchUI);
 });

@@ -283,13 +283,14 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 		"createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum",
 		"setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret",
 		"createOpenBaoDatabaseConnection",
+		"createNeo4jUser", "deleteNeo4jUser", "setNeo4jUserPassword",
 	} {
 		if !covered[id] {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 54 {
-		t.Fatalf("covered operations = %d, want 54", len(covered))
+	if len(covered) != 57 {
+		t.Fatalf("covered operations = %d, want 57", len(covered))
 	}
 }
 

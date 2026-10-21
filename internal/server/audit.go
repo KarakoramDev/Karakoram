@@ -143,6 +143,10 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 	case "GrantMySQLPrivileges", "RevokeMySQLPrivileges":
 		body := in.Body.(*api.MySQLGrant)
 		e.Target = in.Cluster + "/" + body.Database + "/" + body.User
+	case "CreateNeo4jUser":
+		e.Target = in.Cluster + "/" + in.Body.(*api.Neo4jUserCreate).Name
+	case "DeleteNeo4jUser", "SetNeo4jUserPassword":
+		e.Target = in.Cluster + "/" + in.User
 	case "CreatePostgresRole", "UpdatePostgresRole":
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresRoleWrite).Name
 	case "PatchPostgresRole", "DeletePostgresRole", "RotatePostgresRolePassword":

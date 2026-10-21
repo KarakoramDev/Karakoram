@@ -75,6 +75,15 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	neo4jRegistry, err := engine.NewRegistry(&fakeNeo4jAccess{}, &fakeProvider{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	neo4jCluster := domain.Cluster{Name: "graph", Spec: domain.ClusterSpec{Provider: "neo4j", Version: "2026.10.0", Topology: domain.Topology{Type: "single"}}}
+	(&fakeProvider{}).ApplyDefaults(&neo4jCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &neo4jCluster); err != nil {
+		t.Fatal(err)
+	}
 	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
@@ -178,6 +187,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				if operationID == "listMySQLGrants" {
 					url += "?database=app"
 				}
+			}
+			if strings.Contains(path, "/neo4j/") {
+				s.Registry = neo4jRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/graph/", 1)
 			}
 			if strings.Contains(path, "/elasticsearch/") {
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/search/", 1)

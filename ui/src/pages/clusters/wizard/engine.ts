@@ -27,6 +27,15 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose MySQL publicly on port 3306',
     configHint: 'Configure backend-allowlisted MySQL parameters under engine options.',
   };
+  if (provider === 'neo4j') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 5 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      single: { title: 'Single instance (Community)', description: 'Exactly one Neo4j Community instance. No clustering, replicas or high availability; backups and maintenance cause a full outage.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Bolt publicly on port 7687',
+    configHint: 'Only allowlisted engineOptions.settings are supported; engineConfig is not accepted.',
+  };
   if (provider === 'psmdb') return {
     resourceMinimums: { cpu: 1, ram: 0.5, disk: 5 },
     runtimeDisk: { min: 1, max: 3 },
@@ -82,6 +91,12 @@ export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
     spec.provider === 'pxc' ? 'PXC requires three or five Galera members in a Primary component and one routed writer. Quorum loss rejects reads and writes; never bootstrap an unfenced partition. Strict mode requires compatible InnoDB tables with primary keys.' : spec.topology.type === 'single' ? 'Single is not highly available; maintenance interrupts database access.' : 'Group Replication provides automatic failover, requires a majority, and blocks writes on quorum loss.',
     'Manage application users through MySQL access to synchronize ProxySQL authentication. Read/write split is not a consistency guarantee.',
     spec.backup?.pitr?.enabled ? 'PITR requires a completed full backup and continuous binlog archives.' : 'PITR is disabled; recovery is limited to completed backups.',
+  ];
+  if (spec.provider === 'neo4j') return [
+    'Neo4j Community is a single instance with no high availability. Every backup, restart, upgrade, TLS rotation and memory change is a full outage.',
+    'Backups are full offline dumps, with no incremental backups or point-in-time recovery. Scheduled backups require acceptBackupDowntime and have no maintenance window.',
+    'Every Community user has full administrative privileges. Rotate the managed neo4j administrator through System users.',
+    'Only Bolt (7687) can be exposed publicly. HTTPS Query API and Browser remain private; TLS and trusted cluster CA verification are required.',
   ];
   if (spec.provider === 'postgres' || spec.provider === 'supabase') return [
     spec.topology.type === 'single' ? 'A single data member has no failover; maintenance interrupts database access.' : 'Patroni failover briefly interrupts writes. Three or five etcd voters maintain the data-member quorum.',

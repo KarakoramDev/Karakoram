@@ -10,6 +10,15 @@ import { defaultLogProcess, defaultProvider, detailProvider, engines, engineTopo
 const resources: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 2, maxDisk: 20 };
 const spec: Schemas['ClusterSpec'] = { provider: 'unregistered', version: '1.0', topology: { type: 'cluster' }, components: { engine: { replicas: 3, resources }, extra: { worker: { replicas: 2, resources }, disabled: { replicas: 0, resources } } } };
 
+test('Neo4j registry exposes Bolt, singleton summary and all Community metrics', () => {
+  assert.equal(engines.neo4j?.label, 'Neo4j Community');
+  assert.deepEqual(publicExposureMetadata(engines.neo4j, spec), { publicPort: 7687, publicPortLabel: 'Bolt' });
+  assert.equal(engines.neo4j?.topologySummary?.({ spec } as Schemas['Cluster']), 'Single instance (Community)');
+  assert.equal(hasReplicaSetDetails('neo4j'), false);
+  const names = monitoringPanels('neo4j').flatMap((panel) => panel.names);
+  for (const name of ['neo4j_up', 'neo4j_heap_used_bytes', 'neo4j_heap_committed_bytes', 'neo4j_heap_max_bytes', 'neo4j_heap_configured_bytes', 'neo4j_pagecache_configured_bytes', 'neo4j_nodes', 'neo4j_relationships', 'neo4j_transactions_active', 'neo4j_store_size_bytes', 'cpu.percent', 'ram.usedBytes', 'disk.usedBytes']) assert.ok(names.includes(name), name);
+});
+
 test('default provider selects psmdb explicitly rather than catalog order', () => {
   assert.equal(defaultProvider([{ name: 'elasticsearch' }, { name: 'psmdb' }])?.name, 'psmdb');
   assert.equal(defaultProvider([{ name: 'other' }])?.name, 'other');

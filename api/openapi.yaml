@@ -4302,6 +4302,150 @@ paths:
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/neo4j/users:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listNeo4jUsers
+      tags: [Neo4j]
+      summary: List Neo4j Community users
+      description: Every Community user has full administrative privileges. The managed neo4j administrator is hidden.
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Application users, without passwords.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Neo4jUser'}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createNeo4jUser
+      tags: [Neo4j]
+      summary: Create a Neo4j Community user
+      description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Neo4jUserCreate'}
+      responses:
+        '201':
+          description: User created. An omitted password is generated and returned once.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Neo4jUserCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/neo4j/users/{user}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+    get:
+      operationId: getNeo4jUser
+      tags: [Neo4j]
+      summary: Read a Neo4j Community user
+      description: Every Community user has full administrative privileges.
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: User attributes, never its password.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Neo4jUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deleteNeo4jUser
+      tags: [Neo4j]
+      summary: Delete a Neo4j Community user
+      description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: User deleted.
+          headers:
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/neo4j/users/{user}/password:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+    post:
+      operationId: setNeo4jUserPassword
+      tags: [Neo4j]
+      summary: Set or generate a Neo4j Community user password
+      description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Neo4jUserPassword'}
+      responses:
+        '200':
+          description: Password changed. An omitted password is generated and returned once.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Neo4jUserPasswordChanged'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/postgres/roles:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -9881,6 +10025,7 @@ components:
               - diff
               - incr
               - incremental
+              - dump
         capabilities:
           type: array
           items:
@@ -9932,6 +10077,7 @@ components:
             - diff
             - incr
             - incremental
+            - dump
         storage:
           type: string
           minLength: 1
@@ -11123,6 +11269,38 @@ components:
         state: {type: string}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
+    Neo4jUser:
+      type: object
+      additionalProperties: false
+      description: A Neo4j Community user. Every user has full administrative privileges.
+      required: [name, passwordChangeRequired]
+      properties:
+        name: {type: string}
+        passwordChangeRequired: {type: boolean}
+    Neo4jUserCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z][A-Za-z0-9_.-]{0,63}$', description: The managed neo4j administrator is reserved.}
+        password: {type: string, minLength: 1, writeOnly: true, description: Omit to generate a password returned once.}
+    Neo4jUserCreated:
+      type: object
+      additionalProperties: false
+      required: [user]
+      properties:
+        user: {$ref: '#/components/schemas/Neo4jUser'}
+        generatedPassword: {type: string}
+    Neo4jUserPassword:
+      type: object
+      additionalProperties: false
+      properties:
+        password: {type: string, minLength: 1, writeOnly: true, description: Omit to generate a password returned once.}
+    Neo4jUserPasswordChanged:
+      type: object
+      additionalProperties: false
+      properties:
+        generatedPassword: {type: string}
     PostgresRole:
       type: object
       additionalProperties: false
@@ -11652,6 +11830,7 @@ components:
             - diff
             - incr
             - incremental
+            - dump
         trigger:
           type: string
           description: What initiated the snapshot; restore identifies an automatic post-restore base backup.
@@ -12984,6 +13163,7 @@ components:
             - diff
             - incr
             - incremental
+            - dump
         storage:
           type: string
           minLength: 1

@@ -54,6 +54,8 @@ var commandGroupDescriptions = map[string]string{
 	"mysql users":                  "Manage MySQL application users and passwords",
 	"mysql databases":              "Manage MySQL application databases",
 	"mysql grants":                 "Manage MySQL database privileges",
+	"neo4j":                        "Manage Neo4j Community users (all users are administrators)",
+	"neo4j users":                  "Manage Neo4j Community administrative users and passwords",
 }
 
 var commandDescriptions = map[string]string{
@@ -169,6 +171,7 @@ var commandDescriptions = map[string]string{
 	"mysql grants grant":                "Grant MySQL database privileges",
 	"mysql grants revoke":               "Revoke MySQL database privileges",
 	"mysql recover-quorum":              "Explicitly recover PXC quorum after fencing absent members",
+	"neo4j users password":              "Set a Neo4j user password from stdin or generate one (returned once)",
 }
 
 type nativeResourceDescription struct{ singular, plural string }
@@ -191,6 +194,7 @@ var nativeResourceDescriptions = map[string]nativeResourceDescription{
 	"mysql users":                  {"a MySQL application user", "MySQL application users"},
 	"mysql databases":              {"a MySQL database", "MySQL databases"},
 	"mysql grants":                 {"a MySQL privilege grant", "MySQL privilege grants"},
+	"neo4j users":                  {"a Neo4j Community user (full administrator)", "Neo4j Community users"},
 }
 
 func commandDescription(path string) string {
