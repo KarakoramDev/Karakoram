@@ -123,6 +123,7 @@ Metric names, units, availability and engine-specific health interpretation live
 - [MongoDB operations](mongodb/operations.md)
 - [RabbitMQ operations](rabbitmq/operations.md)
 - [Elasticsearch operations](elasticsearch/operations.md)
+- [Neo4j Community operations and metrics](neo4j/operations.md#monitoring): authenticated Query API/JVM observations and filesystem store size, not an Enterprise Prometheus endpoint; all ten `neo4j_*` series are gauges.
 
 Use `rate()` for counters, not gauges; distinguish process availability from recovery coverage and application correctness.
 

@@ -10,24 +10,24 @@ Each cluster selects an immutable provider/engine. Data-bearing members are sing
 
 The provider catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 
-| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) | [Temporal](temporal/README.md) |
-| --- | --- | --- | --- | --- | --- |
-| Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components | Requires PostgreSQL source and binding service |
-| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows and needs backend capability | Stateless role resources; durable disk belongs to source |
-| Add/remove members | Yes | Yes | Yes | Single→HA; HA 3↔5; no HA→single | Per-role replicas within topology bounds |
-| Replace member | Yes | Yes | Yes | Yes | No separate replacement operation |
-| Rolling restart | Yes | Yes | Yes | HA; single interrupts service | Ordered by role; singleton roles interrupt service |
-| Upgrade | Catalog paths | Catalog paths | Catalog paths | Rolling minor; offline adjacent major for postgres; PG17 minor only for Supabase | Catalog paths; no skipped minors/downgrades |
-| Feature compatibility version (FCV) promotion | Yes | No | No | No | No |
-| TLS rotation | Yes | Yes | Yes | Yes; no CA replacement | Three-phase CA rotation |
-| System-user rotation | Yes | Yes | Yes | Yes | Binding-managed database credentials |
-| Public TCP exposure | Yes | Yes | Yes | Yes; selected client service | No; UI HTTPS only with OIDC |
-| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots | pgBackRest full/diff/incr; database data only | Source full/diff/incr plus state manifest |
-| Point-in-time recovery (PITR) | Yes | No | No | Yes, opt-in | No Temporal timestamp restore |
-| In-place restore | Yes | Merge definitions | Native restore | Destructive/offline | Destructive source restore; shared-source acknowledgement |
-| Clone | Yes | Definitions only | Yes | Same provider and PG major only | No arbitrary destination; original source/name required |
-| Suspend/resume | Yes | Yes | Yes | Yes | Retain bound databases and disable login role |
-| Cross-namespace clone | Yes | Definitions only | Yes | Yes; same provider and PG major | No arbitrary destination |
+| Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) | [Temporal](temporal/README.md) |  [Neo4j Community](neo4j/README.md) |
+| --- | --- | --- | --- | --- | --- |  --- |
+| Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components | Requires PostgreSQL source and binding service |  Yes; single member |
+| Scale CPU/RAM/disk | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows | Yes; disk only grows and needs backend capability | Stateless role resources; durable disk belongs to source |  Yes; disk only grows; memory changes interrupt service |
+| Add/remove members | Yes | Yes | Yes | Single→HA; HA 3↔5; no HA→single | Per-role replicas within topology bounds |  No |
+| Replace member | Yes | Yes | Yes | Yes | No separate replacement operation |  No |
+| Rolling restart | Yes | Yes | Yes | HA; single interrupts service | Ordered by role; singleton roles interrupt service |  Restart interrupts service |
+| Upgrade | Catalog paths | Catalog paths | Catalog paths | Rolling minor; offline adjacent major for postgres; PG17 minor only for Supabase | Catalog paths; no skipped minors/downgrades |  2026.09.0→2026.10.0; offline, fresh backup required |
+| Feature compatibility version (FCV) promotion | Yes | No | No | No | No |  No |
+| TLS rotation | Yes | Yes | Yes | Yes; no CA replacement | Three-phase CA rotation |  Yes; full outage |
+| System-user rotation | Yes | Yes | Yes | Yes | Binding-managed database credentials |  Managed `neo4j` |
+| Public TCP exposure | Yes | Yes | Yes | Yes; selected client service | No; UI HTTPS only with OIDC |  Bolt only |
+| Backup types | Percona Backup for MongoDB (PBM): logical, physical | Definitions only; no messages | Native snapshots | pgBackRest full/diff/incr; database data only | Source full/diff/incr plus state manifest |  Offline `dump`; system + graph; full outage |
+| Point-in-time recovery (PITR) | Yes | No | No | Yes, opt-in | No Temporal timestamp restore |  No |
+| In-place restore | Yes | Merge definitions | Native restore | Destructive/offline | Destructive source restore; shared-source acknowledgement |  Destructive/offline |
+| Clone | Yes | Definitions only | Yes | Same provider and PG major only | No arbitrary destination; original source/name required |  Neo4j dump; target version not older than source |
+| Suspend/resume | Yes | Yes | Yes | Yes | Retain bound databases and disable login role |  Yes |
+| Cross-namespace clone | Yes | Definitions only | Yes | Yes; same provider and PG major | No arbitrary destination |  Yes; Neo4j backup only |
 
 See [Backups and storage](backups.md) for shared recovery mechanics and the engine guides for runtime, compatibility and checkpoint rules.
 

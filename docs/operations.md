@@ -95,7 +95,7 @@ on output volume and available pipe capacity, not a guaranteed grace period.
 The member is reported unhealthy while the agent is unresponsive. Recover by
 resuming the agent or restarting the allocation.
 
-Process names, readiness checks and engine diagnostics: [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md).
+Process names, readiness checks and engine diagnostics: [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md), [Neo4j Community](neo4j/operations.md).
 
 Platform failures expose a Zerops error code and sanitized field/reason summary in events and conditions. Inspect the named resource bound or missing service before changing the spec; rejected resource updates/imports have [resource diagnostics](clusters.md#resources-and-autoscaling). For `serviceStackNotFound`, check whether the recorded service was removed externally; do not delete unrelated services. Use the Zerops dashboard when details are missing/truncated.
 

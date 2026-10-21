@@ -5,6 +5,7 @@
 Karakoram accounts, roles and tokens authorize control-plane actions, independently of backend infrastructure credentials and engine-native users.
 
 The server enforces policy; hidden UI controls are not an authorization boundary. Engine identities belong in [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md) and [Elasticsearch](elasticsearch/access-and-security.md).
+Neo4j native users are described in [Neo4j access](neo4j/access-and-tls.md). Every Community user has full administrative privileges; control-plane RBAC does not add native database roles.
 
 ## Connected OAuth applications
 

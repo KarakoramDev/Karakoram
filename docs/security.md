@@ -127,6 +127,7 @@ Verified runtime-to-volume bindings can establish ownership; conflicting/unverif
 ## Exposure and TLS defaults
 
 MongoDB and RabbitMQ default to `requireTLS`; their optional `preferTLS` permits plaintext and `disabled` removes engine encryption. Elasticsearch accepts **only `requireTLS`** for Elasticsearch HTTP/transport, not blanket TLS on every stack input.
+Neo4j Community accepts only `requireTLS`: Bolt 7687 and private HTTPS 7473 use the cluster CA; plain HTTP is disabled. Every native user is an administrator. See [Neo4j access and trust](neo4j/access-and-tls.md).
 
 | Surface | Default | Network restriction | Authentication |
 | --- | --- | --- | --- |
@@ -138,6 +139,7 @@ MongoDB and RabbitMQ default to `requireTLS`; their optional `preferTLS` permits
 | Elasticsearch HTTPS TCP | Private; `requireTLS` only | Opt-in public TCP requires CIDR allowlist; transport remains private | Elasticsearch users/API keys |
 | MySQL / PXC application TCP | Private; `requireTLS` only | Opt-in public 3306 requires CIDR allowlist; private reader/replication channels remain separate | Scoped TLS-only MySQL users |
 | PXC Galera/IST and SST (4567, 4568, 4444) | Explicit channel TLS and peer verification | Never published; member-only reachability is **not enforced** by any registered backend—use a dedicated network/project ([per backend](mysql/access-and-tls.md#replication-ports-and-network-restriction)) | Shared cluster-traffic certificate/key, separate from per-member SQL leaves |
+| Neo4j Bolt | Private; TLS required | Opt-in public TCP requires allowlist policy; HTTPS remains private | Native users; all administrators in Community |
 | Kibana HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | Elasticsearch/Kibana authentication |
 | APM HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | APM secret token or authorized API key |
 | Logstash inputs | Private Beats 5044 / HTTP 8080 | No automatic public routes or input TLS/auth | User pipeline must configure needed protection |

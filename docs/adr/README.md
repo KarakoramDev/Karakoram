@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are also available. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL, Neo4j Community and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are also available. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -53,6 +53,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0056](0056-temporal-service.md) | Temporal application service on bound PostgreSQL with managed TLS and workflow namespaces |
 | [0052](0052-mysql-engine.md) | Percona Server for MySQL, Group Replication single-primary, ProxySQL, XtraBackup and binary-log PITR |
 | [0053](0053-pxc-engine.md) | Percona XtraDB Cluster as a separate provider over the MySQL core |
+| [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
 
 ## References and verification
 
@@ -61,7 +62,7 @@ Use the [verification guide](../verification.md) for automated test coverage and
 Engine operating guides: [MongoDB](../mongodb/README.md), [replica sets](../mongodb/replica-sets.md)
 and [sharding](../mongodb/sharding.md), [RabbitMQ](../rabbitmq/README.md),
 and [Elasticsearch and Elastic Stack](../elasticsearch/README.md), [PostgreSQL](../postgres/README.md),
-[Supabase](../supabase/README.md), [Temporal](../temporal/README.md), and [MySQL and PXC](../mysql/README.md).
+[Supabase](../supabase/README.md), [Temporal](../temporal/README.md), [MySQL and PXC](../mysql/README.md), and [Neo4j Community](../neo4j/README.md).
 
 Primary references: [Zerops API](https://docs.zerops.io/references/api.md), [Local Storage](https://docs.zerops.io/local-storage/overview.md), [public networking](https://docs.zerops.io/references/networking/public-access.md), [Percona system users](https://docs.percona.com/percona-operator-for-mongodb/latest/system-users.html), [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), and [OpenEverest provider runtime](https://github.com/openeverest/openeverest/blob/main/provider-runtime/controller/interface.go).
 

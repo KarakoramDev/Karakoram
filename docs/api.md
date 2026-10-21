@@ -140,6 +140,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
 | Native MySQL access | `/mysql/users`, `/mysql/users/{user}`, `/mysql/users/{user}/password`, `/mysql/users/{user}/password/discard-old`, `/mysql/databases`, `/mysql/databases/{database}`, `/mysql/grants` | MySQL and PXC |
 | PXC minority recovery | `/mysql/recover-quorum` | PXC only; explicit confirmation and backend fencing |
+| Native Neo4j access | `/neo4j/users`, `/neo4j/users/{user}`, `/neo4j/users/{user}/password` | Neo4j Community only; all users have administrative privileges |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
 | OpenBao | `/openbao/unseal-keys/reveal`, `/openbao/database-connections`, `/openbao/database-connections/{connection}` | Confirmed initialization-material reveal; list/create/get/delete managed target connections |
 | Temporal certificates | `POST /temporal/client-certificates` (issue once); `GET /temporal/client-certificates` (metadata) | Temporal |
@@ -151,6 +152,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
 
 PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
+Neo4j native-user reads use `database-users:read`; create/delete/password changes additionally require `clusters:update` alongside the corresponding `database-users` permission. Password responses are no-store. The managed `neo4j` administrator is hidden from lists and cannot be mutated here. See [Neo4j access and TLS](neo4j/access-and-tls.md).
 
 See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade guards. In-place restores of a bound PostgreSQL source require `acknowledgeBoundConsumers: true`; otherwise HTTP 409 `bound_consumers` lists affected consumer identities.
 

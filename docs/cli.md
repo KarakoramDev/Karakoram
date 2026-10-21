@@ -50,6 +50,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - [MySQL and PXC](mysql/README.md) are separate providers with a shared `mysql` access command group. Their backups use `full` or `incremental`, and PITR is GTID/binlog based; see [MySQL backups](mysql/backups.md).
+- Neo4j Community creation, native administrative users and offline outages: [Neo4j](neo4j/README.md). Always pass `--type dump` for Neo4j backups; schedules require `engineOptions.acceptBackupDowntime: true`.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
 - Cluster mutation `--wait` reports acceptance/operation ID on stderr, then phase changes and a fifteen-second heartbeat. The default timeout is **30m**. It waits for the operation and observed cluster generation; an **Error or Degraded cluster fails the wait**. `clusters wait NAME` observes the current desired generation or deletion/suspension without resubmitting.
 - `operations wait ID` succeeds on **Succeeded**, even when the cluster is Degraded; **Failed/Cancelled** fail. Operation success is not a health guarantee. See [operations and status](clusters.md#operations-and-status).
@@ -87,6 +88,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `mysql` | Native database access and PXC quorum recovery | users list/get/create/update/delete/rotate-password/discard-old-password, databases list/get/create/delete, grants list/grant/revoke; recover-quorum | MySQL and PXC; recover-quorum PXC only |
 | `namespaces` | Project registration/token/relay health | list, get, create, update, validate, rotate-token, delete | All |
 | `oauth-grants` | Connected OAuth application grants | list, delete | Control-plane accounts; administrators may manage all grants |
+| `neo4j` | Native administrative users | users list/get/create/delete/password; create/password accept `--password-stdin` | Neo4j Community only; every user is an admin |
 | `openapi` | Download server specification | — | All |
 | `operations` | Observe/cancel asynchronous work | list, cluster, get, wait, cancel | All; cancellation capability varies |
 | `orphaned-volumes` | Inspect pending platform cleanup | list | All |
@@ -109,6 +111,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
+Neo4j user commands, CA trust and direct Bolt connection caveats are in [Neo4j access](neo4j/access-and-tls.md); the managed `neo4j` account uses `system-users rotate`, not native user mutations.
 
 ## MCP clients
 

@@ -14,6 +14,7 @@ Register S3 destinations, manage backup inventory and schedules, and recover int
 | [PostgreSQL / Supabase](postgres/backups.md) | pgBackRest `full`, `diff`, `incr`; PostgreSQL data only | When enabled | Current primary writes backups and WAL directly to S3 |
 | [OpenBao](openbao/backups.md) | Native `raft-snapshot`, up to 4 GiB; requires source seal material for recovery | No | Control plane streams native HTTPS snapshot to S3; unavailable with PostgreSQL storage |
 | [Temporal](temporal/operations.md#backups) | Source PostgreSQL `full`, `diff`, `incr` through the binding plus a manifest in Temporal cluster state | No Temporal timestamp restore | PostgreSQL source owns archives/retention; deleting a Temporal record does not delete source archives |
+| [Neo4j Community](neo4j/backups.md) | Offline `dump` of `system` and `neo4j`; **full outage**; schedules require `acceptBackupDowntime: true` | No | Member streams both dumps to S3, manifest last |
 
 Backup payload transfer to S3 does not use the management relay; remote administration requests may. Control-plane storage verification does not prove member connectivity. Engine backups and [control-plane state backups](operations.md#control-plane-state-backup-and-recovery) protect different assets. Zerops live volume archives are not consistent engine backups.
 

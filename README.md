@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL, modular Supabase and OpenBao orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL, MySQL, Percona XtraDB Cluster, Neo4j Community, modular Supabase, Keycloak, OpenBao and Temporal orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
 
 ## Engines
 
@@ -20,6 +20,7 @@ Versions below are catalog defaults; each engine section lists supported version
 | Temporal | Temporal 1.32.1 (also 1.31.4); ui-server 2.56.0 | Combined server; split stateless roles on bound PostgreSQL | Source PostgreSQL backup plus cluster-state manifest; requires binding service | [Temporal](docs/temporal/README.md) |
 | MySQL | Percona Server for MySQL 8.4.11-11 default; majors 8.4/8.0 | Single; Group Replication single-primary (3/5); ProxySQL | XtraBackup full/incremental and GTID-based PITR | [MySQL](docs/mysql/README.md) |
 | Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` provider | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
+| Neo4j Community | Neo4j 2026.09.0 / 2026.10.0 (default); Temurin Java 21 | Single member only | Offline system + graph dumps; full outage; no PITR | [Neo4j](docs/neo4j/README.md) |
 
 ## Backends
 
@@ -79,6 +80,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **OpenBao:** [Overview](docs/openbao/README.md) · [API access and TLS](docs/openbao/access-and-tls.md) · [Raft backups and recovery](docs/openbao/backups.md) · [Operations and unseal](docs/openbao/operations.md)
 - **Temporal:** [Overview and prerequisites](docs/temporal/README.md) · [Access and TLS](docs/temporal/access-and-tls.md) · [Operations and recovery](docs/temporal/operations.md)
 - **MySQL and PXC:** [Overview](docs/mysql/README.md) · [Configuration](docs/mysql/configuration.md) · [Access and TLS](docs/mysql/access-and-tls.md) · [Backups and PITR](docs/mysql/backups.md) · [Operations and recovery](docs/mysql/operations.md) · [Native verification](docs/mysql/verification.md)
+- **Neo4j Community:** [Overview](docs/neo4j/README.md) · [Access and TLS](docs/neo4j/access-and-tls.md) · [Offline backups](docs/neo4j/backups.md) · [Operations](docs/neo4j/operations.md)
 - **Reference:** [Architecture decisions](docs/adr/README.md) · [Native artifacts](docs/native-artifacts.md) · [Verification](docs/verification.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Acknowledgements
