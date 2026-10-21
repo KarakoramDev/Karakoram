@@ -49,6 +49,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `--dry-run` previews `clusters create`, `edit`, `patch`, `scale`, `upgrade` and `restores create` on the server using the same request body and namespace, without applying changes. `restores create --into-new --dry-run` previews creation of the cloned cluster. Table output has changes (paths and compact JSON before → after), effects and warnings; `-o json`/`-o yaml` preserves the complete plan. A valid plan exits 0; API validation failures keep the normal error exit status. Dry runs never prompt for destructive confirmation (including `-f -`) and cannot be combined with `--wait`.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
+- [MySQL and PXC](mysql/README.md) are separate providers with a shared `mysql` access command group. Their backups use `full` or `incremental`, and PITR is GTID/binlog based; see [MySQL backups](mysql/backups.md).
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
 - Cluster mutation `--wait` reports acceptance/operation ID on stderr, then phase changes and a fifteen-second heartbeat. The default timeout is **30m**. It waits for the operation and observed cluster generation; an **Error or Degraded cluster fails the wait**. `clusters wait NAME` observes the current desired generation or deletion/suspension without resubmitting.
 - `operations wait ID` succeeds on **Succeeded**, even when the cluster is Degraded; **Failed/Cancelled** fail. Operation success is not a health guarantee. See [operations and status](clusters.md#operations-and-status).
@@ -69,7 +70,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `accounts` | Local control-plane accounts | list, get, create, set, delete, reset-password, change-password | All |
 | `auth` | Advanced cookie/OIDC flows | refresh, oidc-login, oidc-callback | All |
 | `backends` | Registered infrastructure kinds and capabilities | list | All |
-| `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window MongoDB/PostgreSQL/Supabase |
+| `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window for providers advertising PITR |
 | `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
 | `config` | Save connection contexts | set-context | Local |
@@ -83,6 +84,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `logout` | Revoke saved token/remove credentials | — | All |
 | `mcp` | Stdio MCP bridge; management and per-cluster data MCP client configuration | config, config --cluster NS/NAME | Management: all; data: MongoDB, PostgreSQL, Supabase, Elasticsearch, RabbitMQ |
 | `metrics` | Prometheus exposition | — | All |
+| `mysql` | Native database access and PXC quorum recovery | users list/get/create/update/delete/rotate-password/discard-old-password, databases list/get/create/delete, grants list/grant/revoke; recover-quorum | MySQL and PXC; recover-quorum PXC only |
 | `namespaces` | Project registration/token/relay health | list, get, create, update, validate, rotate-token, delete | All |
 | `oauth-grants` | Connected OAuth application grants | list, delete | Control-plane accounts; administrators may manage all grants |
 | `openapi` | Download server specification | — | All |
@@ -176,6 +178,34 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 Use `karactl supabase functions list CLUSTER`, `functions get CLUSTER NAME`, `functions deploy CLUSTER NAME DIR_OR_FILE`, and `functions delete CLUSTER NAME`. Deploy sends a map of relative file paths to source text; directories are recursive and require a nonempty `index.ts` entrypoint. A standalone source file is deployed as `index.ts`. Symlinks and special files are rejected, and source text is limited to 1 MiB per function. A cluster supports at most 100 functions. Names match `[a-z0-9][a-z0-9_-]{0,62}`; `main` is reserved for the runtime dispatcher, and parent traversal is forbidden. Sources are stored sealed but remain readable to callers with cluster-read permission, so do not embed application secrets in source files.
 
 Function deletion and `karactl supabase rotate-jwt-secret CLUSTER` require confirmation (or `--yes`). Rotation queues a durable `rotate-jwt-secret` operation; track the returned ID with `karactl operations get` or `operations wait`. SMTP and function mutations require cluster-update permission; audit events contain identifiers, never passwords or source text.
+
+### MySQL native access
+
+The `mysql` command group administers application accounts and database-level grants:
+
+```sh
+karactl mysql users list CLUSTER
+karactl mysql users get CLUSTER USER
+karactl mysql users create CLUSTER -f user.json
+karactl mysql users update CLUSTER USER -f user.json
+karactl mysql users rotate-password CLUSTER USER --retain-current
+karactl mysql users discard-old-password CLUSTER USER
+karactl mysql databases list CLUSTER
+karactl mysql databases get CLUSTER DATABASE
+karactl mysql databases create CLUSTER -f database.json --character-set utf8mb4 --collation utf8mb4_0900_ai_ci
+karactl mysql grants list CLUSTER --user USER
+karactl mysql grants list CLUSTER --database DATABASE
+karactl mysql grants grant CLUSTER -f grant.json
+karactl mysql grants revoke CLUSTER -f grant.json --yes
+karactl mysql databases delete CLUSTER DATABASE --force --yes
+karactl mysql users delete CLUSTER USER --yes
+```
+
+Accounts use the fixed `'name'@'%'` identity and require TLS. Creation and password rotation return a server-generated `generatedPassword` once, using the same JSON/YAML/table output conventions as PostgreSQL role creation; save it securely and never log the response. `--retain-current` keeps the previous password valid during a credential rollout; `discard-old-password` removes that retained password.
+
+User creation documents contain `name` and optional `locked` and `maxUserConnections`. `users update` sends a partial attribute update: omitted fields stay unchanged, and only `locked` and `maxUserConnections` may be changed. Passwords are managed separately through rotation, not supplied in user documents.
+
+Database documents contain `name` and optional `characterSet` and `collation`. The creation flags override the corresponding document fields; these properties cannot be updated after creation. Database deletion refuses nonempty databases unless `--force` is supplied. Grant documents contain `user`, `database` and `privileges`; grants are database-level only, not global or administrative privileges. Listing grants requires a nonempty `--user` or `--database` filter (both may be supplied). User deletion, database deletion and privilege revocation require confirmation or `--yes`.
 
 ### PostgreSQL native access
 

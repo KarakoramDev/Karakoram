@@ -452,7 +452,7 @@ export function ClusterWizardPage() {
                     hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
-                {!engineUI?.engineConfigUnsupported && !['elasticsearch', 'postgres', 'supabase'].includes(provider.name) ? <TextAreaField
+                {!engineUI?.engineConfigUnsupported && !['elasticsearch', 'postgres', 'supabase', 'mysql', 'pxc'].includes(provider.name) ? <TextAreaField
                   label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML, optional)' : 'Engine configuration overrides (optional)')}
                   mono
                   rows={5}

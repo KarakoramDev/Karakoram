@@ -25,6 +25,24 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		tokenFlags(c)
 	case s.operation == "createPostgresDatabase":
 		c.Flags().StringArray("extension", nil, "Extension to create in the database (repeatable; added to the request file)")
+	case s.operation == "listMySQLGrants":
+		validateArgs := c.Args
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validateArgs(cmd, args); err != nil {
+				return err
+			}
+			user, _ := cmd.Flags().GetString("user")
+			database, _ := cmd.Flags().GetString("database")
+			if strings.TrimSpace(user) == "" && strings.TrimSpace(database) == "" {
+				return usageError("--user or --database is required")
+			}
+			return nil
+		}
+	case s.operation == "rotateMySQLUserPassword":
+		c.Flags().Bool("retain-current", false, "Retain the current password until explicitly discarded")
+	case s.operation == "createMySQLDatabase":
+		c.Flags().String("character-set", "", "Database character set (creation only)")
+		c.Flags().String("collation", "", "Database collation (creation only)")
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -89,7 +107,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	case s.operation == "replaceClusterBalancer":
 		c.Flags().Bool("enabled", true, "Enable balancing")
 	case s.operation == "createBackup":
-		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions, snapshot, full, diff or incr)")
+		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions, snapshot, full, incremental, diff or incr)")
 		c.Flags().String("storage", "", "Backup storage (defaults to cluster configuration)")
 		c.Annotations[operationAnnotation] += ",getCluster"
 	case s.operation == "createRestore":
@@ -121,6 +139,23 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	}
 	if strings.HasPrefix(s.path, "namespaces ") {
 		return a.namespaceBody(cmd, s.operation)
+	}
+	if s.operation == "rotateMySQLUserPassword" {
+		retain, _ := cmd.Flags().GetBool("retain-current")
+		return map[string]any{"retainCurrent": retain}, nil
+	}
+	if s.operation == "createMySQLDatabase" {
+		body, err := a.fileBody(cmd)
+		if err != nil {
+			return nil, err
+		}
+		for flag, field := range map[string]string{"character-set": "characterSet", "collation": "collation"} {
+			if cmd.Flags().Changed(flag) {
+				value, _ := cmd.Flags().GetString(flag)
+				body[field] = value
+			}
+		}
+		return body, nil
 	}
 	if !s.body {
 		return nil, nil

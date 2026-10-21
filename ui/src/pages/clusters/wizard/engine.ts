@@ -15,6 +15,18 @@ export function engineRules(provider: string) {
     exposureLabel: 'Use Keycloak public HTTPS routing under engine options',
     configHint: 'Configure the source PostgreSQL binding and ingress under engine options.',
   };
+  if (provider === 'mysql' || provider === 'pxc') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 5 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: (provider === 'pxc' ? {
+      cluster: { title: 'Percona XtraDB Cluster', description: 'Three or five Galera members and one ProxySQL-routed writer. Quorum loss rejects reads and writes. Use InnoDB tables with primary keys.' },
+    } : {
+      single: { title: 'Single MySQL member', description: 'Not highly available. One database member without failover; maintenance causes downtime.' },
+      group: { title: 'MySQL Group Replication', description: 'Three or five members with automatic failover. Requires a majority; writes block on quorum loss.' },
+    }) as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose MySQL publicly on port 3306',
+    configHint: 'Configure backend-allowlisted MySQL parameters under engine options.',
+  };
   if (provider === 'psmdb') return {
     resourceMinimums: { cpu: 1, ram: 0.5, disk: 5 },
     runtimeDisk: { min: 1, max: 3 },
@@ -66,6 +78,11 @@ export function engineRules(provider: string) {
 }
 
 export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
+  if (spec.provider === 'mysql' || spec.provider === 'pxc') return [
+    spec.provider === 'pxc' ? 'PXC requires three or five Galera members in a Primary component and one routed writer. Quorum loss rejects reads and writes; never bootstrap an unfenced partition. Strict mode requires compatible InnoDB tables with primary keys.' : spec.topology.type === 'single' ? 'Single is not highly available; maintenance interrupts database access.' : 'Group Replication provides automatic failover, requires a majority, and blocks writes on quorum loss.',
+    'Manage application users through MySQL access to synchronize ProxySQL authentication. Read/write split is not a consistency guarantee.',
+    spec.backup?.pitr?.enabled ? 'PITR requires a completed full backup and continuous binlog archives.' : 'PITR is disabled; recovery is limited to completed backups.',
+  ];
   if (spec.provider === 'postgres' || spec.provider === 'supabase') return [
     spec.topology.type === 'single' ? 'A single data member has no failover; maintenance interrupts database access.' : 'Patroni failover briefly interrupts writes. Three or five etcd voters maintain the data-member quorum.',
     'ProxySQL is the application endpoint. Login-role passwords must be managed through Postgres access to synchronize proxy authentication; roles created directly in SQL are not routable through the proxy.',

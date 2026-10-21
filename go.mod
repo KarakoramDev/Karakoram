@@ -7,6 +7,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-oidc/v3 v3.14.1
 	github.com/getkin/kin-openapi v0.151.0
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/jsonschema-go v0.4.3
 	github.com/jackc/pgx/v5 v5.11.0
@@ -35,6 +36,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect

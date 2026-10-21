@@ -161,7 +161,7 @@ test('Elasticsearch detail uses native options without an unused generic overrid
   assert.match(markup, /Elastic Stack options/);
   assert.match(markup, /Public HTTPS access to APM Server/);
   const wizard = readFileSync(new URL('../../pages/clusters/ClusterWizard.tsx', import.meta.url), 'utf8');
-  assert.match(wizard, /!\['elasticsearch', 'postgres', 'supabase'\]\.includes\(provider\.name\) \? <TextAreaField/);
+  assert.match(wizard, /!\['elasticsearch', 'postgres', 'supabase', 'mysql', 'pxc'\]\.includes\(provider\.name\) \? <TextAreaField/);
   const inherited = renderToStaticMarkup(createElement(OptionsSection, { provider, spec: { ...spec, engineConfig: 'inherited: true' }, onChange: () => {} }));
   assert.match(inherited, /Clear inherited overrides/);
 });

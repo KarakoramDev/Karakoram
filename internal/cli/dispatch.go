@@ -538,6 +538,9 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 		}
 		return c.VerifyBackupStorage(ctx, args[0], &p)
 	default:
+		if strings.Contains(op, "MySQL") {
+			return dispatchMySQL(ctx, c, op, args, q, body)
+		}
 		if strings.Contains(op, "Postgres") {
 			return dispatchPostgres(ctx, c, op, args, q, body)
 		}

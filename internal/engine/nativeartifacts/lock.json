@@ -623,5 +623,161 @@
     "runtimeDeps": [
       "ca-certificates"
     ]
+  },
+  {
+    "name": "percona-server-8.4.11-11",
+    "version": "8.4.11-11",
+    "file": "Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "a8048701a124737ca816d1c098146703d0387109dbf519a333873ddf0a53dde3",
+    "size": 177929124,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.4/Percona-Server-8.4.11-11/binary/tarball/Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "57878ff8786a8ba85433fd3e273fb7cf3fd9bfed"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.0.46-37",
+    "version": "8.0.46-37",
+    "file": "Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "9a76c3e9c71e3eb354bc066289086bd347cf24a3ac7c4fc2bc74788ec3ce0fa6",
+    "size": 152334402,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.0/Percona-Server-8.0.46-37/binary/tarball/Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "39e2b60e71bb30f081bea095d97ab5378a7a6f27"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-xtradb-cluster-8.4.11-11.1",
+    "version": "8.4.11-11.1",
+    "file": "Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "739c4a5ff8a356760e370a1d487aa2587eabca31a452b22e8c320af69416f8b0",
+    "size": 234385037,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraDB-Cluster-84/Percona-XtraDB-Cluster-8.4.11/binary/tarball/Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtradb-cluster",
+      "commit": "33f7510189c5719c852837d7ad9ba5e7d6431f4d"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "socat",
+      "openssl"
+    ]
+  },
+  {
+    "name": "percona-xtradb-cluster-8.0.46-38.1",
+    "version": "8.0.46-38.1",
+    "file": "Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "cf0d075622e28c82e01d2da04cc78a449213fb1115c1e6fa5aacc5db02c6be20",
+    "size": 182505750,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraDB-Cluster-80/Percona-XtraDB-Cluster-8.0.46/binary/tarball/Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtradb-cluster",
+      "commit": "947005d5e9f5337b7c89777ae530c18bdf5a7baf"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64",
+      "socat",
+      "openssl"
+    ]
+  },
+  {
+    "name": "percona-xtrabackup-8.4.0-7",
+    "version": "8.4.0-7",
+    "file": "percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "073936ff8f2c37fb3b2771b357fd2e71f5d5f40ab9e5fba259a46032f88d2af8",
+    "size": 55517012,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraBackup-8.4/Percona-XtraBackup-8.4.0-7/binary/tarball/percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtrabackup",
+      "commit": "4093cfd863c49d7d625e52086397728978181f00"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-xtrabackup-8.0.35-36",
+    "version": "8.0.35-36",
+    "file": "percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "c8bb153fc2dffe422eed494065f935855ad2b71aaf4a9ff89e531596ed167495",
+    "size": 25900293,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-XtraBackup-8.0/Percona-XtraBackup-8.0.35-36/binary/tarball/percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-xtrabackup",
+      "commit": "7233322c3bd27f0482a2a4e67edec97de887c14a"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.4.10-10",
+    "version": "8.4.10-10",
+    "file": "Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "672cad83a69c3b3c157cbe1f331160787272fa50e126cb412a7643764604e1b5",
+    "size": 177288238,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.4/Percona-Server-8.4.10-10/binary/tarball/Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "d76e81f492e19c31022071220ad811efe977f5ed"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
+  },
+  {
+    "name": "percona-server-8.0.45-36",
+    "version": "8.0.45-36",
+    "file": "Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "sha256": "f9de695f577e1c81ade6ec1891290258c9d9c043ac7b3e086879838b21233679",
+    "size": 152280524,
+    "upstreamURL": "https://downloads.percona.com/downloads/Percona-Server-8.0/Percona-Server-8.0.45-36/binary/tarball/Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz",
+    "license": "GPL-2.0-only",
+    "source": {
+      "repo": "https://github.com/percona/percona-server",
+      "commit": "8fe4a72dfbc3f2d4959cf277704ccefe6b534bd2"
+    },
+    "build": "official-glibc2.35-minimal",
+    "runtimeDeps": [
+      "libaio1t64",
+      "libnuma1",
+      "libev4t64"
+    ]
   }
 ]

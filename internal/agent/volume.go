@@ -251,6 +251,31 @@ func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 			}
 		}
 		return nonemptyVolumeFile(root, "postgres/global/pg_control", 8192)
+	case "mysql":
+		auto, err := nativeMetadata(root, "mysql/auto.cnf", 4096)
+		if err != nil {
+			return false, err
+		}
+		serverUUID := ""
+		for _, line := range strings.Split(string(auto), "\n") {
+			key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if ok && strings.TrimSpace(key) == "server-uuid" {
+				serverUUID = strings.TrimSpace(value)
+			}
+		}
+		if len(serverUUID) != 36 || strings.Trim(serverUUID, "0-") == "" {
+			return false, nil
+		}
+		for i, ch := range serverUUID {
+			if i == 8 || i == 13 || i == 18 || i == 23 {
+				if ch != '-' {
+					return false, nil
+				}
+			} else if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F') {
+				return false, nil
+			}
+		}
+		return nonemptyVolumeFile(root, "mysql/mysql.ibd", 16384)
 	case "elasticsearch":
 		for _, dir := range []string{"karakoram/data/_state", "karakoram/data/nodes/0/_state"} {
 			f, err := root.Open(dir)

@@ -18,6 +18,7 @@ import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, 
 import { fetchBackupInventory } from './backup-inventory';
 import { hasCapability, supportsOperation } from '@/engines';
 import { isPostgres, postgresMajorUpgrade } from '@/engines/postgres/spec';
+import { isMySQL, mysqlMajorUpgrade } from '@/engines/mysql/spec';
 
 export function UpgradesTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -59,11 +60,11 @@ export function UpgradesTab() {
     return provider.upgradePaths
       .filter((p) => p.from === current || p.from === currentMajor || p.from === `${currentMajor}.x` || p.from === '*')
       .map((p) => {
-        const versions = provider.versions.filter((v) => (v.version === p.to || v.major === p.to) && v.status !== 'unavailable' && v.version !== current);
+        const versions = provider.versions.filter((v) => (v.version === p.to || v.major === p.to) && v.status !== 'unavailable' && v.version !== current && (!isMySQL(cluster.spec.provider) || v.version.localeCompare(current, undefined, { numeric: true }) > 0));
         return { path: p, versions };
       })
       .filter((x) => x.versions.length > 0);
-  }, [provider, current, currentMajor]);
+  }, [provider, current, currentMajor, cluster.spec.provider]);
 
   const editable = can('update') && (cluster.status.phase === 'Ready' || cluster.status.phase === 'Degraded');
   const upgrading = cluster.status.phase === 'Upgrading' || (Boolean(running) && cluster.spec.version !== running);
@@ -72,6 +73,8 @@ export function UpgradesTab() {
   const upgrade = useMutation({
     mutationFn: async (version: string) => {
       const path = paths.find((p) => p.versions.some((v) => v.version === version));
+      if (isMySQL(cluster.spec.provider) && version.localeCompare(current, undefined, { numeric: true }) < 0) throw new Error('MySQL and PXC downgrades are blocked.');
+      if (isMySQL(cluster.spec.provider) && mysqlMajorUpgrade(current, version)) requireUpgradeBackup(true, Boolean(lastSuccessful));
       requireUpgradeBackup(Boolean(path?.path.requiresBackup), Boolean(lastSuccessful));
       return unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: { version } } }));
     },
@@ -148,9 +151,10 @@ export function UpgradesTab() {
         Verify every consumer supports the target major. The server rejects upgrades outside a consumer's declared range.
         <ul>{bindings.data.items.map((b) => <li key={b.id}>{b.consumer.kind}/{b.consumer.namespace}/{b.consumer.name}: maximum major {b.maxMajor ?? 'not constrained'} (minimum {b.minMajor ?? 'not constrained'})</li>)}</ul>
       </Callout> : null}
+      {isMySQL(cluster.spec.provider) ? <Callout tone="warn">{cluster.spec.provider === 'pxc' ? 'PXC' : 'MySQL'} 8.0 → 8.4 requires a recent successful current-version backup. Confirm recovery readiness before upgrading; downgrades and provider conversion are blocked. Select only a path offered by this provider catalog. The backend validates backup freshness.</Callout> : null}
       {upgrading ? (
         <Callout tone="info" title="Upgrade in progress">
-          {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.
+          {isMySQL(cluster.spec.provider) ? maintenance : maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.
         </Callout>
       ) : null}
 

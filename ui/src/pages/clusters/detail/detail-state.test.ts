@@ -52,6 +52,12 @@ test('singleton maintenance warns about downtime and neutral engines omit MongoD
   assert.doesNotMatch(maintenanceCopy('other', 3), /primary|secondaries/i);
   assert.match(FCV_GUIDANCE, /downgrades are not supported/);
 });
+test('MySQL and PXC maintenance copy names their own quorum and routing boundaries', () => {
+  assert.match(maintenanceCopy('mysql', 1), /Downtime.*MySQL/);
+  assert.match(maintenanceCopy('mysql', 3), /Group Replication.*majority.*quorum loss/);
+  assert.match(maintenanceCopy('pxc', 3), /Galera.*Primary component.*Synced.*commit outcomes unknown/);
+  assert.doesNotMatch(maintenanceCopy('pxc', 3), /Group Replication|secondaries/);
+});
 test('Elasticsearch maintenance explains database downtime and separate ordered stack restarts', () => {
   const singleton = maintenanceCopy('elasticsearch', 1);
   assert.match(singleton, /only Elasticsearch data node interrupts service/);

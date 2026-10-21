@@ -18,6 +18,8 @@ Versions below are catalog defaults; each engine section lists supported version
 | Keycloak | Official Keycloak 26.8.1; OpenJDK 21 | One native runtime with a PostgreSQL binding | Through the source PostgreSQL cluster | [Keycloak](docs/keycloak/README.md) |
 | OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft | Raft snapshots to S3; no PITR | [OpenBao](docs/openbao/README.md) |
 | Temporal | Temporal 1.32.1 (also 1.31.4); ui-server 2.56.0 | Combined server; split stateless roles on bound PostgreSQL | Source PostgreSQL backup plus cluster-state manifest; requires binding service | [Temporal](docs/temporal/README.md) |
+| MySQL | Percona Server for MySQL 8.4.11-11 default; majors 8.4/8.0 | Single; Group Replication single-primary (3/5); ProxySQL | XtraBackup full/incremental and GTID-based PITR | [MySQL](docs/mysql/README.md) |
+| Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` provider | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
 
 ## Backends
 
@@ -76,6 +78,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **Keycloak:** [PostgreSQL binding, routing and administrator recovery](docs/keycloak/README.md)
 - **OpenBao:** [Overview](docs/openbao/README.md) · [API access and TLS](docs/openbao/access-and-tls.md) · [Raft backups and recovery](docs/openbao/backups.md) · [Operations and unseal](docs/openbao/operations.md)
 - **Temporal:** [Overview and prerequisites](docs/temporal/README.md) · [Access and TLS](docs/temporal/access-and-tls.md) · [Operations and recovery](docs/temporal/operations.md)
+- **MySQL and PXC:** [Overview](docs/mysql/README.md) · [Configuration](docs/mysql/configuration.md) · [Access and TLS](docs/mysql/access-and-tls.md) · [Backups and PITR](docs/mysql/backups.md) · [Operations and recovery](docs/mysql/operations.md) · [Native verification](docs/mysql/verification.md)
 - **Reference:** [Architecture decisions](docs/adr/README.md) · [Native artifacts](docs/native-artifacts.md) · [Verification](docs/verification.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Acknowledgements

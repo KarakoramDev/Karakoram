@@ -18,10 +18,12 @@ import { kibanaReady } from '@/engines/elasticsearch/spec';
 import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { ConnectionHelp as PostgresConnectionHelp } from '@/engines/postgres/ConnectionHelp';
+import { ConnectionHelp as MySQLConnectionHelp } from '@/engines/mysql/ConnectionHelp';
 import { SupabaseCredentialsReveal } from '@/engines/supabase/CredentialsReveal';
 import { isPostgres } from '@/engines/postgres/spec';
 import { DataMcpSection } from './DataMcpSection';
 import { supportsDataMcp } from './datamcp';
+import { isMySQL } from '@/engines/mysql/spec';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -59,6 +61,7 @@ export function OverviewTab() {
     <div className="stack" style={{ gap: 20 }}>
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
       {spec.provider === 'rabbitmq' ? <QuorumCallout cluster={cluster} base={base} /> : null}
+      {spec.provider === 'pxc' ? <Callout tone="info" title="Galera traffic and recovery">ProxySQL routes one writer, but traffic eligibility requires a Primary component, Synced state and wsrep_ready—not just a reachable database. A minority rejects reads and writes. A failed or timed-out commit may have succeeded; retry only with application idempotency. Full-outage recovery compares every stopped member’s recovered state UUID and sequence number; missing or conflicting evidence blocks bootstrap.</Callout> : null}
       {healthNotices.map((notice) => <Callout key={notice.title} tone="warn" title={notice.title}>
         {notice.message} See the <a href="https://karakoram.dev/docs/elasticsearch/operations/#scale-upgrade-restart-and-replace" target="_blank" rel="noreferrer">Elasticsearch scaling guide</a>.
       </Callout>)}
@@ -226,6 +229,7 @@ export function OverviewTab() {
           )}
           {spec.provider === 'elasticsearch' ? <ConnectionHelp connection={conn} /> : null}
           {isPostgres(spec.provider) ? <PostgresConnectionHelp connection={conn} tlsMode={spec.tls?.mode} /> : null}
+          {isMySQL(spec.provider) ? <MySQLConnectionHelp connection={conn} /> : null}
           {spec.provider === 'supabase' ? <SupabaseCredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} /> : null}
         </Card>
         <Card title="Specification">
@@ -236,7 +240,7 @@ export function OverviewTab() {
               spec.components.configServer && ['Config servers', `${spec.components.configServer.replicas} × ${resourcesSummary(spec.components.configServer.resources)}`],
               spec.components.router && ['Routers', `${spec.components.router.replicas} × ${resourcesSummary(spec.components.router.resources, true)}`],
               ['Backup storage', spec.backup?.storage ?? 'none'],
-              hasCapability(provider, 'pitr') && ['PITR', spec.backup?.pitr?.enabled ? `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
+              hasCapability(provider, 'pitr') && ['PITR', spec.backup?.pitr?.enabled ? isMySQL(spec.provider) ? 'on, continuous GTID-checked binlog coverage required' : `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
               ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType} · allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'none'}` : 'private'],
               ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
               hasCapability(provider, 'balancer') && balancer.data && ['Balancer', <span>{balancer.data.enabled ? 'enabled' : 'disabled'}{balancer.data.running ? ' · running' : ''}{balancer.data.mode ? ` · ${balancer.data.mode}` : ''}</span>],
@@ -337,7 +341,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
+      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : isMySQL(provider) ? 'mysql' : provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
       <div className="table-wrap">
         <table className="table">
           <thead>

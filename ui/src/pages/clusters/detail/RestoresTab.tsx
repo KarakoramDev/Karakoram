@@ -20,6 +20,7 @@ import { useClusterContext } from './ClusterDetail';
 import { useSubmissionKey } from './use-submission-key';
 import { engines, hasCapability, supportsOperation, type EngineUI, type RestoreExtras } from '@/engines';
 import { useLocalRequest } from '../use-local-request';
+import { isMySQL } from '@/engines/mysql/spec';
 
 export function RestoresTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -52,6 +53,7 @@ export function RestoresTab() {
           ) : null}
         </div>
       </div>
+      {isMySQL(cluster.spec.provider) ? <Callout tone="warn" title="Provider-matched offline recovery">Restore requires the same provider and server major, a complete backup chain and continuous GTID coverage for PITR. Data members are fenced and server UUIDs change while recovered GTID history is preserved.{cluster.spec.provider === 'pxc' ? ' PXC starts a new Galera history; other members join by SST. Prepared backup Galera coordinates are not a safe recovery position.' : ' A restored Group Replication deployment uses a new group UUID; other members are cloned from the restored seed.'} Managed passwords return to the selected backup snapshot; PITR account changes may require rotation before application access is restored.</Callout> : null}
 
       <Card title="Restore history" flush>
         {restores.isPending ? (

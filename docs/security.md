@@ -55,6 +55,22 @@ Operators should restrict client metadata hosts with `KARAKORAM_OAUTH_CLIENT_HOS
 - **Single-process data MCP state.** Data gateway sessions, confirmation signing keys and consumed challenges, and rate/concurrency counters live in one control-plane process; management MCP legacy sessions are memory-only too. Clients need instance affinity, and a restart ends sessions and pending confirmations.
 - **PostgreSQL PUBLIC grants.** Scope is not an isolation boundary for objects already accessible to PUBLIC; reconciliation does not revoke application privileges.
 
+### Backup repositories and continuous-log writers
+
+Repository write authority is trusted for continuous PostgreSQL WAL,
+PSMDB/PBM oplog and MySQL/PXC binary-log archives before initial recovery
+preflight. Engine checksums and repository-side sidecars detect corruption;
+they do not authenticate a log against a writer able to replace both the object
+and its metadata. There is no control-plane-sealed per-segment archive index
+that removes this trust boundary. Restrict repository writers and use immutable
+retention/object-lock controls where available.
+
+MySQL physical snapshots separately bind source-generated object manifests to
+sealed recovery provenance. Their prepared physical/replay plan is frozen and
+revalidated before STOP/installation. These controls detect physical snapshot
+substitution and post-preflight changes; they do not make forged continuous
+archives supplied before preflight trustworthy. See [MySQL backup integrity](mysql/backups.md#integrity-and-repository-write-access).
+
 ## Relay threat model
 
 Additional projects connect outbound to `/relay/v1/connect` over verified HTTPS with **inner mTLS 1.3**, preserving tunnel confidentiality across L7 termination. A dedicated relay CA, namespace identity and enrolled certificate serial authorize admission; WebSocket Upgrade alone grants no usable session. Default-project routing remains direct.
@@ -120,6 +136,8 @@ MongoDB and RabbitMQ default to `requireTLS`; their optional `preferTLS` permits
 | RabbitMQ AMQPS | Private; `requireTLS` | Opt-in public TCP requires CIDR allowlist | RabbitMQ users |
 | RabbitMQ management HTTPS subdomain | Off; default private management HTTPS | **No CIDR allowlist** on public subdomain; only accepted with `preferTLS`/`disabled`, forwarding private HTTP | RabbitMQ accounts, not Karakoram RBAC |
 | Elasticsearch HTTPS TCP | Private; `requireTLS` only | Opt-in public TCP requires CIDR allowlist; transport remains private | Elasticsearch users/API keys |
+| MySQL / PXC application TCP | Private; `requireTLS` only | Opt-in public 3306 requires CIDR allowlist; private reader/replication channels remain separate | Scoped TLS-only MySQL users |
+| PXC Galera/IST and SST (4567, 4568, 4444) | Explicit channel TLS and peer verification | Never published; member-only reachability is **not enforced** by any registered backend—use a dedicated network/project ([per backend](mysql/access-and-tls.md#replication-ports-and-network-restriction)) | Shared cluster-traffic certificate/key, separate from per-member SQL leaves |
 | Kibana HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | Elasticsearch/Kibana authentication |
 | APM HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | APM secret token or authorized API key |
 | Logstash inputs | Private Beats 5044 / HTTP 8080 | No automatic public routes or input TLS/auth | User pipeline must configure needed protection |
@@ -127,6 +145,15 @@ MongoDB and RabbitMQ default to `requireTLS`; their optional `preferTLS` permits
 TCP CIDR allowlists do not protect component HTTPS subdomains. Private HTTP/input listeners still require a trusted network; a public route is not proof of application readiness, CA validation or external discovery. Keep agent/internal ports private.
 
 Engine CA/SAN rules, application users, system credentials and exposure procedures: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md).
+
+### PXC shared traffic identity
+
+MySQL and PXC require TLS for application connections. PXC additionally configures Galera/IST with `socket.ssl=true` and SST with `encrypt=4`; `pxc_encrypt_cluster_traffic=OFF` disables automatic certificate rewriting, **not** encryption. Every replication/state-transfer channel must remain encrypted and reject an untrusted CA. See [manual-channel rationale and pinned upstream source](mysql/configuration.md#pxc-only).
+
+Galera and SST share one cluster-traffic private key under a dedicated traffic CA, separate from SQL and agent trust. SQL/agent leaves cannot authenticate replication, but compromise of the shared traffic key still affects the cluster-wide replication boundary. Managed rotation replaces **both traffic root and shared leaf/key** under full-stop/evidence-based recovery, so reformed members reject the old traffic credential; new leaf issuance under an unchanged CA would not provide that revocation. Fence compromised secret/network access before distributing replacements. This remains cluster-wide rollover, not independent per-member revocation. Rotation causes database downtime; ordinary membership addition does not rotate traffic identity or implicitly impose that outage. [Detailed trust and revocation caveats](mysql/access-and-tls.md#pxc-cluster-traffic-trust-boundary) describe the operator obligations.
+
+Server-side FILE import/export is unavailable for MySQL/PXC: managed configuration sets `secure_file_priv=NULL` and the administrative account has no `FILE` privilege. This limits SQL access to runtime files and shared traffic keys; it does not change native XtraBackup's backup mechanism.
+
 
 ### Public exposure allowlists
 

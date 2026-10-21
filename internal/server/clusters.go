@@ -257,6 +257,20 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 					return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 				}
 			}
+			if d.PITRTime != nil && c.Spec.Provider == "pxc" {
+				sourceRC, sourceProvider, e := s.context(ctx, source)
+				if e != nil {
+					return s.failure(e)
+				}
+				if failure := s.providerContext(sourceRC); failure != nil {
+					return *failure
+				}
+				if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
+					if _, e = validator.ValidatePITRRestore(ctx, sourceRC, *d.PITRTime); e != nil {
+						return s.failure(e)
+					}
+				}
+			}
 		}
 		var restoreSource domain.ClusterRef
 		var restoreBackup string
@@ -385,6 +399,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 	}
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
+		if name == "RecoverMySQLQuorum" {
+			return failDetails(409, "conflict", "Quorum recovery requires the pxc provider", map[string]any{"field": "spec.provider", "provider": c.Spec.Provider, "reason": domain.ReasonUnsupported})
+		}
 		return s.unsupportedClusterAction(name, p)
 	}
 	if name == "RotateSystemUser" && (p.Name() == "postgres" || p.Name() == "supabase") {
@@ -699,7 +716,15 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return *failure
 		}
 		b := in.Body.(*api.CreateBackupRequest)
-		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
+		upgradeBackup := false
+		if c.Status.Phase == domain.PhaseUpgrading || (c.Status.Phase == domain.PhaseReady || c.Status.Phase == domain.PhaseDegraded) && c.Status.ObservedGeneration < c.Generation {
+			if admission, supported := p.(interface {
+				UpgradeBackupReady(context.Context, *domain.Cluster, engine.SecretStore) bool
+			}); supported {
+				upgradeBackup = admission.UpgradeBackupReady(ctx, c, s.Store)
+			}
+		}
+		if c.Deleting || !upgradeBackup && ((c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation) {
 			state := string(c.Status.Phase)
 			if c.Deleting {
 				state += "; deletion is pending"
@@ -725,6 +750,20 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		if _, err = s.Store.GetBackupStorage(ctx, c.Namespace, b.Storage); err != nil {
 			return s.failure(err)
+		}
+		if validator, yes := p.(interface {
+			ValidateBackup(context.Context, *engine.Context, string) error
+		}); yes {
+			backupRC, _, e := s.context(ctx, c.Ref())
+			if e != nil {
+				return s.failure(e)
+			}
+			if failure := s.providerContext(backupRC); failure != nil {
+				return *failure
+			}
+			if e = validator.ValidateBackup(ctx, backupRC, string(b.Type)); e != nil {
+				return s.failure(e)
+			}
 		}
 		v := domain.Backup{Namespace: c.Namespace, Name: b.Name, Cluster: c.Name, Storage: b.Storage, Type: string(b.Type), Trigger: "manual", Phase: domain.PhasePending}
 		if c.Spec.Provider != "psmdb" {
@@ -917,6 +956,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if strings.Contains(name, "RabbitMQ") {
 		return s.rabbitmq(ctx, name, in, rc, p)
 	}
+	if strings.Contains(name, "MySQL") {
+		return s.mysql(ctx, name, in, rc, p)
+	}
 	if strings.Contains(name, "Postgres") {
 		return s.postgres(ctx, name, in, rc, p)
 	}
@@ -1083,6 +1125,8 @@ func operationKind(name string) string {
 		return "rotate-jwt-secret"
 	case "RebalancePostgres":
 		return domain.OperationRebalance
+	case "RecoverMySQLQuorum":
+		return "recover-quorum"
 	case "RestartCluster":
 		return domain.OperationRestart
 	case "RotateClusterTLS":

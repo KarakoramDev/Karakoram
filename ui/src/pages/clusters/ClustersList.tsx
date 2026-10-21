@@ -88,11 +88,11 @@ export function ClustersListPage() {
 
       <Card
         flush
+        className="cluster-list"
         title={`${items.length} cluster${items.length === 1 ? '' : 's'}`}
         actions={
           <input
-            className="input"
-            style={{ width: 240 }}
+            className="input cluster-list-filter"
             type="search"
             placeholder={allNamespaces ? 'Filter by name, namespace, version, phase' : 'Filter by name, version, phase'}
             aria-label="Filter clusters"

@@ -18,7 +18,9 @@ The app-shell switcher offers **All namespaces** and readable namespaces with to
 
 ## Clusters and creation
 
-**Clusters** lists authorized clusters and their phases. **Create cluster** opens the catalog-driven wizard:
+**Clusters** lists authorized clusters and their phases. On narrow screens, the cluster filter wraps within its card and wide tables scroll independently. The sidebar uses an icon rail; **Change password** remains available through its key icon, with a tooltip and accessible name.
+
+**Create cluster** opens the catalog-driven wizard:
 
 | Step | What to choose or inspect |
 | --- | --- |
@@ -38,6 +40,7 @@ Engine-specific fields, presets, minimum resources and connection procedures bel
 OpenBao adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or AWS KMS auto-unseal, with the transit token and AWS keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
 
 PostgreSQL storage is selectable only when the OpenBao provider advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
+[MySQL and PXC](mysql/README.md) are separate provider choices. MySQL offers single or Group Replication (3/5); PXC offers only Galera `cluster` (3/5), requires ProxySQL and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and provider-specific maintenance review.
 
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
@@ -56,6 +59,8 @@ Tabs and actions are gated by engine capabilities and your permissions.
 | Access | Engine-native access management | RabbitMQ |
 | Elastic Access | Engine-native access management | Elasticsearch |
 | Postgres access | PostgreSQL roles, databases and grants | PostgreSQL and Supabase |
+| MySQL access | MySQL users, databases, grants and password rotation | MySQL and PXC |
+| Recovery | Explicit fenced minority quorum recovery with typed danger confirmation | PXC; requires supported operation and cluster update permission |
 | Components | Supabase service topology/resources | Supabase |
 | Functions & SMTP | Source deployment/deletion and write-only SMTP password | Supabase |
 | OpenBao | Seal/initialization state per member and Raft voter observations, explicit unseal-key reveal, database credential connections | OpenBao |
@@ -67,6 +72,8 @@ Tabs and actions are gated by engine capabilities and your permissions.
 In **Topology → Review & apply**, inspect **What will change** and expand **Merge patch to be sent** for the exact request. CPU-only changes do not move data, but platform resource changes may still restart a member. **Leaving** members remain visible during removal; active-member health ratios exclude them and show their count separately. **Upgrades** distinguishes observed running/member versions from the desired version; **not yet observed** is not deployment confirmation.
 
 PostgreSQL major upgrades (16→17 and 17→18) require **offline maintenance**, not a rolling restart: all data members stop for `pg_upgrade --link`, and database access remains unavailable through replica rebuild. Both the topology change review and upgrade confirmation describe this outage and require a recent successful backup. The in-progress warning retains the offline guidance while data members report mixed source/target majors during replica rebuild. Minor upgrades retain replica-first rolling maintenance (or downtime for a single member).
+
+MySQL/PXC upgrades use their separate catalog paths and block downgrades/provider conversion. The 8.0→8.4 path requires a recent successful current-version backup. PXC's Recovery tab is not a generic force-bootstrap switch: the backend refuses an existing Primary component, compares same-history committed positions and completes fencing before recovering one survivor. Full-outage recovery and backup restore use different evidence rules; see [MySQL/PXC operations](mysql/operations.md).
 
 **Reveal credentials** requires `cluster-credentials:read` and is audited. Revealed credentials are the engine's administrative identity, **not an application identity**. Use scoped application access: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). The response is not retained in the query cache. Keep copied passwords/URIs out of logs. Reveal also provides the public CA with copy/download controls; if clipboard access fails, use manual copy or download without losing PEM line breaks.
 

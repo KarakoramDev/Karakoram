@@ -34,7 +34,7 @@ func backendVolumeScaffold(t *testing.T, aDataDir, backend string) {
 }
 
 func TestVolumeSafetyFreshBackendScaffoldingEveryFamily(t *testing.T) {
-	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "supabase", "openbao"} {
+	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "mysql", "supabase", "openbao"} {
 		for _, backend := range []string{"nomad", "dokploy", "zerops", "combined"} {
 			t.Run(engine+"/"+backend, func(t *testing.T) {
 				a, c := volumeFixture(t, engine, false)
@@ -56,7 +56,7 @@ func TestVolumeSafetyFreshBackendScaffoldingEveryFamily(t *testing.T) {
 }
 
 func TestVolumeSafetyInitializedBackendScaffoldingRemainsEmpty(t *testing.T) {
-	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "supabase", "openbao"} {
+	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "mysql", "supabase", "openbao"} {
 		for _, backend := range []string{"nomad", "dokploy", "zerops", "combined"} {
 			t.Run(engine+"/"+backend, func(t *testing.T) {
 				a, c := volumeFixture(t, engine, true)
@@ -76,7 +76,7 @@ func TestVolumeSafetyInitializedBackendScaffoldingRemainsEmpty(t *testing.T) {
 }
 
 func TestVolumeSafetyBackendScaffoldingDoesNotHidePartialData(t *testing.T) {
-	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "supabase", "openbao"} {
+	for _, engine := range []string{"", "psmdb", "rabbitmq", "elasticsearch", "postgres", "mysql", "supabase", "openbao"} {
 		for _, initialized := range []bool{false, true} {
 			t.Run(engine+"/initialized="+map[bool]string{false: "false", true: "true"}[initialized], func(t *testing.T) {
 				a, c := volumeFixture(t, engine, initialized)

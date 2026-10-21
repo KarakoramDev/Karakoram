@@ -4,6 +4,8 @@
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
 import { postgresMetadata, supabaseMetadata } from './postgres/metadata.ts';
+import { mysqlMetadata } from './mysql/metadata.ts';
+import { pxcMetadata } from './pxc/metadata.ts';
 import { openbaoMetadata } from './openbao/metadata.ts';
 export type { EngineUI, MonitoringPanel, RestoreExtras, RestoreSectionProps, TopologyEditorProps, WizardSectionProps } from './types';
 export { reviewChanges } from './changes.ts';
@@ -14,6 +16,8 @@ export { reviewChanges } from './changes.ts';
  */
 export const engines: Record<string, EngineUI> = {
   postgres: postgresMetadata,
+  mysql: mysqlMetadata,
+  pxc: pxcMetadata,
   supabase: supabaseMetadata,
   openbao: openbaoMetadata,
   psmdb: {
@@ -89,6 +93,7 @@ export function versionSelectable(provider: string, version: Schemas['Provider']
 
 export function tabAvailable(provider: Metadata | undefined, tab: string): boolean {
   if (tab === 'postgres') return hasCapability(provider, 'postgresAccess');
+  if (tab === 'mysql') return hasCapability(provider, 'mysqlAccess');
   if (tab === 'components' || tab === 'functions') return provider?.name === 'supabase';
   if (tab === 'users') return hasCapability(provider, 'databaseUsers') || hasCapability(provider, 'systemUsers');
   if (tab === 'backups' || tab === 'restores') return hasCapability(provider, tab);

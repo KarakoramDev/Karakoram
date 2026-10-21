@@ -1,0 +1,71 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The Karakoram Authors -->
+# Configuration and topology
+
+[Overview](README.md) · [Access](access-and-tls.md) · [Operations](operations.md)
+
+## Supported shape
+
+`engineConfig` is not supported. Use string-valued, backend-allowlisted `engineOptions.parameters`; unknown settings are rejected. The backend remains authoritative even when a UI field validates locally. TLS must be `requireTLS`. Network listeners, data identity, replication, archiving and system accounts are managed settings, not raw configuration overrides.
+
+Example shared by `mysql` and `pxc`:
+
+```yaml
+engineOptions:
+  parameters:
+    max_connections: "250"
+    slow_query_log: "ON"
+    long_query_time: "0.5"
+    transaction_isolation: REPEATABLE-READ
+  proxy:
+    readWriteSplit: false
+    readerPort: false
+  binlog:
+    archiveInterval: 300
+    expireSeconds: 604800
+```
+
+| Option | Meaning / limits |
+| --- | --- |
+| `parameters` | Selected connection, InnoDB buffer/I/O, timeout, packet/buffer/cache, logging and isolation settings; values are strings |
+| `proxy.readWriteSplit` | Default false; opt-in SELECT-pattern reader routing, not a complete SQL classifier |
+| `proxy.readerPort` | Default false; optional private reader listener on 3307 |
+| `binlog.archiveInterval` | Integer seconds, 1–86400; default 300; bounds closed-log rotation, not an archive-success guarantee |
+| `binlog.expireSeconds` | Integer seconds, greater than archive interval, up to 2147483647; default 604800 |
+
+The UI offers the supported parameter names and validates numeric bounds, booleans (`ON`/`OFF` or `0`/`1`) and isolation values. A connection limit can exhaust memory long before its syntactic maximum; size buffers and concurrency together. Use the catalog resource minima and do not shrink persistent disks.
+
+The startup-only `innodb_buffer_pool_instances` and `table_open_cache_instances` parameters accept integers 1–64. They require rolling maintenance and remain pinned per member until that member's turn; changing them is not a live-only tuning operation.
+
+Configuration is desired state rendered into startup options. Supported dynamic values also apply with `SET GLOBAL`; restart-required changes use managed maintenance. **Do not use `SET PERSIST`**: persisted settings travel with copied data and can resurrect obsolete topology or security settings. Managed startup discards persisted-variable overrides. Direct SQL tuning is not a durable replacement for changing the cluster specification.
+
+## MySQL Group Replication only
+
+```yaml
+engineOptions:
+  groupReplication:
+    consistency: BEFORE_ON_PRIMARY_FAILOVER
+    unreachableMajorityTimeout: 30
+```
+
+Consistency choices are `BEFORE_ON_PRIMARY_FAILOVER` (default), `EVENTUAL`, `BEFORE`, `AFTER`, `BEFORE_AND_AFTER`. The default holds a newly elected primary until its backlog is applied; it is not a general guarantee for reads routed to other members. Majority timeout is integer seconds, 1–31536000. Minority exit makes a member read-only; before exit, writes may block and client timeouts remain ambiguous.
+
+Groups use authenticated TLS on the MySQL communication stack, single-primary mode, read-only minority exit and no multi-primary routing. Formation bootstraps once. New members clone from an online donor of the exact same server version; cloning copies data, not configuration. Established members automatically rejoin after restart when the group remains available. Full-outage recovery is a separate, evidence-based operation; see [recovery](operations.md#full-outage-recovery).
+
+Every Group Replication server starts with `super_read_only=ON`, including initialized restarts with unchanged credentials. It remains fenced while waiting to rejoin or if rejoin fails; Group Replication lifts the fence only for a legitimate primary. Single-server deployments remain writable, and PXC uses its own wsrep eligibility rather than this Group Replication startup fence.
+
+## PXC only
+
+PXC has topology `cluster`, never `single` or `group`. It does not expose Group Replication consistency/majority-timeout controls; omit `groupReplication` entirely. Galera traffic and state transfer are encrypted. IST uses retained Galera cache when possible; otherwise `xtrabackup-v2` SST transfers the full dataset using the bundled compatible tools. Allow donor/joiner capacity and bandwidth for SST.
+
+Encryption is configured explicitly per channel: Galera/IST requires `socket.ssl=true`, and SST requires `encrypt=4`, with a shared cluster-traffic certificate/key signed by a dedicated traffic CA. That trust root is separate from SQL and agent trust; SQL/agent leaves cannot authenticate replication. The upstream convenience flag `pxc_encrypt_cluster_traffic` is `OFF` because its automatic behavior overrides channel certificate selection; **this does not disable channel encryption**. MySQL client connections retain per-member certificates and required TLS. These settings are managed, not application overrides.
+
+This follows upstream [manual channel configuration](https://docs.percona.com/percona-xtradb-cluster/8.4/encrypt-traffic.html#ssl-manual-configuration), not a blanket encryption disable. In pinned PXC source [`33f7510`, option assembly](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/wsrep_mysqld.cc#L1202-L1225), automatic mode appends generated TLS options after the configured provider options; the [certificate callback](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/ssl_init_callback.cc#L553-L557) obtains those paths from the MySQL SQL-server certificates. Manual mode keeps independent SQL leaves while explicitly protecting every replication/state-transfer channel. See the [shared traffic-key trust boundary](access-and-tls.md#pxc-cluster-traffic-trust-boundary).
+
+`pxc_strict_mode=ENFORCING` stays enabled. Use InnoDB tables with primary keys; non-transactional writes and `LOCK TABLES` are unsupported. Do not assume every incompatible DDL is rejected at creation: a non-transactional table may be created but fail on writes. Audit existing schemas and transaction patterns before migration. Slow members can trigger flow control; Galera certification can reject conflicting transactions even though routing uses one writer.
+
+## Application routing
+
+ProxySQL is the application endpoint on 3306. Both clustered topologies require at least one proxy replica; `mysql/single` alone may use zero and connect directly. ProxySQL monitors replication eligibility, not just TCP reachability, and keeps a single routed writer. Proxy administration is not a public application endpoint. Multiple proxy replicas do not remove client reconnection requirements.
+
+Reader routing is opt-in. Neither SELECT-pattern splitting nor port 3307 promises causal reads, transaction classification or read-after-write consistency. Keep consistency-sensitive reads and transactions on the writer and qualify the driver's transaction/prepared-statement behavior. Public exposure applies to the normal client endpoint, not a promise of public access to every private replication or reader listener. See [access and TLS](access-and-tls.md).

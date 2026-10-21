@@ -458,6 +458,10 @@ func backupAPI(b domain.Backup) api.Backup {
 			a.Postgres.Groups = &groups
 		}
 	}
+	if m := b.MySQL; m != nil {
+		a.Mysql = &api.MySQLBackup{Label: m.Label, Repository: m.Repository, Type: api.MySQLBackupType(m.Type), ParentLabel: optionalString(m.ParentLabel), ChainRootLabel: m.ChainRootLabel, GtidSet: m.GTIDSet, FromLSN: m.FromLSN, ToLSN: m.ToLSN, ServerVersion: m.ServerVersion, ToolVersion: m.ToolVersion, EndTime: m.EndTime, ObjectPaths: m.ObjectPaths, ClusterUID: m.ClusterUID, Generation: m.Generation}
+		a.Mysql.PhysicalIdentity = optionalString(m.PhysicalIdentity)
+	}
 	return a
 }
 func restoreAPI(r domain.Restore) api.Restore {

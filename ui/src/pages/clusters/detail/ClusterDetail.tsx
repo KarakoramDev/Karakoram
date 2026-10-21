@@ -216,10 +216,11 @@ export function ClusterDetailLayout() {
         confirmLabel="Rotate"
         busy={action.isPending}
         error={action.error}
+        danger={cluster.spec.provider === 'pxc'}
       >
         <p className="small">
-          New member and server certificates are issued and rolled out with a rolling restart.
-          {cluster.spec.tls?.ca === 'userProvided' ? ' For user-provided TLS, update the PEM inputs under Topology & scaling before rotating.' : ' Clients pinning the CA certificate keep working; the CA itself is retained.'}
+          {cluster.spec.provider === 'pxc' ? 'PXC traffic rotation requires offline maintenance: all data members stop, replace the dedicated traffic CA and shared leaf/key, then recover from verified Galera positions. Reformed members reject the old traffic credential. Database access is unavailable until recovery completes. Ordinary membership changes do not require this TLS outage.' : 'New member and server certificates are issued and rolled out with a rolling restart.'}
+          {cluster.spec.tls?.ca === 'userProvided' ? cluster.spec.provider === 'pxc' ? ' For user-provided SQL TLS, update the PEM inputs under Topology & scaling before rotating.' : ' For user-provided TLS, update the PEM inputs under Topology & scaling before rotating.' : cluster.spec.provider === 'pxc' ? ' SQL client trust remains separate from traffic trust; clients must reconnect after offline recovery.' : ' Clients pinning the CA certificate keep working; the CA itself is retained.'}
         </p>
       </ConfirmDialog>
       <ConfirmDialog

@@ -288,6 +288,11 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 	if o.Listen == "" {
 		o.Listen = ":9443"
 	}
+	// Do this before starting runtime goroutines or engine children. Go opens
+	// its own files CLOEXEC, but the invoking shell's lock FDs may not be.
+	if err := closeInheritedFilesOnExec(); err != nil {
+		return fmt.Errorf("isolate inherited process descriptors: %w", err)
+	}
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 	client, err := agentapi.NewClient(agentapi.ClientOptions{BaseURL: o.ControlPlaneURL, Token: o.Token, CAPEM: []byte(o.InternalCAPEM)})

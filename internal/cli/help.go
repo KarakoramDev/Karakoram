@@ -50,6 +50,10 @@ var commandGroupDescriptions = map[string]string{
 	"elasticsearch users":          "Manage Elasticsearch native user accounts",
 	"elasticsearch roles":          "Manage Elasticsearch security role definitions",
 	"elasticsearch api-keys":       "Manage Elasticsearch API credentials",
+	"mysql":                        "Manage MySQL users, databases, grants and PXC recovery",
+	"mysql users":                  "Manage MySQL application users and passwords",
+	"mysql databases":              "Manage MySQL application databases",
+	"mysql grants":                 "Manage MySQL database privileges",
 }
 
 var commandDescriptions = map[string]string{
@@ -160,6 +164,11 @@ var commandDescriptions = map[string]string{
 	"auth refresh":                      "Refresh the current cookie-based session",
 	"auth oidc-login":                   "Start OpenID Connect sign-in and show the redirect",
 	"auth oidc-callback":                "Complete an OpenID Connect authorization callback",
+	"mysql users rotate-password":       "Generate and rotate a MySQL user password (returned once)",
+	"mysql users discard-old-password":  "Discard the retained previous MySQL user password",
+	"mysql grants grant":                "Grant MySQL database privileges",
+	"mysql grants revoke":               "Revoke MySQL database privileges",
+	"mysql recover-quorum":              "Explicitly recover PXC quorum after fencing absent members",
 }
 
 type nativeResourceDescription struct{ singular, plural string }
@@ -179,6 +188,9 @@ var nativeResourceDescriptions = map[string]nativeResourceDescription{
 	"elasticsearch users":          {"an Elasticsearch native user", "Elasticsearch native users"},
 	"elasticsearch roles":          {"an Elasticsearch security role", "Elasticsearch security roles"},
 	"elasticsearch api-keys":       {"an Elasticsearch API key", "Elasticsearch API keys"},
+	"mysql users":                  {"a MySQL application user", "MySQL application users"},
+	"mysql databases":              {"a MySQL database", "MySQL databases"},
+	"mysql grants":                 {"a MySQL privilege grant", "MySQL privilege grants"},
 }
 
 func commandDescription(path string) string {

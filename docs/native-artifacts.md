@@ -61,6 +61,11 @@ explicit configuration rather than relying on retries to get lucky.
 Consumers select new extension bundles through `nativeartifacts.ExtensionArtifact(product, major)`, which resolves `<product>-pg<major>` only when the locked `kind` and `pgMajor` match. A recipe alone does not establish availability. The existing `supabase-pg17-extensions` entry intentionally retains its original name and absent kind/major fields: a narrow compatibility mapping installs it as PostgreSQL 17 with its frozen validator and original invocation. The validator source is embedded in rendered commands, so even adding a major argument or changing its source would change existing deployment command bytes. A golden test pins that complete command; all new extension bundles use the generalized validator and explicit metadata.
 
 Application tarballs also retain the frozen validator source and original `application` invocation so their existing deployment commands remain byte-identical. Only explicitly typed PostgreSQL extension artifacts select the generalized validator.
+### Percona MySQL
+
+MySQL catalog releases pair a versioned `percona-server-<version>` entry with the same-major `percona-xtrabackup-<version>` entry. These are official GPL-2.0-only Linux amd64 glibc2.35 **minimal** tarballs, with immutable upstream tag commits and verified download hashes and sizes. The 8.4 line uses XtraBackup 8.4.0-7; the 8.0 line uses 8.0.35-36. The lock also pins Percona XtraDB Cluster 8.4.11-11.1 and 8.0.46-38.1 as official GPL-2.0-only Linux amd64 glibc2.35 minimal tarballs. The Server and XtraBackup entries use `libaio1t64`, `libnuma1`, and `libev4t64` (the latter is needed by `xbcloud`); PXC additionally uses `socat` and `openssl` for its SST scripts.
+
+Archive extraction retains the upstream top-level directory. Install into `/opt/karakoram/percona-server-<version>`, `/opt/karakoram/percona-xtrabackup-<version>`, or `/opt/karakoram/percona-xtradb-cluster-<version>` and set the member's `serverDir` / `xtraBackupDir` to the contained upstream directory, not the outer installation root. No package service is installed. Member payloads contain sealed-store credentials resolved for authenticated delivery and must be cached with owner-only permissions; never log them. Only allowlisted my.cnf parameters may cross the member boundary.
 
 ## Native rebuild
 

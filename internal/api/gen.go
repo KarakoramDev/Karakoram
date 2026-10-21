@@ -48,6 +48,7 @@ const (
 	BackupTypeDiff         BackupType = "diff"
 	BackupTypeFull         BackupType = "full"
 	BackupTypeIncr         BackupType = "incr"
+	BackupTypeIncremental  BackupType = "incremental"
 	BackupTypeLogical      BackupType = "logical"
 	BackupTypePhysical     BackupType = "physical"
 	BackupTypeRaftSnapshot BackupType = "raft-snapshot"
@@ -60,6 +61,7 @@ const (
 	BackupScheduleTypeDiff         BackupScheduleType = "diff"
 	BackupScheduleTypeFull         BackupScheduleType = "full"
 	BackupScheduleTypeIncr         BackupScheduleType = "incr"
+	BackupScheduleTypeIncremental  BackupScheduleType = "incremental"
 	BackupScheduleTypeLogical      BackupScheduleType = "logical"
 	BackupScheduleTypePhysical     BackupScheduleType = "physical"
 	BackupScheduleTypeRaftSnapshot BackupScheduleType = "raft-snapshot"
@@ -72,6 +74,7 @@ const (
 	BackupScheduleInputTypeDiff         BackupScheduleInputType = "diff"
 	BackupScheduleInputTypeFull         BackupScheduleInputType = "full"
 	BackupScheduleInputTypeIncr         BackupScheduleInputType = "incr"
+	BackupScheduleInputTypeIncremental  BackupScheduleInputType = "incremental"
 	BackupScheduleInputTypeLogical      BackupScheduleInputType = "logical"
 	BackupScheduleInputTypePhysical     BackupScheduleInputType = "physical"
 	BackupScheduleInputTypeRaftSnapshot BackupScheduleInputType = "raft-snapshot"
@@ -269,6 +272,50 @@ const (
 	MemberRoleVector          MemberRole = "vector"
 )
 
+// Defines values for MySQLBackupType.
+const (
+	MySQLBackupTypeFull        MySQLBackupType = "full"
+	MySQLBackupTypeIncremental MySQLBackupType = "incremental"
+)
+
+// Defines values for MySQLGrantPrivileges.
+const (
+	MySQLGrantPrivilegesALL                   MySQLGrantPrivileges = "ALL"
+	MySQLGrantPrivilegesALTER                 MySQLGrantPrivileges = "ALTER"
+	MySQLGrantPrivilegesALTERROUTINE          MySQLGrantPrivileges = "ALTER_ROUTINE"
+	MySQLGrantPrivilegesCREATE                MySQLGrantPrivileges = "CREATE"
+	MySQLGrantPrivilegesCREATEROUTINE         MySQLGrantPrivileges = "CREATE_ROUTINE"
+	MySQLGrantPrivilegesCREATETEMPORARYTABLES MySQLGrantPrivileges = "CREATE_TEMPORARY_TABLES"
+	MySQLGrantPrivilegesCREATEVIEW            MySQLGrantPrivileges = "CREATE_VIEW"
+	MySQLGrantPrivilegesDELETE                MySQLGrantPrivileges = "DELETE"
+	MySQLGrantPrivilegesDROP                  MySQLGrantPrivileges = "DROP"
+	MySQLGrantPrivilegesEVENT                 MySQLGrantPrivileges = "EVENT"
+	MySQLGrantPrivilegesEXECUTE               MySQLGrantPrivileges = "EXECUTE"
+	MySQLGrantPrivilegesINDEX                 MySQLGrantPrivileges = "INDEX"
+	MySQLGrantPrivilegesINSERT                MySQLGrantPrivileges = "INSERT"
+	MySQLGrantPrivilegesLOCKTABLES            MySQLGrantPrivileges = "LOCK_TABLES"
+	MySQLGrantPrivilegesREFERENCES            MySQLGrantPrivileges = "REFERENCES"
+	MySQLGrantPrivilegesSELECT                MySQLGrantPrivileges = "SELECT"
+	MySQLGrantPrivilegesSHOWVIEW              MySQLGrantPrivileges = "SHOW_VIEW"
+	MySQLGrantPrivilegesTRIGGER               MySQLGrantPrivileges = "TRIGGER"
+	MySQLGrantPrivilegesUPDATE                MySQLGrantPrivileges = "UPDATE"
+)
+
+// Defines values for MySQLQuorumRecoveryRequestConfirmation.
+const (
+	AllAbsentMembersFenced MySQLQuorumRecoveryRequestConfirmation = "all-absent-members-fenced"
+)
+
+// Defines values for MySQLUserHost.
+const (
+	MySQLUserHostPercent MySQLUserHost = "%"
+)
+
+// Defines values for MySQLUserCreatedHost.
+const (
+	MySQLUserCreatedHostPercent MySQLUserCreatedHost = "%"
+)
+
 // Defines values for NamespacePhase.
 const (
 	NamespacePhaseDeleting NamespacePhase = "Deleting"
@@ -328,6 +375,7 @@ const (
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
 	OperationTypeRebalance        OperationType = "rebalance"
+	OperationTypeRecoverQuorum    OperationType = "recover-quorum"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
@@ -353,23 +401,24 @@ const (
 
 // Defines values for PostgresGrantPrivileges.
 const (
-	CONNECT   PostgresGrantPrivileges = "CONNECT"
-	CREATE    PostgresGrantPrivileges = "CREATE"
-	TEMP      PostgresGrantPrivileges = "TEMP"
-	TEMPORARY PostgresGrantPrivileges = "TEMPORARY"
-	USAGE     PostgresGrantPrivileges = "USAGE"
+	PostgresGrantPrivilegesCONNECT   PostgresGrantPrivileges = "CONNECT"
+	PostgresGrantPrivilegesCREATE    PostgresGrantPrivileges = "CREATE"
+	PostgresGrantPrivilegesTEMP      PostgresGrantPrivileges = "TEMP"
+	PostgresGrantPrivilegesTEMPORARY PostgresGrantPrivileges = "TEMPORARY"
+	PostgresGrantPrivilegesUSAGE     PostgresGrantPrivileges = "USAGE"
 )
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesDefinitions  ProviderBackupTypes = "definitions"
-	ProviderBackupTypesDiff         ProviderBackupTypes = "diff"
-	ProviderBackupTypesFull         ProviderBackupTypes = "full"
-	ProviderBackupTypesIncr         ProviderBackupTypes = "incr"
-	ProviderBackupTypesLogical      ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical     ProviderBackupTypes = "physical"
-	ProviderBackupTypesRaftSnapshot ProviderBackupTypes = "raft-snapshot"
-	ProviderBackupTypesSnapshot     ProviderBackupTypes = "snapshot"
+	Definitions  ProviderBackupTypes = "definitions"
+	Diff         ProviderBackupTypes = "diff"
+	Full         ProviderBackupTypes = "full"
+	Incr         ProviderBackupTypes = "incr"
+	Incremental  ProviderBackupTypes = "incremental"
+	Logical      ProviderBackupTypes = "logical"
+	Physical     ProviderBackupTypes = "physical"
+	RaftSnapshot ProviderBackupTypes = "raft-snapshot"
+	Snapshot     ProviderBackupTypes = "snapshot"
 )
 
 // Defines values for ProviderTopologyType.
@@ -378,6 +427,7 @@ const (
 	ProviderTopologyTypeCombined         ProviderTopologyType = "combined"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
 	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
+	ProviderTopologyTypeGroup            ProviderTopologyType = "group"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
@@ -548,6 +598,7 @@ const (
 	TopologyTypeCombined         TopologyType = "combined"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
 	TopologyTypeDistributed      TopologyType = "distributed"
+	TopologyTypeGroup            TopologyType = "group"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
@@ -561,6 +612,7 @@ const (
 	TopologyInputTypeCombined         TopologyInputType = "combined"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
 	TopologyInputTypeDistributed      TopologyInputType = "distributed"
+	TopologyInputTypeGroup            TopologyInputType = "group"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
@@ -574,6 +626,7 @@ const (
 	TopologyPatchTypeCombined         TopologyPatchType = "combined"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
 	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
+	TopologyPatchTypeGroup            TopologyPatchType = "group"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
@@ -749,7 +802,10 @@ type Backup struct {
 	LastWriteTime *time.Time `json:"lastWriteTime,omitempty"`
 
 	// Location Complete snapshot-time object key, prefix, or snapshot reference.
-	Location  *string        `json:"location,omitempty"`
+	Location *string `json:"location,omitempty"`
+
+	// Mysql Immutable XtraBackup dependency chain and repository incarnation provenance.
+	Mysql     *MySQLBackup   `json:"mysql,omitempty"`
 	Name      string         `json:"name"`
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 
@@ -1828,6 +1884,110 @@ type MonitoringSpec struct {
 // MonitoringSpecPatch defines model for MonitoringSpecPatch.
 type MonitoringSpecPatch struct {
 	Enabled *bool `json:"enabled"`
+}
+
+// MySQLBackup Immutable XtraBackup dependency chain and repository incarnation provenance.
+type MySQLBackup struct {
+	ChainRootLabel string    `json:"chainRootLabel"`
+	ClusterUID     string    `json:"clusterUID"`
+	EndTime        time.Time `json:"endTime"`
+	FromLSN        uint64    `json:"fromLSN"`
+	Generation     int       `json:"generation"`
+	GtidSet        string    `json:"gtidSet"`
+	Label          string    `json:"label"`
+	ObjectPaths    []string  `json:"objectPaths"`
+	ParentLabel    *string   `json:"parentLabel,omitempty"`
+
+	// PhysicalIdentity Opaque source agent/data incarnation binding local InnoDB LSNs. Absent on legacy backups, which cannot parent incrementals.
+	PhysicalIdentity *string         `json:"physicalIdentity,omitempty"`
+	Repository       string          `json:"repository"`
+	ServerVersion    string          `json:"serverVersion"`
+	ToLSN            uint64          `json:"toLSN"`
+	ToolVersion      string          `json:"toolVersion"`
+	Type             MySQLBackupType `json:"type"`
+}
+
+// MySQLBackupType defines model for MySQLBackup.Type.
+type MySQLBackupType string
+
+// MySQLDatabase defines model for MySQLDatabase.
+type MySQLDatabase struct {
+	CharacterSet string `json:"characterSet"`
+	Collation    string `json:"collation"`
+	Name         string `json:"name"`
+}
+
+// MySQLDatabaseWrite defines model for MySQLDatabaseWrite.
+type MySQLDatabaseWrite struct {
+	CharacterSet *string `json:"characterSet,omitempty"`
+	Collation    *string `json:"collation,omitempty"`
+	Name         string  `json:"name"`
+}
+
+// MySQLGrant defines model for MySQLGrant.
+type MySQLGrant struct {
+	Database   string                 `json:"database"`
+	Privileges []MySQLGrantPrivileges `json:"privileges"`
+	User       string                 `json:"user"`
+}
+
+// MySQLGrantPrivileges defines model for MySQLGrantPrivileges.
+type MySQLGrantPrivileges string
+
+// MySQLPasswordRotation defines model for MySQLPasswordRotation.
+type MySQLPasswordRotation struct {
+	GeneratedPassword string `json:"generatedPassword"`
+}
+
+// MySQLQuorumRecoveryRequest defines model for MySQLQuorumRecoveryRequest.
+type MySQLQuorumRecoveryRequest struct {
+	// Confirmation Explicit acknowledgement that absent members must be fenced before quorum recovery.
+	Confirmation MySQLQuorumRecoveryRequestConfirmation `json:"confirmation"`
+}
+
+// MySQLQuorumRecoveryRequestConfirmation Explicit acknowledgement that absent members must be fenced before quorum recovery.
+type MySQLQuorumRecoveryRequestConfirmation string
+
+// MySQLUser defines model for MySQLUser.
+type MySQLUser struct {
+	Host                 MySQLUserHost `json:"host"`
+	Locked               bool          `json:"locked"`
+	MaxUserConnections   int           `json:"maxUserConnections"`
+	Name                 string        `json:"name"`
+	PasswordRetained     bool          `json:"passwordRetained"`
+	RoutableThroughProxy bool          `json:"routableThroughProxy"`
+}
+
+// MySQLUserHost defines model for MySQLUser.Host.
+type MySQLUserHost string
+
+// MySQLUserCreated defines model for MySQLUserCreated.
+type MySQLUserCreated struct {
+	// GeneratedPassword Returned only when the password was generated.
+	GeneratedPassword    *string              `json:"generatedPassword,omitempty"`
+	Host                 MySQLUserCreatedHost `json:"host"`
+	Locked               bool                 `json:"locked"`
+	MaxUserConnections   int                  `json:"maxUserConnections"`
+	Name                 string               `json:"name"`
+	PasswordRetained     bool                 `json:"passwordRetained"`
+	RoutableThroughProxy bool                 `json:"routableThroughProxy"`
+}
+
+// MySQLUserCreatedHost defines model for MySQLUserCreated.Host.
+type MySQLUserCreatedHost string
+
+// MySQLUserPatch defines model for MySQLUserPatch.
+type MySQLUserPatch struct {
+	Locked             *bool `json:"locked,omitempty"`
+	MaxUserConnections *int  `json:"maxUserConnections,omitempty"`
+}
+
+// MySQLUserWrite defines model for MySQLUserWrite.
+type MySQLUserWrite struct {
+	Locked             *bool   `json:"locked,omitempty"`
+	MaxUserConnections *int    `json:"maxUserConnections,omitempty"`
+	Name               string  `json:"name"`
+	Password           *string `json:"password,omitempty"`
 }
 
 // Namespace defines model for Namespace.
@@ -3849,6 +4009,181 @@ type GetClusterMetricsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListMySQLDatabasesParams defines parameters for ListMySQLDatabases.
+type ListMySQLDatabasesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateMySQLDatabaseParams defines parameters for CreateMySQLDatabase.
+type CreateMySQLDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteMySQLDatabaseParams defines parameters for DeleteMySQLDatabase.
+type DeleteMySQLDatabaseParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetMySQLDatabaseParams defines parameters for GetMySQLDatabase.
+type GetMySQLDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevokeMySQLPrivilegesParams defines parameters for RevokeMySQLPrivileges.
+type RevokeMySQLPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListMySQLGrantsParams defines parameters for ListMySQLGrants.
+type ListMySQLGrantsParams struct {
+	User     *string `form:"user,omitempty" json:"user,omitempty"`
+	Database *string `form:"database,omitempty" json:"database,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GrantMySQLPrivilegesParams defines parameters for GrantMySQLPrivileges.
+type GrantMySQLPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RecoverMySQLQuorumParams defines parameters for RecoverMySQLQuorum.
+type RecoverMySQLQuorumParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListMySQLUsersParams defines parameters for ListMySQLUsers.
+type ListMySQLUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateMySQLUserParams defines parameters for CreateMySQLUser.
+type CreateMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteMySQLUserParams defines parameters for DeleteMySQLUser.
+type DeleteMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetMySQLUserParams defines parameters for GetMySQLUser.
+type GetMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PatchMySQLUserParams defines parameters for PatchMySQLUser.
+type PatchMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RotateMySQLUserPasswordJSONBody defines parameters for RotateMySQLUserPassword.
+type RotateMySQLUserPasswordJSONBody struct {
+	RetainCurrent *bool `json:"retainCurrent,omitempty"`
+}
+
+// RotateMySQLUserPasswordParams defines parameters for RotateMySQLUserPassword.
+type RotateMySQLUserPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DiscardMySQLUserOldPasswordParams defines parameters for DiscardMySQLUserOldPassword.
+type DiscardMySQLUserOldPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListOpenBaoDatabaseConnectionsParams defines parameters for ListOpenBaoDatabaseConnections.
 type ListOpenBaoDatabaseConnectionsParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5211,6 +5546,27 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
 
+// CreateMySQLDatabaseJSONRequestBody defines body for CreateMySQLDatabase for application/json ContentType.
+type CreateMySQLDatabaseJSONRequestBody = MySQLDatabaseWrite
+
+// RevokeMySQLPrivilegesJSONRequestBody defines body for RevokeMySQLPrivileges for application/json ContentType.
+type RevokeMySQLPrivilegesJSONRequestBody = MySQLGrant
+
+// GrantMySQLPrivilegesJSONRequestBody defines body for GrantMySQLPrivileges for application/json ContentType.
+type GrantMySQLPrivilegesJSONRequestBody = MySQLGrant
+
+// RecoverMySQLQuorumJSONRequestBody defines body for RecoverMySQLQuorum for application/json ContentType.
+type RecoverMySQLQuorumJSONRequestBody = MySQLQuorumRecoveryRequest
+
+// CreateMySQLUserJSONRequestBody defines body for CreateMySQLUser for application/json ContentType.
+type CreateMySQLUserJSONRequestBody = MySQLUserWrite
+
+// PatchMySQLUserJSONRequestBody defines body for PatchMySQLUser for application/json ContentType.
+type PatchMySQLUserJSONRequestBody = MySQLUserPatch
+
+// RotateMySQLUserPasswordJSONRequestBody defines body for RotateMySQLUserPassword for application/json ContentType.
+type RotateMySQLUserPasswordJSONRequestBody RotateMySQLUserPasswordJSONBody
+
 // CreateOpenBaoDatabaseConnectionJSONRequestBody defines body for CreateOpenBaoDatabaseConnection for application/json ContentType.
 type CreateOpenBaoDatabaseConnectionJSONRequestBody = OpenBaoDatabaseConnectionWrite
 
@@ -5769,6 +6125,51 @@ type ServerInterface interface {
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterMetricsParams)
+	// List MySQL application databases
+	// (GET /clusters/{cluster}/mysql/databases)
+	ListMySQLDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLDatabasesParams)
+	// Create a MySQL application database
+	// (POST /clusters/{cluster}/mysql/databases)
+	CreateMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLDatabaseParams)
+	// Delete a MySQL application database
+	// (DELETE /clusters/{cluster}/mysql/databases/{database})
+	DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeleteMySQLDatabaseParams)
+	// Read a MySQL application database
+	// (GET /clusters/{cluster}/mysql/databases/{database})
+	GetMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetMySQLDatabaseParams)
+	// Revoke MySQL database privileges
+	// (DELETE /clusters/{cluster}/mysql/grants)
+	RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokeMySQLPrivilegesParams)
+	// List MySQL grants filtered by user or database
+	// (GET /clusters/{cluster}/mysql/grants)
+	ListMySQLGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLGrantsParams)
+	// Grant bounded MySQL database privileges
+	// (POST /clusters/{cluster}/mysql/grants)
+	GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantMySQLPrivilegesParams)
+	// Explicitly recover a fenced PXC minority component
+	// (POST /clusters/{cluster}/mysql/recover-quorum)
+	RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RecoverMySQLQuorumParams)
+	// List MySQL application users
+	// (GET /clusters/{cluster}/mysql/users)
+	ListMySQLUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLUsersParams)
+	// Create a MySQL application user
+	// (POST /clusters/{cluster}/mysql/users)
+	CreateMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLUserParams)
+	// Delete a MySQL application user
+	// (DELETE /clusters/{cluster}/mysql/users/{user})
+	DeleteMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteMySQLUserParams)
+	// Read a MySQL application user
+	// (GET /clusters/{cluster}/mysql/users/{user})
+	GetMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetMySQLUserParams)
+	// Update selected MySQL user attributes
+	// (PATCH /clusters/{cluster}/mysql/users/{user})
+	PatchMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params PatchMySQLUserParams)
+	// Rotate a MySQL user password, optionally retaining the current password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password)
+	RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateMySQLUserPasswordParams)
+	// Discard a MySQL user's retained password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
+	DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DiscardMySQLUserOldPasswordParams)
 	// List managed database connections
 	// (GET /clusters/{cluster}/openbao/database-connections)
 	ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams)
@@ -10344,6 +10745,1020 @@ func (siw *ServerInterfaceWrapper) GetClusterMetrics(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterMetrics(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLDatabases(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLDatabasesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLDatabases(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) CreateMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMySQLDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMySQLDatabase(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMySQLDatabaseParams
+
+	// ------------- Optional query parameter "force" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "force", r.URL.Query(), &params.Force)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "force", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySQLDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) GetMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMySQLDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySQLDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeMySQLPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeMySQLPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeMySQLPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLGrantsParams
+
+	// ------------- Optional query parameter "user" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "user", r.URL.Query(), &params.User)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "database" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "database", r.URL.Query(), &params.Database)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLGrants(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantMySQLPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GrantMySQLPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantMySQLPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecoverMySQLQuorum operation middleware
+func (siw *ServerInterfaceWrapper) RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecoverMySQLQuorumParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecoverMySQLQuorum(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMySQLUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) GetMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) PatchMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateMySQLUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateMySQLUserPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateMySQLUserPassword(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardMySQLUserOldPassword operation middleware
+func (siw *ServerInterfaceWrapper) DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscardMySQLUserOldPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardMySQLUserOldPassword(w, r, cluster, user, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17377,6 +18792,21 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}/logs", wrapper.GetMemberLogs)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/members/{member}/replace", wrapper.ReplaceClusterMember)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/metrics", wrapper.GetClusterMetrics)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/databases", wrapper.ListMySQLDatabases)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/databases", wrapper.CreateMySQLDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/databases/{database}", wrapper.DeleteMySQLDatabase)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/databases/{database}", wrapper.GetMySQLDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.RevokeMySQLPrivileges)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.ListMySQLGrants)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.GrantMySQLPrivileges)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/recover-quorum", wrapper.RecoverMySQLQuorum)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/users", wrapper.ListMySQLUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users", wrapper.CreateMySQLUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.DeleteMySQLUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.GetMySQLUser)
+	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.PatchMySQLUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password", wrapper.RotateMySQLUserPassword)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password/discard-old", wrapper.DiscardMySQLUserOldPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.ListOpenBaoDatabaseConnections)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.CreateOpenBaoDatabaseConnection)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.DeleteOpenBaoDatabaseConnection)
@@ -25154,6 +26584,1521 @@ func (response GetClusterMetrics500JSONResponse) VisitGetClusterMetricsResponse(
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabasesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLDatabasesParams
+}
+
+type ListMySQLDatabasesResponseObject interface {
+	VisitListMySQLDatabasesResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLDatabases200JSONResponse struct {
+	Items []MySQLDatabase `json:"items"`
+}
+
+func (response ListMySQLDatabases200JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLDatabases400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLDatabases400JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLDatabases401JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLDatabases403JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLDatabases404JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLDatabases409JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLDatabases500JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLDatabases503JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLDatabaseRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateMySQLDatabaseParams
+	Body    *CreateMySQLDatabaseJSONRequestBody
+}
+
+type CreateMySQLDatabaseResponseObject interface {
+	VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type CreateMySQLDatabase201JSONResponse MySQLDatabase
+
+func (response CreateMySQLDatabase201JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateMySQLDatabase400JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateMySQLDatabase401JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMySQLDatabase403JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateMySQLDatabase404JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateMySQLDatabase409JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateMySQLDatabase413JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateMySQLDatabase415JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateMySQLDatabase500JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateMySQLDatabase503JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMySQLDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   DeleteMySQLDatabaseParams
+}
+
+type DeleteMySQLDatabaseResponseObject interface {
+	VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type DeleteMySQLDatabase204Response struct {
+}
+
+func (response DeleteMySQLDatabase204Response) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteMySQLDatabase400JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteMySQLDatabase401JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteMySQLDatabase403JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteMySQLDatabase404JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteMySQLDatabase409JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteMySQLDatabase500JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteMySQLDatabase503JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   GetMySQLDatabaseParams
+}
+
+type GetMySQLDatabaseResponseObject interface {
+	VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type GetMySQLDatabase200JSONResponse MySQLDatabase
+
+func (response GetMySQLDatabase200JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetMySQLDatabase400JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMySQLDatabase401JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetMySQLDatabase403JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMySQLDatabase404JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetMySQLDatabase409JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetMySQLDatabase500JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMySQLDatabase503JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeMySQLPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RevokeMySQLPrivilegesParams
+	Body    *RevokeMySQLPrivilegesJSONRequestBody
+}
+
+type RevokeMySQLPrivilegesResponseObject interface {
+	VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type RevokeMySQLPrivileges204Response struct {
+}
+
+func (response RevokeMySQLPrivileges204Response) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeMySQLPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RevokeMySQLPrivileges400JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokeMySQLPrivileges401JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevokeMySQLPrivileges403JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeMySQLPrivileges404JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevokeMySQLPrivileges409JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RevokeMySQLPrivileges413JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RevokeMySQLPrivileges415JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevokeMySQLPrivileges500JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RevokeMySQLPrivileges503JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLGrantsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLGrantsParams
+}
+
+type ListMySQLGrantsResponseObject interface {
+	VisitListMySQLGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLGrants200JSONResponse struct {
+	Items []MySQLGrant `json:"items"`
+}
+
+func (response ListMySQLGrants200JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLGrants400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLGrants400JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLGrants401JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLGrants403JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLGrants404JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLGrants409JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLGrants500JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLGrants503JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GrantMySQLPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  GrantMySQLPrivilegesParams
+	Body    *GrantMySQLPrivilegesJSONRequestBody
+}
+
+type GrantMySQLPrivilegesResponseObject interface {
+	VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type GrantMySQLPrivileges204Response struct {
+}
+
+func (response GrantMySQLPrivileges204Response) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantMySQLPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GrantMySQLPrivileges400JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GrantMySQLPrivileges401JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GrantMySQLPrivileges403JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GrantMySQLPrivileges404JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GrantMySQLPrivileges409JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GrantMySQLPrivileges413JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GrantMySQLPrivileges415JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GrantMySQLPrivileges500JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GrantMySQLPrivileges503JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RecoverMySQLQuorumRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RecoverMySQLQuorumParams
+	Body    *RecoverMySQLQuorumJSONRequestBody
+}
+
+type RecoverMySQLQuorumResponseObject interface {
+	VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error
+}
+
+type RecoverMySQLQuorum202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RecoverMySQLQuorum202JSONResponse struct {
+	Body    Operation
+	Headers RecoverMySQLQuorum202ResponseHeaders
+}
+
+func (response RecoverMySQLQuorum202JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RecoverMySQLQuorum400JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RecoverMySQLQuorum401JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RecoverMySQLQuorum403JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RecoverMySQLQuorum404JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RecoverMySQLQuorum405JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RecoverMySQLQuorum409JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RecoverMySQLQuorum413JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RecoverMySQLQuorum415JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RecoverMySQLQuorum500JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RecoverMySQLQuorum503JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLUsersParams
+}
+
+type ListMySQLUsersResponseObject interface {
+	VisitListMySQLUsersResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLUsers200JSONResponse struct {
+	Items []MySQLUser `json:"items"`
+}
+
+func (response ListMySQLUsers200JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLUsers400JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLUsers401JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLUsers403JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLUsers404JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLUsers409JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLUsers500JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLUsers503JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateMySQLUserParams
+	Body    *CreateMySQLUserJSONRequestBody
+}
+
+type CreateMySQLUserResponseObject interface {
+	VisitCreateMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type CreateMySQLUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateMySQLUser201JSONResponse struct {
+	Body    MySQLUserCreated
+	Headers CreateMySQLUser201ResponseHeaders
+}
+
+func (response CreateMySQLUser201JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateMySQLUser400JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateMySQLUser401JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMySQLUser403JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateMySQLUser404JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateMySQLUser409JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateMySQLUser413JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateMySQLUser415JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateMySQLUser500JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateMySQLUser503JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteMySQLUserParams
+}
+
+type DeleteMySQLUserResponseObject interface {
+	VisitDeleteMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteMySQLUser204Response struct {
+}
+
+func (response DeleteMySQLUser204Response) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteMySQLUser400JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteMySQLUser401JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteMySQLUser403JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteMySQLUser404JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteMySQLUser409JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteMySQLUser500JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteMySQLUser503JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetMySQLUserParams
+}
+
+type GetMySQLUserResponseObject interface {
+	VisitGetMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type GetMySQLUser200JSONResponse MySQLUser
+
+func (response GetMySQLUser200JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetMySQLUser400JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMySQLUser401JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetMySQLUser403JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMySQLUser404JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetMySQLUser409JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetMySQLUser500JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMySQLUser503JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  PatchMySQLUserParams
+	Body    *PatchMySQLUserJSONRequestBody
+}
+
+type PatchMySQLUserResponseObject interface {
+	VisitPatchMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type PatchMySQLUser200JSONResponse MySQLUser
+
+func (response PatchMySQLUser200JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PatchMySQLUser400JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PatchMySQLUser401JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PatchMySQLUser403JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PatchMySQLUser404JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PatchMySQLUser409JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response PatchMySQLUser413JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PatchMySQLUser415JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PatchMySQLUser500JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response PatchMySQLUser503JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateMySQLUserPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  RotateMySQLUserPasswordParams
+	Body    *RotateMySQLUserPasswordJSONRequestBody
+}
+
+type RotateMySQLUserPasswordResponseObject interface {
+	VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type RotateMySQLUserPassword200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type RotateMySQLUserPassword200JSONResponse struct {
+	Body    MySQLPasswordRotation
+	Headers RotateMySQLUserPassword200ResponseHeaders
+}
+
+func (response RotateMySQLUserPassword200JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateMySQLUserPassword400JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateMySQLUserPassword401JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateMySQLUserPassword403JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateMySQLUserPassword404JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateMySQLUserPassword409JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RotateMySQLUserPassword413JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RotateMySQLUserPassword415JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateMySQLUserPassword500JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotateMySQLUserPassword503JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscardMySQLUserOldPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DiscardMySQLUserOldPasswordParams
+}
+
+type DiscardMySQLUserOldPasswordResponseObject interface {
+	VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error
+}
+
+type DiscardMySQLUserOldPassword204Response struct {
+}
+
+func (response DiscardMySQLUserOldPassword204Response) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DiscardMySQLUserOldPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DiscardMySQLUserOldPassword400JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DiscardMySQLUserOldPassword401JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DiscardMySQLUserOldPassword403JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DiscardMySQLUserOldPassword404JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DiscardMySQLUserOldPassword409JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DiscardMySQLUserOldPassword500JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DiscardMySQLUserOldPassword503JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListOpenBaoDatabaseConnectionsRequestObject struct {
@@ -35989,6 +38934,51 @@ type StrictServerInterface interface {
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(ctx context.Context, request GetClusterMetricsRequestObject) (GetClusterMetricsResponseObject, error)
+	// List MySQL application databases
+	// (GET /clusters/{cluster}/mysql/databases)
+	ListMySQLDatabases(ctx context.Context, request ListMySQLDatabasesRequestObject) (ListMySQLDatabasesResponseObject, error)
+	// Create a MySQL application database
+	// (POST /clusters/{cluster}/mysql/databases)
+	CreateMySQLDatabase(ctx context.Context, request CreateMySQLDatabaseRequestObject) (CreateMySQLDatabaseResponseObject, error)
+	// Delete a MySQL application database
+	// (DELETE /clusters/{cluster}/mysql/databases/{database})
+	DeleteMySQLDatabase(ctx context.Context, request DeleteMySQLDatabaseRequestObject) (DeleteMySQLDatabaseResponseObject, error)
+	// Read a MySQL application database
+	// (GET /clusters/{cluster}/mysql/databases/{database})
+	GetMySQLDatabase(ctx context.Context, request GetMySQLDatabaseRequestObject) (GetMySQLDatabaseResponseObject, error)
+	// Revoke MySQL database privileges
+	// (DELETE /clusters/{cluster}/mysql/grants)
+	RevokeMySQLPrivileges(ctx context.Context, request RevokeMySQLPrivilegesRequestObject) (RevokeMySQLPrivilegesResponseObject, error)
+	// List MySQL grants filtered by user or database
+	// (GET /clusters/{cluster}/mysql/grants)
+	ListMySQLGrants(ctx context.Context, request ListMySQLGrantsRequestObject) (ListMySQLGrantsResponseObject, error)
+	// Grant bounded MySQL database privileges
+	// (POST /clusters/{cluster}/mysql/grants)
+	GrantMySQLPrivileges(ctx context.Context, request GrantMySQLPrivilegesRequestObject) (GrantMySQLPrivilegesResponseObject, error)
+	// Explicitly recover a fenced PXC minority component
+	// (POST /clusters/{cluster}/mysql/recover-quorum)
+	RecoverMySQLQuorum(ctx context.Context, request RecoverMySQLQuorumRequestObject) (RecoverMySQLQuorumResponseObject, error)
+	// List MySQL application users
+	// (GET /clusters/{cluster}/mysql/users)
+	ListMySQLUsers(ctx context.Context, request ListMySQLUsersRequestObject) (ListMySQLUsersResponseObject, error)
+	// Create a MySQL application user
+	// (POST /clusters/{cluster}/mysql/users)
+	CreateMySQLUser(ctx context.Context, request CreateMySQLUserRequestObject) (CreateMySQLUserResponseObject, error)
+	// Delete a MySQL application user
+	// (DELETE /clusters/{cluster}/mysql/users/{user})
+	DeleteMySQLUser(ctx context.Context, request DeleteMySQLUserRequestObject) (DeleteMySQLUserResponseObject, error)
+	// Read a MySQL application user
+	// (GET /clusters/{cluster}/mysql/users/{user})
+	GetMySQLUser(ctx context.Context, request GetMySQLUserRequestObject) (GetMySQLUserResponseObject, error)
+	// Update selected MySQL user attributes
+	// (PATCH /clusters/{cluster}/mysql/users/{user})
+	PatchMySQLUser(ctx context.Context, request PatchMySQLUserRequestObject) (PatchMySQLUserResponseObject, error)
+	// Rotate a MySQL user password, optionally retaining the current password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password)
+	RotateMySQLUserPassword(ctx context.Context, request RotateMySQLUserPasswordRequestObject) (RotateMySQLUserPasswordResponseObject, error)
+	// Discard a MySQL user's retained password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
+	DiscardMySQLUserOldPassword(ctx context.Context, request DiscardMySQLUserOldPasswordRequestObject) (DiscardMySQLUserOldPasswordResponseObject, error)
 	// List managed database connections
 	// (GET /clusters/{cluster}/openbao/database-connections)
 	ListOpenBaoDatabaseConnections(ctx context.Context, request ListOpenBaoDatabaseConnectionsRequestObject) (ListOpenBaoDatabaseConnectionsResponseObject, error)
@@ -38316,6 +41306,467 @@ func (sh *strictHandler) GetClusterMetrics(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterMetricsResponseObject); ok {
 		if err := validResponse.VisitGetClusterMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLDatabases operation middleware
+func (sh *strictHandler) ListMySQLDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLDatabasesParams) {
+	var request ListMySQLDatabasesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLDatabases(ctx, request.(ListMySQLDatabasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLDatabases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLDatabasesResponseObject); ok {
+		if err := validResponse.VisitListMySQLDatabasesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMySQLDatabase operation middleware
+func (sh *strictHandler) CreateMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLDatabaseParams) {
+	var request CreateMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateMySQLDatabaseJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMySQLDatabase(ctx, request.(CreateMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitCreateMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMySQLDatabase operation middleware
+func (sh *strictHandler) DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeleteMySQLDatabaseParams) {
+	var request DeleteMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMySQLDatabase(ctx, request.(DeleteMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitDeleteMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMySQLDatabase operation middleware
+func (sh *strictHandler) GetMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetMySQLDatabaseParams) {
+	var request GetMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMySQLDatabase(ctx, request.(GetMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitGetMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeMySQLPrivileges operation middleware
+func (sh *strictHandler) RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokeMySQLPrivilegesParams) {
+	var request RevokeMySQLPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RevokeMySQLPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeMySQLPrivileges(ctx, request.(RevokeMySQLPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeMySQLPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeMySQLPrivilegesResponseObject); ok {
+		if err := validResponse.VisitRevokeMySQLPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLGrants operation middleware
+func (sh *strictHandler) ListMySQLGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLGrantsParams) {
+	var request ListMySQLGrantsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLGrants(ctx, request.(ListMySQLGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLGrantsResponseObject); ok {
+		if err := validResponse.VisitListMySQLGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantMySQLPrivileges operation middleware
+func (sh *strictHandler) GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantMySQLPrivilegesParams) {
+	var request GrantMySQLPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body GrantMySQLPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantMySQLPrivileges(ctx, request.(GrantMySQLPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantMySQLPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantMySQLPrivilegesResponseObject); ok {
+		if err := validResponse.VisitGrantMySQLPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecoverMySQLQuorum operation middleware
+func (sh *strictHandler) RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RecoverMySQLQuorumParams) {
+	var request RecoverMySQLQuorumRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RecoverMySQLQuorumJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecoverMySQLQuorum(ctx, request.(RecoverMySQLQuorumRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecoverMySQLQuorum")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecoverMySQLQuorumResponseObject); ok {
+		if err := validResponse.VisitRecoverMySQLQuorumResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLUsers operation middleware
+func (sh *strictHandler) ListMySQLUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLUsersParams) {
+	var request ListMySQLUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLUsers(ctx, request.(ListMySQLUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLUsersResponseObject); ok {
+		if err := validResponse.VisitListMySQLUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMySQLUser operation middleware
+func (sh *strictHandler) CreateMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLUserParams) {
+	var request CreateMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateMySQLUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMySQLUser(ctx, request.(CreateMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMySQLUserResponseObject); ok {
+		if err := validResponse.VisitCreateMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMySQLUser operation middleware
+func (sh *strictHandler) DeleteMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteMySQLUserParams) {
+	var request DeleteMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMySQLUser(ctx, request.(DeleteMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMySQLUserResponseObject); ok {
+		if err := validResponse.VisitDeleteMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMySQLUser operation middleware
+func (sh *strictHandler) GetMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetMySQLUserParams) {
+	var request GetMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMySQLUser(ctx, request.(GetMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMySQLUserResponseObject); ok {
+		if err := validResponse.VisitGetMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchMySQLUser operation middleware
+func (sh *strictHandler) PatchMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params PatchMySQLUserParams) {
+	var request PatchMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body PatchMySQLUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchMySQLUser(ctx, request.(PatchMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchMySQLUserResponseObject); ok {
+		if err := validResponse.VisitPatchMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateMySQLUserPassword operation middleware
+func (sh *strictHandler) RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateMySQLUserPasswordParams) {
+	var request RotateMySQLUserPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body RotateMySQLUserPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateMySQLUserPassword(ctx, request.(RotateMySQLUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateMySQLUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateMySQLUserPasswordResponseObject); ok {
+		if err := validResponse.VisitRotateMySQLUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DiscardMySQLUserOldPassword operation middleware
+func (sh *strictHandler) DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DiscardMySQLUserOldPasswordParams) {
+	var request DiscardMySQLUserOldPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscardMySQLUserOldPassword(ctx, request.(DiscardMySQLUserOldPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscardMySQLUserOldPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscardMySQLUserOldPasswordResponseObject); ok {
+		if err := validResponse.VisitDiscardMySQLUserOldPasswordResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

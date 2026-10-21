@@ -132,6 +132,17 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = "policy"
 	case "ReplaceSettings":
 		e.Target = "oidc"
+	case "CreateMySQLUser":
+		e.Target = in.Cluster + "/" + in.Body.(*api.MySQLUserWrite).Name
+	case "PatchMySQLUser", "DeleteMySQLUser", "RotateMySQLUserPassword", "DiscardMySQLUserOldPassword":
+		e.Target = in.Cluster + "/" + in.User
+	case "CreateMySQLDatabase":
+		e.Target = in.Cluster + "/" + in.Body.(*api.MySQLDatabaseWrite).Name
+	case "DeleteMySQLDatabase":
+		e.Target = in.Cluster + "/" + in.Database
+	case "GrantMySQLPrivileges", "RevokeMySQLPrivileges":
+		body := in.Body.(*api.MySQLGrant)
+		e.Target = in.Cluster + "/" + body.Database + "/" + body.User
 	case "CreatePostgresRole", "UpdatePostgresRole":
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresRoleWrite).Name
 	case "PatchPostgresRole", "DeletePostgresRole", "RotatePostgresRolePassword":

@@ -399,6 +399,22 @@
   padding: 0;
 }
 
+/* Keep cluster filters inside the card, without changing table scrolling. */
+.cluster-list .card-head {
+  flex-wrap: wrap;
+}
+
+.cluster-list .card-head > .row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cluster-list-filter {
+  width: 240px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .callout {
   display: flex;
   gap: 10px;

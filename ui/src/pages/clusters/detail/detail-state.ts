@@ -18,6 +18,10 @@ export function observedVersion(status: { version?: string; members: { version?:
 
 export function maintenanceCopy(provider: string, replicas: number, current?: string, target?: string): string {
   if (isPostgres(provider) && current && target && postgresMajorUpgrade(current, target)) return POSTGRES_OFFLINE_UPGRADE;
+  if (provider === 'mysql') return replicas === 1
+    ? 'Downtime: single-member MySQL maintenance interrupts database access until it returns.'
+    : 'Group Replication rolls secondaries before moving the primary. A majority is required; writes block on quorum loss, and clients must reconnect after failover.';
+  if (provider === 'pxc') return 'PXC rolls Galera members while preserving a Primary component. Wait for Synced and wsrep_ready before continuing; ProxySQL routes one writer, and a failover timeout can leave commit outcomes unknown.';
   if (provider === 'postgres' || provider === 'supabase') return replicas === 1
     ? 'Downtime: single-member PostgreSQL maintenance interrupts database access until it returns.'
     : 'PostgreSQL replicas restart first, followed by a primary switchover. Failover briefly interrupts writes; availability requires the etcd voting quorum.';

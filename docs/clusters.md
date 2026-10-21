@@ -42,6 +42,40 @@ Both providers support TLS/system-user rotation, public TCP subject to backend c
 ### Temporal
 
 [Temporal](temporal/README.md) runs combined or split stateless workflow roles on an existing Karakoram PostgreSQL ≥12 source. It uses the control plane's shared PostgreSQL binding service. Server versions and UI artifacts are locked separately. Topology, persistence options and history shard count are immutable; scaling is per role. See [access/TLS and OIDC](temporal/access-and-tls.md) and [namespace, upgrade and recovery operations](temporal/operations.md). Temporal backup manifests live in cluster state, while the PostgreSQL source owns archives and retention.
+### MySQL
+
+The `mysql` provider runs Percona Server in `single` or three/five-member,
+single-primary Group Replication topology. Group scaling clones new monotonic
+member identities from the ONLINE writer before joining them. Removal drains
+ProxySQL, hands the writer to an up-to-date ONLINE secondary when necessary,
+leaves Group Replication, and confirms the stopped runtime before deleting the
+ID-fenced runtime and volume. Rejected volume deletion is handed to orphan-volume
+inventory. Replacement joins a new identity before retiring its predecessor;
+cancellation before retirement rolls back the new identity, while cancellation
+after retirement begins completes the cutover under reconciliation ownership.
+
+Single→group retains the existing seed volume and uses a new group identity and
+bootstrap epoch; group→single is rejected. Group topology requires ProxySQL.
+Resource changes, startup-only parameter changes and minor upgrades roll
+secondaries before the writer. The allowlisted `innodb_buffer_pool_instances`
+and `table_open_cache_instances` settings require a restart and remain pinned per
+member until its turn; the other allowlisted variables are applied live. The
+8.0→8.4 major upgrade requires a successful current-version backup started since
+the durable upgrade request, publishes and acknowledges `innodb_fast_shutdown=0`
+before stopping each member, and upgrades the old writer last. Its departure lets
+Group Replication elect an upgraded writer; lower-version join exceptions are
+never enabled. A singleton upgrade is offline. Downgrades are rejected.
+
+TLS rotation stages new member leaves under the existing CA, publishes them,
+and waits for configuration acknowledgement. MySQL reloads client TLS in place;
+GR recovery uses the new leaves on its next connection. ProxySQL applies its
+updated TLS configuration. Formation, restore and active physical backups fence
+membership changes. Durable membership, retirement, rolling and TLS journals
+resume after control-plane restart.
+
+### Percona XtraDB Cluster
+
+The separate `pxc` provider supports only Galera `cluster` topology with three or five data members and at least one ProxySQL replica. It shares MySQL-native access and physical backup lifecycle, but keeps its own artifact/version catalog, `pxc` repository prefix and restore provenance. MySQL↔PXC conversion and cross-provider restore are rejected. Traffic requires Primary/Synced/readiness, with one proxy-routed writer; quorum loss rejects minority reads and writes. Full-outage recovery compares every stopped member's recovered same-UUID Galera position; explicit minority recovery additionally fences missing owned members before bootstrap. See [MySQL/PXC configuration](mysql/configuration.md), [operations and recovery](mysql/operations.md) and [backup/UUID caveats](mysql/backups.md).
 
 ## Create and change desired state
 

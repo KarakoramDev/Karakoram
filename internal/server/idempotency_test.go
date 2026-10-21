@@ -280,6 +280,7 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 		"replaceDatabaseRole", "replaceBackupStorage",
 		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
 		"createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "rebalancePostgres", "createPostgresDatabase", "grantPostgresPrivileges",
+		"createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum",
 		"setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret",
 		"createOpenBaoDatabaseConnection",
 	} {
@@ -287,8 +288,8 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 51 {
-		t.Fatalf("covered operations = %d, want 51", len(covered))
+	if len(covered) != 54 {
+		t.Fatalf("covered operations = %d, want 54", len(covered))
 	}
 }
 

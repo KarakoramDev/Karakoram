@@ -139,8 +139,8 @@ func TestSupervisorDependencyShutdownOrder(t *testing.T) {
 				t.Fatal("dependency shutdown order", actual)
 			}
 			states, _ := s.snapshot()
-			if states["patroni"].PID != 0 || states["etcd"].PID != 0 {
-				t.Fatal("hung consumer prevented dependency stops", states)
+			if states["forwarder"].PID != 0 || states["patroni"].PID != 0 || states["etcd"].PID != 0 {
+				t.Fatal("shutdown returned before every owned child was reaped", states)
 			}
 		})
 	}
@@ -218,5 +218,107 @@ func TestSupervisorMaintenanceResumeUsesStartDependencyOrder(t *testing.T) {
 	}
 	for _, name := range []string{"etcd", "patroni", "forwarder"} {
 		ready(name)
+	}
+}
+
+func TestSupervisorShutdownFencesQueuedRetry(t *testing.T) {
+	s := newSupervisor(io.Discard)
+	s.backoff = 20 * time.Millisecond
+	s.configure("worker", processSpec{binary: filepath.Join(t.TempDir(), "missing")})
+	if err := s.action(context.Background(), "worker", "start"); err == nil {
+		t.Fatal("missing executable unexpectedly started")
+	}
+	s.closeLaunches()
+	time.Sleep(3 * s.backoff)
+	states, _ := s.snapshot()
+	if states["worker"].Restarts != 0 {
+		t.Fatal("shutdown admitted queued retry", states)
+	}
+	if err := s.action(context.Background(), "worker", "start"); err == nil {
+		t.Fatal("shutdown admitted explicit start")
+	}
+}
+
+func TestSupervisorClosesInheritedDescriptors(t *testing.T) {
+	file, err := os.CreateTemp(t.TempDir(), "inherited-lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	// dup deliberately drops CLOEXEC, like a lock inherited from a shell.
+	fd, err := syscall.Dup(int(file.Fd()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer syscall.Close(fd)
+	if err := closeInheritedFilesOnExec(); err != nil {
+		t.Fatal(err)
+	}
+	s := newSupervisor(io.Discard)
+	s.setMaintenance(true)
+	t.Cleanup(func() {
+		if err := s.shutdown(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	s.configure("worker", processSpec{binary: "/bin/sh", args: []string{"-c", `test ! -e "/proc/self/fd/$1" || exit 9; printf 'stdout\n'; printf 'stderr\n' >&2`, "check-fd", strconv.Itoa(fd)}})
+	if err := s.action(context.Background(), "worker", "start"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		states, _ := s.snapshot()
+		if states["worker"].ExitCode != nil {
+			if *states["worker"].ExitCode != 0 || len(s.logTail("worker", 10)) != 2 {
+				t.Fatal("inherited descriptor survived or supervised output was closed", states)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("descriptor helper did not exit")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// CLOEXEC must not release the parent's lock descriptor.
+	duplicate, err := syscall.Dup(fd)
+	if err != nil {
+		t.Fatal("parent descriptor was closed", err)
+	}
+	_ = syscall.Close(duplicate)
+}
+
+func TestSupervisorShutdownDuringRestart(t *testing.T) {
+	s, log, _ := shutdownFixture(t, "forwarder")
+	restartCtx, cancelRestart := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancelRestart()
+	restarted := make(chan error, 1)
+	go func() { restarted <- s.action(restartCtx, "forwarder", "restart") }()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, _ := os.ReadFile(log)
+		if strings.Contains(string(data), "forwarder") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("restart did not enter graceful stop")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	_ = s.shutdown(ctx)
+	select {
+	case err := <-restarted:
+		if err == nil {
+			t.Fatal("restart launched a new process during shutdown")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not release pending restart")
+	}
+	states, _ := s.snapshot()
+	for name, state := range states {
+		if state.PID != 0 {
+			t.Fatal("shutdown left owned child running", name, state)
+		}
 	}
 }

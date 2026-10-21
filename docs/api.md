@@ -138,13 +138,15 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Native access | `/elasticsearch/users`, `/elasticsearch/roles`, `/elasticsearch/api-keys` | Elasticsearch only |
 | Native PostgreSQL access | `/postgres/roles`, `/postgres/roles/{role}`, `/postgres/roles/{role}/password`, `/postgres/databases`, `/postgres/databases/{database}`, `/postgres/grants` | PostgreSQL and Supabase |
 | PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
+| Native MySQL access | `/mysql/users`, `/mysql/users/{user}`, `/mysql/users/{user}/password`, `/mysql/users/{user}/password/discard-old`, `/mysql/databases`, `/mysql/databases/{database}`, `/mysql/grants` | MySQL and PXC |
+| PXC minority recovery | `/mysql/recover-quorum` | PXC only; explicit confirmation and backend fencing |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
 | OpenBao | `/openbao/unseal-keys/reveal`, `/openbao/database-connections`, `/openbao/database-connections/{connection}` | Confirmed initialization-material reveal; list/create/get/delete managed target connections |
 | Temporal certificates | `POST /temporal/client-certificates` (issue once); `GET /temporal/client-certificates` (metadata) | Temporal |
 | Temporal namespaces | `GET /temporal/namespaces`; `DELETE /temporal/namespaces/{temporalNamespace}` (asynchronous) | Temporal |
 | Temporal UI secret | `PUT /temporal/ui/oidc-client-secret` (write-only) | Temporal |
 | Recovery | `/backup-storages`; cluster `/backups`, `/restores` | All |
-| Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase |
+| Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase, MySQL and PXC |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
 
@@ -153,6 +155,11 @@ PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Dat
 See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade guards. In-place restores of a bound PostgreSQL source require `acknowledgeBoundConsumers: true`; otherwise HTTP 409 `bound_consumers` lists affected consumer identities.
 
 Distributed PostgreSQL exposes `POST /clusters/{cluster}/actions/rebalance` with `{strategy?: string}` and returns 202 Operation (`type: rebalance`). It uses `clusters:update`, CSRF and idempotency conventions. Members expose a read-only `group` (0 coordinator); `CitusTopology` conditions report metadata drift. See [distributed PostgreSQL](postgres/distributed.md).
+MySQL native access uses `database-users` RBAC for application users at the fixed `%` host, databases and bounded database privileges. User PATCH changes only supplied connection-limit and lock fields. Create and password rotation return generated passwords only once, with `Cache-Control: no-store` and sealed replay when an idempotency key is supplied. Rotation accepts `retainCurrent` for dual passwords; discard-old removes the retained password. Database creation defaults to `utf8mb4` / `utf8mb4_0900_ai_ci`; deletion requires `force=true` for a nonempty database. Grant listing requires at least one `user` or `database` filter. Global privileges and `GRANT OPTION` are not exposed.
+
+The topology contract accepts MySQL Group Replication `group` and PXC `cluster` alongside `single`; provider catalogs identify which topologies each engine supports. Backup type enums include `incremental` for MySQL/PXC, separately from PostgreSQL's `incr` spelling.
+
+MySQL and PXC share the native access routes, not provider identity or interchangeable backups. See [access and TLS](mysql/access-and-tls.md), [GTID-based recovery](mysql/backups.md) and [explicit PXC minority recovery](mysql/operations.md#explicit-pxc-minority-recovery). Quorum recovery requires cluster update permission, returns an accepted Operation and is not arbitrary SQL or a fencing bypass.
 
 Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
 

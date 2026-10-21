@@ -40,6 +40,15 @@ func TestEngineShutdownPrecedesChildSignals(t *testing.T) {
 				if states["worker"].PID == 0 {
 					t.Fatal("child stopped before handoff")
 				}
+				if err := a.sup.action(ctx, "worker", "start"); err == nil {
+					t.Fatal("handoff admitted a new launch")
+				}
+				a.sup.mu.Lock()
+				closed := a.sup.closed
+				a.sup.mu.Unlock()
+				if !closed {
+					t.Fatal("automatic retries remain enabled during handoff")
+				}
 				if fail {
 					return errors.New("no safe candidate")
 				}

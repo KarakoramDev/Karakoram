@@ -4,7 +4,7 @@
 package cli
 
 // commandSpecs binds the documented command surface to generated operations.
-var commandSpecs = append(append(append([]commandSpec{
+var commandSpecs = append(append(append(append([]commandSpec{
 	{"whoami", "getCurrentUser", 0, false, []queryFlag{}},
 	{"version", "getVersion", 0, false, []queryFlag{}},
 	{"health", "getHealth", 0, false, []queryFlag{}},
@@ -101,7 +101,7 @@ var commandSpecs = append(append(append([]commandSpec{
 	{"auth refresh", "refreshSession", 0, false, []queryFlag{}},
 	{"auth oidc-login", "oidcLogin", 0, false, []queryFlag{{"return-to", "returnTo", "string"}}},
 	{"auth oidc-callback", "oidcCallback", 0, false, []queryFlag{{"code", "code", "string"}, {"state", "state", "string"}}},
-}, rabbitMQCommandSpecs()...), postgresCommandSpecs()...), openBaoCommandSpecs()...)
+}, rabbitMQCommandSpecs()...), postgresCommandSpecs()...), openBaoCommandSpecs()...), mysqlCommandSpecs()...)
 
 // Temporal commands have dedicated safe credential input/output handling.
 var temporalCommandSpecs = []commandSpec{

@@ -71,6 +71,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if _, err := s.Store.EnsurePostgresBinding(ctx, &binding); err != nil {
 		t.Fatal(err)
 	}
+	mysqlRegistry, err := engine.NewRegistry(&fakeMySQLAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
@@ -166,6 +170,12 @@ func TestEveryGETResponseConforms(t *testing.T) {
 					url = strings.Replace(url, "/clusters/prod/", "/clusters/bindingsrc/", 1)
 				}
 				if operationID == "listPostgresGrants" {
+					url += "?database=app"
+				}
+			}
+			if strings.Contains(path, "/mysql/") {
+				s.Registry = mysqlRegistry
+				if operationID == "listMySQLGrants" {
 					url += "?database=app"
 				}
 			}

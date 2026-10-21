@@ -22,6 +22,7 @@ import { latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
+import { isMySQL } from '@/engines/mysql/spec';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
@@ -67,6 +68,7 @@ export function BackupsTab() {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
+      {isMySQL(cluster.spec.provider) ? <Callout tone="warn" title="XtraBackup and binlog recovery">Incremental backups depend on their full backup and complete LSN chain. PITR ends at continuous archived GTID coverage, not the latest application commit; inspect archive lag and gaps. MySQL and PXC backups are not interchangeable. Test recovery before relying on retention or upgrading.</Callout> : null}
       <div className="grid-3">
         <Card flush>
           <div className="stat">
@@ -92,7 +94,7 @@ export function BackupsTab() {
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
               {win?.available && win.start && win.end ? `${formatTime(win.start)} → ${formatTime(win.end)}` : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
             </span>
-            <span className="stat-sub">{win?.message ?? (win?.available ? 'continuous, PBM-verified' : '')}</span>
+            <span className="stat-sub">{win?.message ?? (win?.available ? isMySQL(cluster.spec.provider) ? 'continuous, GTID-checked archive coverage' : 'continuous, engine-verified' : '')}</span>
           </div>
         </Card> : null}
       </div>

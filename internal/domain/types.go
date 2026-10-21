@@ -457,6 +457,7 @@ type Backup struct {
 	Location    string `json:"location,omitempty"`
 	// Postgres records pgBackRest's immutable set and dependency metadata.
 	Postgres *PostgresBackup `json:"postgres,omitempty"`
+	MySQL    *MySQLBackup    `json:"mysql,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -498,6 +499,26 @@ type PostgresBackupGroup struct {
 	Timeline int            `json:"timeline,omitempty"`
 	Backup   PostgresBackup `json:"backup"`
 	LSN      string         `json:"lsn"`
+}
+
+// MySQLBackup records immutable XtraBackup chain and incarnation provenance.
+type MySQLBackup struct {
+	Label          string    `json:"label"`
+	Repository     string    `json:"repository"`
+	Type           string    `json:"type"`
+	ParentLabel    string    `json:"parentLabel,omitempty"`
+	ChainRootLabel string    `json:"chainRootLabel"`
+	GTIDSet        string    `json:"gtidSet"`
+	FromLSN        uint64    `json:"fromLSN"`
+	ToLSN          uint64    `json:"toLSN"`
+	ServerVersion  string    `json:"serverVersion"`
+	ToolVersion    string    `json:"toolVersion"`
+	EndTime        time.Time `json:"endTime"`
+	ObjectPaths    []string  `json:"objectPaths"`
+	ClusterUID     string    `json:"clusterUID"`
+	Generation     int       `json:"generation"`
+	// PhysicalIdentity binds local InnoDB LSNs to one agent/data incarnation.
+	PhysicalIdentity string `json:"physicalIdentity,omitempty"`
 }
 
 // ProviderMatches reports whether a backup can be consumed by the target engine.

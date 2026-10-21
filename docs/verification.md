@@ -9,6 +9,7 @@ Verification checks contracts, real engine behavior and deployed workflows at di
 - **Local automated checks:** validation, authorization, state transitions, recovery checkpoints and generated-contract consistency.
 - **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not backend placement or provisioning.
 - **Native PostgreSQL/Supabase integration:** compiled test binaries run with real installed packages/artifacts in disposable Ubuntu 24.04 Incus/LXC system containers; no application-container runtime or image extraction is required for this path.
+- **Native MySQL/PXC integration:** real Percona Server or PXC, ProxySQL and selected XtraBackup/MinIO scenarios from environment-selected artifacts and disposable scratch paths; [prerequisites and focused commands](mysql/verification.md).
 - **Deployed checks:** paid platform resources, engine data paths and recovery under the configured prerequisites. Skipped capabilities are unverified, not successful.
 - **Browser checks:** rendered navigation, permissions and workflows. Static checks and backing-API scenarios are not browser automation; no automated browser-workflow suite is supplied.
 
@@ -101,6 +102,36 @@ go test -tags integration -count=1 -timeout 30m \
 
 Use [OpenBao operations](openbao/operations.md), [access](openbao/access-and-tls.md) and [recovery](openbao/backups.md) as the deployment checklist. Exercise a three-member create, kill/re-unseal, restart, scale 3→5→3, replacement, catalog-available upgrade, snapshot backup/restore/clone, transit auto-unseal, PostgreSQL/MongoDB/RabbitMQ credential issuance, and delete/keepVolumes resume. Confirm both data and native authentication after recovery; require separate allowed/denied external-client checks.
 
+### Native MySQL subprocess lifecycle
+
+The [operator-focused native guide](mysql/verification.md) defines artifact inputs and acceptance boundaries. The following platform-specific details describe contributor-level lifecycle guarantees, not production availability evidence.
+
+Native runner cleanup waits for agent shutdown before removing disposable data,
+including assertion failures. Shutdown fences automatic retries before engine
+handoff and gives active owned process groups their graceful stop budget. On
+Linux, `waitid(WNOWAIT)` retains the unreaped leader as a PGID identity anchor;
+remaining members receive SIGKILL and `/proc` confirms that they are absent or
+dead before the leader is reaped. Group signalling and the decision to reap are
+serialized, so a previously authorized natural-exit reap never causes a later
+signal to a recycled numeric PGID. Post-KILL death confirmation is intentionally
+independent of the graceful deadline: a kernel-stuck process or an incomplete
+`/proc` observation cannot authorize data removal. Observation failures appear
+in process status while the identity anchor is retained.
+
+This is a Linux active-generation guarantee, not retroactive cleanup of
+descendants from generations already authorized for natural-exit reaping.
+Natural exits retain their existing no-descendant-signalling semantics.
+Non-Linux launches retain existing support but lack the Linux group-death proof;
+their timeout escalation targets only the direct child. A canceled Galera
+recovery launcher must exit without starting another mysqld; recovery still runs
+only at the actual stopped-to-starting boundary.
+
+Agent startup marks inherited non-stdio descriptors close-on-exec so shell
+resource locks cannot be retained by servers or SST children. Linux uses atomic
+`close_range(CLOSE_RANGE_CLOEXEC)`, with a `/proc/self/fd` fallback on older
+kernels; non-Linux startup enumerates `/dev/fd`. Parent lock ownership and
+explicitly mapped child stdout/stderr are preserved. External lock wrappers
+should still use `flock --close`.
 
 ## Capability matrix
 
@@ -116,6 +147,8 @@ Coverage descriptions, not evidence that this checkout or deployment passed:
 | Elasticsearch: snapshots/access/metrics | Local checkpoints; Docker snapshot APIs | Restore/clone, data/credentials, fresh metrics, deletion | Repository compatibility and independent cleanup |
 | PostgreSQL: access/TLS/proxy/lifecycle | Local contracts; native PostgreSQL/ProxySQL access/reload and upgrade cases | HA fencing/failover, scaling/replacement, resource changes and rolling lifecycle | Driver compatibility, external TLS/allowlists and client reconnection |
 | PostgreSQL: pgBackRest/PITR/restore/clone | Local recovery checkpoints; native inventory compatibility | S3 backup chains, expiry dependencies, PITR/in-place/clone and credential recovery | Conservative-window limits, offline-major rollback, retained-object cleanup |
+| MySQL/PXC: native access, topology, routing and lifecycle | Local contracts/UI rendering; native access, group/Galera runner and routing cases | Independent provider catalogs, quorum/fencing, scale/replace/restart, upgrades and resume | Both wizard modules, MySQL access permissions, typed PXC recovery confirmation and client reconnection |
+| MySQL/PXC: XtraBackup/binlog recovery | Local chain/GTID/time-boundary contracts; native MySQL S3/PITR case | Provider-matched full/incremental restore/clone, archive gaps and account snapshots | Conservative window, same-second target, new UUID/history isolation and recovered application authentication |
 | Supabase: modular API/services | Local option/key/SQL/rendering contracts; native API, Envoy, Vector and available component cases | Enabled-component dependency/configuration, API data paths, service reconnect and logs | Credential/function/SMTP UI, object protection and unavailable-artifact rejection |
 | OpenBao: Raft, init/unseal, TLS and membership | Unit state machines; native three-member agents and control-plane create/restart/scale/replace/snapshot workflows | Backend provisioning, real S3, catalog-newer upgrade and external seal dependencies pending | Fixture-backed browser create forms, capability gating, explicit reveal identity/async isolation and secret-cache checks |
 | OpenBao: snapshots, clone and PostgreSQL storage | Native snapshot restore/replay evidence, deleted-source forced clone and SQL-backed storage/HA integration cases | Concrete shared binding-manager composition and deployment recovery acceptance pending | Supplied-share validation/clearing and restore failure/retry workflows |

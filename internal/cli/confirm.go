@@ -12,13 +12,16 @@ import (
 )
 
 func destructive(op string) bool {
+	if op == "revokeMySQLPrivileges" {
+		return true
+	}
 	if op == "rotatePostgresRolePassword" || op == "rotatePostgresBinding" || op == "revokePostgresPrivileges" {
 		return true
 	}
 	if op == "rotateSupabaseJWTSecret" {
 		return true
 	}
-	return strings.HasPrefix(op, "delete") || op == "invalidateElasticAPIKey" || op == "createRestore" || op == "replaceClusterMember" || op == "raiseClusterFCV" || op == "rotateSystemUser" || op == "rotateClusterTLS" || op == "rotateNamespaceToken" || op == "resetAccountPassword" || op == "cancelOperation"
+	return strings.HasPrefix(op, "delete") || op == "recoverMySQLQuorum" || op == "invalidateElasticAPIKey" || op == "createRestore" || op == "replaceClusterMember" || op == "raiseClusterFCV" || op == "rotateSystemUser" || op == "rotateClusterTLS" || op == "rotateNamespaceToken" || op == "resetAccountPassword" || op == "cancelOperation"
 }
 
 // Payload input belongs entirely to the request, never to confirmation.

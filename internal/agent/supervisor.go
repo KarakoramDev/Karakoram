@@ -60,6 +60,9 @@ type child struct {
 	crashes    int
 	startError error
 	generation uint64
+	// Reaping authorization is serialized with every process-group signal.
+	// Until then Linux waitid retains the leader as the PGID identity anchor.
+	reaping bool
 	// First launch intent is stable across failed starts and later restarts.
 	startOrder int
 }
@@ -171,6 +174,7 @@ func (s *supervisor) startLocked(name string, p *child) (err error) {
 	}
 	now := time.Now().UTC()
 	p.cmd = cmd
+	p.reaping = false
 	p.done = make(chan struct{})
 	p.status.State = "running"
 	p.status.PID = cmd.Process.Pid
@@ -187,6 +191,49 @@ func (s *supervisor) startLocked(name string, p *child) (err error) {
 	go func() { defer logs.Done(); s.capture(name, "stdout", stdout) }()
 	go func() { defer logs.Done(); s.capture(name, "stderr", stderr) }()
 	go func() {
+		if ownedGroupAnchors {
+			// Do not release the leader's PID/PGID until shutdown finishes
+			// signalling and observing every remaining group member.
+			for {
+				if err := observeChildExit(cmd.Process.Pid); err == nil {
+					break
+				} else {
+					s.mu.Lock()
+					p.status.Error = "observe owned child exit: " + err.Error()
+					s.mu.Unlock()
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+			s.mu.Lock()
+			cleanup := s.closed
+			if !cleanup {
+				p.reaping = true
+			}
+			s.mu.Unlock()
+			if cleanup {
+				for {
+					s.mu.Lock()
+					err := s.signalChildLocked(p, syscall.SIGKILL)
+					s.mu.Unlock()
+					if err == nil {
+						err = awaitOwnedGroupExit(cmd.Process.Pid)
+					}
+					if err == nil {
+						break
+					}
+					// Incomplete observation cannot authorize data removal.
+					// Keep the anchor and expose the failure until the
+					// kernel can positively confirm group death.
+					s.mu.Lock()
+					p.status.Error = "finish owned process group: " + err.Error()
+					s.mu.Unlock()
+					time.Sleep(100 * time.Millisecond)
+				}
+				s.mu.Lock()
+				p.reaping = true
+				s.mu.Unlock()
+			}
+		}
 		err := cmd.Wait()
 		// Reaping must not depend on EOF: an orphaned descendant can still
 		// hold stdout/stderr. Preserve normal final logs, then close readers
@@ -276,9 +323,8 @@ func (s *supervisor) actionWithAdmission(ctx context.Context, name, action strin
 	case "stop", "restart":
 		p.desired = action == "restart" && beforeStart == nil
 		p.generation++
-		cmd, done, signal := p.cmd, p.done, p.spec.stopSignal
 		s.mu.Unlock()
-		if err := stopChild(ctx, cmd, done, signal); err != nil {
+		if err := s.stopChild(ctx, p); err != nil {
 			return err
 		}
 		if action == "restart" {
@@ -299,14 +345,12 @@ func (s *supervisor) actionWithAdmission(ctx context.Context, name, action strin
 // stopChild sends the graceful signal even when the shutdown wait budget expired.
 // Ordinary actions check cancellation before changing intent; shutdown must still
 // signal every remaining child rather than abandon dependencies after one timeout.
-func stopChild(ctx context.Context, cmd *exec.Cmd, done <-chan struct{}, signal syscall.Signal) error {
-	if cmd == nil {
-		return nil
-	}
-	if signal == 0 {
-		signal = syscall.SIGTERM
-	}
-	if err := syscall.Kill(-cmd.Process.Pid, signal); err != nil && err != syscall.ESRCH {
+func (s *supervisor) stopChild(ctx context.Context, p *child) error {
+	s.mu.Lock()
+	cmd, done := p.cmd, p.done
+	err := s.signalChildLocked(p, p.spec.stopSignal)
+	s.mu.Unlock()
+	if err != nil || cmd == nil {
 		return err
 	}
 	select {
@@ -315,6 +359,21 @@ func stopChild(ctx context.Context, cmd *exec.Cmd, done <-chan struct{}, signal 
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// mu serializes the decision to reap with every process-group signal. Once
+// reaping is authorized, an old numeric PGID is no longer an ownership proof.
+func (s *supervisor) signalChildLocked(p *child, signal syscall.Signal) error {
+	if p.cmd == nil || p.reaping {
+		return nil
+	}
+	if signal == 0 {
+		signal = syscall.SIGTERM
+	}
+	if err := syscall.Kill(-p.cmd.Process.Pid, signal); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	return nil
 }
 
 func (s *supervisor) orderedChildrenLocked() []string {
@@ -357,15 +416,23 @@ func (s *supervisor) snapshot() (map[string]agentapi.ProcessStatus, bool) {
 	}
 	return out, s.maintenance
 }
-func (s *supervisor) shutdown(ctx context.Context) error {
+
+// closeLaunches fences automatic retries and concurrent starts before engine
+// handoff begins, without signalling the processes needed for that handoff.
+func (s *supervisor) closeLaunches() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.closed = true
-	names := s.orderedChildrenLocked()
-	for _, name := range names {
-		p := s.children[name]
+	for _, p := range s.children {
 		p.desired = false
 		p.generation++
 	}
+}
+
+func (s *supervisor) shutdown(ctx context.Context) error {
+	s.closeLaunches()
+	s.mu.Lock()
+	names := s.orderedChildrenLocked()
 	s.mu.Unlock()
 	var errs []error
 	// Each child gets a bounded share, so a stuck consumer cannot consume the
@@ -374,15 +441,37 @@ func (s *supervisor) shutdown(ctx context.Context) error {
 		name := names[i]
 		s.mu.Lock()
 		p := s.children[name]
-		cmd, done, signal := p.cmd, p.done, p.spec.stopSignal
+		cmd, done := p.cmd, p.done
 		s.mu.Unlock()
 		timeout := 10 * time.Second
 		if deadline, ok := ctx.Deadline(); ok {
 			timeout = min(timeout, max(time.Until(deadline), 0)/time.Duration(i+1))
 		}
 		childCtx, cancel := context.WithTimeout(ctx, timeout)
-		err := stopChild(childCtx, cmd, done, signal)
+		err := s.stopChild(childCtx, p)
 		cancel()
+		if cmd != nil {
+			if err != nil {
+				s.mu.Lock()
+				var killErr error
+				if ownedGroupAnchors {
+					killErr = s.signalChildLocked(p, syscall.SIGKILL)
+				} else {
+					// No identity-safe group anchor is available here.
+					// Preserve non-Linux launch support, but never add a
+					// recycled-PGID kill as a fallback.
+					killErr = cmd.Process.Kill()
+					if errors.Is(killErr, os.ErrProcessDone) {
+						killErr = nil
+					}
+				}
+				s.mu.Unlock()
+				err = errors.Join(err, killErr)
+			}
+			// Linux waiters retain the leader until group death is confirmed,
+			// then reap it. Expired grace cannot authorize data removal.
+			<-done
+		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("stop %s: %w", name, err))
 		}

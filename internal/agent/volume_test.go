@@ -38,6 +38,9 @@ func legacyNativeVolume(t *testing.T, a *nodeAgent, engine string) {
 	case "postgres":
 		volumeFile(t, a, "postgres/PG_VERSION", []byte("18\n"))
 		volumeFile(t, a, "postgres/global/pg_control", make([]byte, 8192))
+	case "mysql":
+		volumeFile(t, a, "mysql/auto.cnf", []byte("[auto]\nserver-uuid=11111111-2222-3333-4444-555555555555\n"))
+		volumeFile(t, a, "mysql/mysql.ibd", make([]byte, 16384))
 	case "elasticsearch":
 		volumeFile(t, a, "karakoram/data/_state/node-1.st", []byte{0x3f, 0xd7, 0x6c, 0x17, 1})
 	case "openbao":
@@ -51,7 +54,7 @@ func legacyNativeVolume(t *testing.T, a *nodeAgent, engine string) {
 	}
 }
 func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq", "openbao"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			if err := a.volumeSafety(t.Context(), c); err == nil || !strings.Contains(err.Error(), "VolumeLost") {
@@ -67,7 +70,7 @@ func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
 	}
 }
 func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq", "openbao"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, false)
 			if err := a.volumeSafety(t.Context(), c); err != nil {
@@ -101,7 +104,7 @@ func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
 	}
 }
 func TestVolumeSafetyLegacyRequiresNativeMetadata(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq", "openbao"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			volumeFile(t, a, "karakoram/config.json", []byte(`{"cluster":"demo"}`))
@@ -109,6 +112,8 @@ func TestVolumeSafetyLegacyRequiresNativeMetadata(t *testing.T) {
 			volumeFile(t, a, "db/WiredTiger.wt", []byte("truncated"))
 			volumeFile(t, a, "karakoram/data/_state/node-1.st", []byte("invalid"))
 			volumeFile(t, a, "rabbitmq/rabbit@member/rabbitmq_metadata/config", []byte("wrong node"))
+			volumeFile(t, a, "mysql/auto.cnf", []byte("[auto]\nserver-uuid=invalid\n"))
+			volumeFile(t, a, "mysql/mysql.ibd", []byte("truncated"))
 			if err := a.volumeSafety(t.Context(), c); err == nil {
 				t.Fatal("cache/directory/corrupt marker adopted")
 			}

@@ -53,6 +53,8 @@ tags:
     description: JSON time series, member logs and Prometheus scraping.
   - name: OpenBao
     description: Initialization material and managed database credential connections.
+  - name: MySQL
+    description: MySQL application users, databases and bounded database privileges.
 paths:
   /openapi.yaml:
     get:
@@ -3891,6 +3893,398 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/recover-quorum:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: recoverMySQLQuorum
+      tags: [MySQL]
+      summary: Explicitly recover a fenced PXC minority component
+      description: PXC only. Requires explicit operator acknowledgement. The control plane verifies recovered positions and fences missing owned runtimes before bootstrapping one surviving component. Existing Primary components and ambiguous positions are rejected; no data-loss override exists.
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLQuorumRecoveryRequest'}
+      responses:
+        '202':
+          description: Accepted; track the returned operation.
+          headers:
+            X-Request-ID:
+              schema: {type: string}
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Operation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '405': {$ref: '#/components/responses/MethodNotAllowed'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/users:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listMySQLUsers
+      tags: [MySQL]
+      summary: List MySQL application users
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Application users; reserved identities are hidden.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/MySQLUser'}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createMySQLUser
+      tags: [MySQL]
+      summary: Create a MySQL application user
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLUserWrite'}
+      responses:
+        '201':
+          description: User created; generated password returned once, or replayed with the same idempotency key.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLUserCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/users/{user}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 32}}
+    get:
+      operationId: getMySQLUser
+      tags: [MySQL]
+      summary: Read a MySQL application user
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: User attributes, never password material.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    patch:
+      operationId: patchMySQLUser
+      tags: [MySQL]
+      summary: Update selected MySQL user attributes
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLUserPatch'}
+      responses:
+        '200':
+          description: Updated user.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLUser'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deleteMySQLUser
+      tags: [MySQL]
+      summary: Delete a MySQL application user
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204': {description: User deleted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/users/{user}/password:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 32}}
+    post:
+      operationId: rotateMySQLUserPassword
+      tags: [MySQL]
+      summary: Rotate a MySQL user password, optionally retaining the current password
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                retainCurrent: {type: boolean, default: false}
+      responses:
+        '200':
+          description: Newly generated password; returned once, or replayed with the same idempotency key.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
+            Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLPasswordRotation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/users/{user}/password/discard-old:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: user, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 32}}
+    post:
+      operationId: discardMySQLUserOldPassword
+      tags: [MySQL]
+      summary: Discard a MySQL user's retained password
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      responses:
+        '204': {description: Retained password discarded.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/databases:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listMySQLDatabases
+      tags: [MySQL]
+      summary: List MySQL application databases
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Application databases.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/MySQLDatabase'}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: createMySQLDatabase
+      tags: [MySQL]
+      summary: Create a MySQL application database
+      x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLDatabaseWrite'}
+      responses:
+        '201':
+          description: Database created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLDatabase'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/databases/{database}:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+      - {name: database, in: path, required: true, schema: {type: string, minLength: 1, maxLength: 64}}
+    get:
+      operationId: getMySQLDatabase
+      tags: [MySQL]
+      summary: Read a MySQL application database
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      responses:
+        '200':
+          description: Database attributes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MySQLDatabase'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: deleteMySQLDatabase
+      tags: [MySQL]
+      summary: Delete a MySQL application database
+      x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - {name: force, in: query, schema: {type: boolean, default: false}}
+      responses:
+        '204': {description: Database deleted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /clusters/{cluster}/mysql/grants:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    get:
+      operationId: listMySQLGrants
+      tags: [MySQL]
+      summary: List MySQL grants filtered by user or database
+      description: At least one of user or database is required; both may be supplied.
+      x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      parameters:
+        - {name: user, in: query, schema: {type: string, minLength: 1, maxLength: 32}}
+        - {name: database, in: query, schema: {type: string, minLength: 1, maxLength: 64}}
+      responses:
+        '200':
+          description: Explicit database grants, excluding reserved identities.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/MySQLGrant'}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    post:
+      operationId: grantMySQLPrivileges
+      tags: [MySQL]
+      summary: Grant bounded MySQL database privileges
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLGrant'}
+      responses:
+        '204': {description: Privileges granted.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      operationId: revokeMySQLPrivileges
+      tags: [MySQL]
+      summary: Revoke MySQL database privileges
+      x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MySQLGrant'}
+      responses:
+        '204': {description: Privileges revoked.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/Unavailable'}
   /clusters/{cluster}/postgres/roles:
@@ -8303,6 +8697,90 @@ components:
           type: array
           items:
             type: string
+    MySQLQuorumRecoveryRequest:
+      type: object
+      additionalProperties: false
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          enum: [all-absent-members-fenced]
+          description: Explicit acknowledgement that absent members must be fenced before quorum recovery.
+    MySQLUser:
+      type: object
+      additionalProperties: false
+      required: [name, host, maxUserConnections, locked, passwordRetained, routableThroughProxy]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,31}$'}
+        host: {type: string, enum: ['%']}
+        maxUserConnections: {type: integer, minimum: 0}
+        locked: {type: boolean}
+        passwordRetained: {type: boolean}
+        routableThroughProxy: {type: boolean}
+    MySQLUserWrite:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,31}$'}
+        maxUserConnections: {type: integer, minimum: 0, default: 0}
+        locked: {type: boolean, default: false}
+        password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    MySQLUserPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        maxUserConnections: {type: integer, minimum: 0}
+        locked: {type: boolean}
+    MySQLUserCreated:
+      type: object
+      additionalProperties: false
+      required: [name, host, maxUserConnections, locked, passwordRetained, routableThroughProxy]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,31}$'}
+        host: {type: string, enum: ['%']}
+        maxUserConnections: {type: integer, minimum: 0}
+        locked: {type: boolean}
+        passwordRetained: {type: boolean}
+        routableThroughProxy: {type: boolean}
+        generatedPassword: {type: string, description: Returned only when the password was generated.}
+    MySQLPasswordRotation:
+      type: object
+      additionalProperties: false
+      required: [generatedPassword]
+      properties:
+        generatedPassword: {type: string}
+    MySQLDatabase:
+      type: object
+      additionalProperties: false
+      required: [name, characterSet, collation]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$]{0,63}$'}
+        characterSet: {type: string}
+        collation: {type: string}
+    MySQLDatabaseWrite:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$]{0,63}$'}
+        characterSet: {type: string, default: utf8mb4}
+        collation: {type: string, default: utf8mb4_0900_ai_ci}
+    MySQLGrant:
+      type: object
+      additionalProperties: false
+      required: [user, database, privileges]
+      properties:
+        user: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_]{0,31}$'}
+        database: {type: string, pattern: '^[A-Za-z_][A-Za-z0-9_$]{0,63}$'}
+        privileges:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/MySQLGrantPrivileges'}
+    MySQLGrantPrivileges:
+      type: string
+      enum: [SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE_VIEW, SHOW_VIEW, TRIGGER, EXECUTE, CREATE_ROUTINE, ALTER_ROUTINE, EVENT, LOCK_TABLES, CREATE_TEMPORARY_TABLES, ALL]
     NamespaceName:
       type: string
       pattern: '^[a-z][a-z0-9-]{0,30}[a-z0-9]$'
@@ -9238,6 +9716,7 @@ components:
             - distributed
             - combined
             - split
+            - group
         shards:
           type: integer
           minimum: 1
@@ -9306,6 +9785,7 @@ components:
             - distributed
             - combined
             - split
+            - group
         displayName:
           type: string
         defaults:
@@ -9385,6 +9865,7 @@ components:
               - full
               - diff
               - incr
+              - incremental
         capabilities:
           type: array
           items:
@@ -9435,6 +9916,7 @@ components:
             - full
             - diff
             - incr
+            - incremental
         storage:
           type: string
           minLength: 1
@@ -11066,6 +11548,49 @@ components:
           type: string
           description: Archive fence; worker positions are conservative post-marker upper bounds.
       required: [group, backup, lsn]
+    MySQLBackup:
+      type: object
+      additionalProperties: false
+      description: Immutable XtraBackup dependency chain and repository incarnation provenance.
+      properties:
+        label:
+          type: string
+        repository:
+          type: string
+        type:
+          type: string
+          enum: [full, incremental]
+        parentLabel:
+          type: string
+        chainRootLabel:
+          type: string
+        gtidSet:
+          type: string
+        fromLSN:
+          type: integer
+          format: uint64
+        toLSN:
+          type: integer
+          format: uint64
+        serverVersion:
+          type: string
+        toolVersion:
+          type: string
+        endTime:
+          type: string
+          format: date-time
+        objectPaths:
+          type: array
+          items:
+            type: string
+        clusterUID:
+          type: string
+        generation:
+          type: integer
+        physicalIdentity:
+          type: string
+          description: Opaque source agent/data incarnation binding local InnoDB LSNs. Absent on legacy backups, which cannot parent incrementals.
+      required: [label, repository, type, chainRootLabel, gtidSet, fromLSN, toLSN, serverVersion, toolVersion, endTime, objectPaths, clusterUID, generation]
     Backup:
       type: object
       additionalProperties: false
@@ -11098,6 +11623,8 @@ components:
           description: Complete snapshot-time object key, prefix, or snapshot reference.
         postgres:
           $ref: '#/components/schemas/PostgresBackup'
+        mysql:
+          $ref: '#/components/schemas/MySQLBackup'
         type:
           type: string
           enum:
@@ -11109,6 +11636,7 @@ components:
             - full
             - diff
             - incr
+            - incremental
         trigger:
           type: string
           description: What initiated the snapshot; restore identifies an automatic post-restore base backup.
@@ -11521,6 +12049,7 @@ components:
             - rotate-system-user
             - rotate-tls
             - rotate-jwt-secret
+            - recover-quorum
             - create
             - update
             - tls
@@ -12041,6 +12570,7 @@ components:
             - distributed
             - combined
             - split
+            - group
         shards:
           type: integer
           minimum: 1
@@ -12238,6 +12768,7 @@ components:
             - distributed
             - combined
             - split
+            - group
           nullable: true
         shards:
           type: integer
@@ -12437,6 +12968,7 @@ components:
             - full
             - diff
             - incr
+            - incremental
         storage:
           type: string
           minLength: 1
