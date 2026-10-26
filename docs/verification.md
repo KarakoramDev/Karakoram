@@ -44,6 +44,29 @@ inventory/events and destructive versus retained-data release for Temporal and
 OpenBao. The infrastructure backend and member SQL boundary are controlled
 test doubles; this does not establish native SQL or deployed runtime behavior.
 
+The integration-tagged `TestNativePostgresBindingsAcrossOpenBaoAndTemporal`
+replaces that SQL boundary with the real PostgreSQL agent status/access routes
+and a native PostgreSQL process. Set `KARAKORAM_PG_BIN_DIR` to an installed
+PostgreSQL 16–18 binary directory and run:
+
+```sh
+go test -tags integration -count=1 -v ./internal/server \
+  -run '^TestNativePostgresBindingsAcrossOpenBaoAndTemporal$'
+```
+
+Only an unset binary directory skips this test; configured missing/broken tools
+fail. Run as an unprivileged user. It owns its temporary database, certificates,
+Unix socket alias and dynamic loopback listeners, and removes them at shutdown.
+It verifies bound-role ownership and schema CREATE, verify-full TLS/password
+authentication, denied cross-consumer table reads/table creation/schema creation,
+password rotation and destructive versus data-preserving release. PostgreSQL's
+default PUBLIC CONNECT/TEMP privileges are not revoked: another binding role can
+connect and create temporary tables in a consumer database, but not read its
+private tables or create persistent objects. The test reports those observations
+explicitly; it does not claim connection-level database isolation.
+Infrastructure deployment, source member identity and consumer runtimes remain
+outside this native access-path test.
+
 Use a disposable project/bucket, secure environment credentials and [suite prerequisites/cleanup](../test/e2e/README.md). Checks create paid services, mutate data and temporarily modify authorization/SSO. Namespace scenarios need a second project, IPv6 CIDR and all storage-creation inputs; serialize them with RBAC/OIDC/settings changes. Elasticsearch deployed scenarios need a same-project private-network runner.
 
 ```sh
