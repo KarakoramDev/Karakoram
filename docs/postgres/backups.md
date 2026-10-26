@@ -102,6 +102,17 @@ profiles, not an instruction to inspect today's source selection. These checks
 precede clone provisioning and destructive restore work. Supabase retains its
 existing provider-specific runtime contract.
 
+For distributed PostgreSQL, `source.restorePoint` resolves to a specific coordinated
+backup inventory record. The restore internally records both that backup name and
+the named point; API responses and dry-runs retain only the requested
+`source.restorePoint` selector. Admission rechecks the backup inside the same
+serialized store transaction that creates the restore dependency: if deletion
+commits first, admission fails;
+if restore admission commits first, backup deletion and another cluster's source
+deletion without `keepBackups` fail with **409** while the restore is pending or
+running. A dry-run resolves the same backup and checks the same admission fences,
+but does not reserve a dependency or prevent a later deletion.
+
 **In-place restore is destructive and offline.** Quiesce applications and retain a recovery copy. PITR requests are checked against the source's live conservative WAL watermark before any member is stopped or lineage state changes. Single topology stops PostgreSQL, performs a delta restore and starts/promotes. HA fences every data member, resets only its Patroni DCS scope, restores a seed by custom bootstrap and rebuilds replicas before completing. System identities remain target-owned: recovered database roles are rekeyed to the target's existing passwords, never published as source credentials. Cross-source recovery keeps archiving disabled until target repository configuration and archive-override removal reach every member. When PITR is enabled, a new full is queued; it is not protection until successful.
 
 Restore stop holds survive configuration refreshes and member restarts until the workflow explicitly starts each restored member. ProxySQL administration credentials remain target-local during restore and clone; they are not database catalog credentials.

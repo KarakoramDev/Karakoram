@@ -698,6 +698,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if b.Source.PitrTime != nil && c.Spec.Provider == "postgres" && c.Spec.Topology.Type == "distributed" {
 			return invalidField("source.pitrTime", domain.ReasonUnsupported, "distributed PostgreSQL requires a named restore point")
 		}
+		resolvedBackup := value(b.Source.Backup)
 		if b.Source.RestorePoint != nil {
 			if c.Spec.Provider != "postgres" || c.Spec.Topology.Type != "distributed" {
 				return invalidField("source.restorePoint", domain.ReasonUnsupported, "named restore points require distributed PostgreSQL")
@@ -712,6 +713,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 					if failure := s.retainedRestoreSource(ctx, sourceRef, backup.Name); failure != nil {
 						return *failure
 					}
+					resolvedBackup = backup.Name
 					found = true
 					break
 				}
@@ -735,7 +737,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				return s.failure(engine.Invalid("restore source is not a successful RabbitMQ definitions backup"))
 			}
 		}
-		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, sourceRef, value(b.Source.Backup), b.Name, b.OpenbaoUnsealShares)
+		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, sourceRef, resolvedBackup, b.Name, b.OpenbaoUnsealShares)
 		if restoreFailure != nil {
 			return *restoreFailure
 		}
@@ -774,7 +776,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if value(b.AcknowledgeBoundConsumers) {
 			ctx = store.WithRestoreAcknowledgement(ctx)
 		}
-		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, RestorePoint: value(b.Source.RestorePoint), SourceCluster: source}, Phase: domain.PhasePending}
+		// Pin named points to their validated inventory record so the store's
+		// serialized admission and deletion guards protect the backing backup.
+		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: resolvedBackup, PITRTime: b.Source.PitrTime, RestorePoint: value(b.Source.RestorePoint), SourceCluster: source}, Phase: domain.PhasePending}
 		if dryRun {
 			if err := s.Store.CheckRestore(ctx, &r); err != nil {
 				return s.failure(err)

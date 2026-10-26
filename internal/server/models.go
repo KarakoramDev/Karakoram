@@ -486,7 +486,12 @@ func backupAPI(b domain.Backup) api.Backup {
 }
 func restoreAPI(r domain.Restore) api.Restore {
 	r.Error = redact.Diagnostic(r.Error)
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, RestorePoint: optionalString(r.Source.RestorePoint), SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
+	// The resolved backup is an internal dependency, not a second selector.
+	var backup *string
+	if r.Source.RestorePoint == "" {
+		backup = optionalString(r.Source.Backup)
+	}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: backup, PitrTime: r.Source.PITRTime, RestorePoint: optionalString(r.Source.RestorePoint), SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
 }
 func eventAPI(e domain.Event) api.Event {
 	e.Message = redact.Diagnostic(e.Message)

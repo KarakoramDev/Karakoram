@@ -37,7 +37,7 @@ func TestAdditionalRBACBeforeReplay(t *testing.T) {
 			called := false
 			next := func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
 				called = true
-				return response{status: 204}, nil
+				return ok(map[string]string{"result": "authorized"}), nil
 			}
 			invoke := func() response {
 				r := httptest.NewRequest(http.MethodPost, "/api/v1/clusters/prod", nil)
@@ -69,7 +69,7 @@ func TestAdditionalRBACBeforeReplay(t *testing.T) {
 			if err := s.RBAC.ReplacePolicy(ctx, policy+"p, user:extra-manager, "+extra.Resource+", "+extra.Action+", default/prod, allow\n"); err != nil {
 				t.Fatal(err)
 			}
-			if got := invoke(); got.status != http.StatusNoContent || !called {
+			if got := invoke(); got.status != http.StatusOK || !called {
 				t.Fatalf("same-object grant rejected: %+v", got)
 			}
 			// The original completed response is cached, but revoking the
