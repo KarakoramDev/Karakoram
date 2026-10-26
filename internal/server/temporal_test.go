@@ -6,6 +6,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	infrafake "github.com/KarakoramDev/Karakoram/internal/infra/fake"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -212,5 +216,54 @@ func TestTemporalRestoreAcknowledgementPayload(t *testing.T) {
 				t.Fatalf("payload: %s", ops[0].Payload)
 			}
 		})
+	}
+}
+
+// Admission never calls binding operations; the service only needs to be present.
+type temporalAdmissionBindings struct{ pgbinding.Service }
+
+func TestTemporalPrivateIPv4Admission(t *testing.T) {
+	s, _, token := testServer(t)
+	p := temporal.New(temporal.Options{Bindings: temporalAdmissionBindings{}})
+	var err error
+	s.Registry, err = engine.NewRegistry(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := `{"provider":"temporal","engineOptions":{"persistence":{"postgres":{"cluster":"appdb"}}}}`
+	body := `{"name":"workflows","spec":` + spec + `}`
+	setFamily := func(family string) {
+		s.namespaces = engine.StaticNamespaces{DefaultBackend: infrafake.New(infrafake.Options{
+			Layout: infra.Layout{PrivateAddressFamily: family},
+		})}
+	}
+	assertRejected := func(method, path, body string) {
+		t.Helper()
+		w := call(s, method, path, body, token)
+		if w.Code != 400 || !strings.Contains(w.Body.String(), "invalid_request") ||
+			!strings.Contains(w.Body.String(), "Temporal requires a backend with private IPv4 networking; Zerops is not supported yet") {
+			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body.String())
+		}
+	}
+	setFamily(infra.AddressFamilyIPv6)
+	for _, path := range []string{"/api/v1/clusters", "/api/v1/dry-run/clusters"} {
+		assertRejected("POST", path, body)
+	}
+	if _, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "workflows"}); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("rejected create persisted: %v", err)
+	}
+	setFamily(infra.AddressFamilyIPv4)
+	previewBody(t, call(s, "POST", "/api/v1/dry-run/clusters", body, token))
+	if w := call(s, "POST", "/api/v1/clusters", body, token); w.Code != 201 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	setFamily(infra.AddressFamilyIPv6)
+	for _, prefix := range []string{"/api/v1/clusters/", "/api/v1/dry-run/clusters/"} {
+		assertRejected("PUT", prefix+"workflows", `{"spec":`+spec+`}`)
+		assertRejected("PATCH", prefix+"workflows", `{"spec":{"monitoring":{"enabled":true}}}`)
+	}
+	c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "workflows"})
+	if err != nil || c.Generation != 1 {
+		t.Fatalf("rejected update changed state: %+v %v", c, err)
 	}
 }

@@ -23,7 +23,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/dokploy"
 	infrafake "github.com/KarakoramDev/Karakoram/internal/infra/fake"
+	"github.com/KarakoramDev/Karakoram/internal/infra/nomad"
+	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 )
 
@@ -601,5 +604,31 @@ func TestCapabilities(t *testing.T) {
 	rc.Cluster.Spec.Components.Extra[tspec.Frontend] = d
 	if e := engine.CheckCapabilities(p, rc.Cluster.Spec, "limited", infra.Capabilities{}); !errors.Is(e, engine.ErrNotSupported) {
 		t.Fatal("horizontal scaling not required")
+	}
+}
+
+func TestValidateBackendPrivateIPv4(t *testing.T) {
+	p := New(Options{})
+	for _, tc := range []struct {
+		name    string
+		backend infra.Backend
+		invalid bool
+	}{
+		{"zerops", new(zerops.Backend), true},
+		{"nomad", new(nomad.Backend), false},
+		{"dokploy", new(dokploy.Backend), false},
+		{"unknown-family", infrafake.New(infrafake.Options{}), true},
+		{"unresolved", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := p.ValidateBackend(tc.backend)
+			if tc.invalid {
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "Temporal requires a backend with private IPv4 networking; Zerops is not supported yet") {
+					t.Fatalf("expected private IPv4 admission error, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

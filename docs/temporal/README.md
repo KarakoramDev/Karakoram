@@ -12,6 +12,9 @@ The `temporal` provider runs native Temporal workflow services with persistence 
 - Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.
 - Backend horizontal scaling for component replicas above one; configured Dokploy HTTPS/subdomain routing for a public Web UI. Nomad supports private UI access only.
 
+Create, replace and patch admission (including dry runs) reject backends whose
+runtime layout does not declare private IPv4 networking, before persisting intent.
+
 The `PostgreSQLBinding` status condition reports `Bound` only after the binding
 has an identity and its source connection has resolved. An unreachable source
 member leaves the condition `False/SourceUnavailable`, including when a binding

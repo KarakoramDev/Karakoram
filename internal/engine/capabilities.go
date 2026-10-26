@@ -21,6 +21,13 @@ type CapabilityRequirer interface {
 	RequiredCapabilities(domain.ClusterSpec) []string
 }
 
+// BackendValidator is implemented by providers with admission requirements on
+// the backend's runtime contract, beyond its optional capability flags.
+// A nil backend means the namespace backend could not be resolved.
+type BackendValidator interface {
+	ValidateBackend(infra.Backend) error
+}
+
 // RequiredCapabilities returns the backend capabilities a cluster spec needs
 // regardless of its engine: public TCP exposure, its allowlist, and
 // dedicated CPU for any component.

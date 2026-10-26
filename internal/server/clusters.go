@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"slices"
@@ -161,8 +162,10 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 	}
 	info := factory.Info()
 	have := info.Capabilities
+	var resolvedBackend infra.Backend
 	if s.namespaces != nil {
 		if backend, err := s.namespaces.Backend(namespace); err == nil && backend != nil {
+			resolvedBackend = backend
 			have = backend.Capabilities()
 			unchangedExposure := previousExposure != nil &&
 				previousExposure.Public == c.Spec.Exposure.Public &&
@@ -174,6 +177,12 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 					return &r
 				}
 			}
+		}
+	}
+	if validator, ok := p.(engine.BackendValidator); ok {
+		if err := validator.ValidateBackend(resolvedBackend); err != nil {
+			r := s.failure(err)
+			return &r
 		}
 	}
 	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, have); err != nil {

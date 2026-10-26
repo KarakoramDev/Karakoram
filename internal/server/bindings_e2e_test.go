@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	infrafake "github.com/KarakoramDev/Karakoram/internal/infra/fake"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 )
@@ -208,7 +209,8 @@ func TestPostgresBindingsAcrossOpenBaoAndTemporal(t *testing.T) {
 	}
 	opts := base.Options
 	opts.Registry, opts.Bindings = registry, manager
-	opts.Context.Backend = infrafake.New(infrafake.Options{})
+	opts.Context.Backend = infrafake.New(infrafake.Options{Layout: infra.Layout{PrivateAddressFamily: infra.AddressFamilyIPv4}})
+	opts.Namespaces = engine.StaticNamespaces{DefaultBackend: opts.Context.Backend, DefaultAgentURL: opts.Context.AgentURL}
 	opts.Context.Agents = bindingAgentDialer{upstream}
 	s, err = New(opts)
 	if err != nil {
