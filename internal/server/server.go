@@ -386,16 +386,44 @@ func (s *Server) middleware(next api.StrictHandlerFunc, name string) api.StrictH
 		if strings.HasPrefix(name, "DryRun") {
 			return next(ctx, w, r.WithContext(ctx), v)
 		}
-		// Community user mutations always grant administrative access. Recheck
-		// the additional permission before secret replay as well as execution.
-		if id == "createNeo4jUser" || id == "setNeo4jUserPassword" || id == "deleteNeo4jUser" {
-			extra, exists := api.OperationAdditionalRBAC[id]
-			if !exists || extra.Public || extra.ObjectParam != "cluster" || !s.allowed(ctx, extra.Resource, extra.Action, clusterObject(r.URL.Query().Get("namespace"), r.PathValue("cluster"))) {
-				return fail(403, "forbidden", "Neo4j Community user mutations require clusters/update permission because every user is an administrator"), nil
+		// Conditional and cross-object requirements remain in their handlers.
+		// All other generated additional grants apply before secret replay.
+		extra, exists := api.OperationAdditionalRBAC[id]
+		if !handlerAdditionalRBAC(id) && (exists || id == "createNeo4jUser" || id == "setNeo4jUserPassword" || id == "deleteNeo4jUser") {
+			obj := "*"
+			switch extra.ObjectParam {
+			case "cluster":
+				obj = clusterObject(r.URL.Query().Get("namespace"), r.PathValue("cluster"))
+			case "namespace":
+				obj = r.PathValue("namespace")
+			case "storage":
+				obj = domain.NormalizedNamespace(r.URL.Query().Get("namespace")) + "/" + r.PathValue("storage")
+			}
+			if !exists || extra.Public || !s.allowed(ctx, extra.Resource, extra.Action, obj) {
+				return fail(403, "forbidden", "Additional operation permission denied"), nil
 			}
 		}
 		return s.idempotent(next, id, ctx, w, r.WithContext(ctx), v)
 	}
+}
+
+// handlerAdditionalRBAC identifies requirements whose condition or target object
+// is resolved by the handler, not the route's primary resource.
+func handlerAdditionalRBAC(id string) bool {
+	switch id {
+	case "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword",
+		"createRabbitMQUser", "replaceRabbitMQUser",
+		"createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey":
+		// Only privileged roles, tags or credentials require the extra grant.
+		return true
+	case "createOpenBaoDatabaseConnection", "deleteOpenBaoDatabaseConnection":
+		// The grant belongs to the connection's target cluster, not OpenBao.
+		return true
+	case "listEvents", "streamEvents":
+		// Audit visibility is conditional on the event's resource and object.
+		return true
+	}
+	return false
 }
 
 // sameOrigin permits non-browser clients, but rejects browser authentication

@@ -10,6 +10,11 @@ Neo4j native users are described in [Neo4j access](neo4j/access-and-tls.md). Eve
 Idempotency replay is scoped to the authenticated identity, operation, resource
 path and namespace (including namespace query parameters). A retry in another
 namespace cannot receive a cached secret from the original namespace.
+Generated unconditional additional RBAC grants are checked on the same resource
+before execution or idempotency replay. PostgreSQL binding rotation therefore
+requires both `database-users:update` and `clusters:update`. Conditional grants
+(privileged database roles/tags and cross-cluster OpenBao targets) are resolved
+against the request body or current engine state by their owning handlers.
 
 ## Connected OAuth applications
 
