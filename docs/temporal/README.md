@@ -7,7 +7,7 @@ The `temporal` provider runs native Temporal workflow services with persistence 
 ## Prerequisites
 
 - An existing Karakoram PostgreSQL source cluster, major **12 or later**, reachable from the Temporal members. The PostgreSQL provider's own version catalog still applies.
-- The **PostgreSQL binding service** (ADR 0045). Without it, Temporal cluster admission rejects requests with `PostgreSQL bindings are unavailable`.
+- The **PostgreSQL binding service** (ADR 0045), which the standard server constructs once and shares with Temporal, OpenBao, Keycloak and the bindings API. A composition without it rejects Temporal clusters with `PostgreSQL bindings are unavailable`.
 - Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.
 - Backend horizontal scaling for component replicas above one; backend public HTTPS/subdomain support for a public Web UI.
 

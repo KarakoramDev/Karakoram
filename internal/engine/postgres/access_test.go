@@ -57,11 +57,11 @@ func TestAccessRoleValidation(t *testing.T) {
 	}
 	for _, name := range predefinedMemberships {
 		role := RoleWrite{Role: Role{Name: "app", MemberOf: []string{name}, MemberOfAdmin: []string{name}}}
-		if err := p.validateRole(role); err != nil {
+		if err := p.validateRole(t.Context(), role); err != nil {
 			t.Fatal("allowed admin membership rejected", err)
 		}
 		role.MemberOf = nil
-		if err := p.validateRole(role); err == nil {
+		if err := p.validateRole(t.Context(), role); err == nil {
 			t.Fatal("admin membership outside memberOf accepted")
 		}
 	}

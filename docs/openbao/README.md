@@ -61,7 +61,7 @@ A wait timeout does not cancel creation. Continue observing with `clusters wait 
 - `logLevel`: `trace`, `debug`, `info` (default), `warn`, `error`.
 - Version changes are forward-only and catalog-bound. The current catalog contains only 2.7.1, so no newer-version upgrade is currently available.
 - No PITR, seal migration, performance/DR replication, OpenBao namespaces or HSM seals. Lost-quorum recovery is manual.
-- PostgreSQL storage needs an injected `pgbinding.Service` via `internal/server.engineOptions.Bindings`. Default server composition supplies none, so admission rejects it and provider metadata does not advertise `postgresql-storage`; concrete PgPlatform composition remains an integration prerequisite. It is not required for ordinary PostgreSQL credential connections.
+- PostgreSQL storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, Keycloak, OpenBao and Temporal. Provider metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
 - RabbitMQ credential connections require one shared default/maximum TTL pair per connection. Native TLS credential issuance, permissions and revocation have development proof; deployment-level connectivity and lifecycle acceptance remain pending.
 
 ## Guides

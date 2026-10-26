@@ -72,6 +72,75 @@ func TestKeycloakCatalogWithBindingService(t *testing.T) {
 	}
 }
 
+func TestBuiltInProvidersSharePostgresBindingService(t *testing.T) {
+	s, _, _ := testServer(t)
+	var typedNil *pgbinding.Manager
+	for _, tc := range []struct {
+		name      string
+		bindings  pgbinding.Service
+		available bool
+	}{
+		{"manager", pgbinding.New(pgbinding.Options{Store: s.Store}), true},
+		{"nil", nil, false},
+		{"typed-nil-manager", typedNil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			found := map[string]bool{}
+			for _, provider := range engineProviders(engineOptions{Store: s.Store, Bindings: tc.bindings}) {
+				if provider.Name() != "openbao" && provider.Name() != "temporal" {
+					continue
+				}
+				found[provider.Name()] = true
+				t.Run(provider.Name(), func(t *testing.T) {
+					c := domain.Cluster{Name: "consumer", Spec: domain.ClusterSpec{Provider: provider.Name()}}
+					if provider.Name() == "openbao" {
+						c.Spec.EngineOptions = json.RawMessage(`{"storage":{"type":"postgresql","postgresql":{"cluster":"pg"}}}`)
+						var advertised bool
+						for _, capability := range provider.Describe().Capabilities {
+							advertised = advertised || capability == "postgresql-storage"
+						}
+						if advertised != tc.available {
+							t.Fatalf("postgresql-storage advertised = %t, want %t", advertised, tc.available)
+						}
+					} else {
+						c.Spec.EngineOptions = json.RawMessage(`{"persistence":{"postgres":{"cluster":"pg"}}}`)
+					}
+					provider.ApplyDefaults(&c.Spec)
+					if provider.Name() == "openbao" {
+						c.Spec.Components.Engine.Replicas = 1
+					}
+					err := provider.Validate(t.Context(), nil, &c)
+					if tc.available {
+						if err != nil {
+							t.Fatalf("concrete binding manager rejected: %v", err)
+						}
+					} else if err == nil || !strings.Contains(strings.ToLower(err.Error()), "binding") {
+						t.Fatalf("missing binding manager must reject admission: %v", err)
+					}
+				})
+			}
+			if !found["openbao"] || !found["temporal"] {
+				t.Fatalf("binding-backed providers missing from catalog: %v", found)
+			}
+		})
+	}
+}
+
+func TestServerRetainsSuppliedPostgresBindingManager(t *testing.T) {
+	s, _, _ := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	options := s.Options
+	options.Bindings = bindings
+	withBindings, err := New(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { withBindings.Close() })
+	if withBindings.postgresBindings != bindings {
+		t.Fatal("server replaced the supplied PostgreSQL binding manager")
+	}
+}
+
 func TestProviderImmutable(t *testing.T) {
 	for _, method := range []string{"PATCH", "PUT"} {
 		t.Run(method, func(t *testing.T) {

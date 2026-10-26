@@ -41,7 +41,7 @@ Both providers support TLS/system-user rotation, public TCP subject to backend c
 
 ### Temporal
 
-[Temporal](temporal/README.md) runs combined or split stateless workflow roles on an existing Karakoram PostgreSQL ≥12 source. It requires the PostgreSQL binding service; admission rejects Temporal clusters without it. Server versions and UI artifacts are locked separately. Topology, persistence options and history shard count are immutable; scaling is per role. See [access/TLS and OIDC](temporal/access-and-tls.md) and [namespace, upgrade and recovery operations](temporal/operations.md). Temporal backup manifests live in cluster state, while the PostgreSQL source owns archives and retention.
+[Temporal](temporal/README.md) runs combined or split stateless workflow roles on an existing Karakoram PostgreSQL ≥12 source. It uses the control plane's shared PostgreSQL binding service. Server versions and UI artifacts are locked separately. Topology, persistence options and history shard count are immutable; scaling is per role. See [access/TLS and OIDC](temporal/access-and-tls.md) and [namespace, upgrade and recovery operations](temporal/operations.md). Temporal backup manifests live in cluster state, while the PostgreSQL source owns archives and retention.
 
 ## Create and change desired state
 

@@ -16,8 +16,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase"
-	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -30,6 +30,10 @@ type engineOptions struct {
 }
 
 func engineProviders(o engineOptions) []engine.Provider {
+	// A nil manager inside the service interface must retain nil admission semantics.
+	if bindings, ok := o.Bindings.(*pgbinding.Manager); ok && bindings == nil {
+		o.Bindings = nil
+	}
 	providers := []engine.Provider{
 		psmdb.New(psmdb.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		rabbitmq.New(rabbitmq.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
@@ -37,8 +41,7 @@ func engineProviders(o engineOptions) []engine.Provider {
 		elastic.New(elastic.ProviderOptions{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		postgres.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
 		supabase.New(postgres.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger}),
-		// PostgreSQL bindings are wired at integration; nil rejects admission safely.
-		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: nil}),
+		temporal.New(temporal.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Store: o.Store, Logger: o.Logger, Bindings: o.Bindings}),
 	}
 	if o.Bindings != nil {
 		providers = append(providers, keycloak.New(keycloak.Options{ControlPlaneURL: o.ControlPlaneURL, InternalCAPEM: o.InternalCAPEM, Bindings: o.Bindings}))

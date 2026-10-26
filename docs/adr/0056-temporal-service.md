@@ -14,6 +14,8 @@ Add a `temporal` provider. `spec.version` is the Temporal server version. Every 
 
 Persistence and visibility always live in a Karakoram PostgreSQL cluster referenced through the generic PostgreSQL binding (ADR 0045): `engineOptions.persistence.postgres` names the source cluster (namespace optional, defaults to the Temporal cluster's namespace). The binding creates two databases on the **same** source (persistence and SQL visibility, default names `temporal_<cluster>` and `temporal_<cluster>_visibility`) and one least-privilege login role owning both. One source cluster means one backup or point in time covers both stores consistently. Temporal uses the `postgres12_pgx` plugin with TLS `verify-full` against the binding's CA and the binding's stable writer endpoint. The binding admits PostgreSQL major ≥ 12. There is no embedded database mode: a provider-owned PostgreSQL would either duplicate HA/backup/upgrade logic or require providers to create clusters, which the provider contract does not allow. If the build has no binding service, admission rejects Temporal clusters with an explicit reason.
 
+The standard server constructs one PostgreSQL binding manager and shares that same service with the bindings API, Keycloak, OpenBao and Temporal. Embedders that omit the service still receive admission rejection; consumers use the single contract in `internal/pgbinding`.
+
 Bound credentials are never copied into options or status. The control plane resolves the password in-process when publishing member configuration. A change of the binding's credential generation re-renders configuration and rolls every role.
 
 ### Roles as components

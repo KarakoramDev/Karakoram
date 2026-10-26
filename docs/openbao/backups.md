@@ -97,4 +97,4 @@ For a clone, the same top-level `openbaoUnsealShares` object accompanies the com
 
 ## PostgreSQL-storage caveat
 
-The opt-in PostgreSQL storage path has no Raft snapshots, Raft restore/clone or OpenBao PITR. Protect and recover the **bound PostgreSQL cluster** and retain OpenBao seal material. OpenBao rejects snapshot schedules and `dataSource` with this storage mode. A `pgbinding.Service` can be injected through the server provider-composition seam, but default composition still supplies none, so storage selection remains rejected at admission unless that dependency is provided; [details](operations.md#postgresql-storage-opt-in).
+The opt-in PostgreSQL storage path has no Raft snapshots, Raft restore/clone or OpenBao PITR. Protect and recover the **bound PostgreSQL cluster** and retain OpenBao seal material. OpenBao rejects snapshot schedules and `dataSource` with this storage mode. The standard server supplies the shared PostgreSQL binding service for this mode; [details](operations.md#postgresql-storage-opt-in).
