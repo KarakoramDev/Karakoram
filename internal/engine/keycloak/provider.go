@@ -91,6 +91,15 @@ func ParseOptions(raw json.RawMessage) (EngineOptions, error) {
 	}
 	return o, nil
 }
+
+// RequiredCapabilities declares the backend routing needed by public Keycloak.
+func (*Provider) RequiredCapabilities(s domain.ClusterSpec) []string {
+	o, _ := ParseOptions(s.EngineOptions)
+	if o.PublicHTTPS {
+		return []string{"publicHttps"}
+	}
+	return nil
+}
 func request(c *domain.Cluster, o EngineOptions) pgbinding.Request {
 	ns := o.Database.Namespace
 	if ns == "" {

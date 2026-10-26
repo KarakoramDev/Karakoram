@@ -33,6 +33,10 @@ Application HTTP listens on private port **8080** for a trusted TLS-terminating 
 
 `hostname` accepts an explicit HTTP(S) origin. Omitting it disables strict hostname checks for private development only. `publicHttps` requires an explicit HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure backend must support public HTTPS subdomain routing. Configure DNS and the ingress so the origin matches that routing. **Only trust an ingress that overwrites the selected headers**; otherwise clients can forge their external address/scheme. A private HTTP endpoint is not an Internet-facing production endpoint.
 
+Create, replace and patch admission, including dry runs, reject `publicHttps: true`
+when the namespace backend does not advertise `publicHttps`. This includes Nomad
+and Dokploy namespaces without configured HTTPS routing.
+
 Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this provider; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
 
 ## Establishing an administrator and recovery

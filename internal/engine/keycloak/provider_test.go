@@ -19,6 +19,33 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
+func TestRequiredCapabilities(t *testing.T) {
+	p := New(Options{})
+	for _, public := range []bool{false, true} {
+		t.Run(map[bool]string{false: "private", true: "public"}[public], func(t *testing.T) {
+			options, err := json.Marshal(EngineOptions{
+				Database: DatabaseOptions{Cluster: "appdb"}, PublicHTTPS: public,
+				Hostname: "https://login.example.com", ProxyHeaders: "xforwarded",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			spec := domain.ClusterSpec{EngineOptions: options}
+			err = engine.CheckCapabilities(p, spec, "limited", infra.Capabilities{})
+			if public {
+				if !errors.Is(err, engine.ErrNotSupported) || !strings.Contains(err.Error(), "publicHttps") {
+					t.Fatalf("missing public HTTPS requirement: %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if err := engine.CheckCapabilities(p, spec, "capable", infra.Capabilities{PublicHTTPS: true}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 type bindingFake struct {
 	conn       pgbinding.Connection
 	password   string
