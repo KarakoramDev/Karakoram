@@ -20,7 +20,7 @@ See [Architecture](architecture.md#infrastructure-backends) and [ADR 0030](adr/0
 
 | Backend | Role / runtime | Existing target and provisioned resources | Installation |
 | --- | --- | --- | --- |
-| Zerops | Reference backend | A Zerops project; Ubuntu runtimes, separate Local Storage volumes, routing and additional-namespace relays. | [Install](install.md), dashboard-only [Quick start](quickstart.md) |
+| Zerops | Reference backend | A Zerops project; Ubuntu runtimes, separate Local Storage volumes, routing and additional-namespace relays. | [Zerops guide](zerops.md#install-the-control-plane-on-zerops) |
 | Dokploy | Docker Swarm | A Dokploy environment on your Docker Swarm; applications, node-pinned Docker named volumes, built images, public routes and relays. | [Dokploy guide](dokploy.md#install-the-control-plane-on-dokploy) |
 | Nomad | Native jobs | A dedicated Nomad namespace; native jobs, Variables records, node-pinned dynamic host volumes and relays. | [Nomad guide](nomad.md#install-the-control-plane-on-nomad) |
 
@@ -41,11 +41,11 @@ These are backend capabilities, not guarantees of engine availability. Query `GE
 | Stateless replicas | Supported; not database replication | Supported; persistent runtimes remain singleton | Supported; persistent runtimes remain singleton |
 | Credential scope | Project-scoped token | Admin API key; use a dedicated Dokploy installation | Namespace ACL writes, but not hostile-tenant metadata isolation; trust all job submitters reaching the clients |
 
-For public TCP on Dokploy and Nomad, admission requires an allowlist covering the whole address family and explicit `allowAllAddresses: true`. Apply narrower access rules at your firewall/load balancer; this acknowledgement does not create filtering. Nomad rejects managed public HTTPS for Supabase gateway, Kibana, APM and RabbitMQ management. Review the complete [Dokploy capabilities](dokploy.md#capabilities), [Nomad capabilities](nomad.md#capabilities) and [Limitations](limitations.md).
+For public TCP on Dokploy and Nomad, admission requires an allowlist covering the whole address family and explicit `allowAllAddresses: true`. Apply narrower access rules at your firewall/load balancer; this acknowledgement does not create filtering. Nomad rejects managed public HTTPS for Supabase gateway, Kibana, APM and RabbitMQ management. Review the complete [Zerops capabilities](zerops.md#capabilities), [Dokploy capabilities](dokploy.md#capabilities), [Nomad capabilities](nomad.md#capabilities) and [Limitations](limitations.md).
 
 ## Choose and configure a backend
 
-1. **Zerops:** use the [Quick start](quickstart.md) or [Install](install.md). The default backend is `zerops`; supply `KARAKORAM_ZEROPS_TOKEN` and the project identity as documented there.
+1. **Zerops:** review the [Zerops guide](zerops.md), then use the dashboard-only [Quick start](quickstart.md) or [Install](install.md). The default backend is `zerops`; supply `KARAKORAM_ZEROPS_TOKEN` and the project identity as documented there.
 2. **Dokploy:** first prepare the Swarm, registry, overlay network and access policy in the [Dokploy guide](dokploy.md#requirements), then [install the control plane](dokploy.md#install-the-control-plane-on-dokploy). Set `KARAKORAM_BACKEND=dokploy` and the guide's `KARAKORAM_DOKPLOY_*` target settings.
 3. **Nomad:** first prepare dedicated clients, the private-copy Ubuntu rootfs, routed networking, ACLs and storage in the [Nomad guide](nomad.md#requirements), then [install the control plane](nomad.md#install-the-control-plane-on-nomad). Set `KARAKORAM_BACKEND=nomad` and the guide's `KARAKORAM_NOMAD_*` settings. The operator owns public HTTPS, load balancing and host firewalls.
 

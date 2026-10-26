@@ -22,7 +22,7 @@ Karakoram is multi-platform; a namespace selects the infrastructure backend that
 
 | Backend | Role / runtime | Infrastructure and guide |
 | --- | --- | --- |
-| Zerops | Reference backend | Managed Ubuntu runtimes, Local Storage and public routing in existing projects; [install](docs/install.md). |
+| Zerops | Reference backend | Managed Ubuntu runtimes, Local Storage and public routing in existing projects; [guide](docs/zerops.md). |
 | Dokploy | Docker Swarm | Applications and node-local volumes on your Dokploy-managed Docker Swarm; [guide](docs/dokploy.md). |
 | Nomad | Native jobs | Native jobs and dynamic host volumes on your operator-managed Nomad cluster; [guide](docs/nomad.md). |
 
@@ -60,7 +60,7 @@ A Go-only `make build` without UI assets serves a “UI not built” page. See [
 Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative source/reference links resolve.
 
 - **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Backends](docs/backends.md) · [Pricing](docs/pricing.md) · [Upgrade](docs/upgrade.md)
-- **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Dokploy backend](docs/dokploy.md) · [Nomad backend](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
+- **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Zerops backend](docs/zerops.md) · [Dokploy backend](docs/dokploy.md) · [Nomad backend](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
 - **Interfaces:** [Web UI](docs/web-ui.md) · [CLI](docs/cli.md) · [REST API and SDK](docs/api.md)
 - **MongoDB:** [Overview](docs/mongodb/README.md) · [Replica sets](docs/mongodb/replica-sets.md) · [Sharding](docs/mongodb/sharding.md) · [Users, roles and TLS](docs/mongodb/access-and-tls.md) · [Backups and PITR](docs/mongodb/backups.md) · [Operations](docs/mongodb/operations.md)
 - **RabbitMQ:** [Overview](docs/rabbitmq/README.md) · [Access and TLS](docs/rabbitmq/access-and-tls.md) · [Definitions backups](docs/rabbitmq/backups.md) · [Operations](docs/rabbitmq/operations.md)

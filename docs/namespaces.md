@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Namespaces and relays
 
-A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` (Zerops projects), `dokploy` (Dokploy environments on a Docker Swarm, see [Dokploy backend](dokploy.md)), or `nomad` (Nomad namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
+A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` (Zerops projects, see [Zerops backend](zerops.md)), `dokploy` (Dokploy environments on a Docker Swarm, see [Dokploy backend](dokploy.md)), or `nomad` (Nomad namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
 
 `default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`; `nomad` reads `KARAKORAM_NOMAD_*`, including `KARAKORAM_NOMAD_NAMESPACE`, `KARAKORAM_NOMAD_ADDR` and `KARAKORAM_NOMAD_TOKEN`) and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); all three current backends require it. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
 

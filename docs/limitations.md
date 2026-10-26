@@ -13,7 +13,7 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Backend-specific limitations
 
-Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are additional backends; their status is documented on the [Backends page](backends.md). See the [backend comparison](backends.md#capability-differences) before selecting one.
+[Zerops](zerops.md) is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are additional backends; their status is documented on the [Backends page](backends.md). See the [backend comparison](backends.md#capability-differences) before selecting one.
 
 - **Dokploy:** node-local Docker volumes have no enforced quota or supported growth. The operator owns Swarm, node disks, registry, DNS and firewall. Admin API keys are not target-scoped; use a dedicated installation. Public TCP has no backend CIDR filtering; public HTTPS needs a domain suffix and wildcard DNS.
 - **Nomad:** dynamic `mkdir` host volumes have no enforced quota or supported growth. The operator owns dedicated clients, private-copy rootfs, routed networking, ACLs, disk monitoring and load balancing. Trust every submitter who can place jobs on the clients; namespace metadata is not hostile-tenant isolated. Managed public HTTPS is unavailable.
