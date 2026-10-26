@@ -35,6 +35,15 @@ make openapi-check
 
 `make test-integration` selects only the integration-suite directory; the command above includes internal tagged tests too. Local recovery state machines use controlled doubles; actual data/S3 recovery needs deployed checks.
 
+`TestPostgresBindingsAcrossOpenBaoAndTemporal` in `internal/server` is a normal
+unit test included in `go test ./...`. It uses the production provider composition,
+one shared binding manager, SQLite, authenticated HTTP requests and the real
+PostgreSQL Core against a test HTTPS member-agent protocol. It covers pending
+and ready bindings, source deletion protection, rotation, credential-free
+inventory/events and destructive versus retained-data release for Temporal and
+OpenBao. The infrastructure backend and member SQL boundary are controlled
+test doubles; this does not establish native SQL or deployed runtime behavior.
+
 Use a disposable project/bucket, secure environment credentials and [suite prerequisites/cleanup](../test/e2e/README.md). Checks create paid services, mutate data and temporarily modify authorization/SSO. Namespace scenarios need a second project, IPv6 CIDR and all storage-creation inputs; serialize them with RBAC/OIDC/settings changes. Elasticsearch deployed scenarios need a same-project private-network runner.
 
 ```sh
