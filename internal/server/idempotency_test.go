@@ -297,6 +297,31 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 	}
 }
 
+func TestIdempotencyNamespaceContractCoverage(t *testing.T) {
+	doc, err := apispec.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range doc.Paths.Map() {
+		for _, operation := range path.Operations() {
+			if !idempotencyCovered(operation.OperationID) {
+				continue
+			}
+			t.Run(operation.OperationID, func(t *testing.T) {
+				namespace := false
+				for _, parameter := range append(path.Parameters, operation.Parameters...) {
+					if parameter.Value.In == "query" && parameter.Value.Name == "namespace" {
+						namespace = true
+					}
+				}
+				if got := idempotencyNamespaceScoped(operation.OperationID); got != namespace {
+					t.Errorf("namespace scope = %t, OpenAPI namespace query parameter = %t", got, namespace)
+				}
+			})
+		}
+	}
+}
+
 func TestIdempotencyLeaseHeartbeat(t *testing.T) {
 	s, _, _ := testServer(t)
 	now := time.Now()
