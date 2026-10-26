@@ -41,7 +41,7 @@ var groupActionMu sync.Mutex
 // RenderGroupOptions uses loose plugin variables so --initialize remains safe.
 // start_on_boot stays OFF: the supervisor uses the durable join receipt to
 // restore memory-only recovery credentials after each process start.
-func RenderGroupOptions(s myspec.Spec) map[string]string {
+func RenderGroupOptions(s myspec.Spec, root string) map[string]string {
 	if s.GroupReplication == nil {
 		return nil
 	}
@@ -59,20 +59,24 @@ func RenderGroupOptions(s myspec.Spec) map[string]string {
 		seeds = append(seeds, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)))
 	}
 	return map[string]string{
-		"plugin-load-add":                                      "group_replication.so;mysql_clone.so",
-		"loose-group_replication_group_name":                   g.GroupName,
-		"loose-group_replication_local_address":                net.JoinHostPort(host, strconv.Itoa(port)),
-		"loose-group_replication_group_seeds":                  strings.Join(seeds, ","),
-		"loose-group_replication_communication_stack":          "MYSQL",
-		"loose-group_replication_single_primary_mode":          "ON",
-		"loose-group_replication_ssl_mode":                     "REQUIRED",
-		"loose-group_replication_recovery_use_ssl":             "ON",
-		"loose-group_replication_consistency":                  g.Consistency,
-		"loose-group_replication_exit_state_action":            "READ_ONLY",
-		"loose-group_replication_unreachable_majority_timeout": strconv.Itoa(g.UnreachableMajorityTimeoutSeconds),
-		"loose-group_replication_autorejoin_tries":             strconv.Itoa(g.AutorejoinTries),
-		"loose-group_replication_member_weight":                strconv.Itoa(g.MemberWeight),
-		"loose-group_replication_start_on_boot":                "OFF",
+		"plugin-load-add":                                         "group_replication.so;mysql_clone.so",
+		"loose-group_replication_group_name":                      g.GroupName,
+		"loose-group_replication_local_address":                   net.JoinHostPort(host, strconv.Itoa(port)),
+		"loose-group_replication_group_seeds":                     strings.Join(seeds, ","),
+		"loose-group_replication_communication_stack":             "MYSQL",
+		"loose-group_replication_single_primary_mode":             "ON",
+		"loose-group_replication_ssl_mode":                        "VERIFY_IDENTITY",
+		"loose-group_replication_recovery_use_ssl":                "ON",
+		"loose-group_replication_recovery_ssl_ca":                 filepath.Join(root, "ca.pem"),
+		"loose-group_replication_recovery_ssl_cert":               filepath.Join(root, "server-cert.pem"),
+		"loose-group_replication_recovery_ssl_key":                filepath.Join(root, "server-key.pem"),
+		"loose-group_replication_recovery_ssl_verify_server_cert": "ON",
+		"loose-group_replication_consistency":                     g.Consistency,
+		"loose-group_replication_exit_state_action":               "READ_ONLY",
+		"loose-group_replication_unreachable_majority_timeout":    strconv.Itoa(g.UnreachableMajorityTimeoutSeconds),
+		"loose-group_replication_autorejoin_tries":                strconv.Itoa(g.AutorejoinTries),
+		"loose-group_replication_member_weight":                   strconv.Itoa(g.MemberWeight),
+		"loose-group_replication_start_on_boot":                   "OFF",
 	}
 }
 func groupReceiptPath(dir string, s myspec.Spec) string {

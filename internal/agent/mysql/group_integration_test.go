@@ -55,7 +55,7 @@ func (n *nativeGroupNode) RefreshGroupConfig(context.Context) error       { retu
 func (n *nativeGroupNode) render() error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[mysqld]\nbasedir=%s\ndatadir=%s\nsocket=%s\npid-file=%s\nlog-error=%s\nbind-address=127.0.0.1\nreport-host=127.0.0.1\nport=%d\nserver-id=%d\nmysqlx=OFF\ninnodb-buffer-pool-size=128M\ninnodb-redo-log-capacity=64M\nmax-connections=40\ntable-open-cache=128\ngtid-mode=ON\nenforce-gtid-consistency=ON\nbinlog-format=ROW\nlog-bin=binlog\nlog-replica-updates=ON\nrelay-log=relay\nrequire-secure-transport=ON\nssl-ca=%s\nssl-cert=%s\nssl-key=%s\n", filepath.Dir(n.bin), filepath.Join(n.dir, "data"), filepath.Join(n.dir, "mysql.sock"), filepath.Join(n.dir, "mysql.pid"), filepath.Join(n.dir, "error.log"), n.s.Peers[n.s.Ordinal].Port, n.s.Ordinal+1, filepath.Join(n.dir, "ca.pem"), filepath.Join(n.dir, "server-cert.pem"), filepath.Join(n.dir, "server-key.pem"))
-	opts := RenderGroupOptions(n.s)
+	opts := RenderGroupOptions(n.s, n.dir)
 	keys := make([]string, 0, len(opts))
 	for k := range opts {
 		keys = append(keys, k)

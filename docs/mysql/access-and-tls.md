@@ -6,6 +6,18 @@
 
 Both `mysql` and `pxc` use **MySQL access** in the UI, `karactl mysql` in the CLI and `/api/v1/clusters/{cluster}/mysql/...` in the REST API. These are native MySQL accounts, databases and database-level grants—not MongoDB-shaped `db-users` or arbitrary SQL execution.
 
+For MySQL Group Replication, both group communication and distributed recovery
+authenticate peers, not just encrypt traffic: `group_replication_ssl_mode` is
+`VERIFY_IDENTITY`, and recovery uses the cluster CA, the member SQL certificate
+and private key, and `group_replication_recovery_ssl_verify_server_cert=ON`.
+The advertised recovery hostname (`report_host`) and group addresses are member
+names present in the issued certificate's DNS SANs. No additional certificate
+issuance or weaker `VERIFY_CA` mode is needed. These recovery TLS settings also
+govern the `MYSQL` communication stack in both supported server majors
+([8.4](https://dev.mysql.com/doc/refman/8.4/en/group-replication-configuring-ssl-for-recovery.html),
+[8.0](https://dev.mysql.com/doc/refman/8.0/en/group-replication-configuring-ssl-for-recovery.html)).
+PXC uses its separate Galera traffic credentials and configuration described below.
+
 ## Application identities
 
 Create a database, create a dedicated application user, then grant only the required privileges on that database. Accounts are `'name'@'%'` and require TLS. Names and privileges are validated; reserved schemas and system identities are hidden and cannot be modified here. Global/administrative grants are not exposed. Database character set and collation are creation-time settings, not alter operations.

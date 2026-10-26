@@ -3,6 +3,7 @@
 package mysql
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -39,6 +40,42 @@ func TestCreateSingleConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestGroupPeerAddressesMatchIssuedSQLIdentities(t *testing.T) {
+	p, rc, b := setup(t, "group")
+	converge(t, p, rc, b)
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, member := range s.data() {
+		cfg, err := p.MemberConfig(t.Context(), rc, member.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec myspec.Spec
+		if err = json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(spec.CAPEM)) {
+			t.Fatal("invalid peer CA")
+		}
+		leaf := trafficCertificate(t, []byte(spec.ServerCert.CertPEM))
+		for _, peer := range spec.Peers {
+			if peer.Name != member.Name {
+				continue
+			}
+			if peer.Host != member.Name {
+				t.Fatalf("group address %q differs from report_host %q", peer.Host, member.Name)
+			}
+			if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: peer.Host, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err != nil {
+				t.Fatalf("member %s peer identity: %v", member.Name, err)
+			}
+		}
+	}
+}
+
 func TestCreateGroupReplayEveryCheckpoint(t *testing.T) {
 	p, rc, b := setup(t, "group")
 	converge(t, p, rc, b)

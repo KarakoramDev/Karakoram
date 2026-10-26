@@ -31,14 +31,44 @@ func testCloneSpec() myspec.Spec {
 }
 func TestRenderGroupOptions(t *testing.T) {
 	s := testGroupSpec()
-	m := RenderGroupOptions(s)
-	for k, v := range map[string]string{"loose-group_replication_local_address": "127.0.0.1:24850", "loose-group_replication_group_seeds": "127.0.0.1:24850", "loose-group_replication_communication_stack": "MYSQL", "loose-group_replication_start_on_boot": "OFF", "loose-group_replication_ssl_mode": "REQUIRED", "loose-group_replication_recovery_use_ssl": "ON", "loose-group_replication_exit_state_action": "READ_ONLY", "plugin-load-add": "group_replication.so;mysql_clone.so"} {
+	root := t.TempDir()
+	m := RenderGroupOptions(s, root)
+	for k, v := range map[string]string{
+		"loose-group_replication_local_address":                   "127.0.0.1:24850",
+		"loose-group_replication_group_seeds":                     "127.0.0.1:24850",
+		"loose-group_replication_communication_stack":             "MYSQL",
+		"loose-group_replication_start_on_boot":                   "OFF",
+		"loose-group_replication_ssl_mode":                        "VERIFY_IDENTITY",
+		"loose-group_replication_recovery_use_ssl":                "ON",
+		"loose-group_replication_recovery_ssl_ca":                 filepath.Join(root, "ca.pem"),
+		"loose-group_replication_recovery_ssl_cert":               filepath.Join(root, "server-cert.pem"),
+		"loose-group_replication_recovery_ssl_key":                filepath.Join(root, "server-key.pem"),
+		"loose-group_replication_recovery_ssl_verify_server_cert": "ON",
+		"loose-group_replication_exit_state_action":               "READ_ONLY",
+		"plugin-load-add":                                         "group_replication.so;mysql_clone.so",
+	} {
 		if m[k] != v {
 			t.Errorf("%s=%q want %q", k, m[k], v)
 		}
 	}
-	if RenderGroupOptions(myspec.Spec{}) != nil {
+	if RenderGroupOptions(myspec.Spec{}, root) != nil {
 		t.Fatal("singleton GR options")
+	}
+}
+
+func TestRenderedGroupTLSUsesRuntimeCredentials(t *testing.T) {
+	for _, version := range []string{"8.0.46-37", "8.4.11-11"} {
+		t.Run(version, func(t *testing.T) {
+			s := testGroupSpec()
+			s.Version, s.Topology = version, myspec.TopologyGroup
+			p := dataPaths(t.TempDir())
+			config := renderConfig(s, p)
+			for option, value := range RenderGroupOptions(s, p.root) {
+				if !strings.Contains(config, option+"="+optionQuote(value)+"\n") {
+					t.Errorf("missing rendered option %s", option)
+				}
+			}
+		})
 	}
 }
 func TestGroupJoinReceipt(t *testing.T) {

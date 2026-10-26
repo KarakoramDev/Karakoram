@@ -18,6 +18,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -139,6 +140,60 @@ func startNativeGroupRunnerAgent(t *testing.T, ctx context.Context, s myspec.Spe
 	return a
 }
 
+// Prove the native MYSQL communication stack uses the configured recovery trust
+// root, rather than merely negotiating encryption with any certificate.
+func assertNativeGroupRejectsUntrustedPeer(t *testing.T, ctx context.Context, node *groupRunnerAgent) {
+	t.Helper()
+	db, err := node.runner.LocalAccessDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, p := node.runner.state()
+	untrustedCA, _ := coreTLS(t)
+	caPath := filepath.Join(p.root, "untrusted-peer-ca.pem")
+	if err = os.WriteFile(caPath, []byte(untrustedCA), 0600); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(caPath)
+	if _, err = db.ExecContext(ctx, "SET GLOBAL group_replication_recovery_ssl_ca="+sqlLiteral(caPath)); err != nil {
+		t.Fatal(err)
+	}
+	var activeCA, verifyIdentity string
+	if err = db.QueryRowContext(ctx, "SELECT @@group_replication_recovery_ssl_ca, @@group_replication_recovery_ssl_verify_server_cert").Scan(&activeCA, &verifyIdentity); err != nil {
+		t.Fatal(err)
+	}
+	if activeCA != caPath || verifyIdentity != "1" {
+		t.Fatalf("unexpected native recovery trust: ca=%q verify=%q", activeCA, verifyIdentity)
+	}
+	probe, cancel := context.WithTimeout(ctx, 20*time.Second)
+	err = node.client.Engine(probe, "mysql", myspec.ActionStartGroup, struct{}{}, nil)
+	cancel()
+	if err == nil {
+		t.Fatal("Group Replication joined with an unrelated peer trust root")
+	}
+	log, err := os.ReadFile(filepath.Join(p.root, "mysql-error.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The MYSQL stack reports a generic GCS TLS/connectivity failure rather
+	// than exposing OpenSSL's certificate verification error in this log.
+	if !strings.Contains(string(log), "failed to test connectivity to the local group communication engine") {
+		t.Fatalf("failed join did not record native MYSQL communication rejection: %s", log)
+	}
+	var online int
+	if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@server_uuid AND MEMBER_STATE='ONLINE'").Scan(&online); err != nil {
+		t.Fatal(err)
+	}
+	if online != 0 {
+		t.Fatal("untrusted peer admitted as ONLINE")
+	}
+	node.action(ctx, myspec.ActionStopGroup, struct{}{}, nil)
+	if _, err = db.ExecContext(ctx, "SET GLOBAL group_replication_recovery_ssl_ca="+sqlLiteral(filepath.Join(p.root, "ca.pem"))); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("native Group Replication rejected an unrelated CA before trusted join")
+}
+
 func TestNativeGroupRunner(t *testing.T) {
 	if os.Getenv("KARAKORAM_MYSQL_BIN_DIR") == "" || os.Getenv("KARAKORAM_PROXYSQL_BIN") == "" {
 		t.Skip("set native MySQL and ProxySQL binary paths")
@@ -178,6 +233,9 @@ func TestNativeGroupRunner(t *testing.T) {
 	nodes[0].action(ctx, myspec.ActionBootstrap, myspec.GroupRequest{GroupName: nodes[0].spec.GroupReplication.GroupName, FormationEpoch: 1, Bootstrap: true}, nil)
 	for i := 1; i < 3; i++ {
 		nodes[i].action(ctx, myspec.ActionClone, myspec.CloneRequest{Receipt: fmt.Sprintf("runner-join-%d", i), Donor: peers[0], Version: nodes[i].spec.Version}, nil)
+		if i == 1 {
+			assertNativeGroupRejectsUntrustedPeer(t, ctx, nodes[i])
+		}
 		nodes[i].action(ctx, myspec.ActionStartGroup, struct{}{}, nil)
 	}
 	observe := func(a *groupRunnerAgent) (myspec.StatusResponse, error) {

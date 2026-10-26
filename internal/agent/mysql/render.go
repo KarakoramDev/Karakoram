@@ -48,7 +48,7 @@ func renderConfig(s myspec.Spec, p paths) string {
 		opts["innodb_fast_shutdown"] = "0"
 	}
 	if s.Topology == myspec.TopologyGroup {
-		for k, v := range RenderGroupOptions(s) {
+		for k, v := range RenderGroupOptions(s, p.root) {
 			opts[k] = v
 		}
 		opts["group_replication_start_on_boot"] = "OFF"
