@@ -184,6 +184,24 @@ func integer(args map[string]any, key string, def, max int) (int, error) {
 	return int(n), nil
 }
 
+// overview uses the monitoring-accessible collection: the single-vhost resource
+// requires administrator even for GET. RabbitMQ 4.3.6 fails on paginated vhost
+// collections, so request summary columns and select the exact name locally.
+// That broker version ignores columns too; DataRequest still bounds the list.
+func (u *upstream) overview(ctx context.Context, vhost string) (map[string]any, error) {
+	query := url.Values{"columns": {"name,messages,messages_details,messages_ready,messages_ready_details,messages_unacknowledged,messages_unacknowledged_details,message_stats,recv_oct,recv_oct_details,send_oct,send_oct_details,tracing,default_queue_type"}}
+	var items []map[string]any
+	if err := u.client.DataRequest(ctx, http.MethodGet, []string{"vhosts"}, query, nil, &items); err != nil {
+		return nil, errors.New("RabbitMQ management request failed")
+	}
+	for _, item := range items {
+		if item["name"] == vhost {
+			return item, nil
+		}
+	}
+	return nil, errors.New("RabbitMQ vhost is not available")
+}
+
 func (u *upstream) CallTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
 	var tool *mcp.Tool
 	if u.allowed(name) {
@@ -239,8 +257,6 @@ func (u *upstream) CallTool(ctx context.Context, name string, args map[string]an
 		}
 	}
 	switch name {
-	case "overview":
-		parts = []string{"vhosts", vhost}
 	case "queues_list":
 		parts = []string{"queues", vhost}
 		query.Set("page", strconv.Itoa(page))
@@ -285,7 +301,13 @@ func (u *upstream) CallTool(ctx context.Context, name string, args map[string]an
 		out = nil
 		result = map[string]any{"purged": true}
 	}
-	if err := u.client.DataRequest(ctx, method, parts, query, body, out); err != nil {
+	if name == "overview" {
+		var err error
+		result, err = u.overview(ctx, vhost)
+		if err != nil {
+			return nil, err
+		}
+	} else if err := u.client.DataRequest(ctx, method, parts, query, body, out); err != nil {
 		return nil, errors.New("RabbitMQ management request failed")
 	}
 	if name == "exchanges_list" || name == "bindings_list" || name == "consumers_list" {

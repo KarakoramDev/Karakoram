@@ -134,6 +134,8 @@ Search size defaults to **10**, capped at **100**, with a forced **5-second** se
 
 Every tool requires an explicit permitted **`vhost`**, including `overview`. List tools default to page **1**, `page_size: 100`, maximum **100** per page. Some lists are paginated locally after a bounded Management API response, so page size is not a database-load guarantee.
 
+`overview` returns only the exact requested vhost object, including message statistics, selected locally from the Management API vhost collection. It requests summary columns, but RabbitMQ 4.3.6 ignores that column selection and fails on paginated vhost collections. The single-vhost endpoint requires administrator privileges; no such privileges are granted to data identities. The tool fails closed if the collection exceeds the **4 MiB** response bound, even when the requested vhost alone would fit.
+
 `messages_peek` **consumes and requeues** messages: it is a write, not a read-only inspection. Count defaults to **5**, capped at **20**. Only `ackmode: ack_requeue_true` and `encoding: auto` are accepted; payloads are truncated at **64 KiB**. `message_publish` accepts a UTF-8 payload of at most **64 KiB**. `queue_purge` permanently removes ready messages and always requires confirmation.
 
 ## Confirmation, results and limits

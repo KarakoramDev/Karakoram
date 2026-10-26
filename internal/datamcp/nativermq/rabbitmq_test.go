@@ -27,6 +27,20 @@ func openTest(t *testing.T, handler http.HandlerFunc, level engine.DataAccessLev
 	t.Cleanup(func() { _ = u.Close() })
 	return u
 }
+
+// vhostCollection mirrors RabbitMQ 4.3.6: pagination fails while injecting
+// default queue types into pagination metadata; column selection is ignored
+// because the resulting vhost maps bypass proplist column extraction.
+func vhostCollection(vhosts []map[string]any) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		if query.Get("page") != "" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(vhosts)
+	}
+}
 func TestManifestAndAccess(t *testing.T) {
 	m := Manifest()
 	if m.Upstream != "native-rabbitmq" || m.Version != "1" || m.Tools["queue_purge"].Class != datamcp.ClassDestructive || m.Tools["messages_peek"].Class != datamcp.ClassWrite {
@@ -66,7 +80,7 @@ func TestScopeAndArguments(t *testing.T) {
 	calls := 0
 	u := openTest(t, func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.URL.EscapedPath() != "/api/vhosts/team%2Fa" {
+		if r.URL.EscapedPath() != "/api/queues/team%2Fa/q" {
 			t.Error(r.URL.EscapedPath())
 		}
 		user, pass, _ := r.BasicAuth()
@@ -80,15 +94,131 @@ func TestScopeAndArguments(t *testing.T) {
 			t.Fatalf("accepted %v", args)
 		}
 	}
-	if _, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "team/a"}); err != nil {
+	if _, err := u.CallTool(context.Background(), "queue_get", map[string]any{"vhost": "team/a", "queue": "q"}); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 1 {
 		t.Fatal(calls)
 	}
-	all := openTest(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) }, engine.DataAccessRead)
+	all := openTest(t, vhostCollection([]map[string]any{{"name": "other"}}), engine.DataAccessRead)
 	if _, err := all.CallTool(context.Background(), "overview", map[string]any{"vhost": "other"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOverviewMonitoringIdentity(t *testing.T) {
+	for _, level := range []engine.DataAccessLevel{engine.DataAccessRead, engine.DataAccessReadWrite} {
+		t.Run(string(level), func(t *testing.T) {
+			calls := 0
+			u := openTest(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				user, pass, ok := r.BasicAuth()
+				if !ok || user != "identity" || pass != "secret" {
+					t.Error("missing data identity")
+				}
+				if r.Method != http.MethodGet {
+					t.Errorf("unexpected method: %s", r.Method)
+				}
+				switch r.URL.EscapedPath() {
+				case "/api/vhosts/%2Fteam":
+					// RabbitMQ 4.x requires administrator for the single-vhost
+					// resource, even for a monitoring user with vhost permissions.
+					w.WriteHeader(http.StatusUnauthorized)
+					_, _ = w.Write([]byte(`{"error":"not_authorised","reason":"Not administrator user"}`))
+				case "/api/vhosts":
+					// Monitoring users can list vhosts with their statistics.
+					// Only the exact requested vhost may reach the tool result.
+					vhostCollection([]map[string]any{
+						{"name": "/", "messages": 99},
+						{"name": "/team-other", "messages": 88},
+						{"name": "/team", "messages": 2, "message_stats": map[string]any{"publish": 3, "publish_details": map[string]any{"rate": 1.5}}},
+					})(w, r)
+				default:
+					t.Errorf("unexpected path: %s", r.URL.EscapedPath())
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}, level, "/team")
+			if _, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "/"}); err == nil {
+				t.Fatal("out-of-scope overview accepted")
+			}
+			if calls != 0 {
+				t.Fatal("out-of-scope overview reached the broker")
+			}
+			res, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "/team"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal([]byte(res.Content[0].(*mcp.TextContent).Text), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got["name"] != "/team" || got["messages"] != float64(2) {
+				t.Fatalf("unexpected overview: %v", got)
+			}
+			stats := got["message_stats"].(map[string]any)
+			if stats["publish"] != float64(3) || stats["publish_details"].(map[string]any)["rate"] != 1.5 {
+				t.Fatalf("message statistics lost: %v", stats)
+			}
+			if calls != 1 {
+				t.Fatalf("requests=%d", calls)
+			}
+		})
+	}
+}
+
+func TestOverviewMissingOrInvalidVhost(t *testing.T) {
+	for _, response := range []string{`[]`, `[{"name":"/team-other"}]`, `{}`, `[null]`} {
+		t.Run(response, func(t *testing.T) {
+			u := openTest(t, func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(response))
+			}, engine.DataAccessRead, "/team")
+			if _, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "/team"}); err == nil {
+				t.Fatal("missing or invalid vhost accepted")
+			}
+		})
+	}
+}
+
+func TestOverviewCollectionColumnHint(t *testing.T) {
+	// Request only overview columns, but do not assume the broker honors them.
+	// Name selection is exact even when case/substring alternatives exist.
+	vhosts := []map[string]any{
+		{"name": "/", "messages": 99, "description": "Default virtual host"},
+		{"name": "/TEAM", "messages": 88},
+		{"name": "/team-other", "messages": 77},
+		{"name": "/team", "messages": 7},
+	}
+	calls := 0
+	u := openTest(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/api/vhosts" || r.URL.Query().Get("columns") == "" || len(r.URL.Query()) != 1 {
+			t.Errorf("unexpected collection request: %s", r.URL)
+		}
+		vhostCollection(vhosts)(w, r)
+	}, engine.DataAccessRead, "/team")
+	res, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "/team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(res.Content[0].(*mcp.TextContent).Text), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["name"] != "/team" || got["messages"] != float64(7) || len(got) != 2 {
+		t.Fatalf("unexpected overview: %v", got)
+	}
+	if calls != 1 {
+		t.Fatalf("requests=%d, want 1", calls)
+	}
+}
+
+func TestOverviewCollectionLimit(t *testing.T) {
+	u := openTest(t, vhostCollection([]map[string]any{
+		{"name": "/other", "description": strings.Repeat("x", 4<<20)},
+		{"name": "/team", "messages": 7},
+	}), engine.DataAccessRead, "/team")
+	if _, err := u.CallTool(context.Background(), "overview", map[string]any{"vhost": "/team"}); err == nil {
+		t.Fatal("oversized collection accepted when broker ignores columns")
 	}
 }
 func TestPeekBounds(t *testing.T) {
@@ -229,7 +359,7 @@ func (d *testDialer) DialContext(ctx context.Context, network, address string) (
 	return (&net.Dialer{}).DialContext(ctx, network, d.address)
 }
 func TestEndpointTLSAndDialer(t *testing.T) {
-	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) }))
+	s := httptest.NewTLSServer(vhostCollection([]map[string]any{{"name": "/"}}))
 	defer s.Close()
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.Certificate().Raw})
 	secure, err := Open(context.Background(), datamcp.NativeInput{Level: engine.DataAccessRead, Credentials: engine.DataAccessCredentials{URI: s.URL, TLS: true, CAPEM: ca}})
@@ -246,7 +376,7 @@ func TestEndpointTLSAndDialer(t *testing.T) {
 			t.Fatal(c.URI)
 		}
 	}
-	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) }))
+	plain := httptest.NewServer(vhostCollection([]map[string]any{{"name": "/"}}))
 	defer plain.Close()
 	d := &testDialer{address: strings.TrimPrefix(plain.URL, "http://")}
 	u, err := Open(context.Background(), datamcp.NativeInput{Level: engine.DataAccessRead, Dialer: d, Credentials: engine.DataAccessCredentials{Hosts: []string{"logical.example"}}})
