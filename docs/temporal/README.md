@@ -11,6 +11,11 @@ The `temporal` provider runs native Temporal workflow services with persistence 
 - Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.
 - Backend horizontal scaling for component replicas above one; backend public HTTPS/subdomain support for a public Web UI.
 
+The `PostgreSQLBinding` status condition reports `Bound` only after the binding
+has an identity and its source connection has resolved. An unreachable source
+member leaves the condition `False/SourceUnavailable`, including when a binding
+identity was saved during an earlier reconciliation.
+
 ## At a glance
 
 | Setting | Value |

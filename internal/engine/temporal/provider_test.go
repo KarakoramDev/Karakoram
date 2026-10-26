@@ -31,6 +31,7 @@ type fakeBindings struct {
 	conn          pgbinding.Connection
 	request       pgbinding.Request
 	unavailable   bool
+	failure       error
 	released      bool
 	keep          bool
 	passwordCalls int
@@ -38,6 +39,9 @@ type fakeBindings struct {
 
 func (b *fakeBindings) Ensure(_ context.Context, r pgbinding.Request) (pgbinding.Connection, error) {
 	b.request = r
+	if b.failure != nil {
+		return pgbinding.Connection{}, b.failure
+	}
 	if b.unavailable {
 		return b.conn, pgbinding.ErrSourceUnavailable
 	}
@@ -45,6 +49,9 @@ func (b *fakeBindings) Ensure(_ context.Context, r pgbinding.Request) (pgbinding
 }
 
 func (b *fakeBindings) Resolve(context.Context, string) (pgbinding.Connection, error) {
+	if b.failure != nil {
+		return pgbinding.Connection{}, b.failure
+	}
 	if b.unavailable {
 		return b.conn, pgbinding.ErrSourceUnavailable
 	}
@@ -515,6 +522,48 @@ func TestUnavailableSourceWaits(t *testing.T) {
 	status, e := p.Status(context.Background(), rc)
 	if e != nil || status.Phase == domain.PhaseReady {
 		t.Fatal("unavailable source reported Ready")
+	}
+}
+
+func TestBindingConditionRequiresResolvedSource(t *testing.T) {
+	for _, saved := range []bool{false, true} {
+		t.Run(fmt.Sprintf("saved-identity-%t", saved), func(t *testing.T) {
+			p, rc, bindings, _ := fixture(t, "combined")
+			if saved {
+				s, err := loadState(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				s.BindingID = bindings.conn.BindingID
+				if err := saveState(rc.Cluster, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			assertPending := func() {
+				t.Helper()
+				status, err := p.Status(t.Context(), rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, condition := range status.Conditions {
+					if condition.Type == "PostgreSQLBinding" {
+						if condition.Status != "False" || condition.Reason != "SourceUnavailable" {
+							t.Fatalf("unresolved binding condition: %+v", condition)
+						}
+						return
+					}
+				}
+				t.Fatal("missing binding condition")
+			}
+			if !saved {
+				assertPending()
+			}
+			bindings.failure = engine.ErrUnavailable
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			assertPending()
+		})
 	}
 }
 

@@ -33,6 +33,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err != nil {
 		return result, err
 	}
+	// A saved identity is not evidence that the source is currently resolved.
+	// Leave the condition pending on every failed attempt, including plain
+	// engine.ErrUnavailable returned by source member access.
+	s.WaitingSource = true
 	var conn pgbinding.Connection
 	if s.BindingID == "" {
 		conn, err = p.options.Bindings.Ensure(ctx, bindingRequest(rc.Cluster, o))
@@ -43,8 +47,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err == nil {
 		conn, err = p.options.Bindings.Resolve(ctx, s.BindingID)
 	}
-	if errors.Is(err, pgbinding.ErrSourceUnavailable) {
-		s.WaitingSource = true
+	if errors.Is(err, pgbinding.ErrSourceUnavailable) || errors.Is(err, engine.ErrUnavailable) {
 		rc.Cluster.Status.Message = "Waiting for bound PostgreSQL source"
 		return result, nil
 	}
@@ -149,7 +152,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			Type: "TemporalRestoreRecovery", Status: "False", Reason: "RecoveringRuntimes", Message: message,
 		})
 	}
-	if s.WaitingSource {
+	if s.WaitingSource || s.BindingID == "" {
 		out.Message = "Waiting for bound PostgreSQL source"
 		out.Conditions = append(out.Conditions, domain.Condition{
 			Type: "PostgreSQLBinding", Status: "False",
