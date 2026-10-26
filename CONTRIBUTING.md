@@ -28,7 +28,7 @@ Coding agents must also read [AGENTS.md](AGENTS.md) for repository layout, comma
 
 ## Development setup
 
-Requirements: **Go 1.25+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.
+Requirements: **Go 1.26+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.
 
 ```sh
 make ui

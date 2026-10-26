@@ -51,7 +51,7 @@ Choose a backend in [Backends](docs/backends.md). For Zerops, use the dashboard-
 
 ## Build from source
 
-Requires Go **1.25+**, Node **22.6+**, npm and Make:
+Requires Go **1.26+**, Node **22.6+**, npm and Make:
 
 ```sh
 make build-all             # web UI and both Go executables

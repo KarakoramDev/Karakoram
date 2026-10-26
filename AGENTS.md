@@ -42,7 +42,7 @@ Distinguish the node-agent packages from the MCP agent interface introduced by
 
 ## Build and check commands
 
-Use Go 1.25+, Node 22.6+, npm and Make. Run root commands from the repository root;
+Use Go 1.26+, Node 22.6+, npm and Make. Run root commands from the repository root;
 run npm commands from `ui/`. Read test prerequisites before provisioning resources.
 
 ```sh

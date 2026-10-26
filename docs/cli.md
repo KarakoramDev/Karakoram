@@ -6,7 +6,7 @@
 
 ## Install
 
-Follow [install karactl](install.md#install-karactl) for release downloads and checksum verification. Match the CLI release to your server; connecting an older binary does not add commands. From a compatible release checkout with Go 1.25+:
+Follow [install karactl](install.md#install-karactl) for release downloads and checksum verification. Match the CLI release to your server; connecting an older binary does not add commands. From a compatible release checkout with Go 1.26+:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl

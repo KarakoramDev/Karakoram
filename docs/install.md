@@ -27,7 +27,7 @@ Both setups in root `zerops.yaml` use the same runtime and state volume:
 | Setup | Build and use |
 | --- | --- |
 | `karakoram` (default) | Downloads the upstream pinned binary; verifies the checksum manifest's SSH signature, archive SHA-256 and binary version. Seconds; no Go/Node. Download or verification failure fails the build. |
-| `karakoram-source` | Builds the exact deployed commit and UI with Node 22 and Go; allow minutes. For forks, development and unreleased fixes. Requires the complete checkout, including `ui/package-lock.json`, and outbound Go toolchain/module registry and npm access. Zerops `go@1` starts with Go 1.22; `go 1.25.0` selects the required toolchain automatically. |
+| `karakoram-source` | Builds the exact deployed commit and UI with Node 22 and Go; allow minutes. For forks, development and unreleased fixes. Requires the complete checkout, including `ui/package-lock.json`, and outbound Go toolchain/module registry and npm access. Zerops `go@1` starts with Go 1.22; `go 1.26.0` selects the required toolchain automatically. |
 
 [`deploy/zerops/RELEASE`](../deploy/zerops/RELEASE) contains the pinned SemVer tag. The v0.2.0 release checkout pins `v0.2.0`; a development checkout can still pin the previous published release. **Never edit it by hand:** only the [release tool](../CONTRIBUTING.md#releasing) updates it. A published tag pins itself; `main` between releases pins the latest published release, not newer source. Prebuilt binaries already embed release version, tagged commit and reproducible build date.
 
@@ -207,7 +207,7 @@ sha256sum --ignore-missing -c checksums.txt &&
 
 Authenticate the signing key against a trusted checkout or independently trusted fingerprint: downloading it beside the binary does not establish authenticity. Verify in the download directory; proceed only after signature success and the selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for checksums; Windows needs OpenSSH signature verification and SHA-256 verification. Add `$HOME/.local/bin` to `PATH`.
 
-Alternatively build the matching checkout with Go 1.25+:
+Alternatively build the matching checkout with Go 1.26+:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl

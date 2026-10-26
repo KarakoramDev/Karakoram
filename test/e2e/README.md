@@ -49,7 +49,7 @@ The issuer accepts public-client or basic-client authentication without validati
 
 ## Running the suite
 
-From the repository root, with Go 1.25 or newer:
+From the repository root, with Go 1.26 or newer:
 
 ```sh
 make build
@@ -125,7 +125,7 @@ Each `TestRabbitMQCluster/<phase>` is independent: it creates a randomized prefi
 
 Set URL/token for all phases. `Definitions`, `DeleteKeepVolumes` and `DeleteKeepBackups` additionally need `KARAKORAM_E2E_STORAGE_NAME` or all five S3 creation variables listed above. Storage is verified before provisioning clusters. To exercise message persistence and created-user authentication, set `KARAKORAM_E2E_ALLOW_CIDR` to the runner's actual IPv6 source CIDR and ensure it can reach the project's public TCP endpoints. Without it, only the AMQPS subtests skip, explicitly; control-plane phases still run. Set `KARAKORAM_E2E_KARACTL` for `Access/CLI` and `KARAKORAM_E2E_PRIVATE=1` for `Access/TLS`; otherwise those subtests explicitly skip. An invalid configured CIDR, failed advertised endpoint or missing private-host certificate SAN is a failure, not a skip.
 
-For a runner **inside the same disposable Zerops project**, create a separate Go service (for example `e2erunner`) with terminal access, outbound HTTPS access to Go toolchain/module registries and public IPv6 connectivity. Check out the intended Karakoram source revision there. Use Go 1.25+ or automatic toolchain selection (`GOTOOLCHAIN=auto`); Zerops `go@1` may initially provide an older Go version. Supply the variables above through secure service environment settings, including the runner's source CIDR rather than your workstation's. Open the runner service's terminal and execute from the repository root:
+For a runner **inside the same disposable Zerops project**, create a separate Go service (for example `e2erunner`) with terminal access, outbound HTTPS access to Go toolchain/module registries and public IPv6 connectivity. Check out the intended Karakoram source revision there. Use Go 1.26+ or automatic toolchain selection (`GOTOOLCHAIN=auto`); Zerops `go@1` may initially provide an older Go version. Supply the variables above through secure service environment settings, including the runner's source CIDR rather than your workstation's. Open the runner service's terminal and execute from the repository root:
 
 ```sh
 go vet -tags e2e ./test/e2e/...

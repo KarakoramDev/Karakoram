@@ -18,7 +18,7 @@ Inspect individual assertions/skips, terminal operations, observed generations, 
 
 ## Running the checks
 
-Run from the repository root with Go 1.25+. Docker tests need daemon access/image pulls; host-network tests need Linux and unused ports, not a host serving important databases. Install UI dependencies before generated consistency checks. UI helper tests require Node 22+ with experimental TypeScript stripping.
+Run from the repository root with Go 1.26+. Docker tests need daemon access/image pulls; host-network tests need Linux and unused ports, not a host serving important databases. Install UI dependencies before generated consistency checks. UI helper tests require Node 22+ with experimental TypeScript stripping.
 
 ```sh
 # Local unit/HTTP checks:
