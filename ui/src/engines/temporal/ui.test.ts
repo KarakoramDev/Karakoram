@@ -23,6 +23,7 @@ const { engines, tabAvailable } = await import('../index.ts');
 const { engineRules, engineConsequences } = await import('../../pages/clusters/wizard/engine.ts');
 const { firstInvalidStep } = await import('../../pages/clusters/wizard/state.ts');
 const { validateWizard } = await import('../../pages/clusters/wizard/validation.ts');
+const { cleanSpec } = await import('../../pages/clusters/ClusterWizard.tsx');
 const { configurationReviewRows } = await import('../../pages/clusters/wizard/review.ts');
 const { maintenanceCopy } = await import('../../pages/clusters/detail/detail-state.ts');
 const { RestoresTab } = await import('../../pages/clusters/detail/RestoresTab.tsx');
@@ -47,6 +48,16 @@ const cluster: Schemas['Cluster'] = { name: 'wf', namespace: 'default', generati
 const postgresCluster: Schemas['Cluster'] = { ...cluster, name: 'appdb', spec: { provider: 'postgres', version: '17.4', topology: { type: 'single' }, components: { engine: { replicas: 1, resources } } } };
 const oldPostgres: Schemas['Cluster'] = { ...postgresCluster, name: 'legacy', spec: { ...postgresCluster.spec, version: '11.2' } };
 const mongoCluster: Schemas['Cluster'] = { ...cluster, name: 'docs', spec: { provider: 'psmdb', version: '8.0', topology: { type: 'replicaSet' }, components: { engine: { replicas: 3, resources } } } };
+
+test('Temporal create omits the unused engine response slot from requests', () => {
+  for (const defaults of [spec, combinedDefaults]) {
+    const body: Schemas['CreateClusterRequest'] = { name: 'wf', spec: cleanSpec(defaults, 'default', false) };
+    assert.equal(Object.hasOwn(body.spec.components ?? {}, 'engine'), false);
+    assert.deepEqual(body.spec.components?.extra, defaults.components.extra);
+    assert.equal(defaults.components.engine.replicas, 0);
+  }
+  assert.deepEqual(cleanSpec(postgresCluster.spec, 'default', false).components?.engine, postgresCluster.spec.components.engine);
+});
 
 function render(element: ReactElement, setup?: (client: QueryClient) => void, path = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });

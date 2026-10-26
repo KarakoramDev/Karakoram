@@ -296,6 +296,33 @@ func TestDefaultsValidationAndCatalog(t *testing.T) {
 	}
 }
 
+func TestOmittedEngineComponentStaysUnused(t *testing.T) {
+	for _, topology := range []string{"combined", "split"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, _, _ := fixture(t, topology)
+			next := *rc.Cluster
+			next.Spec = domain.ClusterSpec{
+				Topology:      domain.Topology{Type: topology},
+				EngineOptions: json.RawMessage(`{"persistence":{"postgres":{"cluster":"pg1"}}}`),
+			}
+			p.ApplyDefaults(&next.Spec)
+			if next.Spec.Components.Engine.Replicas != 0 {
+				t.Fatal("defaults enabled the unused engine component")
+			}
+			if err := p.Validate(context.Background(), nil, &next); err != nil {
+				t.Fatalf("create with omitted engine component: %v", err)
+			}
+			if err := p.Validate(context.Background(), &next, &next); err != nil {
+				t.Fatalf("update with unused engine component: %v", err)
+			}
+			next.Spec.Components.Engine.Replicas = 1
+			if err := p.Validate(context.Background(), nil, &next); err == nil {
+				t.Fatal("nonzero replicas admitted for the unused engine component")
+			}
+		})
+	}
+}
+
 func TestUpgradePaths(t *testing.T) {
 	for _, tc := range []struct {
 		from, to string

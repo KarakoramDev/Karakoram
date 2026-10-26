@@ -29,7 +29,7 @@ identity was saved during an earlier reconciliation.
 
 ## Components and presets
 
-All roles use `spec.components.extra`, with independent `replicas` and `resources`. Leave `components.engine` unused (zero replicas). Each component is one backend service; replicas share that service identity.
+All roles use `spec.components.extra`, with independent `replicas` and `resources`. Omit the standard `components.engine` slot from create, replace and patch requests; it is unused for both combined and split topologies. Responses include that slot with zero replicas as an internal default, but the shared request schema does not accept an explicit zero there. Nonzero engine replicas are also rejected by the Temporal provider. Each extra component is one backend service; replicas share that service identity.
 
 | Component | Combined | Split | Replica bounds |
 | --- | --- | --- | --- |

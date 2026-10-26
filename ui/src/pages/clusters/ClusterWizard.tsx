@@ -648,7 +648,7 @@ function GenericComponents({ spec, topology, resources = false, showErrors = fal
 }
 
 /** Drop empty optional envelopes so the server applies its own defaults. */
-function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfirmed: boolean): ClusterSpec {
+export function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfirmed: boolean): Schemas['ClusterInputSpec'] {
   const out: ClusterSpec = structuredClone(spec);
   if (out.backup) {
     if (!out.backup.storage) delete out.backup.storage;
@@ -662,6 +662,9 @@ function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfi
   if (!out.engineConfig) delete out.engineConfig;
   if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
   else delete out.dataSource;
+  // Temporal uses only extra components; the zero-replica response engine slot
+  // is not accepted by the shared request schema.
+  if (out.provider === 'temporal') return { ...out, components: { extra: out.components.extra } };
   return out;
 }
 
