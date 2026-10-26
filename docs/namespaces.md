@@ -37,6 +37,8 @@ Cluster create, replace and patch requests check the namespace backend's adverti
 
 ## Add, validate and rotate
 
+The example below registers an additional target on the **Zerops backend**. Experimental [Dokploy](dokploy.md#managing-dokploy-from-another-control-plane) and [Nomad](nomad.md#target-settings) require their own target settings and credentials; see their guides before registration.
+
 1. Create a token for the additional project using the [required Zerops token scope](security.md). Allow capacity for one relay runtime and an available hostname, normally `karakoramrelay`.
 2. Ensure `KARAKORAM_PUBLIC_URL` is an HTTPS origin reachable from that project. Proxies must forward WebSocket Upgrade at root `/relay/v1/connect`, without browser-login interception; admission uses inner mTLS.
 3. Choose **Settings → Namespaces → Add namespace → Validate and add**, or:
@@ -59,7 +61,7 @@ Validation checks project identity/service-list access, not every mutation grant
 
 Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. A manual validation request returns a stored-token read error to the caller without changing token health. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials; rejected or unsupported backend requests return **400**.
 
-Rotation validates the **same project**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
+Rotation validates the **same backend target**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
 
 ## Relay health
 
@@ -127,7 +129,7 @@ karactl -n prod orphaned-volumes list
 
 Invalid credentials/unavailable routing degrade that namespace's management; other namespaces continue reconciling. Existing engine processes may continue, but observations, new configuration pulls and backup control/scheduling can fail or pause. Cached configuration can preserve startup; uncached bootstrap requires connectivity. Do not clear maintenance holds or repeat restores solely because management disconnected.
 
-Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and Zerops deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
+Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and the backend's deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
 
 Observed owned relays that are stopped or failed are restarted even when their
 deployed executable digest is current; a runtime awaiting its executable is

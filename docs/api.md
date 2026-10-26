@@ -8,7 +8,7 @@ Most routes are under `/api/v1`. `/healthz` and authenticated `/metrics` are ins
 
 ## Authentication
 
-Scripts use a Karakoram API token, **not a Zerops integration token**:
+Scripts use a Karakoram API token, **not a backend infrastructure credential** (such as a Zerops integration token):
 
 ```http
 Authorization: Bearer <karakoram-token>

@@ -7,7 +7,7 @@ Verification checks contracts, real engine behavior and deployed workflows at di
 ## What checks establish
 
 - **Local automated checks:** validation, authorization, state transitions, recovery checkpoints and generated-contract consistency.
-- **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not Zerops placement or provisioning.
+- **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not backend placement or provisioning.
 - **Native PostgreSQL/Supabase integration:** compiled test binaries run with real installed packages/artifacts in disposable Ubuntu 24.04 Incus/LXC system containers; no application-container runtime or image extraction is required for this path.
 - **Deployed checks:** paid platform resources, engine data paths and recovery under the configured prerequisites. Skipped capabilities are unverified, not successful.
 - **Browser checks:** rendered navigation, permissions and workflows. Static checks and backing-API scenarios are not browser automation; no automated browser-workflow suite is supplied.

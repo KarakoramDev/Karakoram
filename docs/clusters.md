@@ -6,7 +6,7 @@ A cluster is a namespace-scoped desired configuration, observed engine topology 
 
 ## Cluster identity and capabilities
 
-Each cluster selects an immutable provider/engine. Data-bearing members are Zerops singleton runtimes with individual Local Storage volumes; auxiliary stateless components depend on the provider. Cluster names are 2–12 lowercase letters/digits, beginning with a letter, and unique within a [namespace](namespaces.md). Use `-n <namespace>` to select one; without a selected namespace, single-object requests default to `default`.
+Each cluster selects an immutable provider/engine. Data-bearing members are singleton runtimes with independently identified persistent volumes supplied by the namespace's backend (Local Storage on Zerops); auxiliary stateless components depend on the provider. Cluster names are 2–12 lowercase letters/digits, beginning with a letter, and unique within a [namespace](namespaces.md). Use `-n <namespace>` to select one; without a selected namespace, single-object requests default to `default`.
 
 The provider catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 

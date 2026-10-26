@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Operations and troubleshooting
 
-Operate the control plane, managed engines and Zerops infrastructure as separate systems; each has its own health and recovery signals.
+Operate the control plane, managed engines and backend infrastructure as separate systems; each has its own health and recovery signals. Backend-specific procedures below are labelled Zerops; experimental [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
 
 ## Health and logs
 
@@ -15,7 +15,7 @@ karactl operations cluster demo
 karactl events list --cluster demo
 ```
 
-`/healthz` checks the control-plane store, not engine health. Inspect cluster conditions, observed generation, member health, agent connectivity, allocations, disk headroom and backup status. Zerops ACTIVE alone is insufficient. Operation success is not a health guarantee; see [operations and status](clusters.md#operations-and-status).
+`/healthz` checks the control-plane store, not engine health. Inspect cluster conditions, observed generation, member health, agent connectivity, allocations, disk headroom and backup status. An active infrastructure runtime (for example Zerops ACTIVE) alone is insufficient. Operation success is not a health guarantee; see [operations and status](clusters.md#operations-and-status).
 
 PostgreSQL health and desired-generation application are separate signals. A
 healthy cluster can still be applying an exposure or configuration change.

@@ -1,8 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Install Karakoram on Zerops
+# Install Karakoram
 
-Install the control plane in an existing Zerops project; the [Quick start](quickstart.md) provides the dashboard-only path.
+Choose an infrastructure backend before installing. Karakoram is multi-platform; backend capabilities and operator responsibilities differ. See [Backends](backends.md) and [Pricing and cost estimates](pricing.md).
+
+| Backend | Installation path |
+| --- | --- |
+| Zerops — reference backend | Follow this page or the dashboard-only [Quick start](quickstart.md). |
+| Dokploy — experimental | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
+| Nomad — experimental | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
+
+The deployment steps below are for the **Zerops backend**, in an existing Zerops project. CLI installation is shared across backends.
 
 ## Prerequisites
 
@@ -21,7 +29,7 @@ Both setups in root `zerops.yaml` use the same runtime and state volume:
 | `karakoram` (default) | Downloads the upstream pinned binary; verifies the checksum manifest's SSH signature, archive SHA-256 and binary version. Seconds; no Go/Node. Download or verification failure fails the build. |
 | `karakoram-source` | Builds the exact deployed commit and UI with Node 22 and Go; allow minutes. For forks, development and unreleased fixes. Requires the complete checkout, including `ui/package-lock.json`, and outbound Go toolchain/module registry and npm access. Zerops `go@1` starts with Go 1.22; `go 1.25.0` selects the required toolchain automatically. |
 
-[`deploy/zerops/RELEASE`](../deploy/zerops/RELEASE) contains one SemVer tag (`v0.1.2`). **Never edit it by hand:** only the [release tool](../CONTRIBUTING.md#releasing) updates it. A published tag pins itself; `main` between releases pins the latest published release, not newer source. Prebuilt binaries already embed release version, tagged commit and reproducible build date.
+[`deploy/zerops/RELEASE`](../deploy/zerops/RELEASE) contains the pinned SemVer tag. The v0.2.0 release checkout pins `v0.2.0`; a development checkout can still pin the previous published release. **Never edit it by hand:** only the [release tool](../CONTRIBUTING.md#releasing) updates it. A published tag pins itself; `main` between releases pins the latest published release, not newer source. Prebuilt binaries already embed release version, tagged commit and reproducible build date.
 
 For source builds select `zeropsSetup: karakoram-source` in imports, `--source` with the helper, or `--setup karakoram-source` with zcli. Forks must select source: the default always downloads KarakoramDev's release, never the fork's source.
 
@@ -178,7 +186,7 @@ Match the CLI release to the **deployed control-plane version**, not the latest 
 [Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover Linux/macOS (`linux`/`darwin`, `amd64`/`arm64`) and Windows (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
 
 ```sh
-RELEASE=v0.1.2
+RELEASE=v0.2.0
 ASSET=karactl-linux-amd64
 BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
 curl --fail --location --proto '=https' --proto-redir '=https' \

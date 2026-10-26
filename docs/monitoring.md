@@ -86,7 +86,7 @@ Historical JSON is distinct from installation-root `/metrics` Prometheus text. A
 
 Scrape **`GET /metrics` at the installation root**, not `/api/v1/metrics`. Metrics carry authoritative `namespace`, `cluster` and `member` labels; include namespace in queries/alert grouping. `set`/`role` are not guaranteed metric labels.
 
-Use a **Karakoram API token**, not the Zerops integration token. Its owner needs `monitoring, read, <namespace>/<cluster>`; individual objects are filtered by policy. Without `namespace`, all authorized namespaces are included; `?namespace=<name>` restricts the scrape. A signed-in browser's access cookie also works, but unattended scrapers should use bearer tokens, not expiring browser cookies.
+Use a **Karakoram API token**, not a backend infrastructure credential. Its owner needs `monitoring, read, <namespace>/<cluster>`; individual objects are filtered by policy. Without `namespace`, all authorized namespaces are included; `?namespace=<name>` restricts the scrape. A signed-in browser's access cookie also works, but unattended scrapers should use bearer tokens, not expiring browser cookies.
 
 ```yaml
 scrape_configs:

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # karactl CLI
 
-`karactl` manages Karakoram through its REST API, not directly through Zerops.
+`karactl` manages Karakoram through its REST API, not directly through infrastructure backends.
 
 ## Install
 
@@ -38,7 +38,7 @@ Contexts are stored at `~/.config/karakoram/config.yaml`, independent of XDG ove
 | Object namespace | `-n` → context namespace → `default` |
 | Cross-cluster collections | Without explicit `-n`, include all authorized namespaces, even if the context has a namespace |
 
-Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` securely. Tokens are Karakoram credentials, not Zerops integration tokens. Logout normally revokes the matching saved token before clearing credentials; `logout --local` leaves server authority active. With an overriding token, revoke other saved tokens explicitly by ID if necessary.
+Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKORAM_SERVER` and `KARAKORAM_TOKEN` securely. Tokens are Karakoram credentials, not backend infrastructure credentials. Logout normally revokes the matching saved token before clearing credentials; `logout --local` leaves server authority active. With an overriding token, revoke other saved tokens explicitly by ID if necessary.
 
 ## Requests, output and waits
 

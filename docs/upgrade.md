@@ -4,9 +4,58 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading from v0.1.x to v0.2.0
+
+**Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.2.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup) below, not a live copy of the SQLite main file. Let engine operations settle and retain the old revision and backup for recovery.
+
+Existing Zerops namespaces and clusters retain their backend, resource identities, secrets and desired specifications; no cluster recreation or backend migration is required. Stored namespaces without a backend kind normalize to `zerops`, and omitted namespace-create kinds still default to Zerops. PostgreSQL and Supabase are new engines; upgrading the control plane does not change an existing cluster's provider or engine version.
+
+### Automatic state changes
+
+Startup applies the following migrations added after v0.1.2, in order, without a separate migration command:
+
+| Migration | Purpose |
+| --- | --- |
+| `010_lifecycle_recovery.sql` | Marks failed delete tracking successful when the matching cluster incarnation is already absent; releases backup inventory stuck in `Deleting` after terminal failed/cancelled deletion so deletion can be retried. |
+| `011_metrics_retention.sql` | Adds the `metrics(timestamp,id)` index for bounded retention scans. |
+| `012_sanitize_diagnostics.sql` | Rewrites legacy diagnostic JSON and event details using the current sanitizer in bounded, resumable batches; leaves secret values and row metadata intact. |
+
+Migration 011 builds an index over existing metrics; migration 012 rewrites legacy diagnostics. These can extend first startup on large stores. Measure on an isolated copy and allow enough readiness time; see [Monitoring](monitoring.md#upgrading-an-existing-metrics-database). Migrations are forward-only: an older binary is not a schema rollback.
+
+### API and specification compatibility
+
+The `/api/v1` API and existing Zerops cluster spec shapes remain. The OpenAPI changes are principally additive, but clients must account for these response and admission changes:
+
+- Namespace responses now require `backend` and `capabilities` and may include non-secret `config`; namespace creation accepts optional `backend` and `config`. `projectId` remains the field name for the backend target ID. Strict clients that reject new response properties need updated models.
+- `GET /backends` lists compiled-in backend metadata and requires `namespaces/read` on global `*`.
+- Cluster create/PUT/PATCH reject missing backend capabilities with `400 invalid_request`. A newly selected public IP family that fresh backend information proves unavailable is rejected; unchanged legacy exposure is preserved and unknown availability does not reject admission.
+- `POST /clusters/{cluster}/retry-deployments` explicitly re-arms exhausted deployment budgets. `spec.retryEpoch` is server-managed/read-only, not an ordinary spec-edit control.
+- Backup or source-cluster deletion can return `409 invalid_state` while an in-flight restore/create depends on it; PITR dependencies also protect the source/history. Wait for completion or safe cancellation rather than bypassing the guard.
+- PostgreSQL role/grant and Supabase credentials, SMTP, functions and JWT-rotation endpoints are added. Topology, backup-type, member-role and credential enums gain engine-specific values; member responses may include `componentVersion`, and agent status may include `message`. Some engine-administration reads now document `503` for unavailable dependencies.
+- Restore readiness is explicitly false during recovery and remains false with `RestoreFinished` until ordinary reconciliation observes database health. Do not infer database readiness from operation completion alone.
+
+Use the matching v0.2.0 CLI/SDK models; see the [API reference](api.md) and [OpenAPI contract](../api/openapi.yaml). No existing path or request property was removed in the v0.1.2-to-v0.2.0 contract diff; expanded enums, stricter admission and deletion guards are notable behavior changes, not a blanket promise that every old client handles new responses.
+
+### Deploy on Zerops
+
+After the state/key backup, deploy the published tag from the checkout root:
+
+```sh
+git fetch origin --tags
+git checkout v0.2.0
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+Set `PROJECT_ID` as below. Preserve the existing volume, master key, secrets, public origin and single-writer deployment settings. Then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#member-agent-updates); upgrading the control-plane binary alone does not replace running member binaries.
+
+### New optional backends
+
+Zerops remains the reference backend. Dokploy and Nomad are new, **experimental** options, not an automatic migration for existing installations. Review [Backends](backends.md), then the [Dokploy installation](dokploy.md#install-the-control-plane-on-dokploy) or [Nomad installation](nomad.md#install-the-control-plane-on-nomad). Keep the existing default namespace on its original target; additional targets use explicit backend selection and credentials through [Namespaces](namespaces.md).
+
 ## Prerequisites
 
-For new installations use [Install](install.md). Upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
+For new installations use [Install](install.md). The concrete deployment, maintenance-container and ownership commands below are for the **Zerops backend**. Experimental [Dokploy](dokploy.md#install-the-control-plane-on-dokploy) and [Nomad](nomad.md#install-the-control-plane-on-nomad) use their guides' singleton/stop-first deployment paths with the same consistent-state and master-key backup requirements. Zerops upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
 
 From the checkout root, set:
 
@@ -59,7 +108,7 @@ After state/key backup, select the published release:
 
 ```sh
 git fetch origin --tags
-git checkout v0.1.2
+git checkout v0.2.0
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
   --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```

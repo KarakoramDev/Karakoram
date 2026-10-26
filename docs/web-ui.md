@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Web UI
 
-The embedded Web UI manages authorized resources through the same API as `karactl`; open the installation's HTTPS origin, without a separate frontend deployment or browser Zerops token.
+The embedded Web UI manages authorized resources through the same API as `karactl`; open the installation's HTTPS origin, without a separate frontend deployment or browser infrastructure credential.
 
 ## Sign in
 
@@ -81,7 +81,7 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 | Monitoring | Collection status and Prometheus guidance; scrape URL is installation-root `/metrics` |
 | Orphaned volumes | Read-only inventory of volumes awaiting platform cleanup; see [operations](operations.md#orphaned-platform-volumes) |
 
-The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored Zerops tokens or the operator master key.
+The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored backend infrastructure credentials or the operator master key.
 
 The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running OpenAPI link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
 

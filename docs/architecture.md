@@ -2,9 +2,11 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted control plane that reconciles engine clusters on Zerops across one or more projects.
+Karakoram is a self-hosted, multi-platform control plane that reconciles engine clusters across infrastructure backends and namespace targets. Zerops is the reference backend; Dokploy and Nomad are experimental. See [Backends](backends.md).
 
 ## Deployment and trust boundaries
+
+The diagram and concrete paths below show the Zerops backend deployment; other backends provide their own runtime layout, storage and public ingress.
 
 ```mermaid
 flowchart LR
@@ -19,7 +21,7 @@ flowchart LR
 ```
 
 - **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. UI/API traffic enters through public HTTPS; the private agent listener uses TLS 9443. SQLite stores desired state, observations, operations, events and encrypted secret values. The master key is a separately managed service secret.
-- **Data-bearing members:** singleton Ubuntu 24.04 runtimes with separate Local Storage volumes and stable identities. Increasing a runtime's container count is not engine replication.
+- **Data-bearing members:** singleton Ubuntu 24.04 runtimes with independently identified persistent volumes and stable identities (Local Storage on Zerops). Increasing a runtime's container count is not engine replication.
 - **Stateless components:** provider-supported auxiliary runtimes do not have durable data volumes. Containers sharing a service identity are not independent data-bearing members.
 - **Node agent:** `karakoram agent` supervises the selected engine and exposes a bounded private API, not a remote shell.
 
@@ -45,7 +47,7 @@ Clusters separate desired `spec` from observed `status`, with generation trackin
 
 Provider persistence replaces each owned state value, not just its nonempty fields. PostgreSQL, Elasticsearch and Supabase replace their complete `Cluster.Internal` namespace objects. Flat MongoDB and RabbitMQ state uses `internal/statejson.ReplaceOwned`: explicit JSON tags define owned root keys, omitted empty fields remove prior values, and unrelated workflow keys survive. Nested values are replaced whole; adding an optional owned field must not require a second, hand-maintained deletion list.
 
-Neither HTTP acceptance nor a successful infrastructure configuration process proves engine health. There is no distributed exactly-once transaction across SQLite, Zerops and engine/storage APIs: durable identifiers and observation constrain replay, while ambiguous outcomes require investigation. [Clusters and operations](clusters.md#operations-and-status) defines generations, operation phases, health, cancellation and wait behavior.
+Neither HTTP acceptance nor a successful infrastructure configuration process proves engine health. There is no distributed exactly-once transaction across SQLite, infrastructure backends and engine/storage APIs: durable identifiers and observation constrain replay, while ambiguous outcomes require investigation. [Clusters and operations](clusters.md#operations-and-status) defines generations, operation phases, health, cancellation and wait behavior.
 
 ## Node-local durability
 
@@ -75,7 +77,7 @@ Agents expose member metrics for control-plane collection, history and authentic
 
 ## Failure domains
 
-The control plane is single-replica. Local Storage is tied to a single host, and independent member services do not establish host/rack/zone separation. Engine replication cannot compensate for every shared-host failure. See [Limitations](limitations.md) before selecting availability and recovery objectives.
+The control plane is single-replica. Persistent volumes are node-local on current backends. Zerops does not guarantee host separation; experimental Dokploy and Nomad report authoritative node placement but cannot establish independent racks or physical hosts beneath the scheduler. Engine replication cannot compensate for every shared-host failure. See [Limitations](limitations.md) before selecting availability and recovery objectives.
 
 ## Engine providers
 

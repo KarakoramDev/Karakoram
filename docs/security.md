@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Security
 
-Karakoram holds infrastructure and engine-management authority across enrolled Zerops projects; this page defines its trust boundaries and operator responsibilities.
+Karakoram holds infrastructure and engine-management authority across enrolled backend targets; this page defines its trust boundaries and operator responsibilities. Zerops is the reference backend; experimental [Dokploy](dokploy.md) and [Nomad](nomad.md) have additional infrastructure trust requirements.
 
 ## Threat model and trust boundaries
 
@@ -16,10 +16,10 @@ The model protects normal API reads from accidental secret disclosure, applies o
 | Agent → control plane | Private TLS 9443, pinned installation CA, assigned-member token |
 | Control plane → agent | Pinned cluster CA/hostname, member token; authenticated commands, not remote shell |
 | Engine clients/members | Engine-native authentication and TLS, separate from agent transport |
-| Control plane → Zerops | Server-held infrastructure token per namespace; never returned to UI/CLI |
+| Control plane → infrastructure backend | Server-held infrastructure credential per namespace; never returned to UI/CLI |
 | Backup path → object storage | Engine-specific credentials/transport; [backup guides](backups.md) define recovery and transfer paths |
 
-Public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. Agent transport has independent end-to-end TLS.
+On the **Zerops backend**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. Experimental Dokploy uses its configured public ingress; experimental Nomad needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every backend.
 
 ## Relay threat model
 

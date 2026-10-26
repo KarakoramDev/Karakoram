@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Access control
 
-Karakoram accounts, roles and tokens authorize control-plane actions, independently of Zerops integration tokens and engine-native users.
+Karakoram accounts, roles and tokens authorize control-plane actions, independently of backend infrastructure credentials and engine-native users.
 
 The server enforces policy; hidden UI controls are not an authorization boundary. Engine identities belong in [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md) and [Elasticsearch](elasticsearch/access-and-security.md).
 

@@ -11,6 +11,15 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **Local Storage minimum is 5 GB.** Mounted capacity follows the volume service's `maxDisk`, not runtime disk or volume `minDisk`. Growth is supported; shrinking is rejected. Resource/autoscaling behavior belongs in [clusters](clusters.md).
 - **Live volume archives are not consistent database backups.** Use [engine-native backups](backups.md) and a separately [consistent control-plane snapshot](operations.md#control-plane-state-backup-and-recovery).
 
+## Experimental backends
+
+Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are **experimental**, with no production track record. See the [backend comparison](backends.md#capability-differences) before selecting one.
+
+- **Dokploy:** node-local Docker volumes have no enforced quota or supported growth. The operator owns Swarm, node disks, registry, DNS and firewall. Admin API keys are not target-scoped; use a dedicated installation. Public TCP has no backend CIDR filtering; public HTTPS needs a domain suffix and wildcard DNS.
+- **Nomad:** dynamic `mkdir` host volumes have no enforced quota or supported growth. The operator owns dedicated clients, private-copy rootfs, routed networking, ACLs, disk monitoring and load balancing. Trust every submitter who can place jobs on the clients; namespace metadata is not hostile-tenant isolated. Managed public HTTPS is unavailable.
+- **Public TCP on both experimental backends:** requires explicit `allowAllAddresses: true` and an allowlist covering the whole address family. Enforce narrower access externally. Nomad static ports need load-balancer forwarding to the correct member node; they are not a routing mesh.
+- **PostgreSQL and Supabase:** both use the shared runtime contract on these experimental backends, but their guides do not claim engine acceptance. Locked native artifacts and registered S3 destinations must be reachable. Supabase public gateway HTTPS is rejected on Nomad.
+
 ## Control-plane and platform operations
 
 - **One control-plane replica; no control-plane HA.** SQLite WAL requires a single writer. Keep `maxContainers: 1` and `temporaryShutdown`; upgrades interrupt management. Lost state cannot be reconstructed by automatically adopting existing services. Preserve consistent state and the original master key; see [recovery](operations.md#control-plane-state-backup-and-recovery).
@@ -25,17 +34,17 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Namespaces and relays
 
-- **One namespace per project.** Names are namespace-local for clusters/storage. Namespace rename/project reassignment is unsupported; only descriptions change. The `default` integration token is environment-managed; API rotation returns 409. See [namespace lifecycle](namespaces.md).
-- **One relay per additional project; no relay HA.** Its loss interrupts management/config pulls/monitoring there, not engine replication. It is not application connectivity. Remote management requires outbound public HTTPS and WebSocket forwarding; the default namespace remains direct.
+- **One namespace per backend target.** Names are namespace-local for clusters/storage. Backend kind, namespace name and target identity are immutable; only descriptions change. The `default` infrastructure credential is environment-managed; API rotation returns 409. See [namespace lifecycle](namespaces.md).
+- **One relay per additional target; no relay HA.** All current backends require it. Its loss interrupts management/config pulls/monitoring there, not engine replication. It is not application connectivity. Remote management requires outbound public HTTPS and WebSocket forwarding; the default namespace remains direct.
 - **One ordered tunnel shares congestion and failure fate.** EOF closes both directions; TCP half-close is not propagated. The relay is not a general VPN or bulk-backup transport. Keepalive/reconnect behavior does not establish a longevity or throughput SLA.
 - **Removal guards retained resources.** Clusters, storages, retained backup records and orphan inventory must be cleared first. Removal deletes the owned relay, not its project or RBAC policies; review grants before name reuse.
 - **Bounds do not eliminate DoS.** Bounded handshakes/messages/streams still share listener/network resources. Project DNS/network remain trusted; inner relay TLS does not replace engine TLS. See [relay threat model](security.md#relay-threat-model).
 
 ## Access and networking
 
-- Public TCP requires project IPv6 or dedicated IPv4; shared HTTP/IPv4 routing is not a generic engine TCP gateway. Verify client address-family connectivity and account for dedicated IPv4 cost.
-- Public route synchronization is project-wide, including other clusters' changes. `Ready`/`isSynced` do not establish external reachability. Check allowed and denied clients independently; retain TLS/authentication as well as allowlists.
-- Project administrators/platform infrastructure remain trusted. **Full access without sudo mode cannot read sensitive environment values.** See [Security](security.md) for token authority, public exposure and TLS boundaries; Karakoram is not a sandbox against project administrators.
+- On the **Zerops backend**, public TCP requires project IPv6 or dedicated IPv4; shared HTTP/IPv4 routing is not a generic engine TCP gateway. Verify client address-family connectivity and account for dedicated IPv4 cost.
+- Zerops public route synchronization is project-wide, including other clusters' changes. `Ready`/`isSynced` do not establish external reachability. Check allowed and denied clients independently; retain TLS/authentication as well as allowlists. Other backends have the [exposure limits above](#experimental-backends).
+- Infrastructure administrators remain trusted. On Zerops, **Full access without sudo mode cannot read sensitive environment values**; this does not remove mutation authority. See [Security](security.md) for token authority, public exposure and TLS boundaries; Karakoram is not a sandbox against infrastructure administrators.
 - Credential/leaf rotation is not general CA-source or master-key rotation. Use engine access guides for supported TLS transitions and certificate requirements.
 
 ### Certificate and member-credential lifecycle

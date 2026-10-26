@@ -2,9 +2,15 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Quick start
 
-Install through the Zerops dashboard, create a cluster and back it up; no checkout or CLI required.
+Choose a backend, install the control plane, then create a cluster and back it up. See [Backends](backends.md) for capability differences and [Pricing](pricing.md) for costs.
 
-You need a Zerops account and existing project. LIGHT hosts the control plane; clusters need **additional capacity**. Check engine sizing below and the wizard's total against project capacity. Other paths: [Install](install.md).
+| Backend | Quick-start path |
+| --- | --- |
+| Zerops — reference backend | Follow the dashboard-only steps below; no checkout or CLI required. |
+| Dokploy — experimental | Follow [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy), then use the engine guides linked below. |
+| Nomad — experimental | Follow [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad), then use the engine guides linked below. |
+
+The steps below use the **Zerops backend**. You need a Zerops account and existing project. LIGHT hosts the control plane; clusters need **additional capacity**. Check engine sizing below and the wizard's total against project capacity. Other Zerops deployment paths: [Install](install.md).
 
 ## 1. Create a Zerops token
 
