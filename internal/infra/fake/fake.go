@@ -224,6 +224,9 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		if invalidResources(s.Resources) {
 			return infra.Op{}, reject("negative resources")
 		}
+		if unknownCPUMode(s.Resources) {
+			return infra.Op{}, reject("unknown CPU mode")
+		}
 		seen[s.Hostname] = true
 	}
 	services := map[string]string{}
@@ -446,6 +449,11 @@ func (b *Backend) lifecycle(ctx context.Context, method, hostname, status string
 func invalidResources(r infra.Resources) bool {
 	return r.MinCPU < 0 || r.MaxCPU < 0 || r.MinRAM < 0 || r.MaxRAM < 0 || r.MinDisk < 0 || r.MaxDisk < 0 || r.StartCPU != nil && *r.StartCPU < 0
 }
+
+// Real backends accept only the infra CPU mode constants; so does the fake.
+func unknownCPUMode(r infra.Resources) bool {
+	return r.CPUMode != "" && r.CPUMode != infra.CPUShared && r.CPUMode != infra.CPUDedicated
+}
 func (b *Backend) SetResources(ctx context.Context, hostname string, resources infra.Resources) (infra.Op, error) {
 	b.state.mu.Lock()
 	defer b.state.mu.Unlock()
@@ -454,6 +462,9 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, resources i
 	}
 	if invalidResources(resources) {
 		return infra.Op{}, reject("negative resources")
+	}
+	if unknownCPUMode(resources) {
+		return infra.Op{}, reject("unknown CPU mode")
 	}
 	r, err := b.get(hostname)
 	if err != nil {

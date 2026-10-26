@@ -17,7 +17,7 @@ func TestCompanionAccessAndResourceChanges(t *testing.T) {
 	f.converge(t)
 	cfg, _ := MemberConfig(t.Context(), f.rc, "demomcp")
 	f.rc.Cluster.Spec.DataMcp.Access = domain.DataMcpAccessRead
-	f.rc.Cluster.Spec.DataMcp.Resources = &domain.Resources{CPUMode: "shared", MinCPU: 1, MaxCPU: 1, MinRAM: 0.5, MaxRAM: 1}
+	f.rc.Cluster.Spec.DataMcp.Resources = &domain.Resources{CPUMode: infra.CPUShared, MinCPU: 1, MaxCPU: 1, MinRAM: 0.5, MaxRAM: 1}
 	f.converge(t)
 	next, err := MemberConfig(t.Context(), f.rc, "demomcp")
 	if err != nil {

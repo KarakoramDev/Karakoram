@@ -349,7 +349,7 @@ func resources(c *domain.Cluster) domain.Resources {
 	if c.Spec.DataMcp.Resources != nil {
 		return *c.Spec.DataMcp.Resources
 	}
-	return domain.Resources{CPUMode: "shared", MinCPU: 1, MaxCPU: 1, MinRAM: 0.25, MaxRAM: 0.5}
+	return domain.Resources{CPUMode: infra.CPUShared, MinCPU: 1, MaxCPU: 1, MinRAM: 0.25, MaxRAM: 0.5}
 }
 
 // An explicit mismatching public marker is a conflict, even if legacy token

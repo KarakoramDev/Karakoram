@@ -52,7 +52,7 @@ func TestRemovedResourceFieldsDoNotBlockCredentialRotation(t *testing.T) {
 	backend := &partialResourceBackend{Backend: f.backend}
 	f.rc.Backend = backend
 	start := 1.0
-	f.rc.Cluster.Spec.DataMcp.Resources = &domain.Resources{CPUMode: "shared", MinCPU: 1, MaxCPU: 2, MinRAM: 0.5, MaxRAM: 1, StartCPU: &start}
+	f.rc.Cluster.Spec.DataMcp.Resources = &domain.Resources{CPUMode: infra.CPUShared, MinCPU: 1, MaxCPU: 2, MinRAM: 0.5, MaxRAM: 1, StartCPU: &start}
 	f.converge(t)
 	initial, err := MemberConfig(t.Context(), f.rc, "demomcp")
 	if err != nil {
@@ -70,7 +70,7 @@ func TestRemovedResourceFieldsDoNotBlockCredentialRotation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if service.Resources.CPUMode != "shared" || service.Resources.MinCPU != 1 || service.Resources.MaxCPU != 2 || service.Resources.StartCPU == nil || *service.Resources.StartCPU != start {
+	if service.Resources.CPUMode != infra.CPUShared || service.Resources.MinCPU != 1 || service.Resources.MaxCPU != 2 || service.Resources.StartCPU == nil || *service.Resources.StartCPU != start {
 		t.Fatal("backend did not retain omitted fields", service.Resources)
 	}
 	if service.Resources.MinRAM != 0.25 || service.Resources.MaxRAM != 0.5 {
@@ -113,10 +113,25 @@ func TestRemovedResourceFieldsDoNotBlockCredentialRotation(t *testing.T) {
 	}
 }
 
+// The default companion resources must be accepted by real backends, which
+// take only the infra CPU mode constants.
+func TestDefaultResourcesUseBackendCPUMode(t *testing.T) {
+	f := setup(t)
+	f.rc.Cluster.Spec.DataMcp.Resources = nil
+	f.converge(t)
+	service, err := f.backend.GetService(t.Context(), "demomcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := service.Resources; r.CPUMode != infra.CPUShared || r.MinCPU != 1 || r.MaxCPU != 1 || r.MinRAM != 0.25 || r.MaxRAM != 0.5 {
+		t.Fatal("unexpected default companion resources", r)
+	}
+}
+
 func TestResourcesMatchExplicitManagement(t *testing.T) {
 	observedStart := 1.0
 	desiredStart := 1.0
-	observed := domain.Resources{CPUMode: "shared", MinCPU: 1, MaxCPU: 2, MinRAM: 0.25, MaxRAM: 0.5, MinDisk: 1, MaxDisk: 2, StartCPU: &observedStart}
+	observed := domain.Resources{CPUMode: infra.CPUShared, MinCPU: 1, MaxCPU: 2, MinRAM: 0.25, MaxRAM: 0.5, MinDisk: 1, MaxDisk: 2, StartCPU: &observedStart}
 	if !resourcesMatch(observed, domain.Resources{}) {
 		t.Fatal("omitted fields treated as drift")
 	}
@@ -129,7 +144,7 @@ func TestResourcesMatchExplicitManagement(t *testing.T) {
 		name   string
 		change func(*domain.Resources)
 	}{
-		{"mode", func(r *domain.Resources) { r.CPUMode = "dedicated" }},
+		{"mode", func(r *domain.Resources) { r.CPUMode = infra.CPUDedicated }},
 		{"minCPU", func(r *domain.Resources) { r.MinCPU = 2 }},
 		{"maxCPU", func(r *domain.Resources) { r.MaxCPU = 3 }},
 		{"minRAM", func(r *domain.Resources) { r.MinRAM = 0.5 }},
