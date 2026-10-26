@@ -882,8 +882,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.dryRunResult("restore", c, c, &r)
 		}
 		payload, err := json.Marshal(struct {
-			Restore string `json:"restore"`
-			AcknowledgeSharedSource bool `json:"acknowledgeSharedSource,omitempty"`
+			Restore                 string `json:"restore"`
+			AcknowledgeSharedSource bool   `json:"acknowledgeSharedSource,omitempty"`
 		}{r.Name, value(b.AcknowledgeSharedSource)})
 		if err != nil {
 			return s.failure(err)

@@ -287,8 +287,8 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 50 {
-		t.Fatalf("covered operations = %d, want 50", len(covered))
+	if len(covered) != 51 {
+		t.Fatalf("covered operations = %d, want 51", len(covered))
 	}
 }
 

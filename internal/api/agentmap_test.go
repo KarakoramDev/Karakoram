@@ -9,6 +9,7 @@ func TestSecuritySensitiveOperationsRequireConfirmation(t *testing.T) {
 	for _, operation := range []string{
 		"changePassword",
 		"revealOpenBaoUnsealKeys", "createOpenBaoDatabaseConnection", "deleteOpenBaoDatabaseConnection",
+		"issueTemporalClientCertificate", "deleteTemporalNamespace", "setTemporalUIOIDCClientSecret",
 		"setSupabaseSMTPPassword", "putSupabaseFunction",
 		"createPostgresRole", "updatePostgresRole", "patchPostgresRole", "grantPostgresPrivileges",
 		"rotatePostgresBinding", "rebalancePostgres",
@@ -31,5 +32,12 @@ func TestOpenBaoInitializationMaterialIsSecret(t *testing.T) {
 	rule, exists := OperationAgent["revealOpenBaoUnsealKeys"]
 	if !exists || !rule.Secret {
 		t.Fatalf("initialization material must be classified as secret: %+v", rule)
+	}
+}
+
+func TestTemporalCertificateIssuanceReturnsSecret(t *testing.T) {
+	rule, exists := OperationAgent["issueTemporalClientCertificate"]
+	if !exists || !rule.Secret {
+		t.Fatalf("certificate issuance returns a private key and must be secret: %+v", rule)
 	}
 }

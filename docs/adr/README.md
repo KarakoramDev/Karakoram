@@ -50,6 +50,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0045](0045-postgres-bindings.md) | Bindings of dependent services to Karakoram PostgreSQL: least-privilege roles, rotation, deletion guard |
 | [0046](0046-citus-distributed-topology.md) | Citus distributed topology: coordinator and worker Patroni groups, formation DCS, rebalancing, coordinated restore points |
 | [0047](0047-openbao-engine.md) | OpenBao: encrypted initialization receipts, control-plane-held unseal material, Raft membership/snapshots and opt-in credential connections |
+| [0056](0056-temporal-service.md) | Temporal application service on bound PostgreSQL with managed TLS and workflow namespaces |
 
 ## References and verification
 
@@ -58,7 +59,7 @@ Use the [verification guide](../verification.md) for automated test coverage and
 Engine operating guides: [MongoDB](../mongodb/README.md), [replica sets](../mongodb/replica-sets.md)
 and [sharding](../mongodb/sharding.md), [RabbitMQ](../rabbitmq/README.md),
 and [Elasticsearch and Elastic Stack](../elasticsearch/README.md), [PostgreSQL](../postgres/README.md),
-and [Supabase](../supabase/README.md).
+and [Supabase](../supabase/README.md), and [Temporal](../temporal/README.md).
 
 Primary references: [Zerops API](https://docs.zerops.io/references/api.md), [Local Storage](https://docs.zerops.io/local-storage/overview.md), [public networking](https://docs.zerops.io/references/networking/public-access.md), [Percona system users](https://docs.percona.com/percona-operator-for-mongodb/latest/system-users.html), [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), and [OpenEverest provider runtime](https://github.com/openeverest/openeverest/blob/main/provider-runtime/controller/interface.go).
 

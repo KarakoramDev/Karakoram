@@ -31,6 +31,10 @@ It returns **201**, `Cache-Control: no-store`, certificate metadata plus `certif
 `GET` on that same route lists metadata only: serial, common name, certificate/CA SHA-256 fingerprints and issue/expiry timestamps. Issuance requires `cluster-credentials:read`; listing requires `clusters:read` on the cluster.
 The list API reports server-computed `currentCa` (CLI `CURRENT` yes/no), comparing each issuing CA with the CA used for new client certificates now—old during rotation's trust phase, new once signing switches—even if no certificate has been issued since rotation; false means the certificate will no longer authenticate after pruning.
 
+The management MCP exposes certificate issuance as `temporal_client_certificate_issue`, with confirmation required and secret output because the response contains a private key. Namespace deletion (`temporal_namespace_delete`) and UI OIDC secret replacement (`temporal_ui_oidc_client_secret_set`) also require confirmation. Certificate and namespace listings are read-only tools; their user-supplied names and descriptions are untrusted data. Restricted API tokens must permit the same cluster-scoped permissions as the corresponding REST routes.
+
+Certificate issuance does not support keyed response replay: private keys are not retained in the control-plane idempotency cache. UI OIDC secret replacement supports `Idempotency-Key` without returning the secret.
+
 Configure the SDK with all of:
 
 1. `frontendAddress` as the host:port to dial; application workers need private network reachability to it. The management relay is not an SDK tunnel.

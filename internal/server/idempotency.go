@@ -52,7 +52,7 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
-	case "createOpenBaoDatabaseConnection":
+	case "createOpenBaoDatabaseConnection", "setTemporalUIOIDCClientSecret":
 		return true
 	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
 		return true

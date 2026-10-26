@@ -3534,6 +3534,15 @@ paths:
       tags: [temporal]
       summary: Issue a Temporal client certificate and return its private key once
       x-karakoram-rbac: {resource: cluster-credentials, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: temporal_client_certificate_issue
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
+        idempotent: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
       requestBody:
         required: true
         content:
@@ -3560,6 +3569,13 @@ paths:
       tags: [temporal]
       summary: List non-secret Temporal client certificate metadata
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: temporal_client_certificates_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '200':
           description: Issued certificate metadata.
@@ -3579,6 +3595,13 @@ paths:
       tags: [temporal]
       summary: List Temporal namespaces
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: temporal_namespaces_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
+        untrusted: true
       responses:
         '200':
           description: Temporal namespaces.
@@ -3602,6 +3625,14 @@ paths:
       tags: [temporal]
       summary: Request asynchronous deletion of an unmanaged Temporal namespace
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: temporal_namespace_delete
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: false
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
       responses:
         '202': {description: Namespace deletion accepted.}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -3619,6 +3650,15 @@ paths:
       tags: [temporal]
       summary: Seal the write-only Temporal UI OIDC client secret
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: temporal_ui_oidc_client_secret_set
+        risk: destructive
+        confirm: confirm
+        async: none
+        idempotent: true
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
