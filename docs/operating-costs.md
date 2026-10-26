@@ -29,7 +29,7 @@ OVHcloud uses **hourly Discovery d2-2 / d2-4 and General Purpose b2-15 instances
 
 ### Unit prices
 
-AWS regional machine-readable catalogs supplement its dynamically rendered pricing pages. OVHcloud's euro prices below are from its official Ireland price list, collected **26 October 2026**; its [regional availability matrix](https://www.ovhcloud.com/en-ie/public-cloud/regions-availability/) lists Discovery, General Purpose, High Speed Gen2 and Standard Object Storage in Gravelines.
+AWS regional machine-readable catalogs supplement its dynamically rendered pricing pages. OVHcloud's euro prices below are from its official Ireland price list; its [regional availability matrix](https://www.ovhcloud.com/en-ie/public-cloud/regions-availability/) lists Discovery, General Purpose, High Speed Gen2 and Standard Object Storage in Gravelines.
 
 | Provider | Unit used | Published price / basis | Official source |
 | --- | --- | --- | --- |
@@ -234,13 +234,13 @@ Plan space for shard recovery/rebalance and watermarks, not just indexed data. O
 
 ## Additional v0.4.0 engines
 
-**OpenBao, Temporal, Percona Server for MySQL, PXC, Neo4j Community, Weaviate, Keycloak and the Citus distributed topology are EXPERIMENTAL until tested against live backends.** The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except Temporal on Zerops as explained below; backend support is not deployment acceptance.
+These engines and the Citus distributed topology are new in v0.4.0; their release status is listed once in [engine availability](backends.md#engine-availability). The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except Temporal on Zerops as explained below; backend support is not deployment acceptance.
 
 PostGIS, pgvector and TimescaleDB profiles cost the same as the corresponding PostgreSQL tier above; no extra runtime is required, but workload-driven CPU/RAM/disk growth is additional.
 
 ### OpenBao
 
-Use integrated **Raft storage** and the default Shamir seal: no PostgreSQL source or paid KMS/transit service is included. Admission allows 1/3/5 members at 1 CPU / 0.5 GiB / 5 GB persistent disk; created RAM defaults to 1 GiB. Each member has a separate 1–3-GB runtime disk. PostgreSQL storage is an opt-in alternative requiring a bound source and a different recovery budget, not the Raft installation priced here. See [OpenBao](openbao/README.md) and [admission](../internal/engine/openbao/provider.go#L187).
+Use integrated **Raft storage** and the default Shamir seal: no PostgreSQL source or paid KMS/transit service is included. Admission allows 1/3/5 members at 1 CPU / 0.5 GiB / 5 GB persistent disk; created RAM defaults to 1 GiB. Each member has a separate 1–3-GB runtime disk. PostgreSQL storage is an opt-in alternative requiring a bound source and a different recovery budget, not the Raft installation priced here. See [OpenBao](openbao/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -266,9 +266,9 @@ Use integrated **Raft storage** and the default Shamir seal: no PostgreSQL sourc
 
 ### Temporal
 
-The strict minimum is one **combined** server with UI explicitly disabled. Combined servers run frontend/history/matching/internal worker together; split topology instead requires one of each role. Common component validation requires 1 whole CPU, positive RAM and 1-GB runtime disk but no fixed positive RAM floor: use the created **1-GiB RAM default**. Replicated combined servers supply redundant service instances, not a separate consensus quorum. See [Temporal](temporal/README.md), [components/defaults](../internal/engine/temporal/provider.go#L44) and [validation](../internal/engine/temporal/provider.go#L228).
+The strict minimum is one **combined** server with UI explicitly disabled. Combined servers run frontend/history/matching/internal worker together; split topology instead requires one of each role. Common component validation requires 1 whole CPU, positive RAM and 1-GB runtime disk but no fixed positive RAM floor: use the created **1-GiB RAM default**. Replicated combined servers supply redundant service instances, not a separate consensus quorum. See [Temporal](temporal/README.md).
 
-A bound PostgreSQL source is mandatory. Each cell includes one additional source at the **PostgreSQL MINIMAL** sizing (1 / 1 / 5, proxy disabled), sharing this installation’s control plane/backend server; backup occupancy is charged once on that source (20/100/500). This remains a singleton persistence bottleneck even in MINIMAL HA; upgrade the source to PostgreSQL HA separately for durable service HA. UI, application workers and external ingress are excluded. **Zerops is not supported** by the current Temporal runtime: it discovers a private local IPv4 route to persistence (`internal/agent/temporal/runner.go:68–78`), while Zerops private service addressing is IPv6 (`internal/infra/zerops/render.go:16`). Dokploy and Nomad provide the required private IPv4 networking; managed public HTTPS is disabled.
+A bound PostgreSQL source is mandatory. Each cell includes one additional source at the **PostgreSQL MINIMAL** sizing (1 / 1 / 5, proxy disabled), sharing this installation’s control plane/backend server; backup occupancy is charged once on that source (20/100/500). This remains a singleton persistence bottleneck even in MINIMAL HA; upgrade the source to PostgreSQL HA separately for durable service HA. UI, application workers and external ingress are excluded. **Zerops is not supported** in this release: Temporal members need a private IPv4 route to their PostgreSQL source, while Zerops private service networking is IPv6. Dokploy and Nomad provide the required private IPv4 networking; managed public HTTPS is disabled.
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -294,7 +294,7 @@ A bound PostgreSQL source is mandatory. Each cell includes one additional source
 
 ### Percona Server for MySQL
 
-Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling ProxySQL; `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; XtraBackup runs with data members, not on extra hosts. See [MySQL](mysql/README.md), [topology admission](../internal/engine/mysql/provider.go#L173) and [resource admission](../internal/engine/mysql/provider.go#L195).
+Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling ProxySQL; `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; XtraBackup runs with data members, not on extra hosts. See [MySQL](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -320,7 +320,7 @@ Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permi
 
 ### Percona XtraDB Cluster (PXC)
 
-PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus 1 required ProxySQL replica; 5 data members are also admitted. Data floors/defaults and proxy resources match Percona Server above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md) and [shared provider topology/floors](../internal/engine/mysql/provider.go#L67).
+PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus 1 required ProxySQL replica; 5 data members are also admitted. Data floors/defaults and proxy resources match Percona Server above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -346,7 +346,7 @@ PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus
 
 ### Neo4j Community
 
-**Singleton only: no HA tier.** Admission requires exactly one member, 1 whole CPU / 1 GiB RAM / 1 GB persistent disk; created defaults are 1 / 2 / 10. Zerops bills its 5-GB minimum volume plus the 1-GB runtime disk at the admission floor. Production remains one larger member. Offline dumps interrupt the database; enable scheduled-backup downtime consent when scheduling them. See [Neo4j](neo4j/README.md) and [admission](../internal/engine/neo4j/provider.go#L113).
+**Singleton only: no HA tier.** Admission requires exactly one member, 1 whole CPU / 1 GiB RAM / 1 GB persistent disk; created defaults are 1 / 2 / 10. Zerops bills its 5-GB minimum volume plus the 1-GB runtime disk at the admission floor. Production remains one larger member. Offline dumps interrupt the database; enable scheduled-backup downtime consent when scheduling them. See [Neo4j](neo4j/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -371,7 +371,7 @@ PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus
 
 ### Weaviate
 
-Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CPU / 1 GiB RAM / 1 GB persistent disk. Created defaults are 1 / 2 / 10. The cluster has three fixed Raft metadata voters; configure collection replication as well (cluster replication minimum defaults to 3). Each member has a separate 1–3-GB runtime disk; Zerops bills at least 5 GB per volume. Inference services/API usage and application objects beyond the listed disks are excluded. See [Weaviate](weaviate/README.md) and [admission](../internal/engine/weaviate/provider.go#L131).
+Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CPU / 1 GiB RAM / 1 GB persistent disk. Created defaults are 1 / 2 / 10. The cluster has three fixed Raft metadata voters; configure collection replication as well (cluster replication minimum defaults to 3). Each member has a separate 1–3-GB runtime disk; Zerops bills at least 5 GB per volume. Inference services/API usage and application objects beyond the listed disks are excluded. See [Weaviate](weaviate/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -397,7 +397,7 @@ Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CP
 
 ### Keycloak
 
-**Singleton only: no HA tier** in the implemented provider. Admission requires 1 CPU / 1.5 GiB RAM / 1-GB disposable runtime disk; pin maxima explicitly rather than the created 2-CPU / 2-GiB / 3-GB upper bounds. A bound PostgreSQL source is mandatory: each cell includes PostgreSQL MINIMAL (1 / 1 / 5, proxy disabled), sharing control-plane/backend-server overhead, with the 20/500 backup occupancy charged once on that source. Production-shaped enlarges the Keycloak runtime, not the singleton source; size/upgrade the source separately for workload and recovery needs. Backups protect the source rather than the disposable runtime. Private ingress only is priced, so Nomad’s lack of managed public HTTPS does not exclude it; external public ingress costs remain excluded. See [Keycloak](keycloak/README.md) and [admission](../internal/engine/keycloak/provider.go#L147).
+**Singleton only: no HA tier** in the implemented provider. Admission requires 1 CPU / 1.5 GiB RAM / 1-GB disposable runtime disk; pin maxima explicitly rather than the created 2-CPU / 2-GiB / 3-GB upper bounds. A bound PostgreSQL source is mandatory: each cell includes PostgreSQL MINIMAL (1 / 1 / 5, proxy disabled), sharing control-plane/backend-server overhead, with the 20/500 backup occupancy charged once on that source. Production-shaped enlarges the Keycloak runtime, not the singleton source; size/upgrade the source separately for workload and recovery needs. Backups protect the source rather than the disposable runtime. Private ingress only is priced, so Nomad’s lack of managed public HTTPS does not exclude it; external public ingress costs remain excluded. See [Keycloak](keycloak/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -422,7 +422,7 @@ Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CP
 
 ### PostgreSQL with Citus distributed topology
 
-Each coordinator/worker **group** admits 1 or 3 data members, each at PostgreSQL’s 1 / 1 / 5 floor (created RAM default 2 GiB). At least **one worker group plus one coordinator group** is required; worker-group default is 2, maximum 8. Replicated groups run Patroni; coordinator members co-locate the shared etcd quorum and workers are its clients. Replicated groups require at least one shared coordinator ProxySQL replica; an unreplicated distributed minimum may explicitly disable it. No extra proxy per worker group is required. Production below chooses two worker groups. The 20/100/500 backup occupancy is for the **whole distributed cluster**, not per group; provision enough for every group and coordinated restore points. See [Citus](postgres/distributed.md), [admission](../internal/engine/postgres/provider.go#L258), [worker-group bounds](../internal/engine/postgres/options.go#L59) and [member count](../internal/engine/postgres/groups.go#L102).
+Each coordinator/worker **group** admits 1 or 3 data members, each at PostgreSQL’s 1 / 1 / 5 floor (created RAM default 2 GiB). At least **one worker group plus one coordinator group** is required; worker-group default is 2, maximum 8. Replicated groups run Patroni; coordinator members co-locate the shared etcd quorum and workers are its clients. Replicated groups require at least one shared coordinator ProxySQL replica; an unreplicated distributed minimum may explicitly disable it. No extra proxy per worker group is required. Production below chooses two worker groups. The 20/100/500 backup occupancy is for the **whole distributed cluster**, not per group; provision enough for every group and coordinated restore points. See [Citus](postgres/distributed.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
