@@ -111,7 +111,15 @@ verification messages also receive this classification. Backup deletion uses
 `async: operation` because its asynchronous response is an Operation, while
 backup and restore creation use `record`. Namespace deletion returns no
 Operation or record, so it uses `none`; observe its lifecycle separately.
+
 OpenBao's connection response is an exception to the administrative-credential set: it contains HTTPS endpoints and CA only. Initialization material has a separate confirmed reveal route and permission; see [OpenBao access and TLS](openbao/access-and-tls.md).
+
+The `openbao_unseal_keys_reveal` management tool is secret and requires explicit
+confirmation, as do creation and deletion of managed database connections.
+Restricted tokens need both `allowCredentialReveal` and the independent
+`openbao-unseal-keys:reveal` permission to reveal initialization material; ordinary
+`cluster-credentials:read` does not grant it. Connection list/get tools return
+password-free summaries and are idempotent reads.
 
 ## Resource families
 

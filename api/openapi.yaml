@@ -3371,6 +3371,12 @@ paths:
       tags: [OpenBao]
       summary: Reveal OpenBao initialization material
       x-karakoram-rbac: {resource: openbao-unseal-keys, action: reveal, object: cluster}
+      x-karakoram-agent:
+        tool: openbao_unseal_keys_reveal
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -3405,6 +3411,12 @@ paths:
       tags: [OpenBao]
       summary: List managed database connections
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: openbao_database_connections_list
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Successful operation.
@@ -3425,6 +3437,11 @@ paths:
       tags: [OpenBao]
       summary: Create a managed database connection
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: openbao_database_connection_create
+        risk: destructive
+        confirm: confirm
+        async: none
       x-karakoram-rbac-extra: {resource: database-users, action: create, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -3462,6 +3479,12 @@ paths:
       tags: [OpenBao]
       summary: getOpenBaoDatabaseConnection
       x-karakoram-rbac: {resource: clusters, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: openbao_database_connection_get
+        risk: read
+        confirm: none
+        async: none
+        idempotent: true
       responses:
         '200':
           description: Successful operation.
@@ -3482,6 +3505,11 @@ paths:
       tags: [OpenBao]
       summary: Delete a managed database connection
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: openbao_database_connection_delete
+        risk: destructive
+        confirm: confirm
+        async: none
       x-karakoram-rbac-extra: {resource: database-users, action: delete, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'

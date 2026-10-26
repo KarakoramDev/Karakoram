@@ -6,8 +6,8 @@ package cli
 import "strings"
 
 var commandGroupDescriptions = map[string]string{
-	"openbao": "Manage OpenBao unseal material and opt-in database credentials",
-	"openbao unseal-keys": "Explicitly reveal OpenBao unseal or recovery material for offline storage",
+	"openbao":                      "Manage OpenBao unseal material and opt-in database credentials",
+	"openbao unseal-keys":          "Explicitly reveal OpenBao unseal or recovery material for offline storage",
 	"openbao database-connections": "Manage OpenBao connections to databases in the same namespace",
 	"accounts":                   "Manage local control-plane accounts",
 	"auth":                       "Manage cookie sessions and OpenID Connect sign-in",

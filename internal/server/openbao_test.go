@@ -114,13 +114,36 @@ func TestOpenBaoReveal(t *testing.T) {
 		if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: role, Roles: []string{"role:" + role}}, "long-test-password"); err != nil {
 			t.Fatal(err)
 		}
-		roleToken, _, err := s.Auth.CreateToken(t.Context(), role, "test", nil)
+		roleToken, _, err := s.Auth.CreateToken(t.Context(), role, "test", nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if w := call(s, "POST", path, `{"confirm":"prod"}`, roleToken); w.Code != 403 {
 			t.Fatal(role, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestOpenBaoRevealRestrictedTokens(t *testing.T) {
+	s, _, _ := openbaoTestServer(t)
+	for _, tc := range []struct {
+		name         string
+		restrictions domain.TokenRestrictions
+		status       int
+	}{
+		{"no-secret-reveal", domain.TokenRestrictions{}, 403},
+		{"read-only", domain.TokenRestrictions{ReadOnly: true, AllowCredentialReveal: true}, 403},
+		{"wrong-permission", domain.TokenRestrictions{Permissions: []string{"cluster-credentials:read"}, AllowCredentialReveal: true}, 403},
+		{"wrong-cluster", domain.TokenRestrictions{Permissions: []string{"openbao-unseal-keys:reveal"}, Clusters: []string{"default/database"}, AllowCredentialReveal: true}, 403},
+		{"explicit-reveal", domain.TokenRestrictions{Permissions: []string{"openbao-unseal-keys:reveal"}, Clusters: []string{"default/prod"}, AllowCredentialReveal: true}, 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := restrictedAdmin(t, s, &tc.restrictions)
+			w := call(s, "POST", "/api/v1/clusters/prod/openbao/unseal-keys/reveal", `{"confirm":"prod"}`, token)
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
+			}
+		})
 	}
 }
 func TestOpenBaoConnectionAdmissionAndDeletion(t *testing.T) {
@@ -154,7 +177,7 @@ func TestOpenBaoTargetPermission(t *testing.T) {
 	if _, err := s.Auth.CreateAccount(t.Context(), domain.Account{Name: "operator", Roles: []string{"role:operator"}}, "long-test-password"); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), "operator", "test", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), "operator", "test", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +293,7 @@ func TestOpenBaoRevealPermissionCanBeChecked(t *testing.T) {
 				t.Fatal(err)
 			}
 			var err error
-			token, _, err = s.Auth.CreateToken(t.Context(), role, "test", nil)
+			token, _, err = s.Auth.CreateToken(t.Context(), role, "test", nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
