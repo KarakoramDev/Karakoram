@@ -24,9 +24,9 @@ Migrations are **forward-only**. Downgrading an upgraded store to v0.3.0 is not 
 
 ### PostgreSQL binding database access
 
-Databases Karakoram creates for [PostgreSQL bindings](postgres/bindings.md) no longer retain PostgreSQL's default PUBLIC `CONNECT` and `TEMPORARY` privileges. Karakoram revokes both from PUBLIC and grants them only to the binding's owning role, plus roles Karakoram itself requires, such as explicitly granted Data MCP readers. Another binding's role can no longer connect to a consumer's database.
+PostgreSQL bindings are new in v0.4.0. Databases Karakoram creates for [PostgreSQL bindings](postgres/bindings.md) do not keep PostgreSQL's default PUBLIC `CONNECT` and `TEMPORARY` privileges: Karakoram revokes both from PUBLIC and grants them only to the binding's owning role; explicit grants Karakoram manages, such as Data MCP readers scoped to that database, are kept. Another binding's role cannot connect to a consumer's database.
 
-Existing binding databases are corrected automatically on their **next reconcile after upgrade**, not by the SQLite migration. Applications that relied on incidental PUBLIC access must use the owning binding identity or deliberately managed grants. This change concerns binding-created databases, not a blanket revocation on unrelated PostgreSQL databases.
+Karakoram re-checks these privileges on reconcile, not through the SQLite migration: if PUBLIC access reappears (for example, granted by hand or restored from older data), it is revoked again and sessions of roles without `CONNECT` are disconnected. Applications must use the owning binding identity or deliberately managed grants. This concerns binding databases only, not a blanket revocation on unrelated PostgreSQL databases.
 
 ### Source-build prerequisites
 
