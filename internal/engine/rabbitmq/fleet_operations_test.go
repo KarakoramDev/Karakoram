@@ -20,7 +20,10 @@ import (
 )
 
 func closedFleetWindow(rc *engine.Context) {
-	rc.Clock.(*testClock).at = time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	// Keep freshly issued leaves valid instead of simulating clock rollback
+	// (which correctly triggers emergency certificate recovery on main).
+	next := rc.Clock.Now().UTC().Add(24 * time.Hour)
+	rc.Clock.(*testClock).at = time.Date(next.Year(), next.Month(), next.Day(), 12, 0, 0, 0, time.UTC)
 	rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{TimeZone: "UTC", Windows: []domain.MaintenanceWindow{{Schedule: "0 1 * * *", Duration: "1h"}}}
 }
 

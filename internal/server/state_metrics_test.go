@@ -38,7 +38,7 @@ func metricReader(t *testing.T, s *Server, name, permissions string) string {
 	if err := s.RBAC.ReplacePolicy(t.Context(), s.RBAC.Policy()+permissions); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := s.Auth.CreateToken(t.Context(), name, "metrics", nil)
+	token, _, err := s.Auth.CreateToken(t.Context(), name, "metrics", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

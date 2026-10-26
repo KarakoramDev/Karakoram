@@ -87,6 +87,10 @@ func TestStatusAPIFencesReadinessAtProcessStart(t *testing.T) {
 				t.Fatalf("phase = %s, want %s", got.Phase, wantPhase)
 			}
 			for _, condition := range got.Conditions {
+				if condition.Type == "AgentsCurrent" {
+					// Build identity is informational, not an availability lease.
+					continue
+				}
 				if string(condition.Status) != wantCondition || (!tc.ready && condition.Reason != "ObservationStale") {
 					t.Fatalf("unexpected availability condition: %+v", condition)
 				}

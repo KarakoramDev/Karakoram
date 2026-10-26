@@ -22,7 +22,10 @@ import (
 )
 
 func closeFleetWindow(rc *engine.Context) {
-	rc.Clock = &retryStepClock{at: time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)}
+	// Keep freshly issued leaves valid: main also heals not-yet-valid
+	// certificates, so rewinding the clock would admit emergency recovery.
+	next := now(rc).UTC().Add(24 * time.Hour)
+	rc.Clock = &retryStepClock{at: time.Date(next.Year(), next.Month(), next.Day(), 12, 0, 0, 0, time.UTC)}
 	rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{TimeZone: "UTC", Windows: []domain.MaintenanceWindow{{Schedule: "0 1 * * *", Duration: "1h"}}}
 }
 
