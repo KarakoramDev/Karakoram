@@ -21,7 +21,6 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
-	"golang.org/x/net/http2"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -212,7 +211,9 @@ func deleteNamespace(ctx context.Context, s tspec.Spec, name string) error {
 	if err != nil {
 		return err
 	}
-	transport := &http2.Transport{TLSClientConfig: config}
+	var protocols http.Protocols
+	protocols.SetHTTP2(true)
+	transport := &http.Transport{TLSClientConfig: config, Protocols: &protocols}
 	defer transport.CloseIdleConnections()
 	message := protowire.AppendTag(nil, 1, protowire.BytesType)
 	message = protowire.AppendString(message, name)

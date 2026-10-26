@@ -220,7 +220,7 @@ func startBindingNativeAgent(t *testing.T, dir, bin string, admin *pgx.ConnConfi
 	config := agentapi.MemberConfig{Cluster: "pgsource", Member: "pgsourcep0", Engine: "postgres", EngineSpec: raw, ConfigVersion: 1, AgentTLS: agentapi.Certificate{CertPEM: string(cert), KeyPEM: string(key)}}
 	cp := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/internal/agent/v1/config" || r.Header.Get("Authorization") != "Bearer native-binding-agent-token" {
-			http.Error(w, "unauthorized", 401)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(config)
