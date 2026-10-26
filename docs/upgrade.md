@@ -4,6 +4,79 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading from v0.3.0 to v0.4.0
+
+**Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.4.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup); retain the old binary and state together for recovery. Existing namespaces, clusters, credentials and policies are retained; upgrading does not migrate their backend or opt them into new engine topologies.
+
+### Automatic state changes
+
+Opening the store at startup applies these migrations in filename order, skipping recorded migrations. Each SQL migration and its completion record commit in one transaction; no separate migration command is needed.
+
+| Migration | Purpose |
+| --- | --- |
+| `013_postgres_bindings.sql` | PostgreSQL consumer bindings, source identity and dependency metadata |
+| `014_ops_cluster_fields.sql` | Adds managed-cluster ownership and maintenance-override generation fields |
+| `015_notifications.sql` | Durable notification delivery outbox and retry indexes |
+| `016_control_plane_backups.sql` | Control-plane backup run records and single-active-run index |
+| `017_backup_drills.sql` | Backup drill reports and cluster/active-run indexes |
+
+Migrations are **forward-only**. Downgrading an upgraded store to v0.3.0 is not supported; an older executable is not a schema rollback. To roll back, stop the new control plane and restore the consistent pre-upgrade state with its original master key and matching old binary. This does not roll back engine data or infrastructure changes made after the snapshot.
+
+### PostgreSQL binding database access
+
+Databases Karakoram creates for [PostgreSQL bindings](postgres/bindings.md) no longer retain PostgreSQL's default PUBLIC `CONNECT` and `TEMPORARY` privileges. Karakoram revokes both from PUBLIC and grants them only to the binding's owning role, plus roles Karakoram itself requires, such as explicitly granted Data MCP readers. Another binding's role can no longer connect to a consumer's database.
+
+Existing binding databases are corrected automatically on their **next reconcile after upgrade**, not by the SQLite migration. Applications that relied on incidental PUBLIC access must use the owning binding identity or deliberately managed grants. This change concerns binding-created databases, not a blanket revocation on unrelated PostgreSQL databases.
+
+### Source-build prerequisites
+
+[`go.mod`](../go.mod) now declares **`go 1.26.0`**, with no separate `toolchain` directive. Source builders need Go 1.26 or newer; the [README build prerequisites](../README.md#build-from-source) also require Node 22.6+, npm and Make. `make build-all` builds the UI before both executables; `make build` alone does not build UI assets. Prebuilt installations need no Go or Node toolchain.
+
+### New runtime environment variables
+
+`internal/server/config.go` adds no settings in this release. These new variables are read by the operational controllers/transports or offline recovery command:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `KARAKORAM_BACKUP_DRILL_CONCURRENCY` | `1` | Installation-wide concurrent drill limit, integer 1–4; invalid values fail startup |
+| `KARAKORAM_NOTIFY_ENDPOINT_ALLOWLIST` | unset | Comma-separated exact `host` or `host:port` exceptions for notification destinations; see [outbound safety](notifications.md#delivery-and-outbound-safety) |
+| `KARAKORAM_RESTORE_S3_ACCESS_KEY_ID` | unset | S3 access key for offline `karakoram admin restore-state` |
+| `KARAKORAM_RESTORE_S3_SECRET_ACCESS_KEY` | unset | S3 secret key for offline `karakoram admin restore-state` |
+
+Restore credentials are needed only for S3 recovery, not ordinary startup. `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` and `KARAKORAM_ARTIFACT_MIRROR` already existed; they are not new settings. Native-test binary paths and development hooks are not installation requirements. See [notifications](notifications.md), [backup drills](backup-drills.md) and [offline state restore](control-plane-backup.md#local-export-and-offline-restore).
+
+### New native artifacts
+
+Installations mirroring native artifacts must add the following exact filenames from [`lock.json`](../internal/engine/nativeartifacts/lock.json), preserving their locked SHA-256 and size. Artifacts are selected by engine/version/profile, not all downloaded at control-plane startup.
+
+| Feature | New files |
+| --- | --- |
+| OpenBao | `openbao_2.7.1_linux_amd64.tar.gz`, `openbao-plugin-database-mongodb_linux_amd64_v1.tar.gz`, `openbao-plugin-kms-aws_linux_amd64_v1.tar.gz` |
+| Keycloak | `keycloak-26.8.1.tar.gz` |
+| TimescaleDB | `timescaledb-pg16-2.31.0-ubuntu24.04-amd64.tar.gz`, `timescaledb-pg17-2.31.0-ubuntu24.04-amd64.tar.gz`, `timescaledb-pg18-2.31.0-ubuntu24.04-amd64.tar.gz` |
+| Citus | `citus-pg16-14.2.0-ubuntu24.04-amd64.tar.gz`, `citus-pg17-14.2.0-ubuntu24.04-amd64.tar.gz`, `citus-pg18-14.2.0-ubuntu24.04-amd64.tar.gz` |
+| Temporal | `temporal_1.31.4_linux_amd64.tar.gz`, `temporal_1.32.1_linux_amd64.tar.gz`, `ui-server_2.56.0_linux_amd64.tar.gz` |
+| Percona Server | `Percona-Server-8.4.11-11-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.4.10-10-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.0.46-37-Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-Server-8.0.45-36-Linux.x86_64.glibc2.35-minimal.tar.gz` |
+| PXC | `Percona-XtraDB-Cluster_8.4.11-11.1_Linux.x86_64.glibc2.35-minimal.tar.gz`, `Percona-XtraDB-Cluster_8.0.46-38.1_Linux.x86_64.glibc2.35-minimal.tar.gz` |
+| XtraBackup | `percona-xtrabackup-8.4.0-7-Linux-x86_64.glibc2.35-minimal.tar.gz`, `percona-xtrabackup-8.0.35-36-Linux-x86_64.glibc2.35-minimal.tar.gz` |
+| Neo4j / Java | `neo4j-community-2026.09.0-unix.tar.gz`, `neo4j-community-2026.10.0-unix.tar.gz`, `OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz` |
+| Weaviate | `weaviate-v1.40.1-linux-amd64.tar.gz`, `weaviate-v1.39.12-linux-amd64.tar.gz` |
+
+TimescaleDB and Citus bundles are Karakoram-built; development builds need a mirror for them. Other additions have official upstream URLs. Weaviate is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
+
+### Deploy on Zerops
+
+After the state/key backup, deploy the published tag from the checkout root:
+
+```sh
+git fetch origin --tags
+git checkout v0.4.0
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent rollout](#rolling-out-member-agents). Review [engine/backend status](backends.md#engine-availability) and the [verified-offline Ops features](operations.md) before enabling new functionality.
+
 ## Upgrading from v0.2.0 to v0.3.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.3.0**, as for every upgrade ([consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup)). Namespaces, clusters, secrets, policies and API tokens are retained; no cluster recreation is required.
@@ -146,7 +219,7 @@ After state/key backup, select the published release:
 
 ```sh
 git fetch origin --tags
-git checkout v0.2.0
+git checkout v0.4.0
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
   --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```

@@ -4,6 +4,8 @@
 
 Operate the control plane, managed engines and backend infrastructure as separate systems; each has its own health and recovery signals. Backend-specific procedures below are labelled Zerops; [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
 
+The fleet Ops features below are **verified offline** (tests without a live backend). See also [notifications](notifications.md), [control-plane backup/recovery](control-plane-backup.md) and [backup drills](backup-drills.md).
+
 ## Maintenance windows
 
 Set `spec.maintenance` to permit new member disruptions only during explicit
@@ -99,8 +101,8 @@ Use the returned operation ID rather than repeating a request after a timeout.
 
 | Backend | Placement and move guarantee |
 | --- | --- |
-| Nomad / Dokploy | Authoritative node placement. Move excludes the predecessor's node; it fails with “no other eligible node” before retiring the old member if capacity is unavailable. An unknown current group returns HTTP 409. |
 | Zerops | Best-effort runtime/volume replacement only: there is **no host placement guarantee**. Re-observe fingerprints afterwards; do not repeatedly recreate members to chase a different fingerprint. |
+| Nomad / Dokploy | Authoritative node placement. Move excludes the predecessor's node; it fails with “no other eligible node” before retiring the old member if capacity is unavailable. An unknown current group returns HTTP 409. |
 
 `placement.source` is `backend` for authoritative node evidence, `best-effort`
 for agent fingerprints only, or `unavailable` when no usable evidence exists.

@@ -4,6 +4,8 @@
 
 A successful backup is not proof that it can be restored. Backup drills exercise provisioning, native restore and readiness without modifying the source cluster. A successful drill proves the recorded checks, not application correctness or a guaranteed recovery time. Engine backups and [control-plane state backups](control-plane-backup.md) protect different assets.
 
+This Ops feature is **verified offline** (tests without a live backend). Qualify provisioning, native recovery and cleanup against your selected backend before relying on scheduled drills.
+
 ## Lifecycle and safety
 
 A manual or scheduled drill selects a successful eligible backup and creates a disposable target in the **source namespace**, named `dr` followed by ten lowercase letters/digits. The target copies the source spec and resource sizes, but strips backup schedules, drill policy and public exposure, and disables monitoring. It uses the normal validated cluster-create path and backend deploy admission, including per-project caps. Server-owned `managedBy` identifies its source and exact drill ID; users cannot supply this marker. Managed targets are excluded from drill scheduling and automatic agent rollout.

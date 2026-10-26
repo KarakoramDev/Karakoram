@@ -95,9 +95,9 @@ PXC data members listen on Galera group communication `4567/tcp` and `4567/udp`,
 
 | Backend | What Karakoram enforces | Operator action for member-only reachability |
 | --- | --- | --- |
+| Zerops | Nothing beyond private listeners: every service in a Zerops project shares the project private network; Zerops firewall allowlists apply only to public port routing. | Place the PXC cluster in a dedicated project when other services in the project are not trusted. |
 | Nomad | Nothing beyond private listeners: members join the target's CNI network (`network`, default `karakoram`) shared by every job using it; the backend renders no per-port rules and no Consul service-mesh intentions. | Run PXC in a namespace whose CNI network carries only that cluster, or apply host/CNI firewall rules allowing `4567`, `4568` and `4444` only between its data members. |
 | Dokploy (Swarm) | Nothing beyond private listeners: members attach to the target's attachable overlay (`network`, default per Dokploy environment) shared by every cluster in that environment and by the control plane; Swarm overlays have no per-port ACL. | Use a dedicated Dokploy environment or `network` for the PXC cluster and attach no other workloads to it. |
-| Zerops | Nothing beyond private listeners: every service in a Zerops project shares the project private network; Zerops firewall allowlists apply only to public port routing. | Place the PXC cluster in a dedicated project when other services in the project are not trusted. |
 
 Verify the chosen restriction from a non-member runtime: connections to `4567`, `4568` and `4444` should fail at the network layer, not only at TLS.
 

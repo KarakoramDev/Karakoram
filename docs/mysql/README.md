@@ -69,4 +69,4 @@ PXC shared replication-certificate rotation fences backup, restore, and backup-d
 - [Operations and recovery](operations.md): status, maintenance, scaling, upgrades and safe bootstrap boundaries.
 - [Verification](verification.md): environment-selected native suites and recovery acceptance checklist.
 
-Architecture decisions remain in [ADR 0052](../adr/0052-mysql-engine.md) and [ADR 0053](../adr/0053-pxc-engine.md). These guides describe the interface and safety rules, not evidence that a deployment has passed acceptance.
+Architecture decisions remain in [ADR 0052](../adr/0052-mysql-engine.md) and [ADR 0053](../adr/0053-pxc-engine.md). See [release status and backend availability](../backends.md#engine-availability).

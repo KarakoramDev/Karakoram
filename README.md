@@ -8,6 +8,8 @@ Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, 
 
 Versions below are catalog defaults; each engine section lists supported versions and upgrade paths.
 
+Release status and backend-specific availability are centralized in [engine availability](docs/backends.md#engine-availability).
+
 | Engine | Distribution/version | Topologies | Backups | Section |
 | --- | --- | --- | --- | --- |
 | MongoDB | Percona Server for MongoDB 8.0.32-14; Percona Backup for MongoDB (PBM) 2.16.0-1 | Replica sets; sharded clusters | Logical/physical; point-in-time recovery (PITR) | [MongoDB](docs/mongodb/README.md) |
@@ -17,7 +19,7 @@ Versions below are catalog defaults; each engine section lists supported version
 | PostgreSQL | Percona PostgreSQL 17.11.1 default; majors 16/17/18; extension profiles | Single; Patroni/etcd HA (3/5); Citus distributed; ProxySQL client service | pgBackRest full/diff/incr and PITR | [PostgreSQL](docs/postgres/README.md) |
 | Supabase | PostgreSQL 17 plus release-locked native services | Same database topologies; modular services | PostgreSQL data only; separate S3 object protection required | [Supabase](docs/supabase/README.md) |
 | Keycloak | Official Keycloak 26.8.1; OpenJDK 21 | One native runtime with a PostgreSQL binding | Through the source PostgreSQL cluster | [Keycloak](docs/keycloak/README.md) |
-| OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft | Raft snapshots to S3; no PITR | [OpenBao](docs/openbao/README.md) |
+| OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft or bound PostgreSQL storage | Raft snapshots to S3; PostgreSQL storage uses source recovery; no PITR for Raft | [OpenBao](docs/openbao/README.md) |
 | Temporal | Temporal 1.32.1 (also 1.31.4); ui-server 2.56.0 | Combined server; split stateless roles on bound PostgreSQL | Source PostgreSQL backup plus cluster-state manifest; requires binding service | [Temporal](docs/temporal/README.md) |
 | MySQL | Percona Server for MySQL 8.4.11-11 default; majors 8.4/8.0 | Single; Group Replication single-primary (3/5); ProxySQL | XtraBackup full/incremental and GTID-based PITR | [MySQL](docs/mysql/README.md) |
 | Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` provider | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
@@ -42,6 +44,7 @@ See [Backends](docs/backends.md) for capability differences and [Operating costs
 - Multi-project [namespaces and authenticated relays](docs/namespaces.md).
 - [Monitoring](docs/monitoring.md), logs and actor-attributed [audit activity](docs/operations.md#reviewing-audit-activity).
 - Local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens: [access control](docs/access-control.md).
+- [Safe fleet operations](docs/operations.md), [control-plane backup/recovery](docs/control-plane-backup.md), [notifications](docs/notifications.md) and [backup drills](docs/backup-drills.md), verified offline.
 
 **Warning:** Review [critical limits](docs/limitations.md) before production use: replica count does not guarantee independent hosts, Local Storage is single-host, and the control plane has one replica.
 
@@ -79,7 +82,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 - **RabbitMQ:** [Overview](docs/rabbitmq/README.md) · [Access and TLS](docs/rabbitmq/access-and-tls.md) · [Definitions backups](docs/rabbitmq/backups.md) · [Operations](docs/rabbitmq/operations.md)
 - **Elasticsearch:** [Overview](docs/elasticsearch/README.md) · [Kibana, Logstash and APM](docs/elasticsearch/stack.md) · [Access and security](docs/elasticsearch/access-and-security.md) · [Snapshots](docs/elasticsearch/snapshots.md) · [Operations](docs/elasticsearch/operations.md)
 - **Weaviate:** [Overview](docs/weaviate/README.md) · [Access and TLS](docs/weaviate/access-and-tls.md) · [Backups](docs/weaviate/backups.md) · [Operations](docs/weaviate/operations.md)
-- **PostgreSQL:** [Overview](docs/postgres/README.md) · [Access and TLS](docs/postgres/access-and-tls.md) · [Backups and PITR](docs/postgres/backups.md) · [Operations](docs/postgres/operations.md)
+- **PostgreSQL:** [Overview](docs/postgres/README.md) · [Extension profiles: PostGIS, pgvector, TimescaleDB](docs/postgres/profiles.md) · [Service bindings](docs/postgres/bindings.md) · [Distributed Citus](docs/postgres/distributed.md) · [Access and TLS](docs/postgres/access-and-tls.md) · [Backups and PITR](docs/postgres/backups.md) · [Operations](docs/postgres/operations.md)
 - **Supabase:** [Overview](docs/supabase/README.md) · [Components and availability](docs/supabase/components.md) · [Operations](docs/supabase/operations.md)
 - **Keycloak:** [PostgreSQL binding, routing and administrator recovery](docs/keycloak/README.md)
 - **OpenBao:** [Overview](docs/openbao/README.md) · [API access and TLS](docs/openbao/access-and-tls.md) · [Raft backups and recovery](docs/openbao/backups.md) · [Operations and unseal](docs/openbao/operations.md)

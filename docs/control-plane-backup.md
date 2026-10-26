@@ -2,6 +2,8 @@
 
 Control-plane backups preserve SQLite coordinator state, not database-engine data. Continue using [database backups](backups.md) for application data. The control plane remains a single-replica service.
 
+This Ops feature is **verified offline** (tests without a live backend). A successful state snapshot does not establish engine-data recovery or a backend rebuild recovery-time guarantee.
+
 ## Policy and runs
 
 An administrator with `settings:read` can inspect policy and runs; changing policy and starting a run require `settings:update`.

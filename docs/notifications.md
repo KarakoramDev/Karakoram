@@ -2,6 +2,8 @@
 
 Notification channels deliver operational events to generic JSON webhooks, Slack incoming webhooks, or email (1–20 recipients). Channels are installation-wide configuration: listing/getting requires `settings:read`; create, replace, delete and test require `settings:update` on `*`. Existing roles are not granted new permissions on upgrade.
 
+This Ops feature is **verified offline** (tests without a live backend); delivery semantics below describe the implemented contract.
+
 ## Configure channels
 
 ```sh

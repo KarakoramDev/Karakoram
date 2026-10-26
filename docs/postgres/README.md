@@ -18,6 +18,7 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private pgEdge companion and de
 | Client service | ProxySQL 3.0.11; `components.extra.proxy`, default 1, enabled range 1–5; zero only with single-member topology/groups |
 | TLS | `requireTLS`, `selfSigned` by default |
 | Recovery | pgBackRest `full` / `diff` / `incr`, opt-in PITR; [backups](backups.md) |
+| Platform features | [PostGIS, pgvector and TimescaleDB profiles](profiles.md); [consumer bindings](bindings.md); [distributed Citus](distributed.md); see [release status/backend availability](../backends.md#engine-availability) |
 
 Inspect the running catalog with `karactl providers get postgres -o json`; versions are pinned to exact Percona packages. A Percona product version such as 17.11.1 differs from PostgreSQL's reported 17.11 patch version. Each HA data member has its own volume containing PostgreSQL, etcd and runtime state. Member names use `<cluster>p<index>`; the proxy service is `<cluster>px`. Indexes are monotonic. Separate members do not guarantee separate hosts; see [failure domains](../limitations.md).
 

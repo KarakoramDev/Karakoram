@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Neo4j Community
 
-Karakoram operates a native Neo4j Community server with one persistent member volume. This guide describes the implemented interface, not a deployment acceptance or availability guarantee. Design: [ADR 0055](../adr/0055-neo4j-community-engine.md).
+Karakoram operates a native Neo4j Community server with one persistent member volume. See [release status and backend availability](../backends.md#engine-availability) and [ADR 0055](../adr/0055-neo4j-community-engine.md).
 
 ## At a glance
 
