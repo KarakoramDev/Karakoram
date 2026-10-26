@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
@@ -26,7 +27,9 @@ func bindingAccess(ctx context.Context) bool { v, _ := ctx.Value(bindingScope{})
 // credential journal. A matching native name alone is never ownership evidence.
 func (p *Core) EnsureBindingRole(ctx context.Context, rc *engine.Context, name string, limit int) error {
 	ctx = BindingContext(ctx)
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	if !strings.HasPrefix(name, "kb_") || limit < 1 {
 		return engine.Invalid("invalid binding role")
@@ -101,7 +104,9 @@ func (p *Core) bindingRoleOID(ctx context.Context, rc *engine.Context, name stri
 
 // VerifyBindingRole checks ownership before cleanup touches dependent objects.
 func (p *Core) VerifyBindingRole(ctx context.Context, rc *engine.Context, name string) (uint32, error) {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return 0, err
+	}
 	defer p.accessMu.Unlock()
 	if err := p.finishPendingAccess(ctx, rc); err != nil {
 		return 0, err
@@ -112,8 +117,8 @@ func (p *Core) VerifyBindingRole(ctx context.Context, rc *engine.Context, name s
 	return p.bindingRoleOID(ctx, rc, name)
 }
 
-// OwnBindingDatabase is deliberately limited to a binding-owned database's
-// public schema; it cannot alter arbitrary schemas or database ownership.
+// OwnBindingDatabase repairs a binding-owned database's public schema ownership
+// and CONNECT/TEMPORARY privileges; it cannot change database ownership.
 func (p *Core) OwnBindingDatabase(ctx context.Context, rc *engine.Context, db Database) error {
 	if !bindingAccess(ctx) || !strings.HasPrefix(db.Owner, "kb_") {
 		return engine.ErrConflict
@@ -135,4 +140,22 @@ func (p *Core) BindingEndpoint(ctx context.Context, rc *engine.Context) (string,
 	}
 	ca, err := secret(ctx, rc, "tls/ca.crt")
 	return connectionMember(rc, s), ca, err
+}
+
+// BindingSourceRevision fences cached database repairs across every managed
+// restore, including restores requested outside the binding service. Do not
+// publish a successful repair while recovery can still replace native ACLs.
+func BindingSourceRevision(c *domain.Cluster) (string, error) {
+	s, err := load(c)
+	if err != nil {
+		return "", err
+	}
+	bs, err := loadBackupState(c)
+	if err != nil {
+		return "", err
+	}
+	if bs.ManagedRolesHeld || bs.Restore != nil || s.RestoreRecovery != nil {
+		return "", engine.ErrUnavailable
+	}
+	return fmt.Sprintf("%s/%d/%d/%d/%d", s.UID, c.Generation, s.BootstrapGeneration, bs.Generation, s.RepositoryGeneration), nil
 }

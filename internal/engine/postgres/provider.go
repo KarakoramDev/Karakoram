@@ -46,12 +46,38 @@ type Options struct {
 // Core reconciles the PostgreSQL data plane and its stateless proxy.
 type Core struct {
 	options  Options
-	accessMu sync.Mutex
+	accessMu contextMutex
 	// Overrides only repository I/O in tests; nil uses the guarded S3 client.
 	restoreSetPresent func(context.Context, *domain.BackupStorage, string) (bool, error)
 	deleteRepository  func(context.Context, domain.BackupStorage, string, string, string) error
 	citusArtifact     func(product string, major int) (nativeartifacts.Artifact, error)
 }
+
+// contextMutex keeps all credential mutations serialized while allowing repair
+// callers to stop waiting when their shorter context expires.
+type contextMutex struct {
+	once sync.Once
+	gate chan struct{}
+}
+
+func (m *contextMutex) Lock(ctx context.Context) error {
+	m.once.Do(func() { m.gate = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *contextMutex) Unlock() { <-m.gate }
 
 // New constructs the shared PostgreSQL core.
 func New(o Options) *Core {

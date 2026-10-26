@@ -6,9 +6,15 @@ package pgbinding
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -26,6 +32,7 @@ type fakeAccess struct {
 	failSchema                               bool
 	failUpdate                               bool
 	roleConflict                             bool
+	onOwn                                    func(context.Context, postgres.Database) error
 	roleCreates, schemaCalls, extensionCalls int
 }
 
@@ -93,15 +100,26 @@ func (f *fakeAccess) DeleteDatabase(_ context.Context, _ *engine.Context, name s
 	delete(f.databases, name)
 	return nil
 }
-func (f *fakeAccess) OwnBindingDatabase(context.Context, *engine.Context, postgres.Database) error {
+func (f *fakeAccess) OwnBindingDatabase(ctx context.Context, _ *engine.Context, db postgres.Database) error {
+	if f.onOwn != nil {
+		if err := f.onOwn(ctx, db); err != nil {
+			return err
+		}
+	}
 	f.schemaCalls++
 	if f.failSchema {
 		f.failSchema = false
 		return engine.ErrUnavailable
 	}
+	database := f.databases[db.Name]
+	database.AllowConnections = true
+	f.databases[db.Name] = database
 	return nil
 }
-func (f *fakeAccess) EnsureDatabaseExtensions(context.Context, *engine.Context, postgres.Database) error {
+func (f *fakeAccess) EnsureDatabaseExtensions(_ context.Context, _ *engine.Context, db postgres.Database) error {
+	if !f.databases[db.Name].AllowConnections {
+		return errors.New("extensions attempted before binding privileges enabled connections")
+	}
 	f.extensionCalls++
 	return nil
 }
@@ -141,7 +159,7 @@ func TestEnsureRetryRotationAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.roleCreates != 1 || f.schemaCalls != 2 || f.extensionCalls != 2 || !strings.HasPrefix(c.Username, "kb_") || c.CredentialGeneration != 1 || c.Host != "sourcepx" || c.Shared {
+	if f.roleCreates != 1 || f.schemaCalls != 2 || f.extensionCalls != 1 || !strings.HasPrefix(c.Username, "kb_") || c.CredentialGeneration != 1 || c.Host != "sourcepx" || c.Shared {
 		t.Fatalf("connection=%+v access=%+v", c, f)
 	}
 	before, err := m.Password(t.Context(), c.PasswordSecretRef)
@@ -180,6 +198,364 @@ func TestEnsureRetryRotationAndRelease(t *testing.T) {
 	}
 	if err := m.Release(t.Context(), c.BindingID, false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReadyBindingReconcilesPrivilegesOncePerProcess(t *testing.T) {
+	for _, state := range []string{"ready", "rotating"} {
+		t.Run(state, func(t *testing.T) {
+			m, f, r, st := bindingFixture(t)
+			c, err := m.Ensure(t.Context(), r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := st.UpdatePostgresBindingState(t.Context(), c.BindingID, state, 1); err != nil {
+				t.Fatal(err)
+			}
+			m = New(m.options) // A control-plane upgrade/restart loses only the repair cache.
+			before := f.schemaCalls
+			if _, err := m.Ensure(t.Context(), r); err != nil {
+				t.Fatal(err)
+			}
+			if f.schemaCalls != before+1 {
+				t.Fatalf("existing %s binding repair calls=%d, want %d", state, f.schemaCalls, before+1)
+			}
+			for range 3 {
+				if _, err := m.Ensure(t.Context(), r); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := m.Resolve(t.Context(), c.BindingID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if f.schemaCalls != before+1 {
+				t.Fatalf("status polls repeated privilege repair: %d", f.schemaCalls)
+			}
+		})
+	}
+}
+
+func TestReadyBindingPrivilegeRepairRetriesWithoutUnbinding(t *testing.T) {
+	m, f, r, st := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(m.options)
+	f.failSchema = true
+	before := f.schemaCalls
+	if _, err := m.Ensure(t.Context(), r); err != nil {
+		t.Fatalf("transient privilege repair unbound healthy binding: %v", err)
+	}
+	b, err := st.GetPostgresBinding(t.Context(), c.BindingID)
+	if err != nil || b.State != "ready" {
+		t.Fatalf("healthy binding state: %+v %v", b, err)
+	}
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Ensure(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if f.schemaCalls != before+2 {
+		t.Fatalf("repair did not retry exactly once: %d", f.schemaCalls)
+	}
+}
+
+func TestReadyBindingPrivilegeRepairRejectsForeignOwner(t *testing.T) {
+	m, f, r, st := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(m.options)
+	db := f.databases[r.Databases[0]]
+	db.OwnerOID++
+	f.databases[db.Name] = db
+	before := f.schemaCalls
+	if _, err := m.Ensure(t.Context(), r); !errors.Is(err, engine.ErrConflict) {
+		t.Fatalf("foreign owner accepted: %v", err)
+	}
+	b, err := st.GetPostgresBinding(t.Context(), c.BindingID)
+	if err != nil || b.State != "conflict" || f.schemaCalls != before {
+		t.Fatalf("foreign database changed: binding=%+v calls=%d err=%v", b, f.schemaCalls, err)
+	}
+}
+
+func TestBindingCreationStaysClosedUntilPrivilegesRepaired(t *testing.T) {
+	m, f, r, _ := bindingFixture(t)
+	r.Extensions = []string{"pgcrypto"}
+	f.failSchema = true
+	if _, err := m.Ensure(t.Context(), r); !errors.Is(err, engine.ErrUnavailable) {
+		t.Fatal(err)
+	}
+	if f.databases[r.Databases[0]].AllowConnections || f.extensionCalls != 0 {
+		t.Fatal("partial creation exposed database or attempted extensions before repair")
+	}
+	if _, err := m.Ensure(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
+	if !f.databases[r.Databases[0]].AllowConnections || f.extensionCalls != 1 || f.roleCreates != 1 {
+		t.Fatal("closed database did not resume through privilege repair and extensions")
+	}
+}
+
+func TestBindingPrivilegesRevalidatedAfterSourceRecovery(t *testing.T) {
+	m, f, r, st := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := true // Physical restore reinstates the old permissive ACLs.
+	f.onOwn = func(context.Context, postgres.Database) error { public = false; return nil }
+	before := f.schemaCalls
+	source, err := st.GetCluster(t.Context(), domain.ClusterRef{Name: r.SourceCluster})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.Internal = []byte(`{"postgres":{"bootstrapGeneration":2},"postgresBackup":{"generation":3}}`)
+	if err := st.UpdateClusterState(t.Context(), source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil {
+		t.Fatal(err)
+	}
+	if public || f.schemaCalls != before+1 {
+		t.Fatal("source recovery reused pre-restore privilege repair")
+	}
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil || f.schemaCalls != before+1 {
+		t.Fatalf("repaired recovery was not cached: %v", err)
+	}
+}
+
+func TestBindingRepairDoesNotCacheChangedSourceRevision(t *testing.T) {
+	m, f, r, st := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(m.options)
+	f.onOwn = func(context.Context, postgres.Database) error {
+		source, err := st.GetCluster(t.Context(), domain.ClusterRef{Name: r.SourceCluster})
+		if err != nil {
+			return err
+		}
+		source.Internal = []byte(`{"postgresBackup":{"generation":4}}`)
+		return st.UpdateClusterState(t.Context(), source)
+	}
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil {
+		t.Fatal(err)
+	}
+	before := f.schemaCalls
+	f.onOwn = nil
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil || f.schemaCalls != before+1 {
+		t.Fatalf("in-flight source revision change cached stale repair: %v", err)
+	}
+}
+
+func TestBlockedBindingRepairDoesNotBlockOtherBindings(t *testing.T) {
+	m, f, r, _ := bindingFixture(t)
+	first, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ConsumerName, r.Databases = "other", []string{"other"}
+	second, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(m.options)
+	started, release := make(chan struct{}), make(chan struct{})
+	f.onOwn = func(ctx context.Context, db postgres.Database) error {
+		if db.Name != "identity" {
+			return nil
+		}
+		close(started)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-release:
+			return nil
+		}
+	}
+	done := make(chan error, 1)
+	go func() { _, err := m.Resolve(t.Context(), first.BindingID); done <- err }()
+	<-started
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	_, secondErr := m.Resolve(ctx, second.BindingID)
+	close(release)
+	firstErr := <-done
+	if secondErr != nil || firstErr != nil {
+		t.Fatalf("unrelated binding blocked: first=%v second=%v", firstErr, secondErr)
+	}
+}
+
+func TestBindingRepairDeadlineLeavesTimeForResolution(t *testing.T) {
+	m, f, r, _ := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = New(m.options)
+	f.onOwn = func(ctx context.Context, _ postgres.Database) error { <-ctx.Done(); return ctx.Err() }
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if _, err := m.Resolve(ctx, c.BindingID); err != nil {
+		t.Fatalf("repair consumed normal resolution deadline: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("repair exhausted parent deadline")
+	}
+}
+
+func TestBindingRepairRevalidatesUntrackedDatabaseReplacement(t *testing.T) {
+	m, f, r, _ := bindingFixture(t)
+	c, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := true
+	f.onOwn = func(context.Context, postgres.Database) error { public = false; return nil }
+	m.mu.Lock()
+	cached := m.privileges[c.BindingID]
+	cached.checked = time.Now().Add(-6 * time.Minute)
+	m.privileges[c.BindingID] = cached
+	m.mu.Unlock()
+	before := f.schemaCalls
+	if _, err := m.Resolve(t.Context(), c.BindingID); err != nil || public || f.schemaCalls != before+1 {
+		t.Fatalf("untracked replacement was not revalidated: public=%t err=%v", public, err)
+	}
+}
+
+func TestBindingLockRegistryReclaimedAfterOperations(t *testing.T) {
+	m, _, r, _ := bindingFixture(t)
+	idle := func() {
+		t.Helper()
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if len(m.bindings) != 0 {
+			t.Fatalf("idle binding locks retained: %d", len(m.bindings))
+		}
+	}
+	connection, err := m.Ensure(t.Context(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idle()
+	if _, err := m.Resolve(t.Context(), connection.BindingID); err != nil {
+		t.Fatal(err)
+	}
+	idle()
+	if _, err := m.Rotate(t.Context(), connection.BindingID); err != nil {
+		t.Fatal(err)
+	}
+	idle()
+	_, _ = m.Backup(t.Context(), connection.BindingID, "full", "backup")
+	idle()
+	_, _ = m.Restore(t.Context(), connection.BindingID, "missing", "restore", false)
+	idle()
+	if err := m.Release(t.Context(), connection.BindingID, false); err != nil {
+		t.Fatal(err)
+	}
+	idle()
+	for i := range 100 {
+		id := "missing-" + strconv.Itoa(i)
+		_, _ = m.Resolve(t.Context(), id)
+		_, _ = m.Rotate(t.Context(), id)
+		_ = m.Release(t.Context(), id, false)
+		_, _ = m.Backup(t.Context(), id, "full", "backup")
+		_, _ = m.Restore(t.Context(), id, "missing", "restore", false)
+		idle()
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.privileges) != 0 {
+		t.Fatalf("released binding retained privilege cache: %d", len(m.privileges))
+	}
+}
+
+func TestBindingLockWaitersStaySerializedAndAreReclaimed(t *testing.T) {
+	m := New(Options{})
+	first, err := m.acquire(t.Context(), "binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if first != nil {
+			m.release("binding", first)
+		}
+	}()
+	const waiters = 16
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	var active atomic.Int32
+	errors := make(chan error, 2*waiters)
+	for range waiters {
+		wg.Go(func() {
+			lock, err := m.acquire(ctx, "binding")
+			if err != nil {
+				errors <- err
+				return
+			}
+			if lock != first {
+				errors <- fmt.Errorf("waiter acquired a replacement lock")
+			}
+			if active.Add(1) != 1 {
+				errors <- fmt.Errorf("binding waiters overlapped")
+			}
+			runtime.Gosched()
+			active.Add(-1)
+			m.release("binding", lock)
+		})
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		m.mu.Lock()
+		queued := first.refs == waiters+1
+		m.mu.Unlock()
+		if queued {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("binding waiters did not register")
+		case <-ticker.C:
+		}
+	}
+	m.release("binding", first)
+	wg.Wait()
+	first = nil
+	close(errors)
+	for err := range errors {
+		t.Error(err)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.bindings) != 0 {
+		t.Fatalf("completed waiters retained lock entries: %d", len(m.bindings))
+	}
+}
+
+func TestCancelledBindingLockWaiterReleasesReference(t *testing.T) {
+	m := New(Options{})
+	first, err := m.acquire(t.Context(), "binding")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 25*time.Millisecond)
+	defer cancel()
+	if lock, err := m.acquire(ctx, "binding"); !errors.Is(err, context.DeadlineExceeded) || lock != nil {
+		t.Fatalf("lock wait ignored deadline: lock=%p err=%v", lock, err)
+	}
+	m.mu.Lock()
+	remaining := first.refs
+	m.mu.Unlock()
+	m.release("binding", first)
+	if remaining != 1 || len(m.bindings) != 0 {
+		t.Fatalf("canceled waiter leaked reference: refs=%d entries=%d", remaining, len(m.bindings))
 	}
 }
 func TestForeignDatabaseIsNotAdopted(t *testing.T) {

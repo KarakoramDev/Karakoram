@@ -606,7 +606,11 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			if len(req.Database.Extensions) > 0 && !req.Database.AllowConnections {
 				return nil, invalidAccess("database extensions require allowConnections")
 			}
-			sql, args, err := createDatabaseStatement(*req.Database)
+			database := *req.Database
+			if req.Binding {
+				database.AllowConnections = false
+			}
+			sql, args, err := createDatabaseStatement(database)
 			if err != nil {
 				return nil, err
 			}
@@ -623,6 +627,11 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 					return nil, readErr
 				}
 				if len(existing) != 1 || existing[0].Owner != req.Database.Owner {
+					return nil, err
+				}
+			}
+			if req.Binding && req.Database.AllowConnections {
+				if err := ownBindingPublicSchema(ctx, c, *req.Database); err != nil {
 					return nil, err
 				}
 			}

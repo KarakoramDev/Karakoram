@@ -49,3 +49,21 @@ func TestBindingRoleAdmission(t *testing.T) {
 		t.Fatal("system schema ownership admitted")
 	}
 }
+
+func TestBindingDatabaseStatements(t *testing.T) {
+	db := pgspec.Database{Name: `consumer"database`, Owner: "kb_0123456789abcdef0123456789abcdef"}
+	want := []string{
+		`REVOKE CONNECT, TEMPORARY ON DATABASE "consumer""database" FROM PUBLIC`,
+		`GRANT CONNECT, TEMPORARY ON DATABASE "consumer""database" TO "kb_0123456789abcdef0123456789abcdef"`,
+		`ALTER DATABASE "consumer""database" WITH ALLOW_CONNECTIONS true`,
+	}
+	got := bindingDatabaseStatements(db)
+	if len(got) != len(want) {
+		t.Fatalf("statements: %q", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("statement %d: %q, want %q", i, got[i], want[i])
+		}
+	}
+}

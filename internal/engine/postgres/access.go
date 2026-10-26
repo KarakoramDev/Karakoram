@@ -363,7 +363,9 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 }
 
 func (p *Core) CreateRole(ctx context.Context, rc *engine.Context, v RoleWrite) (string, error) {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return "", err
+	}
 	defer p.accessMu.Unlock()
 	if err := p.validateRole(ctx, v); err != nil {
 		return "", err
@@ -391,7 +393,9 @@ func (p *Core) CreateRole(ctx context.Context, rc *engine.Context, v RoleWrite) 
 }
 
 func (p *Core) UpdateRole(ctx context.Context, rc *engine.Context, v RoleWrite) error {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	if err := p.validateRole(ctx, v); err != nil {
 		return err
@@ -404,7 +408,9 @@ func (p *Core) UpdateRole(ctx context.Context, rc *engine.Context, v RoleWrite) 
 }
 
 func (p *Core) DeleteRole(ctx context.Context, rc *engine.Context, name string) error {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	if err := p.writableRole(ctx, name); err != nil {
 		return err
@@ -447,7 +453,9 @@ func (p *Core) DeleteRole(ctx context.Context, rc *engine.Context, name string) 
 }
 
 func (p *Core) RotateRolePassword(ctx context.Context, rc *engine.Context, name string) (string, error) {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return "", err
+	}
 	defer p.accessMu.Unlock()
 	if err := p.writableRole(ctx, name); err != nil {
 		return "", err

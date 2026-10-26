@@ -131,6 +131,9 @@ func (p *bindingAccessProvider) VerifyBindingRole(ctx context.Context, rc *engin
 	_, err := p.GetRole(ctx, rc, name)
 	return 1, err
 }
+func (p *bindingAccessProvider) GetDatabase(_ context.Context, _ *engine.Context, name string) (*postgres.Database, error) {
+	return &postgres.Database{Name: name, OwnerOID: 1}, p.err
+}
 func (*bindingAccessProvider) OwnBindingDatabase(context.Context, *engine.Context, postgres.Database) error {
 	return nil
 }

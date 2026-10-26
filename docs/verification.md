@@ -59,11 +59,14 @@ fail. Run as an unprivileged user. It owns its temporary database, certificates,
 Unix socket alias and dynamic loopback listeners, and removes them at shutdown.
 It verifies bound-role ownership and schema CREATE, verify-full TLS/password
 authentication, denied cross-consumer table reads/table creation/schema creation,
-password rotation and destructive versus data-preserving release. PostgreSQL's
-default PUBLIC CONNECT/TEMP privileges are not revoked: another binding role can
-connect and create temporary tables in a consumer database, but not read its
-private tables or create persistent objects. The test reports those observations
-explicitly; it does not claim connection-level database isolation.
+password rotation and destructive versus data-preserving release. It verifies
+that foreign binding roles are denied CONNECT and TEMP with SQLSTATE `42501`,
+while owners retain both privileges. Re-granting `PUBLIC CONNECT/TEMPORARY`
+simulates a pre-upgrade database: ready-binding reconciliation removes those
+defaults and terminates an already-connected foreign session holding a temporary
+table, while preserving owner, explicitly granted reader and administrator
+sessions. It also verifies closed partial-creation retry with extensions and
+re-applies repair in the same manager after the source restore generation advances.
 Infrastructure deployment, source member identity and consumer runtimes remain
 outside this native access-path test.
 

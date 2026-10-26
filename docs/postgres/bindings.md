@@ -10,6 +10,36 @@ A binding is a durable dependency from a managed consumer to a `postgres` source
 
 Each binding owns one login role and one to eight databases. Its reserved `kb_` role has no superuser, database-creation, role-creation, replication or bypass-RLS privileges or memberships. Requested extensions must be available on the source. The role owns the application databases and their public schemas; unrelated consumers should use separate bindings.
 
+Binding databases do not retain PostgreSQL's default `PUBLIC CONNECT` and
+`TEMPORARY` privileges. Karakoram revokes both from `PUBLIC` and explicitly grants
+them to the owning binding role, so another consumer's `kb_` role cannot connect
+or create temporary tables there. Explicit product grants, such as `CONNECT` for
+enabled Data MCP readers scoped to that database, are preserved; administrative
+superusers retain access. New databases start with connections disabled; the
+maintenance connection commits the restricted ACLs and enables connections
+together before public-schema ownership and extension installation. Interrupted
+creation resumes against that same closed database.
+
+After a control-plane upgrade or restart, existing ready bindings are repaired
+automatically on their next reconciliation or credential resolution. After the
+revoke commits, Karakoram terminates existing sessions whose non-superuser login
+role no longer has `CONNECT`, including sessions holding temporary tables.
+Owner, explicitly granted reader and administrator sessions remain connected.
+Repair is not complete until no unauthorized session remains.
+
+Successful repair is cached per binding incarnation, credential generation and
+source bootstrap/restore/repository generation and spec generation. In-progress
+recovery cannot publish a successful cached repair; a fresh source revision is
+checked before caching. Untracked native database replacement is revalidated on
+the next reconciliation after the five-minute cache interval expires; this is
+not a hard exposure-time bound. There is no SQL on every status poll. Repairs
+are serialized per binding, not across all sources. Idle binding lock entries
+are reclaimed after their holder and all waiters leave; successful repair
+results are cached separately. Credential resolution gives repair at most two
+seconds or a quarter of its remaining deadline, including waits for the source
+credential-mutation lock. Transient repair failures retry without marking a
+healthy ready binding unbound; ownership conflicts fail closed.
+
 The cleanup ID remains deterministic, but each newly inserted binding row receives a random, durable incarnation nonce. The native role name hashes the binding ID and that nonce; creation receipts, mutation request identities and rotation secrets are scoped to that incarnation. Retries reuse the persisted incarnation, while recreating a released consumer creates a different role even with the same consumer/source names.
 
 Passwords are generated and sealed by the control plane. Only the managed consumer resolves the credential reference and projects it into sealed member configuration. Neither list nor rotate returns a password or connection URI. Do not modify binding roles through the ordinary PostgreSQL access API or direct SQL.

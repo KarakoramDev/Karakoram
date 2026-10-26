@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -37,12 +38,66 @@ type Options struct {
 	Trigger func(domain.ClusterRef)
 }
 
-type Manager struct {
-	options Options
-	mu      sync.Mutex
+type bindingSync struct {
+	held chan struct{}
+	refs int // Holder and waiters; protected by Manager.mu.
 }
 
-func New(o Options) *Manager { return &Manager{options: o} }
+type privilegeCache struct {
+	revision string
+	checked  time.Time
+}
+
+type Manager struct {
+	options Options
+	// Only protects registry references and cached results, never native calls.
+	mu         sync.Mutex
+	bindings   map[string]*bindingSync
+	privileges map[string]privilegeCache
+}
+
+func New(o Options) *Manager {
+	return &Manager{options: o, bindings: make(map[string]*bindingSync), privileges: make(map[string]privilegeCache)}
+}
+
+func (m *Manager) acquire(ctx context.Context, id string) (*bindingSync, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	m.mu.Lock()
+	lock := m.bindings[id]
+	if lock == nil {
+		lock = &bindingSync{held: make(chan struct{}, 1)}
+		m.bindings[id] = lock
+	}
+	lock.refs++
+	m.mu.Unlock()
+	select {
+	case lock.held <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.release(id, lock)
+			return nil, err
+		}
+		return lock, nil
+	case <-ctx.Done():
+		m.unreference(id, lock)
+		return nil, ctx.Err()
+	}
+}
+
+func (m *Manager) release(id string, lock *bindingSync) {
+	<-lock.held
+	m.unreference(id, lock)
+}
+
+func (m *Manager) unreference(id string, lock *bindingSync) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	lock.refs--
+	if lock.refs == 0 {
+		delete(m.bindings, id)
+	}
+}
 
 var _ Service = (*Manager)(nil)
 
@@ -74,9 +129,13 @@ func (m *Manager) Ensure(ctx context.Context, r Request) (Connection, error) {
 	if err := r.Validate(); err != nil {
 		return Connection{}, engine.Invalid("%s", err)
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	b, err := m.options.Store.EnsurePostgresBinding(ctx, &domain.PostgresBinding{ID: BindingID(r), SourceNamespace: r.SourceNamespace, SourceCluster: r.SourceCluster, ConsumerKind: r.ConsumerKind, ConsumerNamespace: r.ConsumerNamespace, ConsumerName: r.ConsumerName, Databases: r.Databases, Extensions: r.Extensions, MinMajor: r.MinMajor, MaxMajor: r.MaxMajor, State: "pending", CredentialGeneration: 1})
+	id := BindingID(r)
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return Connection{}, err
+	}
+	defer m.release(id, lock)
+	b, err := m.options.Store.EnsurePostgresBinding(ctx, &domain.PostgresBinding{ID: id, SourceNamespace: r.SourceNamespace, SourceCluster: r.SourceCluster, ConsumerKind: r.ConsumerKind, ConsumerNamespace: r.ConsumerNamespace, ConsumerName: r.ConsumerName, Databases: r.Databases, Extensions: r.Extensions, MinMajor: r.MinMajor, MaxMajor: r.MaxMajor, State: "pending", CredentialGeneration: 1})
 	if err != nil {
 		var restoring *store.RestoreInProgressError
 		if errors.As(err, &restoring) {
@@ -106,16 +165,21 @@ func (m *Manager) Ensure(ctx context.Context, r Request) (Connection, error) {
 		return Connection{}, m.bindingError(ctx, b, err)
 	}
 	for _, name := range b.Databases {
-		db := postgres.Database{Name: name, Owner: b.RoleName, Encoding: "UTF8", Locale: "C.UTF-8", AllowConnections: true, Extensions: b.Extensions}
+		db := postgres.Database{Name: name, Owner: b.RoleName, OwnerOID: roleOID, Encoding: "UTF8", Locale: "C.UTF-8", AllowConnections: true, Extensions: b.Extensions}
 		existing, err := a.GetDatabase(ctx, rc, name)
 		if errors.Is(err, engine.ErrNotFound) {
-			if err = a.CreateDatabase(ctx, rc, db); err != nil {
+			closed := db
+			closed.AllowConnections, closed.Extensions = false, nil
+			if err = a.CreateDatabase(ctx, rc, closed); err != nil {
 				return Connection{}, err
 			}
 		} else if err != nil {
 			return Connection{}, err
 		} else if existing.OwnerOID == 0 || existing.OwnerOID != roleOID {
 			return Connection{}, m.bindingError(ctx, b, fmt.Errorf("%w: database %q is retained or owned outside this binding incarnation; explicit operator adoption is required", engine.ErrConflict, name))
+		}
+		if err := a.OwnBindingDatabase(ctx, rc, db); err != nil {
+			return Connection{}, m.bindingError(ctx, b, err)
 		}
 		if len(b.Extensions) > 0 {
 			extensions, ok := a.(interface {
@@ -128,9 +192,6 @@ func (m *Manager) Ensure(ctx context.Context, r Request) (Connection, error) {
 				return Connection{}, err
 			}
 		}
-		if err := a.OwnBindingDatabase(ctx, rc, db); err != nil {
-			return Connection{}, err
-		}
 	}
 	if b.State == "rotating" {
 		if err := m.rotate(ctx, b, rc, a); err != nil {
@@ -141,6 +202,7 @@ func (m *Manager) Ensure(ctx context.Context, r Request) (Connection, error) {
 			return Connection{}, err
 		}
 	}
+	m.cachePrivileges(ctx, b, rc)
 	m.trigger(b)
 	return m.resolve(ctx, b)
 }
@@ -149,8 +211,11 @@ func passwordKey(role string) string {
 	return "access/passwords/" + base64.RawURLEncoding.EncodeToString([]byte(role))
 }
 func (m *Manager) Resolve(ctx context.Context, id string) (Connection, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return Connection{}, err
+	}
+	defer m.release(id, lock)
 	b, err := m.options.Store.GetPostgresBinding(ctx, id)
 	if err != nil {
 		return Connection{}, err
@@ -160,9 +225,80 @@ func (m *Manager) Resolve(ctx context.Context, id string) (Connection, error) {
 	}
 	return m.resolve(ctx, b)
 }
+
+func privilegeRevision(b *domain.PostgresBinding, c *domain.Cluster) (string, error) {
+	source, err := postgres.BindingSourceRevision(c)
+	return b.Incarnation + "/" + strconv.FormatInt(b.CredentialGeneration, 10) + "/" + source, err
+}
+
+// Callers hold the binding lock. A fresh source snapshot prevents an in-flight
+// restore or replacement from publishing a repair for an obsolete revision.
+func (m *Manager) cachePrivileges(ctx context.Context, b *domain.PostgresBinding, rc *engine.Context) {
+	before, err := privilegeRevision(b, rc.Cluster)
+	if err != nil {
+		return
+	}
+	current, _, err := m.source(ctx, b)
+	if err != nil {
+		return
+	}
+	after, err := privilegeRevision(b, current.Cluster)
+	if err == nil && before == after {
+		m.mu.Lock()
+		m.privileges[b.ID] = privilegeCache{revision: after, checked: time.Now()}
+		m.mu.Unlock()
+	}
+}
+
+func (m *Manager) reconcilePrivileges(ctx context.Context, b *domain.PostgresBinding, rc *engine.Context, a Access) error {
+	revision, err := privilegeRevision(b, rc.Cluster)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	cached := m.privileges[b.ID]
+	m.mu.Unlock()
+	// Periodically revalidate untracked native changes (for example a database
+	// recreated manually under the same owner) without SQL on every status poll.
+	if cached.revision == revision && time.Since(cached.checked) < 5*time.Minute {
+		return nil
+	}
+	ctx = postgres.BindingContext(ctx)
+	oid, err := a.VerifyBindingRole(ctx, rc, b.RoleName)
+	if err != nil {
+		return m.bindingError(ctx, b, err)
+	}
+	for _, name := range b.Databases {
+		db, err := a.GetDatabase(ctx, rc, name)
+		if err != nil {
+			return err
+		}
+		if db.OwnerOID == 0 || db.OwnerOID != oid {
+			return m.bindingError(ctx, b, fmt.Errorf("%w: database %q is owned outside this binding incarnation", engine.ErrConflict, name))
+		}
+		if err := a.OwnBindingDatabase(ctx, rc, postgres.Database{Name: name, Owner: b.RoleName, OwnerOID: oid}); err != nil {
+			return m.bindingError(ctx, b, err)
+		}
+	}
+	m.cachePrivileges(ctx, b, rc)
+	return nil
+}
 func (m *Manager) resolve(ctx context.Context, b *domain.PostgresBinding) (Connection, error) {
 	rc, a, err := m.source(ctx, b)
 	if err != nil {
+		return Connection{}, err
+	}
+	// Existing consumers normally Resolve rather than Ensure after restart.
+	// Retry transient repair failures without changing an otherwise healthy
+	// ready binding's availability; only identity conflicts fail it closed.
+	budget := 2 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = min(budget, time.Until(deadline)/4)
+	}
+	repairCtx, cancel := context.WithTimeout(ctx, budget)
+	err = m.reconcilePrivileges(repairCtx, b, rc, a)
+	cancel()
+	if errors.Is(err, engine.ErrConflict) {
 		return Connection{}, err
 	}
 	host, ca, err := a.BindingEndpoint(ctx, rc)
@@ -191,8 +327,11 @@ func (m *Manager) Password(ctx context.Context, ref string) (string, error) {
 }
 
 func (m *Manager) Rotate(ctx context.Context, id string) (Connection, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return Connection{}, err
+	}
+	defer m.release(id, lock)
 	b, err := m.options.Store.GetPostgresBinding(ctx, id)
 	if err != nil {
 		return Connection{}, err
@@ -205,6 +344,9 @@ func (m *Manager) Rotate(ctx context.Context, id string) (Connection, error) {
 		return Connection{}, err
 	}
 	if err := m.options.Store.UpdatePostgresBindingState(ctx, id, "rotating", b.CredentialGeneration); err != nil {
+		return Connection{}, err
+	}
+	if err := m.reconcilePrivileges(ctx, b, rc, a); err != nil {
 		return Connection{}, err
 	}
 	if err := m.rotate(postgres.BindingContext(ctx), b, rc, a); err != nil {
@@ -248,8 +390,11 @@ func (m *Manager) rotate(ctx context.Context, b *domain.PostgresBinding, rc *eng
 }
 
 func (m *Manager) Release(ctx context.Context, id string, keepData bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer m.release(id, lock)
 	b, err := m.options.Store.GetPostgresBinding(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
@@ -315,6 +460,9 @@ func (m *Manager) Release(ctx context.Context, id string, keepData bool) error {
 	if err := m.options.Store.DeletePostgresBinding(ctx, id); err != nil {
 		return err
 	}
+	m.mu.Lock()
+	delete(m.privileges, id)
+	m.mu.Unlock()
 	m.trigger(b)
 	return nil
 }

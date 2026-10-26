@@ -19,7 +19,9 @@ import (
 type managedRoleManifest map[string]string
 
 func (p *Core) captureManagedRoles(ctx context.Context, rc *engine.Context, backup *domain.Backup) error {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	names, err := p.managedRoleNames(ctx, rc)
 	if err != nil {
@@ -41,7 +43,9 @@ func (p *Core) captureManagedRoles(ctx context.Context, rc *engine.Context, back
 }
 
 func (p *Core) restoreManagedRoles(ctx context.Context, rc *engine.Context, backup *domain.Backup) error {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	data, err := rc.Secrets.GetClusterSecret(ctx, domain.ClusterRef{Namespace: backup.Namespace, Name: backup.RecoveryIdentity}, "access/manifest")
 	if err != nil {
@@ -78,7 +82,9 @@ func (p *Core) restoreManagedRoles(ctx context.Context, rc *engine.Context, back
 // Preserve the target's current passwords for in-place recovery; clones first
 // import the backup manifest. Catalog attributes/memberships remain recovered.
 func (p *Core) reconcileRecoveredRoles(ctx context.Context, rc *engine.Context) error {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return err
+	}
 	defer p.accessMu.Unlock()
 	names, err := p.managedRoleNames(ctx, rc)
 	if err != nil || len(names) == 0 {

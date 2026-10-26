@@ -209,7 +209,9 @@ func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, int
 }
 
 func (p *Core) reconcileAccessIntent(ctx context.Context, rc *engine.Context) (bool, error) {
-	p.accessMu.Lock()
+	if err := p.accessMu.Lock(ctx); err != nil {
+		return false, err
+	}
 	defer p.accessMu.Unlock()
 	intent, err := loadAccessIntent(ctx, rc)
 	if err != nil || intent == nil {

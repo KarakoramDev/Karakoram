@@ -39,8 +39,11 @@ func (m *Manager) Backup(ctx context.Context, id, kind, key string) (BackupRef, 
 	if key == "" {
 		return BackupRef{}, engine.Invalid("backup idempotency key is required")
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return BackupRef{}, err
+	}
+	defer m.release(id, lock)
 	b, err := m.options.Store.GetPostgresBinding(ctx, id)
 	if err != nil {
 		return BackupRef{}, err
@@ -106,8 +109,11 @@ func (m *Manager) Restore(ctx context.Context, id, backupID, key string, ack boo
 	if key == "" {
 		return OperationRef{}, engine.Invalid("restore idempotency key is required")
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	lock, err := m.acquire(ctx, id)
+	if err != nil {
+		return OperationRef{}, err
+	}
+	defer m.release(id, lock)
 	b, err := m.options.Store.GetPostgresBinding(ctx, id)
 	if err != nil {
 		return OperationRef{}, err

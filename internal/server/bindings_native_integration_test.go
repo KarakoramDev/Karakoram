@@ -29,7 +29,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	infrafake "github.com/KarakoramDev/Karakoram/internal/infra/fake"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -44,6 +46,25 @@ type nativeBindingEngine struct {
 	runner  *postgresagent.Runner
 	admin   *pgx.ConnConfig
 	version string
+}
+
+type interruptedBindingAccess struct {
+	pgbinding.Access
+	failOwn bool
+}
+
+func (a *interruptedBindingAccess) OwnBindingDatabase(ctx context.Context, rc *engine.Context, db postgres.Database) error {
+	if a.failOwn {
+		a.failOwn = false
+		return engine.ErrUnavailable
+	}
+	return a.Access.OwnBindingDatabase(ctx, rc, db)
+}
+
+func (a *interruptedBindingAccess) EnsureDatabaseExtensions(ctx context.Context, rc *engine.Context, db postgres.Database) error {
+	return a.Access.(interface {
+		EnsureDatabaseExtensions(context.Context, *engine.Context, postgres.Database) error
+	}).EnsureDatabaseExtensions(ctx, rc, db)
 }
 
 func (e *nativeBindingEngine) Name() string        { return e.runner.Name() }
@@ -304,7 +325,8 @@ func TestNativePostgresBindingsAcrossOpenBaoAndTemporal(t *testing.T) {
 	opts := base.Options
 	opts.Bindings = manager
 	opts.Registry = registry
-	opts.Context.Backend = infrafake.New(infrafake.Options{})
+	opts.Context.Backend = infrafake.New(infrafake.Options{Layout: infra.Layout{PrivateAddressFamily: infra.AddressFamilyIPv4}})
+	opts.Namespaces = engine.StaticNamespaces{DefaultBackend: opts.Context.Backend, DefaultAgentURL: opts.Context.AgentURL}
 	opts.Context.Agents = dialer
 	s, err = New(opts)
 	if err != nil {
@@ -443,7 +465,7 @@ func TestNativePostgresBindingsAcrossOpenBaoAndTemporal(t *testing.T) {
 				c.Close(ctx)
 				t.Fatalf("%s database ownership/schema CREATE: %t/%t/%t: %v", database, ownsDatabase, ownsSchema, canCreate, err)
 			}
-			_, err = c.Exec(ctx, `CREATE TABLE public.binding_private_probe(value text); INSERT INTO public.binding_private_probe VALUES ('owned-data')`)
+			_, err = c.Exec(ctx, `CREATE TABLE public.binding_private_probe(value text); INSERT INTO public.binding_private_probe VALUES ('owned-data'); CREATE TEMP TABLE owner_temp_probe(value text)`)
 			c.Close(ctx)
 			if err != nil {
 				t.Fatalf("%s owned table creation: %v", database, err)
@@ -451,32 +473,225 @@ func TestNativePostgresBindingsAcrossOpenBaoAndTemporal(t *testing.T) {
 		}
 	}
 	denied := func(err error) bool { var pg *pgconn.PgError; return errors.As(err, &pg) && pg.Code == "42501" }
-	for consumer, connection := range connections {
-		for other, otherConnection := range connections {
-			if consumer == other {
-				continue
-			}
-			for _, database := range otherConnection.Databases {
-				c, err := connect(connection, database, passwords[consumer])
-				if err != nil {
-					if !denied(err) {
-						t.Fatalf("cross-consumer connection failed unexpectedly: %v", err)
-					}
-					t.Logf("%s -> %s: CONNECT denied", consumer, database)
+	assertIsolation := func(phase string) {
+		t.Helper()
+		for consumer, connection := range connections {
+			for other, otherConnection := range connections {
+				if consumer == other {
 					continue
 				}
-				_, readErr := c.Exec(ctx, `SELECT value FROM public.binding_private_probe`)
-				_, createErr := c.Exec(ctx, `CREATE TABLE public.foreign_probe(value text)`)
-				_, schemaErr := c.Exec(ctx, `CREATE SCHEMA foreign_schema_probe`)
-				if !denied(readErr) || !denied(createErr) || !denied(schemaErr) {
-					c.Close(ctx)
-					t.Fatalf("%s accessed %s objects: read=%v table-create=%v schema-create=%v", consumer, database, readErr, createErr, schemaErr)
+				for _, database := range otherConnection.Databases {
+					c, err := connect(connection, database, passwords[consumer])
+					if err == nil {
+						c.Close(ctx)
+						t.Fatalf("%s: %s connected to foreign database %s", phase, consumer, database)
+					}
+					if !denied(err) {
+						t.Fatalf("cross-consumer connection failed without SQLSTATE 42501: %v", err)
+					}
+					// SET ROLE tests TEMP independently of the CONNECT denial.
+					cfg := adminConfig.Copy()
+					cfg.Database = database
+					admin, err := pgx.ConnectConfig(ctx, cfg)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := admin.Exec(ctx, "SET ROLE "+pgx.Identifier{connection.Username}.Sanitize()); err != nil {
+						admin.Close(ctx)
+						t.Fatal(err)
+					}
+					for _, statement := range []string{
+						`SELECT value FROM public.binding_private_probe`,
+						`CREATE TABLE public.foreign_probe(value text)`,
+						`CREATE SCHEMA foreign_schema_probe`,
+					} {
+						if _, err := admin.Exec(ctx, statement); !denied(err) {
+							admin.Close(ctx)
+							t.Fatalf("foreign object access not denied with SQLSTATE 42501: %v", err)
+						}
+					}
+					_, tempErr := admin.Exec(ctx, `CREATE TEMP TABLE foreign_temp_probe(value text)`)
+					admin.Close(ctx)
+					if !denied(tempErr) {
+						t.Fatalf("%s: foreign TEMP did not fail with SQLSTATE 42501: %v", phase, tempErr)
+					}
+					t.Logf("%s: %s -> %s: CONNECT denied SQLSTATE 42501; TEMP denied SQLSTATE 42501", phase, consumer, database)
 				}
-				_, tempErr := c.Exec(ctx, `CREATE TEMP TABLE binding_temp_probe(value text)`)
-				c.Close(ctx)
-				t.Logf("%s -> %s: PUBLIC CONNECT allowed; TEMP allowed=%t; public CREATE, schema CREATE and private-table SELECT denied", consumer, database, tempErr == nil)
 			}
 		}
+	}
+	assertIsolation("new binding")
+	// Restore the pre-upgrade defaults, including a connection opened before
+	// repair. Revoking CONNECT does not disconnect existing sessions.
+	repairAdmin, err := pgx.ConnectConfig(ctx, adminConfig.Copy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer repairAdmin.Close(ctx)
+	// A failure after CREATE DATABASE leaves the new database closed, even to
+	// its owner. Retrying must repair ACLs before opening it or adding extensions.
+	interrupted := &interruptedBindingAccess{failOwn: true}
+	staged := pgbinding.New(pgbinding.Options{Store: s.Store, Source: func(ctx context.Context, ref domain.ClusterRef) (*engine.Context, pgbinding.Access, error) {
+		rc, access, err := s.bindingSource(ctx, ref)
+		interrupted.Access = access
+		return rc, interrupted, err
+	}})
+	stagedRequest := pgbinding.Request{ConsumerKind: "keycloak", ConsumerName: "staged", SourceCluster: "pgsource", Databases: []string{"staged_binding"}, Extensions: []string{"pgcrypto"}, MinMajor: 13}
+	if _, err := staged.Ensure(ctx, stagedRequest); !errors.Is(err, engine.ErrUnavailable) {
+		t.Fatalf("interrupted creation: %v", err)
+	}
+	var allowed bool
+	if err := repairAdmin.QueryRow(ctx, `SELECT datallowconn FROM pg_database WHERE datname='staged_binding'`).Scan(&allowed); err != nil || allowed {
+		t.Fatalf("partial creation exposed database: allowed=%t err=%v", allowed, err)
+	}
+	if c, err := connect(connections["vault"], "staged_binding", passwords["vault"]); err == nil {
+		c.Close(ctx)
+		t.Fatal("foreign login entered partially provisioned database")
+	} else {
+		var pg *pgconn.PgError
+		if !errors.As(err, &pg) || pg.Code != "55000" {
+			t.Fatalf("closed database login expected SQLSTATE 55000: %v", err)
+		}
+	}
+	stagedConnection, err := staged.Ensure(ctx, stagedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedPassword, err := staged.Password(ctx, stagedConnection.PasswordSecretRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stagedOwner, err := connect(stagedConnection, "staged_binding", stagedPassword)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var installed bool
+	err = stagedOwner.QueryRow(ctx, `SELECT EXISTS(SELECT FROM pg_extension WHERE extname='pgcrypto')`).Scan(&installed)
+	stagedOwner.Close(ctx)
+	if err != nil || !installed {
+		t.Fatalf("closed database retry did not install extensions: %v", err)
+	}
+	if err := staged.Release(ctx, stagedConnection.BindingID, false); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("new binding: interrupted creation stayed ALLOW_CONNECTIONS false; retry restricted ACLs, enabled owner access and installed extensions")
+	for _, row := range rows {
+		for _, database := range row.Databases {
+			if _, err := repairAdmin.Exec(ctx, "GRANT CONNECT, TEMPORARY ON DATABASE "+pgx.Identifier{database}.Sanitize()+" TO PUBLIC"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	foreign, err := connect(connections["vault"], connections["workflows"].Databases[0], passwords["vault"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer foreign.Close(ctx)
+	if _, err := foreign.Exec(ctx, `CREATE TEMP TABLE before_upgrade_probe(value text)`); err != nil {
+		t.Fatal(err)
+	}
+	ownerSession, err := connect(connections["workflows"], connections["workflows"].Databases[0], passwords["workflows"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ownerSession.Close(ctx)
+	if _, err := ownerSession.Exec(ctx, `CREATE TEMP TABLE preserved_owner_session(value text)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repairAdmin.Exec(ctx, `CREATE ROLE binding_explicit_reader LOGIN PASSWORD 'native-reader-password'; GRANT CONNECT ON DATABASE temporal_workflows TO binding_explicit_reader`); err != nil {
+		t.Fatal(err)
+	}
+	readerConnection := connections["workflows"]
+	readerConnection.Username = "binding_explicit_reader"
+	readerSession, err := connect(readerConnection, readerConnection.Databases[0], "native-reader-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readerSession.Close(ctx)
+	upgraded := pgbinding.New(pgbinding.Options{Store: s.Store, Source: func(ctx context.Context, ref domain.ClusterRef) (*engine.Context, pgbinding.Access, error) {
+		return s.bindingSource(ctx, ref)
+	}})
+	for _, row := range rows {
+		_, err := upgraded.Ensure(ctx, pgbinding.Request{
+			ConsumerKind: row.ConsumerKind, ConsumerNamespace: row.ConsumerNamespace, ConsumerName: row.ConsumerName,
+			SourceNamespace: row.SourceNamespace, SourceCluster: row.SourceCluster,
+			Databases: row.Databases, Extensions: row.Extensions, MinMajor: row.MinMajor, MaxMajor: row.MaxMajor,
+		})
+		if err != nil {
+			t.Fatalf("upgrade privilege reconcile: %v", err)
+		}
+		owner := connections[row.ConsumerName]
+		for _, database := range row.Databases {
+			c, err := connect(owner, database, passwords[row.ConsumerName])
+			if err != nil {
+				t.Fatalf("owner CONNECT after repair: %v", err)
+			}
+			_, err = c.Exec(ctx, `CREATE TEMP TABLE after_upgrade_owner_probe(value text)`)
+			c.Close(ctx)
+			if err != nil {
+				t.Fatalf("owner TEMP after repair: %v", err)
+			}
+		}
+	}
+	if _, err := foreign.Exec(ctx, `SELECT * FROM before_upgrade_probe`); err == nil || !foreign.IsClosed() {
+		t.Fatalf("pre-existing foreign session survived repair: closed=%t err=%v", foreign.IsClosed(), err)
+	}
+	if _, err := ownerSession.Exec(ctx, `INSERT INTO preserved_owner_session VALUES ('owner survived')`); err != nil {
+		t.Fatalf("owner session was terminated: %v", err)
+	}
+	if err := readerSession.Ping(ctx); err != nil {
+		t.Fatalf("explicit CONNECT reader session was terminated: %v", err)
+	}
+	if err := repairAdmin.Ping(ctx); err != nil {
+		t.Fatalf("administrator session was terminated: %v", err)
+	}
+	t.Log("upgrade reconcile: pre-existing foreign session holding TEMP table terminated; owner, explicit CONNECT reader and administrator sessions survived")
+	assertIsolation("upgrade reconcile")
+	// A physical restore can retain database OIDs and binding credentials while
+	// restoring old ACLs. Advance its durable recovery generation in the same
+	// manager process and verify the previous cache does not hide the change.
+	for _, row := range rows {
+		for _, database := range row.Databases {
+			if _, err := repairAdmin.Exec(ctx, "GRANT CONNECT, TEMPORARY ON DATABASE "+pgx.Identifier{database}.Sanitize()+" TO PUBLIC"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	recovered, err := s.Store.GetCluster(ctx, source.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var internal map[string]json.RawMessage
+	if err := json.Unmarshal(recovered.Internal, &internal); err != nil {
+		t.Fatal(err)
+	}
+	internal["postgresBackup"] = json.RawMessage(`{"generation":2}`)
+	recovered.Internal, err = json.Marshal(internal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.UpdateClusterState(ctx, recovered); err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if _, err := upgraded.Resolve(ctx, row.ID); err != nil {
+			t.Fatalf("source recovery repair: %v", err)
+		}
+	}
+	assertIsolation("source recovery reconcile")
+	if err := ownerSession.Ping(ctx); err != nil {
+		t.Fatalf("owner session did not survive source recovery repair: %v", err)
+	}
+	if err := readerSession.Ping(ctx); err != nil {
+		t.Fatalf("explicit CONNECT reader did not survive source recovery repair: %v", err)
+	}
+	ownerSession.Close(ctx)
+	readerSession.Close(ctx)
+	if _, err := repairAdmin.Exec(ctx, `DROP ROLE binding_explicit_reader`); err == nil {
+		t.Fatal("reader CONNECT grant unexpectedly disappeared during repair")
+	}
+	if _, err := repairAdmin.Exec(ctx, `REVOKE CONNECT ON DATABASE temporal_workflows FROM binding_explicit_reader; DROP ROLE binding_explicit_reader`); err != nil {
+		t.Fatal(err)
 	}
 	request("DELETE", "/clusters/pgsource", "", 409)
 	for _, row := range rows {
