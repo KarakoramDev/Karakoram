@@ -21,22 +21,39 @@ The model protects normal API reads from accidental secret disclosure, applies o
 
 On the **Zerops backend**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. Dokploy uses its configured public ingress; Nomad needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every backend.
 
-## OAuth MCP authorization
+## Agent access (MCP) security model
 
-The optional embedded authorization server issues opaque, hashed-at-rest tokens
-for `/mcp` only; they are not REST API credentials. Authorization codes require
-S256 PKCE, expire in 60 seconds and can be consumed once. Access tokens expire in
-10 minutes. Refresh tokens rotate; reuse revokes the whole grant. Grants expire
-within 30 days, and account disablement, password changes and revocation are
-checked against persistent state on each request.
+The [management MCP server](mcp.md) and the per-cluster [data MCP gateway](data-mcp.md) are additional clients of the same control plane, not a second authorization system. Their controls are credentials, server-side enforcement and human confirmation; the list of what they do not protect against is as important as the list of what they do.
 
-Consent is always interactive, browser-session and CSRF protected, and cannot be
-framed. Client metadata retrieval pins resolved public addresses, rejects
-redirects, and bounds response size and duration. DCR is separately opt-in.
-Operators should restrict client metadata hosts where possible and review
-connected applications regularly. Database restores restore grants as well;
-revoke restored grants if their former credentials must no longer work.
+### Credentials
 
+| Credential | Properties |
+| --- | --- |
+| Restricted API token | Recommended for agents. `karactl mcp config` mints one per client: read-only unless `--write`, optionally limited to namespaces, and for data access limited to one cluster with explicit `cluster-data` permissions. Restrictions are an immutable deny overlay on the owner's current RBAC; they never add authority and are re-evaluated on every call ([restricted API tokens](access-control.md#restricted-api-tokens)). |
+| OAuth access token | Issued only when `KARAKORAM_OAUTH=on` by the embedded authorization server after interactive consent. Opaque, hashed at rest, audience-bound to `/mcp` and rejected by the REST API. Scopes map onto token restrictions (`karakoram:read` is read-only; `karakoram:write` and `karakoram:credentials` widen within the account's RBAC) plus an optional namespace limit chosen on the consent page. Authorization codes require S256 PKCE, expire in 60 seconds and are single-use; access tokens last 10 minutes; refresh tokens rotate and reuse revokes the whole grant; grants last at most 30 days. OAuth connections cannot create or change API tokens; mint dedicated tokens with `karactl` or the web UI. Client metadata retrieval pins resolved public addresses, rejects redirects and private destinations, and bounds response size and duration; dynamic client registration is separately opt-in. Account disablement, password changes and revocation are checked against persistent state on each request. |
+| Browser cookies, unrestricted or legacy tokens | Never accepted by the data gateway. The management endpoint ignores cookies and accepts unrestricted API tokens, but prefer restricted ones. |
+
+Operators should restrict client metadata hosts with `KARAKORAM_OAUTH_CLIENT_HOSTS` where possible and review **Settings → Connected apps** regularly. Database restores restore grants as well; revoke restored grants if their former credentials must no longer work.
+
+### Enforcement
+
+| Control | What it does |
+| --- | --- |
+| REST RBAC and token restriction overlay | Every management tool call executes in-process through the REST handler with the caller's credentials: authentication, RBAC, per-object filtering, validation, idempotency and audit are the same as for `karactl`. Tool annotations are guidance; the handler is the enforcement point. |
+| Server mode | `KARAKORAM_MCP` (`readonly` by default) classifies side effects for the whole installation: `readonly` lists and executes only read-risk tools; `readwrite` adds write and destructive tools; `off` disables both endpoints. The mode is not an authorization grant: a write still needs an unrestricted-write token and owner RBAC. |
+| Confirmation binding | Destructive management tools return a server-written summary and execute only after a human accepts it in the client. The approval is an HMAC over principal, tool, canonical argument hash and a five-minute expiry, derived from the master key; changed arguments, another principal, expiry, decline or a client without elicitation execute nothing. Some tools also require typing the resource's actual name. There is no model-settable confirmation argument; acceptance and rejection are audited. |
+| Data gateway four switches | Data writes require cluster `spec.dataMcp.access: readWrite`, a token that lists `cluster-data:write` and is not read-only, owner RBAC `cluster-data:write`, and `KARAKORAM_MCP=readwrite`; missing any one hides write tools ([four switches](data-mcp.md#four-switches-for-writes)). Destructive data tools, and all writes with `tools.confirmWrites`, need a gateway-run confirmation bound to cluster, token, tool, class and argument hash that fails closed. `cluster-data` is not a viewer or operator grant. |
+| Per-engine read/write identities | Each enabled cluster gets Karakoram-managed, sealed database identities: a read-only one always, a read-write one only with `readWrite`. Read tools always execute through the read identity, grants follow `spec.dataMcp.scope`, reviewed manifests deny unknown upstream tools, and upstream connection switching and credential tools are unavailable. Companion upstreams stay on loopback behind the private authenticated agent listener ([managed identities](data-mcp.md#managed-identities-and-rotation)). |
+| Origin, transport and limits | Both endpoints reject requests whose browser `Origin` differs from the public origin, inherit the public listener's security headers and body limits, and are meant to run behind HTTPS; the management endpoint returns a Bearer challenge on authentication failure. The data gateway additionally rate-limits per token, bounds concurrency per cluster and truncates results. |
+| Audit | Management actions carry an ` (mcp)` actor suffix; self-reported client names never enter audit identity. Every data tool call, including denials, records a `cluster-data` audit event with an argument hash; `auditQueryText` deliberately adds potentially sensitive arguments. |
+
+### Not protected
+
+- **Secrets are returned when authorized.** Read-only mode classifies side effects, not confidentiality. Operations marked as secret-bearing return actual credentials when RBAC and the token's `allowCredentialReveal` permit it; `karactl mcp config` tokens do not permit it. Do not allow agents to reveal credentials unless necessary.
+- **Prompt injection through returned data.** Logs, events, database-controlled strings and data tool results are framed as untrusted data, but neither framing nor confirmation prevents a model from following malicious instructions it reads. Restricted tokens, read-only defaults, narrow scopes and a client that shows meaningful confirmations are the controls; never put production authority behind unattended blanket approvals.
+- **Query cost.** Result, rate and concurrency bounds limit exposure, not the CPU, memory, I/O or locks a query consumes. Confirmations are not transactions or rollback.
+- **Single-process data MCP state.** Data gateway sessions, confirmation signing keys and consumed challenges, and rate/concurrency counters live in one control-plane process; management MCP legacy sessions are memory-only too. Clients need instance affinity, and a restart ends sessions and pending confirmations.
+- **PostgreSQL PUBLIC grants.** Scope is not an isolation boundary for objects already accessible to PUBLIC; reconciliation does not revoke application privileges.
 
 ## Relay threat model
 
@@ -116,12 +133,6 @@ Credential reveal requires **`cluster-credentials/read`** on `<namespace>/<clust
 The UI requests reveal explicitly without query-state caching. Authorized users can copy credentials; RBAC cannot recall disclosure. Rotate exposed credentials. Secret inputs and one-time-token responses must not enter shared logs.
 
 Operator is an operational-trust role: disruptive lifecycle, restore and identity-management authority remains powerful without reveal. Full-policy replacement risks lockout; retain unrestricted local break-glass access. See [roles and policy rules](access-control.md#default-roles).
-
-## Cluster data MCP boundary
-
-[Data MCP](data-mcp.md) is off per cluster by default and serves one endpoint per cluster on the existing public listener. It rejects cookies, unrestricted tokens and mismatched origins; explicit token data permission and current owner RBAC are both required. `cluster-data` is not a viewer/operator grant. Writes need [four independent switches](data-mcp.md#four-switches-for-writes), with fail-closed gateway confirmation for destructive tools and optionally all writes.
-
-Managed read/write database identities, scope and reviewed tool manifests constrain access; upstream connection switching and credential tools are unavailable. Companion upstreams remain on loopback behind the private authenticated agent listener, not a new public service. Results are bounded untrusted data, **not protection against prompt injection**. Queries can still load production. Data tool calls have their own `cluster-data` audit events, including denials and argument hashes; `auditQueryText` deliberately adds potentially sensitive arguments. See [limits, identities and audit behavior](data-mcp.md#confirmation-results-and-limits).
 
 ## Audit attribution and durability
 

@@ -4,6 +4,44 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading from v0.2.0 to v0.3.0
+
+**Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.3.0**, as for every upgrade ([consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup)). Namespaces, clusters, secrets, policies and API tokens are retained; no cluster recreation is required.
+
+### Automatic state changes
+
+No SQLite migrations are added after `012_sanitize_diagnostics.sql`. OAuth grants and API-token restrictions use existing tables, and dry-run previews run in read-only transactions. Migrations remain forward-only; keep the pre-upgrade backup for rollback.
+
+### Agent access is on, read-only
+
+After the upgrade the control plane serves the [MCP server](mcp.md) at `/mcp` because `KARAKORAM_MCP` defaults to `readonly`: holders of valid API tokens, including existing unrestricted ones, can call read-only tools through the same RBAC and audit path as the REST API. Nothing becomes readable that the token could not already read. To disable the endpoint, set `KARAKORAM_MCP=off` in the control plane's service environment (Zerops: the service's environment variables, or `envVariables` in the import YAML) and restart; set `readwrite` only deliberately. New variables, all documented in [Install](install.md#required-secrets-and-generated-settings):
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `KARAKORAM_MCP` | `readonly` | `off`, `readonly` or `readwrite`; invalid values fail startup |
+| `KARAKORAM_OAUTH` | `off` | Embedded OAuth authorization server for MCP connectors |
+| `KARAKORAM_OAUTH_DCR` | `off` | Dynamic client registration, only with OAuth on |
+| `KARAKORAM_OAUTH_CLIENT_HOSTS` | unset | Optional allowlist of client-metadata hosts |
+
+Existing API tokens stay unrestricted; mint [restricted tokens](access-control.md#restricted-api-tokens) for agents with `karactl mcp config`. Stored RBAC policies are kept. The new `cluster-data` resource is covered by the administrator wildcard but not by the built-in viewer or operator roles; grant it explicitly per `<namespace>/<cluster>`. [Data MCP](data-mcp.md) stays off for every cluster until `spec.dataMcp.enabled: true` is set on that cluster.
+
+### New native artifacts
+
+Data MCP companions for MongoDB, PostgreSQL and Supabase use two new entries in `lock.json`, downloaded only when a cluster enables data MCP: `mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz` is a Karakoram-built release asset with no upstream URL, and `pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz` comes from the official pgEdge release. Operators running a `KARAKORAM_ARTIFACT_MIRROR` must add both files with their exact locked bytes; development builds need the mirror for the MongoDB bundle. See [data MCP companion artifacts](native-artifacts.md#data-mcp-companion-artifacts).
+
+### Deploy on Zerops
+
+After the state/key backup, deploy the published tag from the checkout root:
+
+```sh
+git fetch origin --tags
+git checkout v0.3.0
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#member-agent-updates). Data MCP companions are new private services created only when a cluster opts in.
+
 ## Upgrading from v0.1.x to v0.2.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.2.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup) below, not a live copy of the SQLite main file. Let engine operations settle and retain the old revision and backup for recovery.

@@ -106,6 +106,10 @@ Use the private network from an application service in the same project. **Revea
 - [RabbitMQ access and TLS](rabbitmq/access-and-tls.md)
 - [Elasticsearch access and security](elasticsearch/access-and-security.md)
 
+## 8. Connect an AI agent
+
+The control plane serves a read-only [MCP server](mcp.md) at `/mcp` out of the box. Mint a restricted token with `karactl mcp config --client claude-code|cursor|vscode|codex` and paste the printed configuration into your client; the [MCP quick start](mcp-quickstart.md) covers each client, write access and per-cluster [data MCP](data-mcp.md).
+
 ## What next
 
 - [CLI](cli.md), [cluster operations](clusters.md) and [Backups and storage](backups.md).

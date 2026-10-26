@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MCP server
 
-Karakoram embeds an MCP server at `https://YOUR-CONTROL-PLANE/mcp`. It executes management requests in-process through the same REST authentication, authorization, validation, idempotency and audit path. It never sends telemetry.
+Karakoram embeds an MCP server at `https://YOUR-CONTROL-PLANE/mcp`. It executes management requests in-process through the same REST authentication, authorization, validation, idempotency and audit path. It never sends telemetry. For a step-by-step client setup, start with the [MCP quick start](mcp-quickstart.md).
 
 ## Enable and authenticate
 
@@ -69,9 +69,7 @@ Destructive tools require a human elicitation response. The server writes the ap
 
 ## Security
 
-Readonly mode classifies side effects, not confidentiality. Secret-bearing operations return actual material unchanged when authorized: do not allow agents to reveal credentials unless necessary. Treat all returned logs, events and database-controlled strings as untrusted data, not instructions. Tool annotations are guidance; REST authorization and server-side confirmation are enforcement. Self-reported client names do not enter audit identity.
-
-The public URL must match the control plane origin. Requests with a different browser `Origin` are rejected, and authentication failures return a Bearer challenge. Run behind HTTPS. The MCP endpoint inherits the public listener's security headers and request-body limits. Store the master key securely: independently derived HMAC keys protect confirmation state and retry identities.
+Readonly mode classifies side effects, not confidentiality: secret-bearing operations return actual material when authorized, returned logs, events and database-controlled strings are untrusted data, and tool annotations are guidance while REST authorization and server-side confirmation are enforcement. The [agent access security model](security.md#agent-access-mcp-security-model) describes credentials, enforcement and what is not protected. Operationally: the public URL must match the control plane origin (other browser `Origin` values are rejected), run behind HTTPS, and store the master key securely because confirmation state and retry identities use keys derived from it.
 
 ## Connect with OAuth
 
@@ -109,8 +107,8 @@ Authorization uses single-use codes and mandatory S256 PKCE.
 Access tokens last 10 minutes and work only at `/mcp`, not the REST API. Refresh
 tokens rotate on use; replay disconnects the entire grant. Grants last at most
 30 days. Account lifecycle changes are enforced immediately.
-Where scopes and RBAC permit API-token management, a token created or extended
-by an OAuth connection cannot outlive that connection's grant.
+OAuth connections cannot create or change API tokens; mint dedicated tokens with
+`karactl` or the web UI.
 
 Open **Settings → Connected apps** to inspect clients, scopes, namespace limits,
 creation and last-use times, and revoke a connection. API equivalents are
@@ -131,6 +129,8 @@ For clients requiring stdio, run `karactl --context production mcp`. The bridge 
 Use `--toolsets Clusters,Backups,Workflows` to narrow discovery on the server. This does not grant permission or change server mode.
 
 `karactl mcp config --client claude-code|cursor|vscode|codex|json` creates a dedicated restricted API token and prints remote HTTP client configuration. The default client is `json`, token name is `mcp-CLIENT-DATE`, and expiry is 90 days. Repeat `--namespace NAME` to restrict its scope; `--write` removes the token's read-only restriction but cannot override owner RBAC or server readonly mode. Override the name with `--token-name` or lifetime with `--expires-in 30d` (Go durations such as `720h` are also accepted).
+
+The same command with `--cluster NAMESPACE/NAME` mints a cluster-scoped data token for the per-cluster [data MCP](data-mcp.md#connect-an-agent-client) endpoint instead; `--namespace`, `--stdio` and `--output` do not apply there.
 
 ```sh
 karactl --context production mcp config --client cursor --namespace production

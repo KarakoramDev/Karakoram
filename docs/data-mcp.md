@@ -2,14 +2,14 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Cluster data MCP
 
-Data MCP gives an MCP client tools for the **data inside one cluster**, not authority to create, restore or administer clusters. Each cluster has its own Streamable HTTP endpoint:
+Data MCP gives an MCP client tools for the **data inside one cluster**, not authority to create, restore or administer clusters. It is **experimental** in this release: the interfaces and reviewed tool catalogue can change between minor versions. Each cluster has its own Streamable HTTP endpoint:
 
 ```text
 https://<karakoram>/mcp/clusters/{namespace}/{cluster}
 Authorization: Bearer <restricted-api-token>
 ```
 
-It uses the existing public listener; no public database port or companion port is needed. MongoDB/PSMDB uses `mongodb-mcp-server`, PostgreSQL and Supabase use `pgedge-postgres-mcp`, and Elasticsearch and RabbitMQ use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [security model](security.md) and [access control](access-control.md).
+It uses the existing public listener; no public database port or companion port is needed. MongoDB/PSMDB uses `mongodb-mcp-server`, PostgreSQL and Supabase use `pgedge-postgres-mcp`, and Elasticsearch and RabbitMQ use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [agent access security model](security.md#agent-access-mcp-security-model), [access control](access-control.md) and the [MCP quick start](mcp-quickstart.md#5-data-mcp-quick-start).
 
 ## Enable and scope access
 

@@ -15,6 +15,8 @@ bindings. **Settings → Connected apps** lists and revokes your grants.
 `listOAuthGrants` and `deleteOAuthGrant` provide the same self-service API;
 `api-tokens:read` / `api-tokens:delete` allow administrators to manage others'
 grants. Revocation invalidates every access and refresh token in the grant.
+OAuth connections cannot create or change API tokens; mint dedicated tokens with
+`karactl` or the web UI.
 
 
 ## Local accounts and first login
@@ -217,6 +219,11 @@ ordinary name/expiry update rules.
 karactl tokens create --name inventory --read-only \
   --scope-namespace prod --permission clusters:read
 ```
+
+For MCP clients, `karactl mcp config` mints the right restricted token directly:
+read-only and optionally namespace-limited for the management endpoint, or
+scoped to one cluster with explicit `cluster-data` permissions for its data
+endpoint (`--cluster NS/NAME`). See the [MCP quick start](mcp-quickstart.md).
 
 OIDC group grants apply to browser sessions, not tokens: token authentication uses
 the owner's user/role subjects. Give automation accounts explicit user or role

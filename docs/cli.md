@@ -104,26 +104,24 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 
 `karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
 
-For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes).
-
-`karactl mcp config --cluster NS/NAME` mints a restricted API token scoped to that cluster's data reads and prints client configuration for `/mcp/clusters/NS/NAME`. `--write` also requests data writes; cluster, owner RBAC and installation write gates still apply. The default token lifetime is 90 days. The selected server must support restricted API tokens; older servers may reject the request. Output contains the once-shown token secret: treat it as a credential, avoid logs and protect redirected files. Revoke it by ID through `tokens delete` when no longer needed.
-PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
+For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
 
 ## MCP clients
 
 `karactl --context production mcp` bridges a local stdio MCP client to the control plane's `/mcp` using the same server/token resolution as other commands. Standard output contains MCP messages only; diagnostics go to stderr. Tool lists, calls, progress, cancellation, server instructions and human confirmation remain server-controlled. Narrow discovery with `--toolsets Clusters,Backups,Workflows`; this is not an authorization boundary.
 
-Mint a dedicated restricted token and print configuration for your client:
+`karactl mcp config` mints a dedicated restricted token and prints configuration for your client. Without `--cluster` it configures the management endpoint `/mcp`; with `--cluster NS/NAME` it configures that cluster's [data MCP](data-mcp.md) endpoint `/mcp/clusters/NS/NAME`. Both forms share `--client`, `--write`, `--token-name` and `--expires-in` (90 days by default; whole days such as `30d` or a Go duration such as `720h`), and both print the newly minted secret once: protect the output, heed the stderr warning and revoke the token by ID through `tokens delete` when no longer needed. The server must support restricted API tokens; older servers reject the request.
 
 ```sh
 karactl --context production mcp config --client cursor --namespace production
 karactl --context production mcp config --client vscode --expires-in 30d --output /secure/path/mcp.json
 karactl --context production mcp config --client codex --stdio
+karactl --context production mcp config --cluster production/appdb --client claude-code
 ```
 
-Clients: `claude-code` (shell command), `cursor`, `vscode`, `codex` (TOML), or `json` (generic JSON, default). Tokens default to read-only with a 90-day expiry; `--write` permits mutations only where owner permissions and server mode allow them. Repeat `--namespace` to scope the token, choose `--token-name` to override `mcp-CLIENT-DATE`, and use `--expires-in` with days (`30d`) or a Go duration (`720h`).
+**Management tokens** (no `--cluster`): clients are `claude-code` (shell command), `cursor`, `vscode`, `codex` (TOML) or `json` (generic JSON, default). Tokens are read-only with the name `mcp-CLIENT-DATE` unless overridden; `--write` permits mutations only where owner permissions and server mode allow them, and repeatable `-n/--namespace` restricts the token to namespaces. `--stdio` prints a `karactl mcp` command using the selected saved context, with no embedded token, and reveals the newly minted dedicated token once on stderr for separate provisioning; it does not replace the saved context's token. No files are written unless `--output FILE` is supplied; this command-specific flag writes configuration with mode 0600, rather than selecting the global output format.
 
-Remote snippets contain the newly minted token once; protect the output and heed the stderr warning. `--stdio` instead prints a command using the selected saved context, with no embedded token, and reveals the newly minted dedicated token once on stderr for separate provisioning. It does not replace the saved context's token. No files are written unless `mcp config --output FILE` is supplied; this command-specific flag writes configuration with mode 0600, rather than selecting the global output format. See [MCP security and confirmation](mcp.md).
+**Data tokens** (`--cluster NS/NAME`, always `namespace/name`, never the implicit namespace): clients are `claude-code`, `cursor`, `vscode` or `json`; `codex` is not accepted. The token is scoped to that namespace and cluster with `cluster-data:read`; `--write` adds `cluster-data:write` and removes the read-only restriction, but cluster, owner RBAC and installation write gates still apply. The default name is `mcp-data-<cluster>-<hostname>`. `-n/--namespace`, `--stdio` and `--output` are usage errors (exit 2) together with `--cluster`. See [MCP security and confirmation](mcp.md) and the [MCP quick start](mcp-quickstart.md).
 
 For [OAuth-connected applications](mcp.md#connect-with-oauth), use `karactl oauth-grants list -o json` to inspect visible grants and `karactl oauth-grants delete GRANT_ID` to revoke a connection. Non-administrators see their own grants; administrators with the required API-token permissions may inspect and revoke all accounts' grants. Deletion uses the normal destructive confirmation; pass `--yes` for noninteractive automation. These commands manage account-level grants, not namespace resources.
 
@@ -159,7 +157,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
 | `tokens create` | `-f` OR `--name`, `--expires` (RFC3339 or duration), `--read-only`, repeatable `--scope-namespace`, `--scope-cluster ns/name`, `--permission resource:action`, `--allow-credential-reveal` |
 | `tokens set` | `-f` (name/expiry only); list has `--limit`, `--cursor`; delete/revoke has `--yes` |
-| `mcp config` | `--client claude-code\|cursor\|vscode\|codex\|json` (json), `--write`, `--token-name`, `--expires-in` (90d; whole days or Go duration); management: repeatable `-n/--namespace`, `--stdio`, `--output FILE`; data: `--cluster NS/NAME` (codex unsupported) |
+| `mcp config` | `--client claude-code\|cursor\|vscode\|codex\|json` (json), `--write`, `--token-name`, `--expires-in` (90d; whole days or Go duration); management only: repeatable `-n/--namespace`, `--stdio`, `--output FILE`; data: `--cluster NS/NAME` (no `codex`; rejects `-n`, `--stdio`, `--output`) |
 | `events list` | `--cluster`, `--type`, `--operation`, `--actor`, `--resource`, `--order asc\|desc`, `--limit`, `--cursor` |
 | `events watch` | Same scope filters; `--cursor`, `--last-event-id`; no list limit/order |
 | `operations list/cluster` | `--phase`, `--limit`, `--cursor`; list also `--cluster` |
