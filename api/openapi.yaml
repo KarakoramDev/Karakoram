@@ -3905,6 +3905,7 @@ paths:
       summary: Explicitly recover a fenced PXC minority component
       description: PXC only. Requires explicit operator acknowledgement. The control plane verifies recovered positions and fences missing owned runtimes before bootstrapping one surviving component. Existing Primary components and ambiguous positions are rejected; no data-loss override exists.
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_quorum_recover, risk: destructive, confirm: confirm, async: operation}
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3943,6 +3944,7 @@ paths:
       tags: [MySQL]
       summary: List MySQL application users
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent: {tool: mysql_users_list, risk: read, confirm: none, async: none, idempotent: true}
       responses:
         '200':
           description: Application users; reserved identities are hidden.
@@ -3965,6 +3967,7 @@ paths:
       tags: [MySQL]
       summary: Create a MySQL application user
       x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_create, risk: destructive, confirm: confirm, async: none, secret: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -4001,6 +4004,7 @@ paths:
       tags: [MySQL]
       summary: Read a MySQL application user
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_get, risk: read, confirm: none, async: none, idempotent: true}
       responses:
         '200':
           description: User attributes, never password material.
@@ -4019,6 +4023,7 @@ paths:
       tags: [MySQL]
       summary: Update selected MySQL user attributes
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_update, risk: destructive, confirm: confirm, async: none, secret: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -4046,6 +4051,7 @@ paths:
       tags: [MySQL]
       summary: Delete a MySQL application user
       x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_delete, risk: destructive, confirm: confirm, async: none, idempotent: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -4067,6 +4073,7 @@ paths:
       tags: [MySQL]
       summary: Rotate a MySQL user password, optionally retaining the current password
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_password_rotate, risk: destructive, confirm: confirm, async: none, secret: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -4107,6 +4114,7 @@ paths:
       tags: [MySQL]
       summary: Discard a MySQL user's retained password
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_user_old_password_discard, risk: destructive, confirm: confirm, async: none, idempotent: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       responses:
@@ -4127,6 +4135,7 @@ paths:
       tags: [MySQL]
       summary: List MySQL application databases
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent: {tool: mysql_databases_list, risk: read, confirm: none, async: none, idempotent: true}
       responses:
         '200':
           description: Application databases.
@@ -4149,6 +4158,7 @@ paths:
       tags: [MySQL]
       summary: Create a MySQL application database
       x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-agent: {tool: mysql_database_create, risk: write, confirm: none, async: none}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -4181,6 +4191,7 @@ paths:
       tags: [MySQL]
       summary: Read a MySQL application database
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent: {tool: mysql_database_get, risk: read, confirm: none, async: none, idempotent: true}
       responses:
         '200':
           description: Database attributes.
@@ -4199,6 +4210,7 @@ paths:
       tags: [MySQL]
       summary: Delete a MySQL application database
       x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-agent: {tool: mysql_database_delete, risk: destructive, confirm: name, async: none, idempotent: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - {name: force, in: query, schema: {type: boolean, default: false}}
@@ -4221,6 +4233,7 @@ paths:
       summary: List MySQL grants filtered by user or database
       description: At least one of user or database is required; both may be supplied.
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent: {tool: mysql_grants_list, risk: read, confirm: none, async: none, idempotent: true}
       parameters:
         - {name: user, in: query, schema: {type: string, minLength: 1, maxLength: 32}}
         - {name: database, in: query, schema: {type: string, minLength: 1, maxLength: 64}}
@@ -4246,6 +4259,7 @@ paths:
       tags: [MySQL]
       summary: Grant bounded MySQL database privileges
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_privileges_grant, risk: destructive, confirm: confirm, async: none}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:
@@ -4269,6 +4283,7 @@ paths:
       tags: [MySQL]
       summary: Revoke MySQL database privileges
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent: {tool: mysql_privileges_revoke, risk: destructive, confirm: confirm, async: none, idempotent: true}
       parameters:
         - $ref: '#/components/parameters/CSRF'
       requestBody:

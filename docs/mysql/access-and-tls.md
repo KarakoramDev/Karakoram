@@ -103,3 +103,17 @@ Recovery uses the ordinary product path, whether the member is stopped by an ope
 
 Repeated hostile connections can repeat the abort and keep a member out of the cluster indefinitely. Restricting the replication ports to cluster members is the only mitigation (see above).
 
+## Management agents and restricted tokens
+
+MySQL and PXC share the MySQL management tools exposed by the control-plane MCP
+server. User creation, attribute updates and password rotation are classified as
+secret-bearing security mutations and require confirmation. User deletion,
+discarding an old password, grant changes and PXC quorum recovery also require
+confirmation; database deletion requires name confirmation. Quorum recovery is
+asynchronous and returns a tracked operation. Read-only user, database and grant
+tools never reveal passwords.
+
+Restricted API tokens use the existing cluster-scoped `database-users` permissions
+for access management and `clusters:update` for quorum recovery. These providers
+do not expose a Data MCP gateway.
+
