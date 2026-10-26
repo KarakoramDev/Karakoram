@@ -7330,7 +7330,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
   /events/stream:
     parameters:
       - $ref: '#/components/parameters/NamespaceQuery'
@@ -7427,7 +7427,7 @@ paths:
           description: Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events.
           schema:
             type: string
-            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
+            enum: ["", accounts, api-tokens, auth, backup-storages, backups, cluster-credentials, cluster-data, clusters, database-users, namespaces, operations, orphaned-volumes, rabbitmq-operator-policies, rabbitmq-permissions, rabbitmq-policies, rabbitmq-topic-permissions, rabbitmq-users, rabbitmq-vhosts, rbac, restores, settings]
         - name: cursor
           in: query
           schema:

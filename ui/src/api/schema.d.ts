@@ -10124,7 +10124,7 @@ export interface operations {
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -10168,7 +10168,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };

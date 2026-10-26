@@ -5,12 +5,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -158,14 +160,66 @@ func TestDataMcpPublicToolsAndAudit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			found := false
+			var auditID int64
 			for _, e := range events {
-				if e.Type == "Audit" && e.Resource == "cluster-data" && strings.Contains(e.Actor, "admin (token: data [") {
-					found = true
+				if e.Type == "Audit" && e.Resource == datamcp.RBACResource && strings.Contains(e.Actor, "admin (token: data [") {
+					auditID = e.ID
 				}
 			}
-			if !found {
+			if auditID == 0 {
 				t.Fatalf("missing persisted data audit: %+v", events)
+			}
+			for _, resource := range []string{"events", "audit"} {
+				t.Run(resource, func(t *testing.T) {
+					makeReader := func(name, object string) string {
+						t.Helper()
+						if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: name}, "audit-test-password"); err != nil {
+							t.Fatal(err)
+						}
+						if err := s.RBAC.ReplacePolicy(ctx, s.RBAC.Policy()+"\np, user:"+name+", "+resource+", read, "+object+", allow\n"); err != nil {
+							t.Fatal(err)
+						}
+						reader, _, err := s.Auth.CreateToken(ctx, name, "audit", nil, nil)
+						if err != nil {
+							t.Fatal(err)
+						}
+						return reader
+					}
+					reader := makeReader(resource+"-reader", "default/prod")
+					for _, scope := range []string{"", "&namespace=default", "&cluster=prod", "&namespace=default&cluster=prod"} {
+						w := call(s, "GET", "/api/v1/events?resource=cluster-data"+scope, "", reader)
+						var list api.EventList
+						if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 1 || list.Items[0].Id != auditID {
+							t.Fatalf("filtered gateway audit %q: %d %s", scope, w.Code, w.Body.String())
+						}
+					}
+					other := makeReader(resource+"-other", "default/private")
+					for _, denied := range []string{token, other} {
+						for _, path := range []string{"/api/v1/events", "/api/v1/events/stream"} {
+							w := call(s, "GET", path+"?namespace=default&cluster=prod&resource=cluster-data", "", denied)
+							if w.Code != 403 {
+								t.Fatalf("unauthorized audit filter: %d %s", w.Code, w.Body.String())
+							}
+						}
+					}
+					for _, tc := range []struct {
+						token string
+						want  bool
+					}{{reader, true}, {other, false}} {
+						w := call(s, "GET", "/api/v1/events", "", tc.token)
+						var list api.EventList
+						if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil {
+							t.Fatalf("unfiltered events: %d %s", w.Code, w.Body.String())
+						}
+						found := false
+						for _, e := range list.Items {
+							found = found || e.Id == auditID
+						}
+						if found != tc.want {
+							t.Fatalf("unfiltered gateway audit visible=%t, want %t", found, tc.want)
+						}
+					}
+				})
 			}
 		})
 	}

@@ -14,7 +14,7 @@ import (
 
 var eventResources = func() []string {
 	resources := map[string]bool{
-		"auth": true, "orphaned-volumes": true, "operations": true,
+		"auth": true, "cluster-data": true, "orphaned-volumes": true, "operations": true,
 		"rabbitmq-vhosts": true, "rabbitmq-users": true, "rabbitmq-permissions": true,
 		"rabbitmq-topic-permissions": true, "rabbitmq-policies": true, "rabbitmq-operator-policies": true,
 	}
@@ -85,6 +85,7 @@ func (s *Server) filteredEventAccess(ctx context.Context, resource string) (bool
 		}
 		return false, err
 	default:
+		// Cluster-scoped resources, including cluster-data, share event visibility.
 		canRead := func(object string) bool {
 			return s.allowed(ctx, "events", "read", object) || s.allowed(ctx, "audit", "read", object)
 		}

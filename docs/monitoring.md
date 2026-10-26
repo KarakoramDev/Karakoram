@@ -167,6 +167,14 @@ karactl -n default operations cluster demo
 
 Persisted events and operations support incident review; streams provide timely notification, not authoritative completion. Preserve replay position and filters when reconnecting. Event categories such as `Warning` differ from lifecycle reasons such as `OperationFailed`; use the [API pagination/event contract](api.md#pagination-and-events) for filtering, SSE and proxy behavior. Audit scope/coverage is defined in [Security](security.md#audit-attribution-and-durability).
 
+To query [Data MCP](data-mcp.md) audit events, use
+`karactl -n default events list --cluster demo --resource cluster-data` or
+`GET /api/v1/events?namespace=default&cluster=demo&resource=cluster-data`.
+The same resource filter is supported by event streams. Reading these events
+requires `events:read` or `audit:read` on the cluster; `cluster-data:read` alone
+does not grant audit visibility. Explicit unauthorized resource filters return
+403, while unfiltered listings omit unauthorized events.
+
 ## Troubleshooting
 
 | Symptom | Check/action |
