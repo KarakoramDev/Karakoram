@@ -7,8 +7,8 @@ Choose an infrastructure backend before installing. Karakoram is multi-platform;
 | Backend | Installation path |
 | --- | --- |
 | Zerops — reference backend | Follow this page or the dashboard-only [Quick start](quickstart.md). |
-| Dokploy — experimental | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
-| Nomad — experimental | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
+| Dokploy | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
+| Nomad | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
 
 The deployment steps below are for the **Zerops backend**, in an existing Zerops project. CLI installation is shared across backends.
 

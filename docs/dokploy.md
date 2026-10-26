@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Dokploy backend (experimental)
+# Dokploy backend
 
 The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed Docker Swarm that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with MongoDB, RabbitMQ and Elasticsearch on a three-node test Swarm, but it has no production track record. Zerops remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and remain experimental on Dokploy; this is not an acceptance claim for these engines. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered S3 destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered S3 destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
 
 ## How it maps
 

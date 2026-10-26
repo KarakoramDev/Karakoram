@@ -6,19 +6,19 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Zerops failure domains and storage
 
-- **No anti-affinity guarantee on Zerops.** Separate services/volumes and dedicated CPU do not prove independent hosts, racks or zones. One host failure can remove several voters. Placement groups are best-effort observations: missing/changing signals can produce unknown, false or stale groups; distinct groups do not certify future separation. The experimental [Dokploy](dokploy.md) and [Nomad](nomad.md) backends pin each member's volume to a node and keep one replica set or cluster on distinct nodes while enough nodes exist; they report that node as authoritative placement but cannot protect against shared racks or physical hosts below the scheduler.
+- **No anti-affinity guarantee on Zerops.** Separate services/volumes and dedicated CPU do not prove independent hosts, racks or zones. One host failure can remove several voters. Placement groups are best-effort observations: missing/changing signals can produce unknown, false or stale groups; distinct groups do not certify future separation. The [Dokploy](dokploy.md) and [Nomad](nomad.md) backends pin each member's volume to a node and keep one replica set or cluster on distinct nodes while enough nodes exist; they report that node as authoritative placement but cannot protect against shared racks or physical hosts below the scheduler.
 - **Local Storage is single-host, non-replicated storage.** Each runtime is co-located with its volume. Runtime root disks are wiped on deployment; keep engine data only on assigned per-member volumes. Shared filesystems are unsupported. Replication and backups protect different failure modes.
 - **Local Storage minimum is 5 GB.** Mounted capacity follows the volume service's `maxDisk`, not runtime disk or volume `minDisk`. Growth is supported; shrinking is rejected. Resource/autoscaling behavior belongs in [clusters](clusters.md).
 - **Live volume archives are not consistent database backups.** Use [engine-native backups](backups.md) and a separately [consistent control-plane snapshot](operations.md#control-plane-state-backup-and-recovery).
 
-## Experimental backends
+## Backend-specific limitations
 
-Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are **experimental**, with no production track record. See the [backend comparison](backends.md#capability-differences) before selecting one.
+Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are additional backends; their status is documented on the [Backends page](backends.md). See the [backend comparison](backends.md#capability-differences) before selecting one.
 
 - **Dokploy:** node-local Docker volumes have no enforced quota or supported growth. The operator owns Swarm, node disks, registry, DNS and firewall. Admin API keys are not target-scoped; use a dedicated installation. Public TCP has no backend CIDR filtering; public HTTPS needs a domain suffix and wildcard DNS.
 - **Nomad:** dynamic `mkdir` host volumes have no enforced quota or supported growth. The operator owns dedicated clients, private-copy rootfs, routed networking, ACLs, disk monitoring and load balancing. Trust every submitter who can place jobs on the clients; namespace metadata is not hostile-tenant isolated. Managed public HTTPS is unavailable.
-- **Public TCP on both experimental backends:** requires explicit `allowAllAddresses: true` and an allowlist covering the whole address family. Enforce narrower access externally. Nomad static ports need load-balancer forwarding to the correct member node; they are not a routing mesh.
-- **PostgreSQL and Supabase:** both use the shared runtime contract on these experimental backends, but their guides do not claim engine acceptance. Locked native artifacts and registered S3 destinations must be reachable. Supabase public gateway HTTPS is rejected on Nomad.
+- **Public TCP on both backends:** requires explicit `allowAllAddresses: true` and an allowlist covering the whole address family. Enforce narrower access externally. Nomad static ports need load-balancer forwarding to the correct member node; they are not a routing mesh.
+- **PostgreSQL and Supabase:** both use the shared runtime contract on these backends, but their guides do not claim engine acceptance. Locked native artifacts and registered S3 destinations must be reachable. Supabase public gateway HTTPS is rejected on Nomad.
 
 ## Control-plane and platform operations
 
@@ -30,7 +30,7 @@ Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are
 - **Deletion can leave charged storage.** Platform refusals can move verified owned volumes into [orphan inventory](operations.md#orphaned-platform-volumes); completing cluster deletion does not prove every volume is gone.
 - **No container-exec API.** Node work uses a bounded authenticated agent, not arbitrary remote SSH/exec. [Admin recovery](operations.md#recovering-local-admin-access) uses service secrets/restart or a trusted offline maintenance environment.
 - **Deployment environments are snapshots.** Secret changes require restart/redeploy; runtime YAML environment values override service secrets. Member provisioning imports infrastructure before artifact deployment. Resource updates send complete vertical/horizontal settings.
-- **Existing targets and cataloged engines only.** Karakoram does not create infrastructure projects/clusters; Zerops is the reference backend, with experimental [Dokploy](dokploy.md) and [Nomad](nomad.md) backends. The system `core` service is outside its ownership. Public Git import requires a public repository; private source needs local deployment. Members use prebuilt artifacts.
+- **Existing targets and cataloged engines only.** Karakoram does not create infrastructure projects/clusters; Zerops is the reference backend, with [Dokploy](dokploy.md) and [Nomad](nomad.md) backends. The system `core` service is outside its ownership. Public Git import requires a public repository; private source needs local deployment. Members use prebuilt artifacts.
 
 ## Namespaces and relays
 
@@ -43,7 +43,7 @@ Zerops is the reference backend. [Dokploy](dokploy.md) and [Nomad](nomad.md) are
 ## Access and networking
 
 - On the **Zerops backend**, public TCP requires project IPv6 or dedicated IPv4; shared HTTP/IPv4 routing is not a generic engine TCP gateway. Verify client address-family connectivity and account for dedicated IPv4 cost.
-- Zerops public route synchronization is project-wide, including other clusters' changes. `Ready`/`isSynced` do not establish external reachability. Check allowed and denied clients independently; retain TLS/authentication as well as allowlists. Other backends have the [exposure limits above](#experimental-backends).
+- Zerops public route synchronization is project-wide, including other clusters' changes. `Ready`/`isSynced` do not establish external reachability. Check allowed and denied clients independently; retain TLS/authentication as well as allowlists. Other backends have the [exposure limits above](#backend-specific-limitations).
 - Infrastructure administrators remain trusted. On Zerops, **Full access without sudo mode cannot read sensitive environment values**; this does not remove mutation authority. See [Security](security.md) for token authority, public exposure and TLS boundaries; Karakoram is not a sandbox against infrastructure administrators.
 - Credential/leaf rotation is not general CA-source or master-key rotation. Use engine access guides for supported TLS transitions and certificate requirements.
 

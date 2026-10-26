@@ -13,7 +13,7 @@ karactl -n NS clusters ca appdb > cluster-ca.pem
 
 The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Backend public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
 
-Public exposure is opt-in. Zerops can enforce a CIDR allowlist; experimental backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
+Public exposure is opt-in. Zerops can enforce a CIDR allowlist; backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
 
 On Dokploy, the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
 ports are Swarm-wide, so only one service on that Swarm can publish it. A

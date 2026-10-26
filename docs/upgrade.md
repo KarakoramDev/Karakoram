@@ -51,11 +51,11 @@ Set `PROJECT_ID` as below. Preserve the existing volume, master key, secrets, pu
 
 ### New optional backends
 
-Zerops remains the reference backend. Dokploy and Nomad are new, **experimental** options, not an automatic migration for existing installations. Review [Backends](backends.md), then the [Dokploy installation](dokploy.md#install-the-control-plane-on-dokploy) or [Nomad installation](nomad.md#install-the-control-plane-on-nomad). Keep the existing default namespace on its original target; additional targets use explicit backend selection and credentials through [Namespaces](namespaces.md).
+Zerops remains the reference backend. Dokploy and Nomad are additional options, not an automatic migration for existing installations. Review [Backends](backends.md), then the [Dokploy installation](dokploy.md#install-the-control-plane-on-dokploy) or [Nomad installation](nomad.md#install-the-control-plane-on-nomad). Keep the existing default namespace on its original target; additional targets use explicit backend selection and credentials through [Namespaces](namespaces.md).
 
 ## Prerequisites
 
-For new installations use [Install](install.md). The concrete deployment, maintenance-container and ownership commands below are for the **Zerops backend**. Experimental [Dokploy](dokploy.md#install-the-control-plane-on-dokploy) and [Nomad](nomad.md#install-the-control-plane-on-nomad) use their guides' singleton/stop-first deployment paths with the same consistent-state and master-key backup requirements. Zerops upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
+For new installations use [Install](install.md). The concrete deployment, maintenance-container and ownership commands below are for the **Zerops backend**. [Dokploy](dokploy.md#install-the-control-plane-on-dokploy) and [Nomad](nomad.md#install-the-control-plane-on-nomad) use their guides' singleton/stop-first deployment paths with the same consistent-state and master-key backup requirements. Zerops upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
 
 From the checkout root, set:
 

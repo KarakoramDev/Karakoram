@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted, multi-platform control plane that reconciles engine clusters across infrastructure backends and namespace targets. Zerops is the reference backend; Dokploy and Nomad are experimental. See [Backends](backends.md).
+Karakoram is a self-hosted, multi-platform control plane that reconciles engine clusters across infrastructure backends and namespace targets. Zerops is the reference backend; Dokploy and Nomad are also available. See [Backends](backends.md).
 
 ## Deployment and trust boundaries
 
@@ -29,7 +29,7 @@ Private networking alone is not an authentication boundary. Agent traffic uses p
 
 ## Namespaces and relay routing
 
-A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are Zerops (targets are Zerops projects), the experimental [Dokploy backend](dokploy.md) (Dokploy environments on a Docker Swarm), and the experimental [Nomad backend](nomad.md) (Nomad namespaces on an operator-managed cluster). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; all three current backends require it.
+A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are Zerops (targets are Zerops projects), the [Dokploy backend](dokploy.md) (Dokploy environments on a Docker Swarm), and the [Nomad backend](nomad.md) (Nomad namespaces on an operator-managed cluster). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; all three current backends require it.
 
 The relay opens an outbound WebSocket connection through public HTTPS and carries an inner mutually authenticated TLS tunnel. Provider-approved administration traffic and protected agent traffic use namespace-qualified streams; agent configuration pulls retain end-to-end TLS. A namespace token or relay outage interrupts management of that namespace, not every project. The relay is not application networking.
 
@@ -77,7 +77,7 @@ Agents expose member metrics for control-plane collection, history and authentic
 
 ## Failure domains
 
-The control plane is single-replica. Persistent volumes are node-local on current backends. Zerops does not guarantee host separation; experimental Dokploy and Nomad report authoritative node placement but cannot establish independent racks or physical hosts beneath the scheduler. Engine replication cannot compensate for every shared-host failure. See [Limitations](limitations.md) before selecting availability and recovery objectives.
+The control plane is single-replica. Persistent volumes are node-local on current backends. Zerops does not guarantee host separation; Dokploy and Nomad report authoritative node placement but cannot establish independent racks or physical hosts beneath the scheduler. Engine replication cannot compensate for every shared-host failure. See [Limitations](limitations.md) before selecting availability and recovery objectives.
 
 ## Engine providers
 

@@ -1,6 +1,6 @@
-# 0033 — Experimental HashiCorp Nomad backend
+# 0033 — HashiCorp Nomad backend
 
-Status: Accepted (experimental backend); implements [ADR 0030](0030-backend-neutral-infrastructure-contract.md) for an operator-managed Nomad cluster
+Status: Accepted; implements [ADR 0030](0030-backend-neutral-infrastructure-contract.md) for an operator-managed Nomad cluster
 
 ## Context
 
@@ -10,7 +10,7 @@ The default exec chroot is not a complete package-installation root and can hard
 
 ## Decision
 
-Add a compiled-in `nomad` factory (`internal/infra/nomad`), registered next to Zerops and Dokploy and marked experimental. A target is one existing Nomad namespace **dedicated exclusively to Karakoram, with no other jobs or services**, its credential a Nomad ACL token secret ID. Every native service in that namespace is trusted for hosts generation, so foreign registrations could hijack member names and redirect engine traffic. Runtime import rejects a pre-existing Nomad job without a Karakoram record before creating resources. Operational setup and example policies are in the [Nomad guide](../nomad.md).
+Add a compiled-in `nomad` factory (`internal/infra/nomad`), registered next to Zerops and Dokploy. A target is one existing Nomad namespace **dedicated exclusively to Karakoram, with no other jobs or services**, its credential a Nomad ACL token secret ID. Every native service in that namespace is trusted for hosts generation, so foreign registrations could hijack member names and redirect engine traffic. Runtime import rejects a pre-existing Nomad job without a Karakoram record before creating resources. Operational setup and example policies are in the [Nomad guide](../nomad.md).
 
 - **Identity and records.** Each member runtime is a service job named after its Karakoram hostname. Independently retained runtime/volume identities and desired state live in CAS-protected Nomad Variables at `karakoram/services/<hostname>`, rather than relying on a running job to preserve identity. Environment and secret values live separately at `nomad/jobs/<hostname>`, rendered into the allocation's `secrets/` directory with `change_mode = "noop"`; they apply at the next restart (`envChangeRestarts = false`). Jobs and readable service records do not carry environment values.
 - **Exec rootfs.** Dedicated clients use an operator-built Ubuntu 24.04 minbase rootfs containing `ca-certificates`, `sudo`, `curl`, `gnupg`, `util-linux`, `numactl`, uid/gid 10001 and sudoers. The whole root is mapped through client `chroot_env` from a read-only filesystem **different from Nomad's data/allocation filesystem**, forcing private copies rather than hardlinks. The operator builds, patches and versions this image. The client-wide mapping and root username policy belong on a dedicated node pool, not general-purpose exec clients.

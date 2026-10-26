@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Nomad backend (experimental)
+# Nomad backend
 
 The `nomad` backend runs Karakoram clusters on a [HashiCorp Nomad](https://developer.hashicorp.com/nomad) cluster that you operate. It is **experimental**, with no production track record. Zerops remains the reference backend. The runtime and scheduling behavior described here was exercised on Nomad **2.0.7**; do not assume that an untested Nomad upgrade preserves it. Design rationale: [ADR 0033](adr/0033-nomad-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use native preparation/supervision under this backend and remain experimental here; this is not an engine acceptance claim. Allow egress to Percona repositories, locked native artifacts/operator mirror and registered S3 storage. `native_artifact_mirror` configures the shipped control-plane job's artifact mirror. Supabase `gateway.publicHttps` is rejected because this backend has no managed HTTPS capability; keep the private gateway and supply application ingress outside that option. Public PostgreSQL TCP needs the existing operator load balancer/firewall arrangement and allow-all acknowledgement.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use native preparation/supervision under this backend and have not been accepted here. Allow egress to Percona repositories, locked native artifacts/operator mirror and registered S3 storage. `native_artifact_mirror` configures the shipped control-plane job's artifact mirror. Supabase `gateway.publicHttps` is rejected because this backend has no managed HTTPS capability; keep the private gateway and supply application ingress outside that option. Public PostgreSQL TCP needs the existing operator load balancer/firewall arrangement and allow-all acknowledgement.
 
 ## How it maps
 

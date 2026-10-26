@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are experimental. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are also available. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -37,8 +37,8 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0029](0029-elastic-licensing.md) | Default Elastic distributions, Basic-tier provisioning and ELv2 managed-service obligations |
 | [0030](0030-backend-neutral-infrastructure-contract.md) | Backend-neutral services, runtime deployment, capabilities and per-namespace backend registry |
 | [0031](0031-engine-component-model.md) | Ordered component definitions, per-component resources and engine-owned lifecycle callbacks |
-| [0032](0032-dokploy-backend.md) | Experimental Dokploy/Swarm backend: alias DNS, built member images, pinned volumes and host anti-affinity |
-| [0033](0033-nomad-backend.md) | Experimental Nomad backend: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
+| [0032](0032-dokploy-backend.md) | Dokploy/Swarm backend: alias DNS, built member images, pinned volumes and host anti-affinity |
+| [0033](0033-nomad-backend.md) | Nomad backend: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
 | [0034](0034-postgres-engine.md) | Percona PostgreSQL, Patroni/etcd HA, ProxySQL, native access and pgBackRest recovery |
 | [0035](0035-supabase-engine.md) | Modular native Supabase over the PostgreSQL core, Envoy gateway and explicit artifact capabilities |
 | [0036](0036-native-artifacts.md) | Embedded native artifact lock, mirror precedence, source provenance and signed-release staging |

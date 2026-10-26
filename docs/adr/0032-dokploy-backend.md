@@ -1,6 +1,6 @@
-# 0032 — Experimental Dokploy (Docker Swarm) backend
+# 0032 — Dokploy (Docker Swarm) backend
 
-Status: Accepted (experimental backend); implements [ADR 0030](0030-backend-neutral-infrastructure-contract.md) for a self-hosted Swarm managed by Dokploy
+Status: Accepted; implements [ADR 0030](0030-backend-neutral-infrastructure-contract.md) for a self-hosted Swarm managed by Dokploy
 
 ## Context
 
@@ -8,7 +8,7 @@ Users who operate their own servers asked for a backend other than Zerops. Dokpl
 
 ## Decision
 
-Add a compiled-in `dokploy` factory (`internal/infra/dokploy`), registered next to Zerops and marked experimental. A namespace target is one Dokploy environment; the namespace token is a Dokploy API key.
+Add a compiled-in `dokploy` factory (`internal/infra/dokploy`), registered next to Zerops. A namespace target is one Dokploy environment; the namespace token is a Dokploy API key.
 
 - **Services.** A runtime is one Dokploy application whose name equals the Karakoram hostname. Member DNS identity is a network alias equal to that hostname on a configurable overlay network, because the Swarm service name carries Dokploy's suffix. A volume is a separate "volume holder" application that is never started: it owns one Docker named volume, a node pin and Karakoram metadata, so it keeps an identity for retention and fenced deletion. Metadata (kind, hostname, mounted volume, node, non-secret variable keys) is stored in the application description; secrets and variables share the Dokploy environment, and only non-secret ownership markers are read back. Secret ownership keys are reported masked.
 - **Deployment.** Each deployment uploads an archive with a generated Dockerfile, the release `karakoram` archive, an entrypoint and the non-secret runtime environment. The Dockerfile starts from a digest-pinned Ubuntu 24.04 image, installs the minimal shared packages, runs the engine's unchanged prepare commands as separate cached layers as an unprivileged user with sudo, and adds the artifact. Readiness is validated but not rendered as a Docker health check: Swarm publishes a task's DNS name only once it is healthy, which deadlocks members that must resolve their own name while starting (Elasticsearch publish host, RabbitMQ node name), and continuous health checks would restart databases on transient unreadiness. A deployment completes when its new task runs; engines check readiness through their agents, as on Zerops. Dokploy builds it on the manager and pushes it to the operator's registry. Services use one replica, stop-first updates and rollbacks, stop-before-delete, a 120 s stop grace period and a raised open-file limit.
