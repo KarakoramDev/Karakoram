@@ -11,6 +11,8 @@ Authorization: Bearer <restricted-api-token>
 
 It uses the existing public listener; no public database port or companion port is needed. MongoDB/PSMDB uses `mongodb-mcp-server`, PostgreSQL and Supabase use `pgedge-postgres-mcp`, and Elasticsearch and RabbitMQ use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [agent access security model](security.md#agent-access-mcp-security-model), [access control](access-control.md) and the [MCP quick start](mcp-quickstart.md#5-data-mcp-quick-start).
 
+Data endpoints support stateless MCP `2026-07-28` and legacy initialize-based Streamable HTTP (`2025-11-25`, `2025-06-18`, `2025-03-26`), for both companion-backed and native toolsets. Companion connections negotiate an initialize-based revision independently of the client's protocol; they do not forward the client's protocol version.
+
 ## Enable and scope access
 
 **Off by default:** an absent `spec.dataMcp` or `enabled: false` disables the endpoint and removes its managed data identities and companion when no longer needed. Disabled configurations can retain their settings for later use. Installation policy can also disable all MCP access with `KARAKORAM_MCP=off`; the installation default is `readonly`, not permission to enable any cluster automatically.

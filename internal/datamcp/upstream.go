@@ -17,6 +17,19 @@ type mcpUpstream struct {
 	closed    bool
 }
 
+// Companions use initialize-based MCP independently of the downstream protocol.
+// Starting with this revision skips modern discovery while still allowing the
+// companion to negotiate an older supported initialize-based revision.
+const companionProtocolVersion = "2025-11-25"
+
+// A downstream SDK handler context carries private protocol metadata. Before
+// initialization the SDK transport would reuse that version as the upstream
+// HTTP header, even when Connect explicitly requests a legacy revision.
+// Preserve cancellation and deadlines, but do not inherit downstream values.
+type upstreamConnectContext struct{ context.Context }
+
+func (upstreamConnectContext) Value(any) any { return nil }
+
 // NewMCPUpstream connects without advertising sampling, roots, or elicitation.
 func NewMCPUpstream(ctx context.Context, t mcp.Transport) (Upstream, error) {
 	if t == nil {
@@ -32,7 +45,7 @@ func NewMCPUpstream(ctx context.Context, t mcp.Transport) (Upstream, error) {
 			return next(ctx, method, req)
 		}
 	})
-	s, e := u.client.Connect(ctx, t, nil)
+	s, e := u.client.Connect(upstreamConnectContext{ctx}, t, &mcp.ClientSessionOptions{ProtocolVersion: companionProtocolVersion})
 	if e != nil {
 		return nil, e
 	}
@@ -49,7 +62,7 @@ func (u *mcpUpstream) reconnect(ctx context.Context, old *mcp.ClientSession) (*m
 		return u.session, nil
 	}
 	_ = old.Close()
-	s, e := u.client.Connect(ctx, u.transport, nil)
+	s, e := u.client.Connect(upstreamConnectContext{ctx}, u.transport, &mcp.ClientSessionOptions{ProtocolVersion: companionProtocolVersion})
 	if e != nil {
 		return nil, e
 	}

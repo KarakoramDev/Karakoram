@@ -73,6 +73,7 @@ type Gateway struct {
 	secret        [32]byte
 	mu            sync.Mutex
 	handlers      map[domain.ClusterRef]*mcp.StreamableHTTPHandler
+	stateless     map[domain.ClusterRef]*mcp.StreamableHTTPHandler
 	servers       map[domain.ClusterRef]*mcp.Server
 	retired       map[*cachedUpstream]bool
 	sessions      map[string]string
@@ -147,6 +148,7 @@ func New(o Options) (*Gateway, error) {
 	o.Manifests = manifests
 	g := &Gateway{o: o, origin: origin, handlers: map[domain.ClusterRef]*mcp.StreamableHTTPHandler{}, sessions: map[string]string{}, upstreams: map[string]*cachedUpstream{}, rates: map[string]bucket{}, concurrent: map[domain.ClusterRef]int{}, continuations: map[string]time.Time{}, stop: make(chan struct{}), done: make(chan struct{})}
 	g.servers = map[domain.ClusterRef]*mcp.Server{}
+	g.stateless = map[domain.ClusterRef]*mcp.StreamableHTTPHandler{}
 	g.retired = map[*cachedUpstream]bool{}
 	if _, e := rand.Read(g.secret[:]); e != nil {
 		return nil, e
@@ -204,7 +206,13 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s := g.server(ref)
 		g.servers[ref] = s
 		h = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{MaxRequestBodyBytes: g.o.Limits.MaxBodyBytes, SessionTimeout: 10 * time.Minute, PropagateRequestCancellation: true})
+		g.stateless[ref] = mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, &mcp.StreamableHTTPOptions{Stateless: true, MaxRequestBodyBytes: g.o.Limits.MaxBodyBytes, PropagateRequestCancellation: true})
 		g.handlers[ref] = h
+	}
+	// Modern requests are sessionless; retain the stateful handler only for
+	// initialize-based clients and their token-bound legacy sessions.
+	if id == "" && r.Header.Get("MCP-Protocol-Version") >= "2026-07-28" {
+		h = g.stateless[ref]
 	}
 	g.mu.Unlock()
 	b, _ := json.Marshal(caller)
