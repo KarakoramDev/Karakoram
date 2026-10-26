@@ -67,7 +67,7 @@ func TestRenderPostgres(t *testing.T) {
 	if len(hosts) != 2 || hosts[0].(map[string]any)["host"] != "db1" || hosts[0].(map[string]any)["port"] != 5432 {
 		t.Fatal(hosts)
 	}
-	for key, want := range map[string]any{"sslmode": "verify-full", "target_session_attrs": "any", "allow_writes": false, "allow_llm_switching": false} {
+	for key, want := range map[string]any{"sslmode": "verify-full", "target_session_attrs": "prefer-standby", "allow_writes": false, "allow_llm_switching": false} {
 		if db[key] != want {
 			t.Errorf("%s=%v", key, db[key])
 		}
@@ -103,7 +103,7 @@ func TestRenderPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	db = cfg["databases"].([]any)[0].(map[string]any)
-	if db["target_session_attrs"] != "primary" || db["allow_writes"] != true {
+	if db["target_session_attrs"] != "read-write" || db["allow_writes"] != true {
 		t.Fatal(db)
 	}
 }

@@ -104,11 +104,11 @@ func Render(s companionspec.Spec, p companionspec.Process, dataDir, token string
 	if err != nil {
 		return spec, nil, err
 	}
-	// Reader endpoints may target a standby. "read-write" also rejects a
-	// primary when the read identity has default_transaction_read_only enabled.
-	targetSessionAttrs := "any"
+	// Bypass proxies and prefer a standby for the read identity; read-write
+	// selects a writable primary for the separate write identity.
+	targetSessionAttrs := "prefer-standby"
 	if p.Level == "readWrite" {
-		targetSessionAttrs = "primary"
+		targetSessionAttrs = "read-write"
 	}
 	db := map[string]any{"name": "cluster", "hosts": hosts, "target_session_attrs": targetSessionAttrs, "database": p.Database, "user": p.Username, "password": p.Password, "sslmode": "disable", "allow_writes": p.Level == "readWrite", "allow_llm_switching": false}
 	if p.TLS {

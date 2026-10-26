@@ -13,6 +13,8 @@ karactl -n NS clusters ca appdb > cluster-ca.pem
 
 The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Backend public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
 
+The managed [Data MCP companion](../data-mcp.md) instead connects directly to non-removing PostgreSQL members on private port 5432, bypassing ProxySQL and (for Supabase) Supavisor. Its multi-host URI uses `target_session_attrs=prefer-standby` for reads and `read-write` for the primary-only write identity, with hostname-verified TLS and the cluster CA when TLS is enabled. This avoids proxy extended-protocol limitations and does not require the optional proxy reader port.
+
 Public exposure is opt-in. Zerops can enforce a CIDR allowlist; backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
 
 On Dokploy, the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
@@ -319,14 +321,13 @@ audit application ACLs when a strict DDL or function boundary is required.
 Database scope is not an isolation boundary against existing PUBLIC grants.
 The companion connects only to its selected scoped database (the first entry).
 
-With ProxySQL, the companion reader uses `<cluster>px:5433` (the reader listener
-is enabled with data access), and the writer uses `<cluster>px:5432`. Without a
-proxy, credentials contain all live data-member DNS names and PostgreSQL URIs
-use `target_session_attrs=prefer-standby` for reads and `read-write` for writes.
+Credentials always contain all live data-member DNS names, never the proxy, even
+when ProxySQL is configured: PostgreSQL URIs use
+`target_session_attrs=prefer-standby` for reads and `read-write` for writes.
 TLS-enabled clusters supply their CA and `sslmode=verify-full`; disabled TLS
 uses `sslmode=disable`. The credential consumer must install the supplied CA
 in its connection trust configuration.
 
 `rotate-system-user` accepts either enabled logical identity. A sealed,
-operation-specific staged password is published through member configuration
-and ProxySQL users, and the operation waits for member revision acknowledgements.
+operation-specific staged password is published through member configuration,
+and the operation waits for member revision acknowledgements.

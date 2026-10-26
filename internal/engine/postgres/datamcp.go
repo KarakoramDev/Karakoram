@@ -111,8 +111,9 @@ func ensureDataSecrets(ctx context.Context, rc *engine.Context) error {
 	return nil
 }
 
-// DataAccessCredentials uses project-network DNS, never public endpoint routing.
-// Direct multi-host URIs prefer a standby for reads and require a writer for RW.
+// DataAccessCredentials uses direct project-network member DNS, never proxies or
+// public endpoints: the companion requires PostgreSQL's full extended protocol.
+// Multi-host URIs prefer a standby for reads and require a writer for RW.
 // PUBLIC CONNECT/object grants remain inherited PostgreSQL privileges: database
 // scoping is not an isolation boundary for objects already readable by PUBLIC.
 func (p *Core) DataAccessCredentials(ctx context.Context, rc *engine.Context, level engine.DataAccessLevel) (engine.DataAccessCredentials, error) {
@@ -133,24 +134,9 @@ func (p *Core) DataAccessCredentials(ctx context.Context, rc *engine.Context, le
 		return engine.DataAccessCredentials{}, err
 	}
 	out := engine.DataAccessCredentials{Username: r.Username, Password: r.Password, Database: roles.Databases[0], TLS: rc.Cluster.Spec.TLS.Mode != "disabled"}
-	proxy := false
-	for _, m := range s.Members {
-		if m.Role == "proxy" && !m.Removing {
-			proxy = true
-			break
-		}
-	}
-	if proxy {
-		port := "5432"
-		if level == engine.DataAccessRead {
-			port = "5433"
-		}
-		out.Hosts = []string{rc.Cluster.Name + "px:" + port}
-	} else {
-		for _, m := range s.data() {
-			if !m.Removing {
-				out.Hosts = append(out.Hosts, m.Name+":5432")
-			}
+	for _, m := range s.data() {
+		if !m.Removing {
+			out.Hosts = append(out.Hosts, m.Name+":5432")
 		}
 	}
 	if len(out.Hosts) == 0 {
@@ -166,13 +152,11 @@ func (p *Core) DataAccessCredentials(ctx context.Context, rc *engine.Context, le
 	}
 	u := url.URL{Scheme: "postgresql", User: url.UserPassword(out.Username, out.Password), Host: strings.Join(out.Hosts, ","), Path: "/" + out.Database, RawPath: "/" + url.PathEscape(out.Database)}
 	q := url.Values{"sslmode": {mode}}
-	if !proxy {
-		attrs := "prefer-standby"
-		if level == engine.DataAccessReadWrite {
-			attrs = "read-write"
-		}
-		q.Set("target_session_attrs", attrs)
+	attrs := "prefer-standby"
+	if level == engine.DataAccessReadWrite {
+		attrs = "read-write"
 	}
+	q.Set("target_session_attrs", attrs)
 	u.RawQuery = q.Encode()
 	out.URI = u.String()
 	return out, nil

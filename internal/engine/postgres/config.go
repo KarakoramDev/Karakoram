@@ -75,8 +75,7 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	if err != nil {
 		return infra.RuntimeSpec{}, err
 	}
-	dataRead, _ := engine.DataAccessLevels(rc.Cluster)
-	if m.Role == "proxy" && (o.Proxy.ReaderPort || dataRead) {
+	if m.Role == "proxy" && o.Proxy.ReaderPort {
 		ports = append(ports, infra.Port{Port: 5433, Protocol: "tcp"})
 	}
 	agentURL := rc.AgentURL
@@ -249,17 +248,6 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 				Username: "postgres", Password: get("users/postgres"),
 				RequireTLS: rc.Cluster.Spec.TLS.Mode == "requireTLS",
 			}},
-		}
-		dataRead, _ := engine.DataAccessLevels(rc.Cluster)
-		sp.Proxy.ReaderPort = sp.Proxy.ReaderPort || dataRead
-		roles, e := p.dataRoles(ctx, rc)
-		if e != nil {
-			return agentapi.MemberConfig{}, e
-		}
-		for _, role := range roles.Roles {
-			if role.Enabled {
-				sp.Proxy.Users = append(sp.Proxy.Users, pgspec.ProxyUser{Username: role.Username, Password: role.Password, RequireTLS: rc.Cluster.Spec.TLS.Mode == "requireTLS"})
-			}
 		}
 		users, e := p.proxyUsers(ctx, rc)
 		if e != nil {

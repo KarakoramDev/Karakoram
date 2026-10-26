@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -56,22 +57,18 @@ func TestDataMcpLifecycleAndCredentials(t *testing.T) {
 				if err != nil || u.Scheme != "postgresql" || u.Query().Get("sslmode") != "verify-full" {
 					t.Fatal("bad URI", err)
 				}
-				if proxy {
-					port := ":5432"
-					if level == engine.DataAccessRead {
-						port = ":5433"
+				attrs := "prefer-standby"
+				if level == engine.DataAccessReadWrite {
+					attrs = "read-write"
+				}
+				var hosts []string
+				for _, m := range s.data() {
+					if !m.Removing {
+						hosts = append(hosts, m.Name+":5432")
 					}
-					if len(cred.Hosts) != 1 || cred.Hosts[0] != "demopx"+port {
-						t.Fatal(cred.Hosts)
-					}
-				} else {
-					attrs := "prefer-standby"
-					if level == engine.DataAccessReadWrite {
-						attrs = "read-write"
-					}
-					if len(cred.Hosts) != len(s.data()) || u.Query().Get("target_session_attrs") != attrs {
-						t.Fatal("direct routing")
-					}
+				}
+				if !slices.Equal(cred.Hosts, hosts) || u.Host != strings.Join(hosts, ",") || u.Query().Get("target_session_attrs") != attrs {
+					t.Fatalf("expected direct member routing with %s, got hosts %v and URI host %q, attributes %q", attrs, cred.Hosts, u.Host, u.Query().Get("target_session_attrs"))
 				}
 			}
 			cfg, err := p.MemberConfig(t.Context(), rc, s.data()[0].Name)
@@ -93,12 +90,12 @@ func TestDataMcpLifecycleAndCredentials(t *testing.T) {
 				if err = json.Unmarshal(cfg.EngineSpec, &sp); err != nil {
 					t.Fatal(err)
 				}
-				if !sp.Proxy.ReaderPort {
-					t.Fatal("reader listener disabled")
+				if sp.Proxy.ReaderPort {
+					t.Fatal("Data MCP must not enable the proxy reader listener")
 				}
 				for _, name := range []string{"kk_mcp_ro", "kk_mcp_rw"} {
-					if !slices.ContainsFunc(sp.Proxy.Users, func(u pgspec.ProxyUser) bool { return u.Username == name }) {
-						t.Fatal("missing proxy identity")
+					if slices.ContainsFunc(sp.Proxy.Users, func(u pgspec.ProxyUser) bool { return u.Username == name }) {
+						t.Fatal("Data MCP identity published to proxy")
 					}
 				}
 			}
@@ -226,5 +223,35 @@ func TestDataMcpCarriesApplicationRoleRevision(t *testing.T) {
 		if err != nil || roles.Revision != revision {
 			t.Fatal("application role catalog revision omitted from payload", err)
 		}
+	}
+}
+
+func TestDataMcpCredentialsExcludeRemovingMembers(t *testing.T) {
+	p, rc, _ := setup(t, "ha")
+	rc.Cluster.Spec.DataMcp = &domain.DataMcpSpec{Enabled: true, Access: domain.DataMcpAccessReadWrite}
+	s := converge(t, p, rc)
+	members := s.data()
+	members[0].Removing = true
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, level := range []engine.DataAccessLevel{engine.DataAccessRead, engine.DataAccessReadWrite} {
+		credentials, err := p.DataAccessCredentials(t.Context(), rc, level)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{members[1].Name + ":5432", members[2].Name + ":5432"}
+		if !slices.Equal(credentials.Hosts, want) {
+			t.Fatalf("expected only active data members %v, got %v", want, credentials.Hosts)
+		}
+	}
+	for _, m := range members {
+		m.Removing = true
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DataAccessCredentials(t.Context(), rc, engine.DataAccessRead); !errors.Is(err, engine.ErrUnavailable) {
+		t.Fatalf("expected unavailable without active data members, got %v", err)
 	}
 }
