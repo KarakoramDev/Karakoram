@@ -148,7 +148,7 @@ func TestNeo4jMutationRequiresClusterUpdate(t *testing.T) {
 	if err := s.RBAC.ReplacePolicy(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
-	delegated, _, err := s.Auth.CreateToken(ctx, "user-manager", "users", nil)
+	delegated, _, err := s.Auth.CreateToken(ctx, "user-manager", "users", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,5 +179,22 @@ func TestNeo4jMutationRequiresClusterUpdate(t *testing.T) {
 	replay := idempotentCall(s, "POST", path, "", delegated, "revoked-user")
 	if replay.Code != 403 || p.writes != before || strings.Contains(replay.Body.String(), "generated-once") {
 		t.Fatal("revoked administrative permission revealed cached credentials", replay.Code)
+	}
+}
+
+func TestNeo4jRestrictedTokenDeniesPasswordReveal(t *testing.T) {
+	s, _, p := neo4jTestServer(t)
+	token, _, err := s.Auth.CreateToken(t.Context(), "admin", "no-reveal", nil, &domain.TokenRestrictions{AllowCredentialReveal: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ path, body string }{
+		{"/api/v1/clusters/prod/neo4j/users", `{"name":"app"}`},
+		{"/api/v1/clusters/prod/neo4j/users/app/password", ""},
+	} {
+		w := call(s, "POST", tc.path, tc.body, token)
+		if w.Code != http.StatusForbidden || p.writes != 0 {
+			t.Fatalf("restricted token allowed password mutation: %d %s", w.Code, w.Body.String())
+		}
 	}
 }

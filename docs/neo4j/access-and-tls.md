@@ -77,6 +77,8 @@ The API paths below are relative to `/api/v1/clusters/{cluster}`:
 
 Native routes use `database-users` permissions; every mutation additionally requires `clusters:update`. Cookie mutations require CSRF protection; mutations support `Idempotency-Key`. Password responses use `Cache-Control: no-store`. The generic MongoDB-shaped `/database-users` and `/database-roles` routes are not Neo4j access APIs.
 
+Management MCP exposes `neo4j_users_list` and `neo4j_user_get` as reads, and `neo4j_user_create`, `neo4j_user_delete` and `neo4j_user_password_set` as destructive operations requiring confirmation. Create and password changes are secret-bearing operations: restricted API tokens must permit credential reveal as well as the required permissions, even when supplying a password explicitly. Neo4j does not support the cluster Data MCP gateway.
+
 Creating an existing user returns 409, changing or deleting a missing user returns 404, and invalid names or passwords return 400. The managed `neo4j` administrator is hidden and cannot be changed through these routes.
 
 Names start with an ASCII letter and contain at most 64 letters, digits, underscores, dots or hyphens. Case-insensitive managed/reserved names include `neo4j`, `neo4j_*`, and prefixes `system`, `kk_`, `karakoram`.

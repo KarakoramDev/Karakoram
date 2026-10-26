@@ -4312,6 +4312,12 @@ paths:
       summary: List Neo4j Community users
       description: Every Community user has full administrative privileges. The managed neo4j administrator is hidden.
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: neo4j_users_list
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
       responses:
         '200':
           description: Application users, without passwords.
@@ -4335,6 +4341,12 @@ paths:
       summary: Create a Neo4j Community user
       description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
       x-karakoram-rbac: {resource: database-users, action: create, object: cluster}
+      x-karakoram-agent:
+        tool: neo4j_user_create
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -4373,6 +4385,12 @@ paths:
       summary: Read a Neo4j Community user
       description: Every Community user has full administrative privileges.
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: neo4j_user_get
+        risk: read
+        confirm: none
+        async: none
+        untrusted: true
       responses:
         '200':
           description: User attributes, never its password.
@@ -4392,6 +4410,11 @@ paths:
       summary: Delete a Neo4j Community user
       description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
       x-karakoram-rbac: {resource: database-users, action: delete, object: cluster}
+      x-karakoram-agent:
+        tool: neo4j_user_delete
+        risk: destructive
+        confirm: confirm
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
@@ -4419,6 +4442,12 @@ paths:
       summary: Set or generate a Neo4j Community user password
       description: Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: neo4j_user_password_set
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
       parameters:
         - $ref: '#/components/parameters/CSRF'
