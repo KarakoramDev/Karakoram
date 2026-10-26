@@ -19,6 +19,8 @@ Use a dedicated Karakoram API token in the HTTP `Authorization: Bearer …` head
 
 The endpoint supports stateless MCP `2026-07-28` and legacy initialize-based Streamable HTTP (`2025-11-25`, `2025-06-18`, `2025-03-26`). It does not serve deprecated HTTP+SSE. Legacy sessions are memory-only, principal-bound and expire after 30 idle minutes; at most 256 are retained.
 
+Tool lists are filtered by the caller's current permissions and selected toolsets. On MCP `2026-07-28`, `tools/list` returns `cacheScope: "private"` and `ttlMs: 0`, so lists are immediately stale and must not be shared between callers.
+
 ## Client configuration
 
 Claude Code supports a remote HTTP server:

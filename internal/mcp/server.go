@@ -288,6 +288,7 @@ func (h *Handler) server(r *http.Request) *sdk.Server {
 			}
 			copy := *list
 			copy.Tools = filtered
+			copy.CacheScope = "private"
 			return &copy, nil
 		}
 	})

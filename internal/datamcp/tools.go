@@ -89,7 +89,7 @@ func (g *Gateway) list(ctx context.Context, ref domain.ClusterRef, req mcp.Reque
 	if e != nil {
 		return nil, e
 	}
-	result := &mcp.ListToolsResult{Tools: []*mcp.Tool{}}
+	result := &mcp.ListToolsResult{Cacheable: mcp.Cacheable{CacheScope: "private"}, Tools: []*mcp.Tool{}}
 	for _, t := range tools {
 		result.Tools = append(result.Tools, t.tool)
 	}

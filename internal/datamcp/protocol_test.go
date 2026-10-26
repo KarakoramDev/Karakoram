@@ -2,6 +2,7 @@ package datamcp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -90,6 +91,28 @@ func TestGatewayProtocolBridge(t *testing.T) {
 						x.g.ServeHTTP(response, req)
 						if response.Code != http.StatusOK || strings.Contains(response.Body.String(), `"error"`) || !strings.Contains(response.Body.String(), `"result"`) {
 							t.Fatalf("stateless %s: HTTP %d: %s", method, response.Code, response.Body.String())
+						}
+						if method == "tools/list" {
+							var wire struct {
+								Result struct {
+									CacheScope string `json:"cacheScope"`
+									TTLMs      *int   `json:"ttlMs"`
+								} `json:"result"`
+							}
+							payload := response.Body.String()
+							if strings.HasPrefix(response.Header().Get("Content-Type"), "text/event-stream") {
+								_, data, found := strings.Cut(payload, "data: ")
+								if !found {
+									t.Fatalf("missing SSE data: %s", payload)
+								}
+								payload, _, _ = strings.Cut(data, "\n")
+							}
+							if err := json.Unmarshal([]byte(payload), &wire); err != nil {
+								t.Fatal(err)
+							}
+							if wire.Result.CacheScope != "private" || wire.Result.TTLMs == nil || *wire.Result.TTLMs != 0 {
+								t.Fatalf("caller-specific tool list must be private and immediately stale: %s", response.Body.String())
+							}
 						}
 					}
 				}

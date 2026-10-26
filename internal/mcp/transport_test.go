@@ -5,6 +5,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -104,5 +105,54 @@ func TestToolsetsNarrowDiscoveryAndCalls(t *testing.T) {
 	}
 	if _, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "version_get", Arguments: map[string]any{}}); err == nil {
 		t.Fatal("call escaped selected toolsets")
+	}
+}
+
+func TestStatelessToolListCacheScope(t *testing.T) {
+	for _, allowed := range []bool{true, false} {
+		t.Run(fmt.Sprintf("allowed=%t", allowed), func(t *testing.T) {
+			h, err := New(Options{Mode: "readwrite", Authenticate: func(*http.Request) (*auth.Principal, error) {
+				return &auth.Principal{Account: "user", TokenID: "test"}, nil
+			}, Allowed: func(context.Context, *auth.Principal, string) bool { return allowed }, REST: http.NotFoundHandler()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"stateless-test","version":"1"},"io.modelcontextprotocol/clientCapabilities":{}}}}`
+			req := httptest.NewRequest(http.MethodPost, "/mcp?toolsets=Clusters", strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer testing")
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			req.Header.Set("MCP-Protocol-Version", "2026-07-28")
+			req.Header.Set("Mcp-Method", "tools/list")
+			response := httptest.NewRecorder()
+			h.ServeHTTP(response, req)
+			if response.Code != http.StatusOK {
+				t.Fatalf("tools/list: HTTP %d: %s", response.Code, response.Body.String())
+			}
+			var wire struct {
+				Result *struct {
+					CacheScope string      `json:"cacheScope"`
+					TTLMs      *int        `json:"ttlMs"`
+					Tools      []*sdk.Tool `json:"tools"`
+				} `json:"result"`
+			}
+			payload := response.Body.String()
+			if strings.HasPrefix(response.Header().Get("Content-Type"), "text/event-stream") {
+				_, data, found := strings.Cut(payload, "data: ")
+				if !found {
+					t.Fatalf("missing SSE data: %s", payload)
+				}
+				payload, _, _ = strings.Cut(data, "\n")
+			}
+			if err := json.Unmarshal([]byte(payload), &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire.Result == nil || wire.Result.CacheScope != "private" || wire.Result.TTLMs == nil || *wire.Result.TTLMs != 0 {
+				t.Fatalf("caller-specific tool list must be private and immediately stale: %s", response.Body.String())
+			}
+			if (len(wire.Result.Tools) > 0) != allowed {
+				t.Fatalf("unexpected filtered tools: %s", response.Body.String())
+			}
+		})
 	}
 }
