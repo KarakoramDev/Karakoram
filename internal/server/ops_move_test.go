@@ -14,10 +14,45 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
 
+type moveTestProvider struct {
+	fakeProvider
+	name string
+}
+
+func (p *moveTestProvider) Name() string { return p.name }
+
+func configureMoveTestProvider(t *testing.T, s *Server, name string) *moveTestProvider {
+	t.Helper()
+	p := &moveTestProvider{name: name}
+	registry, err := engine.NewRegistry(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Registry = registry
+	c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Spec.Provider = name
+	if err := s.Store.UpdateClusterSpec(t.Context(), c.Ref(), c.Spec); err != nil {
+		t.Fatal(err)
+	}
+	c, err = s.Store.GetCluster(t.Context(), c.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Status.ObservedGeneration = c.Generation
+	if err := s.Store.UpdateClusterState(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 func TestMoveMemberAPI(t *testing.T) {
 	for _, authoritative := range []bool{false, true} {
 		t.Run(map[bool]string{false: "best-effort", true: "backend"}[authoritative], func(t *testing.T) {
 			s, _, token := testServer(t)
+			configureMoveTestProvider(t, s, "psmdb")
 			capabilities := infra.Capabilities{Placement: authoritative}
 			s.namespaces = engine.StaticNamespaces{DefaultBackend: fake.New(fake.Options{Capabilities: capabilities})}
 			c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})
@@ -57,6 +92,7 @@ func TestMoveMemberAPI(t *testing.T) {
 
 func TestMoveMemberAdmission(t *testing.T) {
 	s, _, token := testServer(t)
+	provider := configureMoveTestProvider(t, s, "psmdb")
 	capabilities := infra.Capabilities{Placement: true}
 	s.namespaces = engine.StaticNamespaces{DefaultBackend: fake.New(fake.Options{Capabilities: capabilities})}
 	path := "/api/v1/clusters/prod/members/prodm0/move"
@@ -79,10 +115,9 @@ func TestMoveMemberAdmission(t *testing.T) {
 			t.Fatal(w.Code, w.Body.String())
 		}
 	}
-	provider, _ := s.Registry.Get("fake")
 	info := provider.Describe()
 	info.Operations = nil
-	provider.(*fakeProvider).info = &info
+	provider.info = &info
 	if w := call(s, "POST", path, "", token); w.Code != 409 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -115,6 +150,7 @@ func TestMoveAndReplaceShareMemberRefusal(t *testing.T) {
 
 func TestMoveBestEffortUnknownPlacement(t *testing.T) {
 	s, _, token := testServer(t)
+	configureMoveTestProvider(t, s, "psmdb")
 	s.namespaces = engine.StaticNamespaces{DefaultBackend: fake.New(fake.Options{})}
 	w := call(s, "POST", "/api/v1/clusters/prod/members/prodm0/move", "", token)
 	if w.Code != 202 {
@@ -130,5 +166,28 @@ func TestMoveBestEffortUnknownPlacement(t *testing.T) {
 	}
 	if err = json.Unmarshal(op.Payload, &payload); err != nil || !payload.Relocate || payload.AvoidGroup != "" {
 		t.Fatal(payload, err)
+	}
+}
+
+func TestMoveMemberRejectsIntegratedEnginesWithoutRelocation(t *testing.T) {
+	for _, name := range []string{"mysql", "pxc", "neo4j", "weaviate", "keycloak", "openbao", "temporal"} {
+		t.Run(name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			// Advertise replacement to prove it does not imply relocation support.
+			configureMoveTestProvider(t, s, name)
+			w := call(s, "POST", "/api/v1/clusters/prod/members/prodm0/move", "", token)
+			if w.Code != 409 || !strings.Contains(w.Body.String(), "Member moves are not supported for engine "+name) {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			ops, err := s.Store.ListOperations(t.Context(), domain.ClusterRef{Name: "prod"})
+			if err != nil || len(ops) != 0 {
+				t.Fatal(ops, err)
+			}
+			// Placement is advisory and remains readable even without move support.
+			w = call(s, "GET", "/api/v1/clusters/prod/placement", "", token)
+			if w.Code != 200 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+		})
 	}
 }

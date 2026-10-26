@@ -2,9 +2,12 @@
 package cpbackup
 
 import (
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -135,5 +138,99 @@ func TestExportFreshAndUnsealedState(t *testing.T) {
 				t.Fatalf("unsealed export: %+v: %v", m, err)
 			}
 		})
+	}
+}
+
+func TestExportPreservesPostgresBindingsAndEngineState(t *testing.T) {
+	ctx := t.Context()
+	sealer, err := secrets.New(strings.Repeat("k", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), sealer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	source := domain.Cluster{Name: "source", Spec: domain.ClusterSpec{Provider: "postgres", Version: "17.11.1"}}
+	if err := st.CreateCluster(ctx, &source); err != nil {
+		t.Fatal(err)
+	}
+	bindings := map[string]*domain.PostgresBinding{}
+	for _, name := range []string{"keycloak", "openbao", "temporal", "mysql", "pxc", "neo4j", "weaviate"} {
+		cluster := domain.Cluster{
+			Name:     name,
+			Spec:     domain.ClusterSpec{Provider: name, EngineOptions: json.RawMessage(`{"checkpoint":"desired"}`)},
+			Internal: json.RawMessage(`{"checkpoint":"durable"}`),
+		}
+		if err := st.CreateCluster(ctx, &cluster); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.SetClusterSecret(ctx, cluster.Ref(), "binding-password", []byte("sealed-value")); err != nil {
+			t.Fatal(err)
+		}
+		if name == "keycloak" || name == "openbao" || name == "temporal" {
+			binding, err := st.EnsurePostgresBinding(ctx, &domain.PostgresBinding{
+				ID: "binding-" + name, SourceCluster: source.Name, ConsumerKind: name,
+				ConsumerName: name, Databases: []string{name}, RoleName: "kb_" + name,
+				MinMajor: 12, MaxMajor: 18, State: "ready", CredentialGeneration: 3,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			bindings[binding.ID] = binding
+		}
+	}
+	out := filepath.Join(t.TempDir(), "snapshot.db.gz")
+	if _, err := Export(ctx, st, sealer, out, "test", "commit"); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	gz, err := gzip.NewReader(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	snapshot := filepath.Join(t.TempDir(), "restored.db")
+	file, err := os.Create(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(file, gz); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := store.Open(snapshot, sealer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restored.Close()
+	for id, want := range bindings {
+		got, err := restored.GetPostgresBinding(ctx, id)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("binding snapshot mismatch: got=%+v want=%+v err=%v", got, want, err)
+		}
+	}
+	for _, name := range []string{"keycloak", "openbao", "temporal", "mysql", "pxc", "neo4j", "weaviate"} {
+		ref := domain.ClusterRef{Name: name}
+		want, err := st.GetCluster(ctx, ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := restored.GetCluster(ctx, ref)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s state snapshot mismatch: got=%+v want=%+v err=%v", name, got, want, err)
+		}
+		secret, err := restored.GetClusterSecret(ctx, ref, "binding-password")
+		if err != nil || string(secret) != "sealed-value" {
+			t.Fatalf("%s sealed secret missing: %q: %v", name, secret, err)
+		}
 	}
 }

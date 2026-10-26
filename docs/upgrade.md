@@ -208,6 +208,8 @@ The durable `upgrade-agents` operation redeploys the current executable at the *
 
 Rollouts respect [maintenance windows](operations.md#maintenance-windows). Use `--ignore-maintenance-window` for an explicit override; this does not bypass engine safety gates. Timing out or interrupting `--wait` does not cancel the rollout; retain the operation ID and use `operations wait ID`.
 
+Agent rollout requires an advertised provider operation backed by a one-member disruption journal. Keycloak, OpenBao, Temporal, MySQL, PXC, Neo4j and Weaviate do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
+
 Automatic rollout is **off by default**:
 
 ```sh

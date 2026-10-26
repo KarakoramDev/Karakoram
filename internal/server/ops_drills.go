@@ -69,6 +69,11 @@ func validateDrillPolicy(c *domain.Cluster) *response {
 	if err != nil || timeout < 30*time.Minute || timeout > 48*time.Hour {
 		return field("timeout", "timeout must be a Go duration between 30m and 48h")
 	}
+	if p.Enabled {
+		if err := drills.ValidateProvider(c.Spec.Provider); err != nil {
+			return field("enabled", err.Error())
+		}
+	}
 	if p.BackupSchedule != "" {
 		for _, schedule := range c.Spec.Backup.Schedules {
 			if schedule.Name == p.BackupSchedule {
@@ -125,6 +130,9 @@ func (s *Server) backupDrills(ctx context.Context, name string, in input) respon
 		if c.Deleting || (c.ManagedBy != nil && c.ManagedBy.Kind == "backup-drill") {
 			return fail(409, "conflict", "Cannot drill a deleting cluster or a backup drill target")
 		}
+		if err := drills.ValidateProvider(c.Spec.Provider); err != nil {
+			return fail(409, "unsupported", err.Error())
+		}
 		var requested string
 		if b, ok := in.Body.(*api.CreateBackupDrillRequest); ok && b != nil {
 			requested = value(b.Backup)
@@ -161,6 +169,9 @@ func drillContext(ctx context.Context, namespace string) context.Context {
 }
 
 func (s *Server) createDrillTarget(ctx context.Context, source domain.Cluster, d domain.BackupDrill) error {
+	if err := drills.ValidateProvider(source.Spec.Provider); err != nil {
+		return err
+	}
 	spec := source.Spec
 	spec.Backup.Schedules = nil
 	spec.Backup.Drill = nil

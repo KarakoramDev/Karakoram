@@ -45,6 +45,12 @@ func (s *Server) replaceOrMoveMember(ctx context.Context, rc *engine.Context, pr
 	if !relocate {
 		return s.enqueue(ctx, c.Ref(), domain.OperationReplaceMember, map[string]string{"member": name})
 	}
+	switch c.Spec.Provider {
+	case "psmdb", "rabbitmq", "elasticsearch", "postgres", "supabase":
+		// These replacement implementations honor relocate and avoidGroup.
+	default:
+		return fail(409, "conflict", "Member moves are not supported for engine "+c.Spec.Provider+"; replacement support alone does not provide relocation")
+	}
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
 	}

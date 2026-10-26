@@ -485,3 +485,33 @@ func TestConcurrencyEnvironment(t *testing.T) {
 		})
 	}
 }
+
+func TestUnsupportedProvidersRejectBeforeProvisioning(t *testing.T) {
+	for _, name := range []string{"keycloak", "openbao", "temporal", "mysql", "pxc", "neo4j", "weaviate", "unknown"} {
+		t.Run(name, func(t *testing.T) {
+			for _, phase := range []string{"Pending", "Provisioning", "Restoring", "Verifying"} {
+				t.Run(phase, func(t *testing.T) {
+					f := setup(t)
+					ref := domain.ClusterRef{Namespace: "default", Name: "source"}
+					source := f.s.clusters[ref.Key()]
+					source.Spec.Provider = name
+					f.s.clusters[ref.Key()] = source
+					f.s.backups[0].Provider = name
+					if _, err := SelectBackup(t.Context(), f.s, source, "backup"); err == nil || !strings.Contains(err.Error(), "unsupported") {
+						t.Fatalf("unsupported provider accepted backup selection: %v", err)
+					}
+					d := f.s.drills["one"]
+					d.Phase = phase
+					f.s.drills[d.ID] = d
+					if err := f.tick(t); err != nil {
+						t.Fatal(err)
+					}
+					d = f.s.drills[d.ID]
+					if f.creates != 0 || d.CompletedAt == nil || !strings.Contains(d.Error, "unsupported") || !strings.Contains(d.Error, name) {
+						t.Fatalf("unsupported drill was not safely rejected: creates=%d report=%+v", f.creates, d)
+					}
+				})
+			}
+		})
+	}
+}

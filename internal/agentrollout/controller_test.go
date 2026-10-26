@@ -24,11 +24,17 @@ func (c *clock) Now() time.Time { return c.at }
 type provider struct {
 	engine.Provider
 	supported bool
+	name      string
 }
 
-func (provider) Name() string { return "fake" }
+func (p provider) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "fake"
+}
 func (p provider) Describe() domain.ProviderInfo {
-	info := domain.ProviderInfo{Name: "fake"}
+	info := domain.ProviderInfo{Name: p.Name()}
 	if p.supported {
 		info.Operations = []string{domain.OperationUpgradeAgents}
 	}
@@ -175,5 +181,29 @@ func TestAgentRolloutIDIncludesIncarnationAndBuild(t *testing.T) {
 	c.CreatedAt = c.CreatedAt.Add(time.Second)
 	if id == OperationID(c, "a") {
 		t.Fatal("incarnation ignored")
+	}
+}
+
+func TestAgentRolloutUnsupportedProvidersNeverEnqueue(t *testing.T) {
+	for _, name := range []string{"keycloak", "openbao", "temporal", "mysql", "pxc", "neo4j", "weaviate"} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := setup(t, true, 1)
+			registry, err := engine.NewRegistry(provider{name: name})
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.opts.Registry = registry
+			value := cluster(t, c, "unsupported", func(v *domain.Cluster) { v.Spec.Provider = name })
+			if err := c.Reconcile(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.opts.Store.GetOperation(t.Context(), OperationID(value, "target")); err != store.ErrNotFound {
+				t.Fatalf("unsupported provider scheduled a disruption: %v", err)
+			}
+			events, err := c.opts.Store.ListEvents(t.Context(), store.EventFilter{Cluster: value.Name})
+			if err != nil || len(events) != 1 || !strings.Contains(events[0].Message, "unsupported") || !strings.Contains(events[0].Message, name) {
+				t.Fatalf("missing unsupported-provider warning: %+v: %v", events, err)
+			}
+		})
 	}
 }

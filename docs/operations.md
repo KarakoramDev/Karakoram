@@ -85,6 +85,13 @@ members, Elasticsearch data/master nodes, and PostgreSQL HA data members
 (including Supabase's PostgreSQL core). Routers, proxies, standalone PostgreSQL,
 and auxiliary Elasticsearch/Supabase components cannot be moved this way.
 
+Move admission is limited to the `psmdb`, `rabbitmq`, `elasticsearch`, `postgres`
+and `supabase` engines whose replacement workflows honor relocation constraints.
+MySQL/PXC, Neo4j, Weaviate, Keycloak, OpenBao and Temporal moves are rejected
+before an operation is queued, even when an engine supports ordinary member
+replacement. Placement reads remain advisory and available independently of
+move support; reported groups do not establish that an engine can relocate.
+
 The API is `POST /clusters/{cluster}/members/{member}/move`; it returns a durable
 `replace-member` operation with `relocate:true` and the observed `avoidGroup`.
 It shares replacement admission, authorization and maintenance-window rules.

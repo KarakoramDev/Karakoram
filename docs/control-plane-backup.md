@@ -33,6 +33,8 @@ The timestamp is `YYYYMMDDTHHMMSSZ`. The JSON manifest contains `format: karakor
 
 A snapshot includes desired state, inventory, operation journals, accounts, policies, installation identity, sealed secrets and PKI. Secrets and private keys remain sealed using the original master key. **The master key is not in the backup.** Preserve `KARAKORAM_MASTER_KEY` independently, securely, and test recovery. The fingerprint detects a wrong key; it is not a substitute for a strong master key or trusted backup custody. Hashes detect corruption, not malicious replacement of both archive and manifest.
 
+SQLite `VACUUM INTO` snapshots every table, including `postgres_bindings` and its source-incarnation/dependency metadata, not a hand-maintained table allowlist. Desired options, internal lifecycle journals and sealed cluster secrets for all registered engines are included, including Keycloak, OpenBao, Temporal, MySQL, PXC, Neo4j and Weaviate. These records do not include those engines' external data or volumes.
+
 The snapshot includes API-token hashes and immutable restriction metadata,
 OAuth grant/token hashes, and sealed Data MCP companion state/configuration.
 Raw API-token bearer secrets are not stored; Data MCP credentials stay in their

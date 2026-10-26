@@ -139,8 +139,17 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 		if len(status.Agents.Outdated) == 0 {
 			continue
 		}
+		provider, err := c.opts.Registry.Get(cluster.Spec.Provider)
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		supported := slices.Contains(provider.Describe().Operations, domain.OperationUpgradeAgents)
 		id := OperationID(cluster, target.Build)
 		event := domain.Event{Namespace: cluster.Namespace, Cluster: cluster.Name, Type: "Warning", Reason: "AgentsOutdated", Message: fmt.Sprintf("Agents differ from target build %s: %v", target.Build, status.Agents.Outdated), Actor: "system:agent-rollout", CreatedAt: c.opts.Clock.Now()}
+		if !supported {
+			event.Message += fmt.Sprintf("; automatic agent upgrades are unsupported for provider %q (no one-member disruption journal); no rollout scheduled", cluster.Spec.Provider)
+		}
 		inserted, err := c.opts.Store.AppendDeduplicatedEvent(ctx, "agentRollout/warnings/"+id, &event)
 		if err != nil {
 			failures = append(failures, err)
@@ -152,12 +161,7 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 		if !settings.Automatic || cluster.ManagedBy != nil || cluster.Deleting || cluster.Status.Phase == domain.PhaseSuspended {
 			continue
 		}
-		provider, err := c.opts.Registry.Get(cluster.Spec.Provider)
-		if err != nil {
-			failures = append(failures, err)
-			continue
-		}
-		if !slices.Contains(provider.Describe().Operations, domain.OperationUpgradeAgents) {
+		if !supported {
 			continue
 		}
 		payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: target.Build, TargetVersion: target.Version})

@@ -88,9 +88,23 @@ func TargetName(id string) string {
 	return "dr" + hex.EncodeToString(digest[:])[:10]
 }
 
+// ValidateProvider limits drills to engines with isolated clone/restore support.
+// Binding-backed services must never restore their shared source in a drill.
+func ValidateProvider(provider string) error {
+	switch provider {
+	case "psmdb", "mongodb", "rabbitmq", "elasticsearch", "elastic", "postgres", "postgresql", "supabase":
+		return nil
+	default:
+		return fmt.Errorf("backup drills are unsupported for provider %q: isolated clone and restore are not implemented", provider)
+	}
+}
+
 // SelectBackup selects only successful, engine-compatible restorable inventory.
 // An explicit selection is still subject to the policy's schedule filter.
 func SelectBackup(ctx context.Context, st BackupRepository, source domain.Cluster, requested string) (domain.Backup, error) {
+	if err := ValidateProvider(source.Spec.Provider); err != nil {
+		return domain.Backup{}, err
+	}
 	backups, err := st.ListBackups(ctx, source.Ref())
 	if err != nil {
 		return domain.Backup{}, err
@@ -223,6 +237,9 @@ func (c *Controller) step(ctx context.Context, d domain.BackupDrill) error {
 	}
 	if source.Deleting {
 		return c.report(ctx, d, "source cluster is deleting")
+	}
+	if err := ValidateProvider(source.Spec.Provider); err != nil {
+		return c.report(ctx, d, err.Error())
 	}
 	timeout := 6 * time.Hour
 	if p := source.Spec.Backup.Drill; p != nil && p.Timeout != "" {

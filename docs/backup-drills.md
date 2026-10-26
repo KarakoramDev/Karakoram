@@ -85,6 +85,8 @@ Missing timing fields mean the milestone or measurement is not yet available, no
 | PostgreSQL | Restore the selected pgBackRest backup and confirm inventory/readiness; this is backup restore, not an arbitrary PITR exercise. |
 | Supabase | PostgreSQL backup restore scope; not proof of recovery of every external integration or non-database asset. |
 
+Drills explicitly reject Keycloak, OpenBao, Temporal, MySQL, PXC, Neo4j, Weaviate and unknown providers before provisioning. Their isolated clone/restore drill contracts are not implemented. In particular, a drill must not restore a binding-backed service's shared PostgreSQL source in place. A persisted unsupported drill records a clear failure without creating a target; ordinary engine backup and restore support does not imply drill support.
+
 See [engine backup capabilities](backups.md#engine-recovery-capabilities) for backup types and recovery boundaries.
 
 ## Events and notifications

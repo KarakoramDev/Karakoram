@@ -12,7 +12,36 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/drills"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
+
+// drillProvider exercises server admission with an isolated-clone-capable
+// provider name; the generic fake is intentionally unsupported by drills.
+type drillProvider struct{ fakeProvider }
+
+func (*drillProvider) Name() string { return "psmdb" }
+func (p *drillProvider) Describe() domain.ProviderInfo {
+	info := p.fakeProvider.Describe()
+	info.Name = p.Name()
+	return info
+}
+
+func configureDrillProvider(t *testing.T, s *Server) {
+	t.Helper()
+	registry, err := engine.NewRegistry(&fakeProvider{}, &drillProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Registry = registry
+	source, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.Spec.Provider = "psmdb"
+	if err := s.Store.UpdateClusterSpec(t.Context(), source.Ref(), source.Spec); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestDrillPolicyValidation(t *testing.T) {
 	for _, tc := range []struct {
@@ -47,6 +76,7 @@ func TestDrillPolicyValidation(t *testing.T) {
 
 func TestDrillAPIDefaultsAndReports(t *testing.T) {
 	s, _, token := testServer(t)
+	configureDrillProvider(t, s)
 	ctx := context.Background()
 	path := "/api/v1/clusters/prod/backup-drills"
 	if w := call(s, "POST", path, "", token); w.Code != 409 {
@@ -54,9 +84,9 @@ func TestDrillAPIDefaultsAndReports(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	for _, b := range []domain.Backup{
-		{Name: "old", Cluster: "prod", Provider: "fake", Type: "full", Phase: domain.PhaseSucceeded, CreatedAt: now.Add(-time.Hour)},
-		{Name: "latest", Cluster: "prod", Provider: "fake", Type: "full", Phase: domain.PhaseSucceeded, CreatedAt: now},
-		{Name: "failed", Cluster: "prod", Provider: "fake", Type: "full", Phase: domain.PhaseFailed, CreatedAt: now.Add(time.Minute)},
+		{Name: "old", Cluster: "prod", Provider: "psmdb", Type: "logical", Phase: domain.PhaseSucceeded, CreatedAt: now.Add(-time.Hour)},
+		{Name: "latest", Cluster: "prod", Provider: "psmdb", Type: "logical", Phase: domain.PhaseSucceeded, CreatedAt: now},
+		{Name: "failed", Cluster: "prod", Provider: "psmdb", Type: "logical", Phase: domain.PhaseFailed, CreatedAt: now.Add(time.Minute)},
 	} {
 		b := b
 		if err := s.Store.CreateBackup(ctx, &b); err != nil {
@@ -123,12 +153,13 @@ func TestDrillTargetMutationGuard(t *testing.T) {
 
 func TestDrillCreatePathAndOwnership(t *testing.T) {
 	s, _, token := testServer(t)
+	configureDrillProvider(t, s)
 	ctx := context.Background()
 	source, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	backup := domain.Backup{Name: "copy", Cluster: "prod", Provider: "fake", Type: "logical", Phase: domain.PhaseSucceeded}
+	backup := domain.Backup{Name: "copy", Cluster: "prod", Provider: "psmdb", Type: "logical", Phase: domain.PhaseSucceeded}
 	if err = s.Store.CreateBackup(ctx, &backup); err != nil {
 		t.Fatal(err)
 	}
@@ -200,5 +231,32 @@ func TestDrillPolicyHTTPValidation(t *testing.T) {
 		if w.Code != 400 || !strings.Contains(w.Body.String(), "spec.backup.drill.") {
 			t.Fatal(request.method, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestDrillUnsupportedProviderAdmission(t *testing.T) {
+	for _, name := range []string{"keycloak", "openbao", "temporal", "mysql", "pxc", "neo4j", "weaviate"} {
+		t.Run(name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			source, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "prod"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			source.Spec.Provider = name
+			if err := s.Store.UpdateClusterSpec(t.Context(), source.Ref(), source.Spec); err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "POST", "/api/v1/clusters/prod/backup-drills", "", token)
+			if w.Code != 409 || !strings.Contains(w.Body.String(), "unsupported") || !strings.Contains(w.Body.String(), name) {
+				t.Fatalf("unsupported drill admission: %d %s", w.Code, w.Body.String())
+			}
+			source.Spec.Backup.Drill = &domain.BackupDrillPolicy{Enabled: true, Schedule: "0 3 * * *"}
+			if r := validateDrillPolicy(source); r == nil || r.status != 400 {
+				t.Fatalf("unsupported drill policy accepted: %+v", r)
+			}
+			if err := s.createDrillTarget(t.Context(), *source, domain.BackupDrill{ID: "unsupported"}); err == nil || !strings.Contains(err.Error(), "unsupported") {
+				t.Fatalf("unsupported direct target create accepted: %v", err)
+			}
+		})
 	}
 }
