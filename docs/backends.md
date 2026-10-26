@@ -51,4 +51,4 @@ For public TCP on Dokploy and Nomad, admission requires an allowlist covering th
 
 For additional targets, [register a namespace](namespaces.md) using `--backend zerops`, `--backend dokploy` or `--backend nomad`, a write-only credential and the backend's non-secret `--config key=value` settings. The API keeps the field name `projectId` for the backend target ID. Backend kind and target identity are immutable; existing records and omitted kinds remain Zerops. Do not change an existing installation's default backend as an in-place cluster migration.
 
-Compare [Pricing and cost estimates](pricing.md) before choosing capacity, storage, public addresses and recovery objectives.
+Compare [Operating costs](operating-costs.md) before choosing capacity, storage, public addresses and recovery objectives.

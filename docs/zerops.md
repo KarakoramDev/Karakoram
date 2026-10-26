@@ -138,7 +138,7 @@ See [Limitations](limitations.md) for shared control-plane, security, networking
 
 Karakoram is self-hosted software; infrastructure costs depend on the project, control plane, engine members, stateless components, relay runtimes, Local Storage, object storage and public addresses. Dedicated CPU, larger resource bounds and dedicated IPv4 affect the footprint. Replication adds members and volumes rather than making one volume replicated.
 
-Use [Pricing and cost estimates](pricing.md) for current assumptions, worked engine footprints and platform pricing links. Include backup retention and retained/orphaned volumes in cost review; do not equate deleting a cluster record with removing every billable resource.
+Use [Operating costs](operating-costs.md) for current assumptions, worked engine footprints and platform pricing links. Include backup retention and retained/orphaned volumes in cost review; do not equate deleting a cluster record with removing every billable resource.
 
 ## Troubleshooting
 

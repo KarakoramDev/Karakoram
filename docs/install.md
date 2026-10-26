@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Install Karakoram
 
-Choose an infrastructure backend before installing. Karakoram is multi-platform; backend capabilities and operator responsibilities differ. See [Backends](backends.md) and [Pricing and cost estimates](pricing.md).
+Choose an infrastructure backend before installing. Karakoram is multi-platform; backend capabilities and operator responsibilities differ. See [Backends](backends.md) and [Operating costs](operating-costs.md).
 
 | Backend | Installation path |
 | --- | --- |

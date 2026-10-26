@@ -33,7 +33,7 @@ Karakoram is multi-platform; a namespace selects the infrastructure backend that
 | Dokploy | Docker Swarm | Applications and node-local volumes on your Dokploy-managed Docker Swarm; [guide](docs/dokploy.md). |
 | Nomad | Native jobs | Native jobs and dynamic host volumes on your operator-managed Nomad cluster; [guide](docs/nomad.md). |
 
-See [Backends](docs/backends.md) for capability differences and [Pricing](docs/pricing.md) for infrastructure costs.
+See [Backends](docs/backends.md) for capability differences and [Operating costs](docs/operating-costs.md) for infrastructure costs.
 
 ## Across engines
 
@@ -68,7 +68,7 @@ Coding agents: read [AGENTS.md](AGENTS.md) for repository boundaries and contrib
 
 Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative source/reference links resolve.
 
-- **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Backends](docs/backends.md) · [Pricing](docs/pricing.md) · [Upgrade](docs/upgrade.md)
+- **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Backends](docs/backends.md) · [Operating costs](docs/operating-costs.md) · [Upgrade](docs/upgrade.md)
 - **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Zerops backend](docs/zerops.md) · [Dokploy backend](docs/dokploy.md) · [Nomad backend](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
 - **Interfaces:** [Web UI](docs/web-ui.md) · [CLI](docs/cli.md) · [REST API and SDK](docs/api.md) · [MCP quick start](docs/mcp-quickstart.md) · [MCP server](docs/mcp.md) · [Cluster data MCP](docs/data-mcp.md)
 - **Operator agents:** [karakoram-operator skill](skills/karakoram-operator/SKILL.md) · [Skill installation](skills/README.md)

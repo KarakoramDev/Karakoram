@@ -1,17 +1,19 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Pricing and cost estimates
+# Operating costs
 
 **The figures below are rough estimates; check the providers’ current pricing before ordering. Prices collected on 26 October 2026.** Karakoram is Apache-2.0 software; these are infrastructure estimates, not a Karakoram subscription, quote, performance promise or availability guarantee.
 
 Karakoram is multi-platform: **Zerops** is the reference backend; **Dokploy** and **Nomad** run on infrastructure you supply. The same VM budget below applies to both backends; the cloud providers are hosting examples, not additional Karakoram backends. See [Backends](backends.md), [clusters](clusters.md) and [limitations](limitations.md).
+
+Karakoram itself is **free and open source**. These are the infrastructure costs of running clusters on each backend/provider, not a price Karakoram charges.
 
 ## Assumptions
 
 - Use **730 hours/month**, on-demand Linux/amd64, no reservations, savings plans, credits or free trials. Hetzner and DigitalOcean monthly caps apply; Zerops' published 30-day rates are multiplied by 730/720. Regions: **Nuremberg/Helsinki for Hetzner compute and European object storage; Frankfurt (eu-central-1) for AWS; FRA1 for DigitalOcean; Gravelines (GRA), France, for OVHcloud Public Cloud**.
 - Native currencies: **USD for Zerops, AWS and DigitalOcean; EUR for Hetzner and OVHcloud**. No currency conversion. Totals are rounded to whole currency units, or one decimal below 10; unit rates retain precision. VAT/taxes excluded.
 - Egress, cross-zone traffic, object requests, paid support, load balancers, NAT gateways, replacement/upgrade overlap and retained/orphaned resources are excluded. Private networking/IPv6 is assumed where necessary. Hetzner's selected public price includes IPv4; AWS public IPv4 is not included. Do not expose internal management listeners.
-- Each engine table is an **entire standalone installation**: engine resources + one Karakoram control plane + one backend server host for Dokploy or Nomad + backup storage. Zerops includes a free Lightweight core for MINIMAL, or one Serious core for MINIMAL HA / PRODUCTION-SHAPED. Share overhead across engines in the same installation instead of paying it five times.
+- Each engine table is an **entire standalone installation**: engine resources + one Karakoram control plane + one backend server host for Dokploy or Nomad + backup storage. Zerops includes a free Lightweight core for MINIMAL, or one Serious core for MINIMAL HA / PRODUCTION-SHAPED. Share overhead across engines in the same installation instead of paying it once per engine.
 - Backup occupancy per cluster is **20 GB/GiB MINIMAL, 100 GB/GiB MINIMAL HA, 500 GB/GiB PRODUCTION-SHAPED**. This is retained physical object occupancy, not logical database size, a retention policy or a compression assumption. Size WAL/oplog history, full/incremental copies and restore staging separately.
 - CPU/RAM/data disk are stated per member as **cores / GiB / GB** (provider storage billing units differ). Every VM has spare RAM above the engine reservation; VM quantities include the OS/scheduler budget. Small shared/burstable VMs are not performance-equivalent to dedicated cores.
 - MINIMAL and MINIMAL HA use explicit admission floors, not necessarily the larger presets. Where validation supplies no positive numeric RAM floor, use the created default and say so. Explicitly set minimum and maximum CPU/RAM/data-disk bounds to the listed size; otherwise omitted maxima can allocate more storage/resources.
@@ -19,7 +21,7 @@ Karakoram is multi-platform: **Zerops** is the reference backend; **Dokploy** an
 
 ## How we calculated
 
-Zerops defaults to **SHARED** CPU in all five engine providers and the control-plane import. Resource cost is the sum over runtimes of CPU + RAM + ephemeral disk, plus persistent volume capacity. Object storage and project core are separate. The estimates budget the upper ephemeral-disk bound: 3 GB per MongoDB/RabbitMQ/Elasticsearch member. PostgreSQL/Supabase currently pass data-component disk bounds to both the runtime and persistent volume, so both are counted (5 + 5 GB at the floor; 100 + 100 GB in the production example). Auxiliary services use their 1-GB runtime-disk default. No extra CPU/RAM charge is invented for a Local Storage volume.
+Zerops defaults to **SHARED** CPU in the engine providers and the control-plane import. Resource cost is the sum over runtimes of CPU + RAM + ephemeral disk, plus persistent volume capacity. Object storage and project core are separate. The estimates budget the upper ephemeral-disk bound: 3 GB per MongoDB/RabbitMQ/Elasticsearch/OpenBao/Weaviate member. PostgreSQL/Supabase/MySQL/PXC and Neo4j currently pass data-component disk bounds to both the runtime and persistent volume, so both are counted. Zerops Local Storage has a 5-GB minimum even when engine admission permits 1 GB. Auxiliary services use their 1-GB runtime-disk default. No extra CPU/RAM charge is invented for a Local Storage volume.
 
 VM estimates are **host count × VM price + storage + object storage + shared control overhead**. AWS adds a 20-GiB gp3 OS disk to every VM and a separate data disk to each data member; DigitalOcean includes its OS disk and adds Volumes for data. Hetzner uses included local SSD capacity for node-pinned persistent host directories, not network Volumes: 40 GB on CX23 or 160 GB on CX43 accommodates the listed data plus OS budget. This is local, non-replicated member storage; engine replication and separate backups remain necessary. An optional Hetzner network-Volume variant is **not priced** because its current unit rate was not recoverable from the official public page; do not interpret that as free block storage.
 
@@ -228,3 +230,218 @@ Combined master/data nodes admit 1–9 members, at least 1 whole CPU, 1.5 GiB RA
 | OVHcloud (EUR) | €32 | €50 | €347 |
 
 Plan space for shard recovery/rebalance and watermarks, not just indexed data. Optional Kibana 9.x has a 1.5-GiB active RAM floor; Logstash and dedicated masters have 1-GiB floors, APM 0.25 GiB. None is needed for the Elasticsearch-only topology priced here. Review [snapshots](elasticsearch/snapshots.md), [Stack components](elasticsearch/stack.md) and Elastic's licensing restrictions in the [engine guide](elasticsearch/README.md).
+
+
+## Additional v0.4.0 engines
+
+**OpenBao, Temporal, Percona Server for MySQL, PXC, Neo4j Community, Weaviate, Keycloak and the Citus distributed topology are EXPERIMENTAL until tested against live backends.** The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except Temporal on Zerops as explained below; backend support is not deployment acceptance.
+
+PostGIS, pgvector and TimescaleDB profiles cost the same as the corresponding PostgreSQL tier above; no extra runtime is required, but workload-driven CPU/RAM/disk growth is additional.
+
+### OpenBao
+
+Use integrated **Raft storage** and the default Shamir seal: no PostgreSQL source or paid KMS/transit service is included. Admission allows 1/3/5 members at 1 CPU / 0.5 GiB / 5 GB persistent disk; created RAM defaults to 1 GiB. Each member has a separate 1–3-GB runtime disk. PostgreSQL storage is an opt-in alternative requiring a bound source and a different recovery budget, not the Raft installation priced here. See [OpenBao](openbao/README.md) and [admission](../internal/engine/openbao/provider.go#L187).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 × 1 / 0.5 / 5; Raft singleton |
+| MINIMAL HA | 3 × 1 / 0.5 / 5; three Raft voters |
+| PRODUCTION-SHAPED | 3 × 4 / 8 / 100; Raft snapshots to S3 |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | 1 × managed runtime | 3 × managed runtime | 3 × managed runtime |
+| Hetzner | 1 × CX23 | 3 × CX23 | 3 × CX43 |
+| AWS | 1 × t3.small | 3 × t3.small | 3 × m6i.xlarge |
+| DigitalOcean | 1 × Basic 1-GiB | 3 × Basic 1-GiB | 3 × Basic 16-GiB |
+| OVHcloud | 1 × d2-2 | 3 × d2-2 | 3 × b2-15 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | $7.5 | $24 | $131 |
+| Hetzner (EUR) | €24 | €36 | €68 |
+| AWS (USD) | $77 | $119 | $607 |
+| DigitalOcean (USD) | $48 | $61 | $365 |
+| OVHcloud (EUR) | €32 | €50 | €347 |
+
+### Temporal
+
+The strict minimum is one **combined** server with UI explicitly disabled. Combined servers run frontend/history/matching/internal worker together; split topology instead requires one of each role. Common component validation requires 1 whole CPU, positive RAM and 1-GB runtime disk but no fixed positive RAM floor: use the created **1-GiB RAM default**. Replicated combined servers supply redundant service instances, not a separate consensus quorum. See [Temporal](temporal/README.md), [components/defaults](../internal/engine/temporal/provider.go#L44) and [validation](../internal/engine/temporal/provider.go#L228).
+
+A bound PostgreSQL source is mandatory. Each cell includes one additional source at the **PostgreSQL MINIMAL** sizing (1 / 1 / 5, proxy disabled), sharing this installation’s control plane/backend server; backup occupancy is charged once on that source (20/100/500). This remains a singleton persistence bottleneck even in MINIMAL HA; upgrade the source to PostgreSQL HA separately for durable service HA. UI, application workers and external ingress are excluded. **Zerops is not supported** by the current Temporal runtime: it discovers a private local IPv4 route to persistence (`internal/agent/temporal/runner.go:68–78`), while Zerops private service addressing is IPv6 (`internal/infra/zerops/render.go:16`). Dokploy and Nomad provide the required private IPv4 networking; managed public HTTPS is disabled.
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 combined at 1 / 1 / 1 runtime; + source 1 / 1 / 5 |
+| MINIMAL HA | 2 combined at 1 / 1 / 1 runtime; + singleton source 1 / 1 / 5 |
+| PRODUCTION-SHAPED | 3 combined at 4 / 8 / 1 runtime; + singleton source 1 / 1 / 5 |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | not supported | not supported | not supported |
+| Hetzner | 1 × CX23 + 1 × CX23 | 2 × CX23 + 1 × CX23 | 3 × CX43 + 1 × CX23 |
+| AWS | 1 × t3.small + 1 × t3.small | 2 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 1 × t3.small |
+| DigitalOcean | 1 × Basic 2-GiB + 1 × Basic 2-GiB | 2 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 1 × Basic 2-GiB |
+| OVHcloud | 1 × d2-2 + 1 × d2-2 | 2 × d2-2 + 1 × d2-2 | 3 × b2-15 + 1 × d2-2 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | not supported | not supported | not supported |
+| Hetzner (EUR) | €30 | €36 | €74 |
+| AWS (USD) | $97 | $118 | $598 |
+| DigitalOcean (USD) | $66 | $78 | $347 |
+| OVHcloud (EUR) | €40 | €48 | €329 |
+
+### Percona Server for MySQL
+
+Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling ProxySQL; `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; XtraBackup runs with data members, not on extra hosts. See [MySQL](mysql/README.md), [topology admission](../internal/engine/mysql/provider.go#L173) and [resource admission](../internal/engine/mysql/provider.go#L195).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 × 1 / 1 / 5; proxy disabled |
+| MINIMAL HA | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| PRODUCTION-SHAPED | 3 × 4 / 8 / 100; 2 proxies at 1 / 1 / 1 runtime; S3 backups |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | 1 × managed runtime | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 2 × managed runtime |
+| Hetzner | 1 × CX23 | 3 × CX23 + 1 × CX23 | 3 × CX43 + 2 × CX23 |
+| AWS | 1 × t3.small | 3 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
+| DigitalOcean | 1 × Basic 2-GiB | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
+| OVHcloud | 1 × d2-2 | 3 × d2-2 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | $9.2 | $33 | $168 |
+| Hetzner (EUR) | €24 | €42 | €80 |
+| AWS (USD) | $77 | $138 | $646 |
+| DigitalOcean (USD) | $54 | $91 | $389 |
+| OVHcloud (EUR) | €32 | €57 | €362 |
+
+### Percona XtraDB Cluster (PXC)
+
+PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus 1 required ProxySQL replica; 5 data members are also admitted. Data floors/defaults and proxy resources match Percona Server above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md) and [shared provider topology/floors](../internal/engine/mysql/provider.go#L67).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| MINIMAL HA | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| PRODUCTION-SHAPED | 3 × 4 / 8 / 100; 2 proxies at 1 / 1 / 1 runtime; S3 backups |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 2 × managed runtime |
+| Hetzner | 3 × CX23 + 1 × CX23 | 3 × CX23 + 1 × CX23 | 3 × CX43 + 2 × CX23 |
+| AWS | 3 × t3.small + 1 × t3.small | 3 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
+| DigitalOcean | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
+| OVHcloud | 3 × d2-2 + 1 × d2-2 | 3 × d2-2 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | $22 | $33 | $168 |
+| Hetzner (EUR) | €42 | €42 | €80 |
+| AWS (USD) | $136 | $138 | $646 |
+| DigitalOcean (USD) | $91 | $91 | $389 |
+| OVHcloud (EUR) | €57 | €57 | €362 |
+
+### Neo4j Community
+
+**Singleton only: no HA tier.** Admission requires exactly one member, 1 whole CPU / 1 GiB RAM / 1 GB persistent disk; created defaults are 1 / 2 / 10. Zerops bills its 5-GB minimum volume plus the 1-GB runtime disk at the admission floor. Production remains one larger member. Offline dumps interrupt the database; enable scheduled-backup downtime consent when scheduling them. See [Neo4j](neo4j/README.md) and [admission](../internal/engine/neo4j/provider.go#L113).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 × 1 / 1 / 1 persistent disk |
+| PRODUCTION-SHAPED | 1 × 4 / 8 / 100; offline dumps to S3 |
+
+| Worker placement | Minimal | Production-shaped |
+| --- | --- | --- |
+| **Zerops** | 1 × managed runtime | 1 × managed runtime |
+| Hetzner | 1 × CX23 | 1 × CX43 |
+| AWS | 1 × t3.small | 1 × m6i.xlarge |
+| DigitalOcean | 1 × Basic 2-GiB | 1 × Basic 16-GiB |
+| OVHcloud | 1 × d2-2 | 1 × b2-15 |
+
+| Monthly total | Minimal | Production-shaped |
+| --- | ---: | ---: |
+| **Zerops (USD)** | $8.8 | $67 |
+| Hetzner (EUR) | €24 | €35 |
+| AWS (USD) | $77 | $248 |
+| DigitalOcean (USD) | $54 | $153 |
+| OVHcloud (EUR) | €32 | €134 |
+
+### Weaviate
+
+Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CPU / 1 GiB RAM / 1 GB persistent disk. Created defaults are 1 / 2 / 10. The cluster has three fixed Raft metadata voters; configure collection replication as well (cluster replication minimum defaults to 3). Each member has a separate 1–3-GB runtime disk; Zerops bills at least 5 GB per volume. Inference services/API usage and application objects beyond the listed disks are excluded. See [Weaviate](weaviate/README.md) and [admission](../internal/engine/weaviate/provider.go#L131).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 × 1 / 1 / 1; no redundancy |
+| MINIMAL HA | 3 × 1 / 1 / 1; three voters and replicated collections |
+| PRODUCTION-SHAPED | 3 × 4 / 8 / 100; replicated collections and S3 full backups |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | 1 × managed runtime | 3 × managed runtime | 3 × managed runtime |
+| Hetzner | 1 × CX23 | 3 × CX23 | 3 × CX43 |
+| AWS | 1 × t3.small | 3 × t3.small | 3 × m6i.xlarge |
+| DigitalOcean | 1 × Basic 2-GiB | 3 × Basic 2-GiB | 3 × Basic 16-GiB |
+| OVHcloud | 1 × d2-2 | 3 × d2-2 | 3 × b2-15 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | $9.0 | $29 | $131 |
+| Hetzner (EUR) | €24 | €36 | €68 |
+| AWS (USD) | $77 | $118 | $607 |
+| DigitalOcean (USD) | $54 | $78 | $365 |
+| OVHcloud (EUR) | €32 | €50 | €347 |
+
+### Keycloak
+
+**Singleton only: no HA tier** in the implemented provider. Admission requires 1 CPU / 1.5 GiB RAM / 1-GB disposable runtime disk; pin maxima explicitly rather than the created 2-CPU / 2-GiB / 3-GB upper bounds. A bound PostgreSQL source is mandatory: each cell includes PostgreSQL MINIMAL (1 / 1 / 5, proxy disabled), sharing control-plane/backend-server overhead, with the 20/500 backup occupancy charged once on that source. Production-shaped enlarges the Keycloak runtime, not the singleton source; size/upgrade the source separately for workload and recovery needs. Backups protect the source rather than the disposable runtime. Private ingress only is priced, so Nomad’s lack of managed public HTTPS does not exclude it; external public ingress costs remain excluded. See [Keycloak](keycloak/README.md) and [admission](../internal/engine/keycloak/provider.go#L147).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 runtime at 1 / 1.5 / 1; + source 1 / 1 / 5 |
+| PRODUCTION-SHAPED | 1 runtime at 4 / 8 / 1; + singleton source 1 / 1 / 5 |
+
+| Worker placement | Minimal | Production-shaped |
+| --- | --- | --- |
+| **Zerops** | 1 × managed runtime + 1 × managed runtime | 1 × managed runtime + 1 × managed runtime |
+| Hetzner | 1 × CX23 + 1 × CX23 | 1 × CX43 + 1 × CX23 |
+| AWS | 1 × t3.small + 1 × t3.small | 1 × m6i.xlarge + 1 × t3.small |
+| DigitalOcean | 1 × Basic 2-GiB + 1 × Basic 2-GiB | 1 × Basic 16-GiB + 1 × Basic 2-GiB |
+| OVHcloud | 1 × d2-2 + 1 × d2-2 | 1 × b2-15 + 1 × d2-2 |
+
+| Monthly total | Minimal | Production-shaped |
+| --- | ---: | ---: |
+| **Zerops (USD)** | $14 | $51 |
+| Hetzner (EUR) | €30 | €41 |
+| AWS (USD) | $97 | $259 |
+| DigitalOcean (USD) | $66 | $155 |
+| OVHcloud (EUR) | €40 | €133 |
+
+### PostgreSQL with Citus distributed topology
+
+Each coordinator/worker **group** admits 1 or 3 data members, each at PostgreSQL’s 1 / 1 / 5 floor (created RAM default 2 GiB). At least **one worker group plus one coordinator group** is required; worker-group default is 2, maximum 8. Replicated groups run Patroni; coordinator members co-locate the shared etcd quorum and workers are its clients. Replicated groups require at least one shared coordinator ProxySQL replica; an unreplicated distributed minimum may explicitly disable it. No extra proxy per worker group is required. Production below chooses two worker groups. The 20/100/500 backup occupancy is for the **whole distributed cluster**, not per group; provision enough for every group and coordinated restore points. See [Citus](postgres/distributed.md), [admission](../internal/engine/postgres/provider.go#L258), [worker-group bounds](../internal/engine/postgres/options.go#L59) and [member count](../internal/engine/postgres/groups.go#L102).
+
+| Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
+| --- | --- |
+| MINIMAL | 1 coordinator + 1 worker, each 1 × 1 / 1 / 5; proxy disabled |
+| MINIMAL HA | 1 coordinator + 1 worker, each 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| PRODUCTION-SHAPED | 1 coordinator + 2 workers, each 3 × 4 / 8 / 100; 2 proxies at 1 / 1 / 1 runtime; S3 backups |
+
+| Worker placement | Minimal | Minimal HA | Production-shaped |
+| --- | --- | --- | --- |
+| **Zerops** | 2 × managed runtime | 6 × managed runtime + 1 × managed runtime | 9 × managed runtime + 2 × managed runtime |
+| Hetzner | 2 × CX23 | 6 × CX23 + 1 × CX23 | 9 × CX43 + 2 × CX23 |
+| AWS | 2 × t3.small | 6 × t3.small + 1 × t3.small | 9 × m6i.xlarge + 2 × t3.small |
+| DigitalOcean | 2 × Basic 2-GiB | 6 × Basic 2-GiB + 1 × Basic 2-GiB | 9 × Basic 16-GiB + 2 × Basic 2-GiB |
+| OVHcloud | 2 × d2-2 | 6 × d2-2 + 1 × d2-2 | 9 × b2-15 + 2 × d2-2 |
+
+| Monthly total | Minimal | Minimal HA | Production-shaped |
+| --- | ---: | ---: | ---: |
+| **Zerops (USD)** | $14 | $47 | $450 |
+| Hetzner (EUR) | €30 | €60 | €179 |
+| AWS (USD) | $97 | $198 | $1722 |
+| DigitalOcean (USD) | $67 | $129 | $1025 |
+| OVHcloud (EUR) | €41 | €83 | €1002 |

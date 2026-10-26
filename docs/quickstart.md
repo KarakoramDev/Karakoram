@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Quick start
 
-Choose a backend, install the control plane, then create a cluster and back it up. See [Backends](backends.md) for capability differences and [Pricing](pricing.md) for costs.
+Choose a backend, install the control plane, then create a cluster and back it up. See [Backends](backends.md) for capability differences and [Operating costs](operating-costs.md) for costs.
 
 | Backend | Quick-start path |
 | --- | --- |
