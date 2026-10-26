@@ -4,6 +4,8 @@
 
 See the [overview](README.md) for prerequisites and [operations](operations.md) for maintenance. Karakoram project namespaces and Temporal workflow namespaces are separate concepts; `karactl -n NS` selects the former.
 
+These access paths apply to Dokploy and Nomad; Zerops is not supported in v0.4.0 because Temporal requires private IPv4 membership networking. Public Web UI HTTPS is available only on configured Dokploy; Nomad UI access remains private.
+
 ## Trust and authorization
 
 Internode traffic always uses mutual TLS with a cluster CA and per-component identities. The frontend always serves TLS on private gRPC port 7233 (HTTP API 7243). `engineOptions.frontend.requireClientAuth` defaults to `true`; setting it to false removes client-certificate authentication, **not** encryption. Generic public frontend exposure is rejected.

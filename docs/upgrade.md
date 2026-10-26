@@ -77,6 +77,8 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 
 Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent rollout](#rolling-out-member-agents). Review [engine/backend status](backends.md#engine-availability) and the [verified-offline Ops features](operations.md) before enabling new functionality.
 
+Temporal is available on Dokploy and Nomad only in v0.4.0. Zerops support is pending IPv6 private networking: the current Temporal membership runtime requires a private IPv4 route to the bound PostgreSQL writer.
+
 ## Upgrading from v0.2.0 to v0.3.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.3.0**, as for every upgrade ([consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup)). Namespaces, clusters, secrets, policies and API tokens are retained; no cluster recreation is required.
@@ -113,7 +115,7 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
   --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```
 
-Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#member-agent-updates). Data MCP companions are new private services created only when a cluster opts in.
+Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#rolling-out-member-agents). Data MCP companions are new private services created only when a cluster opts in.
 
 ## Upgrading from v0.1.x to v0.2.0
 
@@ -158,7 +160,7 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
   --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```
 
-Set `PROJECT_ID` as below. Preserve the existing volume, master key, secrets, public origin and single-writer deployment settings. Then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#member-agent-updates); upgrading the control-plane binary alone does not replace running member binaries.
+Set `PROJECT_ID` as below. Preserve the existing volume, master key, secrets, public origin and single-writer deployment settings. Then follow [deployment and readiness](#deployment-and-readiness) and [member-agent updates](#rolling-out-member-agents); upgrading the control-plane binary alone does not replace running member binaries.
 
 ### New optional backends
 

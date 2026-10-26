@@ -33,7 +33,7 @@ The table describes implemented runtime/admission support, **not live-backend ac
 | Engine / topology | Status | Zerops | Dokploy | Nomad | Guide |
 | --- | --- | --- | --- | --- | --- |
 | OpenBao | **EXPERIMENTAL** until tested against live backends | Native runtime | Native runtime | Native runtime | [OpenBao](openbao/README.md) |
-| Temporal | **EXPERIMENTAL** until tested against live backends | Private services; optional public UI | Private services; optional public UI with configured HTTPS routing | Private services/UI only; no managed public UI HTTPS | [Temporal](temporal/README.md) |
+| Temporal | **EXPERIMENTAL** until tested against live backends | Not supported in v0.4.0: membership requires private IPv4; Zerops uses private IPv6 | Private services; optional public UI with configured HTTPS routing | Private services/UI only; no managed public UI HTTPS | [Temporal](temporal/README.md) |
 | MySQL / Percona Server | **EXPERIMENTAL** until tested against live backends | Single / Group Replication | Single / Group Replication | Single / Group Replication | [MySQL](mysql/README.md) |
 | Percona XtraDB Cluster (PXC) | **EXPERIMENTAL** until tested against live backends | Galera | Galera | Galera | [PXC](mysql/README.md) |
 | Neo4j Community | **EXPERIMENTAL** until tested against live backends | Singleton | Singleton | Singleton | [Neo4j](neo4j/README.md) |
@@ -43,7 +43,7 @@ The table describes implemented runtime/admission support, **not live-backend ac
 
 PostgreSQL [extension profiles](postgres/profiles.md) (PostGIS, pgvector and TimescaleDB) and [service bindings](postgres/bindings.md) use the shared PostgreSQL provider on Zerops, Dokploy and Nomad. Profiles are version/artifact-gated; bindings require a compatible ready source and consumer-specific PostgreSQL version. OpenBao PostgreSQL storage, Temporal and Keycloak require the shared binding service present in the standard server.
 
-No new engine is backend-name restricted: common admission checks public TCP/allowlisting and dedicated CPU; PostgreSQL/MySQL/PXC proxy replicas and Temporal role replicas above one require horizontal scaling. All three backends offer horizontal scaling. Only Zerops enforces public TCP CIDR filtering; Dokploy and Nomad require the explicit all-address acknowledgement and external filtering. Managed public HTTPS is available on Zerops and configured Dokploy, not Nomad. This does not imply safe private networking for untrusted tenants; review each engine's transport requirements.
+Temporal is restricted to Dokploy and Nomad in v0.4.0; Zerops support is pending IPv6 private networking. Common admission checks public TCP/allowlisting and dedicated CPU; PostgreSQL/MySQL/PXC proxy replicas and Temporal role replicas above one require horizontal scaling. All three backends offer horizontal scaling. Only Zerops enforces public TCP CIDR filtering; Dokploy and Nomad require the explicit all-address acknowledgement and external filtering. Managed public HTTPS is available on Zerops and configured Dokploy, not Nomad. This does not imply safe private networking for untrusted tenants; review each engine's transport requirements.
 
 Fleet operations, [notifications](notifications.md), [control-plane recovery](control-plane-backup.md) and [backup drills](backup-drills.md) are **verified offline** (tests without a live backend); see [operations](operations.md) and [verification](verification.md) for scope.
 
@@ -54,7 +54,7 @@ These are backend capabilities, not guarantees of engine availability. Query `GE
 
 | Capability | Zerops — reference | Dokploy | Nomad |
 | --- | --- | --- | --- |
-| Engine model | Shared native contract for every catalog engine and topology listed above | Same runtime contract; subject to the status and feature gates above | Same runtime contract; no managed public HTTPS |
+| Engine model | Shared native contract for catalog engines/topologies above, except Temporal | Shared runtime contract; subject to the status and feature gates above | Same runtime contract; no managed public HTTPS |
 | Placement | No anti-affinity guarantee; observed placement is not authoritative | Authoritative Swarm node; volumes spread while eligible nodes remain | Authoritative Nomad node; volumes spread while eligible nodes remain |
 | Persistent storage | Node-local Local Storage; enforced volume sizing and supported growth, no shrink | Node-local Docker named volumes; no enforced quota or supported growth | Dynamic `mkdir` host volumes; no enforced quota or supported growth |
 | Public TCP | Project public addresses and backend-enforced CIDR allowlists | Swarm routing mesh; no backend CIDR filtering | Static host ports; operator load balancer must forward to the correct node; no backend CIDR filtering |
