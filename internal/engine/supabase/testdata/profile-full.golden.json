@@ -10,7 +10,7 @@
     ],
     "demop0": [
       "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
-      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\nif DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '\"'\"'%s\\n'\"'\"' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" \u003e\u00262\nexit \"$status\"\nfi\n'",
       "sudo percona-release setup -y ppg-17",
       "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
       "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2",
@@ -21,7 +21,7 @@
     "demopx": [
       "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl",
       "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d",
-      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\nif DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '\"'\"'%s\\n'\"'\"' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" \u003e\u00262\nexit \"$status\"\nfi\n'",
       "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service \u0026\u0026 sudo systemctl mask proxysql.service; fi"
     ],
     "demors": [
@@ -31,6 +31,34 @@
   },
   "Members": {
     "demop0": {
+      "dataAccess": {
+        "roles": [
+          {
+            "username": "kk_mcp_ro",
+            "password": "",
+            "enabled": false,
+            "settings": {
+              "default_transaction_read_only": "on",
+              "idle_in_transaction_session_timeout": "60s",
+              "statement_timeout": "30s"
+            }
+          },
+          {
+            "username": "kk_mcp_rw",
+            "password": "",
+            "enabled": false,
+            "write": true,
+            "settings": {
+              "idle_in_transaction_session_timeout": "60s",
+              "statement_timeout": "30s"
+            }
+          }
+        ],
+        "databases": [
+          "postgres"
+        ],
+        "globalRead": true
+      },
       "role": "data",
       "topology": "single",
       "flavour": "supabase",
@@ -218,14 +246,14 @@
   "BootstrapDigest": "bc020b6cdf36424f8e36faff10be79f34dd5ebee7671daab01238b72a3fae4a4",
   "RestartTokens": {
     "analytics": "7498050b06839ab694951d0e9bc08fbe65c8f7d70ec7469513d039ea60bdff60",
-    "auth": "c7d51bdf59f44e00240dd98f46cb3e9530fec040f33624ad5fe792af60792365",
+    "auth": "51d188f88b2a6c7d73dda3f224f8f74750c306283d22d13f9f670c8dd1c949a2",
     "functions": "7aac043e89f06469e72e2c0bafe0c62e42f02e58267da1b322a4ce8f58b73723",
     "gateway": "3182a9353f902dad7e3e0b82599787e8f723f10c64b5ba3dfe0a8350d428fc08",
     "imgproxy": "0f05a7b59b254c9891a9df4b48613972798e3ebcd7fd4d8ad2fb1d1fafce4c31",
     "meta": "df9c758328898e681214c9006715d018cb5c1bf6cef2bb0cbc3aeb85344a7da1",
     "pooler": "eb56a457203566beb7d1298985c209e5aaec61598743f1f5265543359dc19a91",
     "realtime": "61b1b03c4bac4c653ff9c373a9faba418bb34086256fe9e25420c46c47703ea7",
-    "rest": "d0c0ad41eb5d3ea3704d156eb0c3cbe3dc1396d3258f92dc4709cc4711e863a7",
+    "rest": "b0ae61b567e1ef32ae7f88527e402bd6b59cdc1e71ccdbecfc0c0cbb1ea9f247",
     "storage": "15031c1f744fe1cc9cb7a39c4c4ee953f35f3511de748243a5d47fb4d61e7dc4",
     "studio": "39c29af6c9564517d13415b380c5d37ce8b8d83def992564e582c0ff1d8ef42f",
     "vector": "f2197781348281d6f76320264e34c71466989e1ac77575014f885dc6dd974116"

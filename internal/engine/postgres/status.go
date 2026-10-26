@@ -143,12 +143,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	// Bind every proxy's fresh runtime rows to the writer observed in this
 	// sweep. Running alone only promises some ONLINE writer (older agents may
 	// only promise a listening frontend), not the current primary.
+	// Distributed client traffic targets only the coordinator (group zero);
+	// worker primaries must not look like competing client-facing writers.
 	primaryHost := ""
 	primaryCount := 0
 	for i, m := range s.Members {
 		observation := liveMembers[i]
 		st := observation.status
-		if m.Role == "data" && observation.agentHealthy && observation.err == nil && st.Running && (st.Role == "primary" || st.Role == "standalone") {
+		if m.Role == "data" && m.Group == 0 && observation.agentHealthy && observation.err == nil && st.Running && (st.Role == "primary" || st.Role == "standalone") {
 			primaryHost = m.Name
 			primaryCount++
 		}

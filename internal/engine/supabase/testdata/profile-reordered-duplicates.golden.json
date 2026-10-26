@@ -10,7 +10,7 @@
     ],
     "demop0": [
       "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl gnupg lsb-release",
-      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'percona-release.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'10a419065480e4cd4ad6d1036e742832203e79ff537461115361ec2f7ff62e36  percona-release.deb'\"'\"' | sha256sum -c -\nif DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '\"'\"'%s\\n'\"'\"' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" \u003e\u00262\nexit \"$status\"\nfi\n'",
       "sudo percona-release setup -y ppg-17",
       "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d \u0026\u0026 sudo apt-get install -y postgresql-common \u0026\u0026 printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf \u003e/dev/null",
       "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-17='2:17.11-1.noble' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2",
@@ -21,7 +21,7 @@
     "demopx": [
       "sudo apt-get update \u0026\u0026 sudo apt-get install -y ca-certificates curl",
       "printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d \u003e/dev/null \u0026\u0026 sudo chmod 0755 /usr/sbin/policy-rc.d",
-      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\napt-get install -y \"$stage/$file\"\n'",
+      "sudo sh -c 'set -eu\numask 077\nstage=$(mktemp -d /tmp/karakoram-artifact.XXXXXXXXXX)\ntrap '\"'\"'rm -rf -- \"$stage\"'\"'\"' EXIT HUP INT TERM\ncd \"$stage\"\nset -C\nfile='\"'\"'proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"'\ntest ! -e \"$file\" \u0026\u0026 test ! -L \"$file\"\ncurl -fsSL '\"'\"'https://artifacts.example.invalid/proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' \u003e \"$file\"\nprintf '\"'\"'%s\\n'\"'\"' '\"'\"'cda9e28707c944ef673dac2a37b7d0c96b5d11c8df49daccaf377495c8ea69ff  proxysql_3.0.11-ubuntu24_amd64.deb'\"'\"' | sha256sum -c -\nif DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '\"'\"'%s\\n'\"'\"' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" \u003e\u00262\nexit \"$status\"\nfi\n'",
       "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service \u0026\u0026 sudo systemctl mask proxysql.service; fi"
     ],
     "demors": [
@@ -31,6 +31,34 @@
   },
   "Members": {
     "demop0": {
+      "dataAccess": {
+        "roles": [
+          {
+            "username": "kk_mcp_ro",
+            "password": "",
+            "enabled": false,
+            "settings": {
+              "default_transaction_read_only": "on",
+              "idle_in_transaction_session_timeout": "60s",
+              "statement_timeout": "30s"
+            }
+          },
+          {
+            "username": "kk_mcp_rw",
+            "password": "",
+            "enabled": false,
+            "write": true,
+            "settings": {
+              "idle_in_transaction_session_timeout": "60s",
+              "statement_timeout": "30s"
+            }
+          }
+        ],
+        "databases": [
+          "postgres"
+        ],
+        "globalRead": true
+      },
       "role": "data",
       "topology": "single",
       "flavour": "supabase",
@@ -220,9 +248,9 @@
   ],
   "BootstrapDigest": "9e16b56444a73ccf5b6e821822d23f2e70450f597f001cac350cec537e667b6e",
   "RestartTokens": {
-    "auth": "67e97079d826b3449c9a7ca36bc9c618b79545150353d92b7a1a9cba1dd34027",
+    "auth": "9948c7d72914f39a22a7024d08649aaf76bc2a6d03961fa89775ee74e7956935",
     "gateway": "616455745e54a9ddddcab9c0afb7e1ab8f6a476dc58f50980fd044b92cec8f59",
-    "rest": "02e4b5e5911ac998ece819ec5d231f1da4af6bc8e417c0ab238ce1189874f3ba"
+    "rest": "8ef37cbace9a5b65e4a31551fd25eef815c06246a2699267abc15d476f0d44bb"
   },
   "CoreSpecDigest": "457aa75c4d5d2b617cba6cae16ff00af7622d937594fd021cc00c979c380bcd9"
 }

@@ -15,7 +15,30 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 )
+
+func TestPostgresProfileDataMcpAdmission(t *testing.T) {
+	p := postgres.New(postgres.Options{})
+	for _, profile := range []string{"postgis", "pgvector", "timescaledb"} {
+		t.Run(profile, func(t *testing.T) {
+			c := &domain.Cluster{Spec: domain.ClusterSpec{Provider: "postgres", Topology: domain.Topology{Type: "ha"}, EngineOptions: json.RawMessage(`{"profiles":["` + profile + `"]}`), DataMcp: &domain.DataMcpSpec{Enabled: true}}}
+			if err := validateDataMcp(p, c); err != nil {
+				t.Fatalf("profile rejected: %v", err)
+			}
+			c.Spec.Topology.Type = "distributed"
+			err := validateDataMcp(p, c)
+			var field *engine.ValidationError
+			if !errors.As(err, &field) || field.Field != "spec.dataMcp.enabled" || !strings.Contains(field.Message, "distributed") {
+				t.Fatalf("distributed topology needs clear field error: %v", err)
+			}
+			c.Spec.DataMcp.Enabled = false
+			if err := validateDataMcp(p, c); err != nil {
+				t.Fatalf("disabled data MCP rejected: %v", err)
+			}
+		})
+	}
+}
 
 type dataMcpProvider struct {
 	fakeProvider

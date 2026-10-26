@@ -2617,6 +2617,11 @@ paths:
       tags: [Postgres]
       summary: Rebalance shards across distributed PostgreSQL worker groups
       x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_rebalance
+        risk: destructive
+        confirm: confirm
+        async: operation
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -3829,6 +3834,11 @@ paths:
       tags: [Postgres]
       summary: List inbound PostgreSQL consumer bindings without credentials
       x-karakoram-rbac: {resource: database-users, action: read, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_bindings_list
+        risk: read
+        confirm: none
+        async: none
       responses:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
@@ -3857,6 +3867,12 @@ paths:
       summary: Rotate binding credentials and refresh the consumer
       x-karakoram-rbac: {resource: database-users, action: update, object: cluster}
       x-karakoram-rbac-extra: {resource: clusters, action: update, object: cluster}
+      x-karakoram-agent:
+        tool: postgres_binding_rotate
+        risk: destructive
+        confirm: confirm
+        secret: true
+        async: none
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'

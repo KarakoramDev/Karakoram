@@ -81,12 +81,13 @@ func setupDistributed(t *testing.T, replicas int) (*Core, *engine.Context, *fake
 				http.NotFound(w, r)
 				return
 			}
+			if m.Role == "proxy" {
+				proxy.ServeHTTP(w, r)
+				return
+			}
 			role := "replica"
 			if name == leader(m.Group) {
 				role = "primary"
-			}
-			if m.Role == "proxy" {
-				role = "proxy"
 			}
 			options, _ := ParseOptions(m.Options)
 			json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: role, Leader: leader(m.Group), Running: !m.Offline, Streaming: role == "replica", Version: m.Version, SystemID: fmt.Sprintf("group-%d", m.Group), Timeline: 1, WALPosition: "1/100", EtcdHealthy: true, EtcdMemberID: name + "-etcd", CredentialReceipts: true, SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true, SharedMemoryParameters: fakeSharedMemory(options.Parameters), HealthCapabilities: &pgspec.HealthCapabilities{LocalEtcd: true, ReplicationSlots: true, WALArchive: true, ReplicationDistance: true, PatroniPause: true}})

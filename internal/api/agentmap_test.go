@@ -10,6 +10,7 @@ func TestSecuritySensitiveOperationsRequireConfirmation(t *testing.T) {
 		"changePassword",
 		"setSupabaseSMTPPassword", "putSupabaseFunction",
 		"createPostgresRole", "updatePostgresRole", "patchPostgresRole", "grantPostgresPrivileges",
+		"rotatePostgresBinding", "rebalancePostgres",
 		"createRabbitMQUser", "replaceRabbitMQUser",
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",

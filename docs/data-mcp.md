@@ -11,6 +11,8 @@ Authorization: Bearer <restricted-api-token>
 
 It uses the existing public listener; no public database port or companion port is needed. MongoDB/PSMDB uses `mongodb-mcp-server`, PostgreSQL and Supabase use `pgedge-postgres-mcp`, and Elasticsearch and RabbitMQ use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [agent access security model](security.md#agent-access-mcp-security-model), [access control](access-control.md) and the [MCP quick start](mcp-quickstart.md#5-data-mcp-quick-start).
 
+PostgreSQL extension profiles retain Data MCP support on single and HA topologies. Distributed PostgreSQL (Citus) rejects `spec.dataMcp.enabled: true` at admission because its group-aware access model is not supported by the PostgreSQL companion. Keycloak does not support Data MCP.
+
 Data endpoints support stateless MCP `2026-07-28` and legacy initialize-based Streamable HTTP (`2025-11-25`, `2025-06-18`, `2025-03-26`), for both companion-backed and native toolsets. Companion connections negotiate an initialize-based revision independently of the client's protocol; they do not forward the client's protocol version.
 
 Tool lists are caller-specific. On MCP `2026-07-28`, `tools/list` returns `cacheScope: "private"` and `ttlMs: 0`; clients must re-fetch to reflect current authorization and cluster tool filtering.

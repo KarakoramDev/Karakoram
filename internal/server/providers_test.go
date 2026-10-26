@@ -23,7 +23,7 @@ import (
 func TestBuiltInProviderCatalogConforms(t *testing.T) {
 	s, _, token := testServer(t)
 	var err error
-	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store})...)
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: s.postgresBindings})...)
 	if err != nil {
 		t.Fatal(err)
 	}
