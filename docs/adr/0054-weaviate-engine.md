@@ -8,13 +8,13 @@ Weaviate combines Raft-replicated metadata with independently replicated object/
 
 ## Decision
 
-### Versions and license boundary (WEAVIATE-01, WEAVIATE-02)
+### Versions and license boundary
 
 Provider `weaviate` installs official linux-amd64 release tarballs, catalog-pinned to 1.40.1 (default) and 1.39.12. The native-artifact lock records downloaded size, SHA256 cross-checked against the release sidecar, upstream URL and dereferenced tag commit. Members download from upstream or an operator mirror and verify the digest; Karakoram does not redistribute the executable. Install each version under `/opt/karakoram/weaviate-<version>`; the archive has root `weaviate`, `LICENSE` and `README.md` files.
 
 Record the mixed binary license as `BSD-3-Clause AND LicenseRef-Weaviate-Enterprise`, not BSD-only. Force `NAMESPACES_ENABLED=false`, `SELF_RECOVERY_ENABLED=false`, `BACKUP_DEDUPE_ENABLED=false`; never supply `LICENSE_KEY`, `LICENSE_KEY_FILE` or backup `dedupeReplicas`. Typed options and an explicit inference-variable allowlist prevent raw environment injection. Ordinary replication, movement, RBAC, DB users and full S3 backups are community features; this boundary does not grant enterprise rights.
 
-### Membership and replication (WEAVIATE-03, WEAVIATE-04)
+### Membership and replication
 
 `single` has one member and voter, bootstrap expect 1, and cannot scale into a cluster in place. `cluster` has 3–9 data members and exactly three fixed initial voters. Every member receives the same ordered three voter `name:raft-RPC-port` entries and bootstrap expect 3; later members actively join as non-voters. The first three candidates must be present for fresh bootstrap. Persisted Raft configuration remains authoritative afterward; bootstrap expect is not a quorum override.
 
@@ -24,7 +24,7 @@ Minimum collection replication defaults to 1 for single and 3 for cluster, bound
 
 Drain each replica with `POST /v1/replication/replicate` using lower-camel `collection`, `shard`, `sourceNode`, `targetNode`, `type:"MOVE"`; persist returned `id` and poll `status.state` until `READY`. Retryable native status errors retain that ID; only cancellation or a missing operation consumes a MOVE failure attempt. Recover lost POST replies from the operation list rather than submitting duplicates. After empty sharding/verbose-node observations, checkpoint a reversible process stop, retaining runtime and volume. Wait for every surviving member's `/v1/nodes` view to exclude the departing member from healthy placement, then take a fresh collection-wide sharding scan, including HOT/COLD tenant physical shards. If ownership appeared during stopping, checkpoint configuration restore, restart and readiness acknowledgement, then resume draining. Only a fenced, authoritative empty scan permits authenticated **internal data-port** `/v1/cluster/remove` with `{"node":"name"}`, followed by runtime and volume deletion. Gossip failure detection/Leave removes live membership but does not remove persisted Raft peers; a stopped voter still counts toward quorum.
 
-### Authentication and TLS (WEAVIATE-05, WEAVIATE-06)
+### Authentication and TLS
 
 Disable anonymous access; enable API keys, RBAC and dynamic DB users. Static `karakoram-admin` is the sole bootstrap/root identity; its secret is revealed only through protected credentials access. Native key validation permits multiple distinct keys for one user, so rotate static keys with old+new during a rolling restart and remove old in a second roll. Application users and custom roles use native REST management; protect the root identity and built-in roles. OIDC is not configured.
 
@@ -40,7 +40,7 @@ Default private ports are gossip 7946 TCP **and UDP**, data 7947 TCP, Raft 8300 
 
 Derive the REST/gossip bind host from the backend private address family: IPv4-only Nomad and Dokploy layouts use `0.0.0.0`; IPv6 Zerops and default/dual-stack layouts use `::`.
 
-### Backup and recovery (WEAVIATE-07)
+### Backup and recovery
 
 Enable `backup-s3` whenever an S3 storage is bound (upstream refuses to start the module without a bucket); bind at most one S3 storage. Render `BACKUP_S3_BUCKET`, `BACKUP_S3_PATH`, `BACKUP_S3_ENDPOINT` (host[:port], no scheme), `BACKUP_S3_USE_SSL`, `AWS_REGION`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from encrypted configuration. Storage changes require a roll. Reject operations naming another storage. Isolate keys under `<storage-prefix>/<namespace>/<cluster>/<cluster-UID>` and record immutable location, native backup ID, source version and ordered member names/count.
 
@@ -50,7 +50,7 @@ The `Endpoint` field is present in those schemas but is not an effective endpoin
 
 Native restore status is keyed by backup ID and survives earlier restores of the same backup, and the status API omits attempt timestamps. Acquire durable source-backup ownership bound to target, restore and operation before capturing the baseline or deleting collections; concurrent targets wait. Terminal restores/operations or deleted targets allow atomic reclamation, and a stale release cannot remove successor ownership. Record the attempt identity (`startedAt`) from the backup's `restore_config.json` in object storage. After a crash, a different identity is this fenced attempt and may be adopted; an unchanged identity without a recorded acceptance is re-submitted; a missing or ambiguous identity fails closed with operator guidance. Identity comparison does not assume monotonic native clocks. External native restore clients must not concurrently use the same source backup, because they bypass this control-plane fence. Native backup status reports size in GiB; convert it to bytes.
 
-### Maintenance, modules and resources (WEAVIATE-08, WEAVIATE-09, WEAVIATE-10)
+### Maintenance, modules and resources
 
 Roll one member at a time, non-voters before voters; require all expected members ready and healthy, synchronized cluster statistics, expected voter configuration and a leader/quorum before each disruption. Acknowledgements include applied config version and native version. Allow patch-forward and exactly one minor forward; reject downgrade/minor skipping. Certificate updates join other restart-required configuration in the roll fingerprint.
 
@@ -63,7 +63,7 @@ Reconciliation follows the shared engine rules. A deployment whose platform retr
 Public listener reservations are namespace- and cluster/member-owned, including allocations not yet published. Release them only after runtime/public-route teardown succeeds (also on secret-cleanup replay); failed backend mutations retain exclusion. Keeping volumes suspends the cluster without reserving listener ports: clear assignments and allocate afresh on resume. Disabling exposure releases only that member's owned reservations, never a successor owner's port named by a stale checkpoint.
 Stored assignments contribute occupancy only to the current allocation; they never become permanent in-memory reservations. Thus a worker observing an old stored checkpoint between release and persistence cannot resurrect a retired allocation, while unpublished allocations retain their independent exclusion.
 
-### Monitoring and member contract (WEAVIATE-11, WEAVIATE-12)
+### Monitoring and member contract
 
 The dependency-free `internal/engine/weaviate/wvspec` is shared by provider and agent. It contains explicit HTTP, gRPC, gossip, data, Raft, Raft RPC and metrics ports so loopback tests can allocate disjoint ports; typed settings/secrets; validated modules/inference; optional S3 binding; and restart token. Rendering remains agent-owned. Keep serialized changes additive and preserve omitted-field behavior; do not rename fields or reinterpret existing values. Engine/process are both `weaviate`. Test/development hooks in the agent environment only: `KARAKORAM_WEAVIATE_INSTALL_ROOT` replaces the `/opt/karakoram` install root, and `KARAKORAM_WEAVIATE_LOCAL_CLUSTER=true` renders upstream localhost cluster mode so several members can share one network namespace with distinct ports; production runtimes never set either.
 
@@ -71,7 +71,7 @@ Bounded POST `/v1/weaviate/readiness` returns ready, configVersion, version and 
 
 Scrape Prometheus locally with bounded responses. Export only `wvspec.MetricNames`: availability, objects, shards, collections, query/request/batch-object counters, vector-index capacity/tombstones, LSM bytes and async queue length. Exposition names use `karakoram_weaviate_`; provider descriptors map them to canonical dotted `weaviate.*` names with explicit units and scale. The provider catalog and agent share that fixed vocabulary; no arbitrary upstream labels or metrics are relayed. Version remains a native status observation, not a fabricated metric; no disk-readonly series is advertised without a corresponding native source.
 
-### Testing (WEAVIATE-13)
+### Testing
 
 Use validation/unit tests and fake-native-API provider tests for durable replay, topology, authorization and redaction. Build-tagged native integration tests exercise authenticated singleton and three-member loopback formation, RBAC/DB users, TLS, S3 backup/restore and rolling 1.39.12→1.40.1 upgrades with official binaries supplied explicitly. Native S3 tests require an external test endpoint; no Docker dependency. Live backend acceptance remains a separate gate, including UDP/private network behavior.
 

@@ -555,10 +555,12 @@ func runUnprivilegedPrepare(t *testing.T, a Artifact, file, dest string) {
 	}
 }
 
+// KARAKORAM_OPENBAO_ARTIFACT_DIR names a directory holding the locked upstream
+// OpenBao archives; the test is skipped when it is unset.
 func TestPrepareRealOpenBaoArchives(t *testing.T) {
-	cache, err := os.UserCacheDir()
-	if err != nil {
-		t.Fatal(err)
+	dir := os.Getenv("KARAKORAM_OPENBAO_ARTIFACT_DIR")
+	if dir == "" {
+		t.Skip("KARAKORAM_OPENBAO_ARTIFACT_DIR unset")
 	}
 	for _, name := range []string{"openbao", "openbao-plugin-database-mongodb", "openbao-plugin-kms-aws"} {
 		t.Run(name, func(t *testing.T) {
@@ -566,10 +568,10 @@ func TestPrepareRealOpenBaoArchives(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			file := filepath.Join(cache, "kk-openbao-artifacts", a.File)
+			file := filepath.Join(dir, a.File)
 			info, err := os.Stat(file)
 			if os.IsNotExist(err) {
-				t.Skip("cached upstream archive unavailable")
+				t.Fatalf("locked archive %s missing from KARAKORAM_OPENBAO_ARTIFACT_DIR", a.File)
 			}
 			if err != nil {
 				t.Fatal(err)
