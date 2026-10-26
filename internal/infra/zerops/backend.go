@@ -25,18 +25,73 @@ import (
 type Backend struct {
 	client                    *Client
 	mu                        sync.Mutex
+	operationLocks            *sync.Map
 	ids                       map[string]string
 	cachedAt                  time.Time
 	pollInterval, waitTimeout time.Duration
+	// retryNow is an optional clock for the terminal-deployment retry cadence.
+	retryNow           func() time.Time
+	maxInflightDeploys int
 }
 
 var _ infra.Backend = (*Backend)(nil)
 var _ infra.SubdomainAccess = (*Backend)(nil)
 var hostnamePattern = regexp.MustCompile(`^[a-z][a-z0-9]{0,24}$`)
 
+// Zerops has no receipt CAS. Reconstructed backends in this control-plane
+// process share exclusion for the same service, never for unrelated members.
+var projectOperationLocks sync.Map
+
+// contextMutex follows the backend's context-aware admission convention: a
+// canceled waiter never waits for another request's artifact upload to finish.
+type contextMutex struct {
+	once sync.Once
+	gate chan struct{}
+}
+
+func (m *contextMutex) Lock(ctx context.Context) error {
+	m.once.Do(func() { m.gate = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *contextMutex) Unlock() { <-m.gate }
+
+func (b *Backend) operationLock(id string) *contextMutex {
+	if lock, ok := b.operationLocks.Load(id); ok {
+		return lock.(*contextMutex)
+	}
+	lock, _ := b.operationLocks.LoadOrStore(id, &contextMutex{})
+	return lock.(*contextMutex)
+}
+
+func operationLocks(base, project string) *sync.Map {
+	key := base + "\x00" + project
+	if locks, ok := projectOperationLocks.Load(key); ok {
+		return locks.(*sync.Map)
+	}
+	locks, _ := projectOperationLocks.LoadOrStore(key, &sync.Map{})
+	return locks.(*sync.Map)
+}
+
 // New constructs a Zerops backend, using bounded context-cancelable waits for
 // secrets and routing. SetEnvSecrets does not restart running database members.
 func New(o Options) (*Backend, error) {
+	limit, err := deploymentLimit(o.MaxInflightDeploys, os.Getenv("KARAKORAM_ZEROPS_MAX_INFLIGHT_DEPLOYS"))
+	if err != nil {
+		return nil, err
+	}
 	c, err := NewClient(o)
 	if err != nil {
 		return nil, err
@@ -47,7 +102,7 @@ func New(o Options) (*Backend, error) {
 	if o.WaitTimeout <= 0 {
 		o.WaitTimeout = 5 * time.Minute
 	}
-	return &Backend{client: c, ids: make(map[string]string), pollInterval: o.PollInterval, waitTimeout: o.WaitTimeout}, nil
+	return &Backend{client: c, operationLocks: operationLocks(c.base, c.project), ids: make(map[string]string), pollInterval: o.PollInterval, waitTimeout: o.WaitTimeout, maxInflightDeploys: limit}, nil
 }
 
 // Name returns the infrastructure backend identifier.
@@ -96,6 +151,23 @@ func (b *Backend) ProjectInfo(ctx context.Context) (infra.Project, error) {
 	p, err := b.client.ProjectInfo(ctx)
 	return infra.Project{ID: p.ID, Name: p.Name, PublicIPv4: p.PublicIPv4, PublicIPv6: p.PublicIPv6}, err
 }
+
+// SupportsPublicIP uses a fresh project lookup; neither namespace identity nor
+// previously observed addresses can establish current family availability.
+func (b *Backend) SupportsPublicIP(ctx context.Context, family string) (bool, error) {
+	project, err := b.ProjectInfo(ctx)
+	if err != nil {
+		return false, err
+	}
+	switch family {
+	case "IPV4":
+		return project.PublicIPv4 != "", nil
+	case "IPV6":
+		return project.PublicIPv6 != "", nil
+	default:
+		return false, &infra.RejectedError{Message: "zerops: public IP type must be IPV4 or IPV6"}
+	}
+}
 func (b *Backend) invalidate(name string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -122,7 +194,7 @@ func (b *Backend) refresh(ctx context.Context) ([]ServiceStack, error) {
 }
 func notFound(err error) bool {
 	var e *APIError
-	return errors.As(err, &e) && (e.StatusCode == 404 || (e.StatusCode == 400 && e.Code == "serviceStackNotFound"))
+	return errors.As(err, &e) && (e.StatusCode == 404 || (e.StatusCode == 400 && (e.Code == "serviceStackNotFound" || e.Code == "appVersionNotFound")))
 }
 
 // processExpired recognizes a process the platform no longer retains. Zerops
@@ -209,6 +281,16 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	if len(specs) == 0 {
 		return infra.Op{Kind: "import"}, nil
 	}
+	receipt := importReceipt(specs)
+	if op, recovered, err := b.recoverImport(ctx, specs, receipt); err != nil || recovered {
+		return op, err
+	}
+	if receipt != "" {
+		data, err = receiptImportDocument(&doc, receipt)
+		if err != nil {
+			return infra.Op{}, err
+		}
+	}
 	seen := make(map[string]bool, len(specs))
 	for _, s := range specs {
 		seen[s.Hostname] = true
@@ -254,6 +336,9 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	attempted := truncateDiagnostic(strings.Join(attempts, "; "), 384)
 	result, err := b.client.ImportServices(ctx, string(data))
 	if err != nil {
+		if op, recovered, recoveryErr := b.recoverImport(ctx, specs, receipt); recoveryErr == nil && recovered {
+			return op, nil
+		}
 		return infra.Op{}, rejectedUpdate(err, "service import", hostname, attempted)
 	}
 	var ids []string
@@ -390,8 +475,16 @@ func (b *Backend) DeleteServiceByID(ctx context.Context, name, expectedID string
 			if err == nil && recorded.protected() {
 				return infra.Op{}, &infra.RejectedError{Message: "zerops: refusing protected service"}
 			}
+			if err == nil {
+				if recorded.ID != expectedID || recorded.Name != name || (recorded.ProjectID != "" && recorded.ProjectID != b.client.project) {
+					return infra.Op{}, &classifiedError{cause: errors.New("zerops: refusing deletion of mismatched service identity"), class: infra.ErrConflict}
+				}
+				s = &recorded
+			}
 		}
-		return infra.Op{Kind: "delete"}, nil
+		if s == nil {
+			return infra.Op{Kind: "delete"}, nil
+		}
 	}
 	if expectedID == "" || s.ID != expectedID {
 		return infra.Op{}, &classifiedError{cause: errors.New("zerops: refusing deletion of replaced service"), class: infra.ErrConflict}
@@ -415,6 +508,11 @@ func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (
 	if err != nil {
 		return infra.Op{}, err
 	}
+	lock := b.operationLock(s.ID)
+	if err := lock.Lock(ctx); err != nil {
+		return infra.Op{}, err
+	}
+	defer lock.Unlock()
 	var reader io.Reader = d.Artifact.Reader
 	var size int64
 	if seeker, ok := d.Artifact.Reader.(io.ReadSeeker); ok {
@@ -446,18 +544,7 @@ func (b *Backend) Deploy(ctx context.Context, name string, d infra.Deployment) (
 		}
 		reader = f
 	}
-	version, err := b.client.CreateAppVersion(ctx, s.ID, d.Artifact.Name)
-	if err != nil {
-		return infra.Op{}, err
-	}
-	if version.ID == "" {
-		return infra.Op{}, errors.New("zerops: empty app version ID")
-	}
-	if err = b.client.Upload(ctx, version.ID, reader, size); err != nil {
-		return infra.Op{}, err
-	}
-	p, err := b.client.Deploy(ctx, version.ID, runtimeYAML, name)
-	return processOp(&p, "deploy", s.ID), err
+	return b.deployWithReceipt(ctx, s, name, d.Artifact.Name, runtimeYAML, reader, size, d.RetryEpoch)
 }
 
 type contextReader struct {
@@ -541,8 +628,12 @@ func (b *Backend) lifecycle(ctx context.Context, name, action string) (infra.Op,
 	if err != nil {
 		return infra.Op{}, err
 	}
-	p, err := b.client.Lifecycle(ctx, s.ID, action)
-	return processOp(&p, action, s.ID), err
+	lock := b.operationLock(s.ID)
+	if err := lock.Lock(ctx); err != nil {
+		return infra.Op{}, err
+	}
+	defer lock.Unlock()
+	return b.lifecycleWithReceipt(ctx, s, action)
 }
 
 // Start schedules runtime start.
@@ -952,8 +1043,21 @@ func (b *Backend) Logs(ctx context.Context, name string, q infra.LogQuery) ([]in
 // may have created; any other expired action fails as Expired so the caller's
 // bounded retry re-issues it instead of polling a missing process forever.
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if receiptAction(op.Kind) && op.ServiceID != "" {
+		lock := b.operationLock(op.ServiceID)
+		if err := lock.Lock(ctx); err != nil {
+			return infra.OpState{}, err
+		}
+		defer lock.Unlock()
+	}
 	if op.ID == "" {
 		return infra.OpState{Done: true, Status: "FINISHED"}, nil
+	}
+	if strings.HasPrefix(op.ID, "version:") {
+		return b.versionStatus(ctx, op)
+	}
+	if strings.HasPrefix(op.ID, "import-observe:") {
+		return b.importedStatus(ctx, op)
 	}
 	ids := []string{op.ID}
 	if strings.HasPrefix(op.ID, "multi:") {
@@ -966,6 +1070,9 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	for _, id := range ids {
 		p, err := b.client.GetProcess(ctx, id)
 		if processExpired(err) {
+			if state, handled, err := b.expiredReceiptStatus(ctx, op); handled {
+				return state, err
+			}
 			expired++
 			continue
 		}
@@ -1010,10 +1117,19 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 				}
 				msg = rejectedUpdateMessage(action, hostname, msg, op.AttemptedResources)
 			}
+			if err := b.clearReceipt(ctx, op); err != nil {
+				return infra.OpState{}, err
+			}
 			return infra.OpState{Done: true, Failed: true, Status: p.Status, Message: msg}, nil
 		default:
 			state.Done = false
 			state.Status = p.Status
+			if op.Kind == "delete" {
+				state.Message, err = b.deleteProgress(ctx, op, p)
+				if err != nil {
+					return state, err
+				}
+			}
 		}
 	}
 	if expired > 0 {
@@ -1027,10 +1143,15 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 			state.Message = "platform process expired before its outcome was observed; retrying the action"
 		}
 	}
+	if state.Done && !state.Expired {
+		if err := b.clearReceipt(ctx, op); err != nil {
+			return infra.OpState{}, err
+		}
+	}
 	return state, nil
 }
 func (b *Backend) waitOp(ctx context.Context, op infra.Op) error {
-	for {
+	for attempt := 0; ; attempt++ {
 		state, err := b.OpStatus(ctx, op)
 		if err != nil {
 			return err
@@ -1044,8 +1165,19 @@ func (b *Backend) waitOp(ctx context.Context, op infra.Op) error {
 		if state.Done {
 			return nil
 		}
-		if err = sleep(ctx, b.pollInterval); err != nil {
+		if err = sleep(ctx, b.waitOpInterval(op, attempt == 0)); err != nil {
 			return err
 		}
 	}
+}
+
+func (b *Backend) waitOpInterval(op infra.Op, first bool) time.Duration {
+	// Receipt/env writes normally finish in tens of milliseconds. A single
+	// early observation avoids imposing deployment-scale latency on every
+	// durable checkpoint. Slow writes fall back to the configured cadence;
+	// deployment/import/routing polls and platform admission are unchanged.
+	if first && (op.Kind == "receipt" || op.Kind == "secret") {
+		return min(b.pollInterval, 100*time.Millisecond)
+	}
+	return b.pollInterval
 }

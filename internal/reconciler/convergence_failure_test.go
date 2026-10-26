@@ -96,7 +96,7 @@ func TestConvergenceFailureDoesNotObserveTheGenerationAsApplied(t *testing.T) {
 	c := &domain.Cluster{Generation: 2, Status: domain.ClusterStatus{ObservedGeneration: 1}}
 	rc := m.opts.Context
 	rc.Cluster = c
-	if _, err := m.synchronize(t.Context(), p, &rc); err != nil {
+	if _, err := m.synchronize(t.Context(), p, &rc, nil); err != nil {
 		t.Fatal(err)
 	}
 	if c.Status.ObservedGeneration != 1 {

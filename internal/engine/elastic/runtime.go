@@ -60,6 +60,5 @@ func RuntimeSpec(layout infra.Layout, in RuntimeInput) (infra.RuntimeSpec, error
 		Cluster: in.Cluster, Member: in.Hostname, Engine: agentspec.Engine,
 		Volume: in.Volume, AgentURL: in.AgentURL, InternalCAPEM: in.InternalCAPEM,
 		Ports: ports, Prepare: prepare, ReadinessTimeout: timeout,
-		ReadinessArgs: []string{"--engine=" + agentspec.Engine, "--data-dir=" + layout.DataDir(in.Volume), in.Component},
 	}).Spec(layout), nil
 }

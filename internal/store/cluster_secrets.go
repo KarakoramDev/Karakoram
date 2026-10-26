@@ -110,10 +110,6 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 	if len(values) == 0 {
 		return s.UpdateClusterSpec(ctx, ref, spec)
 	}
-	data, err := json.Marshal(spec)
-	if err != nil {
-		return err
-	}
 	sealed, err := s.sealClusterValues(name, values)
 	if err != nil {
 		return err
@@ -123,7 +119,18 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 		return err
 	}
 	defer tx.Rollback()
+	if err = checkSpecSnapshot(ctx, tx, ref); err != nil {
+		return err
+	}
 	before, err := specAuditBefore(ctx, tx, ref)
+	if err != nil {
+		return err
+	}
+	data, spec, err := preserveRetryEpoch(ctx, tx, ref, spec)
+	if err != nil {
+		return err
+	}
+	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, len(values) != 0)
 	if err != nil {
 		return err
 	}

@@ -118,6 +118,12 @@ func TestComponentImportOwnershipMarkers(t *testing.T) {
 			if err := p.importMember(t.Context(), rc, s, m); err != nil {
 				t.Fatal(err)
 			}
+			if m.ImportPlan == nil {
+				t.Fatal("missing durable component import plan")
+			}
+			if err := p.importMember(t.Context(), rc, s, m); err != nil {
+				t.Fatal(err)
+			}
 			if len(f.imports) != 1 || len(f.imports[0]) != 1 {
 				t.Fatal("component import did not create one runtime", f.imports)
 			}
@@ -150,6 +156,12 @@ func TestImportRecordsIDsAndPreservesVolumeIdentity(t *testing.T) {
 		t.Run("recorded-volume-"+recordedVolume, func(t *testing.T) {
 			p, rc, f, s, m := ownershipFixture(t)
 			m.ServiceID, m.VolumeID = "previous-runtime", recordedVolume
+			if err := p.importMember(t.Context(), rc, s, m); err != nil {
+				t.Fatal(err)
+			}
+			if m.ImportPlan == nil {
+				t.Fatal("missing durable member import plan")
+			}
 			if err := p.importMember(t.Context(), rc, s, m); err != nil {
 				t.Fatal(err)
 			}
@@ -243,6 +255,9 @@ func TestExpiredPendingImportReimportsMissingServices(t *testing.T) {
 			if _, err := p.Sync(t.Context(), rc); err != nil {
 				t.Fatal("normal import step did not recover expired import", err)
 			}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal("submit checkpointed import batch", err)
+			}
 			if len(f.imports) != 1 {
 				t.Fatal("missing services were not reimported", f.calls)
 			}
@@ -327,6 +342,12 @@ func TestDedicatedMasterVolumeSpreadGroups(t *testing.T) {
 			p, rc, backend, s, m := ownershipFixture(t)
 			rc.Cluster.Spec.Topology.Type = "dedicatedMasters"
 			m.Kind = kind
+			if err := p.importMember(t.Context(), rc, s, m); err != nil {
+				t.Fatal(err)
+			}
+			if m.ImportPlan == nil {
+				t.Fatal("missing durable volume import plan")
+			}
 			if err := p.importMember(t.Context(), rc, s, m); err != nil {
 				t.Fatal(err)
 			}

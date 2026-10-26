@@ -245,7 +245,12 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 		}
 		service, err := rc.Backend.GetService(ctx, name)
 		if err != nil {
-			return err
+			if !m.RuntimeRecovery.VolumeLost || !engine.ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
+				return err
+			}
+			if service != nil && (recorded == "" || service.ID != recorded) {
+				return engine.UnverifiedOwnership(service)
+			}
 		}
 		if service == nil {
 			continue
@@ -289,7 +294,7 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 	// runtime ID become new evidence for an otherwise unverifiable volume.
 	// Services of a cluster being deleted are left alone, and a member without
 	// a stored agent token has nothing to derive a marker from.
-	if (verifiedServices[0] == nil && verifiedServices[1] == nil) || rc.Cluster.Deleting {
+	if (verifiedServices[0] == nil && verifiedServices[1] == nil) || rc.Cluster.Deleting || m.RuntimeRecovery.VolumeLost {
 		return nil
 	}
 	tok, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
@@ -326,7 +331,7 @@ func adoptImported(ctx context.Context, rc *engine.Context, m *member, op infra.
 		if err != nil {
 			return false, err
 		}
-		if service == nil {
+		if service == nil || service.Importing {
 			complete = false
 			continue
 		}

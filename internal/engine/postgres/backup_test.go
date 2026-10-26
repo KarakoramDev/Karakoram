@@ -22,6 +22,7 @@ import (
 func backupFixture(t *testing.T, topology string) (*Core, *engine.Context, *state) {
 	t.Helper()
 	p, rc, _ := setup(t, topology)
+	p.restoreSetPresent = func(context.Context, *domain.BackupStorage, string) (bool, error) { return true, nil }
 	p.options.Store = rc.Store
 	s, _ := load(rc.Cluster)
 	s.UID = "incarnation"
@@ -71,6 +72,8 @@ func TestBackupStanzaWaitsForProvisioning(t *testing.T) {
 
 func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 	p, rc, _ := backupFixture(t, "single")
+	clock := &backupCleanupClock{at: time.Date(2026, 10, 23, 17, 0, 0, 0, time.UTC)}
+	rc.Clock = clock
 	// Desired major may already differ while a queued old-major backup runs.
 	rc.Cluster.Spec.Version = "18.6.1"
 	calls := 0
@@ -86,15 +89,21 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				t.Error(err)
 			}
-			if req.Receipt != "durable-operation" || req.Repository == nil || req.Repository.Path != "/prefix/postgres/default/demo-incarnation" {
+			wantReceipt := "durable-operation"
+			if calls > 0 {
+				wantReceipt += "/backup-retry-1"
+			}
+			if req.Receipt != wantReceipt || req.Repository == nil || req.Repository.Path != "/prefix/postgres/default/demo-incarnation" {
 				t.Error("missing durable receipt or scoped repository")
 			}
 			calls++
-			state := "running"
-			if calls > 1 {
+			state := "failed"
+			if calls == 2 {
+				state = "running"
+			} else if calls > 2 {
 				state = "done"
 			}
-			json.NewEncoder(w).Encode(pgspec.BackupResponse{State: state, Label: inventory.Backups[0].Label})
+			json.NewEncoder(w).Encode(pgspec.BackupResponse{State: state, Label: inventory.Backups[0].Label, Message: "pgBackRest error [082]: required WAL segment was not archived"})
 		case "/v1/postgres/backup-info":
 			json.NewEncoder(w).Encode(inventory)
 		default:
@@ -102,7 +111,7 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	})
-	b := &domain.Backup{Namespace: "default", Name: "baseline", Cluster: "demo", Storage: "archive", Type: "full", Phase: domain.PhasePending}
+	b := &domain.Backup{Namespace: "default", Name: "baseline", Cluster: "demo", Storage: "archive", Type: "full", Trigger: "restore", Phase: domain.PhasePending}
 	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
 		t.Fatal(err)
 	}
@@ -115,12 +124,13 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 		op.Checkpoint = result.Checkpoint
+		clock.at = clock.at.Add(result.RequeueAfter)
 		if result.Done {
 			break
 		}
 	}
 	b, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name)
-	if err != nil || b.Phase != domain.PhaseSucceeded || b.Postgres == nil {
+	if err != nil || b.Phase != domain.PhaseSucceeded || b.Postgres == nil || b.Error != "" {
 		t.Fatal(b, err)
 	}
 	if b.Postgres.SystemID != "1234567890123456789" || b.Postgres.RepoBytes != 100 || b.Size != 500 || b.CompletedAt == nil || b.Postgres.Label != inventory.Backups[0].Label {
@@ -138,6 +148,123 @@ func TestBackupCheckpointResumeAndMetadata(t *testing.T) {
 		t.Fatal("terminal checkpoint started another backup", err)
 	}
 }
+
+func TestBackupFailurePreservesNativeDiagnostic(t *testing.T) {
+	for _, message := range []string{
+		"pgBackRest error [082]: required WAL segment was not archived before the archive timeout",
+		"",
+	} {
+		t.Run(message, func(t *testing.T) {
+			p, rc, _ := backupFixture(t, "single")
+			installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/postgres/status" {
+					json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: "standalone", Running: true, Timeline: 2})
+					return
+				}
+				if r.URL.Path != "/v1/postgres/backup" {
+					t.Errorf("unexpected action: %s", r.URL.Path)
+				}
+				json.NewEncoder(w).Encode(pgspec.BackupResponse{State: "failed", Message: message})
+			})
+			b := &domain.Backup{Namespace: "default", Cluster: "demo", Name: "failed", Storage: "archive", Type: "full", Phase: domain.PhaseRunning}
+			if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+				t.Fatal(err)
+			}
+			cp, _ := json.Marshal(backupCheckpoint{Step: "backup", Member: "demop0", Timeline: 2})
+			op := &domain.Operation{ID: "failed-native", Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"failed"}`), Checkpoint: cp}
+			result, err := p.runBackupOperation(t.Context(), rc, op)
+			saved, getErr := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name)
+			if getErr != nil || err == nil || !result.Done || saved.Phase != domain.PhaseFailed || saved.CompletedAt == nil || saved.Error == "" || saved.Error != err.Error() {
+				t.Fatalf("failure diagnostic not preserved: result=%+v backup=%+v error=%v get=%v", result, saved, err, getErr)
+			}
+			if message != "" && saved.Error != message {
+				t.Fatal("native error replaced with generic failure", saved.Error)
+			}
+		})
+	}
+}
+
+func TestRestoreFreshBackupRetriesAreBoundedAndDurable(t *testing.T) {
+	_, rc, _ := backupFixture(t, "single")
+	clock := &backupCleanupClock{at: time.Date(2026, 10, 23, 17, 0, 0, 0, time.UTC)}
+	rc.Clock = clock
+	var receipts []string
+	installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/postgres/status" {
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: "standalone", Running: true, Timeline: 2})
+			return
+		}
+		if r.URL.Path != "/v1/postgres/backup" {
+			t.Errorf("retry invoked non-backup action: %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		var request pgspec.BackupRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		receipts = append(receipts, request.Receipt)
+		json.NewEncoder(w).Encode(pgspec.BackupResponse{State: "failed", Message: "pgBackRest error [082]: required WAL segment was not archived"})
+	})
+	b := &domain.Backup{Namespace: "default", Cluster: "demo", Name: "fresh", Trigger: "restore", Storage: "archive", Type: "full", Phase: domain.PhaseRunning}
+	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, _ := json.Marshal(backupCheckpoint{Step: "backup", Member: "demop0", Timeline: 2})
+	op := &domain.Operation{ID: "fresh-backup", Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"fresh"}`), Checkpoint: checkpoint}
+	wantReceipts := []string{"fresh-backup", "fresh-backup/backup-retry-1", "fresh-backup/backup-retry-2"}
+	for attempt := range 3 {
+		p := New(Options{Store: rc.Store})
+		result, err := p.runBackupOperation(t.Context(), rc, op)
+		op.Checkpoint = result.Checkpoint
+		if len(receipts) != attempt+1 || receipts[attempt] != wantReceipts[attempt] {
+			t.Fatalf("deadline did not dispatch expected receipt: %v", receipts)
+		}
+		if attempt < 2 {
+			if err != nil || result.Done || result.RequeueAfter != 30*time.Second || !strings.Contains(result.Message, "[082]") {
+				t.Fatalf("retry lost bound/reason: %+v %v", result, err)
+			}
+			var saved backupCheckpoint
+			if err := json.Unmarshal(op.Checkpoint, &saved); err != nil {
+				t.Fatal(err)
+			}
+			deadline := clock.at.Add(30 * time.Second)
+			if !saved.BackupRetryNotBefore.Equal(deadline) {
+				t.Fatalf("retry deadline not durable: %s, want %s", saved.BackupRetryNotBefore, deadline)
+			}
+			for _, remaining := range []time.Duration{30 * time.Second, 25 * time.Second, time.Second} {
+				clock.at = deadline.Add(-remaining)
+				// Restore the entire operation from serialized state, as a
+				// controller restart would, rather than retaining a live checkpoint.
+				raw, marshalErr := json.Marshal(op)
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				var resumed domain.Operation
+				if err := json.Unmarshal(raw, &resumed); err != nil {
+					t.Fatal(err)
+				}
+				p := New(Options{Store: rc.Store})
+				early, earlyErr := p.runBackupOperation(t.Context(), rc, &resumed)
+				if earlyErr != nil || early.Done || early.RequeueAfter != remaining || len(receipts) != attempt+1 {
+					t.Fatalf("early reconcile dispatched backup or lost delay: result=%+v err=%v receipts=%v", early, earlyErr, receipts)
+				}
+				op.Checkpoint = early.Checkpoint
+			}
+			clock.at = deadline
+		} else if err == nil || !result.Done || !strings.Contains(err.Error(), "after 3 attempts") || !strings.Contains(err.Error(), "[082]") {
+			t.Fatalf("exhaustion not terminal/truthful: %+v %v", result, err)
+		}
+	}
+	if strings.Join(receipts, ",") != "fresh-backup,fresh-backup/backup-retry-1,fresh-backup/backup-retry-2" {
+		t.Fatal("retry receipts were not distinct/durable", receipts)
+	}
+	var completed backupCheckpoint
+	if err := json.Unmarshal(op.Checkpoint, &completed); err != nil || !completed.BackupRetryNotBefore.IsZero() {
+		t.Fatalf("due retry did not clear its deadline: %+v %v", completed, err)
+	}
+}
+
 func TestBackupRoleChangeFailsHonestly(t *testing.T) {
 	p, rc, _ := backupFixture(t, "ha")
 	installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
@@ -187,11 +314,14 @@ func TestRestoreChoreography(t *testing.T) {
 		name     string
 		topology string
 		cross    bool
+		recovery bool
 	}{
-		{"single", "single", false},
-		{"ha", "ha", false},
-		{"single-cross-source", "single", true},
-		{"ha-cross-source", "ha", true},
+		{"single", "single", false, false},
+		{"ha", "ha", false, false},
+		{"single-cross-source", "single", true, false},
+		{"ha-cross-source", "ha", true, false},
+		{"single-recovery", "single", false, true},
+		{"ha-recovery", "ha", false, true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			topology := scenario.topology
@@ -313,11 +443,45 @@ func TestRestoreChoreography(t *testing.T) {
 				}
 			})
 			op := &domain.Operation{ID: "restore-operation", Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"recovery"}`)}
-			completed := false
-			for range 80 {
-				result, err := p.runBackupOperation(t.Context(), rc, op)
+			if scenario.recovery {
+				// Failure cleanup acquires recovery ownership only after a
+				// durable hold, not for an untouched preflight-only request.
+				first, err := p.runBackupOperation(t.Context(), rc, op)
 				if err != nil {
 					t.Fatal(err)
+				}
+				op.Checkpoint = first.Checkpoint
+				if _, err := p.CancelOperation(t.Context(), rc, op); err != nil {
+					t.Fatal(err)
+				}
+			}
+			completed := false
+			for range 80 {
+				p = New(Options{Store: rc.Store})
+				p.restoreSetPresent = func(context.Context, *domain.BackupStorage, string) (bool, error) {
+					return true, nil
+				}
+				var result engine.OpResult
+				var err error
+				if scenario.recovery {
+					current, loadErr := load(rc.Cluster)
+					if loadErr != nil {
+						t.Fatal(loadErr)
+					}
+					_, err = p.reconcileRestoreRecovery(t.Context(), rc, current)
+					if saveErr := save(rc.Cluster, current); saveErr != nil {
+						t.Fatal(saveErr)
+					}
+					if current.RestoreRecovery == nil {
+						result.Done = true
+					} else {
+						result.Checkpoint = current.RestoreRecovery.Checkpoint
+					}
+				} else {
+					result, err = p.runBackupOperation(t.Context(), rc, op)
+				}
+				if err != nil {
+					t.Fatalf("restore checkpoint %s: %v", result.Step, err)
 				}
 				op.Checkpoint = result.Checkpoint
 				if result.Done {
@@ -395,6 +559,13 @@ func TestCloneQueuesOnlyAfterProvisioningAndOnlyOnce(t *testing.T) {
 		t.Fatal("clone replaced target-local ProxySQL admin credential", err)
 	}
 	s.Members[0].Stage = "joined"
+	for _, member := range s.Members {
+		if member.Role == "proxy" {
+			// Native data recovery must finish even if this desired proxy
+			// cannot be placed; its correction is fenced while recovery runs.
+			member.Stage = "planned"
+		}
+	}
 	for range 2 {
 		if _, err := p.syncBackups(t.Context(), rc, s); err != nil {
 			t.Fatal(err)

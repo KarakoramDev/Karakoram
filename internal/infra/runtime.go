@@ -96,6 +96,8 @@ type RuntimeSpec struct {
 type Deployment struct {
 	Artifact Artifact
 	Runtime  RuntimeSpec
+	// RetryEpoch grants one fresh deployment retry budget when increased.
+	RetryEpoch int64
 }
 
 // Validate rejects a deployment no backend can render safely.

@@ -5,13 +5,68 @@ package elastic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
+
+// InitialDataSourceApplied is generation-independent: process health and an
+// applied spec generation are not evidence that the initial snapshot restored.
+func (*Provider) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := load(c)
+	if err != nil {
+		return false, err
+	}
+	if s.InitialRestore == "failed" || s.InitialRestore == "abandoned" {
+		return false, fmt.Errorf("initial snapshot restore did not complete: %s", s.InitialRestoreError)
+	}
+	return s.InitialRestore == "done", nil
+}
+
+// observeInitialRestore preserves terminal failure across control-plane restarts
+// and generation changes. Only the durable successful restore record can repair
+// the gap between native completion and saving the provider completion marker.
+func observeInitialRestore(ctx context.Context, rc *engine.Context, s *state) error {
+	if rc.Cluster.Spec.DataSource == nil || engine.InitialDataSourceUnproven(rc.Cluster) || s.Suspended || s.InitialRestore == "" || s.InitialRestore == "done" || s.InitialRestore == "abandoned" {
+		return nil
+	}
+	if s.InitialRestore == "failed" {
+		return fmt.Errorf("%w: initial snapshot restore did not complete: %s", engine.ErrInvalid, s.InitialRestoreError)
+	}
+	r, err := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), "initial-restore")
+	if err != nil {
+		return err
+	}
+	switch r.Phase {
+	case domain.PhaseSucceeded:
+		// Old versions could mark the restore record succeeded after observing
+		// health alone. Preserve existing done markers, but never manufacture
+		// a missing marker from that record or an accepted-only receipt.
+		raw, e := secret(ctx, rc, "operations/initial-restore-"+s.UID+"/restore-submission")
+		if e != nil {
+			return e
+		}
+		var receipt struct {
+			Repository string `json:"repository"`
+			Snapshot   string `json:"snapshot"`
+			Completed  bool   `json:"completed"`
+		}
+		if json.Unmarshal(raw, &receipt) != nil || !receipt.Completed || receipt.Repository == "" || receipt.Snapshot == "" {
+			return errors.New("initial snapshot restore lacks durable native completion evidence; reconcile the restored data before proceeding")
+		}
+		s.InitialRestore = "done"
+	case domain.PhaseFailed, domain.PhaseCancelled:
+		s.InitialRestore = "failed"
+		s.InitialRestoreError = fmt.Sprintf("restore initial-restore ended %s: %s", r.Phase, r.Error)
+		return fmt.Errorf("%w: %s", engine.ErrInvalid, s.InitialRestoreError)
+	}
+	return nil
+}
 
 func componentProcess(m *member) string {
 	if m.Kind == kindAPM {
@@ -45,10 +100,16 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 	if err != nil {
 		return operationResult(cp, false), err
 	}
+	if r.Phase == domain.PhaseFailed || r.Phase == domain.PhaseCancelled {
+		return operationResult(cp, true), operationInvalid("restore " + name + " ended " + string(r.Phase) + ": " + r.Error)
+	}
 	defer func() {
 		if runErr == nil {
 			return
 		}
+		// Error is the latest retry diagnostic, not an abort marker. Only a
+		// terminal result changes Phase/CompletedAt; successful completion below
+		// clears diagnostics after transient native/API failures.
 		r.Error = runErr.Error()
 		if result.Done {
 			stamp := operationNow(rc)
@@ -56,6 +117,19 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		}
 		runErr = errors.Join(runErr, rc.Store.UpdateRestore(ctx, r))
 	}()
+	switch cp.Stage {
+	case "recover", "reset", "security", "config", "start", "running":
+		raw, e := secret(ctx, rc, "operations/"+op.ID+"/restore-submission")
+		if e != nil {
+			return operationResult(cp, false), e
+		}
+		var receipt struct {
+			Completed bool `json:"completed"`
+		}
+		if json.Unmarshal(raw, &receipt) != nil || !receipt.Completed {
+			return operationResult(cp, false), errors.New("restore lacks durable native completion evidence; reconcile restored data before proceeding; managed components remain stopped")
+		}
+	}
 	if r.Source.PITRTime != nil {
 		cp.Stage, cp.Failure = "done", "Elasticsearch does not support point-in-time restore"
 		return operationResult(cp, true), operationInvalid(cp.Failure)
@@ -111,6 +185,9 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 	switch cp.Stage {
 	case "":
 		info, e := client.GetSnapshot(ctx, repo, snapshot)
+		if esapi.IsNotFound(e) {
+			return operationResult(cp, false), engine.InvalidField("source.backup", domain.ReasonNotFound, "Source snapshot is no longer available in the repository; select another successful backup and retry the restore")
+		}
 		if e != nil {
 			return operationResult(cp, false), e
 		}
@@ -170,33 +247,12 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		if err = client.DeleteIndices(ctx, indices); err != nil && !esapi.IsNotFound(err) {
 			return operationResult(cp, false), err
 		}
-		cp.Before, err = client.ListIndices(ctx, true)
-		if err != nil {
-			return operationResult(cp, false), err
-		}
-		cp.Stage = "submit"
+		cp.Stage = "submit-receipted"
 	case "submit":
-		// Newly recreated snapshot indices (including data-stream backing
-		// indices) are the receipt if POST succeeded before checkpoint storage.
-		// Existing feature indices or unrelated shard recovery are not receipts.
-		indices, e := client.ListIndices(ctx, true)
-		if e != nil {
-			return operationResult(cp, false), e
-		}
-		info, e := client.GetSnapshot(ctx, repo, snapshot)
-		if e != nil {
-			return operationResult(cp, false), e
-		}
-		restored := false
-		for _, index := range indices {
-			if slices.Contains(info.Indices, index) && !slices.Contains(cp.Before, index) {
-				restored = true
-			}
-		}
-		if !restored {
-			if err = client.RestoreSnapshot(ctx, repo, snapshot, esapi.RestoreRequest{Indices: "*", IncludeGlobalState: true, IncludeAliases: true}); err != nil {
-				return operationResult(cp, false), err
-			}
+		return operationResult(cp, false), errors.New("restore submission predates durable receipts; reconcile the native restore and data before starting a new restore; managed components remain stopped")
+	case "submit-receipted":
+		if err = submitRestoreOnce(ctx, rc, client, op.ID, repo, snapshot); err != nil {
+			return operationResult(cp, errors.Is(err, engine.ErrInvalid)), err
 		}
 		cp.Stage = "recover"
 	case "recover":
@@ -263,6 +319,76 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, s *state,
 		return operationResult(cp, false), operationInvalid("unknown restore checkpoint")
 	}
 	return operationResult(cp, false), nil
+}
+
+// Elasticsearch has no restore idempotency token. Persist intent before POST,
+// and accept only a durable successful response, never index names or health.
+// An intent without a response is deliberately not replayed: even a snapshot
+// containing only feature state can otherwise overwrite data a second time.
+func submitRestoreOnce(ctx context.Context, rc *engine.Context, client *esapi.Client, operationID, repo, snapshot string) error {
+	if operationID == "" {
+		return operationInvalid("restore submission requires an operation identity")
+	}
+	key := "operations/" + operationID + "/restore-submission"
+	type receipt struct {
+		Repository  string `json:"repository"`
+		Snapshot    string `json:"snapshot"`
+		Completed   bool   `json:"completed"`
+		NativeError string `json:"nativeError,omitempty"`
+	}
+	value := receipt{Repository: repo, Snapshot: snapshot}
+	raw, err := secret(ctx, rc, key)
+	if err == nil {
+		var prior receipt
+		if json.Unmarshal(raw, &prior) != nil || prior.Repository != repo || prior.Snapshot != snapshot {
+			return errors.New("restore submission receipt does not match the source; reconcile the native restore before proceeding")
+		}
+		if prior.Completed {
+			return nil
+		}
+		return restoreUnknownOutcome(prior.NativeError)
+	}
+	if !missing(err) {
+		return err
+	}
+	raw, err = json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	if err = putSecret(ctx, rc, key, raw); err != nil {
+		return err
+	}
+	if err = client.RestoreSnapshot(ctx, repo, snapshot, esapi.RestoreRequest{Indices: "*", IncludeGlobalState: true, IncludeAliases: true}); err != nil {
+		if errors.Is(err, esapi.ErrRestoreFailed) {
+			return operationInvalid("native snapshot restore failed; target data is incomplete")
+		}
+		// A final validation-looking response cannot exclude an earlier native
+		// execution: TransportMasterNodeAction can retry internally after a
+		// master disconnect. Preserve evidence without claiming no restore ran.
+		value.NativeError = err.Error()
+		raw, marshalErr := json.Marshal(value)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if persistErr := putSecret(ctx, rc, key, raw); persistErr != nil {
+			return persistErr
+		}
+		return restoreUnknownOutcome(value.NativeError)
+	}
+	value.Completed = true
+	raw, err = json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return putSecret(ctx, rc, key, raw)
+}
+
+func restoreUnknownOutcome(nativeError string) error {
+	message := "restore submission outcome is unknown"
+	if nativeError != "" {
+		message += "; native response: " + nativeError
+	}
+	return operationInvalid(message + "; preserve restore receipts and holds; fence external writers, reconcile GET /_recovery?active_only=false&detailed=true with the source snapshot and acknowledged data; then suspend with keepVolumes: true and resume before requesting a fresh explicit restore; do not delete the receipt or retry blindly; see docs/elasticsearch/snapshots.md; managed components remain stopped")
 }
 
 // restoreComponentAction checkpoints each service-wide stop/start receipt and

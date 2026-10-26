@@ -44,6 +44,9 @@ func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *coreInfra, *
 	if _, err := p.Sync(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal("checkpoint import batch", err)
+	}
 	if _, err := p.Sync(t.Context(), rc); err == nil {
 		t.Fatal("partial import failure was not returned")
 	}

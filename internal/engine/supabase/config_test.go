@@ -15,6 +15,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
+	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
@@ -80,6 +81,100 @@ func TestGraphQLExposesEffectivePostgRESTSchema(t *testing.T) {
 		if err := json.Unmarshal(config.EngineSpec, &sp); err != nil || !sp.GraphQL || !reflect.DeepEqual(sp.REST.Schemas, []string{"public", "graphql_public"}) {
 			t.Fatal("GraphQL profile/schema not delivered", member, err)
 		}
+	}
+}
+
+func TestDatabaseReadinessCredentialUpgradeRepublishesConfig(t *testing.T) {
+	p, rc, _ := setupProvider(t)
+	convergeProvider(t, p, rc)
+	state, err := loadState(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	versions := map[string]int64{}
+	for _, component := range []string{"auth", "rest"} {
+		member := state.Members[component]
+		config, err := p.MemberConfig(t.Context(), rc, member.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		versions[component] = config.ConfigVersion
+		var spec sbspec.Spec
+		if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		// Reconstruct the old projected payload and digest without changing
+		// user intent or forcing a new update operation.
+		spec.ServiceRoleKey, spec.RestartToken = "", ""
+		spec.RestartToken = configDigest(spec)
+		config.EngineSpec, err = json.Marshal(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rc.Secrets.SetClusterSecret(t.Context(), rc.Cluster.Ref(), "supabase/config/"+member.Name, raw); err != nil {
+			t.Fatal(err)
+		}
+		member.ConfigHash = spec.RestartToken
+		member.Stage = engine.ComponentDeployed
+	}
+	if err := saveState(rc.Cluster, state); err != nil {
+		t.Fatal(err)
+	}
+	convergeProvider(t, p, rc)
+	for _, component := range []string{"auth", "rest"} {
+		config, err := p.MemberConfig(t.Context(), rc, state.Members[component].Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec sbspec.Spec
+		if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		if spec.ServiceRoleKey == "" || config.ConfigVersion <= versions[component] {
+			t.Fatal("ordinary convergence did not refresh the missing readiness credential", component)
+		}
+	}
+}
+
+func TestDeployedReadinessArtifactUpgradeRequiresDeployment(t *testing.T) {
+	p, rc, _ := setupProvider(t)
+	convergeProvider(t, p, rc)
+	state, err := loadState(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	member := state.Members["rest"]
+	before, err := p.MemberConfig(t.Context(), rc, member.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	member.Stage = engine.ComponentDeployed
+	member.Version = "previous-artifact"
+	member.ConfigHash = "previous-artifact-config"
+	if err := saveState(rc.Cluster, state); err != nil {
+		t.Fatal(err)
+	}
+	if handled, err := p.syncComponents(t.Context(), rc); err != nil || !handled {
+		t.Fatal("artifact correction was not handled", err)
+	}
+	state, err = loadState(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	member = state.Members["rest"]
+	if member.Stage != engine.ComponentImported || member.Version != "previous-artifact" {
+		t.Fatal("artifact change bypassed installation through normal deployment")
+	}
+	after, err := p.MemberConfig(t.Context(), rc, member.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("published a new-artifact configuration before installation")
 	}
 }
 

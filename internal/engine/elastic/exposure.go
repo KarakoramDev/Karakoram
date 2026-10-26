@@ -65,6 +65,23 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	}
 	return 0, invalid("no project TCP ports remain")
 }
+
+// revokeComponentExposure only removes explicitly disabled HTTPS routes. It is
+// safe before readiness/configuration reconciliation; enabling stays in expose.
+func (p *Provider) revokeComponentExposure(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	options, err := parseStoredOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return false, err
+	}
+	for _, m := range s.componentMembers() {
+		desired := m.Kind == kindKibana && options.Kibana.Public || m.Kind == kindAPM && options.APM.Public
+		if m.Subdomain && !desired {
+			return true, p.issueAction(ctx, rc, s, &pending{Action: "subdomain-off", Member: m.Name})
+		}
+	}
+	return false, nil
+}
+
 func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	options, err := parseStoredOptions(rc.Cluster.Spec.EngineOptions)
 	if err != nil {

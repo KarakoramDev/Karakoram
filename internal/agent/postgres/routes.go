@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
@@ -65,6 +66,13 @@ func internalRequest(ctx context.Context, s pgspec.Spec, host string, port int, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if method == http.MethodPost && path == "/switchover" {
+			if resp.StatusCode >= 500 {
+				return errors.New("switchover_unavailable")
+			}
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			return errors.New(classifySwitchoverRejection(string(body)))
+		}
 		return fmt.Errorf("internal PostgreSQL service returned HTTP %d", resp.StatusCode)
 	}
 	if output != nil {
@@ -118,8 +126,16 @@ func patchDynamic(ctx context.Context, s pgspec.Spec, p paths) error {
 	return patroniRequest(ctx, s, "PATCH", "/config", desired, nil)
 }
 func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.StatusResponse {
-	out := pgspec.StatusResponse{Role: "starting", Version: s.Version}
+	out := pgspec.StatusResponse{
+		Role: "starting", Version: s.Version, CredentialReceipts: true,
+		HealthCapabilities: &pgspec.HealthCapabilities{
+			LocalEtcd: true, ReplicationSlots: true, WALArchive: true,
+			ReplicationDistance: true, PatroniPause: true,
+		},
+	}
 	out.BootstrapGeneration = appliedBootstrapGeneration(p)
+	out.DataRecoveryRequired = dataRecoveryRequired(s, p)
+	out.DataMissing = dataMissing(s, p)
 	if s.Role == pgspec.RoleProxy {
 		out.Role = "proxy"
 		c, err := proxyConnect(ctx, s.Proxy)
@@ -133,13 +149,22 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 			out.Running = true
 			frontend.Close()
 		}
-		rows, err := queryTable(ctx, c, "SELECT hostname,hostgroup_id,status FROM runtime_pgsql_servers")
-		if err == nil {
-			for _, r := range rows {
-				group, _ := strconv.Atoi(r["hostgroup_id"])
-				out.ProxyBackends = append(out.ProxyBackends, pgspec.ProxyBackend{Host: r["hostname"], Hostgroup: group, Status: r["status"]})
+		out.ProxyBackends, err = proxyBackendStatus(ctx, c)
+		if out.Running && err == nil && !proxyWriterReady(s.Proxy, out.ProxyBackends) && proxyProbeWriter(ctx, s) {
+			out.ProxyBackends, err = proxyBackendStatus(ctx, c)
+		}
+		out.Running = out.Running && err == nil && proxyWriterReady(s.Proxy, out.ProxyBackends)
+		if out.Running && len(s.Proxy.Users) > 0 {
+			users, err := queryTable(ctx, c, "SELECT username,active FROM runtime_pgsql_users")
+			observed := keyRows(users, "username")
+			out.Running = err == nil
+			for _, user := range s.Proxy.Users {
+				out.Running = out.Running && observed[user.Username]["active"] == "1"
 			}
 		}
+		proxyDiagnostics(ctx, out.ProxyBackends, func(ctx context.Context, sql string) ([]tableRow, error) {
+			return queryTable(ctx, c, sql)
+		})
 		return out
 	}
 	c, err := localConnect(ctx, s, p)
@@ -164,7 +189,7 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 			}
 		}
 		_ = c.QueryRow(ctx, "SELECT timeline_id FROM pg_catalog.pg_control_checkpoint()").Scan(&out.Timeline)
-		_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),''), COALESCE(last_failed_time > last_archived_time, last_failed_time IS NOT NULL) FROM pg_catalog.pg_stat_archiver").Scan(&out.LastArchivedAt, &out.ArchiveFailing)
+		out.ArchiveStatusKnown = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),''), COALESCE(last_failed_time > last_archived_time, last_failed_time IS NOT NULL) FROM pg_catalog.pg_stat_archiver").Scan(&out.LastArchivedAt, &out.ArchiveFailing) == nil
 		if recovery {
 			_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_last_wal_receive_lsn(),pg_catalog.pg_last_wal_replay_lsn()),0)::bigint, EXISTS(SELECT FROM pg_catalog.pg_stat_wal_receiver WHERE status='streaming')").Scan(&out.LagBytes, &out.Streaming)
 			_ = c.QueryRow(ctx, "SELECT pg_catalog.pg_last_wal_replay_lsn()::text").Scan(&out.WALPosition)
@@ -175,6 +200,7 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 			}
 			_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.max(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_current_wal_lsn(),replay_lsn)),0)::bigint, COALESCE(pg_catalog.string_agg(DISTINCT sync_state,','),'') FROM pg_catalog.pg_stat_replication").Scan(&out.LagBytes, &out.SyncState)
 		}
+		sampleWALHealth(ctx, c, &out)
 	}
 	if s.Topology == pgspec.TopologyHA {
 		var ps struct {
@@ -206,7 +232,7 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 				}
 				if m.Name == s.Member {
 					out.FailoverFenced = retirementTagsApplied(m.Tags)
-					out.RetirementTagsCleared = !m.Tags.NoFailover && !m.Tags.NoLoadBalance
+					out.RetirementTagsCleared = !m.Tags.failoverDisabled() && !m.Tags.NoLoadBalance
 					if m.Role == "sync_standby" || m.Role == "quorum_standby" {
 						out.SyncState = "sync"
 					}
@@ -429,10 +455,16 @@ func (e *Runner) Routes(mux *http.ServeMux, n *agent.Node) {
 						}
 					}
 					status := e.status(ctx, s, dataPaths(locked.DataDir()))
-					if status.Leader == "" {
-						return errors.New("unknown Patroni leader")
+					if status.Running && status.Role == "replica" && status.Streaming && status.Leader != "" && status.Leader != s.Member {
+						return nil // A concurrent failover already demoted this member.
 					}
-					return patroniRequest(ctx, s, "POST", "/switchover", map[string]string{"leader": status.Leader, "candidate": req.Candidate}, nil)
+					if !status.Running || status.Role != "primary" || status.Leader != s.Member || !status.EtcdHealthy {
+						return errors.New("switchover_leader_changed")
+					}
+					if status.Paused {
+						return errors.New("switchover_paused")
+					}
+					return patroniRequest(ctx, s, "POST", "/switchover", map[string]string{"leader": s.Member, "candidate": req.Candidate}, nil)
 				case pgspec.ActionReinit:
 					var req struct{}
 					if err = decode(&req); err != nil {
@@ -473,7 +505,11 @@ func (e *Runner) Routes(mux *http.ServeMux, n *agent.Node) {
 				return errors.New("unsupported postgres action")
 			})
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusConflict)
+				if action == pgspec.ActionSwitchover {
+					actionJSON(w, http.StatusConflict, agentapi.ErrorResponse{Error: safeSwitchoverRejection(err)})
+				} else {
+					http.Error(w, err.Error(), http.StatusConflict)
+				}
 				return
 			}
 			actionJSON(w, http.StatusOK, result)

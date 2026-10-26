@@ -76,10 +76,20 @@ type Node struct {
 
 // Nodes returns nodes ordered by name and ID.
 func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
+	return c.nodes(ctx, "/_nodes")
+}
+
+// LocalNodes observes only this endpoint, so an unresponsive peer cannot hold
+// up the node's own identity and version evidence.
+func (c *Client) LocalNodes(ctx context.Context) ([]Node, error) {
+	return c.nodes(ctx, "/_nodes/_local")
+}
+
+func (c *Client) nodes(ctx context.Context, path string) ([]Node, error) {
 	var v struct {
 		Nodes map[string]Node `json:"nodes"`
 	}
-	err := c.do(ctx, "GET", "/_nodes", url.Values{"filter_path": {"nodes.*.name,nodes.*.version,nodes.*.roles,nodes.*.host,nodes.*.ip"}}, nil, &v)
+	err := c.do(ctx, "GET", path, url.Values{"filter_path": {"nodes.*.name,nodes.*.version,nodes.*.roles,nodes.*.host,nodes.*.ip"}}, nil, &v)
 	if err != nil {
 		return nil, err
 	}

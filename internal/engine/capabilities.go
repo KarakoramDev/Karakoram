@@ -4,6 +4,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -71,4 +72,34 @@ func CheckCapabilities(p Provider, spec domain.ClusterSpec, backend string, have
 		return nil
 	}
 	return fmt.Errorf("%w: backend %s does not provide %s", ErrNotSupported, backend, strings.Join(missing, ", "))
+}
+
+// CheckExposureSupport refuses only a positively unsupported public IP family.
+// Unknown capability does not change admission or convergence behavior.
+func CheckExposureSupport(ctx context.Context, backend infra.Backend, exposure domain.Exposure) (domain.Condition, error) {
+	if !exposure.Public {
+		return domain.Condition{}, nil
+	}
+	family := exposure.IPType
+	if family == "" {
+		family = "IPV6"
+	}
+	condition := domain.Condition{Type: "ExposureSupported", Status: "Unknown", Reason: "PublicIPSupportUnknown",
+		Message: "Backend cannot currently confirm public " + family + " availability; routing will be attempted"}
+	checker, ok := backend.(infra.PublicIPSupport)
+	if !ok {
+		return condition, nil
+	}
+	supported, err := checker.SupportsPublicIP(ctx, family)
+	if err != nil {
+		return condition, nil
+	}
+	if supported {
+		condition.Status, condition.Reason = "True", "PublicIPAvailable"
+		condition.Message = "Backend provides public " + family
+		return condition, nil
+	}
+	condition.Status, condition.Reason = "False", "PublicIPTypeUnsupported"
+	condition.Message = "spec.exposure.ipType " + family + " is unavailable in this namespace's backend project; select an available IP family, provision that public address, or disable public exposure"
+	return condition, fmt.Errorf("%w: %s", ErrInvalid, condition.Message)
 }

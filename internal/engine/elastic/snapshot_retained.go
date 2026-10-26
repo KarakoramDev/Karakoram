@@ -29,8 +29,9 @@ func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.Back
 		return err
 	}
 	// Require the complete cluster UID namespace, not merely a storage prefix.
-	suffix := strings.TrimPrefix(base, strings.Trim(storage.Prefix, "/")+"/")
-	if storage.Prefix == "" {
+	storagePrefix := domain.ElasticsearchObjectPrefix(storage.Prefix, "")
+	suffix := strings.TrimPrefix(base, storagePrefix+"/")
+	if storagePrefix == "" {
 		suffix = base
 	}
 	parts := strings.Split(suffix, "/")

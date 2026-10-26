@@ -4,6 +4,12 @@
 
 Use cluster specs and durable operations for broker lifecycle changes, not parallel manual platform deployments.
 
+On Zerops, exhausted exact-version deployment retries report
+`DeploymentRetriesExhausted` and stop submissions for that broker. Other brokers
+remain observable and can finish provisioning; rolling disruption and quorum
+fences are not bypassed. Inspect the platform/runtime failure, correct it, then
+run `karactl --namespace NS clusters retry-deployments NAME` to re-arm deployment.
+
 ## Lifecycle and readiness
 
 Members report role `broker`; the supervised process/log name is **`rabbitmq-server`**:
@@ -16,6 +22,41 @@ karactl -n NS events list --cluster brokers --order desc
 ```
 
 Ready requires every expected broker running, each seeing the same planned running membership, no alarms/partitions/maintenance, and active platform containers. Healthy survivors are not individually marked unhealthy/partitioned merely because another broker stopped; aggregate health still degrades. Local health does not prove queue quorum/delivery. See [operation and generation status](../clusters.md#operations-and-status).
+
+Current member agents observe broker membership, runtime version, alarms and
+partitions through authenticated loopback Management HTTP calls in parallel.
+Live in-service and alarm health checks must return complete, bounded successful
+health responses; HTTP headers or cached node statistics alone cannot establish
+readiness. HTTPS verifies the managed CA and member hostname, and no public
+management listener is required. This avoids launching
+an Erlang CLI VM on every health sweep. Older agents retain their existing
+CLI status protocol until upgraded; only an absent observation route enables
+that compatibility path, never an authentication, timeout or broker-health error.
+Bootstrap/join preconditions still use cookie-authenticated CLI status because a
+new broker has no managed HTTP user yet, but this read has a four-second budget
+on both control plane and current member agents. Repair's `list_vhosts` and
+`list_users` observations also have independent four-second agent-side budgets.
+Timeouts fail closed and name the read and member-connectivity checks; bootstrap,
+join and credential/vhost repair mutations retain their administration budgets.
+Upgrade member agents to bound repair listing commands; the control-plane
+formation deadline also protects calls to older agents.
+Reserved-user repair uses cookie-authenticated CLI access before HTTP-dependent
+formation and recovery checks, selecting a reachable running agent rather than
+requiring the broken management credential. A peer left behind by a rotation first
+receives the rotation's newer configuration epoch in a separate persisted step.
+The selected agent then reloads committed desired credentials and acknowledges
+that epoch before repair, fencing delayed pre-rotation configuration pulls as
+well as stale cached credentials. An unacknowledged peer is skipped so another
+reachable broker can repair access; its epoch fence is not bypassed, including
+when the reported epoch is absent/zero. Each fallback peer first receives any
+required epoch through the same persisted step. If no peer acknowledges, no
+native repair runs and the previous success timestamp is retained. Reload or
+status-read errors remain visible and do not claim success.
+Its one-minute repair interval is unchanged; staged password rotations retain
+ownership of their credential change.
+If no broker is running outside maintenance, repair defers without claiming success.
+Native repair errors remain visible but do not prevent runtime/rolling recovery
+from restoring the broker or quorum needed for the next repair attempt.
 
 Platform readiness probes localhost's configured AMQPS port (AMQP if TLS disabled). An intentional maintenance/stopped hold passes platform readiness: deployment success is not messaging readiness. Do not remove holds to bypass stalled work. During creation, member stages distinguish import/deployment/agent readiness/join; `RUNNING` still needs aggregate membership checks. Departing members stay visible as `LEAVING`/`LEAVING_BLOCKED` until removed, not counted healthy.
 
@@ -79,6 +120,38 @@ Replacement joins a fresh monotonic identity and grows/migrates replicas before 
 | Rolling change stalled | Operation step, config acknowledgement, maintenance, platform action, quorum blockers; recover replicas/alarms, observe terminal platform status |
 | Management unavailable | Private management ports, CA/hostname, `karakoram` credentials, namespace relay/session/policy; repair private administration, not TLS bypass |
 | Restore has no messages | Expected [definitions-only behavior](backups.md); inspect imported objects/target credentials and arrange replay |
+
+`Partition=True` requires native non-empty partition evidence, or a fresh
+running-membership view that omits a peer which freshly reports itself running.
+That disagreement identifies an unavailable broker peer link, not a stopped
+broker. Restore peer connectivity and inspect `cluster_status` on each side;
+check DNS, distribution ports, cookie and TLS. Preserve queue data: do not reset
+or force-boot brokers.
+
+A management timeout alone does **not** prove a network partition.
+`Partition=Unknown` means membership could not be observed and there is no
+positive partition evidence. `Healthy`, `Partition`, and cluster messages name
+the member whose management/membership observation is unavailable and give
+inspection/restore advice; Ready remains withheld. Missing expected peers are
+named even when no native `partitions[]` is reported. A stopped peer can degrade
+aggregate health without marking healthy survivors partitioned.
+
+Member health uses fresh local in-service and local-alarm checks plus a
+matching loopback Prometheus runtime identity, each with a two-second HTTP
+budget. Peer-dependent `/api/nodes?disable_stats=true` membership has a separate
+one-second budget. If a paused peer blocks that view, healthy surviving members
+remain RUNNING/healthy with fresh samples, but cluster readiness and membership-
+dependent formation, rolling-change and removal gates remain withheld.
+Missing membership is never replaced with configured peers or a guessed
+self-only running view.
+
+A fresh membership view that explicitly does not report the queried broker's
+own application running is negative local evidence, not a peer-link fault:
+that member is DOWN with local application inspection/recovery guidance.
+This can race an independently successful local service probe during shutdown;
+it must not withdraw healthy survivors' local health or label the broker as
+its own missing peer. An unavailable membership view is not such evidence.
+
 
 ## Metrics
 

@@ -254,6 +254,13 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 	if err := p.validateRole(v); err != nil {
 		return "", err
 	}
+	if err := p.finishPendingAccess(ctx, rc); err != nil {
+		return "", err
+	}
+	receipts, err := p.credentialReceipts(ctx, rc)
+	if err != nil {
+		return "", err
+	}
 	names, err := p.managedRoleNames(ctx, rc)
 	if err != nil {
 		return "", err
@@ -282,14 +289,6 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		}
 		v.Password = &verifier
 	}
-	if err = p.accessAction(ctx, rc, "roles", pgspec.AccessRequest{Operation: op, Role: &v}, nil); err != nil {
-		return "", err
-	}
-	if v.Password != nil {
-		if err = putSecret(ctx, rc, rolePasswordKey(v.Name), []byte(password)); err != nil {
-			return "", fmt.Errorf("sealing applied role password: %w", err)
-		}
-	}
 	if v.Login {
 		if !slices.Contains(names, v.Name) {
 			names = append(names, v.Name)
@@ -298,14 +297,39 @@ func (p *Core) writeRole(ctx context.Context, rc *engine.Context, op string, v R
 		names = slices.DeleteFunc(names, func(name string) bool { return name == v.Name })
 	}
 	slices.Sort(names)
-	b, err := json.Marshal(names)
+	revision, err := secrets.Token()
 	if err != nil {
 		return "", err
 	}
-	if err = putSecret(ctx, rc, "access/roles", b); err != nil {
-		return "", fmt.Errorf("sealing managed role index: %w", err)
+	intent := &accessIntent{
+		Request: pgspec.AccessRequest{Operation: op, Role: &v},
+		Names:   names, Revision: revision, Generated: generated != "",
 	}
-	if err = p.bumpAccessRevision(ctx, rc); err != nil {
+	if v.Password != nil {
+		intent.Password = &password
+	}
+	if !receipts {
+		// Preserve pre-receipt agent behavior during a mixed-version rollout:
+		// direct SQL followed by metadata publication, without promising
+		// crash-safe recovery that the old agent cannot provide.
+		if err := p.accessAction(ctx, rc, "roles", intent.Request, nil); err != nil {
+			return "", err
+		}
+		return generated, p.publishAccessIntent(ctx, rc, intent)
+	}
+	intent.Request.RequestID = revision
+	intent.Previous, err = accessSnapshot(ctx, rc, v.Name)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(intent)
+	if err != nil {
+		return "", err
+	}
+	if err = putSecret(ctx, rc, "access/pending", raw); err != nil {
+		return "", fmt.Errorf("sealing credential intent before SQL: %w", err)
+	}
+	if err = p.completeAccessIntent(ctx, rc, intent); err != nil {
 		return "", err
 	}
 	return generated, nil
@@ -316,6 +340,20 @@ func (p *Core) CreateRole(ctx context.Context, rc *engine.Context, v RoleWrite) 
 	defer p.accessMu.Unlock()
 	if err := p.validateRole(v); err != nil {
 		return "", err
+	}
+	if intent, err := loadAccessIntent(ctx, rc); err != nil {
+		return "", err
+	} else if intent != nil {
+		err := p.completeAccessIntent(ctx, rc, intent)
+		if err != nil && !definitiveAccessRejection(err) {
+			return "", err
+		}
+		if err == nil && intent.Request.Operation == "create" && intent.Request.Role.Name == v.Name {
+			if intent.Generated && intent.Password != nil {
+				return *intent.Password, nil
+			}
+			return "", nil
+		}
 	}
 	if _, err := p.GetRole(ctx, rc, v.Name); err == nil {
 		return "", engine.ErrConflict
@@ -344,6 +382,9 @@ func (p *Core) DeleteRole(ctx context.Context, rc *engine.Context, name string) 
 	if err := p.writableRole(name); err != nil {
 		return err
 	}
+	if err := p.finishPendingAccess(ctx, rc); err != nil {
+		return err
+	}
 	if err := p.accessAction(ctx, rc, "roles", pgspec.AccessRequest{Operation: "delete", Name: name}, nil); err != nil {
 		return err
 	}
@@ -370,6 +411,21 @@ func (p *Core) RotateRolePassword(ctx context.Context, rc *engine.Context, name 
 	defer p.accessMu.Unlock()
 	if err := p.writableRole(name); err != nil {
 		return "", err
+	}
+	if intent, err := loadAccessIntent(ctx, rc); err != nil {
+		return "", err
+	} else if intent != nil && intent.Request.Role.Name == name && intent.Password != nil {
+		err := p.completeAccessIntent(ctx, rc, intent)
+		if err != nil && !definitiveAccessRejection(err) {
+			return "", err
+		}
+		if err == nil {
+			return *intent.Password, nil
+		}
+	} else if intent != nil {
+		if err := p.completeAccessIntent(ctx, rc, intent); err != nil && !definitiveAccessRejection(err) {
+			return "", err
+		}
 	}
 	role, err := p.GetRole(ctx, rc, name)
 	if err != nil {

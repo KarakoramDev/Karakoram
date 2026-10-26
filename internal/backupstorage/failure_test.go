@@ -27,6 +27,9 @@ func TestFailureCategorizationAndSecretSafety(t *testing.T) {
 		{"key", minio.ErrorResponse{Code: "InvalidAccessKeyId", Message: "private-credential-value"}, "access_denied"},
 		{"signature", minio.ErrorResponse{Code: "SignatureDoesNotMatch", Message: "private-credential-value"}, "access_denied"},
 		{"bucket", minio.ErrorResponse{Code: "NoSuchBucket", Message: "private-credential-value"}, "bucket_not_found"},
+		{"clock-skew", minio.ErrorResponse{Code: "RequestTimeTooSkewed", Message: "private-credential-value"}, "clock_skew"},
+		{"expired-request", minio.ErrorResponse{Code: "RequestExpired", Message: "private-credential-value"}, "clock_skew"},
+		{"future-request", minio.ErrorResponse{Code: "RequestInTheFuture", Message: "private-credential-value"}, "clock_skew"},
 		{"tls", &tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}, "tls_error"},
 		{"dns", &net.DNSError{Err: "private-credential-value", Name: "private-endpoint"}, "unreachable"},
 		{"connect", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("private-credential-value")}, "unreachable"},
@@ -39,6 +42,9 @@ func TestFailureCategorizationAndSecretSafety(t *testing.T) {
 			reason, message := Failure(err)
 			if reason != tc.reason || message == "" || strings.Contains(message, "private-credential-value") || strings.Contains(err.Error(), "private-credential-value") {
 				t.Fatalf("%s %s: %v", reason, message, err)
+			}
+			if tc.reason == "clock_skew" && (!strings.Contains(message, "control-plane host clock") || !strings.Contains(message, "verification again")) {
+				t.Fatalf("missing clock remediation: %q", message)
 			}
 			if !errors.Is(err, tc.err) {
 				t.Fatal("underlying error not preserved")

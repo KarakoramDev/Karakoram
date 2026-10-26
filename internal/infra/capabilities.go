@@ -3,6 +3,29 @@
 
 package infra
 
+import (
+	"context"
+	"errors"
+)
+
+// ErrPublicIPTypeUnsupported marks a definitive platform refusal of an IP family.
+var ErrPublicIPTypeUnsupported = errors.New("public IP type unsupported")
+
+// PublicIPSupport is optional: only backends with authoritative, fresh family
+// information implement it. An error means unknown, never unsupported.
+type PublicIPSupport interface {
+	SupportsPublicIP(context.Context, string) (bool, error)
+}
+
+// RuntimeResourceDeployment is an opt-in lifecycle guarantee: SetResources on
+// a running runtime reapplies its stored deployment, including stop/start when
+// required. A successful receipt already covers that deployment; consumers must
+// gate the resource mutation as a disruption, but need not deploy it again.
+// Native configuration acknowledgement and readiness remain engine-owned.
+type RuntimeResourceDeployment interface {
+	ResourceUpdatesDeployRuntime() bool
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract
@@ -36,6 +59,10 @@ type Capabilities struct {
 	HorizontalScaling bool `json:"horizontalScaling"`
 	// EnvChangeRestarts: writing variables restarts or redeploys the runtime.
 	EnvChangeRestarts bool `json:"envChangeRestarts"`
+	// StatelessRolloutSurge bounds extra serving instances during a stateless
+	// rollout above max(old replicas, desired replicas). Zero means unknown:
+	// consumers must reserve both complete old and desired sets.
+	StatelessRolloutSurge int `json:"statelessRolloutSurge,omitempty"`
 }
 
 // flags pairs each flag with its stable API name, in display order.

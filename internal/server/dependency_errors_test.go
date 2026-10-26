@@ -206,6 +206,51 @@ func TestProviderDrivenBackupAndPITRDiagnostics(t *testing.T) {
 	}
 }
 
+type emptyPITRProvider struct{ *fakeProvider }
+
+func (*emptyPITRProvider) PITRWindow(context.Context, *engine.Context) ([]domain.TimeWindow, error) {
+	return nil, nil
+}
+
+func TestUnavailablePITRWindowExplainsReason(t *testing.T) {
+	s, _, token := testServer(t)
+	var err error
+	s.Registry, err = engine.NewRegistry(&emptyPITRProvider{&fakeProvider{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "GET", "/api/v1/clusters/prod/pitr", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var got struct {
+		Available bool    `json:"available"`
+		Message   *string `json:"message"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Available || got.Message == nil || !strings.Contains(*got.Message, "PITR") {
+		t.Fatalf("unavailable PITR window must explain why: %s", w.Body.String())
+	}
+	var c struct {
+		Spec struct {
+			Backup struct {
+				PITR struct {
+					Enabled bool `json:"enabled"`
+				} `json:"pitr"`
+			} `json:"backup"`
+		} `json:"spec"`
+	}
+	r := call(s, "GET", "/api/v1/clusters/prod", "", token)
+	if err := json.Unmarshal(r.Body.Bytes(), &c); err != nil {
+		t.Fatal(err)
+	}
+	if disabled := strings.Contains(*got.Message, "not enabled"); disabled == c.Spec.Backup.PITR.Enabled {
+		t.Fatalf("message %q does not match pitr.enabled=%v", *got.Message, c.Spec.Backup.PITR.Enabled)
+	}
+}
+
 func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 	s, _, token := testServer(t)
 	base := map[string]any{"name": "archive", "type": "s3", "endpointURL": "https://s3.example.test", "region": "us-east-1", "bucket": "bucket", "credentials": map[string]string{"accessKeyId": "private-access", "secretAccessKey": "private-secret"}}
@@ -253,7 +298,7 @@ func TestStorageFieldConflictAndVerificationDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	storage.EndpointURL = "http://s3.example.test/path"
+	storage.EndpointURL = "http://127.0.0.1"
 	if err = s.Store.UpdateBackupStorage(t.Context(), storage); err != nil {
 		t.Fatal(err)
 	}

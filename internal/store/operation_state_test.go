@@ -100,6 +100,9 @@ func TestUpdateOperationAndClusterStateRollsBack(t *testing.T) {
 func TestClaimRunningOperationDoesNotStartPending(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	pending := domain.Operation{ID: "pending", Cluster: "demo"}
 	if err := s.EnqueueOperation(ctx, &pending); err != nil {
 		t.Fatal(err)
@@ -125,6 +128,9 @@ func TestDeleteClusterRetiresUnfinishedOperations(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
 	c, running := operationStateFixture(t, s)
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "other"}); err != nil {
+		t.Fatal(err)
+	}
 	completed := time.Date(2024, 1, 5, 9, 0, 0, 0, time.UTC)
 	for _, op := range []domain.Operation{
 		{ID: "pending", Cluster: "demo"},

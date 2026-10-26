@@ -85,7 +85,41 @@ func (*Provider) SupportsFailureCleanup(op *domain.Operation) bool {
 	}
 }
 
-func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+// PrepareOperationFailureCleanup bounds backup observation even when namespace,
+// runtime or storage resolution is unavailable. It performs no native actions.
+func (*Provider) PrepareOperationFailureCleanup(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if op.Kind != domain.OperationBackup {
+		return engine.OpResult{}, nil
+	}
+	result, err := pbm.PrepareBackupFailureCleanup(ctx, rc, op)
+	if result.Done {
+		// The durable checkpoint and Message carry the failure; the reconciler
+		// treats this as completed compensation, not another cleanup retry.
+		return result, nil
+	}
+	return result, err
+}
+
+func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	defer func() {
+		if !result.Done || op.Kind != domain.OperationRestore || rc.Cluster.Spec.DataSource == nil {
+			return
+		}
+		s, loadErr := load(rc.Cluster)
+		if loadErr != nil {
+			err = loadErr
+			return
+		}
+		if op.ID == initialRestoreID(rc.Cluster, s) {
+			s.InitialRestore = &initialRestore{OperationID: op.ID, Failure: "Initial restore operation " + op.ID + " was cancelled; recreate the target from a verified backup"}
+			s.Phase = "initial-restore-failed"
+			rc.Cluster.Status.Phase = domain.PhaseFailed
+			rc.Cluster.Status.Message = s.InitialRestore.Failure
+			if saveErr := save(rc.Cluster, s); saveErr != nil {
+				err = saveErr
+			}
+		}
+	}()
 	if op.Kind == domain.OperationReplaceMember {
 		s, err := load(rc.Cluster)
 		if err != nil {

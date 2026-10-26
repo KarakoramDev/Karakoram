@@ -60,7 +60,12 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return s.Upgrade == nil && s.Rolling == nil && (s.Replacement == nil || s.Replacement.Recovery == ""), nil
+	for _, m := range s.Members {
+		if m.UnplacedRetirement != nil || m.ImportBatch != nil || m.RuntimeRecovery.Op != nil || m.RuntimeRecovery.ImportPlan != nil {
+			return false, nil
+		}
+	}
+	return s.RestoreRecovery == nil && s.Upgrade == nil && s.Rolling == nil && (s.Replacement == nil || s.Replacement.Recovery == ""), nil
 }
 
 // RunOperation executes bounded, checkpointed rolling restarts.
@@ -70,7 +75,18 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		return engine.OpResult{}, err
 	}
 	if !allowed {
-		return engine.OpResult{}, engine.Invalid("PostgreSQL maintenance owns the cluster; imperative operations must wait")
+		// Replacement join deliberately runs Sync to provision its new member.
+		// Its own frozen import is admission fencing for other operations, not
+		// a reason to fail the already-running, non-destructive join observer.
+		s, loadErr := load(rc.Cluster)
+		if loadErr != nil {
+			return engine.OpResult{}, loadErr
+		}
+		ownedJoin := op.Kind == domain.OperationReplaceMember && s.Upgrade == nil && s.Rolling == nil && s.RestoreRecovery == nil &&
+			s.Replacement != nil && s.Replacement.Operation == op.ID && s.Replacement.Stage == "join" && s.Replacement.Recovery == ""
+		if !ownedJoin {
+			return engine.OpResult{}, engine.Invalid("PostgreSQL maintenance owns the cluster; imperative operations must wait")
+		}
 	}
 	switch op.Kind {
 	case domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore":
@@ -159,7 +175,7 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 			if m.Role == "data" && s.Topology == "ha" {
 				err = a.Engine(ctx, "postgres", "restart", struct{}{}, nil)
 			} else {
-				err = a.Process(ctx, agentapi.ProcessAction{Process: process, Action: "restart"})
+				err = a.Process(ctx, agentapi.ProcessAction{Process: process, Action: "restart", RequestID: op.ID + "/restart/" + m.Name})
 			}
 			if err != nil {
 				return engine.OpResult{}, err

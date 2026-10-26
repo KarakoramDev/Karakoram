@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -89,6 +91,52 @@ func GetStatus(ctx context.Context, c *mongo.Client) (Status, error) {
 	return v, err
 }
 
+// GetObservedStatus bounds one replication read without shortening subsequent
+// administrative commands.
+func GetObservedStatus(ctx context.Context, c *mongo.Client, host string) (Status, error) {
+	readCtx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
+	status, err := GetStatus(readCtx, c)
+	if err != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(readCtx.Err(), context.DeadlineExceeded)) {
+		return status, fmt.Errorf("PSMDB replication status read exceeded %s budget: inspect member %s responsiveness/connectivity: %w", engine.ObservationTimeout, host, err)
+	}
+	return status, err
+}
+
+// GetPrimaryStatus uses the writable side's replication view. A partitioned
+// secondary's nearest-server view must not label reachable primary peers dead.
+func GetPrimaryStatus(ctx context.Context, c *mongo.Client) (Status, error) {
+	var v Status
+	err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}, options.RunCmd().SetReadPreference(readpref.Primary())).Decode(&v)
+	return v, err
+}
+
+// HasWritablePrimary rejects secondary-only and contradictory replication views.
+func (s Status) HasWritablePrimary() bool {
+	primaries := 0
+	for _, member := range s.Members {
+		if member.State == "PRIMARY" && member.Health == 1 {
+			primaries++
+		}
+	}
+	return primaries == 1
+}
+
+// CheckWritablePrimary selects the primary and verifies its current hello
+// response, rather than treating a successful nearest/secondary ping as writable.
+func CheckWritablePrimary(ctx context.Context, c *mongo.Client) error {
+	var hello struct {
+		Writable bool `bson:"isWritablePrimary"`
+	}
+	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}, options.RunCmd().SetReadPreference(readpref.Primary())).Decode(&hello); err != nil {
+		return err
+	}
+	if !hello.Writable {
+		return errors.New("no writable primary; restore replica-set quorum and inspect election, storage and network diagnostics; automatic reinitialization is refused")
+	}
+	return nil
+}
+
 // Lag reports seconds behind the newest optime in this replica set.
 func (s Status) Lag(m Member) float64 {
 	var newest time.Time
@@ -157,7 +205,7 @@ func Promote(ctx context.Context, c *mongo.Client, host string) error {
 	if e != nil {
 		return e
 	}
-	s, e := GetStatus(ctx, c)
+	s, e := GetObservedStatus(ctx, c, host)
 	if e != nil {
 		return e
 	}
@@ -200,7 +248,7 @@ func Remove(ctx context.Context, c *mongo.Client, host string) error {
 	if e != nil {
 		return e
 	}
-	s, e := GetStatus(ctx, c)
+	s, e := GetObservedStatus(ctx, c, host)
 	if e != nil {
 		return e
 	}
@@ -254,7 +302,7 @@ func SafeToRestart(ctx context.Context, c *mongo.Client, host string) error {
 	if len(v.Members) == 1 {
 		return nil
 	}
-	s, e := GetStatus(ctx, c)
+	s, e := GetObservedStatus(ctx, c, host)
 	if e != nil {
 		return e
 	}

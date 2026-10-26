@@ -39,7 +39,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		}
 	}
 	if m.ServiceID != "" {
-		runtime, err := rc.Backend.GetService(ctx, m.Name)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -58,7 +58,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		return false, nil
 	}
 	if m.VolumeID != "" {
-		volume, err := rc.Backend.GetService(ctx, m.Volume)
+		volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -94,6 +94,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 	for i, peer := range s.Members {
 		if peer == m {
 			s.Members = append(s.Members[:i], s.Members[i+1:]...)
+			delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 			break
 		}
 	}

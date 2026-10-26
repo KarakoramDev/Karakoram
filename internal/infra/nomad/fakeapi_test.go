@@ -12,6 +12,8 @@ package nomad
 // is recorded even if the next request observes the old allocation already dead.
 // Tests requiring a single writer must deregister and await terminal allocations
 // before registering replacements, rather than relying on this scheduler to fence.
+// Canary jobs retain their predecessors until all replacement tasks are healthy.
+// This models the availability/health boundary, not Nomad's serial scheduling.
 
 import (
 	"crypto/x509"
@@ -19,6 +21,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -37,6 +40,7 @@ const fakeNomadManagementToken = "test-nomad-management-token"
 type fakeRow = map[string]any
 
 type fakeToken struct {
+	accessor   string
 	management bool
 	namespaces map[string]bool
 }
@@ -55,6 +59,7 @@ type fakeJob struct {
 	row         fakeRow
 	evaluations []string
 	deployment  fakeRow
+	previous    []*fakeAlloc
 }
 
 type fakeAlloc struct {
@@ -66,7 +71,10 @@ type fakeAlloc struct {
 }
 
 type fakeNomad struct {
-	mu sync.Mutex
+	mu                 sync.Mutex
+	latency            time.Duration
+	projectAllocations bool
+	requestHook        func(http.ResponseWriter, *http.Request) (bool, func())
 	*httptest.Server
 	serial, clock int
 	index         uint64
@@ -127,6 +135,10 @@ func (f *fakeNomad) addToken(secret string, management bool, namespaces ...strin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	token := fakeToken{management: management, namespaces: map[string]bool{}}
+	token.accessor = f.tokens[secret].accessor
+	if token.accessor == "" {
+		token.accessor = f.nextID()
+	}
 	for _, ns := range namespaces {
 		token.namespaces[ns] = true
 	}
@@ -366,6 +378,7 @@ func (f *fakeNomad) setAllocStatus(a *fakeAlloc, status string) {
 	a.row["ClientStatus"] = status
 	a.row["ModifyTime"] = f.now()
 	a.row["ModifyIndex"] = f.nextIndex()
+	a.row["DeploymentStatus"] = fakeRow{"Healthy": status == "running"}
 	for _, value := range fakeMap(a.row["TaskStates"]) {
 		state := fakeMap(value)
 		state["State"] = "dead"
@@ -397,9 +410,32 @@ func (f *fakeNomad) updateJobStatus(job *fakeJob) {
 	}
 	job.row["Status"] = status
 	if job.deployment != nil {
+		running, desired, failed := 0, 0, false
+		for _, group := range fakeRows(job.row["TaskGroups"]) {
+			desired += fakeInt(group, "Count")
+		}
+		for _, a := range f.allocs {
+			retained := len(fakeRows(job.row["TaskGroups"])) == 1 &&
+				fakeInt(fakeMap(fakeRows(job.row["TaskGroups"])[0]["Update"]), "Canary") == 0 &&
+				sameScaleSpecification(fakeRawJob(job.row), fakeRawJob(fakeMap(a.row["Job"]))) &&
+				reflect.DeepEqual(fakeCombinedTaskMeta(job.row), fakeCombinedTaskMeta(fakeMap(a.row["Job"])))
+			if a.row["JobID"] != job.row["ID"] || a.row["Namespace"] != job.row["Namespace"] || a.row["JobVersion"] != job.row["Version"] && !retained {
+				continue
+			}
+			if a.row["ClientStatus"] == "running" && a.row["DesiredStatus"] == "run" {
+				running++
+			}
+			failed = failed || a.row["ClientStatus"] == "failed"
+		}
 		job.deployment["Status"] = "running"
-		if status == "running" {
+		if running >= desired {
 			job.deployment["Status"] = "successful"
+			for _, a := range job.previous {
+				f.stopAlloc(a)
+			}
+			job.previous = nil
+		} else if failed {
+			job.deployment["Status"] = "failed"
 		}
 	}
 }
@@ -448,6 +484,28 @@ func (f *fakeNomad) checkOverlaps() {
 
 func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
+	delay := f.latency
+	hook := f.requestHook
+	f.mu.Unlock()
+	if hook != nil {
+		handled, finish := hook(w, r)
+		if finish != nil {
+			defer finish()
+		}
+		if handled {
+			return
+		}
+	}
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
 	query := r.URL.Query()
 	safe := url.Values{}
@@ -482,7 +540,7 @@ func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		if token.management {
 			typ = "management"
 		}
-		fakeJSON(w, 200, fakeRow{"AccessorID": "00000000-0000-4000-8000-000000000000", "SecretID": r.Header.Get("X-Nomad-Token"), "Name": "Test token", "Type": typ, "Policies": []string{"test-policy"}, "Global": false})
+		fakeJSON(w, 200, fakeRow{"AccessorID": token.accessor, "SecretID": r.Header.Get("X-Nomad-Token"), "Name": "Test token", "Type": typ, "Policies": []string{"test-policy"}, "Global": false})
 		return
 	}
 	if path == "/v1/namespaces" && r.Method == http.MethodGet {
@@ -671,6 +729,13 @@ func (f *fakeNomad) register(w http.ResponseWriter, r *http.Request, ns string) 
 		http.Error(w, "Namespace does not exist", 400)
 		return
 	}
+	for _, group := range fakeRows(row["TaskGroups"]) {
+		if update := fakeMap(group["Update"]); update != nil && update["AutoPromote"] == true && fakeInt(update, "Canary") == 0 {
+			// Nomad 2.0 returns job validation failures as HTTP 500.
+			http.Error(w, "Task group "+fakeString(group, "Name")+" validation failed: Auto Promote requires a Canary count greater than zero", http.StatusInternalServerError)
+			return
+		}
+	}
 	if fakeString(row, "NodePool") == "" {
 		row["NodePool"] = "default"
 	}
@@ -700,7 +765,7 @@ func (f *fakeNomad) register(w http.ResponseWriter, r *http.Request, ns string) 
 	if old != nil {
 		version = fakeInt(old.row, "Version") + 1
 		createIndex = uint64(fakeInt(old.row, "CreateIndex"))
-		changed = !reflect.DeepEqual(row["TaskGroups"], old.row["TaskGroups"]) || row["NodePool"] != old.row["NodePool"] || old.row["Stop"] == true
+		changed = !reflect.DeepEqual(row["TaskGroups"], old.row["TaskGroups"]) || !reflect.DeepEqual(fakeCombinedTaskMeta(row), fakeCombinedTaskMeta(old.row)) || row["NodePool"] != old.row["NodePool"] || old.row["Stop"] == true
 	}
 	row["Namespace"] = ns
 	if fakeString(row, "Name") == "" {
@@ -715,6 +780,9 @@ func (f *fakeNomad) register(w http.ResponseWriter, r *http.Request, ns string) 
 	if row["Stop"] == nil {
 		row["Stop"] = false
 	}
+	// Nomad overwrites this server-maintained field with the authenticated
+	// registering token's accessor, even when a job body carries an older one.
+	row["NomadTokenID"] = f.tokens[r.Header.Get("X-Nomad-Token")].accessor
 	idx := f.nextIndex()
 	row["Version"], row["CreateIndex"], row["ModifyIndex"], row["JobModifyIndex"] = version, createIndex, idx, idx
 	job := &fakeJob{row: row}
@@ -724,6 +792,13 @@ func (f *fakeNomad) register(w http.ResponseWriter, r *http.Request, ns string) 
 	f.jobs[key] = job
 	eval := f.newEval(ns, id, "job-register", idx)
 	job.evaluations = append(job.evaluations, fakeString(eval, "ID"))
+	// Count-only changes reconcile existing healthy allocations and schedule
+	// only the deficit, even if the superseded canary was blocked.
+	if old != nil && row["Stop"] != true && fakeRetainScale(f, old, job, eval) {
+		f.updateJobStatus(job)
+		fakeJSON(w, 200, fakeRow{"EvalID": eval["ID"], "JobModifyIndex": idx, "Index": f.index})
+		return
+	}
 	if row["Stop"] == true {
 		f.stopJobAllocs(ns, id)
 	} else if changed {
@@ -736,12 +811,82 @@ func (f *fakeNomad) register(w http.ResponseWriter, r *http.Request, ns string) 
 		f.schedule(job, eval)
 		// Observe the replacement claim before old clients receive their stop.
 		f.checkOverlaps()
-		for _, a := range previous {
-			f.stopAlloc(a)
+		canary := false
+		for _, group := range fakeRows(row["TaskGroups"]) {
+			canary = canary || fakeInt(fakeMap(group["Update"]), "Canary") > 0
+		}
+		if canary {
+			job.previous = previous
+		} else {
+			for _, a := range previous {
+				f.stopAlloc(a)
+			}
 		}
 	}
 	f.updateJobStatus(job)
 	fakeJSON(w, 200, fakeRow{"EvalID": eval["ID"], "EvalCreateIndex": eval["CreateIndex"], "JobModifyIndex": idx, "Index": f.index, "Warnings": ""})
+}
+
+func fakeRawJob(row fakeRow) map[string]json.RawMessage {
+	data, _ := json.Marshal(row)
+	var raw map[string]json.RawMessage
+	_ = json.Unmarshal(data, &raw)
+	return raw
+}
+
+func fakeRetainScale(f *fakeNomad, old, job *fakeJob, eval fakeRow) bool {
+	asRaw := fakeRawJob
+	groups := fakeRows(job.row["TaskGroups"])
+	if len(groups) != 1 || fakeInt(fakeMap(groups[0]["Update"]), "Canary") != 0 ||
+		!sameScaleSpecification(asRaw(old.row), asRaw(job.row)) {
+		return false
+	}
+	// Nomad compares CombinedTaskMeta for each allocation, not just the
+	// current job's task groups. Job Meta changes are destructive too.
+	count := fakeInt(groups[0], "Count")
+	serving := []*fakeAlloc{}
+	for _, a := range f.allocs {
+		if a.row["Namespace"] == job.row["Namespace"] && a.row["JobID"] == job.row["ID"] &&
+			a.row["DesiredStatus"] == "run" && a.row["ClientStatus"] == "running" &&
+			sameScaleSpecification(asRaw(fakeMap(a.row["Job"])), asRaw(job.row)) &&
+			reflect.DeepEqual(fakeCombinedTaskMeta(fakeMap(a.row["Job"])), fakeCombinedTaskMeta(job.row)) {
+			serving = append(serving, a)
+		}
+	}
+	if len(serving) < count {
+		if len(serving) < fakeInt(fakeRows(old.row["TaskGroups"])[0], "Count") {
+			return false
+		}
+		f.schedule(job, eval)
+		return true
+	}
+	for _, a := range serving[count:] {
+		f.stopAlloc(a)
+	}
+	for _, id := range old.evaluations {
+		if e := f.evals[id]; e != nil && e["Status"] == "blocked" {
+			e["Status"] = "cancelled"
+		}
+	}
+	eval["Status"] = "complete"
+	return true
+}
+
+// Task Meta overrides group Meta, which overrides job Meta, as in Nomad.
+func fakeCombinedTaskMeta(job fakeRow) map[string]map[string]any {
+	combined := map[string]map[string]any{}
+	for _, group := range fakeRows(job["TaskGroups"]) {
+		for _, task := range fakeRows(group["Tasks"]) {
+			meta := map[string]any{}
+			for _, scope := range []fakeRow{job, group, task} {
+				for key, value := range fakeMap(scope["Meta"]) {
+					meta[key] = value
+				}
+			}
+			combined[fakeString(group, "Name")+"/"+fakeString(task, "Name")] = meta
+		}
+	}
+	return combined
 }
 
 func (f *fakeNomad) newEval(ns, jobID, trigger string, modify uint64) fakeRow {
@@ -772,7 +917,11 @@ func (f *fakeNomad) schedule(job *fakeJob, eval fakeRow) {
 		}
 		existing := 0
 		for _, a := range f.allocs {
-			if a.row["Namespace"] == ns && a.row["JobID"] == jobID && a.row["JobVersion"] == job.row["Version"] && a.row["TaskGroup"] == group["Name"] && !fakeTerminal(a) {
+			sameVersion := a.row["JobVersion"] == job.row["Version"]
+			retained := fakeInt(fakeMap(group["Update"]), "Canary") == 0 &&
+				sameScaleSpecification(fakeRawJob(job.row), fakeRawJob(fakeMap(a.row["Job"]))) &&
+				reflect.DeepEqual(fakeCombinedTaskMeta(job.row), fakeCombinedTaskMeta(fakeMap(a.row["Job"])))
+			if a.row["Namespace"] == ns && a.row["JobID"] == jobID && (sameVersion || retained) && a.row["TaskGroup"] == group["Name"] && !fakeTerminal(a) {
 				existing++
 			}
 		}
@@ -909,7 +1058,12 @@ func (f *fakeNomad) jobEndpoint(w http.ResponseWriter, r *http.Request, ns strin
 			rows := []fakeRow{}
 			for _, a := range f.allocs {
 				if a.row["Namespace"] == ns && a.row["JobID"] == id {
-					rows = append(rows, a.row)
+					row := a.row
+					if f.projectAllocations {
+						row = maps.Clone(row)
+						delete(row, "NetworkStatus")
+					}
+					rows = append(rows, row)
 				}
 			}
 			fakeJSON(w, 200, fakeSorted(rows, "ID"))

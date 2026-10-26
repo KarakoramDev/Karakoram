@@ -92,7 +92,28 @@ func (e *Runner) cli(ctx context.Context, tool string, stdin io.Reader, args ...
 	e.mu.Lock()
 	env := slices.Clone(e.env)
 	e.mu.Unlock()
-	return command(ctx, env, tool, stdin, 60*time.Second, args...)
+	return command(ctx, env, tool, stdin, cliTimeout(tool, args), args...)
+}
+
+// cliRead bounds observation only; callers retain their administration context
+// for any mutations after a complete successful read.
+func (e *Runner) cliRead(ctx context.Context, read string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
+	out, err := e.cli(ctx, "rabbitmqctl", nil, jsonArgs(append([]string{read}, args...)...)...)
+	if err != nil {
+		return nil, fmt.Errorf("RabbitMQ %s read exceeded 4s budget or failed: inspect member responsiveness/connectivity: %w", read, err)
+	}
+	return out, nil
+}
+
+func cliTimeout(tool string, args []string) time.Duration {
+	if tool == "rabbitmq-upgrade" && len(args) > 0 && args[0] == "drain" {
+		// Leadership transfers can outlast ordinary CLI calls. Leave response
+		// headroom within the route/client's three-minute engine deadline.
+		return 175 * time.Second
+	}
+	return 60 * time.Second
 }
 func jsonArgs(args ...string) []string { return append(args, "--quiet", "--formatter", "json") }
 func checkQueueResults(out []byte) error {
@@ -134,6 +155,29 @@ func validName(s string) bool {
 	return len(s) > 0 && len(s) <= 255 && utf8.ValidString(s) && !strings.HasPrefix(s, "-") && !strings.ContainsAny(s, "\x00\r\n")
 }
 func (e *Runner) Routes(mux *http.ServeMux, n *agent.Node) {
+	// This capability is independent of native startup: a non-seed supervisor
+	// can advertise it while the broker is held out of DesiredProcesses.
+	mux.HandleFunc("POST /v1/rabbitmq/formation-capabilities", func(w http.ResponseWriter, r *http.Request) {
+		if err := decode(r, &rmqspec.EmptyRequest{}); err != nil {
+			writeJSON(w, 400, agentapi.ErrorResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, 200, rmqspec.FormationCapabilities{FixedSeed: true})
+	})
+	// Read-only HTTP probes must not queue behind a CLI mutation holding the
+	// node action lock. Config returns a protected immutable snapshot.
+	mux.HandleFunc("POST /v1/rabbitmq/observe", func(w http.ResponseWriter, r *http.Request) {
+		if err := decode(r, &rmqspec.EmptyRequest{}); err != nil {
+			writeJSON(w, 400, agentapi.ErrorResponse{Error: err.Error()})
+			return
+		}
+		result, err := observe(r.Context(), n.Config())
+		if err != nil {
+			writeJSON(w, 503, agentapi.ErrorResponse{Error: err.Error()})
+			return
+		}
+		writeJSON(w, 200, result)
+	})
 	for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "stop-app", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
 		mux.HandleFunc("POST /v1/rabbitmq/"+action, func(w http.ResponseWriter, r *http.Request) {
 			var request any
@@ -216,7 +260,7 @@ func validateRequest(v any) error {
 }
 func (e *Runner) status(ctx context.Context, n *agent.Node) (rmqspec.StatusResponse, error) {
 	var result rmqspec.StatusResponse
-	out, err := e.cli(ctx, "rabbitmqctl", nil, jsonArgs("cluster_status")...)
+	out, err := e.cliRead(ctx, "cluster_status")
 	if err != nil {
 		return result, err
 	}
@@ -307,21 +351,9 @@ func (e *Runner) execute(ctx context.Context, n *agent.Node, action string, requ
 	case "revive":
 		return ok, run("rabbitmq-upgrade", "revive")
 	case "stop":
-		states, _ := n.Snapshot()
-		if states[process].PID == 0 {
-			e.mu.Lock()
-			e.stopped = true
-			e.mu.Unlock()
-			return ok, n.Action(ctx, process, "stop")
-		}
-		e.mu.Lock()
-		appStopped := e.appStoppedPID == states[process].PID
-		e.mu.Unlock()
-		if !appStopped {
-			if err := run("rabbitmq-upgrade", "drain"); err != nil {
-				return nil, err
-			}
-		}
+		// Rolling changes explicitly drain at their quorum safety gate. A
+		// whole-cluster shutdown must also work without any reachable peers:
+		// preserve on-disk membership and stop the local process directly.
 		// Disarm supervision before shutdown, otherwise the exit schedules a restart.
 		e.mu.Lock()
 		e.stopped = true
@@ -421,7 +453,29 @@ func (e *Runner) password(ctx context.Context, action, user, password string) er
 	return err
 }
 func (e *Runner) bootstrap(ctx context.Context, c agentapi.MemberConfig) error {
-	out, err := e.cli(ctx, "rabbitmqctl", nil, jsonArgs("list_users")...)
+	if managedAccessCurrent(ctx, c) {
+		return nil
+	}
+	out, err := e.cliRead(ctx, "list_vhosts", "name")
+	if err != nil {
+		return fmt.Errorf("observe managed vhost /: %w", err)
+	}
+	var vhosts []struct {
+		Name string `json:"name"`
+	}
+	if err = json.Unmarshal(out, &vhosts); err != nil {
+		return fmt.Errorf("decode managed vhost observation: %w", err)
+	}
+	if !slices.ContainsFunc(vhosts, func(v struct {
+		Name string `json:"name"`
+	}) bool {
+		return v.Name == "/"
+	}) {
+		if _, err = e.cli(ctx, "rabbitmqctl", nil, jsonArgs("add_vhost", "/")...); err != nil {
+			return fmt.Errorf("restore managed vhost /: %w", err)
+		}
+	}
+	out, err = e.cliRead(ctx, "list_users")
 	if err != nil {
 		return err
 	}
@@ -448,13 +502,13 @@ func (e *Runner) bootstrap(ctx context.Context, c agentapi.MemberConfig) error {
 			action = "change_password"
 		}
 		if err = e.password(ctx, action, name, cred.Password); err != nil {
-			return err
+			return fmt.Errorf("restore managed user %s credential: %w", name, err)
 		}
 		if _, err = e.cli(ctx, "rabbitmqctl", nil, jsonArgs("set_user_tags", name, "administrator")...); err != nil {
-			return err
+			return fmt.Errorf("restore managed user %s tags: %w", name, err)
 		}
 		if _, err = e.cli(ctx, "rabbitmqctl", nil, jsonArgs("set_permissions", "--vhost", "/", name, ".*", ".*", ".*")...); err != nil {
-			return err
+			return fmt.Errorf("restore managed user %s permissions on /: %w", name, err)
 		}
 	}
 	if exists("guest") {

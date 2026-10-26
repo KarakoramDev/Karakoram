@@ -16,8 +16,16 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
-func recoveredRenewalMember(_ context.Context, _ *engine.Context, _ *internalState, m *member) (mongoadmin.Status, error) {
-	return mongoadmin.Status{Members: []mongoadmin.Member{{Name: m.Name + ":27017", State: "SECONDARY", Health: 1, OptimeDate: time.Now()}}}, nil
+func recoveredRenewalMember(_ context.Context, _ *engine.Context, s *internalState, m *member) (mongoadmin.Status, error) {
+	var status mongoadmin.Status
+	for i, peer := range s.setMembers(m.Set) {
+		role := "SECONDARY"
+		if i == 0 {
+			role = "PRIMARY"
+		}
+		status.Members = append(status.Members, mongoadmin.Member{Name: peer.Name + ":27017", State: role, Health: 1, OptimeDate: time.Now()})
+	}
+	return status, nil
 }
 
 func TestReloadWaitingMemberAcceptsCorrectedEngineConfig(t *testing.T) {

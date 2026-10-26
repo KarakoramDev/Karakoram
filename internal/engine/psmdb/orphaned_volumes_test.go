@@ -5,14 +5,19 @@ package psmdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -137,7 +142,10 @@ func TestLegacyVolumeRetryStartsThirtyMinuteClockOnObservation(t *testing.T) {
 }
 
 func TestOrphanedRemovalConvergesAndNeverReusesIndex(t *testing.T) {
-	p, rc, f, _, s, removed, events := orphanFixture(t, "delete-volume")
+	p, rc, f, clock, s, removed, events := orphanFixture(t, "delete-volume")
+	// Certificate issuance uses wall time; this case exercises convergence,
+	// not the historical retry clock used by the orphan threshold fixtures.
+	clock.at = time.Now().UTC()
 	// Keep an active member so this is scale-down, not an empty cluster.
 	active := s.add(rc.Cluster.Name, "rs0", agentapi.RoleReplicaSet, -1)
 	active.Stage, active.Version, active.NeedsAllocation = "active", rc.Cluster.Spec.Version, false
@@ -147,17 +155,44 @@ func TestOrphanedRemovalConvergesAndNeverReusesIndex(t *testing.T) {
 	if err := p.ensureSecrets(context.Background(), rc, s); err != nil {
 		t.Fatal(err)
 	}
+	s.TLSMode, rc.Cluster.Spec.TLS.Mode = "disabled", "disabled"
 	if _, err := reconcileConfig(context.Background(), rc, s); err != nil {
 		t.Fatal(err)
 	}
 	s.ConfigVersion = 1
+	seedFormedServices(t, p, rc, f.fakeInfra, s)
+	activateConfig(rc.Cluster, s, active)
+	native := nativeHealingFixture(t, rc, s)
+	native.config.Members = slices.DeleteFunc(native.config.Members, func(m mongoadmin.ConfigMember) bool { return m.Host == removed.Name+":27017" })
+	var applied atomic.Int64
+	applied.Store(active.ConfigVersion)
+	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/status" {
+			_ = json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: applied.Load(), Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}}})
+			return
+		}
+		if r.URL.Path == "/v1/reload" {
+			cfg, err := p.MemberConfig(r.Context(), rc, active.Name)
+			if err != nil {
+				t.Error(err)
+				http.Error(w, "configuration unavailable", 500)
+				return
+			}
+			applied.Store(cfg.ConfigVersion)
+		}
+		_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
+	})
+	p.ensureManagedUsers = func(context.Context, *engine.Context, *internalState) error { return nil }
 	rc.Cluster.Generation, rc.Cluster.Status.ObservedGeneration = 3, 2
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
-	for range 3 {
-		if _, err := p.Sync(context.Background(), rc); err != nil {
+	for range 20 {
+		if _, err := p.sync(context.Background(), rc, p.prepareDisruption, healthyTestReplication); err != nil {
 			t.Fatal(err)
+		}
+		if retryState(t, rc).Phase == "ready" {
+			break
 		}
 	}
 	s = retryState(t, rc)
@@ -248,6 +283,30 @@ func TestCleanupOrphanContinuesLaterMembersAndCompletes(t *testing.T) {
 	}
 }
 
+func TestNewPlanWithoutBackendPreservesAllocationForRetry(t *testing.T) {
+	_, rc, backend, _ := setup(t)
+	rc.Backend = nil
+	s := retryState(t, rc)
+	plan(rc.Cluster, s)
+	if err := allocateNewPlans(t.Context(), rc, s, s.Members); err == nil || !strings.Contains(err.Error(), "backend is unavailable") {
+		t.Fatal("missing backend was not reported", err)
+	}
+	for _, m := range s.Members {
+		if !m.NeedsAllocation {
+			t.Fatal("unverified allocation was accepted", m)
+		}
+	}
+	rc.Backend = backend
+	if err := skipOccupiedPlans(t.Context(), rc, s, s.Members); err != nil {
+		t.Fatal("allocation did not recover", err)
+	}
+	for _, m := range s.Members {
+		if m.NeedsAllocation {
+			t.Fatal("allocation remained blocked after backend recovery", m)
+		}
+	}
+}
+
 func TestSameNamedClusterCreationSkipsOrphansAndExistingServices(t *testing.T) {
 	for _, collision := range []string{"orphan-record", "volume", "runtime"} {
 		t.Run(collision, func(t *testing.T) {
@@ -277,6 +336,9 @@ func TestSameNamedClusterCreationSkipsOrphansAndExistingServices(t *testing.T) {
 			s := retryState(t, rc)
 			if len(s.Members) != 1 || s.Members[0].Index != 1 || s.Members[0].Name != "demom1" || s.NextIndex["rs0"] != 2 {
 				t.Fatal(s)
+			}
+			if _, err := p.Sync(ctx, rc); err != nil {
+				t.Fatal(err)
 			}
 			if _, err := p.Sync(ctx, rc); err != nil {
 				t.Fatal(err)

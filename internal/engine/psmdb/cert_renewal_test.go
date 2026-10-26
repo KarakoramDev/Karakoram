@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
@@ -28,7 +29,8 @@ type renewalAgent struct {
 
 func renewalCluster(t *testing.T, replicas int) (*Provider, *engine.Context, map[string]*renewalAgent, *pki.CA) {
 	t.Helper()
-	p, rc, _, _ := setup(t)
+	p, rc, backend, _ := setup(t)
+	p.ensureManagedUsers = func(context.Context, *engine.Context, *internalState) error { return nil }
 	rc.Cluster.Spec.Components.Engine.Replicas = replicas
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -54,6 +56,26 @@ func renewalCluster(t *testing.T, replicas int) (*Provider, *engine.Context, map
 	agents := map[string]*renewalAgent{}
 	dialer := memberDialer{}
 	for _, m := range s.Members {
+		token, err := rc.Secrets.GetAgentToken(context.Background(), rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		specs := []infra.ServiceSpec{serviceSpec(rc.Backend.Layout(), rc.Cluster, m, token.Token)}
+		m.ServiceID = m.Name
+		if m.Volume != "" {
+			specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, token.Token, m.Disk))
+			m.VolumeID = m.Volume
+		}
+		for _, spec := range specs {
+			ownership := map[string]string{}
+			for key, value := range spec.Env {
+				ownership[key] = value
+			}
+			for key, value := range spec.Vars {
+				ownership[key] = value
+			}
+			backend.services[spec.Hostname] = &infra.Service{ID: spec.Hostname, Hostname: spec.Hostname, Kind: spec.Kind, Status: infra.StatusActive, Ownership: ownership, Resources: spec.Resources}
+		}
 		a := &renewalAgent{}
 		a.running.Store(true)
 		a.version.Store(m.ConfigVersion)
@@ -134,7 +156,7 @@ func TestCertificateRenewalRollsAfterDisruptionAndRecovery(t *testing.T) {
 	assertPublished := func() {
 		t.Helper()
 		for _, m := range s.Members {
-			for _, kind := range []string{"members", "agents"} {
+			for _, kind := range []string{"members"} {
 				name := "tls/" + kind + "/" + m.Name + ".pem"
 				got, err := secret(ctx, rc, name)
 				if err != nil {
@@ -162,12 +184,11 @@ func TestCertificateRenewalRollsAfterDisruptionAndRecovery(t *testing.T) {
 		return stepped, gateError
 	}
 	recovered := false
-	replication := func(_ context.Context, _ *engine.Context, _ *internalState, m *member) (mongoadmin.Status, error) {
-		state := "RECOVERING"
+	replication := func(ctx context.Context, rc *engine.Context, s *internalState, m *member) (mongoadmin.Status, error) {
 		if recovered {
-			state = "SECONDARY"
+			return recoveredRenewalMember(ctx, rc, s, m)
 		}
-		return mongoadmin.Status{Members: []mongoadmin.Member{{Name: m.Name + ":27017", Health: 1, State: state, OptimeDate: time.Now()}}}, nil
+		return mongoadmin.Status{Members: []mongoadmin.Member{{Name: m.Name + ":27017", Health: 1, State: "RECOVERING", OptimeDate: time.Now()}}}, nil
 	}
 	syncCluster := func() error {
 		_, err := p.sync(ctx, rc, prepare, replication)
@@ -231,6 +252,7 @@ func TestCertificateRenewalRollsAfterDisruptionAndRecovery(t *testing.T) {
 		recovered = false
 		assertPublished()
 	}
+	recovered = true
 	if err := syncCluster(); err != nil {
 		t.Fatal(err)
 	}
@@ -243,6 +265,11 @@ func TestCertificateRenewalRollsAfterDisruptionAndRecovery(t *testing.T) {
 func TestProvidedNearExpiryCertificateRemainsStableAndReportsExpiry(t *testing.T) {
 	p, rc, agents, ca := renewalCluster(t, 3)
 	ctx := context.Background()
+	syncCluster := func() (engine.Result, error) {
+		return p.sync(ctx, rc, func(context.Context, *engine.Context, *internalState, *member) (bool, error) {
+			return false, nil
+		}, recoveredRenewalMember)
+	}
 	rc.Cluster.Spec.TLS.CA = "userProvided"
 	s, _ := load(rc.Cluster)
 	names := []string{}
@@ -264,7 +291,7 @@ func TestProvidedNearExpiryCertificateRemainsStableAndReportsExpiry(t *testing.T
 		}
 	}
 	// Apply the material change once, then measure only repeated renew-window Syncs.
-	if _, err := p.Sync(ctx, rc); err != nil {
+	if _, err := syncCluster(); err != nil {
 		t.Fatal(err)
 	}
 	s, _ = load(rc.Cluster)
@@ -277,7 +304,7 @@ func TestProvidedNearExpiryCertificateRemainsStableAndReportsExpiry(t *testing.T
 	}
 	before := s.ConfigVersion
 	for range 4 {
-		if _, err := p.Sync(ctx, rc); err != nil {
+		if _, err := syncCluster(); err != nil {
 			t.Fatal(err)
 		}
 		s, _ = load(rc.Cluster)

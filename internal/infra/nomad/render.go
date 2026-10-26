@@ -141,6 +141,11 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 			"DelayFunction": "exponential", "MaxDelay": int64(time.Hour),
 		},
 	}
+	if r.Deployment.EphemeralDiskMB > 0 {
+		// Old deployments retain their original disk policy until an intended
+		// Deploy freezes a new budget; a control-plane upgrade is not a rollout.
+		group["EphemeralDisk"] = map[string]any{"SizeMB": r.Deployment.EphemeralDiskMB, "Sticky": false, "Migrate": false}
+	}
 	if r.Volume != "" {
 		// Sticky single-writer storage pins rescheduled allocations to the
 		// original node; the lifetime flock serializes any overlapping writers.
@@ -156,7 +161,31 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 			"AccessMode": "single-node-single-writer", "AttachmentMode": "file-system",
 		}}
 		task["VolumeMounts"] = []any{map[string]any{"Volume": "data", "Destination": layout.VolumePath(r.Volume), "ReadOnly": false}}
-	} else {
+	} else if len(r.Deployment.Runtime.Args) == 0 || r.Deployment.Runtime.Args[0] != "relay" {
+		// Stateless applications retain their serving predecessor until the
+		// replacement passes checks. Relay sessions must remain singleton.
+		group["Update"] = map[string]any{
+			"MaxParallel": 1, "Canary": 1, "AutoPromote": true, "AutoRevert": true,
+			"HealthCheck": "checks", "MinHealthyTime": int64(10 * time.Second),
+			"HealthyDeadline": int64(10 * time.Minute), "ProgressDeadline": int64(12 * time.Minute),
+		}
+		checks := make([]any, 0, len(r.Deployment.Runtime.Ports))
+		for _, port := range r.Deployment.Runtime.Ports {
+			if port.Port == 9443 || port.Protocol != "tcp" {
+				continue
+			}
+			checks = append(checks, map[string]any{
+				"Name": "serving-" + strconv.Itoa(port.Port), "Type": "tcp",
+				"AddressMode": "alloc", "PortLabel": strconv.Itoa(port.Port),
+				"Interval": int64(2 * time.Second), "Timeout": int64(time.Second),
+			})
+		}
+		// Keep the discovery registration available during bootstrap. Checks
+		// gate deployment health, not the agent's ability to obtain config.
+		if len(checks) != 0 {
+			services := group["Services"].([]any)
+			services[0].(map[string]any)["Checks"] = checks
+		}
 		group["Disconnect"] = map[string]any{
 			"LostAfter": int64(time.Minute),
 			"Replace":   true, "Reconcile": "keep_replacement",
@@ -247,5 +276,9 @@ func renderEnvTemplate(hostname string) string {
 }
 
 func renderHostsTemplate() string {
-	return "127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ .Address }} {{ $name }}\n{{ end }}{{ end }}"
+	// Exec inherits the client's UTS hostname, not the job/service name.
+	// Keep its local alias in the watched template so discovery updates cannot
+	// erase it and make every prepare-time sudo fall back to external DNS.
+	// A native service with the same name retains its routable addresses.
+	return "127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n{{ $hostname := env \"attr.unique.hostname\" }}{{ $registered := false }}{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ if eq $name $hostname }}{{ $registered = true }}{{ end }}{{ .Address }} {{ $name }}\n{{ end }}{{ end }}{{ if and $hostname (not $registered) }}127.0.1.1 {{ $hostname }}\n{{ end }}"
 }

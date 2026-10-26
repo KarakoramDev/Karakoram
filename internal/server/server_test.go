@@ -380,3 +380,47 @@ func TestRootRoutesSecurityHeadersAndBodyLimit(t *testing.T) {
 		t.Fatal("oversized request accepted", w.Code)
 	}
 }
+
+func TestUnkeyedClusterCreateConflictPreservesAcceptedRequest(t *testing.T) {
+	s, _, token := testServer(t)
+	ctx := t.Context()
+	body := `{"name":"newcluster","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"components":{"engine":{"replicas":3,"resources":{"maxCpu":2,"minCpu":1,"minRam":2,"maxRam":2,"minDisk":10,"maxDisk":10}}}}}`
+	// call deliberately sends no Idempotency-Key: the second POST is a new
+	// request, not a replay of the successful first create.
+	first := call(s, "POST", "/api/v1/clusters?namespace=default", body, token)
+	if first.Code != http.StatusCreated {
+		t.Fatal(first.Code, first.Body.String())
+	}
+	opID := first.Header().Get("Karakoram-Operation-Id")
+	if opID == "" {
+		t.Fatal("accepted create has no operation ID")
+	}
+	ref := domain.ClusterRef{Namespace: "default", Name: "newcluster"}
+	before, err := s.Store.GetCluster(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := call(s, "POST", "/api/v1/clusters?namespace=default", body, token)
+	if second.Code != http.StatusConflict || !strings.Contains(second.Body.String(), "Cluster already exists") {
+		t.Fatal(second.Code, second.Body.String())
+	}
+	after, err := s.Store.GetCluster(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeJSON, err := json.Marshal(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterJSON, err := json.Marshal(after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(beforeJSON) != string(afterJSON) {
+		t.Fatal("duplicate create changed the accepted cluster")
+	}
+	ops, err := s.Store.ListOperations(ctx, ref)
+	if err != nil || len(ops) != 1 || ops[0].ID != opID || ops[0].Kind != domain.OperationCreate {
+		t.Fatal("duplicate create changed accepted operations", ops, err)
+	}
+}

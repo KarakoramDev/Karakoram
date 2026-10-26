@@ -86,7 +86,9 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 		Cluster: rc.Cluster.Name, Member: m.Name, Engine: "postgres", Volume: m.Volume,
 		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM,
 		Ports: ports, Prepare: prepare,
-		ReadinessArgs: []string{"--engine=postgres", "--data-dir=" + rc.Backend.Layout().DataDir(m.Volume)},
+	}
+	if m.Role == "proxy" {
+		runtime.ReadinessArgs = engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=postgres", "--data-dir="+rc.Backend.Layout().DataDir(m.Volume))
 	}
 	return runtime.Spec(rc.Backend.Layout()), nil
 }
@@ -195,7 +197,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			}
 			sp.Postgres.SharedPreloadLibraries = p.options.Flavour.SharedPreloadLibraries()
 		}
-		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", Generation: s.BootstrapGeneration}
+		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: !s.Formed && !engine.InitialDataSourceUnproven(rc.Cluster), Generation: s.BootstrapGeneration}
 		if !s.Formed {
 			sp.Bootstrap.SeedMember = s.ConversionSeed
 		}
@@ -229,11 +231,15 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			return agentapi.MemberConfig{}, err
 		}
 	} else {
+		maxConnections, e := p.proxyConnectionLimit(rc, s, m)
+		if e != nil {
+			return agentapi.MemberConfig{}, e
+		}
 		desired = []string{"proxysql"}
 		sp.Proxy = &pgspec.Proxy{
 			Monitor: credential("kk_monitor"), Admin: credential("kk_proxy_admin"),
 			ReadWriteSplit: o.Proxy.ReadWriteSplit, ReaderPort: o.Proxy.ReaderPort,
-			BackendTLS: true, Threads: 2, MaxConnections: 1000,
+			BackendTLS: true, Threads: 2, MaxConnections: maxConnections,
 			Users: []pgspec.ProxyUser{{
 				Username: "postgres", Password: get("users/postgres"),
 				RequireTLS: rc.Cluster.Spec.TLS.Mode == "requireTLS",
@@ -267,14 +273,30 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if err != nil {
 		return agentapi.MemberConfig{}, err
 	}
+	var volume *agentapi.VolumeIdentity
+	if m.Role == "data" && m.VolumeID != "" {
+		initialized := m.RuntimeRecovery.Initialized || m.Stage == "joined"
+		if sp.Bootstrap != nil && sp.Bootstrap.Method == "restore" {
+			// Only a durable restore generation authorizes writing replacement
+			// data. Ordinary config pulls never adopt an empty initialized volume.
+			initialized = false
+		}
+		volume = &agentapi.VolumeIdentity{ClusterUID: s.UID, Member: m.Name, Volume: m.Volume, VolumeID: m.VolumeID, Initialized: initialized}
+	}
 	raw, err := json.Marshal(sp)
 	if err != nil {
 		return agentapi.MemberConfig{}, err
 	}
+	configVersion := m.ConfigVersion
+	if m.TLSReloadPending {
+		configVersion = m.TLSReloadVersion
+	}
 	return agentapi.MemberConfig{
 		Cluster: rc.Cluster.Name, Member: name, Engine: "postgres", EngineSpec: raw,
 		Role: m.Role, Port: 5432, EngineVersion: version,
-		ConfigVersion: m.ConfigVersion, DesiredProcesses: desired,
-		AgentTLS: agentapi.Certificate{CertPEM: agentCert.CertPEM, KeyPEM: agentCert.KeyPEM},
+		ConfigVersion: configVersion, DesiredProcesses: desired,
+		Volume:                volume,
+		AgentTLS:              agentapi.Certificate{CertPEM: agentCert.CertPEM, KeyPEM: agentCert.KeyPEM},
+		CertificateReloadOnly: m.TLSReloadOnly,
 	}, nil
 }

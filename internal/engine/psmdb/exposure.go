@@ -7,8 +7,41 @@ import (
 	"context"
 	"strings"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
+
+// restrictExposure removes owned routes before native health gates. Public
+// endpoint creation remains in the health-gated portion of Sync.
+func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState) error {
+	for _, m := range ordered(s) {
+		ex := rc.Cluster.Spec.Exposure
+		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
+			ex.Public = false
+		}
+		h := hash(ex)
+		if ex.Public || m.PublicHash == h && m.PublicPort == 0 {
+			continue
+		}
+		service, err := rc.Backend.GetService(ctx, m.Name)
+		if err != nil {
+			return err
+		}
+		// Planned members do not have a service yet; positive absence also
+		// proves there is no route to revoke.
+		if service != nil {
+			if err := verifyServiceOwnership(ctx, rc, m, service, false); err != nil {
+				return err
+			}
+			if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
+				return err
+			}
+		}
+		m.PublicPort = 0
+		m.PublicHash = h
+	}
+	return nil
+}
 
 // allocatePublicPort reserves the first free project-wide TCP port. The mutex
 // covers concurrently reconciling clusters until their Internal reservation lands

@@ -48,6 +48,9 @@ func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *fakeInfra) {
 	p, rc, f, _ := setup(t)
 	rc.Cluster.Spec.Components.Engine.Replicas = 1
 	rc.Backend = &partialImportInfra{fakeInfra: f}
+	if _, err := p.Sync(context.Background(), rc); err != nil {
+		t.Fatal("checkpoint import batch", err)
+	}
 	if _, err := p.Sync(context.Background(), rc); err == nil {
 		t.Fatal("expected partial import failure")
 	}
@@ -80,6 +83,9 @@ func TestFailedImportRetryAdoptsUntaggedVolume(t *testing.T) {
 	if m.Stage != "imported" || m.ServiceID != runtimeID || m.VolumeID != volumeID || s.Retry != nil || s.Pending != nil {
 		t.Fatalf("retry did not checkpoint adopted services: %+v", s)
 	}
+	// The partial import fixture intentionally leaves storage CREATING.
+	// Complete its platform transition before expecting database bootstrap.
+	f.services[m.Volume].Status = infra.StatusActive
 	// Continue from the serialized checkpoint rather than an in-memory member.
 	rc.Cluster = cloneCluster(t, rc.Cluster)
 	ready(t, p, rc)
@@ -183,5 +189,118 @@ func TestFailedImportCleanupCheckpointsOwnershipBeforeDeletingRuntime(t *testing
 	done, err = p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true})
 	if err != nil || done || f.services[m.Name] != nil || f.services[m.Volume] == nil {
 		t.Fatal("checkpointed cleanup did not delete only the runtime", done, err, f.log.snapshot())
+	}
+}
+
+type volumeLossObservationInfra struct {
+	*fakeInfra
+	name string
+	err  error
+}
+
+func (f *volumeLossObservationInfra) GetService(ctx context.Context, name string) (*infra.Service, error) {
+	service, err := f.fakeInfra.GetService(ctx, name)
+	if name == f.name && service != nil {
+		return service, f.err
+	}
+	return service, err
+}
+
+func TestOwnershipToleratesOnlyRecordedMatchingVolumeLoss(t *testing.T) {
+	for _, kind := range []string{"runtime", "volume"} {
+		for _, observation := range []string{"matched", "unclassified", "wrong-volume", "wrong-id", "generic", "foreign-service"} {
+			t.Run(kind+"/"+observation, func(t *testing.T) {
+				p, rc, f, _ := setup(t)
+				ready(t, p, rc)
+				m := state(t, rc).find("demom0")
+				runtimeID, volumeID := m.ServiceID, m.VolumeID
+				m.RuntimeRecovery.VolumeLost = observation != "unclassified"
+				lost := &infra.VolumeLostError{Volume: m.Volume, ServiceID: m.VolumeID, Message: "original physical volume is absent"}
+				var err error = lost
+				switch observation {
+				case "wrong-volume":
+					lost.Volume = "different-volume"
+				case "wrong-id":
+					lost.ServiceID = "different-incarnation"
+				case "generic":
+					err = errors.New("temporary platform observation failure")
+				}
+				name := m.Name
+				if kind == "volume" {
+					name = m.Volume
+				}
+				if observation == "foreign-service" {
+					f.services[name].ID = "foreign-incarnation"
+					f.services[name].Ownership = nil
+				}
+				rc.Backend = &volumeLossObservationInfra{fakeInfra: f, name: name, err: err}
+				err = verifyMemberServices(t.Context(), rc, m)
+				if observation == "matched" {
+					if err != nil {
+						t.Fatalf("confirmed loss blocked existing recovery journal: %v", err)
+					}
+				} else if err == nil {
+					t.Fatal("unmatched, unclassified or foreign loss bypassed ownership")
+				}
+				if m.ServiceID != runtimeID || m.VolumeID != volumeID {
+					t.Fatal("loss observation adopted a new runtime or volume incarnation")
+				}
+			})
+		}
+	}
+}
+
+func TestDepartureUsesConfirmedLostIncarnationWithoutAgent(t *testing.T) {
+	for _, kind := range []string{"runtime", "volume"} {
+		t.Run(kind, func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			m := state(t, rc).find("demom0")
+			m.RuntimeRecovery.VolumeLost = true
+			name := m.Name
+			if kind == "volume" {
+				name = m.Volume
+			}
+			rc.Backend = &volumeLossObservationInfra{fakeInfra: f, name: name, err: &infra.VolumeLostError{Volume: m.Volume, ServiceID: m.VolumeID}}
+			agents := &lifecycleAgents{fakeAgents: a}
+			rc.Agents = agents
+			lost, err := p.departureUnavailable(t.Context(), rc, m)
+			if err != nil || !lost || len(agents.dials) != 0 {
+				t.Fatalf("confirmed physical loss blocked native removal guards: lost=%v err=%v dials=%v", lost, err, agents.dials)
+			}
+			m.RuntimeRecovery.VolumeLost = false
+			if _, err = p.departureUnavailable(t.Context(), rc, m); err == nil {
+				t.Fatal("unclassified physical-loss observation was suppressed")
+			}
+		})
+	}
+}
+
+func TestCleanupConfirmedPhysicalLossDeletesButCannotRetainData(t *testing.T) {
+	for _, kind := range []string{"runtime", "volume"} {
+		t.Run(kind, func(t *testing.T) {
+			p, rc, f, _ := setup(t)
+			ready(t, p, rc)
+			s := state(t, rc)
+			m := s.find("demom0")
+			m.RuntimeRecovery.VolumeLost = true
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			name := m.Name
+			if kind == "volume" {
+				name = m.Volume
+			}
+			rc.Backend = &volumeLossObservationInfra{fakeInfra: f, name: name, err: &infra.VolumeLostError{Volume: m.Volume, ServiceID: m.VolumeID}}
+			before := f.mutations
+			done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepVolumes: true, KeepBackups: true})
+			if done || err == nil || f.mutations != before {
+				t.Fatalf("suspension claimed to preserve missing data: done=%v err=%v mutations=%d", done, err, f.mutations-before)
+			}
+			cleanupCluster(t, p, rc, domain.DeleteOptions{KeepBackups: true})
+			if len(f.services) != 0 {
+				t.Fatalf("confirmed physical loss prevented destructive cleanup: %+v", f.services)
+			}
+		})
 	}
 }

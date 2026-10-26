@@ -58,10 +58,8 @@ func recordedSnapshot(storage *domain.BackupStorage, b *domain.Backup) (base, re
 			return "", "", "", operationInvalid("unsafe snapshot base path")
 		}
 	}
-	prefix := strings.Trim(storage.Prefix, "/")
-	if prefix != "" && !strings.HasPrefix(base, prefix+"/") {
-		return "", "", "", operationInvalid("snapshot base path is outside the storage prefix")
-	}
+	// The recorded location is immutable. Prefix edits affect future snapshots,
+	// not existing repository paths; bucket and storage identity still must match.
 	return base, repo, name, nil
 }
 
@@ -80,19 +78,19 @@ func (p *Provider) runBackup(ctx context.Context, rc *engine.Context, s *state, 
 	if err != nil {
 		return operationResult(cp, false), err
 	}
-	repo, err := p.operationRepository(ctx, rc, s, storage, false, "")
+	base, snapshot := clusterBasePath(storage, rc.Cluster, s), snapshotName(b.Name)
+	if b.Location != "" {
+		base, _, snapshot, err = recordedSnapshot(storage, b)
+		if err != nil {
+			return operationResult(cp, false), err
+		}
+	}
+	repo, err := p.operationRepository(ctx, rc, s, storage, false, base)
 	if errors.Is(err, errWaiting) {
 		return operationResult(cp, false), nil
 	}
 	if err != nil {
 		return operationResult(cp, false), err
-	}
-	snapshot := snapshotName(b.Name)
-	if b.Location != "" {
-		_, _, snapshot, err = recordedSnapshot(storage, b)
-		if err != nil {
-			return operationResult(cp, false), err
-		}
 	}
 	client, err := p.es(ctx, rc, s)
 	if err != nil {
@@ -102,7 +100,7 @@ func (p *Provider) runBackup(ctx context.Context, rc *engine.Context, s *state, 
 	switch cp.Stage {
 	case "":
 		b.Provider = "elasticsearch"
-		b.Location = snapshotLocation(storage, clusterBasePath(storage, rc.Cluster, s), repo, snapshot)
+		b.Location = snapshotLocation(storage, base, repo, snapshot)
 		b.SourceTopology = rc.Cluster.Spec.Topology
 		b.SourceVersion = rc.Cluster.Spec.Version
 		if err = rc.Store.UpdateBackup(ctx, b); err != nil {

@@ -21,14 +21,19 @@ import (
 )
 
 func TestClusterDirectory(t *testing.T) {
-	s := domain.BackupStorage{Prefix: "production/"}
-	directory, err := ClusterDirectory(s, "demo", "incarnation")
-	if err != nil || directory != "production/karakoram/demo-incarnation/" {
-		t.Fatal(directory, err)
+	for _, test := range []struct{ prefix, want string }{
+		{"production", "production/"}, {"/production", "production/"},
+		{"production/", "production/"}, {"/production/", "production/"},
+		{"/x/y/", "x/y/"}, {"/", ""}, {"", ""},
+	} {
+		directory, err := ClusterDirectory(domain.BackupStorage{Prefix: test.prefix}, "demo", "incarnation")
+		if err != nil || directory != test.want+"karakoram/demo-incarnation/" {
+			t.Fatal(test.prefix, directory, err)
+		}
 	}
 	for _, test := range []struct{ prefix, cluster, uid string }{
 		{"", "", "uid"}, {"", "demo", ""}, {"", "../demo", "uid"}, {"", "demo", "../uid"},
-		{"", "demo", ".."}, {"", "demo", "u\\id"}, {"/production", "demo", "uid"}, {"production//nested", "demo", "uid"}, {"production/../other", "demo", "uid"},
+		{"", "demo", ".."}, {"", "demo", "u\\id"}, {"production//nested", "demo", "uid"}, {"production/../other", "demo", "uid"}, {"..", "demo", "uid"}, {".", "demo", "uid"}, {"a\\b", "demo", "uid"},
 	} {
 		if _, err := ClusterDirectory(domain.BackupStorage{Prefix: test.prefix}, test.cluster, test.uid); err == nil {
 			t.Fatal("unsafe namespace accepted", test)

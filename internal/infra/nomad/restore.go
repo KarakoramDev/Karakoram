@@ -52,6 +52,7 @@ func (b *Backend) restorationFenced(r *record) bool {
 // Serialize with lifecycle mutations, reload the desired state, and claim the
 // registration with Variables CAS before submitting an absent-only jobs write.
 func (b *Backend) restoreMissingJob(ctx context.Context, stale *record) (string, error) {
+	ctx = infra.WithoutObservation(ctx)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	r, err := b.load(ctx, stale.Hostname)

@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
@@ -197,8 +198,11 @@ func initSingle(ctx context.Context, n *agent.Node, s pgspec.Spec, p paths) erro
 		return initSingleRestore(ctx, n, s, p, backupCommand)
 	}
 	if _, err := os.Stat(filepath.Join(p.pgdata, "PG_VERSION")); err == nil {
-		return nil
+		return recordInitialization(p)
 	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := guardInitialization(s, p); err != nil {
 		return err
 	}
 	if err := n.WriteFile("postgres/initdb.password", []byte(s.Superuser.Password+"\n"), 0600); err != nil {
@@ -214,7 +218,13 @@ func initSingleRestore(ctx context.Context, n *agent.Node, s pgspec.Spec, p path
 	marker := filepath.Join(p.root, "bootstrap-generation.json")
 	var generation *int
 	if data, err := os.ReadFile(marker); err == nil && json.Unmarshal(data, &generation) == nil && generation != nil && *generation == s.Bootstrap.Generation {
-		return nil
+		if _, err := os.Stat(filepath.Join(p.pgdata, "PG_VERSION")); err != nil {
+			if os.IsNotExist(err) {
+				return errors.New(missingDataMessage)
+			}
+			return err
+		}
+		return recordInitialization(p)
 	} else if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -289,6 +299,11 @@ func (e *Runner) systemRoleSQL(s pgspec.Spec) ([]string, error) {
 	return e.roleSQL, nil
 }
 func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
+	// Identity recovery must never enter normal rollout's postmaster-restart
+	// decision, including when an unrelated setting is already pending restart.
+	if c.CertificateReloadOnly {
+		return e.applyCertificateReload(ctx, n, c)
+	}
 	s, err := decodeSpec(c)
 	if err != nil {
 		return nil, err
@@ -308,6 +323,24 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, err
 	}
 	renderSpec := e.retirementConfig(ctx, n, s, p)
+	if s.Role == pgspec.RoleData && s.Topology == pgspec.TopologyHA && s.Bootstrap != nil && s.Bootstrap.Method != "restore" {
+		if _, statErr := os.Stat(filepath.Join(p.pgdata, "PG_VERSION")); statErr == nil {
+			if err = recordInitialization(p); err != nil {
+				return nil, err
+			}
+		} else if !os.IsNotExist(statErr) {
+			return nil, statErr
+		}
+		recorded, receiptErr := initializationRecorded(p)
+		if receiptErr != nil {
+			return nil, receiptErr
+		}
+		if recorded {
+			bootstrap := *renderSpec.Bootstrap
+			bootstrap.AllowInitDB = false
+			renderSpec.Bootstrap = &bootstrap
+		}
+	}
 	files, err := render(renderSpec, p, statements)
 	if err != nil {
 		return nil, err
@@ -453,13 +486,12 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		// Patroni installs its signal handlers after startup. Only reload a process
 		// which was already running at the beginning of this configuration pull.
 		if states["patroni"].PID != 0 && wanted("patroni") {
-			if err = patchDynamic(ctx, s, p); err != nil {
+			if err = reloadPatroniConfig(changed, func() error {
+				return n.Signal("patroni", syscall.SIGHUP)
+			}, func() error {
+				return patchDynamic(ctx, s, p)
+			}); err != nil {
 				return nil, err
-			}
-			if len(changed) > 0 {
-				if err = patroniRequest(ctx, s, "POST", "/reload", map[string]any{}, nil); err != nil {
-					return nil, err
-				}
 			}
 		}
 	}

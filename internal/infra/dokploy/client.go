@@ -7,13 +7,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 const (
@@ -24,13 +29,15 @@ const (
 )
 
 type client struct {
-	origin string
-	http   *http.Client
-	token  atomic.Value // string
+	origin       string
+	http         *http.Client
+	token        atomic.Value // string
+	observations *infra.ReadBudget
 }
 
 func newClient(origin, token string) *client {
 	c := &client{origin: origin, http: &http.Client{Timeout: 2 * time.Minute, CheckRedirect: noRedirect}}
+	c.observations = infra.ObservationBudget("dokploy\x00" + origin)
 	c.setToken(token)
 	return c
 }
@@ -107,6 +114,7 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 	} else if h.Timeout == 0 {
 		h.Timeout = 2 * time.Minute
 	}
+	limited := method == http.MethodGet && infra.IsObservation(ctx)
 	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -122,9 +130,17 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 		if contentType != "" {
 			req.Header.Set("Content-Type", contentType)
 		}
+		if limited {
+			if err := c.observations.Acquire(ctx); err != nil {
+				return err
+			}
+		}
 		resp, requestErr := h.Do(req)
 		retry := false
 		if requestErr != nil {
+			if limited {
+				c.observations.Release()
+			}
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -134,6 +150,9 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 			retry = resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
 			data, readErr := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 			resp.Body.Close()
+			if limited {
+				c.observations.Release()
+			}
 			switch {
 			case readErr != nil:
 				err = silentFailure("cannot read platform response")
@@ -147,6 +166,12 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 				if json.Unmarshal(data, out) != nil {
 					err = silentFailure("invalid JSON response")
 				}
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				if at := retryAfterAt(resp.Header.Get("Retry-After"), time.Now()); !at.IsZero() {
+					err = &infra.RetryAfterError{Cause: err, At: at}
+				}
+				return errors.Join(err, ctx.Err())
 			}
 		}
 		if ctx.Err() != nil {
@@ -166,4 +191,18 @@ func (c *client) request(ctx context.Context, method, target string, body io.Rea
 		case <-timer.C:
 		}
 	}
+}
+
+func retryAfterAt(value string, now time.Time) time.Time {
+	value = strings.TrimSpace(value)
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
+		if seconds > 0 && now.Unix() <= (1<<63-1)-seconds {
+			return time.Unix(now.Unix()+seconds, int64(now.Nanosecond()))
+		}
+		return time.Time{}
+	}
+	if at, err := http.ParseTime(value); err == nil && at.After(now) {
+		return at
+	}
+	return time.Time{}
 }

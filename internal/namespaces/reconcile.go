@@ -122,7 +122,11 @@ func (r *Registry) syncSessionSnapshot(ctx context.Context, n *domain.Namespace,
 		n.Relay.LastError = ""
 	} else if n.DeployedExecutableHash != "" && n.PendingOpID == "" {
 		n.Relay.Phase = "Error"
-		n.Relay.LastError = "Relay is disconnected"
+		state := "has no authenticated session observed by this control plane"
+		if was || !s.LastSeen.IsZero() || s.Hello.Version != "" {
+			state = "authenticated session dropped"
+		}
+		n.Relay.LastError = fmt.Sprintf("Relay %s; dial target %s/relay/v1/connect; inspect relay runtime logs for DNS, TCP, outer HTTPS trust/hostname, WebSocket upgrade or inner mTLS failure (pre-connect failures are not visible to the control plane)", state, relay.DiagnosticEndpoint(r.o.PublicURL))
 	}
 	updatePhase(n)
 	if was != s.Connected {
@@ -148,20 +152,26 @@ func (r *Registry) step(ctx context.Context, name string) {
 		if !n.Default {
 			token, err = r.o.Store.GetNamespaceTokenForUpdate(ctx, name)
 		}
-		var validation error
-		var project infra.Project
-		if err != nil {
-			validation = &credentialError{message: "Stored project credentials are unavailable"}
+		if err != nil && !errors.Is(err, store.ErrNotFound) && !errors.Is(err, store.ErrSecretUnreadable) {
+			// No credential was inspected. Preserve health and the validation
+			// deadline so the next reconciliation tick retries the store read.
+			r.o.Logger.Warn("Namespace credential read failed; retrying validation next tick", "namespace", name)
 		} else {
-			_, project, validation = r.o.Backends.Validate(ctx, r.target(n, token))
-		}
-		was := n.Token.Valid
-		applyTokenValidation(n, project, validation, time.Now().UTC(), r.displayName(n.Backend))
-		if was != n.Token.Valid {
-			if n.Token.Valid {
-				r.event(ctx, n, "NamespaceValidated", "Project token validated")
+			var validation error
+			var project infra.Project
+			if err != nil {
+				validation = &credentialError{message: "Stored project credentials are unavailable"}
 			} else {
-				r.event(ctx, n, "NamespaceValidationFailed", "Project token validation failed")
+				_, project, validation = r.o.Backends.Validate(ctx, r.target(n, token))
+			}
+			was := n.Token.Valid
+			applyTokenValidation(n, project, validation, time.Now().UTC(), r.displayName(n.Backend))
+			if was != n.Token.Valid {
+				if n.Token.Valid {
+					r.event(ctx, n, "NamespaceValidated", "Project token validated")
+				} else {
+					r.event(ctx, n, "NamespaceValidationFailed", "Project token validation failed")
+				}
 			}
 		}
 	}
@@ -181,6 +191,12 @@ func (r *Registry) step(ctx context.Context, name string) {
 		return
 	}
 	clusters, err := r.o.Store.ListClusters(ctx, name)
+	var damaged *store.ClusterDataError
+	if errors.As(err, &damaged) {
+		r.o.Logger.Error("isolating unreadable clusters from relay policy", "namespace", name, "error", err)
+		// Authorize only independently decoded rows, never the damaged row.
+		err = nil
+	}
 	targets := []string{}
 	if err == nil && r.o.RelayTargets != nil {
 		for i := range clusters {
@@ -206,7 +222,9 @@ func (r *Registry) step(ctx context.Context, name string) {
 			n.Relay.LastError = err.Error()
 		} else {
 			n.Failures = 0
-			n.RetryAt = time.Time{}
+			if !n.RetryAt.After(time.Now()) {
+				n.RetryAt = time.Time{}
+			}
 		}
 	}
 	// Successful deletion already removed the record.
@@ -221,6 +239,11 @@ func (r *Registry) step(ctx context.Context, name string) {
 func (r *Registry) pending(ctx context.Context, n *domain.Namespace, b Backend, op infra.Op) error {
 	n.PendingOpID = op.ID
 	n.PendingOpKind = op.Kind
+	if op.ID != "" {
+		n.PendingOpStartedAt = time.Now().UTC()
+	} else {
+		n.PendingOpStartedAt = time.Time{}
+	}
 	if n.Phase != "Deleting" {
 		if n.Relay.Phase != "Deploying" {
 			r.event(ctx, n, "RelayDeploying", "Relay reconciliation operation started")
@@ -233,18 +256,61 @@ func (r *Registry) pending(ctx context.Context, n *domain.Namespace, b Backend, 
 	}
 	return r.save(ctx, n)
 }
+func (r *Registry) deleteRelay(ctx context.Context, n *domain.Namespace, b Backend, id string) error {
+	op, err := b.DeleteServiceByID(ctx, n.Relay.Hostname, id)
+	if err != nil {
+		// Backend errors may contain credentials. Keep diagnostics actionable
+		// without rendering their raw text or discarding the previous receipt.
+		return errors.New("backend refused fenced deletion of the owned relay; the pending operation is retained; check service identity, unresolved import and active lifecycle leases in the namespace backend; Karakoram will retry automatically")
+	}
+	n.Relay.ServiceID = id
+	n.PendingExecutableHash = ""
+	n.Relay.LastError = ""
+	op.Kind = "delete"
+	return r.pending(ctx, n, b, op)
+}
 func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend) error {
 	if n.PendingOpID != "" {
+		if n.Phase == "Deleting" && engine.CleanupSupersedesDeployment(b, infra.Op{Kind: n.PendingOpKind}) {
+			// Keep the old receipt until fenced deletion is accepted. Repeating
+			// this after a lost save is safe under DeploymentSuperseder's contract.
+			service, err := b.GetService(ctx, n.Relay.Hostname)
+			if err != nil {
+				return errors.New("cannot inspect relay service before fenced deletion; the pending operation is retained")
+			}
+			id := n.Relay.ServiceID
+			if service != nil {
+				if !owned(n, service) || id != "" && id != service.ID {
+					return errors.New("cannot supersede relay operation: service identity or ownership changed; the pending operation is retained")
+				}
+				id = service.ID
+			}
+			if id == "" {
+				return errors.New("cannot supersede relay operation without the owned service ID; the pending operation is retained")
+			}
+			return r.deleteRelay(ctx, n, b, id)
+		}
+		if n.PendingOpStartedAt.IsZero() {
+			n.PendingOpStartedAt = time.Now().UTC()
+		}
 		state, err := b.OpStatus(ctx, infra.Op{ID: n.PendingOpID, Kind: n.PendingOpKind, ServiceID: n.Relay.ServiceID})
 		if err != nil {
-			return errors.New("Cannot inspect relay operation")
+			return fmt.Errorf("cannot inspect relay %s operation %q; check the operation in the namespace backend; automatic mutations remain fenced until its outcome is known", n.PendingOpKind, n.PendingOpID)
 		}
 		if !state.Done {
+			n.Relay.LastError = fmt.Sprintf("Waiting for relay %s operation %q in the namespace backend; automatic mutations remain fenced until its outcome is known", n.PendingOpKind, n.PendingOpID)
+			if time.Since(n.PendingOpStartedAt) >= 15*time.Minute {
+				if n.Phase == "Deleting" {
+					return fmt.Errorf("namespace deletion is waiting for relay %s operation %q for at least 15 minutes; this backend requires its terminal outcome before cleanup; inspect the operation and resolve backend deployment or import blockers; Karakoram will retry automatically; do not remove control-plane state", n.PendingOpKind, n.PendingOpID)
+				}
+				return fmt.Errorf("relay %s operation %q has not finished for at least 15 minutes; inspect or cancel it in the namespace backend, then allow Karakoram to observe its terminal outcome; do not remove control-plane state", n.PendingOpKind, n.PendingOpID)
+			}
 			return nil
 		}
 		kind := n.PendingOpKind
 		n.PendingOpID = ""
 		n.PendingOpKind = ""
+		n.PendingOpStartedAt = time.Time{}
 		if state.Failed {
 			if kind == "restart" {
 				n.SecretsPending = true
@@ -277,7 +343,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	if service != nil {
 		n.Relay.ServiceID = service.ID
 		// A relay about to be deleted needs no marker.
-		if n.Phase != "Deleting" && (service.Ownership["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || n.SecretsPending) {
+		if n.Phase != "Deleting" && !service.Importing && (service.Ownership["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || n.SecretsPending) {
 			if err = b.SetEnvVars(ctx, n.Relay.Hostname, map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}); err != nil {
 				return errors.New("Cannot update relay ownership marker")
 			}
@@ -285,12 +351,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	if n.Phase == "Deleting" {
 		if service != nil {
-			op, err := b.DeleteServiceByID(ctx, n.Relay.Hostname, service.ID)
-			if err != nil {
-				return errors.New("Cannot delete owned relay service")
-			}
-			op.Kind = "delete"
-			return r.pending(ctx, n, b, op)
+			return r.deleteRelay(ctx, n, b, service.ID)
 		}
 		if err = r.o.Store.DeleteNamespace(ctx, n); err != nil {
 			return err
@@ -302,7 +363,11 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		r.event(ctx, n, "NamespaceDeleted", "Namespace deleted")
 		return nil
 	}
-	if time.Until(n.Relay.CertNotAfter) < 30*24*time.Hour {
+	leaf, err := relay.ParseCertificatePEM(n.ClientCert)
+	if err != nil {
+		return errors.New("cannot parse relay certificate; restore the persisted namespace identity")
+	}
+	if (service == nil || !service.Importing) && relay.NeedsRenewal(leaf, time.Now()) {
 		key, err := r.issue(n)
 		if err != nil {
 			return errors.New("Cannot renew relay certificate")
@@ -323,7 +388,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		return err
 	}
 	secrets := map[string]string{"KARAKORAM_RELAY_CERT": string(n.ClientCert), "KARAKORAM_RELAY_KEY": string(key), "KARAKORAM_RELAY_CA": string(r.pki.CACert)}
-	if service == nil {
+	if service == nil || service.Importing {
 		n.DeployedExecutableHash = ""
 		n.SecretsPending = false
 		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets, Vars: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}})
@@ -348,7 +413,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	status := r.Hub.Status(n.Name)
 	mismatch := status.Connected && status.Hello.ExecutableSHA256 != "" && status.Hello.ExecutableSHA256 != r.o.ExecutableHash
-	if n.DeployedExecutableHash != r.o.ExecutableHash || mismatch {
+	if n.DeployedExecutableHash != r.o.ExecutableHash || mismatch || service.Status == infra.StatusReadyToDeploy {
 		artifact, err := r.o.Artifact.Open(ctx)
 		if err != nil {
 			return errors.New("Cannot open relay executable artifact")
@@ -358,8 +423,22 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		if err != nil {
 			return errors.New("Cannot deploy relay executable")
 		}
+		if service.Status == infra.StatusReadyToDeploy && n.DeployedExecutableHash == r.o.ExecutableHash {
+			n.RetryAt = time.Now().Add(time.Minute)
+		}
 		n.PendingExecutableHash = r.o.ExecutableHash
 		op.Kind = "deploy"
+		return r.pending(ctx, n, b, op)
+	}
+	if !status.Connected && (service.Status == infra.StatusStopped || service.Status == infra.StatusFailed) {
+		op, err := b.Restart(ctx, n.Relay.Hostname)
+		if err != nil {
+			return errors.New("cannot restart stopped relay runtime")
+		}
+		// Persist a cooldown even for synchronous restarts; stale inventory must
+		// not produce a restart on every reconciliation or after a CP restart.
+		n.RetryAt = time.Now().Add(time.Minute)
+		op.Kind = "restart"
 		return r.pending(ctx, n, b, op)
 	}
 	return nil

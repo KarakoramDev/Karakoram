@@ -30,7 +30,12 @@ func RenderYAML(hostname string, layout infra.Layout, binary string, spec infra.
 		}
 		ports = append(ports, port)
 	}
-	deploy := map[string]any{"temporaryShutdown": spec.StopBeforeStart}
+	// Stateless replacements may overlap; shutting all predecessors down first
+	// defeats rolling availability. Volume writers retain the explicit fence.
+	// Relays also remain singleton: a second live session evicts the first,
+	// whose reconnect can then evict the replacement.
+	singleton := spec.Volume != "" || (len(spec.Args) > 0 && spec.Args[0] == "relay")
+	deploy := map[string]any{"temporaryShutdown": spec.StopBeforeStart && singleton}
 	if r := spec.Readiness; r != nil {
 		deploy["readinessCheck"] = map[string]any{
 			"exec":           map[string]any{"command": path.Join(layout.AppDir, binary) + " " + strings.Join(r.Args, " ")},

@@ -58,7 +58,7 @@ func renderTestDeployment(t *testing.T) infra.Deployment {
 
 func renderTestZip(t *testing.T, d infra.Deployment) (map[string][]byte, string) {
 	t.Helper()
-	p, err := renderDeployment(d)
+	p, _, err := renderDeployment(d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestRenderRejectedAndCleanup(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			d := renderTestDeployment(t)
 			mutate(&d)
-			p, err := renderDeployment(d)
+			p, _, err := renderDeployment(d)
 			var rejected *infra.RejectedError
 			if p != "" || !errors.Is(err, infra.ErrRejected) || !errors.As(err, &rejected) {
 				t.Fatalf("path=%q error=%v", p, err)
@@ -298,7 +298,7 @@ func TestRenderStreamsLargeArtifact(t *testing.T) {
 	}()
 	d := renderTestDeployment(t)
 	d.Artifact.Reader = &renderBoundedReader{r: pr, max: 32 << 10}
-	p, err := renderDeployment(d)
+	p, _, err := renderDeployment(d)
 	pr.Close()
 	if p != "" {
 		defer os.Remove(p)

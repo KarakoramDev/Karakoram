@@ -21,6 +21,8 @@ import (
 	"net/url"
 	"regexp"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
 const hubServerName = "karakoram-relay-hub"
@@ -79,7 +81,7 @@ func issueCertificate(caPEM, keyPEM []byte, namespace string, now time.Time) ([]
 	if err != nil {
 		return nil, nil, err
 	}
-	t := &x509.Certificate{SerialNumber: serial, NotBefore: now.Add(-5 * time.Minute), NotAfter: now.AddDate(1, 0, 0), BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature}
+	t := &x509.Certificate{SerialNumber: serial, NotBefore: now.Add(-pki.LeafClockSkew), NotAfter: now.AddDate(1, 0, 0), BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature}
 	if t.NotAfter.After(ca.NotAfter) {
 		t.NotAfter = ca.NotAfter
 	}
@@ -165,7 +167,7 @@ func NamespaceFromCert(cert *x509.Certificate) (string, error) {
 	return ns, nil
 }
 
-// NeedsRenewal reports whether a certificate expires in fewer than thirty days, including expired certificates.
+// NeedsRenewal reports whether a certificate is not yet valid or expires in fewer than thirty days.
 func NeedsRenewal(cert *x509.Certificate, now time.Time) bool {
-	return cert == nil || cert.NotAfter.Sub(now) < 30*24*time.Hour
+	return cert == nil || now.Before(cert.NotBefore) || cert.NotAfter.Sub(now) < 30*24*time.Hour
 }

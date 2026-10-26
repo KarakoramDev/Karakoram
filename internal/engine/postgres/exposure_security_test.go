@@ -5,6 +5,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -98,6 +99,87 @@ func TestAllowlistIntersection(t *testing.T) {
 		got, err := intersectAllowlists(tc.current, tc.desired)
 		if err != nil || !reflect.DeepEqual(got, tc.want) {
 			t.Fatalf("intersection=%v want=%v err=%v", got, tc.want, err)
+		}
+	}
+}
+
+type conflictingExposureBackend struct {
+	*exposureBackend
+	released bool
+}
+
+func (b *conflictingExposureBackend) EnsurePublicPort(ctx context.Context, name string, port infra.PublicPort) error {
+	if !b.released {
+		return &infra.PublicPortConflictError{Port: 5432}
+	}
+	return b.exposureBackend.EnsurePublicPort(ctx, name, port)
+}
+
+func TestPublicPortConflictPreservesPrivatePostgresIntent(t *testing.T) {
+	p, rc, base := setup(t, "single")
+	b := &conflictingExposureBackend{exposureBackend: &exposureBackend{fakeBackend: base, routes: map[string]infra.PublicPort{}}}
+	rc.Backend = b
+	s := converge(t, p, rc)
+	target := connectionMember(rc, s)
+	rc.Cluster.Spec.Exposure = domain.Exposure{Public: true, IPType: "IPV4"}
+	err := p.reconcileExposure(t.Context(), rc, s)
+	var conflict *infra.PublicPortConflictError
+	if !errors.As(err, &conflict) || conflict.Port != 5432 {
+		t.Fatalf("publication conflict lost: %v", err)
+	}
+	if !rc.Cluster.Spec.Exposure.Public || connectionMember(rc, s) != target || len(b.routes) != 0 {
+		t.Fatal("refused publication changed requested exposure or private client service")
+	}
+	for _, m := range s.Members {
+		if m.Public {
+			t.Fatalf("refused route acknowledged as public: %s", m.Name)
+		}
+	}
+}
+
+func TestPublicPortRefusalFullSyncPrivateCorrectionAndReenable(t *testing.T) {
+	p, rc, base := setup(t, "single")
+	b := &conflictingExposureBackend{exposureBackend: &exposureBackend{fakeBackend: base, routes: map[string]infra.PublicPort{}}}
+	rc.Backend = b
+	converge(t, p, rc)
+	rc.Cluster.Spec.Exposure = domain.Exposure{Public: true, IPType: "IPV4"}
+	rc.Cluster.Generation++
+	var conflict *infra.PublicPortConflictError
+	for range 100 {
+		_, err := p.Sync(t.Context(), rc)
+		if errors.As(err, &conflict) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if conflict == nil {
+		t.Fatal("full Sync did not expose the refusal")
+	}
+	for _, public := range []bool{false, true} {
+		b.released = true
+		rc.Cluster.Spec.Exposure.Public = public
+		rc.Cluster.Generation++
+		for range 100 {
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			if rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+				break
+			}
+		}
+		if rc.Cluster.Status.ObservedGeneration != rc.Cluster.Generation {
+			t.Fatalf("full Sync stuck after correcting exposure to %v: %s", public, rc.SyncWait)
+		}
+		s, err := load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range s.Members {
+			if m.Name == connectionMember(rc, s) && m.Public != public {
+				t.Fatalf("public acknowledgement=%v want %v", m.Public, public)
+			}
 		}
 	}
 }

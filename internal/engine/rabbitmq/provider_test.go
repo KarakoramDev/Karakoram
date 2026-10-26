@@ -279,7 +279,7 @@ func TestRuntimeSpecAndMemberConfigTLSModes(t *testing.T) {
 				if runtime.Base != infra.BaseUbuntu2404 || runtime.Volume != m.Volume || !runtime.StopBeforeStart || !slices.Equal(runtime.Args, []string{"agent"}) || !reflect.DeepEqual(runtime.Env, wantEnv) {
 					t.Fatalf("runtime: %+v", runtime)
 				}
-				if runtime.Readiness == nil || !slices.Equal(runtime.Readiness.Args, []string{"agent", "readiness", "--engine=rabbitmq", "--data-dir=" + dataDir}) || runtime.Readiness.FailureTimeout != 300*time.Second || runtime.Readiness.RetryPeriod != 10*time.Second {
+				if runtime.Readiness == nil || !slices.Equal(runtime.Readiness.Args, []string{"agent", "readiness", "--startup", "--data-dir=" + dataDir}) || runtime.Readiness.FailureTimeout != 300*time.Second || runtime.Readiness.RetryPeriod != 10*time.Second {
 					t.Fatalf("readiness: %+v", runtime.Readiness)
 				}
 				wantPorts := []int{5672, 5671, 15672, 15671, 15692, 4369, 25672, 5551, 5552}

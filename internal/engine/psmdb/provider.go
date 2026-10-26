@@ -36,6 +36,7 @@ type Provider struct {
 	portMu               sync.Mutex
 	portReservations     map[string]map[int]string
 	deleteClusterObjects func(context.Context, domain.BackupStorage, string, string) error
+	ensureManagedUsers   func(context.Context, *engine.Context, *internalState) error
 }
 
 // New constructs a PSMDB provider.
@@ -46,7 +47,9 @@ func New(o Options) *Provider {
 	if o.ControlPlaneURL == "" {
 		o.ControlPlaneURL = "https://karakoram:9443"
 	}
-	return &Provider{options: o, portReservations: make(map[string]map[int]string), deleteClusterObjects: backupstorage.DeleteCluster}
+	p := &Provider{options: o, portReservations: make(map[string]map[int]string), deleteClusterObjects: backupstorage.DeleteCluster}
+	p.ensureManagedUsers = p.reconcileManagedUsers
+	return p
 }
 
 // Name returns the stable engine identifier.

@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/version"
@@ -240,6 +241,53 @@ func jitter(bound time.Duration) time.Duration {
 	}
 	return time.Duration(n.Int64())
 }
+
+// Report only typed, fixed failure reasons: HTTP bodies and transport errors may
+// contain credentials or untrusted peer text.
+func connectionFailure(stage, endpoint string, err error, response *http.Response) error {
+	reason := "connection failed"
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	var dns *net.DNSError
+	var network net.Error
+	switch {
+	case errors.As(err, &unknown):
+		reason = "TLS certificate authority is not trusted; install the HTTPS issuer in the relay runtime trust store"
+		if stage == "inner mTLS" {
+			reason = "TLS certificate authority is not trusted; check pinned KARAKORAM_RELAY_CA and hub enrollment configuration"
+		}
+	case errors.As(err, &hostname):
+		reason = "TLS certificate does not match the dial hostname"
+	case errors.As(err, &invalid):
+		reason = "TLS certificate is invalid or outside its validity period"
+	case errors.As(err, &network) && network.Timeout():
+		reason = "connection or handshake timed out"
+	case errors.As(err, &dns):
+		reason = "DNS resolution failed"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		reason = "TCP connection refused; check the dial target and ingress listener"
+	case response != nil && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden):
+		reason = fmt.Sprintf("ingress authentication/authorization rejected (HTTP %d); relay endpoint must allow WebSocket upgrade without browser login", response.StatusCode)
+	case response != nil:
+		reason = fmt.Sprintf("WebSocket upgrade rejected (HTTP %d); check ingress forwarding of /relay/v1/connect", response.StatusCode)
+	}
+	return fmt.Errorf("relay %s to %s: %s", stage, DiagnosticEndpoint(endpoint), reason)
+}
+
+// DiagnosticEndpoint returns only a bounded authority, never userinfo, path or
+// query text. The limit keeps both reconnect logs and namespace status bounded.
+func DiagnosticEndpoint(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return "unknown"
+	}
+	const maxAuthorityBytes = 192
+	if len(u.Host) > maxAuthorityBytes {
+		return u.Host[:maxAuthorityBytes-3] + "..."
+	}
+	return u.Host
+}
 func (r *runtime) connect(ctx context.Context, endpoint string, tlsConfig *tls.Config) error {
 	sessionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -250,13 +298,13 @@ func (r *runtime) connect(ctx context.Context, endpoint string, tlsConfig *tls.C
 		if response != nil && response.Body != nil {
 			response.Body.Close()
 		}
-		return errors.New("relay WebSocket connection failed")
+		return connectionFailure("outer HTTPS/WebSocket", endpoint, err, response)
 	}
 	defer ws.CloseNow()
 	raw := websocketConn(sessionCtx, ws)
 	conn := tls.Client(raw, tlsConfig)
 	if err = conn.HandshakeContext(handshakeCtx); err != nil {
-		return errors.New("relay inner TLS handshake failed")
+		return connectionFailure("inner mTLS", endpoint, err, nil)
 	}
 	mux, err := smux.Client(conn, r.o.SmuxConfig)
 	if err != nil {

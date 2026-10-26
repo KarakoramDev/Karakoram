@@ -62,7 +62,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		if b.Spec.DataSource != nil {
 			e.Reason = "ClusterCloneRequested"
 		}
-	case "ReplaceCluster", "PatchCluster":
+	case "ReplaceCluster", "PatchCluster", "RetryClusterDeployments":
 		// The desired-state transaction already persisted this event with its
 		// pre-write snapshot; only publish after that transaction committed.
 		if result.auditEvent != nil {

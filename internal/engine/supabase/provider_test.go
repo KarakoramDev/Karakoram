@@ -113,6 +113,7 @@ type testBackend struct {
 	lookupErrors map[string]error
 	stopped      map[string]bool
 	gatewayHosts map[string]int
+	nativeStatus map[string]pgspec.StatusResponse
 }
 
 func (*testBackend) Name() string { return "test" }
@@ -145,7 +146,7 @@ func (b *testBackend) ImportServices(_ context.Context, specs []infra.ServiceSpe
 			ownership[k] = v
 		}
 		ids[spec.Hostname] = spec.Hostname + "-id"
-		b.services[spec.Hostname] = &infra.Service{ID: ids[spec.Hostname], Hostname: spec.Hostname, Kind: spec.Kind, Ownership: ownership, Resources: spec.Resources}
+		b.services[spec.Hostname] = &infra.Service{ID: ids[spec.Hostname], Hostname: spec.Hostname, Kind: spec.Kind, Status: infra.StatusActive, Ownership: ownership, Resources: spec.Resources, MinContainers: spec.MinContainers, MaxContainers: spec.MaxContainers}
 	}
 	return infra.Op{Services: ids}, nil
 }
@@ -161,12 +162,16 @@ func (*testBackend) OpStatus(context.Context, infra.Op) (infra.OpState, error) {
 	return infra.OpState{Done: true}, nil
 }
 func (b *testBackend) Containers(_ context.Context, name string) ([]infra.Container, error) {
-	if !b.deployed[name] {
+	if !b.deployed[name] || b.services[name] == nil {
 		return nil, nil
 	}
-	// The fixture's TLS agent server models one live instance per runtime.
-	// ForInstance retains its dynamic port and selects the member by bearer token.
-	return []infra.Container{{ID: name + "-instance", Hostname: "127.0.0.1", IPv4: "127.0.0.1", Status: infra.ContainerRunning}}, nil
+	// The TLS fixture serves independent instances with the same member config.
+	count := max(1, b.services[name].MinContainers)
+	instances := make([]infra.Container, count)
+	for i := range instances {
+		instances[i] = infra.Container{ID: fmt.Sprintf("%s-instance-%d", name, i), Hostname: "127.0.0.1", IPv4: "127.0.0.1", Status: infra.ContainerRunning}
+	}
+	return instances, nil
 }
 func (*testBackend) DeletePublicPorts(context.Context, string) error { return nil }
 func (b *testBackend) DeleteServiceByID(_ context.Context, name, id string) (infra.Op, error) {
@@ -236,7 +241,14 @@ func setupProvider(t *testing.T) (*Provider, *engine.Context, *testBackend) {
 			if strings.HasSuffix(name, "px") {
 				role = "proxy"
 			}
-			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: !backend.stopped[name], Role: role, Version: cluster.Spec.Version})
+			status := pgspec.StatusResponse{Running: !backend.stopped[name], Role: role, Version: cluster.Spec.Version, SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true}
+			if role == "proxy" {
+				status.ProxyBackends = []pgspec.ProxyBackend{{Host: "demop0", Hostgroup: 10, Status: "ONLINE"}}
+			}
+			if observed, ok := backend.nativeStatus[name]; ok {
+				status = observed
+			}
+			json.NewEncoder(w).Encode(status)
 		case "/v1/supabase/status":
 			status := sbspec.Status{Ready: true}
 			if strings.HasSuffix(name, codes["gateway"]) {
@@ -270,7 +282,8 @@ func convergeProvider(t *testing.T, p *Provider, rc *engine.Context) {
 			return
 		}
 	}
-	t.Fatal("provider did not converge")
+	status, err := p.Status(t.Context(), rc)
+	t.Fatalf("provider did not converge: phase=%s conditions=%+v members=%+v error=%v", status.Phase, status.Conditions, status.Members, err)
 }
 func TestPgsodiumDoesNotPreloadWithoutRootKeyManagement(t *testing.T) {
 	p, rc, _ := setupProvider(t)
@@ -339,8 +352,8 @@ func TestComponentLifecycleAndSecretIsolation(t *testing.T) {
 	if spec.DataPeers[0] != "demop0" || !spec.DatabaseTLS || spec.Auth.JWTExpiry != 3600 || len(spec.Upstreams) != 3 || spec.DBRoles["supabase_auth_admin"] == "" {
 		t.Fatal("incomplete Supabase member payload")
 	}
-	if len(spec.DBRoles) != 1 || spec.DBRoles["postgres"] != "" || spec.DBRoles["authenticator"] != "" || spec.ServiceRoleKey != "" {
-		t.Fatal("Auth received unrelated database or API credentials")
+	if len(spec.DBRoles) != 1 || spec.DBRoles["postgres"] != "" || spec.DBRoles["authenticator"] != "" || spec.ServiceRoleKey != c.ServiceRoleKey {
+		t.Fatal("Auth must receive its readiness credential but no unrelated database credentials")
 	}
 	for _, secret := range []string{c.JWTSecret, c.ServiceRoleKey, c.DashboardPassword, spec.DBRoles["supabase_auth_admin"]} {
 		if strings.Contains(string(rc.Cluster.Internal), secret) {
@@ -582,7 +595,7 @@ func TestComponentFailureClearsPendingWithoutDone(t *testing.T) {
 			member := *state.Members["rest"]
 			state.Pending = &componentPending{Op: infra.Op{ID: "failed-component"}, Component: "rest", Action: action}
 			rc.Backend = failedComponentBackend{backend}
-			busy, err := observeComponent(t.Context(), rc, state)
+			busy, err := p.observeComponent(t.Context(), rc, state)
 			if !busy || err == nil || state.Pending != nil {
 				t.Fatalf("failed operation remained pending: busy=%v pending=%+v err=%v", busy, state.Pending, err)
 			}
@@ -636,6 +649,20 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 			rc.Cluster.Spec.Components.Engine.Replicas = 3
 			rc.Cluster.Generation = 2
 			rc.Cluster.Status.ObservedGeneration = 1
+			// Existing joined members must actually exist. Otherwise the runtime
+			// recovery reconciler correctly repairs them before new provisioning.
+			for i := range 3 {
+				name := fmt.Sprintf("%sp%d", rc.Cluster.Name, i)
+				value := "joined-fixture-" + name
+				token := &domain.AgentToken{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Member: name, Token: value, Hash: secrets.Hash(value)}
+				if err := rc.Secrets.SetAgentToken(t.Context(), token); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := backend.ImportServices(t.Context(), []infra.ServiceSpec{engine.RuntimeServiceSpec(backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: name, Token: value, Resources: rc.Cluster.Spec.Components.Engine.Resources, Containers: 1})}); err != nil {
+					t.Fatal(err)
+				}
+				backend.deployed[name] = true
+			}
 			// Resume a durable replacement at join after its etcd learner was
 			// admitted, but before Core.Sync has provisioned its runtime/volume.
 			rc.Cluster.Internal = json.RawMessage(`{"postgres":{
@@ -658,15 +685,23 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 				t.Fatal(err)
 			}
 			state.Members["rest"] = &componentMember{Name: "demors", Component: "rest", Stage: engine.ComponentImported}
+			// This pending deployment represents an optional runtime which has
+			// not been created, unlike the joined core members above.
+			delete(backend.services, "demors")
+			delete(backend.deployed, "demors")
 			pending := &componentPending{Op: infra.Op{ID: "unready-deploy"}, Component: "rest", Action: "deploy"}
 			state.Pending = pending
 			if err := saveState(rc.Cluster, state); err != nil {
 				t.Fatal(err)
 			}
 			rc.Backend = blockedDeployBackend{testBackend: backend, pollError: pollError}
-			result, err := p.Sync(t.Context(), rc)
-			if !errors.Is(err, pollError) {
-				t.Fatalf("component observation error lost: got %v, want %v", err, pollError)
+			var result engine.Result
+			for range 2 {
+				// The first pass durably freezes import intent before submission.
+				result, err = p.Sync(t.Context(), rc)
+				if !errors.Is(err, pollError) {
+					t.Fatalf("component observation error lost: got %v, want %v", err, pollError)
+				}
 			}
 			if backend.services["demop3"] == nil || backend.services["demop3v"] == nil {
 				t.Fatal("optional deployment blocked replacement runtime/volume provisioning")
@@ -774,7 +809,6 @@ func TestComponentIdentitySurvivesLostImportCheckpoint(t *testing.T) {
 		if backend.services["demogw"] != nil {
 			t.Fatal("infrastructure imported before identity was persisted")
 		}
-		planned := append(json.RawMessage(nil), rc.Cluster.Internal...)
 		token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), "demogw")
 		if err != nil {
 			t.Fatal(err)
@@ -782,9 +816,19 @@ func TestComponentIdentitySurvivesLostImportCheckpoint(t *testing.T) {
 		if _, err = p.Sync(ctx, rc); err != nil {
 			t.Fatal(err)
 		}
+		state, err = loadState(rc.Cluster)
+		if err != nil || state.Members["gateway"].ImportBatch == nil || backend.services["demogw"] != nil {
+			t.Fatal("import batch was not persisted separately before submission", err)
+		}
+		planned := append(json.RawMessage(nil), rc.Cluster.Internal...)
+		if _, err = p.Sync(ctx, rc); err != nil {
+			t.Fatal(err)
+		}
 		if backend.services["demogw"] == nil {
 			t.Fatal("runtime was not imported")
 		}
+		serviceID := backend.services["demogw"].ID
+		owner := backend.services["demogw"].Ownership[engine.OwnerVariable]
 		// Simulate a restart after backend import but before its receipt persisted.
 		rc.Cluster.Internal = planned
 		if _, err = p.Sync(ctx, rc); err != nil {
@@ -793,6 +837,9 @@ func TestComponentIdentitySurvivesLostImportCheckpoint(t *testing.T) {
 		after, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), "demogw")
 		if err != nil || after.Token != token.Token {
 			t.Fatal("restart replaced the imported runtime's ownership token")
+		}
+		if service := backend.services["demogw"]; service == nil || service.ID != serviceID || service.Ownership[engine.OwnerVariable] != owner || owner == "" {
+			t.Fatal("lost import receipt replay replaced runtime identity or ownership")
 		}
 		return
 	}
@@ -889,8 +936,15 @@ func TestDeletedJoinedComponentIsRecreatedWithDurableIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			state, err := loadState(rc.Cluster)
-			if err != nil || state.Members[component].Stage != engine.ComponentPlanned || state.Pending == nil || state.Pending.Action != "import" {
-				t.Fatal("confirmed absence did not restart provisioning", err)
+			if err != nil || state.Members[component].RuntimeRecovery.ImportPlan == nil || state.Members[component].RuntimeRecovery.Op != nil || backend.services[name] != nil {
+				t.Fatal("confirmed absence did not first persist runtime-only import intent", err)
+			}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			state, err = loadState(rc.Cluster)
+			if err != nil || state.Members[component].RuntimeRecovery.Op == nil || state.Members[component].RuntimeRecovery.ImportPlan == nil || state.Members[component].RuntimeRecovery.Action != "import" {
+				t.Fatal("persisted runtime-only import was not submitted with its original plan", err)
 			}
 			convergeProvider(t, p, rc)
 			after, err := rc.Secrets.GetAgentToken(t.Context(), rc.Cluster.Ref(), name)

@@ -346,7 +346,7 @@ export type paths = {
         put?: never;
         /**
          * Create and reconcile a cluster
-         * @description Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
+         * @description Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request. Public IP family admission may query fresh backend project information; a definitively unavailable family is rejected, while unknown availability does not reject the request.
          */
         post: operations["createCluster"];
         delete?: never;
@@ -372,20 +372,20 @@ export type paths = {
         get: operations["getCluster"];
         /**
          * Replace the full cluster desired spec
-         * @description After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Capability admission uses static backend metadata, without a platform API request.
+         * @description After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Public IP family admission may query fresh backend project information; newly selected unsupported exposure is rejected, unchanged legacy exposure is preserved, and unknown availability does not reject the request.
          */
         put: operations["replaceCluster"];
         post?: never;
         /**
          * Delete cluster or suspend while retaining volumes
-         * @description With keepVolumes=true, delete runtimes while preserving volumes, cluster secrets and metadata in Suspended phase for resume. Otherwise deletion is asynchronous until resources are gone.
+         * @description With keepVolumes=true, delete runtimes while preserving volumes, cluster secrets and metadata in Suspended phase for resume. Otherwise deletion is asynchronous until resources are gone. Unless keepBackups=true, returns 409 invalid_state if another cluster has an in-flight restore/create referencing a source backup; the message identifies the dependent operation. An in-flight PITR restore/create conservatively fences its source cluster, base backups and history even with keepBackups=true because execution still requires the live source. Wait for completion or safe cancellation. Restore/create admission and destructive deletion intent are atomic; restores cannot newly reference backups or PostgreSQL descendants whose ancestor deletion was already accepted, and PITR cannot be admitted while source deletion or backup expiration is in progress.
          */
         delete: operations["deleteCluster"];
         options?: never;
         head?: never;
         /**
          * Apply an RFC 7396 cluster merge patch
-         * @description Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
+         * @description Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request. Public IP family admission may query fresh backend project information; newly selected unsupported exposure is rejected, unchanged legacy exposure is preserved, and unknown availability does not reject the request.
          */
         patch: operations["patchCluster"];
         trace?: never;
@@ -440,7 +440,7 @@ export type paths = {
         post?: never;
         /**
          * Delete backup data and metadata
-         * @description Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
+         * @description Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Returns 409 invalid_state while an in-flight restore/create references the backup (including a PostgreSQL dependent set expired with it); the message identifies the dependent operation. In-flight PITR restores/clones conservatively fence all backups and required history on their source until terminal. Wait for completion or safe cancellation before retrying. Once deletion intent is accepted, new restores/clones referencing that backup or PostgreSQL descendants are refused, as are PITR requests that could depend on the expiring backup/history.
          */
         delete: operations["deleteBackup"];
         options?: never;
@@ -1525,6 +1525,32 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/retry-deployments": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-arm platform deployments stopped by the retry limit
+         * @description Increments the server-managed retry epoch and reconciles exhausted members/components with a fresh deployment budget. Returns 409 when no deployment is exhausted in the current epoch. Replaying an Idempotency-Key returns the original response without granting another budget.
+         */
+        post: operations["retryClusterDeployments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/rotate-tls": {
         parameters: {
             query?: {
@@ -2203,6 +2229,7 @@ export type components = {
             connected: boolean;
             /** Format: date-time */
             lastSeenAt?: string;
+            message?: string;
             version?: string;
         };
         /** @description Only metadata and a non-sensitive identifying prefix; the token value is never returned here. */
@@ -2396,6 +2423,11 @@ export type components = {
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
+            /**
+             * Format: int64
+             * @description Server-managed; ignored on input and preserved on updates. Use retry-deployments to grant a new budget.
+             */
+            readonly retryEpoch?: number;
             tls?: components["schemas"]["TLSInput"];
             topology?: components["schemas"]["TopologyInput"];
             version?: string;
@@ -2447,6 +2479,11 @@ export type components = {
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
+            /**
+             * Format: int64
+             * @description Server-managed deployment retry budget epoch. Changed only by retry-deployments, never by ordinary spec updates.
+             */
+            readonly retryEpoch?: number;
             tls?: components["schemas"]["TLS"];
             topology: components["schemas"]["Topology"];
             version: string;
@@ -2461,7 +2498,7 @@ export type components = {
             /** Format: int64 */
             observedGeneration: number;
             /**
-             * @description Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+             * @description Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
              * @enum {string}
              */
             phase: "Creating" | "Initializing" | "Ready" | "Updating" | "Scaling" | "Upgrading" | "Restoring" | "Degraded" | "Error" | "Deleting" | "Suspended";
@@ -3550,7 +3587,7 @@ export type components = {
              * @description Present when verified is false; categorized, secret-free cause.
              * @enum {string}
              */
-            failureReason?: "access_denied" | "bucket_not_found" | "endpoint_not_allowed" | "tls_error" | "unreachable" | "timeout" | "unknown";
+            failureReason?: "access_denied" | "bucket_not_found" | "clock_skew" | "endpoint_not_allowed" | "tls_error" | "unreachable" | "timeout" | "unknown";
             message: string;
             verified: boolean;
         };
@@ -5454,6 +5491,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     replaceClusterBalancer: {
@@ -5577,6 +5615,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     createDatabaseRole: {
@@ -5677,6 +5716,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     replaceDatabaseRole: {
@@ -5820,6 +5860,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     createDatabaseUser: {
@@ -5920,6 +5961,7 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     replaceDatabaseUser: {
@@ -7279,7 +7321,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Role created. A generated login password is returned only here. */
+            /** @description Role created in PostgreSQL and managed credentials stored. A generated login password is returned only here. ProxySQL publication is asynchronous; 201 is not a proxy-login usability barrier. After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json) until conditions contains type CredentialsPublished with status "True" before using the proxy credentials. */
             201: {
                 headers: {
                     /** @description Never cache credentials. */
@@ -7375,7 +7417,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Updated role. */
+            /** @description Updated role. ProxySQL credential publication is asynchronous. After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json) until conditions contains type CredentialsPublished with status "True" before using changed proxy credentials. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7414,7 +7456,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Role deleted. */
+            /** @description Role deleted in PostgreSQL. ProxySQL removal is asynchronous. Poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json) until conditions contains type CredentialsPublished with status "True" for publication completion. Existing sessions are not terminated by this barrier. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -7469,7 +7511,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Updated role. */
+            /** @description Updated role. ProxySQL credential publication is asynchronous. After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json) until conditions contains type CredentialsPublished with status "True" before using changed proxy credentials. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7524,7 +7566,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Newly generated password; never retrievable again without the same idempotency key. */
+            /** @description Newly generated password; never retrievable again without the same idempotency key. PostgreSQL and managed credential storage are updated, but ProxySQL publication is asynchronous. After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json) until conditions contains type CredentialsPublished with status "True" before using the new proxy password. */
             200: {
                 headers: {
                     /** @description Never cache credentials. */
@@ -9133,6 +9175,62 @@ export interface operations {
                 headers: {
                     "Karakoram-Operation-Id"?: string;
                     /** @description Request correlation identifier. */
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Cluster"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    retryClusterDeployments: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted; track the returned cluster generation and operation. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
                     "X-Request-ID"?: string;
                     [name: string]: unknown;
                 };

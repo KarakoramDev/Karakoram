@@ -5,17 +5,21 @@ package agent
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 // Give log readers time to consume buffered output after the direct child exits.
@@ -29,7 +33,8 @@ type processSpec struct {
 	stopSignal syscall.Signal
 	// cleanEnv starts the child from a minimal environment instead of the
 	// agent's, so member credentials such as the agent token are not inherited.
-	cleanEnv bool
+	cleanEnv           bool
+	goMemoryLimitBytes uint64
 }
 
 // minimalEnv carries only non-secret process basics into engine children.
@@ -53,7 +58,10 @@ type child struct {
 	status     agentapi.ProcessStatus
 	done       chan struct{}
 	crashes    int
+	startError error
 	generation uint64
+	// First launch intent is stable across failed starts and later restarts.
+	startOrder int
 }
 type supervisor struct {
 	mu                  sync.Mutex
@@ -62,10 +70,19 @@ type supervisor struct {
 	logs                map[string][]agentapi.LogLine
 	output              io.Writer
 	backoff             time.Duration
+	pipe                func() (*os.File, *os.File, error)
+	outputOnce          sync.Once
+	outputStop          sync.Once
+	outputQueue         chan agentapi.LogLine
+	outputDone          chan struct{}
+	ownershipDir        string
+	beforeStart         func() error
+	starts              int
+	session             string
 }
 
 func newSupervisor(output io.Writer) *supervisor {
-	return &supervisor{children: map[string]*child{}, logs: map[string][]agentapi.LogLine{}, output: output, backoff: time.Second}
+	return &supervisor{children: map[string]*child{}, logs: map[string][]agentapi.LogLine{}, output: output, outputDone: make(chan struct{}), backoff: time.Second, session: rand.Text()}
 }
 func (s *supervisor) configure(name string, spec processSpec) {
 	s.mu.Lock()
@@ -77,13 +94,34 @@ func (s *supervisor) configure(name string, spec processSpec) {
 	}
 	p.spec = spec
 }
-func (s *supervisor) startLocked(name string, p *child) error {
+func (s *supervisor) startLocked(name string, p *child) (err error) {
+	defer func() {
+		if err != nil {
+			p.status.State, p.status.Error = "failed", err.Error()
+			p.startError = err
+			s.scheduleLocked(name, p)
+		}
+	}()
 	if s.closed {
 		return errors.New("supervisor shut down")
 	}
 	if p.cmd != nil {
 		return nil
 	}
+	if p.startOrder == 0 {
+		s.starts++
+		p.startOrder = s.starts
+	}
+	if s.beforeStart != nil {
+		if err := s.beforeStart(); err != nil {
+			return err
+		}
+	}
+	release, err := s.acquireProcess(name)
+	if err != nil {
+		return err
+	}
+	defer release()
 	cmd := exec.Command(p.spec.binary, p.spec.args...)
 	if p.spec.cleanEnv {
 		cmd.Env = append(minimalEnv(), p.spec.env...)
@@ -92,13 +130,17 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	}
 	cmd.Dir = p.spec.dir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	pipe := s.pipe
+	if pipe == nil {
+		pipe = os.Pipe
+	}
 	// Own the pipes so cmd.Wait can reap the child without closing readers
 	// before its final output has been captured.
-	stdout, stdoutWriter, err := os.Pipe()
+	stdout, stdoutWriter, err := pipe()
 	if err != nil {
 		return err
 	}
-	stderr, stderrWriter, err := os.Pipe()
+	stderr, stderrWriter, err := pipe()
 	if err != nil {
 		_ = stdout.Close()
 		_ = stdoutWriter.Close()
@@ -106,16 +148,26 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	}
 	cmd.Stdout = stdoutWriter
 	cmd.Stderr = stderrWriter
-	err = cmd.Start()
+	err = s.recordProcessIntent(name)
+	if err == nil {
+		err = cmd.Start()
+		if err != nil {
+			err = errors.Join(err, s.writeProcessOwner(name, processOwner{}))
+		}
+	}
 	_ = stdoutWriter.Close()
 	_ = stderrWriter.Close()
 	if err != nil {
 		_ = stdout.Close()
 		_ = stderr.Close()
-		p.status.State = "failed"
-		p.status.Error = err.Error()
-		s.scheduleLocked(name, p)
 		return err
+	}
+	if err := s.recordProcess(name, cmd.Process.Pid); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		_ = stdout.Close()
+		_ = stderr.Close()
+		return fmt.Errorf("persist process ownership; child stopped: %w", err)
 	}
 	now := time.Now().UTC()
 	p.cmd = cmd
@@ -123,7 +175,11 @@ func (s *supervisor) startLocked(name string, p *child) error {
 	p.status.State = "running"
 	p.status.PID = cmd.Process.Pid
 	p.status.StartedAt = &now
+	p.status.SupervisorSession = s.session
+	p.status.Launch++
+	p.status.GoMemoryLimitBytes = p.spec.goMemoryLimitBytes
 	p.status.Error = ""
+	p.startError = nil
 	p.status.ExitCode = nil
 	done := p.done
 	var logs sync.WaitGroup
@@ -149,6 +205,14 @@ func (s *supervisor) startLocked(name string, p *child) error {
 		p.status.PID = 0
 		code := cmd.ProcessState.ExitCode()
 		p.status.ExitCode = &code
+		// Qualify retained output only after this exact launch has been reaped.
+		// Readers never infer failure from log text or a later child's state.
+		lines := s.logs[name]
+		for i := range lines {
+			if lines[i].SupervisorSession == p.status.SupervisorSession && lines[i].Launch == p.status.Launch {
+				lines[i].ExitCode = &code
+			}
+		}
 		p.status.State = "stopped"
 		if err != nil {
 			p.status.Error = err.Error()
@@ -181,11 +245,26 @@ func (s *supervisor) scheduleLocked(name string, p *child) {
 	})
 }
 func (s *supervisor) action(ctx context.Context, name, action string) error {
+	return s.actionWithAdmission(ctx, name, action, nil, nil)
+}
+
+// Admission runs under the process lock immediately before changing intent.
+// Identified restarts use it to durably bind their stop to the owned generation.
+func (s *supervisor) actionWithAdmission(ctx context.Context, name, action string, admit func(*child) error, beforeStart func() error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	p := s.children[name]
 	if p == nil {
 		s.mu.Unlock()
 		return fmt.Errorf("process %s is not configured", name)
+	}
+	if admit != nil {
+		if err := admit(p); err != nil {
+			s.mu.Unlock()
+			return err
+		}
 	}
 	switch action {
 	case "start":
@@ -195,24 +274,19 @@ func (s *supervisor) action(ctx context.Context, name, action string) error {
 		s.mu.Unlock()
 		return err
 	case "stop", "restart":
-		p.desired = false
+		p.desired = action == "restart" && beforeStart == nil
 		p.generation++
 		cmd, done, signal := p.cmd, p.done, p.spec.stopSignal
-		if signal == 0 {
-			signal = syscall.SIGTERM
-		}
 		s.mu.Unlock()
-		if cmd != nil {
-			if err := syscall.Kill(-cmd.Process.Pid, signal); err != nil && err != syscall.ESRCH {
-				return err
-			}
-			select {
-			case <-done:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		if err := stopChild(ctx, cmd, done, signal); err != nil {
+			return err
 		}
 		if action == "restart" {
+			if beforeStart != nil {
+				if err := beforeStart(); err != nil {
+					return err
+				}
+			}
 			return s.action(ctx, name, "start")
 		}
 		return nil
@@ -221,11 +295,48 @@ func (s *supervisor) action(ctx context.Context, name, action string) error {
 		return errors.New("invalid process action")
 	}
 }
+
+// stopChild sends the graceful signal even when the shutdown wait budget expired.
+// Ordinary actions check cancellation before changing intent; shutdown must still
+// signal every remaining child rather than abandon dependencies after one timeout.
+func stopChild(ctx context.Context, cmd *exec.Cmd, done <-chan struct{}, signal syscall.Signal) error {
+	if cmd == nil {
+		return nil
+	}
+	if signal == 0 {
+		signal = syscall.SIGTERM
+	}
+	if err := syscall.Kill(-cmd.Process.Pid, signal); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *supervisor) orderedChildrenLocked() []string {
+	names := make([]string, 0, len(s.children))
+	for name := range s.children {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		a, b := s.children[names[i]].startOrder, s.children[names[j]].startOrder
+		if a == b {
+			return names[i] < names[j]
+		}
+		return a < b
+	})
+	return names
+}
 func (s *supervisor) setMaintenance(enabled bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.maintenance = enabled
-	for name, p := range s.children {
+	for _, name := range s.orderedChildrenLocked() {
+		p := s.children[name]
 		p.generation++
 		if !enabled && p.desired && p.cmd == nil {
 			_ = s.startLocked(name, p)
@@ -237,40 +348,135 @@ func (s *supervisor) snapshot() (map[string]agentapi.ProcessStatus, bool) {
 	defer s.mu.Unlock()
 	out := map[string]agentapi.ProcessStatus{}
 	for name, p := range s.children {
-		out[name] = p.status
+		status := p.status
+		if status.PID > 0 && processStopped(status.PID) {
+			status.State = "paused"
+			status.Error = "process is stopped by a signal; resume it with SIGCONT after checking the cause"
+		}
+		out[name] = status
 	}
 	return out, s.maintenance
 }
 func (s *supervisor) shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	s.closed = true
-	names := make([]string, 0, len(s.children))
-	for name := range s.children {
-		names = append(names, name)
+	names := s.orderedChildrenLocked()
+	for _, name := range names {
+		p := s.children[name]
+		p.desired = false
+		p.generation++
 	}
 	s.mu.Unlock()
 	var errs []error
-	for _, name := range names {
-		if err := s.action(ctx, name, "stop"); err != nil {
-			errs = append(errs, err)
+	// Each child gets a bounded share, so a stuck consumer cannot consume the
+	// entire shutdown deadline before dependencies receive their graceful stop.
+	for i := len(names) - 1; i >= 0; i-- {
+		name := names[i]
+		s.mu.Lock()
+		p := s.children[name]
+		cmd, done, signal := p.cmd, p.done, p.spec.stopSignal
+		s.mu.Unlock()
+		timeout := 10 * time.Second
+		if deadline, ok := ctx.Deadline(); ok {
+			timeout = min(timeout, max(time.Until(deadline), 0)/time.Duration(i+1))
+		}
+		childCtx, cancel := context.WithTimeout(ctx, timeout)
+		err := stopChild(childCtx, cmd, done, signal)
+		cancel()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("stop %s: %w", name, err))
 		}
 	}
+	s.outputStop.Do(func() { close(s.outputDone) })
 	return errors.Join(errs...)
 }
+
+const supervisorLogLineBytes = 16 << 10
+const supervisorLogBytes = 1 << 20
+
 func (s *supervisor) capture(name, stream string, r io.Reader) {
-	scan := bufio.NewScanner(r)
-	scan.Buffer(make([]byte, 4096), 1024*1024)
-	for scan.Scan() {
-		line := agentapi.LogLine{Timestamp: time.Now().UTC(), Process: name, Stream: stream, Message: scan.Text()}
-		s.mu.Lock()
-		ring := s.logs[name]
-		if len(ring) == 1000 {
-			copy(ring, ring[1:])
-			ring = ring[:999]
+	reader := bufio.NewReaderSize(r, supervisorLogLineBytes)
+	var message []byte
+	var sanitizer redact.Stream
+	var truncated bool
+	for {
+		part, err := reader.ReadSlice('\n')
+		remaining := supervisorLogLineBytes - len(message)
+		retained := min(len(part), remaining)
+		sanitizer.Observe(part[:retained], false)
+		sanitizer.Observe(part[retained:], true)
+		truncated = truncated || retained < len(part)
+		message = append(message, part[:retained]...)
+		if err == bufio.ErrBufferFull {
+			continue // Discard excess bytes, but always keep draining the pipe.
 		}
-		s.logs[name] = append(ring, line)
-		fmt.Fprintf(s.output, "[%s %s] %s\n", name, stream, line.Message)
-		s.mu.Unlock()
+		if len(message) > 0 {
+			safe, gap, keep := sanitizer.Line(string(bytes.TrimSuffix(message, []byte{'\n'})))
+			sanitizer.EndLine(truncated)
+			if gap != "" {
+				s.captureLine(name, stream, gap)
+			}
+			if keep {
+				s.captureLine(name, stream, safe)
+			}
+			message = message[:0]
+			truncated = false
+		}
+		if err != nil {
+			if gap := sanitizer.Omission(); gap != "" {
+				s.captureLine(name, stream, gap)
+			}
+			return
+		}
+	}
+}
+
+func (s *supervisor) captureLine(name, stream, message string) {
+	line := agentapi.LogLine{Timestamp: time.Now().UTC(), Process: name, Stream: stream, Message: message}
+	s.mu.Lock()
+	if p := s.children[name]; p != nil {
+		line.SupervisorSession = p.status.SupervisorSession
+		line.Launch = p.status.Launch
+	}
+	ring := append(s.logs[name], line)
+	total := 0
+	first := len(ring)
+	for first > 0 && len(ring)-first < 1000 && total+len(ring[first-1].Message) <= supervisorLogBytes {
+		first--
+		total += len(ring[first].Message)
+	}
+	for i := range first {
+		ring[i] = agentapi.LogLine{}
+	}
+	s.logs[name] = ring[first:]
+	s.mu.Unlock()
+	s.emit(line)
+}
+
+// A stalled external collector may lose output, never process control or pipe draining.
+// There is at most one blocked writer and a bounded queue per supervisor.
+func (s *supervisor) emit(line agentapi.LogLine) {
+	if s.output == nil || s.output == io.Discard {
+		return
+	}
+	s.outputOnce.Do(func() {
+		s.outputQueue = make(chan agentapi.LogLine, 32)
+		go func() {
+			for {
+				select {
+				case line := <-s.outputQueue:
+					fmt.Fprintf(s.output, "[%s %s] %s\n", line.Process, line.Stream, line.Message)
+				case <-s.outputDone:
+					return
+				}
+			}
+		}()
+	})
+	select {
+	case <-s.outputDone:
+		return
+	case s.outputQueue <- line:
+	default:
 	}
 }
 func (s *supervisor) logTail(name string, n int) []agentapi.LogLine {

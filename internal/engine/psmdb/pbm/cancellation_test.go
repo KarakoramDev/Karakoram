@@ -6,6 +6,7 @@ package pbm
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -25,11 +26,13 @@ func TestBackupCancellationUsesDurableReceiptAndFinalizesRecord(t *testing.T) {
 	}
 	drive(t, env, op, RunBackup, true)
 	got, err := st.GetBackup(context.Background(), env.RC.Cluster.Ref(), b.Name)
-	if err != nil || got.Phase != domain.PhaseFailed || got.Error == "" || got.CompletedAt == nil || agent.backupCancelCalls != 1 {
-		t.Fatal(got, err, agent.backupCancelCalls)
+	cancelCalls := agent.backupCancelCallCount()
+	if err != nil || got.Phase != domain.PhaseFailed || got.Error == "" || got.CompletedAt == nil || cancelCalls != 1 {
+		t.Fatal(got, err, cancelCalls)
 	}
 	found := false
-	for _, request := range agent.requests {
+	requests := agent.recordedRequests()
+	for _, request := range requests {
 		if request.Command == "cancel-backup" && request.RequestID == op.ID+"/cancel" {
 			found = true
 		}
@@ -52,8 +55,9 @@ func TestRestoreCancellationBeforeDataMutationRestoresTargetConfiguration(t *tes
 	}
 	drive(t, env, op, RunRestore, true)
 	got, err := st.GetRestore(context.Background(), env.RC.Cluster.Ref(), r.Name)
-	if err != nil || got.Phase != domain.PhaseFailed || got.Error != "Restore cancelled before data mutation" || agent.starts != 0 || len(hooks.reset) != 0 {
-		t.Fatal(got, err, agent.starts, hooks.reset)
+	starts := agent.startCount()
+	if err != nil || got.Phase != domain.PhaseFailed || got.Error != "Restore cancelled before data mutation" || starts != 0 || len(hooks.reset) != 0 {
+		t.Fatal(got, err, starts, hooks.reset)
 	}
 }
 
@@ -77,15 +81,18 @@ func TestExpiredRestoreWaitsForPBMTerminalStatus(t *testing.T) {
 				}
 				if step == "start" {
 					res, err := RunRestore(context.Background(), env, op)
-					if err != nil || res.Step != "poll" || agent.starts != 1 || agent.requests[0].RequestID != op.ID {
-						t.Fatal("restore start was not replayed with its receipt", res, err, agent.requests)
+					starts := agent.startCount()
+					requests := agent.recordedRequests()
+					if err != nil || res.Step != "poll" || starts != 0 || len(requests) != 0 {
+						t.Fatal("known restore was resubmitted instead of observed", res, err, requests)
 					}
 					op.Checkpoint = res.Checkpoint
 				}
 				for range 3 {
 					res, err := RunRestore(context.Background(), env, op)
-					if err != nil || res.Done || res.Step != "poll" || len(agent.actions) != 0 {
-						t.Fatal("process recovery started before PBM finished", res, err, agent.actions)
+					actions := agent.recordedActions()
+					if err != nil || res.Done || res.Step != "poll" || len(actions) != 0 {
+						t.Fatal("process recovery started before PBM finished", res, err, actions)
 					}
 					op.Checkpoint = res.Checkpoint
 				}
@@ -97,7 +104,7 @@ func TestExpiredRestoreWaitsForPBMTerminalStatus(t *testing.T) {
 					want = domain.PhaseFailed
 				}
 				final, _ := loadCheckpoint(op)
-				if err != nil || got.Phase != want || final.FreshBase == failed || (failed && got.Error != "restore failed") || (!failed && len(hooks.reset) == 0) {
+				if err != nil || got.Phase != want || final.FreshBase == failed || (failed && (!strings.Contains(got.Error, "PBM restore restore-task failed: restore failed") || !strings.Contains(got.Error, "partial changes cannot be excluded"))) || (!failed && len(hooks.reset) == 0) {
 					t.Fatal(got, err, final, hooks.reset)
 				}
 			})

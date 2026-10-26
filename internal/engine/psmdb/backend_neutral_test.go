@@ -34,6 +34,12 @@ func TestShardedVolumeSpreadGroups(t *testing.T) {
 		if err := p.importMember(t.Context(), rc, s, m); err != nil {
 			t.Fatal(err)
 		}
+		if m.ImportPlan == nil {
+			t.Fatal("missing durable member import plan")
+		}
+		if err := p.importMember(t.Context(), rc, s, m); err != nil {
+			t.Fatal(err)
+		}
 		found := false
 		for _, spec := range backend.imports[before] {
 			if spec.Kind == infra.KindVolume {
@@ -163,6 +169,12 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 			}
 			if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
 				t.Fatal(err)
+			}
+			if err := p.importMember(t.Context(), rc, s, replacement); err != nil {
+				t.Fatal(err)
+			}
+			if replacement.ImportPlan == nil {
+				t.Fatal("missing durable replacement import plan")
 			}
 			if err := p.importMember(t.Context(), rc, s, replacement); err != nil {
 				t.Fatal(err)

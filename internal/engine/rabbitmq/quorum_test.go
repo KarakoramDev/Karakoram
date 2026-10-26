@@ -138,7 +138,7 @@ func TestQuorumBlockedOperationsUseSafetyWaitIntervalAndMessage(t *testing.T) {
 					}
 					op.Checkpoint = result.Checkpoint
 					if state(t, rc).find(m.Name).ChangeStep == "drain" {
-						if result.RequeueAfter != 5*time.Second || result.Message != "" {
+						if result.RequeueAfter != time.Second || result.Message != "" {
 							t.Fatal("recovered operation retained the blocked cadence or message", result)
 						}
 						return

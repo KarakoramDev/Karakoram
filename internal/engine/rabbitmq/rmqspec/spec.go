@@ -32,9 +32,15 @@ type MemberSpec struct {
 	// IPv4Distribution selects IPv4 Erlang distribution; omitted keeps the
 	// legacy IPv6 transport and serialized member specifications unchanged.
 	IPv4Distribution bool `json:"ipv4Distribution,omitempty"`
+	// FormationSeed selects native fixed-seed discovery with unlimited retries.
+	// Empty retains classic discovery for existing and retained members.
+	FormationSeed string `json:"formationSeed,omitempty"`
 }
 
 type EmptyRequest struct{}
+type FormationCapabilities struct {
+	FixedSeed bool `json:"fixedSeed"`
+}
 type JoinRequest struct {
 	Seed string `json:"seed"`
 }
@@ -80,6 +86,13 @@ type StatusResponse struct {
 	Maintenance  bool            `json:"maintenance"`
 	FeatureFlags []FeatureFlag   `json:"featureFlags"`
 	Version      string          `json:"version"`
+	// MembershipError leaves local service/identity/alarm observations usable,
+	// but no running/disk-node or partition view may be inferred from them.
+	MembershipError string `json:"membershipError,omitempty"`
+	// Empty means a legacy agent. Unknown is not evidence of credential drift.
+	AdminCredentialStatus string `json:"adminCredentialStatus,omitempty"`
+	// Epoch of the configuration snapshot used by the credential probe.
+	ConfigVersion int64 `json:"configVersion,omitempty"`
 }
 type StreamReplicasResponse struct {
 	Replicas json.RawMessage `json:"replicas"`

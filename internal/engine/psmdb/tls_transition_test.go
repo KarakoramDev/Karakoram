@@ -7,10 +7,8 @@ import (
 	"context"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
 )
 
 func TestTLSModeTransitionsPreserveMemberConnectivity(t *testing.T) {
@@ -69,9 +67,7 @@ func TestTLSModeTransitionsPreserveMemberConnectivity(t *testing.T) {
 				}
 				return false, nil
 			}
-			replication := func(_ context.Context, _ *engine.Context, _ *internalState, m *member) (mongoadmin.Status, error) {
-				return mongoadmin.Status{Members: []mongoadmin.Member{{Name: m.Name + ":27017", State: "SECONDARY", Health: 1, OptimeDate: time.Now()}}}, nil
-			}
+			replication := healthyTestReplication
 			for range 100 {
 				if _, err := p.sync(ctx, rc, prepare, replication); err != nil {
 					t.Fatal(err)

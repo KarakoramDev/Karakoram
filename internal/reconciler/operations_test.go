@@ -155,7 +155,7 @@ func TestDeadlineExpiresPendingBehindUnformedCluster(t *testing.T) {
 	if err := s.CreateCluster(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestart, CreatedAt: time.Now().Add(-3 * time.Hour)}
+	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestart, Elapsed: 3 * time.Hour}
 	if err := s.EnqueueOperation(ctx, op); err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestDeadlineRetainsLastErrorAcrossProgressUpdates(t *testing.T) {
 		t.Fatal("first failure retired operation")
 	}
 	op.Message = "Waiting for inventory"
-	op.CreatedAt = time.Now().Add(-3 * time.Hour)
+	op.Elapsed = 3 * time.Hour
 	if !m.operationFailure(op, nil) || !strings.Contains(op.Message, "Storage is unavailable") {
 		t.Fatal(op)
 	}

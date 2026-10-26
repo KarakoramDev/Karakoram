@@ -68,7 +68,7 @@ func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		for key, value := range s.Vars {
 			ownership[key] = value
 		}
-		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership}
+		f.services[s.Hostname] = &infra.Service{Hostname: s.Hostname, ID: s.Hostname, Kind: s.Kind, Status: infra.StatusActive, Resources: s.Resources, Ownership: ownership}
 		ids[s.Hostname] = s.Hostname
 	}
 	return infra.Op{ID: "import", Services: ids}, nil
@@ -314,7 +314,7 @@ func TestRuntimeSpecAndConfig(t *testing.T) {
 		!reflect.DeepEqual(spec.Args, []string{"agent"}) || spec.Volume != m.Volume || !spec.StopBeforeStart {
 		t.Fatalf("unexpected runtime: %+v", spec)
 	}
-	if spec.Readiness == nil || !reflect.DeepEqual(spec.Readiness.Args, []string{"agent", "readiness"}) ||
+	if spec.Readiness == nil || !reflect.DeepEqual(spec.Readiness.Args, []string{"agent", "readiness", "--startup", "--data-dir=" + rc.Backend.Layout().DataDir(m.Volume)}) ||
 		spec.Readiness.FailureTimeout != 300*time.Second || spec.Readiness.RetryPeriod != 10*time.Second {
 		t.Fatalf("unexpected readiness: %+v", spec.Readiness)
 	}

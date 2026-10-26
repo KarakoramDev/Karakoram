@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const Engine = "supabase"
@@ -310,8 +311,13 @@ var GatewayUpstreams = []string{"auth", "rest", "realtime", "storage", "meta", "
 type Status struct {
 	Component string `json:"component"` // Component is the supervised service name.
 	Version   string `json:"version"`   // Version is the native artifact version.
-	Ready     bool   `json:"ready"`     // Ready reports the component's own health endpoint.
+	Ready     bool   `json:"ready"`     // Ready reports local health and observed dependencies.
 	Message   string `json:"message"`   // Message contains no upstream response body or secrets.
+	// Reason optionally identifies a failed dependency; absent on older agents.
+	Reason string `json:"reason,omitempty"`
+	// StorageS3CheckedAt is the start of the last bounded authenticated bucket
+	// probe. Missing on older agents; it must not become a mixed-version gate.
+	StorageS3CheckedAt *time.Time `json:"storageS3CheckedAt,omitempty"`
 	// GatewayUpstreamHosts reports resolved Envoy hosts, not application health.
 	// Missing observations (including older agents) do not satisfy stack readiness.
 	GatewayUpstreamHosts map[string]int `json:"gatewayUpstreamHosts,omitempty"`

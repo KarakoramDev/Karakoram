@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -85,7 +86,7 @@ func TestMissingBrokerVersionBlocksReadiness(t *testing.T) {
 }
 
 func TestStatusHealthyMajorityDuringBrokerShutdown(t *testing.T) {
-	for _, stopped := range []string{"process", "application", "unreachable"} {
+	for _, stopped := range []string{"process", "application", "unreachable", "local-membership-negative"} {
 		t.Run(stopped, func(t *testing.T) {
 			p, rc, _, a := setup(t)
 			ready(t, p, rc)
@@ -97,6 +98,11 @@ func TestStatusHealthyMajorityDuringBrokerShutdown(t *testing.T) {
 				broker.appStopped = true
 			case "unreachable":
 				broker.down = true
+			case "local-membership-negative":
+				// A fresh explicit local negative can race an otherwise
+				// successful in-service probe. It must not become a self-peer
+				// connectivity diagnosis or affect healthy survivors.
+				broker.runningNodes = []string{"rabbit@demom0", "rabbit@demom1"}
 			}
 			status, err := p.Status(context.Background(), rc)
 			if err != nil {
@@ -109,9 +115,20 @@ func TestStatusHealthyMajorityDuringBrokerShutdown(t *testing.T) {
 				if member.Health != (member.Name != "demom2") {
 					t.Fatalf("peer shutdown changed local health: %+v", member)
 				}
+				if strings.Contains(member.Agent.Message, "expected peer rabbit@"+member.Name) {
+					t.Fatalf("local application absence attributed to a self-peer link: %+v", member)
+				}
+				if member.Name == "demom2" && (stopped == "application" || stopped == "local-membership-negative") &&
+					(!strings.Contains(member.Agent.Message, "own RabbitMQ application") || !strings.Contains(member.Agent.Message, "check_running/status")) {
+					t.Fatalf("missing actionable local application diagnosis: %+v", member)
+				}
 			}
 			assertLifecycleCondition(t, status, "Healthy", "False")
-			assertLifecycleCondition(t, status, "Partition", "False")
+			partition := "False"
+			if stopped == "unreachable" {
+				partition = "Unknown"
+			}
+			assertLifecycleCondition(t, status, "Partition", partition)
 			assertLifecycleCondition(t, status, "Alarms", "False")
 		})
 	}
@@ -221,8 +238,10 @@ func TestCleanupUnreachableNonRunningRuntime(t *testing.T) {
 					if f.services[m.Name] != nil || (f.services[m.Volume] != nil) != keep {
 						t.Fatalf("runtime/volume cleanup mismatch: %+v", m)
 					}
-					if m.Name != "demom0" {
-						assertBefore(t, calls, "agent:"+m.Name+":drain", "agent:"+m.Name+":/v1/maintenance")
+					if keep && m.Name != "demom0" {
+						if slices.Contains(calls, "agent:"+m.Name+":drain") {
+							t.Fatalf("whole-cluster suspension drained %s", m.Name)
+						}
 						assertBefore(t, calls, "agent:"+m.Name+":/v1/maintenance", "agent:"+m.Name+":stop")
 						assertBefore(t, calls, "agent:"+m.Name+":stop", "infra:"+m.Name+":delete")
 					}
@@ -256,19 +275,31 @@ func TestCleanupUnreachableNonRunningRuntime(t *testing.T) {
 	}
 }
 
-func TestCleanupUnreachableRuntimeWithoutTerminalObservationIsBlocked(t *testing.T) {
+func TestCleanupUnreachableRuntimeUsesPlatformFence(t *testing.T) {
 	for _, status := range []string{"", infra.StatusActive, "RUNNING", "STARTING", "STOPPING", "UNKNOWN"} {
 		t.Run(status, func(t *testing.T) {
 			p, rc, f, a := setup(t)
 			ready(t, p, rc)
 			f.services["demom0"].Status = status
 			a.broker("demom0").down = true
+			events := &definitionsTestEvents{}
+			rc.Events = events
 			a.log.clear()
-			before := f.mutations
-			done, err := p.Cleanup(context.Background(), rc, domain.DeleteOptions{KeepBackups: true})
-			if err == nil || done || f.mutations != before || len(a.log.snapshot()) != 0 {
-				t.Fatalf("unconfirmed runtime shutdown was bypassed: done=%v err=%v calls=%v", done, err, a.log.snapshot())
+			cleanupCluster(t, p, rc, domain.DeleteOptions{KeepVolumes: true, KeepBackups: true})
+			if f.services["demom0"] != nil || f.services["demom0v"] == nil {
+				t.Fatal("platform shutdown did not preserve the unreachable broker volume")
 			}
+			if state(t, rc).find("demom0").CleanupStopReason == "" || len(events.events) != 1 || events.events[0].Reason != "SuspendBrokerShutdownSkipped" {
+				t.Fatalf("unreachable broker shutdown was not diagnosed: %+v", events.events)
+			}
+			calls := a.log.snapshot()
+			for _, action := range []string{"drain", "stop", "forget", "shrink"} {
+				if slices.Contains(calls, "agent:demom0:"+action) {
+					t.Fatalf("unreachable broker received %s: %v", action, calls)
+				}
+			}
+			assertBefore(t, calls, "agent:demom1:stop", "infra:demom0:delete")
+			assertBefore(t, calls, "agent:demom2:stop", "infra:demom0:delete")
 		})
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
-	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic"
 )
 
@@ -59,7 +58,7 @@ func (s *Server) elasticAccess(ctx context.Context, name string, in input) respo
 	}
 	access, yes := p.(elastic.Access)
 	if !yes {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, p)
 	}
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure

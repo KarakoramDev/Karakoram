@@ -1740,7 +1740,7 @@ paths:
                 $ref: '#/components/schemas/Cluster'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
+      description: Also authorize clusters create against the submitted namespace/name. Returns desired state immediately; status tracks asynchronous reconciliation. Cloning requires backups/read on the source namespace/cluster; cross-namespace cloning additionally requires backups/export on that source object, checked by the handler rather than route metadata. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request. Public IP family admission may query fresh backend project information; a definitively unavailable family is rejected, while unknown availability does not reject the request.
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -1798,7 +1798,7 @@ paths:
       tags:
         - Clusters
       summary: Replace the full cluster desired spec
-      description: After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Capability admission uses static backend metadata, without a platform API request.
+      description: After engine defaults and validation, rejects specs requiring capabilities absent from the namespace backend with 400 invalid_request. Public IP family admission may query fresh backend project information; newly selected unsupported exposure is rejected, unchanged legacy exposure is preserved, and unknown availability does not reject the request.
       x-karakoram-rbac:
         resource: clusters
         action: update
@@ -1860,7 +1860,7 @@ paths:
               $ref: '#/components/schemas/ReplaceClusterRequest'
     patch:
       operationId: patchCluster
-      description: Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request; capability admission uses static metadata without a platform API request.
+      description: Send application/merge-patch+json. For compatibility, application/json is interpreted as the same merge patch and normalized before validation. After engine defaults and validation, specs requiring capabilities absent from the namespace backend return 400 invalid_request. Public IP family admission may query fresh backend project information; newly selected unsupported exposure is rejected, unchanged legacy exposure is preserved, and unknown availability does not reject the request.
       tags:
         - Clusters
       summary: Apply an RFC 7396 cluster merge patch
@@ -1964,7 +1964,7 @@ paths:
                 $ref: '#/components/schemas/Operation'
         '500':
           $ref: '#/components/responses/InternalError'
-      description: With keepVolumes=true, delete runtimes while preserving volumes, cluster secrets and metadata in Suspended phase for resume. Otherwise deletion is asynchronous until resources are gone.
+      description: With keepVolumes=true, delete runtimes while preserving volumes, cluster secrets and metadata in Suspended phase for resume. Otherwise deletion is asynchronous until resources are gone. Unless keepBackups=true, returns 409 invalid_state if another cluster has an in-flight restore/create referencing a source backup; the message identifies the dependent operation. An in-flight PITR restore/create conservatively fences its source cluster, base backups and history even with keepBackups=true because execution still requires the live source. Wait for completion or safe cancellation. Restore/create admission and destructive deletion intent are atomic; restores cannot newly reference backups or PostgreSQL descendants whose ancestor deletion was already accepted, and PITR cannot be admitted while source deletion or backup expiration is in progress.
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - name: keepVolumes
@@ -2073,6 +2073,49 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CSRF'
         - $ref: '#/components/parameters/IdempotencyKey'
+  /clusters/{cluster}/retry-deployments:
+    parameters:
+      - $ref: '#/components/parameters/ClusterPath'
+      - $ref: '#/components/parameters/NamespaceQuery'
+    post:
+      operationId: retryClusterDeployments
+      tags: [ClusterActions]
+      summary: Re-arm platform deployments stopped by the retry limit
+      description: Increments the server-managed retry epoch and reconciles exhausted members/components with a fresh deployment budget. Returns 409 when no deployment is exhausted in the current epoch. Replaying an Idempotency-Key returns the original response without granting another budget.
+      x-karakoram-rbac: {resource: clusters, action: update, object: cluster}
+      parameters:
+        - $ref: '#/components/parameters/CSRF'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Accepted; track the returned cluster generation and operation.
+          headers:
+            X-Request-ID:
+              schema: {type: string}
+            Karakoram-Operation-Id:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cluster'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /clusters/{cluster}/raise-fcv:
     parameters:
       - $ref: '#/components/parameters/ClusterPath'
@@ -2600,6 +2643,8 @@ paths:
                 $ref: '#/components/schemas/Balancer'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     put:
       operationId: replaceClusterBalancer
       tags:
@@ -2870,7 +2915,11 @@ paths:
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '201':
-          description: Role created. A generated login password is returned only here.
+          description: >-
+            Role created in PostgreSQL and managed credentials stored. A generated login password is returned only here.
+            ProxySQL publication is asynchronous; 201 is not a proxy-login usability barrier.
+            After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json)
+            until conditions contains type CredentialsPublished with status "True" before using the proxy credentials.
           headers:
             Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
             Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
@@ -2925,7 +2974,10 @@ paths:
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '200':
-          description: Updated role.
+          description: >-
+            Updated role. ProxySQL credential publication is asynchronous.
+            After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json)
+            until conditions contains type CredentialsPublished with status "True" before using changed proxy credentials.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/PostgresRole'}
@@ -2954,7 +3006,10 @@ paths:
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
         '500': {$ref: '#/components/responses/InternalError'}
         '200':
-          description: Updated role.
+          description: >-
+            Updated role. ProxySQL credential publication is asynchronous.
+            After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json)
+            until conditions contains type CredentialsPublished with status "True" before using changed proxy credentials.
           content:
             application/json:
               schema: {$ref: '#/components/schemas/PostgresRole'}
@@ -2973,7 +3028,12 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '500': {$ref: '#/components/responses/InternalError'}
         '503': {$ref: '#/components/responses/Unavailable'}
-        '204': {description: Role deleted.}
+        '204':
+          description: >-
+            Role deleted in PostgreSQL. ProxySQL removal is asynchronous.
+            Poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json)
+            until conditions contains type CredentialsPublished with status "True" for publication completion.
+            Existing sessions are not terminated by this barrier.
         '409': {$ref: '#/components/responses/Conflict'}
   /clusters/{cluster}/postgres/roles/{role}/password:
     parameters:
@@ -2997,7 +3057,11 @@ paths:
         '409': {$ref: '#/components/responses/Conflict'}
         '500': {$ref: '#/components/responses/InternalError'}
         '200':
-          description: Newly generated password; never retrievable again without the same idempotency key.
+          description: >-
+            Newly generated password; never retrievable again without the same idempotency key.
+            PostgreSQL and managed credential storage are updated, but ProxySQL publication is asynchronous.
+            After this response, poll GET /clusters/{cluster}/status (karactl -n NS clusters status CLUSTER -o json)
+            until conditions contains type CredentialsPublished with status "True" before using the new proxy password.
           headers:
             Cache-Control: {schema: {type: string, enum: [no-store]}, description: Never cache credentials.}
             Idempotent-Replayed: {$ref: '#/components/headers/IdempotentReplayed'}
@@ -4259,6 +4323,8 @@ paths:
                 $ref: '#/components/schemas/DatabaseUserList'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       parameters:
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
@@ -4371,6 +4437,8 @@ paths:
                 $ref: '#/components/schemas/DatabaseUser'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     put:
       operationId: replaceDatabaseUser
       tags:
@@ -4499,6 +4567,8 @@ paths:
                 $ref: '#/components/schemas/DatabaseRoleList'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       description: Role administration uses the database-users RBAC resource.
       parameters:
         - $ref: '#/components/parameters/Limit'
@@ -4610,6 +4680,8 @@ paths:
                 $ref: '#/components/schemas/DatabaseRole'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
     put:
       operationId: replaceDatabaseRole
       tags:
@@ -5272,7 +5344,7 @@ paths:
       tags:
         - Backups
       summary: Delete backup data and metadata
-      description: Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Other snapshots and PITR objects are not removed.
+      description: Live clusters queue engine-native deletion (202). For a deleted source cluster, the control plane deletes only this snapshot's recorded objects and metadata, then its protected recovery credential and inventory record (204). For MongoDB, these objects are the snapshot's S3 directory and sibling .pbm.json metadata. Interrupted cleanup retains a Deleting record; repeat DELETE to resume. Missing retained records return 204. Returns 409 invalid_state while an in-flight restore/create references the backup (including a PostgreSQL dependent set expired with it); the message identifies the dependent operation. In-flight PITR restores/clones conservatively fence all backups and required history on their source until terminal. Wait for completion or safe cancellation before retrying. Once deletion intent is accepted, new restores/clones referencing that backup or PostgreSQL descendants are refused, as are PITR requests that could depend on the expiring backup/history.
       x-karakoram-rbac:
         resource: backups
         action: delete
@@ -7604,6 +7676,11 @@ components:
       type: object
       additionalProperties: false
       properties:
+        retryEpoch:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Server-managed deployment retry budget epoch. Changed only by retry-deployments, never by ordinary spec updates.
         provider:
           type: string
           minLength: 1
@@ -7672,6 +7749,8 @@ components:
         lastSeenAt:
           type: string
           format: date-time
+        message:
+          type: string
         version:
           type: string
       required:
@@ -7931,7 +8010,7 @@ components:
       properties:
         phase:
           type: string
-          description: Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+          description: Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
           enum:
             - Creating
             - Initializing
@@ -9202,7 +9281,7 @@ components:
           type: string
         failureReason:
           type: string
-          enum: [access_denied, bucket_not_found, endpoint_not_allowed, tls_error, unreachable, timeout, unknown]
+          enum: [access_denied, bucket_not_found, clock_skew, endpoint_not_allowed, tls_error, unreachable, timeout, unknown]
           description: Present when verified is false; categorized, secret-free cause.
       description: Checks S3 read/write/delete access and TLS without exposing credentials. A completed verification returns HTTP 200 even on failure, with verified false, failureReason and actionable message.
       required:
@@ -9837,6 +9916,11 @@ components:
     ClusterInputSpec:
       type: object
       properties:
+        retryEpoch:
+          type: integer
+          format: int64
+          readOnly: true
+          description: Server-managed; ignored on input and preserved on updates. Use retry-deployments to grant a new budget.
         provider:
           type: string
           minLength: 1

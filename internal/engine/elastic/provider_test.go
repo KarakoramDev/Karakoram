@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -70,7 +71,7 @@ func (f *coreInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		for key, value := range s.Vars {
 			ownership[key] = value
 		}
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Status: infra.StatusActive, Resources: s.Resources, Ownership: ownership, MinContainers: s.MinContainers, MaxContainers: s.MaxContainers}
 		services[s.Hostname] = s.Hostname
 		f.calls = append(f.calls, "import:"+s.Hostname)
 	}
@@ -200,7 +201,12 @@ func (f *coreInfra) Containers(_ context.Context, name string) ([]infra.Containe
 	if f.services[name] == nil {
 		return nil, errors.New("service " + name + " not found")
 	}
-	return []infra.Container{{Status: infra.ContainerActive, PlacementGroup: "group-a"}}, nil
+	count := max(1, f.services[name].MinContainers)
+	instances := make([]infra.Container, count)
+	for i := range instances {
+		instances[i] = infra.Container{ID: fmt.Sprintf("%s-instance-%d", name, i), Hostname: "127.0.0.1", Status: infra.ContainerActive, PlacementGroup: "group-a"}
+	}
+	return instances, nil
 }
 func (*coreInfra) Logs(context.Context, string, infra.LogQuery) ([]infra.LogLine, error) {
 	return nil, nil
@@ -261,23 +267,37 @@ type coreES struct {
 	snapshots                []string
 	unassignedPrimary        bool
 	relocating, initializing int
+	unassigned               int
 	voters                   []string
 	shardRows                []map[string]string
 	allocationExplain        map[string]any
+	writeBlocks              map[string]string
+	observationFailures      map[string]bool
+	hangingMembers           map[string]bool
 }
 
 func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
+	// Block outside the mutex: a stopped member must not serialize healthy peers.
+	if f.hangingMembers[r.TLS.ServerName] || (r.URL.Path == "/_nodes" && len(f.hangingMembers) > 0) {
+		f.mu.Unlock()
+		<-r.Context().Done()
+		return
+	}
 	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	reply := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+	if f.observationFailures[r.URL.Path] || (r.URL.Path == "/_nodes/_local" && f.observationFailures["/_nodes"]) {
+		http.Error(w, "native observation deadline exceeded", http.StatusGatewayTimeout)
+		return
+	}
 	if r.Method != "GET" {
 		f.mutations = append(f.mutations, r.Method+" "+r.URL.Path)
 	}
 	switch {
 	case r.URL.Path == "/":
 		reply(map[string]any{"cluster_uuid": f.uuid, "cluster_name": "demo", "version": map[string]string{"number": "9.5.5"}})
-	case r.URL.Path == "/_nodes":
+	case r.URL.Path == "/_nodes" || r.URL.Path == "/_nodes/_local":
 		f.infra.mu.Lock()
 		nodes := map[string]any{}
 		for name, version := range f.infra.nodes {
@@ -300,7 +320,7 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/_cat/master":
 		reply([]map[string]string{{"node": f.master}})
 	case r.URL.Path == "/_cluster/health":
-		reply(map[string]any{"status": f.health, "number_of_nodes": len(f.infra.nodes), "number_of_data_nodes": len(f.infra.nodes), "relocating_shards": f.relocating, "initializing_shards": f.initializing})
+		reply(map[string]any{"status": f.health, "number_of_nodes": len(f.infra.nodes), "number_of_data_nodes": len(f.infra.nodes), "relocating_shards": f.relocating, "initializing_shards": f.initializing, "unassigned_shards": f.unassigned})
 	case r.URL.Path == "/_cat/allocation":
 		rows := []map[string]any{}
 		f.infra.mu.Lock()
@@ -344,6 +364,9 @@ func (f *coreES) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		settings := map[string]string{"index.number_of_replicas": strconv.Itoa(f.replicas)}
 		if f.autoExpand != "" {
 			settings["index.auto_expand_replicas"] = f.autoExpand
+		}
+		for key, value := range f.writeBlocks {
+			settings[key] = value
 		}
 		reply(map[string]any{"logs": map[string]any{"settings": settings}})
 	case r.URL.Path == "/_cluster/settings":
@@ -632,6 +655,9 @@ func TestInitialProvisioningPendingBootstrapAndSecurity(t *testing.T) {
 	if _, err := p.Sync(ctx, rc); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := p.Sync(ctx, rc); err != nil {
+		t.Fatal("submit checkpointed import batch", err)
+	}
 	f.done = false
 	before := f.mutations
 	for range 3 {
@@ -866,6 +892,8 @@ func TestCleanupSnapshotsComponentsRuntimeVolumeOrdering(t *testing.T) {
 	rc.Cluster.Spec.Components.Extra[kindKibana] = kb
 	s := coreConverge(t, p, rc, f)
 	s.Repositories["test"] = &repository{Name: "kk-test", BasePath: "owned"}
+	started := time.Now().Add(-3 * time.Minute)
+	s.BackupCleanupStarted = &started
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -891,8 +919,8 @@ func TestCleanupSnapshotsComponentsRuntimeVolumeOrdering(t *testing.T) {
 	if !reflect.DeepEqual(calls, []string{"delete:demokb", "delete:demon0", "delete:demon0v"}) {
 		t.Fatal(calls)
 	}
-	if len(es.snapshots) != 0 {
-		t.Fatal("snapshots retained")
+	if len(es.snapshots) != 2 {
+		t.Fatal("native snapshots must not be accessed after runtime retirement")
 	}
 	if _, err := secret(context.Background(), rc, secretAdmin); !missing(err) {
 		t.Fatal("secrets not deleted")
@@ -945,6 +973,7 @@ func TestCleanupKeepVolumesAndResume(t *testing.T) {
 func TestPlatformRetryPersistsActionAndDoesNotAdvance(t *testing.T) {
 	p, rc, f, _ := coreSetup(t, 1)
 	ctx := context.Background()
+	_, _ = p.Sync(ctx, rc)
 	_, _ = p.Sync(ctx, rc)
 	_, _ = p.Sync(ctx, rc)
 	f.failed = true
@@ -1077,6 +1106,14 @@ func TestDedicatedMasterPayloadAndRollingOrder(t *testing.T) {
 	}
 }
 
+// Managed credential repair is non-disruptive and runs on every convergence
+// pass. Keep the assertions sensitive to every other native mutation.
+func disruptiveMutations(es *coreES) []string {
+	return slices.DeleteFunc(slices.Clone(es.mutations), func(call string) bool {
+		return strings.HasPrefix(call, "PUT /_security/role/") || strings.HasPrefix(call, "PUT /_security/user/")
+	})
+}
+
 func TestRestartOperationDoesNotTriggerAnotherConfigPass(t *testing.T) {
 	p, rc, f, es := coreSetup(t, 3)
 	coreConverge(t, p, rc, f)
@@ -1096,10 +1133,10 @@ func TestRestartOperationDoesNotTriggerAnotherConfigPass(t *testing.T) {
 	if !done {
 		t.Fatal("restart did not complete")
 	}
-	before := len(es.mutations)
+	before := len(disruptiveMutations(es))
 	coreConverge(t, p, rc, f)
-	if len(es.mutations) != before {
-		t.Fatal("Sync undid the imperative restart nonce", es.mutations[before:])
+	if len(disruptiveMutations(es)) != before {
+		t.Fatal("Sync undid the imperative restart nonce", disruptiveMutations(es)[before:])
 	}
 }
 
@@ -1109,14 +1146,14 @@ func TestResourceChangesRollESHeapButNotCPUOrComponents(t *testing.T) {
 	kb.Replicas = 1
 	rc.Cluster.Spec.Components.Extra[kindKibana] = kb
 	coreConverge(t, p, rc, f)
-	before := len(es.mutations)
+	before := len(disruptiveMutations(es))
 	rc.Cluster.Spec.Components.Engine.Resources.MinCPU = 2
 	rc.Cluster.Spec.Components.Engine.Resources.MaxCPU = 2
 	kb.Resources.MinRAM = 3
 	kb.Resources.MaxRAM = 3
 	rc.Cluster.Spec.Components.Extra[kindKibana] = kb
 	coreConverge(t, p, rc, f)
-	if len(es.mutations) != before {
+	if len(disruptiveMutations(es)) != before {
 		t.Fatal("CPU/component resize disrupted Elasticsearch")
 	}
 	cfg, err := p.MemberConfig(context.Background(), rc, "demokb")
@@ -1144,7 +1181,7 @@ func TestResourceChangesRollESHeapButNotCPUOrComponents(t *testing.T) {
 	if spec.HeapMB != ElasticsearchHeapMB(4) {
 		t.Fatal("ES heap resize was not rolled")
 	}
-	if len(es.mutations) == before {
+	if len(disruptiveMutations(es)) == before {
 		t.Fatal("ES heap resize did not use allocation procedure")
 	}
 }
@@ -1328,6 +1365,8 @@ func TestUnreachableSnapshotCleanupRecordsWarningAndContinues(t *testing.T) {
 	p, rc, f, _ := coreSetup(t, 1)
 	s := coreConverge(t, p, rc, f)
 	s.Repositories["owned"] = &repository{Name: "kk-owned"}
+	started := time.Now().Add(-3 * time.Minute)
+	s.BackupCleanupStarted = &started
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -1659,6 +1698,11 @@ func TestProvisioningPrecedesSavedRolling(t *testing.T) {
 				before := len(f.calls)
 				if _, err := p.Sync(context.Background(), rc); err != nil {
 					t.Fatal(err)
+				}
+				if stage == stagePlanned {
+					if _, err := p.Sync(context.Background(), rc); err != nil {
+						t.Fatal("submit checkpointed recovery import", err)
+					}
 				}
 				action := "import:"
 				if stage == stageImported {

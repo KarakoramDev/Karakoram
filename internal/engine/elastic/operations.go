@@ -20,7 +20,6 @@ import (
 type operationState struct {
 	Stage         string   `json:"stage"`
 	Names         []string `json:"names,omitempty"`
-	Before        []string `json:"before,omitempty"`
 	Index         int      `json:"index,omitempty"`
 	NewMember     string   `json:"newMember,omitempty"`
 	ConfigVersion int64    `json:"configVersion,omitempty"`

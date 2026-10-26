@@ -28,6 +28,11 @@ func TestBackendPlacementOverridesAgentFingerprint(t *testing.T) {
 			for range 3 {
 				s.add(rc.Cluster.Name)
 			}
+			// This fixture exposes running agent endpoints below. Mark the
+			// deployment observed; planned members intentionally skip probes.
+			for _, m := range ordered(s) {
+				m.Stage = "deployed"
+			}
 			if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
 				t.Fatal(err)
 			}

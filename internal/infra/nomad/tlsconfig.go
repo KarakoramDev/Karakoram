@@ -22,20 +22,20 @@ func loadTLS(getenv func(string) string) (*tls.Config, error) {
 	if files.CACert != "" {
 		pem, err := os.ReadFile(files.CACert)
 		if err != nil {
-			return nil, rejectedConfig("nomadTLSConfig", "cannot load KARAKORAM_NOMAD_CACERT")
+			return nil, tlsConfigurationError("TLS configuration failed: cannot load KARAKORAM_NOMAD_CACERT")
 		}
 		config.RootCAs = x509.NewCertPool()
 		if !config.RootCAs.AppendCertsFromPEM(pem) {
-			return nil, rejectedConfig("nomadTLSConfig", "cannot load KARAKORAM_NOMAD_CACERT")
+			return nil, tlsConfigurationError("TLS configuration failed: cannot load KARAKORAM_NOMAD_CACERT")
 		}
 	}
 	if (files.ClientCert == "") != (files.ClientKey == "") {
-		return nil, rejectedConfig("nomadTLSConfig", "KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY must be set together")
+		return nil, tlsConfigurationError("TLS configuration failed: KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY must be set together")
 	}
 	if files.ClientCert != "" {
 		cert, err := tls.LoadX509KeyPair(files.ClientCert, files.ClientKey)
 		if err != nil {
-			return nil, rejectedConfig("nomadTLSConfig", "cannot load KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY")
+			return nil, tlsConfigurationError("TLS configuration failed: cannot load KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY")
 		}
 		config.Certificates = []tls.Certificate{cert}
 	}

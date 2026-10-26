@@ -13,42 +13,62 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/statejson"
 )
 
 // internalState is persisted after every reconciliation. Stages progress only after observed success.
 // Unknown JSON fields are retained so PBM's durable state can share Cluster.Internal.
 type internalState struct {
-	UID                string                    `json:"uid"`
-	PBMPrefix          string                    `json:"pbmPrefix"`
-	Phase              string                    `json:"phase"`
-	ConfigVersion      int64                     `json:"configVersion"`
-	Members            []*member                 `json:"members"`
-	Sets               map[string]*setState      `json:"sets"`
-	NextIndex          map[string]int            `json:"nextIndex"`
-	Pending            *pending                  `json:"pending,omitempty"`
-	Retry              *pending                  `json:"retry,omitempty"`
-	PlatformRetries    map[string]*platformRetry `json:"platformRetries,omitempty"`
-	ConfigHash         string                    `json:"configHash"`
-	PBMHash            string                    `json:"pbmHash"`
-	PBMStorage         string                    `json:"pbmStorage"`
-	UsedStorages       []string                  `json:"usedStorages,omitempty"`
-	CloneQueued        bool                      `json:"cloneQueued"`
-	BalancerStopped    bool                      `json:"balancerStopped"`
-	BalancerWasEnabled bool                      `json:"balancerWasEnabled"`
-	CleanupBackups     bool                      `json:"cleanupBackups"`
-	CleanupSecrets     bool                      `json:"cleanupSecrets"`
-	CleanedStorages    []string                  `json:"cleanedStorages,omitempty"`
-	FinalizedStorages  []string                  `json:"finalizedStorages,omitempty"`
-	RotationSecrets    []string                  `json:"rotationSecrets,omitempty"`
-	LastRotatedAt      map[string]*time.Time     `json:"lastRotatedAt,omitempty"`
-	ReplaceActive      bool                      `json:"replaceActive"`
-	Suspended          bool                      `json:"suspended"`
-	TLSMode            string                    `json:"tlsMode"`
-	TargetTLS          string                    `json:"targetTLS,omitempty"`
+	UID                      string                    `json:"uid"`
+	PBMPrefix                string                    `json:"pbmPrefix"`
+	Phase                    string                    `json:"phase"`
+	ConfigVersion            int64                     `json:"configVersion"`
+	Members                  []*member                 `json:"members"`
+	Sets                     map[string]*setState      `json:"sets"`
+	NextIndex                map[string]int            `json:"nextIndex"`
+	Pending                  *pending                  `json:"pending,omitempty"`
+	Retry                    *pending                  `json:"retry,omitempty"`
+	PlatformRetries          map[string]*platformRetry `json:"platformRetries,omitempty"`
+	ConfigHash               string                    `json:"configHash"`
+	PBMHash                  string                    `json:"pbmHash"`
+	PBMStorage               string                    `json:"pbmStorage"`
+	UsedStorages             []string                  `json:"usedStorages,omitempty"`
+	CloneQueued              bool                      `json:"cloneQueued"`
+	InitialRestore           *initialRestore           `json:"initialRestore,omitempty"`
+	BalancerStopped          bool                      `json:"balancerStopped"`
+	BalancerWasEnabled       bool                      `json:"balancerWasEnabled"`
+	BalancerObserved         bool                      `json:"balancerObserved,omitempty"`
+	CleanupBackups           bool                      `json:"cleanupBackups"`
+	CleanupSecrets           bool                      `json:"cleanupSecrets"`
+	CleanedStorages          []string                  `json:"cleanedStorages,omitempty"`
+	FinalizedStorages        []string                  `json:"finalizedStorages,omitempty"`
+	BackupCleanupStarted     *time.Time                `json:"backupCleanupStarted,omitempty"`
+	RetainedStorages         []string                  `json:"retainedStorages,omitempty"`
+	RotationSecrets          []string                  `json:"rotationSecrets,omitempty"`
+	LastRotatedAt            map[string]*time.Time     `json:"lastRotatedAt,omitempty"`
+	ReplaceActive            bool                      `json:"replaceActive"`
+	Suspended                bool                      `json:"suspended"`
+	TLSMode                  string                    `json:"tlsMode"`
+	TargetTLS                string                    `json:"targetTLS,omitempty"`
+	ManagedUsersError        string                    `json:"managedUsersError,omitempty"`
+	ManagedUsersRetryable    bool                      `json:"managedUsersRetryable"`
+	RestoreConsistency       *restoreConsistency       `json:"restoreConsistency,omitempty"`
+	RestoreWorkerUnconfirmed bool                      `json:"restoreWorkerUnconfirmed,omitempty"`
+}
+
+// restoreConsistency survives process recovery and unrelated operations.
+// Availability cannot prove that a failed native restore left data/auth intact.
+type restoreConsistency struct {
+	NativeName string `json:"nativeName"`
+	Failure    string `json:"failure"`
 }
 type member struct {
-	Name   string `json:"name"`
-	Volume string `json:"volume,omitempty"`
+	Name               string                     `json:"name"`
+	NativeReadiness    *bool                      `json:"nativeReadiness,omitempty"`
+	RuntimeRecovery    engine.RuntimeRecovery     `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement *engine.UnplacedRetirement `json:"unplacedRetirement,omitempty"`
+	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
+	Volume             string                     `json:"volume,omitempty"`
 	// ReplacesVolume preserves the replacement placement hint across reconciles.
 	ReplacesVolume   string           `json:"replacesVolume,omitempty"`
 	ServiceID        string           `json:"serviceId,omitempty"`
@@ -90,6 +110,7 @@ type pending struct {
 }
 
 type platformRetry struct {
+	engine.RetrySchedule
 	Failures             int       `json:"failures"`
 	RetryAfter           time.Time `json:"retryAfter"`
 	Message              string    `json:"message"`
@@ -119,6 +140,13 @@ func load(c *domain.Cluster) (*internalState, error) {
 	}
 	if s.TLSMode == "" {
 		s.TLSMode = c.Spec.TLS.Mode
+	}
+	// Active is the pre-journal durable receipt that native initialization
+	// completed. Migrate before ownership checks can observe physical loss.
+	for _, m := range s.Members {
+		if m.Stage == "active" && m.VolumeID != "" {
+			m.RuntimeRecovery.Initialized = true
+		}
 	}
 	return s, nil
 }
@@ -159,21 +187,9 @@ func save(c *domain.Cluster, s *internalState) error {
 			return e
 		}
 	}
-	b, e := json.Marshal(s)
+	raw, e := statejson.ReplaceOwned(raw, s)
 	if e != nil {
 		return e
-	}
-	var owned map[string]json.RawMessage
-	if e = json.Unmarshal(b, &owned); e != nil {
-		return e
-	}
-	for k, v := range owned {
-		raw[k] = v
-	}
-	for _, k := range []string{"pending", "retry", "platformRetries", "targetTLS", "cleanedStorages", "finalizedStorages"} {
-		if _, ok := owned[k]; !ok {
-			delete(raw, k)
-		}
 	}
 	c.Internal, e = json.Marshal(raw)
 	return e

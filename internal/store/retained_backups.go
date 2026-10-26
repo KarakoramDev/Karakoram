@@ -22,6 +22,9 @@ func (s *Store) MarkRetainedBackupDeleting(ctx context.Context, b *domain.Backup
 		return err
 	}
 	defer tx.Rollback()
+	if err = refuseBackupDependents(ctx, tx, domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster}, b.Name, false, false); err != nil {
+		return err
+	}
 	b.Phase = domain.PhaseDeleting
 	data, err := json.Marshal(b)
 	if err != nil {

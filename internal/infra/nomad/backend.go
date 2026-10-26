@@ -79,7 +79,7 @@ func resourceValidation(r infra.Resources) error {
 	return nil
 }
 func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error) {
-	if err := b.resumePorts(ctx, r); err != nil {
+	if err := b.resumePending(ctx, r); err != nil {
 		return infra.Service{}, err
 	}
 	s := infra.Service{ID: r.ID, Hostname: r.Hostname, Kind: r.Kind, Status: infra.StatusReadyToDeploy, Resources: r.Resources, MinContainers: r.Min, MaxContainers: r.Max, Ownership: map[string]string{}}
@@ -93,9 +93,15 @@ func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error
 			s.Masked = true
 		}
 	}
-	if r.Kind == infra.KindVolume {
-		s.Status = infra.StatusActive
+	if r.Importing {
+		s.Importing = true
+		s.Status = infra.StatusCreating
 		return s, nil
+	}
+	if r.Kind == infra.KindVolume {
+		status, err := b.volumeStatus(ctx, r)
+		s.Status = status
+		return s, err
 	}
 	if r.Desired == "deleting" {
 		s.Status = infra.StatusDeleting
@@ -140,6 +146,80 @@ func (b *Backend) observed(ctx context.Context, r *record) (infra.Service, error
 		s.Status = infra.StatusFailed
 		return s, jobOwnershipConflict()
 	}
+	if job.Stop {
+		// A confirmed external scheduler stop is recoverable through Start.
+		// Never confuse our own in-flight shutdown/replacement with that
+		// signal, or let observation bypass a held lifecycle/restoration claim.
+		if r.Desired == "running" && (r.Pending == nil || r.Pending.Phase == "done") &&
+			!b.operationLeaseBlocked(r) && !b.restorationFenced(r) {
+			s.Status = infra.StatusStopped
+		}
+		return s, nil
+	}
+	if r.Volume == "" && r.Pending != nil && r.Pending.Phase != "done" {
+		// A running canary (or serving predecessor) is not completion of
+		// this configuration. Keep service readiness behind the same native
+		// deployment/evaluation barrier as the caller-visible operation.
+		if r.Pending.Phase != "failed" || !operationMatchesJob(r.Pending, job) {
+			return s, nil
+		}
+		// A historical timeout must not hide eventual native recovery, but
+		// neither running tasks nor an automatically reverted job prove it.
+		var deployment *struct {
+			JobVersion uint64
+			Status     string
+		}
+		_, err := b.c.get(ctx, "/v1/job/"+r.Hostname+"/deployment", nil, &deployment)
+		if err != nil && !errors.Is(err, infra.ErrNotFound) {
+			return s, err
+		}
+		if deployment != nil && deployment.JobVersion == job.Version && deployment.Status != "successful" {
+			return s, nil
+		}
+		// A matching successful deployment is durable completion proof even
+		// after Nomad garbage-collects the original evaluation. Count-only
+		// updates without that proof still require a completed evaluation.
+		complete := deployment != nil && deployment.JobVersion == job.Version && deployment.Status == "successful"
+		if !complete {
+			var evaluation struct{ Status string }
+			if _, err := b.c.get(ctx, "/v1/evaluation/"+r.Pending.EvalID, nil, &evaluation); err != nil {
+				if errors.Is(err, infra.ErrNotFound) {
+					return s, nil
+				}
+				return s, err
+			}
+			complete = evaluation.Status == "complete"
+		}
+		active, running := 0, 0
+		for _, a := range as {
+			if !allocationTerminal(a) {
+				active++
+				if a.ClientStatus == "running" {
+					running++
+				}
+			}
+		}
+		if complete && active == r.Max && running == r.Max {
+			s.Status = infra.StatusRunning
+		}
+		return s, nil
+	}
+	if r.Volume == "" && r.Pending != nil && r.Pending.Phase == "done" &&
+		operationMatchesJob(r.Pending, job) {
+		// Count-only and in-place updates legitimately retain older allocation
+		// versions. Accept them only after this exact operation's deployment/
+		// evaluation gate completed, never to hide a pending or failed rollout.
+		running := 0
+		for _, a := range as {
+			if a.ClientStatus == "running" {
+				running++
+			}
+		}
+		if !job.Stop && running >= r.Max {
+			s.Status = infra.StatusRunning
+			return s, nil
+		}
+	}
 	for _, a := range as {
 		if a.JobVersion != job.Version || a.CreateIndex <= job.JobModifyIndex {
 			continue
@@ -167,13 +247,15 @@ func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Serv
 	if err != nil {
 		return nil, err
 	}
-	out := make([]infra.Service, 0, len(rs))
-	for _, r := range rs {
-		s, e := b.observed(ctx, r)
-		if e != nil {
-			return nil, e
-		}
-		out = append(out, s)
+	out := make([]infra.Service, len(rs))
+	if err := infra.ObserveParallel(ctx, len(rs), func(i int) error {
+		// Pending completion and missing-job restoration retain their own
+		// existing mutex/reload fences inside observed's mutation helpers.
+		service, err := b.observed(ctx, rs[i])
+		out[i] = service
+		return err
+	}); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -196,11 +278,12 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		existing[r.Hostname] = r
 	}
 	seen := map[string]bool{}
+	batchHash := importHash(specs)
 	for _, s := range specs {
 		if !safeHostname(s.Hostname) {
 			return op, reject("service hostname must be a DNS label")
 		}
-		if seen[s.Hostname] || existing[s.Hostname] != nil {
+		if seen[s.Hostname] || existing[s.Hostname] != nil && !resumableImport(existing[s.Hostname], batchHash) {
 			return op, infra.ErrConflict
 		}
 		seen[s.Hostname] = true
@@ -242,98 +325,54 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 				return op, jobErr
 			}
 		}
+		if existing[s.Hostname] == nil {
+			env, envErr := b.readVariable(ctx, "nomad/jobs/"+s.Hostname)
+			if envErr != nil {
+				return op, envErr
+			}
+			if env.ModifyIndex != 0 {
+				return op, &APIError{Status: 409, Op: "import", Message: "environment already exists without a Karakoram service record; refusing adoption"}
+			}
+		}
 	}
 	ordered := append([]infra.ServiceSpec(nil), specs...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Kind == infra.KindVolume && ordered[j].Kind != infra.KindVolume })
-	var created []*record
-	createdEnv := map[string]uint64{}
+	ids := map[string]string{}
+	// Reservations survive errors. Never compensate storage after publishing
+	// an identity: another observer may already be using that committed record.
 	defer func() {
-		if err == nil {
-			return
-		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		for i := len(created) - 1; i >= 0; i-- {
-			r := created[i]
-			if r.Index != 0 {
-				_ = b.removeVariable(cleanup, recordPrefix+r.Hostname, r.Index)
-			}
-			if index := createdEnv[r.Hostname]; index != 0 {
-				_ = b.removeVariable(cleanup, "nomad/jobs/"+r.Hostname, index)
-			}
-			if r.VolumeID != "" {
-				_ = b.c.delete(cleanup, "/v1/volume/host/"+r.VolumeID, nil, nil)
-			}
+		if err != nil && len(ids) != 0 {
+			op = encodeOp(operation{Action: "import", Services: ids, Issued: time.Now().UTC()})
 		}
 	}()
-	ids := map[string]string{}
+	reserved := make([]*record, 0, len(ordered))
 	for _, s := range ordered {
-		id, e := newID()
-		if e != nil {
-			return op, e
-		}
-		r := &record{ID: id, Hostname: s.Hostname, Kind: s.Kind, Volume: s.Volume, SpreadGroup: s.SpreadGroup, Resources: s.Resources, Min: s.MinContainers, Max: s.MaxContainers, Vars: map[string]string{}, Desired: "stopped"}
-		if r.Min == 0 {
-			r.Min = 1
-		}
-		if r.Max == 0 {
-			r.Max = 1
-		}
-		if r.Max < r.Min {
-			return op, reject("invalid container bounds")
-		}
-		for k, v := range s.Vars {
-			r.Vars[k] = v
-		}
-		for k := range s.Env {
-			r.SecretKeys = append(r.SecretKeys, k)
-		}
-		sort.Strings(r.SecretKeys)
-		if r.Kind == infra.KindVolume {
-			ns, e := b.nodes(ctx)
-			if e != nil {
-				return op, e
+		r := existing[s.Hostname]
+		if r == nil {
+			r, err = b.reserveImport(ctx, s, batchHash, rs, existing)
+			if r != nil {
+				ids[r.Hostname] = r.ID
 			}
-			r.Node, e = chooseNode(ns, rs, r.SpreadGroup, s.SpreadReplaces)
-			if e != nil {
-				return op, e
-			}
-			if err = b.createVolume(ctx, r); err != nil {
+			if err != nil {
 				return op, err
 			}
-			r.ID = r.VolumeID
-		} else if r.Volume != "" {
-			v := existing[r.Volume]
-			if v == nil || v.Kind != infra.KindVolume {
-				return op, reject("runtime references an absent volume")
-			}
-			r.Node = v.Node
+			existing[r.Hostname] = r
+			rs = append(rs, r)
 		}
-		created = append(created, r)
-		env := map[string]string{}
-		for k, v := range s.Env {
-			env[k] = v
-		}
-		for k, v := range s.Vars {
-			env[k] = v
-		}
-		if len(env) > 0 {
-			v := variable{Path: "nomad/jobs/" + r.Hostname, Items: env}
-			if err = b.writeVariable(ctx, &v); err != nil {
-				return op, err
-			}
-			createdEnv[r.Hostname] = v.ModifyIndex
-		}
-		existing[r.Hostname] = r
-		rs = append(rs, r)
 		ids[r.Hostname] = r.ID
+		reserved = append(reserved, r)
 	}
-	// Publish durable identities only after all resources and environment writes succeed.
-	for _, r := range created {
-		if err = b.save(ctx, r); err != nil {
+	// Only after every identity is durable may resource creation begin.
+	for i, r := range reserved {
+		if !r.Importing {
+			continue
+		}
+		if err = b.finishImport(ctx, r, ordered[i]); err != nil {
 			return op, err
 		}
 	}
+	// Imported identities and resources remain visible to resume/cleanup on
+	// every failure path, including lost successful replies.
 	return encodeOp(operation{Action: "import", Services: ids, Issued: time.Now().UTC()}), nil
 }
 func ignoreNotFound(err error) error {

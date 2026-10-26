@@ -14,7 +14,7 @@ import (
 
 func TestStorageUpdateClearsPersistedCheck(t *testing.T) {
 	s, _, token := testServer(t)
-	body := `{"name":"archive","type":"s3","endpointURL":"https://s3.example.test/path","region":"region","bucket":"bucket","credentials":{"accessKeyId":"access-private","secretAccessKey":"secret-private"}}`
+	body := `{"name":"archive","type":"s3","endpointURL":"https://127.0.0.1","region":"region","bucket":"bucket","credentials":{"accessKeyId":"access-private","secretAccessKey":"secret-private"}}`
 	if w := call(s, "POST", "/api/v1/backup-storages", body, token); w.Code != 201 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -48,7 +48,7 @@ func TestStorageUpdateClearsPersistedCheck(t *testing.T) {
 	}
 	check("/api/v1/backup-storages/archive", true)
 	check("/api/v1/backup-storages", true)
-	update := `{"type":"s3","endpointURL":"https://s3.example.test/path","region":"region","bucket":"bucket","forcePathStyle":true,"verifyTLS":true,"credentials":{"accessKeyId":"access-private","secretAccessKey":"replacement-private"}}`
+	update := `{"type":"s3","endpointURL":"https://127.0.0.1","region":"region","bucket":"bucket","forcePathStyle":true,"verifyTLS":true,"credentials":{"accessKeyId":"access-private","secretAccessKey":"replacement-private"}}`
 	w := call(s, "PUT", "/api/v1/backup-storages/archive", update, token)
 	var saved api.BackupStorage
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &saved) != nil || saved.Verification != nil {

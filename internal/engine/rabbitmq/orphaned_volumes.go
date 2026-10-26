@@ -71,6 +71,7 @@ func (p *Provider) orphanVolume(ctx context.Context, rc *engine.Context, s *inte
 			return true, err
 		}
 		removeRecord(s, m.Name)
+		delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 	}
 	return true, nil
 }

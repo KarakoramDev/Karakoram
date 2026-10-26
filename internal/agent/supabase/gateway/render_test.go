@@ -10,6 +10,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -100,6 +101,91 @@ func TestDiscoveryRefreshBounds(t *testing.T) {
 		if _, exists := cluster["health_checks"]; exists {
 			t.Fatal("discovery readiness must not introduce a bootstrap health dependency")
 		}
+	}
+}
+
+func TestRolloutTransportFailurePolicy(t *testing.T) {
+	in := fixture()
+	in.Upstreams = map[string]string{}
+	for _, name := range []string{"auth", "rest", "realtime", "storage", "functions", "meta", "studio"} {
+		in.Upstreams[name] = name + ".internal:8080"
+	}
+	raw, err := Render(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config object
+	if err := json.Unmarshal(raw, &config); err != nil {
+		t.Fatal(err)
+	}
+	resources := config["static_resources"].(map[string]any)
+	wantOutliers := map[string]any{
+		"split_external_local_origin_errors": true,
+		"consecutive_local_origin_failure":   float64(1), "enforcing_consecutive_local_origin_failure": float64(100),
+		"consecutive_5xx": float64(0), "enforcing_consecutive_5xx": float64(0),
+		"consecutive_gateway_failure": float64(0), "enforcing_consecutive_gateway_failure": float64(0),
+		"enforcing_success_rate": float64(0), "enforcing_local_origin_success_rate": float64(0),
+		"interval": "1s", "base_ejection_time": "5s", "max_ejection_time": "30s",
+		"max_ejection_percent": float64(50), "always_eject_one_host": false,
+	}
+	clusters := resources["clusters"].([]any)
+	if len(clusters) != len(in.Upstreams) {
+		t.Fatal("missing upstream clusters")
+	}
+	for _, entry := range clusters {
+		cluster := entry.(map[string]any)
+		if !reflect.DeepEqual(cluster["outlier_detection"], wantOutliers) {
+			t.Fatalf("%s: unexpected outlier detection: %v", cluster["name"], cluster["outlier_detection"])
+		}
+	}
+	hcm := resources["listeners"].([]any)[0].(map[string]any)["filter_chains"].([]any)[0].(map[string]any)["filters"].([]any)[0].(map[string]any)["typed_config"].(map[string]any)
+	if !reflect.DeepEqual(hcm["upgrade_configs"], []any{map[string]any{"upgrade_type": "websocket"}}) {
+		t.Fatal("websocket upgrades must remain enabled")
+	}
+	wantRetry := map[string]any{
+		"retry_on": "connect-failure,refused-stream,reset-before-request", "num_retries": float64(2),
+		"retry_host_predicate": []any{map[string]any{
+			"name":         "envoy.retry_host_predicates.previous_hosts",
+			"typed_config": map[string]any{"@type": "type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate"},
+		}},
+		"host_selection_retry_max_attempts": float64(3),
+	}
+	routes := hcm["route_config"].(map[string]any)["virtual_hosts"].([]any)[0].(map[string]any)["routes"].([]any)
+	seen := map[string]bool{}
+	websockets := 0
+	for _, entry := range routes {
+		route := entry.(map[string]any)
+		action, ok := route["route"].(map[string]any)
+		if !ok {
+			if _, exists := route["retry_policy"]; exists {
+				t.Fatal("direct responses must not retry")
+			}
+			continue
+		}
+		if !reflect.DeepEqual(action["retry_policy"], wantRetry) {
+			t.Fatalf("%s: unsafe retry policy: %v", route["name"], action["retry_policy"])
+		}
+		component := action["cluster"].(string)
+		seen[component] = true
+		timeout, idle := "30s", any(nil)
+		if component == "functions" {
+			timeout, idle = "410s", "160s"
+		}
+		if component == "storage" || route["name"] == "realtime-ws" {
+			timeout, idle = "0s", "0s"
+		}
+		if action["timeout"] != timeout || action["idle_timeout"] != idle {
+			t.Fatalf("%s: streaming/route timeouts changed: %v", route["name"], action)
+		}
+		if route["name"] == "realtime-ws" {
+			websockets++
+			if action["host_rewrite_literal"] != "realtime-dev.supabase-realtime" {
+				t.Fatal("websocket tenant rewrite changed")
+			}
+		}
+	}
+	if len(seen) != len(in.Upstreams) || websockets != 2 {
+		t.Fatal("missing upstream or websocket/longpoll routes")
 	}
 }
 

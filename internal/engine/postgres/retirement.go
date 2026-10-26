@@ -31,6 +31,9 @@ func fenceRetirement(ctx context.Context, rc *engine.Context, s *state, m *membe
 		if err != nil {
 			return retirementRuntimeFallback(ctx, rc, s, m, err)
 		}
+		if !st.Running && !retirementLeader(st, m.Name) {
+			return retirementRuntimeFallback(ctx, rc, s, m, nil)
+		}
 		if !st.RetirementTagsCleared {
 			return false, nil
 		}
@@ -49,6 +52,9 @@ func fenceRetirement(ctx context.Context, rc *engine.Context, s *state, m *membe
 		if st.RetirementStopped && !st.Running && !retirementLeader(st, m.Name) {
 			m.Retirement = "stopped"
 			return false, nil
+		}
+		if !st.Running && !retirementLeader(st, m.Name) {
+			return retirementRuntimeFallback(ctx, rc, s, m, nil)
 		}
 		// Recheck before publishing/reloading tags and before stopping. If
 		// leadership changed, first remove tags durably, then switch away.
@@ -112,7 +118,7 @@ func fenceRetirement(ctx context.Context, rc *engine.Context, s *state, m *membe
 		if err := verifyMember(ctx, rc, m); err != nil {
 			return false, err
 		}
-		runtime, err := rc.Backend.GetService(ctx, m.Name)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -158,25 +164,39 @@ func fenceRetirement(ctx context.Context, rc *engine.Context, s *state, m *membe
 	}
 }
 
-// Engine action failures and demotion are not proof that the agent is lost.
-// Only failure to reach its generic status endpoint selects the backend fence.
-// Stop then suppresses rescheduling until the old runtime is terminal.
+// An engine action failure or demotion alone does not select the backend fence.
+// An unreachable agent, lost data, or an explicitly stopped/failed Patroni
+// supervisor can select it, but none proves stopped: removal still requires an
+// authoritative runtime Stop receipt, terminal observation and surviving writer.
 func retirementRuntimeFallback(ctx context.Context, rc *engine.Context, s *state, m *member, cause error) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
+	}
+	if m.RuntimeRecovery.VolumeLost {
+		if ok, err := survivingPrimary(ctx, rc, s, m.Name); err != nil || !ok {
+			return false, err
+		}
+		m.Retirement = "runtime-stop"
+		return false, nil
 	}
 	if rc.Agents == nil {
 		return false, errors.Join(cause, engine.ErrUnavailable)
 	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 	if err == nil {
-		_, err = a.Status(ctx)
+		status, statusErr := engine.ObserveAgentStatus(ctx, a, "PostgreSQL", m.Name)
+		err = statusErr
 		if err == nil {
-			return false, cause
+			process, known := status.Processes["patroni"]
+			if !known || process.PID != 0 || process.State != "stopped" && process.State != "failed" {
+				return false, cause
+			}
 		}
-		var transport *url.Error
-		if !errors.As(err, &transport) {
-			return false, errors.Join(cause, err)
+		if err != nil {
+			var transport *url.Error
+			if !errors.As(err, &transport) {
+				return false, errors.Join(cause, err)
+			}
 		}
 	}
 	if ok, err := survivingPrimary(ctx, rc, s, m.Name); err != nil || !ok {
@@ -187,7 +207,7 @@ func retirementRuntimeFallback(ctx context.Context, rc *engine.Context, s *state
 }
 
 func retirementRuntimeStopped(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
-	runtime, err := rc.Backend.GetService(ctx, m.Name)
+	runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 	if err != nil {
 		return false, err
 	}

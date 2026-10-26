@@ -7,6 +7,8 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,12 +33,12 @@ var renderFileName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
 // renderDeployment consumes the artifact once, streaming it into a private zip.
 // The caller owns the returned file and must remove it after uploading.
-func renderDeployment(d infra.Deployment) (zipPath string, err error) {
+func renderDeployment(d infra.Deployment) (zipPath, digest string, err error) {
 	if err := d.Validate(); err != nil {
-		return "", &infra.RejectedError{Code: "deployment", Message: err.Error()}
+		return "", "", &infra.RejectedError{Code: "deployment", Message: err.Error()}
 	}
-	reject := func(message string) (string, error) {
-		return "", &infra.RejectedError{Code: "deployment", Message: message}
+	reject := func(message string) (string, string, error) {
+		return "", "", &infra.RejectedError{Code: "deployment", Message: message}
 	}
 	if d.Runtime.Base != infra.BaseUbuntu2404 {
 		return reject("Dokploy supports only the Ubuntu 24.04 runtime base")
@@ -66,7 +68,7 @@ func renderDeployment(d infra.Deployment) (zipPath string, err error) {
 	}
 	file, err := os.CreateTemp("", "karakoram-dokploy-*.zip")
 	if err != nil {
-		return "", fmt.Errorf("create deployment archive: %w", err)
+		return "", "", fmt.Errorf("create deployment archive: %w", err)
 	}
 	zipPath = file.Name()
 	defer func() {
@@ -76,7 +78,8 @@ func renderDeployment(d infra.Deployment) (zipPath string, err error) {
 			zipPath = ""
 		}
 	}()
-	zw := zip.NewWriter(file)
+	hash := sha256.New()
+	zw := zip.NewWriter(io.MultiWriter(file, hash))
 	entries := []struct {
 		name string
 		mode os.FileMode
@@ -96,7 +99,7 @@ func renderDeployment(d infra.Deployment) (zipPath string, err error) {
 		h.SetMode(entry.mode)
 		w, createErr := zw.CreateHeader(h)
 		if createErr != nil {
-			return zipPath, fmt.Errorf("create deployment entry: %w", createErr)
+			return zipPath, "", fmt.Errorf("create deployment entry: %w", createErr)
 		}
 		if entry.name == d.Artifact.Name {
 			err = streamRenderArtifact(w, d.Artifact)
@@ -104,16 +107,16 @@ func renderDeployment(d infra.Deployment) (zipPath string, err error) {
 			_, err = io.WriteString(w, entry.text)
 		}
 		if err != nil {
-			return zipPath, err
+			return zipPath, "", err
 		}
 	}
 	if err = zw.Close(); err != nil {
-		return zipPath, fmt.Errorf("finish deployment archive: %w", err)
+		return zipPath, "", fmt.Errorf("finish deployment archive: %w", err)
 	}
 	if err = file.Close(); err != nil {
-		return zipPath, fmt.Errorf("close deployment archive: %w", err)
+		return zipPath, "", fmt.Errorf("close deployment archive: %w", err)
 	}
-	return zipPath, nil
+	return zipPath, hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func streamRenderArtifact(dst io.Writer, artifact infra.Artifact) error {
@@ -163,7 +166,7 @@ func renderDockerfile(d infra.Deployment) string {
 	fmt.Fprintf(&b, "FROM %s\nSHELL [\"/bin/bash\",\"-o\",\"pipefail\",\"-c\"]\n", baseImage)
 	// tar/gzip and coreutils are provided by Ubuntu. Engine prepare commands
 	// install their own product dependencies; only shared prerequisites go here.
-	fmt.Fprintf(&b, "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg && rm -rf /var/lib/apt/lists/* && groupadd --gid 10001 karakoram && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash karakoram && printf 'karakoram ALL=(ALL) NOPASSWD:ALL\\n' > /etc/sudoers.d/karakoram && chmod 0440 /etc/sudoers.d/karakoram && mkdir -p %s %s && chown karakoram:karakoram %s %s\n", layout.AppDir, layout.VolumeRoot, layout.AppDir, layout.VolumeRoot)
+	fmt.Fprintf(&b, "RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates sudo curl gnupg util-linux && rm -rf /var/lib/apt/lists/* && groupadd --gid 10001 karakoram && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash karakoram && printf 'karakoram ALL=(ALL) NOPASSWD:ALL\\n' > /etc/sudoers.d/karakoram && chmod 0440 /etc/sudoers.d/karakoram && mkdir -p %s %s && chown karakoram:karakoram %s %s\n", layout.AppDir, layout.VolumeRoot, layout.AppDir, layout.VolumeRoot)
 	fmt.Fprintf(&b, "USER %s\nWORKDIR %s\n", layout.User, layout.AppDir)
 	for _, command := range d.Runtime.Prepare {
 		fmt.Fprintf(&b, "RUN %s\n", renderJSON([]string{"/bin/bash", "-o", "pipefail", "-c", command}))
@@ -195,6 +198,10 @@ func renderEntrypoint(volume string) string {
 	if volume != "" {
 		p := renderShellQuote(layout.VolumePath(volume))
 		fmt.Fprintf(&b, "if [ \"$(stat -c '%%u:%%g' %s)\" != '10001:10001' ]; then\n    sudo chown karakoram:karakoram %s\nfi\n", p, p)
+		// A deleted Swarm service can leave an old task draining after its
+		// inventory disappears. The descriptor survives exec for that task's
+		// entire lifetime, excluding a restored writer on the same volume.
+		fmt.Fprintf(&b, "exec 9> %s\nflock 9\n", renderShellQuote(path.Join(layout.VolumePath(volume), ".karakoram-writer.lock")))
 	}
 	fmt.Fprintf(&b, ". %s/karakoram.env\nexec \"$@\"\n", layout.AppDir)
 	return b.String()

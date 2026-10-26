@@ -5,6 +5,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,7 +41,8 @@ type AgentRuntime struct {
 	Prepare       []string
 	// Env adds engine-specific non-secret variables.
 	Env map[string]string
-	// ReadinessArgs follow `agent readiness`.
+	// ReadinessArgs overrides startup readiness for stateless replacements whose
+	// dependencies were healthy when the engine selected this deployment.
 	ReadinessArgs []string
 	// ReadinessTimeout defaults to DefaultReadinessTimeout.
 	ReadinessTimeout time.Duration
@@ -64,21 +66,70 @@ func (a AgentRuntime) Spec(l infra.Layout) infra.RuntimeSpec {
 	if timeout == 0 {
 		timeout = DefaultReadinessTimeout
 	}
+	readinessArgs := a.ReadinessArgs
+	if len(readinessArgs) == 0 {
+		readinessArgs = []string{"--startup", "--data-dir=" + l.DataDir(a.Volume)}
+	}
 	return infra.RuntimeSpec{
 		Base: infra.BaseUbuntu2404, Prepare: a.Prepare, Env: env, Args: []string{"agent"},
 		Ports: a.Ports, Volume: a.Volume, StopBeforeStart: true,
-		Readiness: &infra.Readiness{Args: append([]string{"agent", "readiness"}, a.ReadinessArgs...), FailureTimeout: timeout, RetryPeriod: ReadinessRetryPeriod},
+		Readiness: &infra.Readiness{Args: append([]string{"agent", "readiness"}, readinessArgs...), FailureTimeout: timeout, RetryPeriod: ReadinessRetryPeriod},
 	}
+}
+
+// StatelessReadiness freezes a deployment's probe choice until the engine has
+// observed native convergence and clears decision. Fresh, healthy dependencies
+// retain overlap-until-native-ready for rolling frontend replacements. Initial
+// creation and dependency recovery must not wait on those dependencies while
+// holding a platform deployment slot.
+func StatelessReadiness(rc *Context, member string, decision **bool, nativeArgs ...string) []string {
+	if *decision == nil {
+		status := FreshStatus(rc.Cluster.Status, deploymentNow(rc))
+		healthy := status.ObservedGeneration > 0
+		dependencies := 0
+		for _, peer := range status.Members {
+			if peer.Name == member {
+				continue
+			}
+			dependencies++
+			healthy = healthy && peer.Health && peer.Agent.Healthy
+		}
+		native := healthy && dependencies > 0
+		*decision = &native
+	}
+	if **decision {
+		return nativeArgs
+	}
+	return nil
 }
 
 // Deploy ships the release artifact with spec to hostname.
 func Deploy(ctx context.Context, rc *Context, hostname string, spec infra.RuntimeSpec) (infra.Op, error) {
+	if DeploymentBlocked(rc, hostname, spec) {
+		f := rc.Cluster.Status.DeploymentFailures[hostname]
+		return infra.Op{}, &infra.DeploymentExhaustedError{Service: hostname, Version: f.Version, Attempts: f.Attempts, LastError: f.LastError}
+	}
+	// New desired intent invalidates the old fence, even if submission waits.
+	delete(rc.Cluster.Status.DeploymentFailures, hostname)
 	artifact, err := rc.Artifact.Open(ctx)
 	if err != nil {
 		return infra.Op{}, err
 	}
 	defer artifact.Close()
-	return rc.Backend.Deploy(ctx, hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: ArtifactName, Binary: ArtifactBinary}, Runtime: spec})
+	op, err := rc.Backend.Deploy(ctx, hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: ArtifactName, Binary: ArtifactBinary}, Runtime: spec, RetryEpoch: rc.Cluster.Spec.RetryEpoch})
+	if err != nil {
+		err = RecordDeploymentExhausted(ctx, rc, hostname, spec, err)
+		if deploymentWaiting(err) {
+			at := infra.RetryAt(err)
+			if at.IsZero() {
+				at = deploymentNow(rc).Add(15 * time.Second)
+			}
+			message := infra.SafeDetail(err)
+			eventErr := recordDeploymentWait(ctx, rc, err, message)
+			return op, errors.Join(&PlatformRetryWait{RetryAt: at, Message: message, Cause: err}, eventErr)
+		}
+	}
+	return op, err
 }
 
 // OwnershipEnv returns the legacy secret identity variables of a member service.

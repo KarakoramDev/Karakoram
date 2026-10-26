@@ -66,7 +66,7 @@ func runAdapter(t *testing.T, e *Engine, dir string, spec agentspec.Spec, desire
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
 	o := agent.Options{Engine: agentspec.Engine, ControlPlaneURL: server.URL, InternalCAPEM: string(ca), Cluster: c.Cluster, Member: c.Member, Token: "token", DataDir: dir, Listen: "127.0.0.1:0", Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	observed := &observedEngine{Engine: e, results: make(chan adapterResult, 1)}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	done := make(chan error, 1)
 	go func() { done <- agent.Run(ctx, o, observed) }()
 	t.Cleanup(func() {
@@ -375,5 +375,105 @@ func TestConfigurationLogCutoffFollowsRunnerApply(t *testing.T) {
 	e.mu.RUnlock()
 	if runnerReachedAt.IsZero() || cutoff.Before(runnerReachedAt) {
 		t.Fatalf("log cutoff %s preceded runner apply %s", cutoff, runnerReachedAt)
+	}
+}
+
+func TestKibanaRefusedListenerSamplesFreshPressureWithinRequest(t *testing.T) {
+	r, _ := fixture(t)
+	e := NewEngine()
+	e.runner = r
+	spec := esSpec()
+	spec.Component = agentspec.ComponentKibana
+	spec.Kibana = &agentspec.KibanaSpec{ESHosts: []string{"https://testn0:9200"}, ServiceAccountToken: "token", SecurityKey: "security-key", SavedObjectsKey: "saved-objects-key", ReportingKey: "reporting-key"}
+	binary := filepath.Join(r.home(spec), "bin", spec.Component)
+	if err := os.MkdirAll(filepath.Dir(binary), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binary, []byte("#!/bin/sh\nexec sleep 30\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	result := runAdapter(t, e, t.TempDir(), spec, []string{spec.Component})
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	events := 30117
+	growing := true
+	eventReads := 0
+	e.memoryPressure.readFile = func(path string) ([]byte, error) {
+		switch path {
+		case "/proc/self/cgroup":
+			return []byte("0::/nomad.slice/share.slice/alloc.member.scope\n"), nil
+		case "/proc/self/mountinfo":
+			return []byte("29 23 0:26 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n"), nil
+		}
+		switch filepath.Base(path) {
+		case "memory.events":
+			eventReads++
+			if growing {
+				events++
+			}
+			return []byte("max " + strconv.Itoa(events) + "\noom 0\noom_kill 0\n"), nil
+		case "memory.pressure":
+			return []byte("some avg10=0.00 avg60=0.00 total=1693514\n"), nil
+		case "memory.current":
+			return []byte("316526592"), nil
+		case "memory.max":
+			return []byte("1073741824"), nil
+		}
+		return nil, os.ErrNotExist
+	}
+	mux := http.NewServeMux()
+	e.Routes(mux, result.node)
+	probe := func() agentspec.Readiness {
+		t.Helper()
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/v1/elasticsearch/readiness", nil))
+		var observation agentspec.Readiness
+		if err := json.Unmarshal(w.Body.Bytes(), &observation); err != nil {
+			t.Fatal(err)
+		}
+		return observation
+	}
+	for range 2 {
+		// A first RPC, or an RPC following a long gap, has no fresh baseline.
+		e.memoryPressure.mu.Lock()
+		e.memoryPressure.sampleAt = time.Now().Add(-time.Minute)
+		e.memoryPressure.eventAt = time.Time{}
+		e.memoryPressure.mu.Unlock()
+		observation := probe()
+		if observation.Ready || !observation.MemoryPressure ||
+			!strings.Contains(observation.Message, "listener unavailable") ||
+			!strings.Contains(observation.Message, "max increased") ||
+			!strings.Contains(observation.Message, "minRam and maxRam") {
+			t.Fatalf("refused listener with fresh max growth lost actionable pressure: %+v", observation)
+		}
+	}
+	growing = false
+	e.memoryPressure.mu.Lock()
+	e.memoryPressure.sampleAt = time.Now().Add(-time.Minute)
+	e.memoryPressure.eventAt = time.Time{}
+	e.memoryPressure.mu.Unlock()
+	if observation := probe(); observation.Ready || observation.MemoryPressure {
+		t.Fatalf("static historical max events asserted readiness or pressure: %+v", observation)
+	}
+	eventReads = 0
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	request := httptest.NewRequest(http.MethodPost, "/v1/elasticsearch/readiness", nil).WithContext(ctx)
+	mux.ServeHTTP(httptest.NewRecorder(), request)
+	if eventReads != 1 {
+		t.Fatalf("cancelled request took a second sample: %d reads", eventReads)
+	}
+	scopedRead := e.memoryPressure.readFile
+	e.memoryPressure.readFile = func(path string) ([]byte, error) {
+		if path == "/proc/self/mountinfo" {
+			// Nomad exec exposes /sys as sysfs, but no cgroup2 submount.
+			return []byte("520 509 0:72 / /sys ro,nosuid,nodev,noexec - sysfs sysfs ro\n"), nil
+		}
+		return scopedRead(path)
+	}
+	if observation := probe(); observation.Ready || observation.MemoryPressure ||
+		!strings.Contains(observation.Message, "memory pressure evidence unavailable in this runtime") {
+		t.Fatalf("Nomad exec missing cgroup2 mount silently lost evidence: %+v", observation)
 	}
 }

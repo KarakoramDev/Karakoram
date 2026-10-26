@@ -80,7 +80,6 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (i
 	return (engine.AgentRuntime{
 		Cluster: rc.Cluster.Name, Member: m.Name, Engine: "rabbitmq", Volume: m.Volume,
 		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM, Ports: ports, Prepare: prepare,
-		ReadinessArgs: []string{"--engine=rabbitmq", "--data-dir=" + layout.VolumePath(m.Volume)},
 	}).Spec(layout), nil
 }
 func runtimeResources(r domain.Resources) domain.Resources { r.MinDisk = 1; r.MaxDisk = 3; return r }
@@ -181,6 +180,13 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				}
 			}
 			base := "tls/" + kind + "/" + m.Name
+			if kind == "agents" {
+				// Agent HTTPS hot-swaps on config pulls, independently of
+				// broker quorum/drain gates and the old leaf's validity.
+				if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+".pending.pem"); err != nil && !missing(err) {
+					return err
+				}
+			}
 			existing, e := secret(ctx, rc, base+".pem")
 			if e == nil {
 				renew, e := pki.NeedsRenewal(existing, 30*24*time.Hour, now(rc))
@@ -190,10 +196,12 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				if !renew {
 					continue
 				}
+			}
+			if e == nil && kind == "members" {
 				base += ".pending"
 				pending, e := secret(ctx, rc, base+".pem")
 				if e == nil {
-					renew, e = pki.NeedsRenewal(pending, 30*24*time.Hour, now(rc))
+					renew, e := pki.NeedsRenewal(pending, 30*24*time.Hour, now(rc))
 					if e != nil {
 						return e
 					}
@@ -203,7 +211,7 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				} else if !missing(e) {
 					return e
 				}
-			} else if !missing(e) {
+			} else if e != nil && !missing(e) {
 				return e
 			}
 			cert, key, e := ca.Issue(pki.CertRequest{CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: ips, Validity: 365 * 24 * time.Hour, Server: true, Client: kind == "members"})
@@ -239,6 +247,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		return agentapi.MemberConfig{}, engine.ErrNotFound
 	}
 	v := agentapi.MemberConfig{Engine: "rabbitmq", Cluster: rc.Cluster.Name, Member: m.Name, Role: "rabbitmq", EngineVersion: m.DesiredVersion, EngineConfig: m.EngineConfig, ConfigVersion: m.ConfigVersion, TLS: agentapi.TLSConfig{Mode: m.TLSMode}, SystemUsers: map[string]agentapi.Credentials{}, DesiredProcesses: []string{"rabbitmq-server"}}
+	v.Volume = engine.RuntimeVolumeIdentity(s.UID, m.Name, m.Volume, m.VolumeID, m.RuntimeRecovery.Initialized || m.Stage == "ready")
 	ca, err := secret(ctx, rc, "tls/ca.crt")
 	if err != nil {
 		return v, err
@@ -286,6 +295,15 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		r = runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)
 	}
 	spec := rmqspec.MemberSpec{NodeName: "rabbit@" + name, Peers: peers, Cookie: string(cookie), Version: m.DesiredVersion, Plugins: slices.Concat(alwaysEnabledPlugins, options.Plugins), PrometheusPort: 15692, ConfigOverrides: m.EngineConfig, TotalMemoryBytes: int64(r.MinRAM * 1e9), MemoryHighWatermarkBytes: int64(r.MinRAM * 1e9 * 0.6), DiskFreeLimitBytes: int64(max(0.5, r.MinRAM) * 1e9), DefaultQueueType: "quorum", InterNodeTLS: s.InterNodeTLS}
+	if m.InitialFormation && s.CreationSeed != "" && !m.Resume && !m.FormationVerified && m.Stage != "ready" {
+		if s.CreationGateChecked && s.find(s.CreationSeed).FormationGate && m.FormationGate {
+			spec.FormationSeed = "rabbit@" + s.CreationSeed
+		} else if m.Name != s.CreationSeed && !m.FormationLegacyRelease {
+			// Existing supervisors honor DesiredProcesses even if their engine
+			// predates fixed-seed discovery. Do not boot before negotiation.
+			v.DesiredProcesses = []string{}
+		}
+	}
 	spec.IPv4Distribution = rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4
 	switch m.TLSMode {
 	case "disabled":
@@ -356,7 +374,7 @@ func memberIPs(ctx context.Context, rc *engine.Context) ([]net.IP, error) {
 	return ips, nil
 }
 func hasPendingCertificate(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		_, err := secret(ctx, rc, "tls/"+kind+"/"+m.Name+".pending.pem")
 		if err == nil {
 			return true, nil
@@ -368,7 +386,7 @@ func hasPendingCertificate(ctx context.Context, rc *engine.Context, m *member) (
 	return false, nil
 }
 func publishRenewedCertificates(ctx context.Context, rc *engine.Context, m *member) error {
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		base := "tls/" + kind + "/" + m.Name
 		b, err := secret(ctx, rc, base+".pending.pem")
 		if missing(err) {
@@ -408,7 +426,11 @@ func rotateCertificate(ctx context.Context, rc *engine.Context, m *member) error
 		if e != nil {
 			return e
 		}
-		if e = putSecret(ctx, rc, "tls/"+kind+"/"+m.Name+".pending.pem", append(cert, key...)); e != nil {
+		suffix := ".pending.pem"
+		if kind == "agents" {
+			suffix = ".pem"
+		}
+		if e = putSecret(ctx, rc, "tls/"+kind+"/"+m.Name+suffix, append(cert, key...)); e != nil {
 			return e
 		}
 	}

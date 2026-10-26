@@ -66,6 +66,8 @@ type Cluster struct {
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
 type ClusterSpec struct {
+	// RetryEpoch is advanced only by the operator deployment retry action.
+	RetryEpoch    int64            `json:"retryEpoch,omitempty"`
 	Provider      string           `json:"provider"`
 	Version       string           `json:"version"`
 	Topology      Topology         `json:"topology"`
@@ -169,16 +171,69 @@ type DeleteOptions struct {
 
 // ClusterStatus captures the latest observed cluster health and connectivity.
 type ClusterStatus struct {
-	Phase              Phase          `json:"phase"`
-	Message            string         `json:"message,omitempty"`
-	Conditions         []Condition    `json:"conditions"`
-	ObservedGeneration int64          `json:"observedGeneration"`
-	Version            string         `json:"version,omitempty"`
-	FCV                string         `json:"fcv,omitempty"`
-	Members            []MemberStatus `json:"members"`
-	Connection         Connection     `json:"connection"`
-	Backup             BackupStatus   `json:"backup"`
-	Placement          Placement      `json:"placement"`
+	// DeploymentFailures fences terminal platform deployments independently of provider state.
+	DeploymentFailures map[string]DeploymentFailure `json:"deploymentFailures,omitempty"`
+	Phase              Phase                        `json:"phase"`
+	Message            string                       `json:"message,omitempty"`
+	Conditions         []Condition                  `json:"conditions"`
+	ObservedGeneration int64                        `json:"observedGeneration"`
+	// ObservedAt is the start of the successful health sweep, not a condition transition.
+	ObservedAt time.Time `json:"observedAt,omitempty"`
+	// ObservationEpoch is private persisted provenance assigned only by the
+	// observation wrapper, never providers. Public API models do not expose it.
+	ObservationEpoch string         `json:"observationEpoch,omitempty"`
+	Version          string         `json:"version,omitempty"`
+	FCV              string         `json:"fcv,omitempty"`
+	Members          []MemberStatus `json:"members"`
+	Connection       Connection     `json:"connection"`
+	Backup           BackupStatus   `json:"backup"`
+	Placement        Placement      `json:"placement"`
+	// CleanupStarted fences retention changes once provider cleanup may run.
+	CleanupStarted bool `json:"cleanupStarted,omitempty"`
+	// InitialDataSource retains lifecycle evidence independently of health
+	// conditions (which suspension may rewrite). It is internal control-plane
+	// state; API projections expose its diagnostic conditions/events instead.
+	InitialDataSource *InitialDataSourceLifecycle `json:"initialDataSource,omitempty"`
+}
+
+// InitialDataSourceLifecycle distinguishes a failed convergence tracker from a
+// genuine restore abort. Abort evidence survives fresh health and suspension;
+// native completion can satisfy only a non-aborted initial data requirement.
+type InitialDataSourceLifecycle struct {
+	NativeOperation   string     `json:"nativeOperation,omitempty"`
+	ClaimOperation    string     `json:"claimOperation,omitempty"`
+	ClaimedAt         *time.Time `json:"claimedAt,omitempty"`
+	TrackingFailure   string     `json:"trackingFailure,omitempty"`
+	AbortMessage      string     `json:"abortMessage,omitempty"`
+	CompletionAudited bool       `json:"completionAudited,omitempty"`
+}
+
+// InitialDataSourceClaim is the first native bootstrap/import ownership receipt.
+// Its time and cluster incarnation remain stable across retries and CP restarts.
+type InitialDataSourceClaim struct {
+	Operation          string    `json:"operation"`
+	ClaimedAt          time.Time `json:"claimedAt"`
+	ClusterIncarnation string    `json:"clusterIncarnation,omitempty"`
+}
+
+// Initial restore tracker steps classify why an observation operation failed;
+// they do not certify native completion or revoke existing native ownership.
+const (
+	InitialRestoreTrackerDeadline    = "initial-restore-tracker-deadline"
+	InitialRestoreTrackerRetryBudget = "initial-restore-tracker-retry-budget"
+	InitialRestoreCreateFailure      = "initial-restore-create-failed"
+)
+
+// DeploymentFailure retains a terminal deployment until its desired runtime or
+// operator retry epoch changes. DesiredHash never contains runtime secrets.
+type DeploymentFailure struct {
+	RetryEpoch       int64  `json:"retryEpoch"`
+	DesiredHash      string `json:"desiredHash"`
+	ArtifactIdentity string `json:"artifactIdentity,omitempty"`
+	Version          string `json:"version"`
+	Attempts         int    `json:"attempts"`
+	LastError        string `json:"lastError,omitempty"`
+	Message          string `json:"message"`
 }
 
 // Condition describes one observed aspect of resource health.
@@ -186,6 +241,7 @@ type Condition struct {
 	Type               string    `json:"type"`
 	Status             string    `json:"status"`
 	Reason             string    `json:"reason,omitempty"`
+	Key                string    `json:"key,omitempty"`
 	Message            string    `json:"message,omitempty"`
 	LastTransitionTime time.Time `json:"lastTransitionTime"`
 }
@@ -477,14 +533,18 @@ func (o Operation) Terminal() bool {
 
 // Operation tracks durable desired-state convergence or a checkpointed action.
 type Operation struct {
-	Namespace               string          `json:"namespace,omitempty"`
-	ID                      string          `json:"id"`
-	Cluster                 string          `json:"cluster"`
-	Kind                    string          `json:"kind"`
-	Target                  OperationTarget `json:"target"`
-	TargetGeneration        int64           `json:"targetGeneration,omitempty"`
-	Failures                int             `json:"failures,omitempty"`
-	LastError               string          `json:"lastError,omitempty"`
+	Namespace          string          `json:"namespace,omitempty"`
+	ID                 string          `json:"id"`
+	Cluster            string          `json:"cluster"`
+	ClusterIncarnation string          `json:"clusterIncarnation,omitempty"`
+	Kind               string          `json:"kind"`
+	Target             OperationTarget `json:"target"`
+	TargetGeneration   int64           `json:"targetGeneration,omitempty"`
+	Failures           int             `json:"failures,omitempty"`
+	LastError          string          `json:"lastError,omitempty"`
+	// BlockingMessage is the latest observed blocker, independent of retry accounting.
+	BlockingMessage         string          `json:"blockingMessage,omitempty"`
+	BlockingObservedAt      *time.Time      `json:"blockingObservedAt,omitempty"`
 	CancelRequested         bool            `json:"cancelRequested,omitempty"`
 	Phase                   Phase           `json:"phase"`
 	Step                    string          `json:"step,omitempty"`
@@ -497,6 +557,8 @@ type Operation struct {
 	StartedAt               *time.Time      `json:"startedAt,omitempty"`
 	CompletedAt             *time.Time      `json:"completedAt,omitempty"`
 	FailureCleanupStartedAt *time.Time      `json:"failureCleanupStartedAt,omitempty"`
+	Elapsed                 time.Duration   `json:"elapsed,omitempty"`
+	FailureCleanupElapsed   time.Duration   `json:"failureCleanupElapsed,omitempty"`
 	Actor                   string          `json:"actor"`
 }
 

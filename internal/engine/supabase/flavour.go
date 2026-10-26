@@ -5,6 +5,7 @@ package supabase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -113,7 +114,15 @@ func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) erro
 			continue
 		}
 		var status pgspec.StatusResponse
-		err = client.Engine(ctx, "postgres", "status", struct{}{}, &status)
+		// Writer discovery is an observation; SQL bootstrap below is a
+		// mutation and must keep the original administration context.
+		statusCtx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+		err = client.Engine(statusCtx, "postgres", "status", struct{}{}, &status)
+		cancel()
+		if errors.Is(err, context.DeadlineExceeded) {
+			client.Close()
+			return fmt.Errorf("supabase bootstrap writer-discovery status read exceeded %s budget: inspect member %s responsiveness/connectivity: %w", engine.ObservationTimeout, name, err)
+		}
 		if err == nil && status.Running && (status.Role == "primary" || status.Role == "standalone") {
 			err = client.Engine(ctx, "postgres", pgspec.ActionSQLBootstrap, request, nil)
 			client.Close()

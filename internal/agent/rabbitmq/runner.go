@@ -91,6 +91,9 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 	if !slices.Contains(s.Peers, s.NodeName) {
 		return s, errors.New("local node missing from peers")
 	}
+	if s.FormationSeed != "" && (!nodePattern.MatchString(s.FormationSeed) || !slices.Contains(s.Peers, s.FormationSeed)) {
+		return s, errors.New("invalid formation seed")
+	}
 	if len(s.Cookie) < 16 || len(s.Cookie) > 255 || strings.ContainsAny(s.Cookie, "\r\n\x00") {
 		return s, errors.New("invalid cookie")
 	}
@@ -164,6 +167,10 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 	path := func(p string) string { return filepath.Join(root, p) }
 	var b strings.Builder
 	line := func(k string, v any) { fmt.Fprintf(&b, "%s = %v\n", k, v) }
+	// Native cluster_status (including /api/nodes?disable_stats=true) also
+	// reads the display name. An unset name resolves the OS hostname/FQDN on
+	// every read, turning unrelated DNS misses into readiness timeouts.
+	line("cluster_name", c.Cluster)
 	if s.AMQPPort == 0 {
 		line("listeners.tcp", "none")
 	} else {
@@ -207,12 +214,20 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 			line("stream.listeners.ssl.default", s.StreamTLSPort)
 		}
 	}
-	line("cluster_formation.peer_discovery_backend", "classic_config")
-	for i, p := range s.Peers {
-		line(fmt.Sprintf("cluster_formation.classic_config.nodes.%d", i+1), p)
+	if s.FormationSeed == "" {
+		line("cluster_formation.peer_discovery_backend", "classic_config")
+		for i, p := range s.Peers {
+			line(fmt.Sprintf("cluster_formation.classic_config.nodes.%d", i+1), p)
+		}
+		line("cluster_formation.discovery_retry_limit", 30)
+		line("cluster_formation.discovery_retry_interval", 1000)
+	} else {
+		// With an explicit seed this bundled backend needs no Kubernetes API
+		// or pod naming. It selects only that seed and retries forever, unlike
+		// classic discovery's finite-retry standalone fallback.
+		line("cluster_formation.peer_discovery_backend", "k8s")
+		line("cluster_formation.k8s.seed_node", s.FormationSeed)
 	}
-	line("cluster_formation.discovery_retry_limit", 30)
-	line("cluster_formation.discovery_retry_interval", 1000)
 	line("log.console", true)
 	line("log.file", false)
 	line("vm_memory_high_watermark.absolute", s.MemoryHighWatermarkBytes)
@@ -227,7 +242,11 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 		b.WriteString(s.ConfigOverrides)
 		b.WriteByte('\n')
 	}
-	files := []renderedFile{{"rabbitmq.conf", b.String(), 0600}, {"enabled_plugins", "[" + strings.Join(s.Plugins, ",") + "].\n", 0600}, {"home/.erlang.cookie", s.Cookie, 0400}}
+	plugins := s.Plugins
+	if s.FormationSeed != "" {
+		plugins = append(slices.Clone(plugins), "rabbitmq_peer_discovery_k8s")
+	}
+	files := []renderedFile{{"rabbitmq.conf", b.String(), 0600}, {"enabled_plugins", "[" + strings.Join(plugins, ",") + "].\n", 0600}, {"home/.erlang.cookie", s.Cookie, 0400}}
 	advanced := "[].\n"
 	dist := "-proto_dist inet6_tcp"
 	if s.IPv4Distribution {
@@ -266,6 +285,9 @@ func restartFingerprint(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfi
 	// Discovery membership can change while running. Initial queue replicas are
 	// creation-time defaults, so neither planned membership nor its size restarts.
 	s.Peers = []string{s.NodeName}
+	// Formation controls only a blank node's first boot. Dropping the gate
+	// after verified membership must not restart a newly joined broker.
+	s.FormationSeed = ""
 	files, env := render(dir, s, c)
 	h := sha256.New()
 	fmt.Fprint(h, s.Version, binary(process), env)

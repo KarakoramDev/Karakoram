@@ -41,6 +41,9 @@ func TestClusterDeletionReleasesRestoreNamesAndPreservesBackups(t *testing.T) {
 	if _, err := s.GetRestore(ctx, domain.ClusterRef{Namespace: other.Namespace, Name: c.Name}, r.Name); err != nil {
 		t.Fatal("another namespace was changed", err)
 	}
+	if err := s.CreateBackup(ctx, &domain.Backup{Cluster: "source", Name: "newbackup", Phase: domain.PhaseSucceeded}); err != nil {
+		t.Fatal(err)
+	}
 	fresh := &domain.Cluster{Name: c.Name, Spec: domain.ClusterSpec{DataSource: &domain.DataSource{Cluster: "source", Backup: "newbackup"}}}
 	if err := s.CreateCluster(ctx, fresh); err != nil {
 		t.Fatal(err)

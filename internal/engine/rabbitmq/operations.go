@@ -23,7 +23,7 @@ type operationState struct {
 
 func opResult(cp operationState, done bool, step string) (engine.OpResult, error) {
 	b, err := json.Marshal(cp)
-	return engine.OpResult{Done: done, Step: step, Checkpoint: b, RequeueAfter: 5 * time.Second}, err
+	return engine.OpResult{Done: done, Step: step, Checkpoint: b, RequeueAfter: time.Second}, err
 }
 func decodeJSON(b []byte, v any) error {
 	if len(b) == 0 {
@@ -32,6 +32,16 @@ func decodeJSON(b []byte, v any) error {
 	return json.Unmarshal(b, v)
 }
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	recoveryState, recoveryErr := loadState(rc.Cluster)
+	if recoveryErr != nil {
+		return result, recoveryErr
+	}
+	if busy, e := drainRuntimeRecovery(ctx, rc, recoveryState); busy || e != nil {
+		if saveErr := recoveryState.save(rc.Cluster); e == nil {
+			e = saveErr
+		}
+		return engine.OpResult{RequeueAfter: 5 * time.Second, Checkpoint: op.Checkpoint, Message: "Waiting for accepted runtime recovery"}, e
+	}
 	switch op.Kind {
 	case domain.OperationBackup:
 		return p.backupOp(ctx, rc, op)
@@ -72,6 +82,10 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			_, e = p.retryPending(ctx, rc, s)
 		}
 		r, _ := opResult(cp, false, "waiting-platform")
+		return r, e
+	}
+	if busy, e := p.observeResumeDeployments(ctx, rc, s); busy || e != nil {
+		r, _ := opResult(cp, false, "waiting-resume-platform")
 		return r, e
 	}
 	if cp.Waiting == "" {
@@ -193,6 +207,14 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			}
 			if e = putSecret(ctx, rc, "users/"+user, pw); e != nil {
 				return result, e
+			}
+			if user == "admin" {
+				s.AdminCredentialVersion = s.ConfigVersion
+				// Publish the committed credential epoch before reloading peers.
+				// Their previous snapshots must not be mistaken for drift.
+				for _, peer := range s.runningMembers() {
+					peer.ConfigVersion = s.ConfigVersion
+				}
 			}
 			m.ChangeAction = ""
 			m.TargetConfig = ""

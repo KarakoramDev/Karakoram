@@ -1,6 +1,6 @@
 {
   "artifact": "supabase-storage-1.81.0-ubuntu24.04-amd64.tar.gz",
-  "sha256": "9e38a691f8e275bd9ab4f1482f0829b67d93b22380410b41277611744a3fccc8",
+  "sha256": "9dee07761d0bf8efaa1b23827787241824581f2b2fde831f6ad7b4c08f718986",
   "members": [
     {"name": "./app/node_modules/.bin/acorn", "linkname": "../acorn/bin/acorn", "type": "2"},
     {"name": "./app/node_modules/@fastify/send/test/fixtures/snow ☃", "linkname": "", "type": "5"},

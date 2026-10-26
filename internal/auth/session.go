@@ -183,9 +183,7 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 		if err != nil || a.Disabled || a.MustChangePassword || t.CreatedAt.Before(a.PasswordChangedAt) || t.CreatedAt.Before(a.CreatedAt) {
 			return nil, ErrUnauthenticated
 		}
-		if err = s.o.Store.TouchApiToken(ctx, t.ID, s.now()); err != nil {
-			return nil, err
-		}
+		s.touchTokenUsage(t.ID, s.now())
 		return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, nil), Via: "token", TokenID: t.ID, TokenName: t.Name, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword}, nil
 	}
 	c, err := r.Cookie(AccessCookie)
@@ -211,6 +209,22 @@ func (s *Service) Authenticate(r *http.Request) (*Principal, error) {
 		}
 	}
 	return &Principal{Account: a.Name, AccountCreatedAt: a.CreatedAt, Subjects: subjects(a, se.Subjects), Via: se.Via, OIDCIssuer: a.OIDCIssuer, MustChangePassword: a.MustChangePassword, CSRFToken: se.CSRF}, nil
+}
+
+// Usage is advisory metadata, never part of credential validation. Admit at most
+// one bounded write per service; a busy writer cannot queue request goroutines
+// or retain the identity lifecycle mutex.
+func (s *Service) touchTokenUsage(id string, at time.Time) {
+	select {
+	case s.tokenUsage <- struct{}{}:
+		go func() {
+			defer func() { <-s.tokenUsage }()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			_ = s.o.Store.TouchApiToken(ctx, id, at)
+		}()
+	default:
+	}
 }
 func (s *Service) refreshSession(ctx context.Context, r *http.Request) (*domain.Session, string, error) {
 	c, err := r.Cookie(RefreshCookie)

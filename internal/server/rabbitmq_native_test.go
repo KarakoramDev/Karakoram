@@ -306,6 +306,14 @@ func TestRabbitMQRetainedDefinitionsCloneRemainsPatchableAfterSourceDeletion(t *
 	if created.Code != http.StatusCreated {
 		t.Fatal("retained definitions backup rejected after source cluster deletion", created.Code, created.Body.String())
 	}
+	completed, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "copy"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed.Internal = []byte(`{"cloneImported":true}`)
+	if err := s.Store.UpdateClusterState(t.Context(), completed); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Store.DeleteBackup(t.Context(), source.Ref(), backup.Name); err != nil {
 		t.Fatal(err)
 	}

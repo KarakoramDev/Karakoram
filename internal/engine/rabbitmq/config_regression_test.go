@@ -215,7 +215,7 @@ func TestAutomaticLeafRenewalPublishesOnlyAfterSafeStop(t *testing.T) {
 		t.Fatal(err)
 	}
 	pending := map[string]string{}
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		bundle, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pending.pem")
 		if err != nil {
 			t.Fatalf("%s renewal not staged: %v", kind, err)
@@ -226,8 +226,11 @@ func TestAutomaticLeafRenewalPublishesOnlyAfterSafeStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.ConfigVersion != before.ConfigVersion || after.TLS.CertPEM != before.TLS.CertPEM || after.AgentTLS != before.AgentTLS {
-		t.Fatal("pending renewal escaped the per-member publication gate")
+	if after.ConfigVersion != before.ConfigVersion || after.TLS.CertPEM != before.TLS.CertPEM {
+		t.Fatal("pending database renewal escaped the per-member publication gate")
+	}
+	if after.AgentTLS == before.AgentTLS {
+		t.Fatal("agent transport renewal remained behind the broker disruption gate")
 	}
 	a.log.clear()
 	syncUntil(t, p, rc, func(s *internalState) bool {
@@ -237,13 +240,13 @@ func TestAutomaticLeafRenewalPublishesOnlyAfterSafeStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.broker("demom0").running || stopped.ConfigVersion != before.ConfigVersion || stopped.TLS.CertPEM != before.TLS.CertPEM || stopped.AgentTLS != before.AgentTLS {
+	if a.broker("demom0").running || stopped.ConfigVersion != before.ConfigVersion || stopped.TLS.CertPEM != before.TLS.CertPEM || stopped.AgentTLS != after.AgentTLS {
 		t.Fatal("renewal published before the old broker was safely stopped")
 	}
 	if _, err := p.Sync(ctx, rc); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		bundle, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/"+kind+"/demom0.pem")
 		if err != nil || string(bundle) != pending[kind] {
 			t.Fatalf("%s staged renewal was not atomically promoted: %v", kind, err)

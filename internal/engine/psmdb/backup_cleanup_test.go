@@ -5,9 +5,12 @@ package psmdb
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
@@ -17,24 +20,17 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
-type unavailableBackupAgents struct{ calls int }
+type unavailableBackupAgents struct {
+	calls   int
+	failure string
+}
 
 func (d *unavailableBackupAgents) Dial(context.Context, domain.ClusterRef, string) (*agentapi.Client, error) {
 	d.calls++
-	return nil, errors.New("member is unavailable")
-}
-
-type interruptedBackupInventory struct {
-	engine.ClusterStore
-	fail bool
-}
-
-func (s *interruptedBackupInventory) DeleteBackup(ctx context.Context, ref domain.ClusterRef, name string) error {
-	if s.fail {
-		s.fail = false
-		return errors.New("inventory temporarily unavailable")
+	if d.failure != "" {
+		return nil, errors.New(d.failure)
 	}
-	return s.ClusterStore.DeleteBackup(ctx, ref, name)
+	return nil, errors.New("member is unavailable")
 }
 
 func backupCleanupSetup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *unavailableBackupAgents) {
@@ -65,6 +61,7 @@ func backupCleanupSetup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *
 	}
 	agents := &unavailableBackupAgents{}
 	rc.Agents = agents
+	rc.Events = &orphanEvents{}
 	return p, rc, f, agents
 }
 
@@ -146,102 +143,6 @@ func TestFullDeletionOfSuspendedClusterUsesStorageWithoutPBM(t *testing.T) {
 	}
 }
 
-func TestOfflineBackupCleanupPreservesInventoryAndResourcesUntilSuccess(t *testing.T) {
-	for _, failure := range []string{"storage", "inventory"} {
-		t.Run(failure, func(t *testing.T) {
-			p, rc, f, agents := backupCleanupSetup(t)
-			s := retryState(t, rc)
-			b := &domain.Backup{Name: "backup", Cluster: rc.Cluster.Name, Storage: "archive", PBMName: "snapshot", PBMPrefix: "archive/" + s.PBMPrefix, RecoveryIdentity: "backup-recovery"}
-			if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
-				t.Fatal(err)
-			}
-			if err := rc.Secrets.SetClusterSecret(t.Context(), domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin", []byte("recovery")); err != nil {
-				t.Fatal(err)
-			}
-			suspendForBackupCleanup(t, p, rc)
-			fail := failure == "storage"
-			calls := 0
-			p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error {
-				calls++
-				if fail {
-					return errors.New("storage permission denied")
-				}
-				return nil
-			}
-			if failure == "inventory" {
-				rc.Store = &interruptedBackupInventory{ClusterStore: rc.Store, fail: true}
-			}
-			if done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{}); done || err == nil {
-				t.Fatal("cleanup failure was ignored", done, err)
-			}
-			if failure == "storage" && (!strings.Contains(rc.Cluster.Status.Message, "repair storage access") || !strings.Contains(rc.Cluster.Status.Message, "--keep-backups")) {
-				t.Fatal("failure is not actionable", rc.Cluster.Status.Message)
-			}
-			if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); err != nil {
-				t.Fatal("failure lost retry inventory", err)
-			}
-			if f.services[s.Members[0].Volume] == nil || len(retryState(t, rc).CleanedStorages) != 0 {
-				t.Fatal("failure advanced persistent resource deletion")
-			}
-			if failure == "storage" {
-				if _, err := rc.Secrets.GetClusterSecret(t.Context(), domain.ClusterRef{Name: b.RecoveryIdentity}, "users/userAdmin"); err != nil {
-					t.Fatal("storage failure discarded recovery credential", err)
-				}
-			}
-			fail = false
-			// Deserialize the checkpoint, as after a controller restart.
-			clone := *rc.Cluster
-			clone.Internal = append([]byte(nil), rc.Cluster.Internal...)
-			rc.Cluster = &clone
-			for range 30 {
-				done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if done {
-					if calls != 2 || len(f.services) != 0 || agents.calls != 0 {
-						t.Fatal("retry did not finish idempotently", calls, f.services, agents.calls)
-					}
-					if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); !missing(err) {
-						t.Fatal("retry left backup inventory", err)
-					}
-					return
-				}
-			}
-			t.Fatal("retry never completed")
-		})
-	}
-}
-
-func TestUnreachableRuntimeDoesNotAuthorizeDirectBackupDeletion(t *testing.T) {
-	p, rc, f, agents := backupCleanupSetup(t)
-	direct := false
-	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error { direct = true; return nil }
-	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-	if done || err == nil || !strings.Contains(err.Error(), "restore member availability") || !strings.Contains(err.Error(), "--keep-backups") {
-		t.Fatal("PBM failure must be actionable", done, err)
-	}
-	if direct || agents.calls == 0 || len(f.services) != 2 {
-		t.Fatal("unreachable runtime caused unsafe direct deletion", direct, agents.calls, f.services)
-	}
-}
-
-func TestOfflineBackupDeletionRequiresRecordedClusterNamespace(t *testing.T) {
-	p, rc, _, _ := backupCleanupSetup(t)
-	suspendForBackupCleanup(t, p, rc)
-	s := retryState(t, rc)
-	s.PBMPrefix = "karakoram/another-incarnation"
-	if err := save(rc.Cluster, s); err != nil {
-		t.Fatal(err)
-	}
-	direct := false
-	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error { direct = true; return nil }
-	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-	if done || err == nil || direct || !strings.Contains(err.Error(), "resume the cluster") {
-		t.Fatal("unsafe namespace accepted", done, err, direct)
-	}
-}
-
 func TestOfflineCleanupRemovesInventoryAfterOlderStorageCheckpoint(t *testing.T) {
 	p, rc, _, agents := backupCleanupSetup(t)
 	suspendForBackupCleanup(t, p, rc)
@@ -271,6 +172,102 @@ func TestOfflineCleanupRemovesInventoryAfterOlderStorageCheckpoint(t *testing.T)
 		}
 	}
 	t.Fatal("cleanup did not finish")
+}
+
+func TestDeleteWithoutNativeCredentialsFencesRuntimesFirst(t *testing.T) {
+	for _, failure := range []string{"AuthenticationFailed", "all members unreachable"} {
+		t.Run(failure, func(t *testing.T) {
+			p, rc, backend, agents := backupCleanupSetup(t)
+			s := retryState(t, rc)
+			agents.failure = failure
+			b := &domain.Backup{Name: "owned", Cluster: rc.Cluster.Name, Storage: "archive", PBMName: "snapshot", PBMPrefix: "archive/" + s.PBMPrefix}
+			if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			p.deleteClusterObjects = func(_ context.Context, storage domain.BackupStorage, cluster, uid string) error {
+				calls++
+				if backend.services[s.Members[0].Name] != nil {
+					t.Fatal("runtime can still write backups")
+				}
+				prefix, err := backupstorage.ClusterDirectory(storage, cluster, uid)
+				if err != nil || prefix != b.PBMPrefix+"/" {
+					t.Fatal("wrong owned prefix", prefix, err)
+				}
+				return nil
+			}
+			finishBackupCleanup(t, p, rc, domain.DeleteOptions{})
+			if calls != 1 || agents.calls != 0 || len(backend.services) != 0 {
+				t.Fatal("deletion depended on native authentication", calls, agents.calls, backend.services)
+			}
+			if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); !missing(err) {
+				t.Fatal("success retained backup inventory", err)
+			}
+		})
+	}
+}
+
+func finishBackupCleanup(t *testing.T, p *Provider, rc *engine.Context, opts domain.DeleteOptions) {
+	t.Helper()
+	for range 40 {
+		done, err := p.Cleanup(t.Context(), rc, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Rehydrate every checkpoint, including retained outcomes and deadlines.
+		clone := *rc.Cluster
+		clone.Internal = slices.Clone(rc.Cluster.Internal)
+		rc.Cluster = &clone
+		if done {
+			return
+		}
+	}
+	t.Fatal("cleanup did not finish")
+}
+
+func TestArtifactFailureRetainsInventoryButFinishesDeletion(t *testing.T) {
+	for _, failure := range []string{"permission", "prefix", "identity", "deadline"} {
+		t.Run(failure, func(t *testing.T) {
+			p, rc, backend, agents := backupCleanupSetup(t)
+			s := retryState(t, rc)
+			b := &domain.Backup{Name: "owned", Cluster: rc.Cluster.Name, Storage: "archive", PBMName: "snapshot", PBMPrefix: "archive/" + s.PBMPrefix}
+			if failure == "prefix" {
+				b.PBMPrefix = "old/" + s.PBMPrefix
+			}
+			if failure == "identity" {
+				s.UID = ""
+			}
+			if failure == "deadline" {
+				start := now(rc).Add(-3 * time.Minute)
+				s.BackupCleanupStarted = &start
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error {
+				calls++
+				return errors.New("storage permission denied")
+			}
+			finishBackupCleanup(t, p, rc, domain.DeleteOptions{})
+			if failure != "permission" && calls != 0 {
+				t.Fatal("unsafe or expired deletion attempted")
+			}
+			if len(backend.services) != 0 || agents.calls != 0 {
+				t.Fatal("artifact failure stranded runtime", backend.services, agents.calls)
+			}
+			if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); err != nil {
+				t.Fatal("lost retained artifact inventory", err)
+			}
+			events := rc.Events.(*orphanEvents).items
+			if len(events) != 1 || events[0].Reason != "BackupArtifactsRetained" || !strings.Contains(events[0].Message, b.PBMPrefix) {
+				t.Fatal("missing truthful retained outcome", events)
+			}
+		})
+	}
 }
 
 func TestDeletingReplacementPreservesRetainedSourceBackup(t *testing.T) {
@@ -352,50 +349,28 @@ func TestDeletingReplacementPreservesRetainedSourceBackup(t *testing.T) {
 	t.Fatal("replacement deletion did not finish")
 }
 
-func TestChangedStoragePrefixReportsProvenanceMismatch(t *testing.T) {
-	p, rc, _, _ := backupCleanupSetup(t)
-	suspendForBackupCleanup(t, p, rc)
-	s := retryState(t, rc)
-	b := &domain.Backup{Name: "backup", Cluster: rc.Cluster.Name, Storage: "archive", PBMName: "snapshot", PBMPrefix: "original-prefix/" + s.PBMPrefix}
-	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+func TestMongoDeletionKeepsRestoreDependencyConflict(t *testing.T) {
+	_, rc, backend, _ := backupCleanupSetup(t)
+	st := rc.Store.(*store.Store)
+	b := &domain.Backup{Name: "base", Cluster: rc.Cluster.Name, Storage: "archive", Phase: domain.PhaseSucceeded, PBMName: "snapshot"}
+	if err := st.CreateBackup(t.Context(), b); err != nil {
 		t.Fatal(err)
 	}
-	direct := false
-	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error { direct = true; return nil }
-	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-	if done || err == nil || direct || !strings.Contains(err.Error(), "restore the original storage prefix") || strings.Contains(err.Error(), "repair storage access") {
-		t.Fatal("provenance failure was misreported", done, err, direct)
+	target := &domain.Cluster{Name: "deptarget"}
+	if err := st.CreateCluster(t.Context(), target); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := rc.Store.GetBackup(t.Context(), rc.Cluster.Ref(), b.Name); err != nil {
-		t.Fatal("mismatched backup inventory was deleted", err)
+	restore := &domain.Restore{Name: "restore", Cluster: target.Name, Source: domain.RestoreSource{SourceCluster: rc.Cluster.Name, Backup: b.Name}}
+	op := &domain.Operation{ID: "dependent-operation", Cluster: target.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)}
+	if err := st.EnqueueRestore(t.Context(), restore, op); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestProductiveStorageCleanupPassRequeuesWithoutFailure(t *testing.T) {
-	p, rc, _, _ := backupCleanupSetup(t)
-	suspendForBackupCleanup(t, p, rc)
-	p.deleteClusterObjects = func(context.Context, domain.BackupStorage, string, string) error {
-		return backupstorage.ErrDeletionInProgress
+	err := st.MarkClusterDeleting(t.Context(), rc.Cluster.Ref(), domain.DeleteOptions{})
+	var conflict *domain.ResourceError
+	if !errors.Is(err, store.ErrConflict) || !errors.As(err, &conflict) || conflict.Reason != domain.ReasonInvalidState || !strings.Contains(err.Error(), op.ID) {
+		t.Fatal("lost API409 dependency conflict", err)
 	}
-	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-	if done || err != nil || len(retryState(t, rc).CleanedStorages) != 0 || strings.Contains(rc.Cluster.Status.Message, "repair") {
-		t.Fatal("normal storage cleanup progress became a failure", done, err, rc.Cluster.Status.Message)
-	}
-}
-
-type unsupportedCleanupStorage struct{ engine.ClusterStore }
-
-func (s unsupportedCleanupStorage) GetBackupStorage(context.Context, string, string) (*domain.BackupStorage, error) {
-	return &domain.BackupStorage{Name: "archive", Type: "unsupported", Prefix: "archive"}, nil
-}
-
-func TestZeroValueProviderDefaultsStorageDeletion(t *testing.T) {
-	p, rc, _, _ := backupCleanupSetup(t)
-	suspendForBackupCleanup(t, p, rc)
-	rc.Store = unsupportedCleanupStorage{rc.Store}
-	var zero Provider
-	done, err := zero.Cleanup(t.Context(), rc, domain.DeleteOptions{})
-	if done || err == nil || !strings.Contains(err.Error(), "unsupported backup storage type") {
-		t.Fatal("zero-value provider did not invoke default storage cleanup", done, err)
+	if len(backend.services) != 2 {
+		t.Fatal("refused deletion altered runtime")
 	}
 }

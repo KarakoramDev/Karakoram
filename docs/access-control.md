@@ -156,4 +156,11 @@ karactl tokens delete '<token-id>' --yes
 
 Securely capture creation's one-time `secret`; later reads expose metadata only. Inject `KARAKORAM_TOKEN` from a secret manager, not command arguments/history. CLI login saves its own token; logout revokes it unless `--local` only removes local credentials. Bearers bypass CSRF, not RBAC.
 
+`lastUsedAt` is best-effort, asynchronous usage metadata, not an authentication
+or audit guarantee. At most one usage update runs at a time with a one-second
+write budget; concurrent updates may be skipped when the writer is busy.
+Credential validity and owner permissions are still checked from persisted
+state on each request. Public version discovery reads its settings snapshot
+without waiting for the identity mutation mutex.
+
 Browsers use rotating cookie sessions, not automation tokens; [cookie/CSRF guarantees](security.md) are separate from token permissions. The UI refreshes expired access automatically; network/5xx errors preserve the session and offer retry. Repeated authentication rejection after refresh signs out instead of looping. See [CLI](cli.md) and [API](api.md).

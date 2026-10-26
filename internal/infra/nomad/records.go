@@ -21,6 +21,7 @@ const recordPrefix = "karakoram/services/"
 type storedDeployment struct {
 	Runtime                  infra.RuntimeSpec
 	Source, Checksum, Binary string
+	EphemeralDiskMB          int `json:",omitempty"`
 }
 type record struct {
 	ID, Hostname, Volume, SpreadGroup, Node, VolumeID, VolumeName string
@@ -33,6 +34,10 @@ type record struct {
 	Desired                                                       string
 	Deployment                                                    *storedDeployment
 	Pending                                                       *operation
+	// Import identity is reserved before any volume/environment side effect.
+	// The hash covers the original batch, not readable secret values.
+	ImportHash string `json:",omitempty"`
+	Importing  bool   `json:",omitempty"`
 	// Direct allocation restarts share exclusion without replacing Pending,
 	// including deployed legacy records that have no pending-operation handle.
 	RestartLease *operationLease `json:",omitempty"`
@@ -135,22 +140,33 @@ func (b *Backend) records(ctx context.Context, prefix string) ([]*record, bool, 
 	if _, err := b.c.get(ctx, "/v1/vars", query("prefix", recordPrefix+prefix), &vars); err != nil {
 		return nil, false, err
 	}
-	out := make([]*record, 0, len(vars))
-	incomplete := false
-	for _, v := range vars {
+	results := make([]struct {
+		record     *record
+		incomplete bool
+	}, len(vars))
+	if err := infra.ObserveParallel(ctx, len(vars), func(i int) error {
+		v := vars[i]
 		hostname, ok := strings.CutPrefix(v.Path, recordPrefix)
 		if !ok || !safeHostname(hostname) {
-			continue
+			return nil
 		}
 		loaded, err := b.readVariable(ctx, v.Path)
 		if err != nil {
-			return nil, false, err
+			return err
 		}
-		if r := decodeRecord(loaded, hostname); r != nil {
-			out = append(out, r)
-		} else if loaded.ModifyIndex != 0 {
-			incomplete = true
+		results[i].record = decodeRecord(loaded, hostname)
+		results[i].incomplete = results[i].record == nil && loaded.ModifyIndex != 0
+		return nil
+	}); err != nil {
+		return nil, false, err
+	}
+	out := make([]*record, 0, len(vars))
+	incomplete := false
+	for _, result := range results {
+		if result.record != nil {
+			out = append(out, result.record)
 		}
+		incomplete = incomplete || result.incomplete
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Hostname < out[j].Hostname })
 	return out, incomplete, nil

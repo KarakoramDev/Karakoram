@@ -384,13 +384,15 @@ func TestEngineRunTLSReloadAndCachedStartup(t *testing.T) {
 			})
 			var status agentapi.Status
 			deadline := time.Now().Add(5 * time.Second)
+			// The post-listen configuration pull can briefly restart the worker;
+			// a reachable status endpoint does not imply a running process.
 			for {
 				status, err = client.Status(context.Background())
-				if err == nil {
+				if err == nil && status.Processes["worker"].State == "running" && status.Processes["worker"].PID != 0 {
 					break
 				}
 				if time.Now().After(deadline) {
-					t.Fatal("TLS status unavailable", err)
+					t.Fatal("worker did not become running", status, err)
 				}
 				time.Sleep(10 * time.Millisecond)
 			}

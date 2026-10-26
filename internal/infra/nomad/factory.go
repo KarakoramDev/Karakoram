@@ -10,14 +10,16 @@ import (
 	"net/netip"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-var nomadCapabilities = infra.Capabilities{PublicTCP: true, Placement: true, Logs: true, HorizontalScaling: true, DedicatedCPU: true}
+var nomadCapabilities = infra.Capabilities{PublicTCP: true, Placement: true, Logs: true, HorizontalScaling: true, DedicatedCPU: true, StatelessRolloutSurge: 1}
 var configEnv = [...]struct{ key, env string }{
 	{"address", "KARAKORAM_NOMAD_ADDR"}, {"region", "KARAKORAM_NOMAD_REGION"}, {"datacenters", "KARAKORAM_NOMAD_DATACENTERS"}, {"nodePool", "KARAKORAM_NOMAD_NODE_POOL"}, {"network", "KARAKORAM_NOMAD_NETWORK"}, {"publicIPv4", "KARAKORAM_NOMAD_PUBLIC_IPV4"}, {"publicIPv6", "KARAKORAM_NOMAD_PUBLIC_IPV6"},
+	{"ephemeralDiskMB", "KARAKORAM_NOMAD_EPHEMERAL_DISK_MB"},
 }
 var namespaceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 var settingName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
@@ -107,6 +109,9 @@ func (f factory) New(t infra.Target) (infra.Backend, error) {
 		case "publicIPv6":
 			ip, e := netip.ParseAddr(v)
 			valid = e == nil && ip.Is6() && !ip.Is4In6() && ip.Zone() == ""
+		case "ephemeralDiskMB":
+			size, err := strconv.Atoi(v)
+			valid = err == nil && size > 0 && size <= maxEphemeralDiskMB
 		default:
 			return nil, rejectedConfig("unknownConfigKey", "unknown target setting")
 		}

@@ -4,9 +4,142 @@
 
 Database maintenance follows [PostgreSQL operations](../postgres/operations.md), [access/TLS](../postgres/access-and-tls.md) and [recovery](../postgres/backups.md). PostgreSQL 17 is the only admitted major. Source/target backup providers must match exactly; postgres↔supabase recovery is rejected.
 
+When bootstrap inputs change, PostgreSQL writer-discovery status reads each have
+a four-second budget. A deadline fails convergence closed with the member name
+and a request to inspect responsiveness/connectivity; no SQL bootstrap or digest
+acknowledgement follows missing writer evidence. SQL bootstrap mutations retain
+their existing, independent administration budget.
+
+## Cluster restart and member software
+
+`karactl clusters restart NAME --wait` first performs the PostgreSQL/ProxySQL
+rolling restart, then restarts every live instance of each enabled Supabase
+component, one instance at a time. Disabled components are skipped. Each component
+instance must show a changed supervised child PID, launch identity, restart count
+or start time, acknowledge its configuration, and regain native readiness before
+the next instance is restarted. Final stack readiness is required for success.
+Missing instances, unknown inventory and unavailable probes cannot certify a
+restart; inspect the named component/instance when the operation fails or waits.
+A singleton is unavailable during its restart; this is not a zero-disruption
+operation. Progress survives control-plane restarts.
+
+This restarts **application processes in place**, not the member agent or its
+deployment archive. An unchanged allocation, job version or agent artifact is
+therefore expected. A control-plane upgrade alone does not roll member agents.
+Release/configuration reconciliation only redeploys components when its desired
+runtime/version requires it; a new control-plane executable is not itself such
+an intent. Restart is not an artifact-upgrade command.
+
+To roll an existing stateless component onto the current control plane's member
+artifact when no version-driven redeployment is pending, schedule maintenance,
+save its desired replica count/settings, disable it with
+`spec.components.extra.COMPONENT.replicas: 0`, and wait for removal to converge.
+Then restore the saved count and wait for deployment and native readiness.
+Disable dependent components first and restore dependencies first; temporarily
+disable public gateway exposure if disabling the gateway. This recreates the
+component service and interrupts its sessions; do not substitute a positive
+replica/resource change, which can retain the existing archive. For example,
+Realtime can be disabled and re-enabled independently at its supported singleton
+count. Verify the new allocation's deployed member artifact/build identity, not
+only operation success or `componentVersion`. Realtime's internal RPC listener
+is bound to loopback and must never be reachable.
+
+Explicitly disabling an existing component proceeds even while database readiness
+is failing (including WAL retention caused by that component). Wait for its
+service removal, not just operation success: the generation remains unacknowledged
+until the database and remaining components are Ready. Re-enabling waits for core
+Ready; it cannot deploy a replacement or expose a new public route during a core
+readiness failure.
+
+Database member-agent upgrades require a provider-driven database member
+deployment using the PostgreSQL maintenance/recovery procedures; do not disable
+database members or delete their volumes to emulate a component roll.
+
 ## Components and health
 
 Change desired replicas/resources under `spec.components.extra` and follow operation/generation convergence. Explicit zero disables a service, subject to dependency validation. Component application readiness is separate from database readiness. In member status, application releases use `componentVersion`; their database `version` is intentionally empty. Aggregate resource requirements include every enabled service, proxy and data member.
+Enabling or disabling a component changes the shared upstream map in application configuration hashes, so the remaining Supabase applications can restart in place as their configurations converge sequentially; this can take multiple passes and temporarily outlive the [15-second availability observation lease](../clusters.md), without restarting the PostgreSQL core.
+
+Changing only an application's replica count or resource bounds (for example,
+`components.extra.rest.resources.maxCpu`) does not publish a new PostgreSQL or
+ProxySQL configuration or redeploy their runtimes. The database core tracks only
+the engine and proxy component bounds. Database/proxy settings, managed access
+revisions, and Supabase engine options still participate in database configuration
+convergence, including extension preload changes.
+
+Database slot-retention blockers report `Ready=False/SlotWALRetention`, including
+when all optional components are healthy. An optional-component failure does not
+overwrite that independent database diagnosis. Disabling the offending optional
+consumer can still remove its owned service while that condition persists; this
+does not clear slot health or acknowledge the generation early. See
+[PostgreSQL slot health](../postgres/operations.md).
+
+A smaller positive count supersedes a still-pending larger scale without first
+waiting for the obsolete count. Terminal scale/resize failures retain their exact
+requested count/resource target across restarts and report
+`ComponentRuntimeFailed`; unchanged targets are not repeatedly submitted.
+When the backend can prove the complete desired runtime already exists as healthy
+owned allocations, reconciliation may adopt or start its placement-free recovery
+receipt. Otherwise convergence keeps returning the terminal error so tracking
+operations exhaust their existing bounded failure budget truthfully. A genuinely
+corrected count/resource target gets a new attempt; disabling/deleting the
+component remains available.
+Resource corrections after a failed count are dispatched before retrying that
+count, including when the corrected desired target differs from the failed one.
+The replacement receipt records the corrected resources and full desired target;
+if that correction also fails, the unchanged corrected target remains bounded.
+Terminal receipt handling and corrected resource requests run independently of
+database readiness. A temporarily unhealthy database core cannot hide a terminal
+component error from the tracking operation's failure budget or prevent submitting
+corrected bounds after a failed/superseded rollout. This does not automatically
+replay an unchanged failed target, and database recovery continues independently.
+Gateway public-exposure revocation takes priority over this failure handling.
+An unrelated terminal component failure cannot prevent revocation or hide its
+accepted receipt; the component error remains visible to bounded tracking.
+Every accepted corrective receipt records the exact failed operation it corrects
+and its full desired target, whether it changes resources or recovers retained
+allocations. While that receipt owns the same component, failure and target, its
+nonterminal wait does not charge the old failure again. Evidence remains recorded
+until completion; a failed correction reports its own terminal outcome, and
+unrelated failures still report normally.
+After an upgrade, older pending receipts without this linkage are still observed
+without replay when they match the same component, failed/current desired target,
+and recorded resource-after-scale or retained-recovery shape. This compatibility
+wait neither submits a new operation nor treats unrelated pending work as recovery.
+
+Readiness requires the desired number of live instances for **every enabled
+component** and an application/configuration observation from each live instance,
+including extra instances during a rollout. The control plane pins probes to
+backend-provided instance addresses while retaining the logical member's TLS and
+bearer identity. A healthy service-DNS response cannot mask an unhealthy sibling.
+Missing instances, inaccessible inventory, unusable instance addresses, stale
+configuration and native health failures keep `ComponentsReady=False`; the
+component member's `agent.message` identifies the failed instance and native
+reason where available. Database health conditions remain visible independently.
+After the dependency or instance recovers, fresh observations clear the condition;
+an HTTP health failure alone does not trigger a blanket process restart.
+
+If newly restored REST instances serve authenticated requests but their native
+database probe returns HTTP 401, check that the control plane includes the
+service-role credential in Auth/REST member configurations. After upgrading a
+control plane that omitted it, normal convergence republishes the corrected
+configuration even for instances still waiting for initial readiness. Instances
+already running the database-backed probes do not need another agent artifact
+roll for this credential correction. Leave the existing Running update in place:
+do not retry the patch, cancel the operation, or disable/re-enable the component.
+Completion still requires fresh applied-configuration and native serving success
+from every instance; a control-plane upgrade alone is not evidence of recovery.
+
+The final gateway upstream sweep emits an actionable gateway member, condition
+and cluster message when observations fail or enabled upstreams are missing.
+It withholds final Ready without revoking otherwise healthy gateway bootstrap
+health: later upstream services must still be able to join sequentially, including
+component additions and re-enables. Listener/bootstrap health is not proof of
+complete native upstream evidence. Inspect every gateway instance's native status
+and upstream connectivity.
+`ComponentsReady` is a readiness gate (False while evidence is incomplete), not
+an assertion that a timeout proves a native outage. PostgreSQL-derived conditions
+retain the [database observation semantics](../postgres/operations.md).
 
 Gateway bootstrap readiness means its API listener is accepting TCP connections,
 not that its upstream DNS records exist yet. This allows the gateway to join
@@ -36,7 +169,80 @@ resolution retries back off from 250 ms to at most one second. The fixed refresh
 also bounds successful empty-answer retries, reducing the old five-second delay
 while discovery records appear during component creation. This modest per-service
 DNS polling trades a little local discovery traffic for faster convergence; the
-host-count gate, not timing assumptions, provides final readiness.
+host-count gate provides a discovery readiness observation, **not** proof that a
+gateway can reach every upstream. Retained DNS hosts can outlive connectivity.
+To bridge rollout discovery races (a replacement registered before listening or a
+retired allocation still cached in DNS), every upstream route retries up to twice
+on `connect-failure,refused-stream,reset-before-request`, preferring a host not
+already attempted (three host-selection attempts). These are failures before
+upstream processing; HTTP 5xx and resets after request headers were sent are
+**not retried**, protecting non-idempotent Storage/REST writes. Existing route
+timeouts still include retries; Storage streaming and Realtime websocket/longpoll
+retain unlimited route/idle duration. An established websocket is not replayed.
+The pinned [Envoy 1.39.1 retry semantics](https://www.envoyproxy.io/docs/envoy/v1.39.1/configuration/http/http_filters/router_filter#config-http-filters-router-x-envoy-retry-on)
+include `reset-before-request`.
+
+All upstream clusters passively eject a host after one local-origin failure,
+separately from application errors, with one-second analysis sweeps and a
+five-second base ejection (repeat ejections back off up to 30 seconds). HTTP 5xx
+and success-rate ejection are disabled. The ejection cap is **50%**, with
+`always_eject_one_host=false`: a singleton is never ejected, and two hosts can
+eject one. This retains at least 50% healthy hosts, avoiding Envoy's default
+panic mode (which would otherwise balance across unhealthy hosts below the
+50% healthy threshold). See [outlier detection](https://www.envoyproxy.io/docs/envoy/v1.39.1/api-v3/config/cluster/v3/outlier_detection.proto).
+With a reachable healthy alternative, pre-connect rollout failures can therefore
+be absorbed instead of repeatedly surfacing stale-host 503s. This is not
+zero-downtime protection: retry exhaustion, connection/route timeouts, large
+streaming bodies exceeding Envoy's retry buffer, loss of all reachable hosts,
+and in-flight requests on a killed member can still fail. Clients must reconnect
+interrupted websocket sessions and decide whether a failed write is safe to retry.
+
+Direct component probes do not traverse the gateway's network path; use
+authenticated end-to-end route/application checks. A REST or Auth instance
+failing native/serving readiness withdraws `ComponentsReady` and stack readiness
+with an instance-scoped message, but remains in the gateway's resolved pool.
+There are no application-level active health checks: Nomad service checks test
+only the listener, and Zerops deploy readiness checks do not feed gateway
+membership. An instance that accepts connections but returns PostgREST HTTP 503
+is neither retried nor ejected for that response, so extra REST/Auth replicas do
+not mask one instance's database-path loss. Restore or replace the instance named
+in status; see [cluster restart and member software](#cluster-restart-and-member-software).
+
+Storage readiness combines the native `/status` endpoint with an authenticated,
+non-mutating S3 bucket `HEAD` from the Storage member, using its already-projected
+backend registration and optional bucket override. The probe has the shared
+four-second observation timeout; concurrent status/metrics callers share a sample
+for at most the five-second readiness interval. Both successful and failed samples
+expire, and a changed endpoint, bucket or credential invalidates the cache.
+The control plane accepts a bucket-probe timestamp up to one second ahead of its
+own clock to tolerate modest cross-host skew; larger future timestamps, zero
+timestamps, and samples older than the fifteen-second readiness limit remain
+invalid. This allowance does not extend the cache or turn a failed `HEAD` healthy.
+Authentication/access denial, a missing bucket and a bounded observation failure
+produce `StorageS3Unavailable` on `Ready=False` and `ComponentsReady=False`, with
+phase `Degraded` when the database core is otherwise Ready; an independent database
+blocker retains its own phase and reason. Healthy unrelated components retain their
+own health. A fresh
+successful check restores readiness without a component restart. No objects are
+created, listed, changed or deleted by this check.
+
+The probe retains and signs the endpoint's base path for legacy configurations;
+new [storage registrations](../backups.md#register-s3-storage) require an origin
+without a mount path so every backup engine can use the same registration.
+Addressing shares the registration client's force-path rules: IP endpoints and
+HTTPS dotted buckets use path style; ordinary custom DNS endpoints use virtual-host
+style unless path style is forced.
+Member application observations run with bounded instance concurrency, so several
+slow S3 probes overlap rather than consuming the whole five-second status sweep
+one member at a time. All live instances must still pass, including rollout extras.
+
+Bucket `HEAD` requires bucket-level access and does not certify per-object read,
+write or delete permissions, content integrity or a particular object's existence.
+Diagnose those separately with fresh authenticated object operations and compare
+acknowledged bytes after recovery. Older member binaries omit the S3 observation
+and retain their previous readiness semantics; roll Storage members to obtain
+dependency coverage. Present observations with invalid or expired timestamps are
+not accepted as successful dependency evidence.
 
 Components use pinned artifacts and a configuration digest. Relevant configuration or release changes trigger service configuration/redeployment one component at a time; component versions are not chosen with `spec.version`. A Karakoram release update can therefore change service versions. Review [artifact availability](components.md) first: a catalog preset or saved function source does not bypass missing-artifact admission.
 
@@ -50,6 +256,70 @@ Failed component infrastructure operations clear their pending receipt and repor
 the failure without applying the requested state. Reconciliation can retry after
 the underlying placement or runtime problem is corrected.
 
+A confirmed terminal component deployment failure is retained across retries and
+control-plane restarts. `Ready=False` and `ComponentsReady=False` report
+`ComponentDeploymentFailed` with phase `Degraded`, even during initial creation.
+The member message includes the immutable backend service and deployment handle,
+the terminal platform status, and a request to inspect deployment/runtime
+preparation diagnostics. On Zerops, `version:<id>` identifies the exact app
+version; inspect its deployment process and prepare-runtime log, not merely the
+service's imported/creating state. Successful preparation alone does not prove
+that Zerops created a runtime instance.
+Container-inventory errors are appended to this evidence, rather than replacing
+the deployment handle or last observed platform status.
+
+A submitted component deployment reports `ComponentDeploymentPending` rather
+than an unexplained imported stage. Its member/condition message identifies the
+immutable service/version handle, last observed platform phase (for example,
+`PREPARING_RUNTIME`), time observed in that phase, and submission age. Phase age
+is checkpointed and survives control-plane restarts; older in-flight receipts
+start tracking when first observed after upgrade. Pending work does not imply a
+terminal failure or justify replay. A previous confirmed failure remains the
+higher-priority diagnosis while its retry is pending.
+
+An ambiguous or still-running platform operation remains pending and is not
+blindly replayed. A confirmed terminal outcome releases the pending deployment
+for automatic retry. Zerops can also retire a definitively unsubmitted
+infrastructure attempt as `RETRY_REQUIRED` after its request-settle evidence
+gate; that is not a terminal platform deployment failure and does not create or
+replace a `ComponentDeploymentFailed` diagnosis. The previous failure remains
+visible while its retry is pending and clears when a deployment succeeds.
+Zerops retries confirmed deployment/runtime-preparation failures using the same
+uploaded version with at most three 15/30/60-second backoffs. Another confirmed
+failure enters durable `DeploymentRetriesExhausted`; reconciliation continues
+observation but stops deployment submissions until an explicit audited
+`karactl clusters retry-deployments NAME` grants one fresh three-retry budget.
+Restarts retain the attempt count, terminal state and retry epoch. Failure
+conditions preserve sanitized platform diagnostics. RUNNING/unknown work remains
+fenced regardless of age or elapsed deadlines. A corrected artifact/runtime
+intent can supersede a conclusively terminal receipt under the same
+terminal-process evidence gate.
+The provider exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
+`DeploymentRetriesExhausted` reason and operator command. An exhausted component
+is skipped while other components continue reconciliation; pending deploy
+receipts are retired without marking the failed artifact applied. There is no
+scheduled retry deadline after exhaustion: the retry epoch must be re-armed.
+Application/configuration and instance health must still pass before Ready.
+An enabled component's terminal deployment failure also keeps combined
+`Ready=False` when the deployment guard has already set phase `Degraded`.
+An independent database readiness failure retains its own reason; healthy
+database members do not imply that the complete enabled stack is ready.
+Disabled optional components do not participate in this readiness gate.
+Database recovery continues while the optional deployment is pending or failed.
+Correct a backend placement/runtime problem using the exact failed handles; do
+not clear operation receipts, start unverified runtimes, or disable Storage
+merely to make the cluster Ready.
+
+Component imports first persist the original request without bearer credentials.
+After an interrupted setup, an owned backend reservation is replayed with the
+same resources and replica count before applying subsequent desired edits or
+component removal. Its presence alone does not authorize deployment. Preserve the
+original import intent and backend state if an incomplete reservation is reported
+without a matching intent; do not adopt or recreate it as a different request.
+Cluster deletion likewise finishes reserved setup before removing its services,
+without deploying the component. Accepted import handles retain the same replay
+ownership instead of waiting indefinitely for setup which still needs replay.
+
 A confirmed missing stateless runtime is re-imported and redeployed using its
 existing durable member identity and ownership token. Lookup errors do not count
 as absence, and conflicting ownership markers prevent adoption or modification.
@@ -59,6 +329,11 @@ member is unavailable. Pending infrastructure operations still serialize optiona
 component changes, but never block PostgreSQL provisioning, replacement or recovery.
 Component polling errors are reported while core reconciliation continues;
 enabling public exposure remains gated on core readiness.
+Explicitly disabled existing components use the same ownership-checked deletion
+path before core readiness, after pending receipts and frozen import replay have
+finished. This cleanup does not deploy or positively scale optional components;
+re-enable and new public exposure wait for core Ready. Dependency validation still
+requires dependents to be disabled first.
 
 Internal database connections use a local raw TCP forwarder on loopback 5432
 (15432 for Supavisor). HA probes authenticated TLS Patroni `/primary` every second.
@@ -73,6 +348,7 @@ as primary, a new connection can still reach the old database: this raw forwarde
 does not inspect PostgreSQL errors or independently elect/fence writers. Strict
 synchronous mode, DCS quorum loss and maintenance can interrupt API availability
 even while stateless services are running.
+See the [frozen PostgreSQL primary boundary](../postgres/operations.md#failover-suspension-and-deletion): a suspended postmaster with healthy Patroni does not trigger automatic failover.
 
 Realtime supports one application replica, independently of the database's
 single/HA topology. Create/update admission rejects any enabled count above one
@@ -86,6 +362,21 @@ a singleton has no peers to discover. Ordinary database pools and logical
 replication still reconnect through the forwarder; the member supervisor still
 restarts any actual application exit. This removes an unnecessary failure path,
 not all possible upstream exits.
+
+A Realtime restart or replacement closes client channels; clients receive a channel
+error and must resubscribe. Client SDKs may attempt to reconnect automatically,
+but applications must monitor subscription state and handle recovery themselves;
+Karakoram does not guarantee client-side recovery. Postgres Changes committed while
+a channel is disconnected are not replayed after it resubscribes. Changes committed
+around a PostgreSQL primary failover can also be missed: Realtime re-creates its
+temporary replication slot on the new primary, even while the SDK channel remains
+`SUBSCRIBED` without a `CHANNEL_ERROR` or resubscription. Treat Realtime as a
+notification stream, not a durable change log. Consistency-critical consumers must
+reconcile from the source table after reconnects or database failovers rather than
+relying on channel state as proof of complete delivery.
+During a Realtime outage the cluster reports `ComponentsReady=False`
+with the component's current observation error and returns to Ready once the
+replacement is serving and all other readiness conditions hold.
 
 **Previously stored multi-replica Realtime specs remain unsupported independent
 nodes, not a distributed Realtime cluster.** The native release defaults every
@@ -235,3 +526,25 @@ Use explicit `npm:` or `jsr:` imports rather than relying on undeclared aliases.
 Database backups restore database data/roles, not Storage S3 objects or the whole control-plane secret/function store. Protect S3 objects separately and keep consistent control-plane state plus its original master key. A database clone has its own service configuration/keys/object tenant; it is not a complete copy of an application's external objects or deployment. Plan coordinated object/database recovery and re-check application access after restore, especially credentials restored from an older snapshot.
 
 Suspension/removal follows shared cluster retention choices and PostgreSQL volume rules; optional services are stateless runtimes, not independently retained application disks. Preserve external S3 data according to your own policy. See [shared recovery](../backups.md) and [control-plane recovery](../operations.md#control-plane-state-backup-and-recovery).
+
+Cluster deletion supersedes a component's deployment/readiness wait. The owned
+service's immutable-ID and ownership checks still apply; an in-flight deployment
+receipt is not a prerequisite for submitting deletion. This does not override
+Zerops's own per-service process queue: an accepted `stack.delete` may remain
+`PENDING` behind that service's `RUNNING stack.deploy`, including runtime
+preparation. Deleting reports the exact delete process/service, platform status
+and age derived from platform timestamps; when available, it also names the
+same-service running process and its age. PostgreSQL cleanup preserves this diagnostic
+in cluster status and the tracked delete operation.
+
+Only observation is retried while a deletion is accepted: each platform read has
+the client's finite request timeout and bounded transient retries (three retries
+by default). Queue inspection is additionally bounded by the backend wait timeout.
+An unavailable queue inventory is reported, not treated as permission to replay
+deletion. Inventory failures propagate to reconciliation's failure backoff;
+`429`/`503` responses with `Retry-After` retain that reset and stop the observation
+before further platform requests. Reconciliation keeps the accepted handle across restarts and does not
+resubmit it on a timer, cancel a running deployment, or infer successful deletion
+from age. A CLI wait timeout stops that client's wait, not accepted cleanup.
+Inspect/escalate the named platform processes if they stop progressing; confirmed
+terminal failure or expiry returns to the existing cleanup retry/error policy.

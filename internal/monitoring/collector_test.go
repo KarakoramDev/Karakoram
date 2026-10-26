@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -408,9 +409,14 @@ func TestNamespaceMetricIsolationAndAuthoritativeLabels(t *testing.T) {
 	}
 }
 
-type recordingDialer struct{ refs []domain.ClusterRef }
+type recordingDialer struct {
+	mu   sync.Mutex
+	refs []domain.ClusterRef
+}
 
 func (d *recordingDialer) Dial(_ context.Context, ref domain.ClusterRef, _ string) (*agentapi.Client, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.refs = append(d.refs, ref)
 	return nil, errors.New("member unavailable")
 }
@@ -423,7 +429,11 @@ func TestScrapeDialsNamespacedReferences(t *testing.T) {
 	if err := c.scrape(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(d.refs) != 2 || d.refs[0] != (domain.ClusterRef{Namespace: "default", Name: "same"}) || d.refs[1] != (domain.ClusterRef{Namespace: "other", Name: "same"}) {
+	seen := map[domain.ClusterRef]bool{}
+	for _, ref := range d.refs {
+		seen[ref] = true
+	}
+	if len(d.refs) != 2 || !seen[domain.ClusterRef{Namespace: "default", Name: "same"}] || !seen[domain.ClusterRef{Namespace: "other", Name: "same"}] {
 		t.Fatal(d.refs)
 	}
 	if len(c.latest) != 2 {
@@ -478,6 +488,47 @@ karakoram_process_cpu_seconds_total{process="helper",component="data"} 20.9
 			cacheUsage(t, c, target, now.Add(time.Second), "# TYPE karakoram_process_cpu_seconds_total counter\n"+tc.current)
 			if usage := c.MemberUsage(domain.ClusterRef{Name: "demo"}, "m0"); usage.CPUPercent != nil {
 				t.Fatal("failed scrape retained process baselines")
+			}
+		})
+	}
+}
+
+func TestFederationExpiresCachedPositiveSamples(t *testing.T) {
+	target := Target{Namespace: domain.DefaultNamespace, Cluster: "demo", Member: "m0"}
+	for _, mode := range []string{"expired", "missing", "future", "discovery-failure"} {
+		t.Run(mode, func(t *testing.T) {
+			c := New(Options{Store: monitoringStore(t), Interval: time.Second, Targets: func(context.Context) ([]Target, error) {
+				return nil, errors.New("discovery unavailable")
+			}})
+			at := time.Now()
+			switch mode {
+			case "expired":
+				at = at.Add(-3 * time.Second)
+			case "missing":
+				at = time.Time{}
+			case "future":
+				at = at.Add(time.Hour)
+			}
+			families, samples, err := parseMetrics([]byte("# TYPE karakoram_mongodb_up gauge\nkarakoram_mongodb_up 1\n"), target, at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.cacheScrape(target, families, samples, at)
+			if mode == "discovery-failure" {
+				if err := c.scrape(t.Context()); err == nil {
+					t.Fatal("discovery failure was suppressed")
+				}
+			}
+			for range 2 {
+				var out bytes.Buffer
+				if err := c.WritePrometheus(t.Context(), &out, nil); err != nil {
+					t.Fatal(err)
+				}
+				exported, _, err := parseMetrics(out.Bytes(), target, time.Now())
+				success := exported["karakoram_member_scrape_success"]
+				if err != nil || exported["karakoram_mongodb_up"] != nil || success == nil || len(success.Metric) != 1 || success.Metric[0].GetGauge().GetValue() != 0 {
+					t.Fatal("stale health was republished as current", out.String(), err)
+				}
 			}
 		})
 	}

@@ -15,7 +15,80 @@ The ordinary connection summary is password-free. `clusters connection appdb --r
 
 Public exposure is opt-in. Zerops can enforce a CIDR allowlist; experimental backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
 
+On Dokploy, the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
+ports are Swarm-wide, so only one service on that Swarm can publish it. A
+conflicting enable fails promptly with `PublicPortInUse`, leaving the private
+endpoint intact; disable the other service's publication or keep this cluster
+private. Karakoram does not silently allocate another PostgreSQL public port.
+
 Public endpoint removals and allowlist restrictions are applied independently of database-member health or rolling convergence. New endpoints and allowlist expansions wait for readiness. A mixed allowlist edit first retains only the intersection of the old and desired networks; if that intersection is empty the endpoint is removed until the cluster is ready.
+
+### Planned proxy drain and external load balancers
+
+On graceful agent termination (including a backend replica-count reduction),
+healthy ProxySQL instances execute `PROXYSQL PAUSE` before their native process
+is stopped. This closes the PostgreSQL listeners while leaving established
+sessions running. The agent waits at least **10 seconds** for external TCP
+health checks to remove the instance, then waits for client sessions to disappear,
+up to **25 seconds total**, including preparation and the native PAUSE
+acknowledgement. Only the initial writer-health query has a separate three-second
+limit: listener removal can wait for native workers longer than that. The
+10-second detection wait begins after PAUSE acknowledges, and is truncated by
+the total deadline if necessary. Sessions still open at the
+deadline are terminated; pool owners must reconnect. Keep transactions shorter
+than this window if they must complete across a planned reduction. A graceful
+stop of the last proxy still removes the only route; redundancy is required.
+
+This contract requires a **drain-capable agent binary in the allocation**.
+Updating the control plane does not replace existing agent binaries, and a
+count-only scale-up reuses the artifact registered in the existing runtime job.
+A newly created allocation is therefore not proof of a new agent release.
+Before relying on the contract or testing it, record the allocation's actual
+agent version and binary/artifact digest; deploy the intended artifact through
+the normal rollout workflow, or create a fresh cluster with that artifact.
+Drain-capable agents log PAUSE acknowledgement, changes in the connected-client
+count, skipped-drain reasons, and completion duration/error. A deadline/error
+is not successful session exhaustion. The count includes open-transaction and
+idle frontend sessions; a transaction COMMIT alone does not close a pooled
+client session. Such sessions may keep the drain open until the bound.
+
+An external LB must detect listener failure within **10 seconds**, retry a
+**failed TCP connect on a different healthy backend**, and preserve established
+sessions when a backend becomes DOWN. TCP checks alone do not prevent errors in
+the check-detection race. Do not replay PostgreSQL queries/transactions at the LB
+or enable `on-marked-down shutdown-sessions`. For example, an HAProxy TCP backend:
+
+```haproxy
+backend postgres
+    mode tcp
+    timeout connect 1s
+    retries 3
+    option redispatch 1
+    default-server inter 1s fastinter 1s downinter 1s fall 2 rise 2
+    server node-a 192.0.2.11:5432 check
+    server node-b 192.0.2.12:5432 check
+```
+
+Use actual eligible node addresses and retain the deployment's client/server
+timeouts. The example retries transport establishment only, never SQL. Clients
+must still reconnect after idle/persistent sessions reach the drain deadline or
+after an unplanned failure. An already non-listening or writer-unhealthy proxy
+does not wait out the drain window. Crashes and SIGKILL bypass the graceful hook;
+there is no added failover delay. Nomad renders a 120-second task kill timeout,
+but its client's [`max_kill_timeout`](https://developer.hashicorp.com/nomad/docs/configuration/client#max_kill_timeout)
+defaults to **30 seconds** and caps that request. The 25-second proxy hook leaves
+five seconds for ordinary native exit under that default; a stuck native process
+may still be forcibly killed by the platform. Raising the client limit alone
+does not extend the agent's 25-second drain: a longer drain would require both
+an agent-budget change and adequate client grace. Dokploy renders a 120-second
+Swarm stop grace, but uses the same 25-second agent drain. Zerops uses this hook
+only when its platform delivers graceful termination; Karakoram has no Zerops
+stop-grace setting or published platform timing guarantee. Operators must
+establish at least **30 seconds** of platform grace for the proxy drain plus
+ordinary child exit (or more for slow native shutdown). Karakoram cannot extend
+a platform's forced-kill deadline; the overall agent shutdown remains bounded
+at 60 seconds.
+
 
 ## Roles
 
@@ -40,6 +113,80 @@ Creation without a supplied login password returns `generatedPassword` once; rot
 Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable; Supabase protects its service identities too. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
 
 Managed login passwords are sealed and loaded into all proxies because ProxySQL needs recoverable passwords. SQL-created roles/password changes are not automatically imported; manage proxy-facing identities through this API. Access mutations use a freshly resolved writable primary, and HA actions require Patroni's leader lock. No current primary returns unavailable rather than directing writes to a replica. This is direct access administration, not continuous reconciliation of arbitrary SQL changes.
+
+**Proxy publication is asynchronous.** A role-create `201`, update/rotation
+`200`, or delete `204` confirms the PostgreSQL mutation and managed credential
+storage, not that every ProxySQL instance has applied it. Immediate proxy logins
+can fail with `User not found` or still encounter the preceding password until
+publication completes. Deletion likewise propagates asynchronously; it is not
+a barrier that terminates existing sessions.
+
+After the mutation returns, poll **`GET /clusters/{cluster}/status`** (with the
+namespace query parameter), using this CLI command:
+
+```sh
+karactl -n NS clusters status appdb -o json
+```
+
+Wait for `conditions[]` with `type: CredentialsPublished` and `status: "True"`.
+For automation with `jq` (stop or investigate on CLI errors):
+
+```sh
+while :; do
+  status=$(karactl -n NS clusters status appdb -o json) || exit
+  printf '%s\n' "$status" |
+    jq -e 'any(.conditions[]?; .type == "CredentialsPublished" and .status == "True")' >/dev/null && break
+  sleep 1
+done
+```
+
+This condition requires the **current** managed access revision to have entered
+the desired configuration, every live proxy instance to acknowledge that
+configuration, at least the desired number of instances to be present, and
+healthy native writer/user observations on all of them. The status endpoint
+also fences cached success against newer access mutations. Missing/False is
+not success. Do not substitute cluster `Ready`, absence of `ProxyRollout`, or
+`CredentialsConsistent`: those alone can describe the configuration preceding
+the mutation. Use the status endpoint above rather than a cached cluster/list
+response. With proxies disabled, this publication condition is absent and
+PostgreSQL applies the credential mutation directly. This barrier certifies
+configuration publication, not session revocation or future availability.
+While publication is in progress after a role create or delete, the cluster
+briefly reports phase `Updating` with `Ready=False` and reason
+`MembersStarting`; existing connections are unaffected, and the cluster returns
+to `Ready` once the proxies apply the new configuration.
+
+On receipt-capable agents, managed role writes seal a recovery intent **before**
+sending credential SQL. The agent commits the role mutation and an operation
+receipt containing the request digest and native role OID in one PostgreSQL
+transaction. It reports `applied`, `rejected`, or `unknown`; transport failures
+are never treated as proof of rollback. If the SQL response is lost or
+password/index/revision persistence fails, reconciliation replays the same
+selected intent, observes its receipt, and publishes the matching proxy revision.
+`CredentialsConsistent=False` identifies a pending transition; restore database
+and sealed-state-store availability rather than changing the password directly
+in SQL. Retrying a still-pending rotation completes that intent instead of
+selecting another password.
+
+A definitive SQL rejection (for example, a nonexistent membership target)
+retires the intent and restores any partially published credential metadata;
+the API/recovery error identifies the rejection and ordinary reconciliation can
+continue. A same-name native role without this operation's receipt, or a role
+whose OID differs from the receipt after a drop/recreate, is refused as a
+conflict. Recovery never converts CREATE into an unconditional name-only ALTER
+and never adopts that foreign role. Successful receipt replay does not rewrite
+subsequent native role edits.
+
+During mixed-version upgrades, old agents retain the earlier direct SQL then
+metadata-publication behavior: credential administration remains available, but
+ambiguous response/crash recovery is **not** guaranteed for those writes.
+The informational `CredentialRecovery=False` / `LegacyAgent` condition recommends
+rolling the data-member agents to enable transactional receipts; it does not
+make a healthy legacy cluster unready. Pre-receipt pending CREATE recovery never
+adopts an existing same-name role. Journaled writes already sent to new agents
+remain journaled and are not silently retried through an older agent protocol.
+The journal and rollback snapshot contain credentials only in sealed state,
+never in cluster status or logs; native receipts contain no password or verifier.
 
 Credential DDL carries SCRAM-SHA-256 verifiers, never plaintext passwords. System/Supabase bootstrap derives verifiers in the agent; the application-role API derives them before forwarding to the agent. Dedicated PostgreSQL management connections use `search_path=pg_catalog` and disable statement, duration, sample and error-statement/parameter logging before credential SQL. Database logging options still apply to application sessions.
 
@@ -78,7 +225,53 @@ Proxy-to-PostgreSQL traffic and ProxySQL's backend monitor require TLS and use t
 
 **Backend hostname verification limitation:** ProxySQL 3.0.11 uses libpq `sslmode=require` with an explicit root certificate for both [query](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Connection.cpp) and [monitor](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Monitor.cpp) connections. With the CA supplied, this authenticates the certificate chain, but it does **not** compare the certificate's names to the configured backend hostname; it is not `verify-full`. Keep the cluster CA/signing key private, use a dedicated CA per cluster, and restrict private backend network access. Client-to-proxy `sslmode=verify-full` and direct PostgreSQL connections are separate TLS legs.
 
-Generated certificates are staged for renewal within 30 days of expiry and activated member-by-member. If the control plane restarts after staging certificates but before recording their activation state, reconciliation recovers the pending material and publishes a rolling configuration revision before activation. Supplied certificates must be rotated by the operator; expiry warnings do not create replacement user certificates. The supplied CA cannot be replaced in place: no trust-overlap CA rollout is implemented. Reloadable HBA/TLS changes preserve existing SQL sessions; postmaster changes or proxy listener/certificate activation can still interrupt connections. See [operations](operations.md).
+Generated database certificates are staged for renewal within 30 days of expiry and activated member-by-member. Agent HTTPS identities are published independently through authenticated configuration pulls, including recovery after leaf expiry or clock correction; this transport renewal does not restart the database. If the control plane restarts after staging database certificates but before recording their activation state, reconciliation recovers the pending material and publishes a rolling configuration revision before activation; unusable pending leaves are reissued. Patroni reload is requested through its locally supervised process before verified HTTPS configuration requests, so its old HTTPS identity does not have to authenticate its own reload. Supplied certificates must be rotated by the operator; expiry warnings do not create replacement user certificates. The supplied CA cannot be replaced in place: no trust-overlap CA rollout is implemented. Reloadable HBA/TLS changes preserve existing SQL sessions; postmaster changes or proxy listener/certificate activation can still interrupt connections. See [operations](operations.md) and [certificate lifecycle limits](../limitations.md#certificate-and-member-credential-lifecycle).
+
+Generated leaf certificates use a one-hour backdated validity start (bounded by
+the issuing CA's validity) without extending their expiry. Larger clock jumps
+still require clock correction. If an active member leaf is not yet valid or
+has expired, the control plane reissues it through the normal publication and
+reload path, including during initial formation or a single-to-HA conversion.
+Database, Patroni and etcd share the data member's native identity; proxy and
+agent identities are also renewed. Native health and a healthy ProxySQL writer
+route are not prerequisites for correcting an invalid native identity.
+
+The control plane checks member maintenance and operation/restore ownership,
+publishes only the already-applied configuration, and retains a reload
+acknowledgement journal across lost responses. `MemberTLSReady` reports the
+invalid validity boundary, a pending replacement acknowledgement, or a blocked
+legacy-agent recovery. It does not relax TLS verification or replace the CA.
+Reload-only capable agents write only identity files and signal the existing
+PostgreSQL or Patroni process; they never consume a pending postmaster restart.
+That restart remains visible for the ordinary configuration rollout.
+After acknowledgement, the accepted certificate revision remains the member's
+published configuration floor, including after a control-plane restart. Completing
+the certificate journal does not republish an older revision or mark deferred
+options, engine-version, or resource changes as applied.
+
+Existing HA agents already support the required Patroni certificate reload, so
+an in-flight single-to-HA conversion can recover after a control-plane upgrade
+without replacing agents. Older single-node agents use the existing path only
+when native observation confirms that no postmaster restart is pending.
+Otherwise `CertificateRecoveryBlocked` requests an agent upgrade for safe,
+reload-only certificate recovery rather than restarting the writer.
+The blocked reason clears when the active identity becomes valid or a
+replacement is activated; it is not retained after the validity problem ends.
+
+After a clock rollback, a non-serving ProxySQL instance can retain monitor
+observations from the future even after all leaf certificates are valid. If
+there is no ONLINE writer, monitor errors are over five minutes ahead of the
+control-plane clock, and a healthy primary is independently verified, the
+control plane records an instance-specific restart intent before resetting only
+that stateless proxy through the existing authenticated process API.
+`ProxyClockReady=False/MonitorClockAhead` describes this distinct recovery;
+`MemberTLSReady` is absent once certificate validity and reload receipts are
+healthy. Maintenance and stop holds are respected. The same evidence never
+causes a second restart, and changed evidence is subject to a thirty-minute
+cooldown. Healthy writer routes are not restarted because of old monitor rows.
+Unavailable inventory, transport, or native observations do not establish a clock
+fault and do not block ordinary deployment observation or recovery. Existing
+restart receipts are retained until a complete instance observation is available.
 
 ## Proxy compatibility
 

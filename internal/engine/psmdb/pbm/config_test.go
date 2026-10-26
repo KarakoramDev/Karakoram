@@ -29,10 +29,14 @@ restore:
     numDownloadWorkers: 1
     maxDownloadBufferMb: 64
     downloadChunkMb: 8
+    batchSize: 500
+    numInsertionWorkers: 1
+    numParallelCollections: 1
 `
 
 func TestRenderConfigGolden(t *testing.T) {
 	env, _, _, _ := setup(t)
+	// The fixture carries explicit applied 1 GiB mongod allocations.
 	rendered, err := RenderConfig(env)
 	if err != nil {
 		t.Fatal(err)

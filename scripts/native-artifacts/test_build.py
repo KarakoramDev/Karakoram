@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 # Copyright 2026 The Karakoram Authors
+import ast
 import hashlib
 import importlib.util
 import io
@@ -11,7 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 spec = importlib.util.spec_from_file_location('native_build',Path(__file__).with_name('build.py'))
 build = importlib.util.module_from_spec(spec)
@@ -94,6 +95,7 @@ class NativeBuilder(unittest.TestCase):
             keys = [kind+'-'+recipe[kind] for kind in ('node','go','rust','otp','bun') if kind in recipe]
             if 'elixir' in recipe:
                 keys.append('elixir-'+recipe['elixir']+'-otp-'+recipe['otp'].split('.')[0])
+                keys.extend((build.hex_toolchain_key(recipe), 'rebar3-3.24.0'))
             for key in keys:
                 pin = build.TOOLCHAINS[key]
                 self.assertEqual(len(bytes.fromhex(pin['sha256'])),32)
@@ -121,17 +123,148 @@ class NativeBuilder(unittest.TestCase):
         self.assertIn('turbo prune studio --docker',recipe)
 
     def test_mix_bootstrap_uses_pinned_verified_local_files(self):
-        with patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'wait_for_host'):
-            build.toolchains({'otp':'27.3.4.6','elixir':'1.18.2'})
-        self.assertEqual([call.args[0] for call in install.call_args_list],['otp-27.3.4.6','elixir-1.18.2-otp-27','hex-2.5.3','rebar3-3.24.0'])
-        self.assertEqual([call.kwargs for call in install.call_args_list[-2:]],[{'installer':'true'},{'installer':'true'}])
+        for otp, elixir, hex_key in (
+            ('28.5.0.4', '1.19.5', 'hex-2.5.3-elixir-1.19-otp-28'),
+            ('27.3.4.6', '1.19.5', 'hex-2.5.3-elixir-1.19-otp-27'),
+            ('27.2.1', '1.18.2', 'hex-2.5.3-elixir-1.18-otp-27'),
+        ):
+            with self.subTest(otp=otp, elixir=elixir), patch.object(build,'install_toolchain') as install, patch.object(build,'guest'), patch.object(build,'wait_for_host'):
+                build.toolchains({'otp':otp,'elixir':elixir})
+            self.assertEqual([call.args[0] for call in install.call_args_list],['otp-'+otp,'elixir-'+elixir+'-otp-'+otp.split('.')[0],hex_key,'rebar3-3.24.0'])
+            self.assertEqual([call.kwargs for call in install.call_args_list[-2:]],[{'installer':'true'},{'installer':'true'}])
+            self.assertEqual(build.TOOLCHAINS[hex_key]['file'],'hex-2.5.3.ez')
         recipe = (build.HERE/'recipe.sh').read_text()
         self.assertIn('mix archive.install /root/hex-2.5.3.ez --force',recipe)
         self.assertIn('mix local.rebar rebar3 /root/rebar3-3.24.0 --force',recipe)
         self.assertNotIn('mix local.hex',recipe)
         self.assertNotIn('--if-missing',recipe)
-        for key in ('hex-2.5.3','rebar3-3.24.0'):
+        for key in ('hex-2.5.3-elixir-1.18-otp-27','rebar3-3.24.0'):
             self.assertEqual(len(bytes.fromhex(build.TOOLCHAINS[key]['sha256'])),32)
+
+    def test_logflare_dependency_patch_is_verified_after_fetch_before_compile(self):
+        recipe = (build.HERE/'recipe.sh').read_text()
+        patch_file = build.HERE/'patches/supabase-logflare-cainophile.patch'
+        digest = hashlib.sha256(patch_file.read_bytes()).hexdigest()
+        start = recipe.index('        if [ "$name" = supabase-logflare ]; then',
+                             recipe.index('mix deps.get --only prod'))
+        end = recipe.index('        fi', start) + len('        fi')
+        command = recipe[start:end]
+        self.assertIn(digest+'  $patch', command)
+        self.assertLess(recipe.index('mix deps.get --only prod'), start)
+        self.assertLess(end, recipe.index('mix deps.compile'))
+        self.assertIn('%{align_lsn: true}', patch_file.read_text())
+        self.assertIn('_ when AlignLsn ->', patch_file.read_text())
+        self.assertIn('git apply "/root/$patch"', command)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root/'deps/cainophile').mkdir(parents=True)
+            subprocess.run(['git','init','--quiet',str(root)],check=True)
+            (root/'stage/native-patches').mkdir(parents=True)
+            patch_copy = root/patch_file.name
+            shutil.copyfile(patch_file, patch_copy)
+            command = command.replace('/root', str(root))
+            env = {'name':'supabase-logflare', 'stage':str(root/'stage')}
+            # A valid digest cannot conceal upstream source drift.
+            result = subprocess.run(['bash','-euc',command],cwd=root,env=env,
+                                    capture_output=True,text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('No such file', result.stderr)
+            self.assertFalse((root/'stage/native-patches'/patch_file.name).exists())
+            patch_copy.write_bytes(patch_copy.read_bytes()+b'\n')
+            result = subprocess.run(['bash','-euc',command],cwd=root,env=env,
+                                    capture_output=True,text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('FAILED', result.stdout)
+            self.assertFalse((root/'stage/native-patches'/patch_file.name).exists())
+
+    def test_unknown_hex_pair_fails_before_installation(self):
+        with patch.object(build,'install_toolchain') as install:
+            with self.assertRaisesRegex(RuntimeError, 'no pinned Hex archive'):
+                build.toolchains({'otp':'28.5.0.4','elixir':'1.18.2','node':'24.22.0'})
+            install.assert_not_called()
+        self.assertNotIn('hex-2.5.3',build.TOOLCHAINS)
+
+    def test_asset_inputs_are_verified_before_recipe_use(self):
+        for name, keys in (
+            ('supabase-realtime', ['tailwindcss-3.3.2-linux-x64']),
+            ('supabase-edge-runtime', ['rusty-v8-130.0.7-x86_64-unknown-linux-gnu','rusty-v8-130.0.7-src-binding-x86_64-unknown-linux-gnu','edge-main-worker-bc27d2661edd']),
+        ):
+            with patch.object(build,'install_toolchain') as install:
+                build.toolchains({'name':name})
+            self.assertEqual([call.args[0] for call in install.call_args_list],keys)
+            for key in keys:
+                self.assertEqual(len(bytes.fromhex(build.TOOLCHAINS[key]['sha256'])),32)
+        recipe = (build.HERE/'recipe.sh').read_text()
+        self.assertIn('export MIX_TAILWIND_PATH=/root/tailwindcss-3.3.2-linux-x64',recipe)
+        self.assertIn('config :tailwind, path: System.fetch_env!("MIX_TAILWIND_PATH")',recipe)
+        self.assertIn('export RUSTY_V8_ARCHIVE=/root/librusty_v8_release_x86_64-unknown-linux-gnu.a.gz',recipe)
+        self.assertIn('cargo build --locked --profile release',recipe)
+        self.assertIn('export RUSTY_V8_SRC_BINDING_PATH=/root/src_binding_release_x86_64-unknown-linux-gnu.rs',recipe)
+        self.assertIn('cp /root/edge-main-worker.ts "$stage/app/main/upstream-index.ts"',recipe)
+        self.assertNotIn('curl -fsSL',recipe)
+
+    def test_studio_waits_for_meta_before_checks_and_cleans_up(self):
+        tree = ast.parse((build.HERE/'smoke.py').read_text())
+        start = next(index for index,node in enumerate(tree.body)
+                     if isinstance(node,ast.Assign) and any(isinstance(target,ast.Name) and target.id == 'process' for target in node.targets))
+        fixture = compile(ast.Module(body=tree.body[start:],type_ignores=[]),'smoke.py','exec')
+        for outcome in ('ready', 'timeout', 'exited'):
+            with self.subTest(outcome=outcome):
+                process = MagicMock()
+                process.poll.return_value = None
+                meta = MagicMock()
+                meta.poll.return_value = 1 if outcome == 'exited' else None
+                meta.returncode = 1
+                calls = []
+                def response(url, timeout):
+                    url = url.full_url if isinstance(url,build.urllib.request.Request) else url
+                    calls.append(url)
+                    if url.endswith(':8080/health') and (len(calls) == 1 or outcome == 'timeout'):
+                        raise OSError('connection refused')
+                    self.assertFalse(meta.terminate.called)
+                    reply = MagicMock()
+                    reply.__enter__.return_value = reply
+                    reply.status = 200
+                    reply.read.return_value = b'[]' if url.endswith('/tables') else b'<html></html>'
+                    return reply
+                clock = MagicMock()
+                clock.monotonic.side_effect = [0,1,121] if outcome == 'timeout' else [0,1,2]
+                commands = MagicMock()
+                commands.Popen.return_value = process
+                scope = {'subprocess':commands,'env':{},'log':None,'time':clock,
+                         'meta_process':meta,'name':'supabase-studio','health':'http://127.0.0.1:3000/',
+                         'urllib':build.urllib,'json':json}
+                with patch.object(build.urllib.request,'urlopen',side_effect=response), patch('builtins.print'):
+                    if outcome == 'ready':
+                        exec(fixture,scope)
+                        self.assertEqual(calls[:2],['http://127.0.0.1:8080/health']*2)
+                        self.assertIn('http://127.0.0.1:8080/tables',calls)
+                        clock.sleep.assert_called_once_with(1)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError,'within 120 seconds' if outcome == 'timeout' else 'postgres-meta fixture exited'):
+                            exec(fixture,scope)
+                        self.assertNotIn('http://127.0.0.1:3000/',calls)
+                process.terminate.assert_called_once()
+                meta.terminate.assert_called_once()
+
+
+    def test_builder_environment_records_image_and_sorted_packages(self):
+        with patch.object(build.subprocess,'check_output',side_effect=['a'*64+'\n','zlib1g:amd64=1.3\nbash=5.2\n']) as output:
+            result = build.builder_environment()
+        self.assertEqual(result,{'imageFingerprint':'a'*64,'aptPackages':['bash=5.2','zlib1g:amd64=1.3']})
+        self.assertEqual(output.call_args_list[0].args[0],['incus','config','get',build.BUILDER,'volatile.base_image'])
+        self.assertEqual(output.call_args_list[1].args[0],['incus','exec',build.BUILDER,'--','dpkg-query','-W','-f=${binary:Package}=${Version}\\n'])
+        for responses in ([''],['a'*64,''],['a'*64,'not-a-package']):
+            with patch.object(build.subprocess,'check_output',side_effect=responses):
+                with self.assertRaises(RuntimeError):
+                    build.builder_environment()
+
+    def test_storage_smoke_mirrors_product_schema_grants(self):
+        smoke = (build.HERE/'smoke.py').read_text()
+        product = (build.ROOT/'internal/agent/supabase/initsql/sql/020-storage.sql').read_text()
+        start = product.index('ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage')
+        self.assertIn(product[start:].strip(),smoke)
+        self.assertIn('GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;',smoke)
 
     def test_otp_reuse_requires_matching_successful_build_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -211,7 +344,7 @@ class NativeBuilder(unittest.TestCase):
             def install_selected(key, *args, **kwargs):
                 if key == 'otp-'+guest.version:
                     return install(key,*args,**kwargs)
-            with patch.object(build,'HERE',here), patch.object(build,'OUT',guest.out), patch.dict(build.TOOLCHAINS,{'otp-'+guest.version:old_pin}), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs'), patch.object(build,'install_toolchain',side_effect=install_selected), patch.object(build,'guest',side_effect=guest.guest), patch.object(build,'run',side_effect=guest.run), patch.object(build,'wait_for_host'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'qualify') as qualify:
+            with patch.object(build,'HERE',here), patch.object(build,'OUT',guest.out), patch.dict(build.TOOLCHAINS,{'otp-'+guest.version:old_pin}), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs'), patch.object(build,'install_toolchain',side_effect=install_selected), patch.object(build,'guest',side_effect=guest.guest), patch.object(build,'run',side_effect=guest.run), patch.object(build,'wait_for_host'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'builder_environment',return_value={'imageFingerprint':'a'*64,'aptPackages':['gcc=1']}), patch.object(build,'qualify') as qualify:
                 build.build(name)
                 old_fingerprint = build.build_input_fingerprint(name)
                 candidate = guest.out/(name+'-'+recipe['version']+'-ubuntu24.04-amd64.tar.gz.candidate')
@@ -357,9 +490,10 @@ class NativeBuilder(unittest.TestCase):
             out = Path(directory)
             fingerprint = build.build_input_fingerprint(name)
             guests = [{'name':build.BUILDER,'status':'Running'}]
-            with patch.object(build,'OUT',out), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs') as push, patch.object(build,'toolchains',return_value='/bin'), patch.object(build,'guest'), patch.object(build,'wait_for_host'), patch.object(build,'run'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'qualify') as qualify:
+            with patch.object(build,'OUT',out), patch.object(build,'get_instances',return_value=guests), patch.object(build,'push_build_inputs') as push, patch.object(build,'toolchains',return_value='/bin'), patch.object(build,'guest'), patch.object(build,'wait_for_host'), patch.object(build,'run'), patch.object(build.subprocess,'check_output',return_value='123'), patch.object(build,'builder_environment',return_value={'imageFingerprint':'a'*64,'aptPackages':['gcc=1']}), patch.object(build,'qualify') as qualify:
                 build.build(name)
             self.assertEqual(json.loads((out/(name+'.manifest.json')).read_text())['buildInputFingerprint'],fingerprint)
+            self.assertEqual(json.loads((out/(name+'.manifest.json')).read_text())['builderEnvironment'],{'imageFingerprint':'a'*64,'aptPackages':['gcc=1']})
             push.assert_called_once()
             qualify.assert_called_once()
 

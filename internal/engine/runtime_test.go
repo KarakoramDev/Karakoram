@@ -19,9 +19,9 @@ import (
 
 func TestAgentRuntimeSpec(t *testing.T) {
 	l := infra.Layout{AppDir: "/srv/app", VolumeRoot: "/srv/disks", User: "app"}
-	a := AgentRuntime{Cluster: "cluster", Member: "member", Engine: "postgres", Volume: "volume", AgentURL: "https://control.example.test", InternalCAPEM: "certificate", Prepare: []string{"prepare"}, Env: map[string]string{"ENGINE_SETTING": "value"}, Ports: []infra.Port{{Port: 5432, Protocol: "tcp"}}, ReadinessArgs: []string{"--wait=ready"}, ReadinessTimeout: 2 * time.Minute}
+	a := AgentRuntime{Cluster: "cluster", Member: "member", Engine: "postgres", Volume: "volume", AgentURL: "https://control.example.test", InternalCAPEM: "certificate", Prepare: []string{"prepare"}, Env: map[string]string{"ENGINE_SETTING": "value"}, Ports: []infra.Port{{Port: 5432, Protocol: "tcp"}}, ReadinessTimeout: 2 * time.Minute}
 	got := a.Spec(l)
-	want := infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Prepare: a.Prepare, Env: map[string]string{"KARAKORAM_URL": a.AgentURL, "KARAKORAM_CLUSTER": "cluster", "KARAKORAM_MEMBER": "member", "KARAKORAM_INTERNAL_CA": "certificate", DataDirVariable: "/srv/disks/volume", "KARAKORAM_ENGINE": "postgres", "ENGINE_SETTING": "value"}, Args: []string{"agent"}, Ports: a.Ports, Volume: "volume", StopBeforeStart: true, Readiness: &infra.Readiness{Args: []string{"agent", "readiness", "--wait=ready"}, FailureTimeout: 2 * time.Minute, RetryPeriod: ReadinessRetryPeriod}}
+	want := infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Prepare: a.Prepare, Env: map[string]string{"KARAKORAM_URL": a.AgentURL, "KARAKORAM_CLUSTER": "cluster", "KARAKORAM_MEMBER": "member", "KARAKORAM_INTERNAL_CA": "certificate", DataDirVariable: "/srv/disks/volume", "KARAKORAM_ENGINE": "postgres", "ENGINE_SETTING": "value"}, Args: []string{"agent"}, Ports: a.Ports, Volume: "volume", StopBeforeStart: true, Readiness: &infra.Readiness{Args: []string{"agent", "readiness", "--startup", "--data-dir=/srv/disks/volume"}, FailureTimeout: 2 * time.Minute, RetryPeriod: ReadinessRetryPeriod}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Spec: %+v want %+v", got, want)
 	}
@@ -41,7 +41,7 @@ func TestAgentRuntimeDefaultsAndStatelessDataDir(t *testing.T) {
 	if _, ok := got.Env["KARAKORAM_ENGINE"]; ok {
 		t.Fatal("unspecified engine was set")
 	}
-	if !reflect.DeepEqual(got.Args, []string{"agent"}) || got.Readiness == nil || !reflect.DeepEqual(got.Readiness.Args, []string{"agent", "readiness"}) || got.Readiness.FailureTimeout != DefaultReadinessTimeout || got.Readiness.RetryPeriod != ReadinessRetryPeriod {
+	if !reflect.DeepEqual(got.Args, []string{"agent"}) || got.Readiness == nil || !reflect.DeepEqual(got.Readiness.Args, []string{"agent", "readiness", "--startup", "--data-dir=/srv/app/karakoram-data"}) || got.Readiness.FailureTimeout != DefaultReadinessTimeout || got.Readiness.RetryPeriod != ReadinessRetryPeriod {
 		t.Fatalf("default readiness: %+v", got.Readiness)
 	}
 	override := (AgentRuntime{AgentURL: "original", Env: map[string]string{"KARAKORAM_URL": "override"}}).Spec(l)
@@ -150,7 +150,7 @@ func TestDeployOpensAndClosesArtifact(t *testing.T) {
 				t.Fatal(err)
 			}
 			artifact := &trackedArtifact{Reader: strings.NewReader("archive")}
-			rc := &Context{Backend: b, Artifact: runtimeArtifactSource{artifact: artifact}}
+			rc := &Context{Cluster: &domain.Cluster{}, Backend: b, Artifact: runtimeArtifactSource{artifact: artifact}}
 			failure := errors.New("deployment refused")
 			if fail {
 				b.FailNext("Deploy", failure)
@@ -177,7 +177,7 @@ func TestDeployOpensAndClosesArtifact(t *testing.T) {
 	}
 	failure := errors.New("artifact unavailable")
 	b := fake.New(fake.Options{})
-	rc := &Context{Backend: b, Artifact: runtimeArtifactSource{err: failure}}
+	rc := &Context{Cluster: &domain.Cluster{}, Backend: b, Artifact: runtimeArtifactSource{err: failure}}
 	if op, err := Deploy(t.Context(), rc, "member", infra.RuntimeSpec{}); !errors.Is(err, failure) || op.ID != "" {
 		t.Fatalf("artifact error: %+v %v", op, err)
 	}

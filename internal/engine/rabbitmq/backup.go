@@ -74,13 +74,11 @@ func definitionsKey(prefix, uid, name string) (string, error) {
 	if !safeObjectPart(uid) || !safeObjectPart(name) {
 		return "", errors.New("backup has no safe cluster UID or name")
 	}
-	prefix = strings.TrimRight(prefix, "/")
+	if err := domain.ValidateBackupStoragePrefix(prefix); err != nil {
+		return "", err
+	}
+	prefix = domain.BackupStoragePrefix(prefix)
 	if prefix != "" {
-		for _, part := range strings.Split(prefix, "/") {
-			if !safeObjectPart(part) {
-				return "", errors.New("storage prefix is not a safe object namespace")
-			}
-		}
 		prefix += "/"
 	}
 	return prefix + uid + "/definitions/" + name + ".json.gz", nil

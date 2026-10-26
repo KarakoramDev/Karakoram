@@ -26,6 +26,9 @@ type Provider interface {
 	ApplyDefaults(*domain.ClusterSpec)
 	Validate(context.Context, *domain.Cluster, *domain.Cluster) error
 	Sync(context.Context, *Context) (Result, error)
+	// Status may return a useful partial snapshot with a secondary error when
+	// Phase is nonempty. Reconciliation publishes its safety observations but
+	// does not declare readiness or advance the applied generation on that error.
 	Status(context.Context, *Context) (domain.ClusterStatus, error)
 	RunOperation(context.Context, *Context, *domain.Operation) (OpResult, error)
 	Cleanup(context.Context, *Context, domain.DeleteOptions) (bool, error)
@@ -62,6 +65,13 @@ type OperationClaimPolicy interface {
 	CanClaimOperation(*domain.Cluster) (bool, error)
 }
 
+// OperationObservationInvalidator discards transient observation windows before
+// an attempt, including failures resolving dependencies before provider entry.
+// Only a successful fresh provider observation may renew the prior checkpoint.
+type OperationObservationInvalidator interface {
+	InvalidateOperationObservation(*domain.Operation) error
+}
+
 // OperationSyncPolicy optionally permits ordinary Sync after a nonterminal,
 // successful RunOperation call. Without this policy, Running operations exclude
 // Sync and Status, which may be unsafe while restore stops database processes.
@@ -91,7 +101,10 @@ type Result struct {
 
 // OpResult reports operation completion and the next durable checkpoint.
 type OpResult struct {
-	Done         bool
+	Done bool
+	// Recovered confirms a successful native outcome during failure cleanup.
+	// Only a completed backup may override its exhausted initiation retries.
+	Recovered    bool
 	RequeueAfter time.Duration
 	Step         string
 	Message      string
@@ -125,6 +138,9 @@ type ClusterStore interface {
 	EnqueueBackup(context.Context, *domain.Backup, *domain.Operation) error
 	// EnqueueRestore atomically creates a Pending restore record and its restore operation.
 	EnqueueRestore(context.Context, *domain.Restore, *domain.Operation) error
+	// ClaimInitialDataSource atomically closes provisioning-amendment admission
+	// before a provider executes its first native initial import.
+	ClaimInitialDataSource(context.Context, domain.ClusterRef) error
 	GetOperation(context.Context, string) (*domain.Operation, error)
 	GetRestore(context.Context, domain.ClusterRef, string) (*domain.Restore, error)
 	UpdateRestore(context.Context, *domain.Restore) error
@@ -208,6 +224,21 @@ type Context struct {
 	Artifact  ArtifactSource
 	Logger    *slog.Logger
 	Clock     Clock
+	// ObservationEpoch is unique per CP process and shared with the API.
+	// Availability embeddings must supply the same nonempty value to both;
+	// timestamps alone cannot distinguish old snapshots after clock steps.
+	ObservationEpoch string
+	// AvailabilityOnly excludes inventory adoption/reconciliation from Status.
+	// An imperative operation may temporarily own a different native backup
+	// destination; probing availability must not reinterpret that inventory.
+	AvailabilityOnly bool
+	// DeploymentWait retains non-terminal platform backpressure for status.
+	DeploymentWait       string
+	DeploymentWaitReason string
+	DeploymentWaitKey    string
+	// SyncWait describes the current generation barrier, independently of health.
+	// Providers replace it on every attempt; it is not an availability condition.
+	SyncWait string
 }
 
 // Registry owns providers indexed by their unique names.

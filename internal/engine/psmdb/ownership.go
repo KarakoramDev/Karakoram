@@ -76,6 +76,25 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 		}
 		service, err := rc.Backend.GetService(ctx, name)
 		if err != nil {
+			if (m.RuntimeRecovery.Initialized || m.RuntimeRecovery.VolumeLost) && engine.ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
+				// This is evidence of the old volume's loss, not an absent
+				// logical resource to import. Preserve its recorded identity
+				// while native replacement synchronizes a different member.
+				if service != nil {
+					kind := infra.KindRuntime
+					if volume {
+						kind = infra.KindVolume
+					}
+					if service.Kind != kind {
+						return fmt.Errorf("%w: service %s has unexpected kind while observing volume loss", engine.ErrConflict, name)
+					}
+					if err := verifyServiceOwnership(ctx, rc, m, service, volume); err != nil {
+						return err
+					}
+				}
+				m.RuntimeRecovery.VolumeLost = true
+				continue
+			}
 			return err
 		}
 		if service == nil {
@@ -133,7 +152,7 @@ func adoptImported(ctx context.Context, rc *engine.Context, m *member, op infra.
 		if err != nil {
 			return false, err
 		}
-		if service == nil {
+		if service == nil || service.Importing {
 			complete = false
 			continue
 		}

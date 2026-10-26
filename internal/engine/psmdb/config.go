@@ -17,6 +17,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/users"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -44,11 +45,16 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) in
 		agentURL = p.options.ControlPlaneURL
 	}
 	prepare := PrepareCommands(version)
+	var readinessArgs []string
+	if m.Role == agentapi.RoleRouter {
+		readinessArgs = engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=psmdb")
+	}
 	return (engine.AgentRuntime{
 		Cluster: c.Name, Member: m.Name, Volume: m.Volume,
 		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM,
 		Ports: []infra.Port{{Port: 27017, Protocol: "tcp"}}, Prepare: prepare,
-		Env: map[string]string{"PERCONA_TELEMETRY_DISABLE": "1"},
+		Env:           map[string]string{"PERCONA_TELEMETRY_DISABLE": "1"},
+		ReadinessArgs: readinessArgs,
 	}).Spec(rc.Backend.Layout())
 }
 func runtimeResources(r domain.Resources) domain.Resources { r.MinDisk = 1; r.MaxDisk = 3; return r }
@@ -166,6 +172,13 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 		}
 		for _, kind := range []string{"members", "agents"} {
 			base := "tls/" + kind + "/" + m.Name
+			if kind == "agents" {
+				// Agent HTTPS swaps in memory on an authenticated config pull.
+				// It must not depend on the old leaf passing a disruption gate.
+				if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+".pending.pem"); err != nil && !missing(err) {
+					return err
+				}
+			}
 			if kind == "members" && providedLeaf {
 				// Supplied leaves belong to the operator, not the auto-renewer.
 				if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+".pending.pem"); err != nil && !missing(err) {
@@ -183,11 +196,12 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 				if !renew {
 					continue
 				}
-				// Agents read active secrets independently of ConfigVersion. Keep
-				// renewals private until this member passes the disruption gate.
+			}
+			if renewing && kind == "members" {
+				// Database leaves still require the gated rolling reload.
 				pending, err := secret(ctx, rc, base+".pending.pem")
 				if err == nil {
-					renew, err = pki.NeedsRenewal(pending, 30*24*time.Hour, now(rc))
+					renew, err := pki.NeedsRenewal(pending, 30*24*time.Hour, now(rc))
 					if err != nil {
 						return err
 					}
@@ -198,7 +212,7 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 					return err
 				}
 				base += ".pending"
-			} else if !missing(e) {
+			} else if e != nil && !missing(e) {
 				return e
 			}
 			cert, key, e := ca.Issue(pki.CertRequest{CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: ips, Validity: 365 * 24 * time.Hour, Server: true, Client: kind == "members"})
@@ -208,7 +222,7 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 			if e = putSecret(ctx, rc, base+".pem", append(cert, key...)); e != nil {
 				return e
 			}
-			if renewing {
+			if renewing && kind == "members" {
 				s.ConfigVersion++
 			}
 		}
@@ -245,6 +259,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	get := func(key string) (string, error) { b, e := secret(ctx, rc, key); return string(b), e }
 	v := agentapi.MemberConfig{Cluster: rc.Cluster.Name, Member: name, Role: m.Role, ReplSetName: m.Set, Port: 27017, EngineVersion: m.DesiredVersion, EngineConfig: m.EngineConfig, ConfigVersion: m.ConfigVersion, SystemUsers: map[string]agentapi.Credentials{}, TLS: agentapi.TLSConfig{Mode: m.TLSMode}}
+	v.Volume = engine.RuntimeVolumeIdentity(s.UID, m.Name, m.Volume, m.VolumeID, m.RuntimeRecovery.Initialized || m.Stage == "active" || m.Stage == "reload-publish" || m.Stage == "reload-wait")
 	if v.EngineVersion == "" {
 		v.EngineVersion = rc.Cluster.Spec.Version
 	}
@@ -269,6 +284,17 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		}
 		v.SystemUsers[u] = agentapi.Credentials{Username: u, Password: pw, Database: "admin"}
 	}
+	identity, e := loadRestorePBMIdentity(rc.Cluster.Internal)
+	if e != nil {
+		return v, e
+	}
+	if identity != nil && identity.Stage == "active" {
+		pw, err := get(identity.Secret)
+		if err != nil {
+			return v, err
+		}
+		v.SystemUsers["backup"] = agentapi.Credentials{Username: identity.User, Password: pw, Database: "admin"}
+	}
 	v.PBMEnabled = m.Role != agentapi.RoleRouter && s.Sets[m.Set] != nil && s.Sets[m.Set].Stage == "ready"
 	process := "mongod"
 	if m.Role == agentapi.RoleRouter {
@@ -282,6 +308,9 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	}
 	v.ShardServer = m.Role == agentapi.RoleReplicaSet && rc.Cluster.Spec.Topology.Type == "sharded"
 	v.WiredTigerCacheSizeGB = m.CacheGB
+	if m.Role != agentapi.RoleRouter {
+		v.PBMGoMemoryLimitBytes = pbm.GoMemoryLimitBytes(appliedPBMResources(ctx, rc, s, m), m.CacheGB)
+	}
 	var restore struct {
 		Maintenance map[string]bool     `json:"pbmMaintenance"`
 		Stopped     map[string][]string `json:"pbmStopped"`
@@ -324,7 +353,7 @@ func activateConfig(c *domain.Cluster, s *internalState, m *member) {
 
 // publishRenewedCertificates is called only inside the gated rolling reload.
 func publishRenewedCertificates(ctx context.Context, rc *engine.Context, m *member) error {
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		base := "tls/" + kind + "/" + m.Name
 		bundle, err := secret(ctx, rc, base+".pending.pem")
 		if missing(err) {
@@ -344,7 +373,7 @@ func publishRenewedCertificates(ctx context.Context, rc *engine.Context, m *memb
 }
 
 func hasPendingCertificate(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	for _, kind := range []string{"members", "agents"} {
+	for _, kind := range []string{"members"} {
 		_, err := secret(ctx, rc, "tls/"+kind+"/"+m.Name+".pending.pem")
 		if err == nil {
 			return true, nil

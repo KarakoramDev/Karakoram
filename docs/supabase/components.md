@@ -8,6 +8,10 @@ Each `spec.components.extra.<name>` has `replicas` and `resources`. An absent en
 
 Enabled analytics requires at least **1 GiB `minRam`** per replica (with `maxRam` at least as large). The native Logflare release exceeds a 512 MiB memory limit during startup, including migrations, despite bounded BEAM schedulers. The default already reserves 1 GiB; admission rejects smaller reservations rather than accepting a stack that repeatedly dies before readiness. This is a startup floor, not production workload sizing.
 
+Analytics keeps a temporary logical replication slot (`cainophile_*`, publication `logflare_pub` in the `_supabase` database) for its metadata cache. The shipped build acknowledges the server's WAL position while that publication has no changes, so the slot does not pin the cluster's WAL when the metadata is idle (upstream Logflare's client otherwise retains WAL without bound). If any slot does pin WAL, the cluster reports `ReplicationSlots=False` and `Ready=False` with reason `SlotWALRetention`; see [PostgreSQL operations](../postgres/operations.md) for the optional `max_slot_wal_keep_size` safety limit.
+
+Acknowledging WAL on keepalives is safe only for this ephemeral cache-invalidation consumer on a temporary slot; it is not a durable-consumer acknowledgment policy. Feedback can advance before queued invalidations are processed. Durable consumers must not use this policy: reconnecting to a persistent slot could skip changes acknowledged before they were delivered or processed.
+
 | Component | Native application / current lock version | Private port | Dependency / availability |
 | --- | --- | --- | --- |
 | `gateway` | Envoy 1.39.1 | 8000 | Default enabled; supplied |
@@ -24,6 +28,39 @@ Enabled analytics requires at least **1 GiB `minRam`** per replica (with `maxRam
 | `vector` | Vector 0.53.0 | 9002 log source | Supplied; requires analytics |
 
 `minimal` enables gateway/auth/rest plus proxy. `standard` adds realtime/storage/meta/studio; `full` selects every component. All three presets have their component artifacts in the current lock. Standard/full also require `storage.backendStorage`. Inspect the embedded [lock](../../internal/engine/nativeartifacts/lock.json) and running provider catalog when upgrading. Source-built services and the always-installed extension bundle need an operator mirror in development builds; admission rejects an unresolved bundle even for the minimal preset. Official entries can resolve upstream. No independent component-version override exists.
+
+Status collects PostgreSQL, each enabled component, and final gateway upstream readiness independently and concurrently. Component observations have a four-second budget inside the five-second sweep; a hung native application endpoint withdraws that component's health and stack readiness without disconnecting responsive agents or discarding healthy peers' observations. All live instances must acknowledge current configuration and native readiness, including extra rollout instances. A timeout includes the affected instance and directs operators to restore its agent/application observations before serving traffic; it is not evidence that the entire stack is absent.
+
+Database-backed readiness uses read-only serving requests, not merely process
+listeners: REST requires both PostgREST admin `/ready` and an authenticated
+OpenAPI root request, Auth performs a single indexed user-ID lookup (including
+the successful no-such-user result on empty databases), Storage lists buckets,
+and metadata lists schemas. Auth readiness never counts the user population.
+These probes use existing local service credentials
+and do not create application data. A reachable process whose database path or
+schema cache cannot serve is unhealthy; its instance-scoped diagnosis withdraws
+`ComponentsReady` and stack readiness on the normal observation sweep. Upstream
+response bodies and credentials are not copied into status. The existing
+three-second native probe budget and runtime recovery hysteresis are unchanged.
+Gateway listener readiness remains independent during sequential bootstrap;
+final gateway discovery evidence is not an end-to-end database query.
+Realtime readiness also requires its tenant health payload to report healthy,
+not just HTTP success; a healthy idle tenant need not already have an active
+database connection. Pooler and Analytics retain their upstream database-aware
+health checks. None of these observations replaces an end-to-end workload probe.
+
+These probe changes require the updated agent on each component instance.
+A control-plane-only rollout leaves existing agents' native probes unchanged;
+use fresh members or the supported component artifact rollout to install the
+updated agent, and verify every live instance's artifact provenance.
+
+Auth and REST member configurations also retain the existing service-role API
+credential for these authenticated database probes. Correcting missing probe
+credentials requires a control-plane upgrade and normal member configuration
+convergence, not another agent artifact rollout if the instance already runs
+these probes. Storage already retains this credential; metadata's native
+loopback database probe does not require it. Do not bypass authentication or
+fall back to process-only readiness when a serving probe returns HTTP 401.
 
 ## Configuration
 
@@ -78,11 +115,40 @@ The Percona-17-built `supabase-pg17-extensions` bundle additionally supplies `pg
 
 Envoy renders routes for enabled components only. It translates supported opaque/legacy API keys, restricts `/pg/` to service keys, and protects Studio with dashboard Basic authentication. After successful authentication it replaces `apikey` with the cluster service-role credential for Studio's private proxy, which validates and strips that transport credential before forwarding to loopback-only Studio. MCP and Realtime tenant-admin paths are denied. Do not expose individual service/admin ports publicly.
 
+PostgREST application paths such as `/rest/v1/messages` and
+`/rest/v1/rpc/list_messages` accept anon/publishable and service-role/secret API
+keys; database grants and row-level security still determine application access.
+The exact `/rest/v1/` root (including requests with a query string) serves OpenAPI
+schema discovery and is **admin-only**, matching
+[upstream Kong policy](https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/docker/volumes/api/kong.yml)
+and its [security rationale](https://github.com/orgs/supabase/discussions/42949).
+An anon key returning 403 at that root is expected; test an actual table or RPC
+path for anon application access. A service key does not replace Studio dashboard
+authentication, and anon/publishable keys cannot access `/pg/`.
+
 Realtime routes positively allow only websocket/longpoll, `/api/ping`, `/api/broadcast` (including `/api/broadcast/:topic/events/:event`), and `/healthcheck` beneath `/realtime/v1`. Unknown paths and noncanonical paths containing empty or dot segments, escaped slashes/backslashes, or nested percent encoding are denied. This policy does not normalize Storage paths: raw SigV4 paths remain unchanged. Realtime's private administration API uses a separate sealed signing secret, never the tenant/anon JWT secret; ordinary application and service-role keys cannot administer tenants directly.
 
 Both broadcast endpoints use `POST`, matching the pinned Realtime router. The gateway removes only the `/realtime/v1` prefix, retaining the leading slash in the upstream `/api/broadcast/...` request target.
 
 Gateway, PostgREST, Storage, metadata/Studio private proxies and Vector ingestion follow the backend's private address family. IPv6 proxies retain IPv4 loopback health access. Raw Studio stays on `127.0.0.1:3000`; its authenticated private ingress is port `3002`. Vector uses `[::]:9002` on IPv6 backends and `0.0.0.0:9002` on IPv4 backends, with health remaining at `127.0.0.1:9001`.
+
+Realtime, Supavisor and Logflare retain their native Erlang distribution for local runtime use only. Distribution sockets and EPMD bind to IPv4 loopback, and each component uses a distinct cookie derived from existing sealed, random per-cluster credentials, not the cookie bundled in the downloadable release. Do not open EPMD (TCP 4369) or Erlang distribution ports between members; these services do not provide an inter-member BEAM cluster. Apply the updated agent-rendered configuration to existing members before relying on this isolation. Never publish process environments or release cookies. The upstream release launchers pass the cookie as a process argument. With default Linux procfs permissions, any user who can access a process's `/proc` entry can read its arguments; `hidepid=1` or `hidepid=2` restricts access by other users but does not isolate processes running as the same user. On Nomad and Dokploy, members run in private PID namespaces, so sibling members do not see each other's processes, but member processes remain visible in the node host's PID namespace. Karakoram does not enable `hidepid` for the member's `/proc`, and the member agent and component processes run as the same service user. The cookie is therefore readable by any process inside the member; with default Linux procfs permissions on the node host, it is also readable by any host user. On other backends, assume the same exposure to anyone with access to the member's host. Do not run untrusted users or processes inside a Realtime, Supavisor or Logflare member or on its node host, and do not share the member's process or network namespaces. To restrict access through the node host's `/proc`, mount it with `hidepid=2`; this hides member process entries from other unprivileged host users except members of the group exempted with the procfs `gid=` option. The host's root user and processes running as the member's service user keep access, and the member's own `/proc` mount is unchanged.
+
+Realtime's internal RPC listener is bound to loopback and must never be reachable.
+Existing deployments require the updated member agent as well as its rendered
+configuration. A control-plane upgrade or an in-place application restart does
+not replace that member executable. Follow the
+[component artifact roll procedure](operations.md#cluster-restart-and-member-software)
+before relying on updated member behavior.
+
+Other native application listeners are distinct from distribution: Supavisor
+also opens PostgreSQL proxy port `5412` and internal session/transaction shards
+`12100`–`12107`, all using its PostgreSQL credential authentication. Logflare opens
+gRPC ingestion port `50051`, protected by API-key/source authorization. These
+upstream application listeners default to wildcard binds and do not expose
+arbitrary Erlang RPC. Do not publish them: the pinned releases do not expose an
+environment option to loopback-bind these listeners individually. `NODE_IP` and
+`LOGFLARE_NODE_HOST` name nodes, not application bind addresses.
 
 Browser CORS defaults to upstream allow-any-origin behavior because application authentication uses headers, not browser cookies. Preflight is handled before API-key or dashboard authentication; credentialed CORS is disabled. To restrict browser callers, set `gateway.corsOrigins: [https://app.example.com]`. CORS is a browser policy, not an authorization boundary: non-browser callers still need the appropriate API keys and database grants/RLS. GraphQL requests receive both `Content-Profile` (POST) and `Accept-Profile` (GET) for `graphql_public`.
 

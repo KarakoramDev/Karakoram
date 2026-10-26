@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
@@ -63,7 +64,18 @@ func (s *Store) EnqueueOperation(ctx context.Context, op *domain.Operation) erro
 	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
-	return put(ctx, s.writer, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true)
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err = admitClusterOperation(ctx, tx, op); err != nil {
+		return err
+	}
+	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // GetOperation loads operation.
@@ -74,7 +86,7 @@ func (s *Store) GetOperation(ctx context.Context, id string) (*domain.Operation,
 		return nil, typed(err)
 	}
 	var op domain.Operation
-	if err = json.Unmarshal(data, &op); err != nil {
+	if err = json.Unmarshal(redact.DiagnosticsJSON(data), &op); err != nil {
 		return nil, err
 	}
 	return &op, nil
@@ -129,6 +141,9 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 	if current.Terminal() {
 		return nil
 	} // Never overwrite retirement or a concurrent cancellation.
+	if current.Kind == domain.OperationCreate && current.TargetGeneration != op.TargetGeneration {
+		return domain.Conflict("operation", op.ID, domain.ReasonConflict, ErrConflict, "Initial create operation %s was amended to generation %d; reload it before recording convergence", op.ID, current.TargetGeneration)
+	}
 	op.CancelRequested = op.CancelRequested || current.CancelRequested
 	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), false); err != nil {
 		return err
@@ -162,6 +177,9 @@ func (s *Store) UpdateOperationAndClusterState(ctx context.Context, op *domain.O
 	var current domain.Operation
 	if err = json.Unmarshal(raw, &current); err != nil {
 		return err
+	}
+	if current.Kind == domain.OperationCreate && current.TargetGeneration != op.TargetGeneration {
+		return domain.Conflict("operation", op.ID, domain.ReasonConflict, ErrConflict, "Initial create operation %s was amended to generation %d; reload it before recording convergence", op.ID, current.TargetGeneration)
 	}
 	op.CancelRequested = op.CancelRequested || current.CancelRequested
 	data, err := json.Marshal(op)
@@ -235,7 +253,7 @@ func (s *Store) ClaimOperation(ctx context.Context, ref domain.ClusterRef) (*dom
 	if err := ref.Validate(); err != nil {
 		return nil, err
 	}
-	return s.claimOperation(ctx, ref.Key(), true)
+	return s.claimOperation(ctx, ref.Key(), true, "")
 }
 
 // ClaimRunningOperation resumes active work without starting a Pending action.
@@ -244,23 +262,51 @@ func (s *Store) ClaimRunningOperation(ctx context.Context, ref domain.ClusterRef
 	if err := ref.Validate(); err != nil {
 		return nil, err
 	}
-	return s.claimOperation(ctx, ref.Key(), false)
+	return s.claimOperation(ctx, ref.Key(), false, "")
 }
 
-func (s *Store) claimOperation(ctx context.Context, cluster string, includePending bool) (*domain.Operation, error) {
+// ClaimBackupDeletion permits retained-object cleanup without starting unrelated
+// runtime work while a cluster is suspended.
+func (s *Store) ClaimBackupDeletion(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	return s.claimOperation(ctx, ref.Key(), true, domain.OperationDeleteBackup)
+}
+
+func (s *Store) claimOperation(ctx context.Context, cluster string, includePending bool, kind string) (*domain.Operation, error) {
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	var data []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.targetGeneration') IS NULL AND (? OR phase='Running') ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending).Scan(&data)
+	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.targetGeneration') IS NULL AND (? OR phase='Running') AND (?='' OR json_extract(data,'$.kind')=?) ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending, kind, kind).Scan(&data)
 	if err != nil {
 		return nil, typed(err)
 	}
 	var op domain.Operation
 	if err = json.Unmarshal(data, &op); err != nil {
 		return nil, err
+	}
+	if (op.Kind == domain.OperationRestore || op.Kind == "initial-restore") && op.Phase != domain.PhaseRunning {
+		if err = claimInitialDataSource(ctx, tx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}); err != nil {
+			return nil, err
+		}
+	}
+	// Running work already owns the native lifecycle, including compensation.
+	// Do not re-admit it through an initial create tracker that may have failed
+	// while cleanup was in progress. Its Running row itself fences amendments.
+	if op.Phase == domain.PhaseRunning {
+		if _, ok := ctx.Value(clusterSnapshotKey{}).(clusterSnapshot); ok {
+			c, err := scanCluster(tx.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(op.Namespace), op.Cluster))
+			if err != nil {
+				return nil, err
+			}
+			if err = checkClusterSnapshot(ctx, tx, c); err != nil {
+				return nil, err
+			}
+		}
 	}
 	now := time.Now().UTC()
 	op.Phase = domain.PhaseRunning
@@ -280,6 +326,10 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 
 // EnqueueBackup creates its inventory record and operation in one transaction.
 func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *domain.Operation) error {
+	return s.enqueueBackup(ctx, backup, op, nil)
+}
+
+func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *domain.Operation, advance *scheduleAdvance) error {
 	if err := (domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}).Validate(); err != nil {
 		return err
 	}
@@ -299,6 +349,15 @@ func (s *Store) EnqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 		return err
 	}
 	defer tx.Rollback()
+	if backup.Cluster != op.Cluster || domain.NormalizedNamespace(backup.Namespace) != op.Namespace {
+		return ErrConflict
+	}
+	if err = admitClusterOperation(ctx, tx, op); err != nil {
+		return err
+	}
+	if err = advanceSchedule(ctx, tx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}, advance); err != nil {
+		return err
+	}
 	if err = put(ctx, tx, "backup", domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key(), backup.Name, backup, "", "", string(backup.Phase), true); err != nil {
 		return err
 	}
@@ -329,6 +388,25 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 		return err
 	}
 	defer tx.Rollback()
+	if restore.Cluster != op.Cluster || domain.NormalizedNamespace(restore.Namespace) != op.Namespace {
+		return ErrConflict
+	}
+	if err = admitClusterOperation(ctx, tx, op); err != nil {
+		return err
+	}
+	if c, initial, err := initialDataSourceOperation(ctx, tx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}); err != nil {
+		return err
+	} else if initial != nil {
+		if !matchesInitialRestore(c, restore) {
+			return initialRestoreConflict(initial)
+		}
+		if _, err := admitInitialNativeContinuation(ctx, tx, c, initial); err != nil {
+			return err
+		}
+	}
+	if err = admitRestoreBackup(ctx, tx, domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}, domain.ClusterRef{Namespace: restore.SourceNamespace, Name: restore.Source.SourceCluster}, restore.Source.Backup, restore.Source.PITRTime != nil); err != nil {
+		return err
+	}
 	if err = put(ctx, tx, "restore", domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}.Key(), restore.Name, restore, "", "", string(restore.Phase), true); err != nil {
 		return err
 	}
@@ -352,6 +430,18 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 	}
 	defer tx.Rollback()
 	ref := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}
+	if backup.Cluster != op.Cluster || domain.NormalizedNamespace(backup.Namespace) != op.Namespace {
+		return ErrConflict
+	}
+	if _, fenced := ctx.Value(clusterSnapshotKey{}).(clusterSnapshot); fenced {
+		current, readErr := scanCluster(tx.QueryRowContext(ctx, "SELECT "+clusterColumns+" FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name))
+		if readErr != nil {
+			return readErr
+		}
+		if err = checkClusterSnapshot(ctx, tx, current); err != nil {
+			return err
+		}
+	}
 	var raw []byte
 	if err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='backup' AND scope=? AND key=?", ref.Key(), backup.Name).Scan(&raw); err != nil {
 		return typed(err)
@@ -359,8 +449,14 @@ func (s *Store) EnqueueBackupDeletion(ctx context.Context, backup *domain.Backup
 	if err = json.Unmarshal(raw, backup); err != nil {
 		return err
 	}
+	if err = refuseBackupDependents(ctx, tx, ref, backup.Name, false, false); err != nil {
+		if conflict, ok := err.(*domain.ResourceError); ok {
+			conflict.State = string(backup.Phase)
+		}
+		return err
+	}
 	op.Target = domain.OperationTarget{Kind: "backup", Name: backup.Name}
-	if backup.PBMName == "" && (backup.Phase == domain.PhaseFailed || backup.Phase == domain.PhasePending) {
+	if backup.PBMName == "" && backup.Location == "" && backup.Postgres == nil && (backup.Phase == domain.PhaseFailed || backup.Phase == domain.PhasePending) {
 		var active int
 		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind')='backup' AND json_extract(data,'$.target.kind')='backup' AND json_extract(data,'$.target.name')=?", ref.Key(), backup.Name).Scan(&active); err != nil {
 			return err

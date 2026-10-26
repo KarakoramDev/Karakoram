@@ -442,16 +442,38 @@ func TestRelayReconcileDurableOperationsAndSecretFreeYAML(t *testing.T) {
 	}
 }
 
+// Renewal admission uses the signed leaf, not mutable display metadata.
+func expiringClientIdentity(t *testing.T, r *Registry, n *domain.Namespace) {
+	t.Helper()
+	cert, key, err := relay.IssueClientCertificate(r.pki.CACert, r.pki.CAKey, n.Name, time.Now().Add(-364*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaf, err := relay.ParseCertificatePEM(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.ClientCert, n.ClientSerial, n.Relay.CertNotAfter = cert, leaf.SerialNumber.String(), leaf.NotAfter
+	token, err := r.o.Store.GetNamespaceTokenForUpdate(t.Context(), n.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = r.o.Store.UpdateNamespaceCredentials(t.Context(), n, token, key); err != nil {
+		t.Fatal(err)
+	}
+	r.enroll(n)
+}
+
 func TestClientRenewalUsesSecretsAndRestartWithoutRedeploy(t *testing.T) {
 	r, b, _ := setupRegistry(t)
 	n := createTestNamespace(t, r)
 	ctx := context.Background()
+	expiringClientIdentity(t, r, n)
 	oldSerial := n.ClientSerial
 	oldKey, err := r.o.Store.GetNamespaceRelayKey(ctx, n.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	n.Relay.CertNotAfter = time.Now().Add(24 * time.Hour)
 	n.DeployedExecutableHash = "test-hash"
 	n.SecretsPending = false
 	b.service = &infra.Service{Kind: infra.KindRuntime, ID: "owned-relay", Hostname: n.Relay.Hostname, Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}
@@ -596,7 +618,7 @@ func TestRegistryLifecycleEventsUseSystemActor(t *testing.T) {
 	}
 	r.syncSessionSnapshot(ctx, n, relay.SessionStatus{Connected: true})
 	r.syncSessionSnapshot(ctx, n, relay.SessionStatus{})
-	n.Relay.CertNotAfter = time.Now().Add(time.Hour)
+	expiringClientIdentity(t, r, n)
 	if err = r.save(ctx, n); err != nil {
 		t.Fatal(err)
 	}
@@ -929,5 +951,35 @@ func TestBackendTargetIsolationAndOptionalRelay(t *testing.T) {
 	r.step(t.Context(), n.Name)
 	if _, err := r.Get(t.Context(), n.Name); !errors.Is(err, ErrNotFound) {
 		t.Fatal("direct namespace not deleted", err)
+	}
+}
+
+func TestRelayResumesIncompleteImportBeforeRenewingIdentity(t *testing.T) {
+	r, b, _ := setupRegistry(t)
+	n := createTestNamespace(t, r)
+	expiringClientIdentity(t, r, n)
+	serial := n.ClientSerial
+	n.SecretsPending = true
+	b.service = &infra.Service{
+		ID: "service-test", Hostname: n.Relay.Hostname, Kind: infra.KindRuntime,
+		Status: infra.StatusCreating, Importing: true,
+		Ownership: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker},
+	}
+	if err := r.save(t.Context(), n); err != nil {
+		t.Fatal(err)
+	}
+	r.step(t.Context(), n.Name)
+	got, err := r.Get(t.Context(), n.Name)
+	if err != nil || got.PendingOpKind != "import" || got.ClientSerial != serial || b.imports != 1 || b.deploys != 0 || b.restarts != 0 || b.envVarWrites != 0 {
+		t.Fatalf("incomplete import did not retain its original enrollment: %+v %v", got, err)
+	}
+	if b.env["KARAKORAM_RELAY_CERT"] != string(n.ClientCert) || b.service.Importing {
+		t.Fatal("original import was not resumed with its original secrets")
+	}
+	r.step(t.Context(), n.Name) // consume completed import
+	r.step(t.Context(), n.Name) // renewal is now admitted
+	got, err = r.Get(t.Context(), n.Name)
+	if err != nil || got.ClientSerial == serial || !got.SecretsPending {
+		t.Fatalf("completed import did not release certificate renewal: %+v %v", got, err)
 	}
 }

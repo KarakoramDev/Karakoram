@@ -103,13 +103,17 @@ type ServiceSpec struct {
 
 // Service describes an observed infrastructure service.
 type Service struct {
-	ID            string      `json:"id"`
-	Hostname      string      `json:"hostname"`
-	Kind          ServiceKind `json:"kind"`
-	Status        string      `json:"status"`
-	Resources     Resources   `json:"resources"`
-	MinContainers int         `json:"minContainers"`
-	MaxContainers int         `json:"maxContainers"`
+	ID       string      `json:"id"`
+	Hostname string      `json:"hostname"`
+	Kind     ServiceKind `json:"kind"`
+	Status   string      `json:"status"`
+	// Importing identifies a durable reservation whose original ImportServices
+	// batch must be replayed before deployment or lifecycle mutations. Ownership
+	// and a nonnil service alone do not establish that setup completed.
+	Importing     bool      `json:"importing,omitempty"`
+	Resources     Resources `json:"resources"`
+	MinContainers int       `json:"minContainers"`
+	MaxContainers int       `json:"maxContainers"`
 	// Ownership contains only Karakoram identity keys, never arbitrary environment
 	// secrets. Values the token cannot read are omitted, never stored masked.
 	Ownership map[string]string `json:"-"`
@@ -227,6 +231,14 @@ type Backend interface {
 	Containers(context.Context, string) ([]Container, error)
 	Logs(context.Context, string, LogQuery) ([]LogLine, error)
 	OpStatus(context.Context, Op) (OpState, error)
+}
+
+// FailedScaleRecoverer can reapply a terminally failed runtime's desired count
+// only when the owned desired specification is already natively healthy at that
+// count. False means no mutation occurred. A new operation must never fall back
+// to placing replacements if that proof disappears before registration.
+type FailedScaleRecoverer interface {
+	RecoverFailedScale(ctx context.Context, hostname string, min, max int) (Op, bool, error)
 }
 
 // SubdomainAccess manages public HTTPS routing to a service's HTTP ports

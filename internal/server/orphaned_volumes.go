@@ -9,6 +9,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 // ListOrphanedVolumes implements the generated strict API operation.
@@ -35,6 +36,8 @@ func (s *Server) orphanedVolumes(ctx context.Context) response {
 }
 
 func orphanedVolumeAPI(v domain.OrphanedVolume) api.OrphanedVolume {
+	v.FirstError = redact.Diagnostic(v.FirstError)
+	v.LastError = redact.Diagnostic(v.LastError)
 	return api.OrphanedVolume{
 		Namespace:     ptr(domain.NormalizedNamespace(v.Namespace)),
 		Hostname:      v.Hostname,

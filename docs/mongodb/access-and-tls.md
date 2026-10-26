@@ -77,7 +77,7 @@ The generated cluster CA uses ECDSA P-256, distinct from installation internal P
 
 Patch `spec.tls: {mode: requireTLS, ca: selfSigned}` with `clusters patch demo -f FILE --wait`. Changes use rolling passes, waiting for configuration acknowledgement and replication catch-up between members/passes. Enabling traverses `disabled → allowTLS → preferTLS → requireTLS`, stopping at the requested mode; disabling reverses it. Internal `allowTLS` accepts both but sends plaintext; it is not a public option. Directly mixing disabled/preferTLS can break replication/stepdown.
 
-`karactl clusters rotate-tls demo --wait --yes` rotates leaves under the existing CA, not the master key or CA source. CA source **and stored signing certificate/key are immutable**: changed material returns **409**; identical resubmission is accepted. Controller-issued member/agent leaves renew within 30 days of expiry, staged one member at a time behind disruption/replication checks.
+`karactl clusters rotate-tls demo --wait --yes` rotates leaves under the existing CA, not the master key or CA source. CA source **and stored signing certificate/key are immutable**: changed material returns **409**; identical resubmission is accepted. Controller-issued database leaves renew within 30 days of expiry, staged one member at a time behind disruption/replication checks. Agent HTTPS leaves are published independently and hot-swapped through authenticated configuration pulls, so expired or future-dated agent transport cannot block its own renewal. See [certificate lifecycle limits](../limitations.md#certificate-and-member-credential-lifecycle).
 
 ## User-provided PKI
 
@@ -155,7 +155,7 @@ spec:
 
 Replace this documentation CIDR with authorized client ranges; follow the shared [public exposure allowlist and acknowledgement rules](../security.md#public-exposure-allowlists). The UI clears confirmation when settings change.
 
-Managed listeners explicitly enable `bindIpAll` and IPv6; neither is overridable. Members share the project public IP with distinct mapped ports. Disabling exposure removes owned routes. Routing synchronization is project-wide; Ready/`isSynced` is not proof of external reachability. Keep `requireTLS`, narrow CIDRs and verify allowed/denied access; never publish agent port 9443.
+Managed listeners explicitly enable `bindIpAll` and IPv6; neither is overridable. Members share the project public IP with distinct mapped ports. Disabling exposure removes owned routes even when no writable primary exists or replicas are lagging, after pending platform operations and ownership checks; it does not mark the cluster Ready or acknowledge the new generation. Publishing routes still requires native health. Routing synchronization is project-wide; Ready/`isSynced` is not proof of external reachability. Keep `requireTLS`, narrow CIDRs and verify allowed/denied access; never publish agent port 9443.
 
 **Warning:** Public replica-set seeds still advertise private member names/ports. No automatic external DNS/SNI split-horizon solution is configured; DNS-to-shared-IP alone does not fix per-member port mappings. External clients must resolve/reach discovered endpoints with valid TLS. `directConnection=true` is diagnostic, not HA/failover. Treat `publicHosts` as routes, not validated external discovery. [Sharded](sharding.md) mongos endpoints do not require external discovery of shard members.
 

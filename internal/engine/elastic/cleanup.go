@@ -5,28 +5,37 @@ package elastic
 
 import (
 	"context"
-	"net/url"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
 )
 
-// Cleanup removes owned snapshots while the cluster is alive, then components,
-// node runtimes, volumes and secrets. Unreachable clusters retain snapshots and
-// emit a warning rather than blocking infrastructure deletion indefinitely.
+// Cleanup retires all runtime writers and optional volumes before bounded,
+// control-plane cleanup of exact owned repository prefixes.
 func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.DeleteOptions) (done bool, err error) {
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return false, err
+	}
+	// Backend-owned deletion fences survive this whole-cluster takeover.
+	for _, m := range s.Members {
+		m.UnplacedRetirement = nil
 	}
 	defer func() {
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
 		}
 	}()
+	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
+		return false, e
+	}
 	s.Phase = "cleanup"
+	rc.Cluster.Status.Message = "Deleting: removing Elasticsearch runtime services and owned resources"
+	if s.Pending != nil && engine.CleanupSupersedesDeployment(rc.Backend, s.Pending.Op) {
+		delete(s.PlatformRetries, retryKey(s.Pending))
+		s.Pending = nil
+	}
 	if opts.KeepVolumes {
 		if s.Rolling != nil {
 			s.ResumeAllocationReset = true
@@ -57,56 +66,6 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	}
 	if busy, _, e := p.retryPending(ctx, rc, s); busy || e != nil {
 		return false, e
-	}
-	if !opts.KeepBackups && !s.CleanupBackups {
-		owned := false
-		for _, repo := range s.Repositories {
-			owned = owned || !repo.ReadOnly
-		}
-		if !owned {
-			s.CleanupBackups = true
-			return false, nil
-		}
-		c, e := p.es(ctx, rc, s)
-		reachable := e == nil
-		if reachable {
-			_, e = c.Info(ctx)
-			reachable = e == nil
-		}
-		if !reachable {
-			if c != nil {
-				c.Close()
-			}
-			if rc.Events != nil {
-				if e = rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "SnapshotsRetained", Message: "Elasticsearch is unreachable; snapshots remain in backup storage and infrastructure deletion continues", CreatedAt: now(rc)}); e != nil {
-					return false, e
-				}
-			}
-			s.CleanupBackups = true
-			return false, nil
-		}
-		defer c.Close()
-		for _, key := range sortedKeys(s.Repositories) {
-			repo := s.Repositories[key]
-			if repo.ReadOnly {
-				continue
-			}
-			snapshots, e := c.ListSnapshots(ctx, repo.Name)
-			if e != nil {
-				return false, e
-			}
-			if e = p.cleanupSnapshotRecords(ctx, rc, repo, snapshots); e != nil {
-				return false, e
-			}
-			if len(snapshots) > 0 {
-				if e = c.DeleteSnapshot(ctx, repo.Name, snapshots[0].Snapshot); e != nil {
-					return false, e
-				}
-				return false, nil
-			}
-		}
-		s.CleanupBackups = true
-		return false, nil
 	}
 	ordered := append(s.componentMembers(), s.esNodes()...)
 	for _, m := range ordered {
@@ -160,6 +119,11 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, p.issueAction(ctx, rc, s, &pending{Action: "cleanup-volume", Member: m.Name})
 		}
 	}
+	if !opts.KeepBackups && !s.CleanupBackups {
+		if done, e := p.cleanupBackupArtifacts(ctx, rc, s); !done || e != nil {
+			return false, e
+		}
+	}
 	if opts.KeepVolumes {
 		s.Suspended = true
 		rc.Cluster.Status.Phase = domain.PhaseSuspended
@@ -184,30 +148,4 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 		s.CleanupSecrets = true
 	}
 	return true, nil
-}
-
-// Inventory is removed only after Elasticsearch confirms that the corresponding
-// snapshot is absent. Re-listing makes crashes between native and record deletion
-// retryable without discarding records for read-only or unreachable repositories.
-func (p *Provider) cleanupSnapshotRecords(ctx context.Context, rc *engine.Context, repo *repository, snapshots []esapi.SnapshotInfo) error {
-	backups, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
-	if err != nil {
-		return err
-	}
-	for _, b := range backups {
-		location, err := url.Parse(b.Location)
-		if err != nil || b.Provider != "elasticsearch" || location.Query().Get("repository") != repo.Name || strings.TrimPrefix(location.Path, "/") != repo.BasePath || location.Fragment == "" {
-			continue
-		}
-		present := false
-		for _, snapshot := range snapshots {
-			present = present || snapshot.Snapshot == location.Fragment
-		}
-		if !present {
-			if err = rc.Store.DeleteBackup(ctx, rc.Cluster.Ref(), b.Name); err != nil && !missing(err) {
-				return err
-			}
-		}
-	}
-	return nil
 }

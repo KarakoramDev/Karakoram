@@ -7,7 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
+
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
 func primaryEnv(ctx context.Context, env Env) (Env, error) {
@@ -29,9 +30,7 @@ func primaryEnv(ctx context.Context, env Env) (Env, error) {
 		return Env{}, errors.New("target cluster has no durable PBM prefix")
 	}
 	env.Storage, env.Credentials, env.Prefix = *storage, storage.Credentials, state.Prefix
-	if storage.Prefix != "" {
-		env.Prefix = strings.TrimRight(storage.Prefix, "/") + "/" + env.Prefix
-	}
+	env.Prefix = domain.BackupObjectPrefix(storage.Prefix, env.Prefix)
 	env.PITR = env.RC.Cluster.Spec.Backup.PITR
 	return env, nil
 }

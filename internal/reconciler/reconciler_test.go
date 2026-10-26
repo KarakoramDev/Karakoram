@@ -345,7 +345,7 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if strings.Join(calls, ",") != "restore,restore" {
+	if strings.Join(calls, ",") != "restore,status,status,restore" {
 		t.Fatal(calls)
 	}
 	op, err := s.GetOperation(ctx, "restore")
@@ -359,7 +359,7 @@ func TestRunningOperationPrecedesSynchronization(t *testing.T) {
 	if _, err = m.reconcile(ctx, domain.ClusterRef{Name: "demo"}); err == nil {
 		t.Fatal("ordinary synchronization did not resume")
 	}
-	if strings.Join(calls, ",") != "restore,restore,sync,status" {
+	if strings.Join(calls, ",") != "restore,status,status,restore,sync,status,status" {
 		t.Fatal(calls)
 	}
 }
@@ -651,7 +651,7 @@ func TestScheduledPlatformWaitRequiresOnlyWaitLeaves(t *testing.T) {
 		{"nil", nil, nil},
 		{"direct", first, first},
 		{"wrapped", fmt.Errorf("provider: %w", first), first},
-		{"joined waits", errors.Join(later, fmt.Errorf("provider: %w", first)), first},
+		{"joined waits", errors.Join(later, fmt.Errorf("provider: %w", first)), later},
 		{"plain failure", failure, nil},
 		{"wait then failure", errors.Join(first, failure), nil},
 		{"failure then wait", errors.Join(failure, first), nil},

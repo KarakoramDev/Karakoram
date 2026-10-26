@@ -45,6 +45,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `-o table` is the default; detail output uses sections and list output summarizes nested fields. `-o json` and `-o yaml` preserve complete structured responses.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. A supplied file defines the body instead of convenience body flags. Use protected files for secrets. Exceptions: `rbac policy set` takes raw CSV; engine-native role/key commands use their documented definitions.
 - Cluster create files contain `{name, spec}`. `edit` replaces the complete `{spec}` and can open the configured editor without a file. `patch`, `scale` and `upgrade` files contain `{spec: {...}}` merge patches; arrays replace the previous array, not append to it.
+- Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. Elasticsearch-native role/API-key definition files retain their documented merge/conflict behavior.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
 - PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
@@ -68,7 +69,7 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `auth` | Advanced cookie/OIDC flows | refresh, oidc-login, oidc-callback | All |
 | `backends` | Registered infrastructure kinds and capabilities | list | All |
 | `backups` | Backup inventory and creation/deletion | create, list, get, delete, pitr-window | All; pitr-window MongoDB/PostgreSQL/Supabase |
-| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
+| `clusters` | Cluster lifecycle/observation | create, list, get, status, members, placement, connection, ca, logs, metrics, edit, patch, scale, upgrade, restart, retry-deployments, replace-member, resume, rotate-tls, delete, wait, balancer, raise-fcv | All; balancer/raise-fcv MongoDB only |
 | `completion` | Generate shell scripts | bash, zsh, fish, powershell | Local |
 | `config` | Save connection contexts | set-context | Local |
 | `db-roles` | Custom database roles | list, get, create, set, delete | MongoDB only |
@@ -97,6 +98,8 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 | `tokens` | Control-plane API tokens | list, get, create, set, delete (alias revoke) | All |
 | `version` | Client/server build metadata | — | All |
 | `whoami` | Authenticated identity | — | All |
+
+`karactl clusters retry-deployments NAME [--namespace NS] [-o json]` explicitly [re-arms exhausted platform deployments](clusters.md#retry-exhausted-platform-deployments) after fixing the underlying platform failure; it requires `clusters/update` and returns a conflict if no deployment is exhausted.
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes).
 PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
@@ -128,7 +131,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 | `backups create CLUSTER [NAME]` | `-f`, `--storage` (cluster default), `--type` (CLI default logical; choose the engine-supported type in [backup guidance](backups.md)) |
 | `backups list CLUSTER` | `--limit`, `--cursor` |
 | `restores create CLUSTER [NAME]` | `-f`, `--backup`, `--time` (RFC3339, where supported), `--source-cluster`, `--source-namespace`, `--into-new`, `--yes` |
-| `namespaces create` | `-f`, `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only) |
+| `namespaces create` | `--name`, `--project-id` (backend target ID), `--token-file`, `--description`, `--backend` (zerops), repeatable `--config key=value` (non-secret backend settings; Zerops accepts none, its API URL is operator-only); no `-f` |
 | `storages create/set` | `-f`; `verify NAME` checks connectivity separately; list has `--limit`, `--cursor`; delete has `--yes` |
 | `tokens create/set` | `-f`; list has `--limit`, `--cursor`; delete/revoke has `--yes` |
 | `events list` | `--cluster`, `--type`, `--operation`, `--actor`, `--resource`, `--order asc\|desc`, `--limit`, `--cursor` |

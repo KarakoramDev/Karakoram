@@ -260,6 +260,32 @@ func (r *Registry) lock(name string) *sync.Mutex {
 	}
 	return m
 }
+
+// lockContext preserves lifecycle serialization without making cancelled API
+// requests wait for a backend operation holding the namespace lock.
+func lockContext(ctx context.Context, m *sync.Mutex) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if m.TryLock() {
+		return nil
+	}
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if m.TryLock() {
+				return nil
+			}
+		}
+	}
+}
 func (r *Registry) backend(name string) Backend {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -308,6 +334,8 @@ func applyTokenValidation(n *domain.Namespace, project infra.Project, validation
 	case errors.Is(validation, infra.ErrUnauthorized):
 		n.Token.Valid = false
 		n.Token.LastError = "Project token access rejected: " + infra.SafeDetail(validation)
+	case errors.Is(validation, infra.ErrConfiguration):
+		n.Token.LastError = infra.SafeDetail(validation)
 	default:
 		n.Token.LastError = temporaryPlatformError(displayName, validation)
 	}
@@ -370,10 +398,14 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	if info.Relay && (!relayHostnamePattern.MatchString(r.o.RelayHostname) || r.o.RelayHostname == "core") {
 		return nil, fmt.Errorf("%w: invalid relay hostname", ErrInvalid)
 	}
-	r.createMu.Lock()
+	if err := lockContext(ctx, &r.createMu); err != nil {
+		return nil, err
+	}
 	defer r.createMu.Unlock()
 	m := r.lock(name)
-	m.Lock()
+	if err := lockContext(ctx, m); err != nil {
+		return nil, err
+	}
 	defer m.Unlock()
 	all, err := r.o.Store.ListNamespacesForUpdate(ctx)
 	if err != nil {
@@ -389,6 +421,9 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	}
 	b, p, err := r.o.Backends.Validate(ctx, target)
 	if err != nil {
+		if errors.Is(err, infra.ErrConfiguration) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, infra.SafeDetail(err))
+		}
 		if errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnsupported) {
 			return nil, err
 		}
@@ -400,7 +435,16 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 	if info.Relay {
 		service, err := b.GetService(ctx, r.o.RelayHostname)
 		if err != nil {
-			return nil, errors.New("cannot inspect relay hostname")
+			if errors.Is(err, infra.ErrConfiguration) {
+				return nil, fmt.Errorf("%w: %s", ErrInvalid, infra.SafeDetail(err))
+			}
+			if errors.Is(err, infra.ErrUnauthorized) {
+				return nil, fmt.Errorf("%w: cannot inspect relay hostname; check the target token's relay service/record read permissions: %s", ErrInvalid, infra.SafeDetail(err))
+			}
+			if errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnsupported) {
+				return nil, err
+			}
+			return nil, &PlatformUnavailableError{cause: err, displayName: info.DisplayName}
 		}
 		if service != nil {
 			return nil, fmt.Errorf("%w: relay hostname is already used by a service this namespace does not own", ErrInvalid)
@@ -440,7 +484,9 @@ func (r *Registry) Create(ctx context.Context, name, projectID, token, descripti
 }
 func (r *Registry) Update(ctx context.Context, name, description string) (*domain.Namespace, error) {
 	m := r.lock(name)
-	m.Lock()
+	if err := lockContext(ctx, m); err != nil {
+		return nil, err
+	}
 	defer m.Unlock()
 	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
@@ -455,7 +501,9 @@ func (r *Registry) Update(ctx context.Context, name, description string) (*domai
 }
 func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain.Namespace, error) {
 	m := r.lock(name)
-	m.Lock()
+	if err := lockContext(ctx, m); err != nil {
+		return nil, err
+	}
 	defer m.Unlock()
 	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
@@ -466,6 +514,9 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 	}
 	replacement, p, err := r.o.Backends.Validate(ctx, r.target(n, token))
 	if err != nil {
+		if errors.Is(err, infra.ErrConfiguration) {
+			return nil, fmt.Errorf("%w: %s", ErrInvalid, infra.SafeDetail(err))
+		}
 		if errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnsupported) {
 			return nil, err
 		}
@@ -500,7 +551,9 @@ func (r *Registry) RotateToken(ctx context.Context, name, token string) (*domain
 }
 func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace, error) {
 	m := r.lock(name)
-	m.Lock()
+	if err := lockContext(ctx, m); err != nil {
+		return nil, err
+	}
 	defer m.Unlock()
 	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {
@@ -526,7 +579,9 @@ func (r *Registry) Validate(ctx context.Context, name string) (*domain.Namespace
 }
 func (r *Registry) Delete(ctx context.Context, name string) error {
 	m := r.lock(name)
-	m.Lock()
+	if err := lockContext(ctx, m); err != nil {
+		return err
+	}
 	defer m.Unlock()
 	n, err := r.o.Store.GetNamespaceForUpdate(ctx, name)
 	if err != nil {

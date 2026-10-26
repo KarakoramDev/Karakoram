@@ -224,6 +224,9 @@ func TestAccountsTokensAndSessions(t *testing.T) {
 func TestOperationsResumeAndAtomicBackup(t *testing.T) {
 	s, path := testStore(t)
 	ctx := context.Background()
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	first := domain.Operation{ID: "first", Cluster: "demo", Kind: "backup"}
 	second := domain.Operation{ID: "second", Cluster: "demo", Kind: "restart"}
 	for _, op := range []*domain.Operation{&first, &second} {

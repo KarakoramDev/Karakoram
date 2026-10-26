@@ -124,7 +124,7 @@ func TestPrepareCommands(t *testing.T) {
 		}
 		var install string
 		if strings.HasSuffix(file, ".deb") {
-			install = "apt-get install -y \"$stage/$file\""
+			install = "DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\""
 		} else if strings.Contains(file, ".tar.") {
 			install = "tar --no-same-owner --no-same-permissions --delay-directory-restore"
 			for _, want := range []string{"python3 -c", archiveValidator, "\"$file\" 'application'", "sudo -u 'runtime' -- sh -c", " < \"$file\""} {
@@ -141,6 +141,48 @@ func TestPrepareCommands(t *testing.T) {
 		if !strings.Contains(command, install) || strings.Index(command, "sha256sum -c -") > strings.Index(command, install) {
 			t.Fatal("install missing or precedes verification: " + command)
 		}
+	}
+}
+
+func TestPrepareDebSerialDecompressionAndFailure(t *testing.T) {
+	for _, status := range []int{0, 100, 137} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, "fixture.deb")
+			data := []byte("verified package fixture")
+			if err := os.WriteFile(file, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			// Only apt is replaced: run the real download, checksum, privileged
+			// shell body and cleanup without requiring root or installing packages.
+			apt := "#!/bin/sh\n[ \"$DPKG_DEB_THREADS_MAX\" = 1 ] || exit 98\n[ \"$1\" = install ] && [ \"$2\" = -y ] && [ -f \"$3\" ] || exit 99\nprintf '%s\\n' serial-apt-reached\nexit " + fmt.Sprint(status) + "\n"
+			if err := os.WriteFile(filepath.Join(dir, "apt-get"), []byte(apt), 0700); err != nil {
+				t.Fatal(err)
+			}
+			a := Artifact{Name: "example", File: "fixture.deb", SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+			script := prepareScript(t, PrepareCommands(a, "file://"+file, "", "")[0])
+			cmd := exec.Command("sh", "-c", script)
+			cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "DPKG_DEB_THREADS_MAX=64")
+			output, err := cmd.CombinedOutput()
+			got := 0
+			if err != nil {
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) {
+					t.Fatal(err)
+				}
+				got = exit.ExitCode()
+			}
+			if got != status || !strings.Contains(string(output), "serial-apt-reached") {
+				t.Fatalf("exit=%d, want=%d: %s", got, status, output)
+			}
+			diagnostic := "package installation failed (exit " + fmt.Sprint(status) + "; serial decompression enabled)"
+			if status != 0 && (!strings.Contains(string(output), diagnostic) || !strings.Contains(string(output), "allocation memory limits")) {
+				t.Fatalf("missing truthful preparation diagnostic: %s", output)
+			}
+			if status == 0 && strings.Contains(string(output), "installation failed") {
+				t.Fatalf("successful preparation reported failure: %s", output)
+			}
+		})
 	}
 }
 

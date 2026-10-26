@@ -135,6 +135,9 @@ func TestRetirementFinalizesBackupsAndSuspensionIsHonest(t *testing.T) {
 func TestFailedOperationFinalizesRestore(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	r := &domain.Restore{Name: "recover", Cluster: "demo"}
 	op := &domain.Operation{Cluster: r.Cluster, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"recover"}`)}
 	if err := s.EnqueueRestore(ctx, r, op); err != nil {
@@ -154,6 +157,9 @@ func TestFailedOperationFinalizesRestore(t *testing.T) {
 func TestOperationMigrationFinalizesHistoricalPendingBackups(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := context.Background()
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	backup := &domain.Backup{Name: "daily", Cluster: "demo", Type: "logical"}
 	op := &domain.Operation{Cluster: "demo", Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"daily"}`)}
 	if err := s.EnqueueBackup(ctx, backup, op); err != nil {

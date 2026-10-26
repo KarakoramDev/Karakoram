@@ -5,6 +5,7 @@ package psmdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -87,20 +88,22 @@ func (p *Provider) userClient(ctx context.Context, rc *engine.Context) (*mongo.C
 func (p *Provider) ListDatabaseUsers(ctx context.Context, rc *engine.Context) ([]domain.DatabaseUser, error) {
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
-		return nil, e
+		return nil, mongoadmin.ReadError(e)
 	}
 	defer c.Disconnect(ctx)
-	return users.ListUsers(ctx, c)
+	out, e := users.ListUsers(ctx, c)
+	return out, mongoadmin.ReadError(e)
 }
 
 // GetDatabaseUser retrieves one application user.
 func (p *Provider) GetDatabaseUser(ctx context.Context, rc *engine.Context, db, name string) (*domain.DatabaseUser, error) {
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
-		return nil, e
+		return nil, mongoadmin.ReadError(e)
 	}
 	defer c.Disconnect(ctx)
-	return users.GetUser(ctx, c, db, name)
+	out, e := users.GetUser(ctx, c, db, name)
+	return out, mongoadmin.ReadError(e)
 }
 
 // CreateDatabaseUser creates a user and returns its supplied or generated password once.
@@ -155,12 +158,12 @@ func (p *Provider) DeleteDatabaseUser(ctx context.Context, rc *engine.Context, d
 func (p *Provider) ListDatabaseRoles(ctx context.Context, rc *engine.Context) ([]domain.DatabaseRole, error) {
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
-		return nil, e
+		return nil, mongoadmin.ReadError(e)
 	}
 	defer c.Disconnect(ctx)
 	roles, e := users.ListRoles(ctx, c)
 	if e != nil {
-		return nil, e
+		return nil, mongoadmin.ReadError(e)
 	}
 	out := roles[:0]
 	for _, r := range roles {
@@ -178,10 +181,11 @@ func (p *Provider) GetDatabaseRole(ctx context.Context, rc *engine.Context, db, 
 	}
 	c, e := p.userClient(ctx, rc)
 	if e != nil {
-		return nil, e
+		return nil, mongoadmin.ReadError(e)
 	}
 	defer c.Disconnect(ctx)
-	return users.GetRole(ctx, c, db, name)
+	out, e := users.GetRole(ctx, c, db, name)
+	return out, mongoadmin.ReadError(e)
 }
 
 // CreateDatabaseRole creates a custom role.
@@ -234,11 +238,16 @@ func (p *Provider) Balancer(ctx context.Context, rc *engine.Context) (domain.Bal
 	}
 	c, e := p.dial(ctx, rc, s, "router", "clusterAdmin")
 	if e != nil {
-		return domain.BalancerStatus{}, e
+		return domain.BalancerStatus{}, mongoadmin.ReadError(e)
 	}
 	defer c.Disconnect(ctx)
-	mode, running, e := mongoadmin.Balancer(ctx, c)
-	return domain.BalancerStatus{Enabled: mode != "off", Running: running, Mode: mode}, e
+	readCtx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
+	mode, running, e := mongoadmin.Balancer(readCtx, c)
+	if e != nil && (errors.Is(e, context.DeadlineExceeded) || errors.Is(readCtx.Err(), context.DeadlineExceeded)) {
+		e = fmt.Errorf("PSMDB balancer status read exceeded %s budget: inspect member %s responsiveness/connectivity: %w", engine.ObservationTimeout, rc.Cluster.Name+"r", e)
+	}
+	return domain.BalancerStatus{Enabled: mode != "off", Running: running, Mode: mode}, mongoadmin.ReadError(e)
 }
 
 // SetBalancer enables or disables the sharded-cluster balancer.
@@ -259,24 +268,34 @@ func (p *Provider) SetBalancer(ctx context.Context, rc *engine.Context, enabled 
 }
 
 type hooks struct {
-	p  *Provider
-	rc *engine.Context
+	p     *Provider
+	rc    *engine.Context
+	state *internalState
+}
+
+func (h hooks) BalancerEnabled(ctx context.Context) (bool, error) {
+	state, err := h.p.Balancer(ctx, h.rc)
+	return state.Enabled, err
 }
 
 func (h hooks) SetBalancer(ctx context.Context, enabled bool) error {
 	return h.p.SetBalancer(ctx, h.rc, enabled)
 }
+
 func (h hooks) ResetSystemUsers(ctx context.Context, recoveryIdentity string) error {
 	rc := h.rc
 	s, e := load(rc.Cluster)
 	if e != nil {
 		return e
 	}
-	// PBM preserves its authenticating account during logical recovery. Its
-	// pbmAnyAction role can reset users without knowing snapshot-time passwords.
-	// Physical recovery may replace it; use the protected snapshot identity then.
+	// PITR's target-only authenticating account survives source managed-user
+	// updates. Physical/legacy snapshot recovery uses the protected identity.
+	restoreIdentity, e := loadRestorePBMIdentity(rc.Cluster.Internal)
+	if e != nil {
+		return e
+	}
 	var recoveryPassword []byte
-	if recoveryIdentity != "" {
+	if recoveryIdentity != "" && (restoreIdentity == nil || restoreIdentity.Stage == "creating") {
 		recoveryPassword, e = rc.Secrets.GetClusterSecret(ctx, domain.ParseClusterKey(recoveryIdentity), "users/userAdmin")
 		if e != nil {
 			return e
@@ -294,7 +313,7 @@ func (h hooks) ResetSystemUsers(ctx context.Context, recoveryIdentity string) er
 		if state.Stage != "ready" {
 			continue
 		}
-		c, e := h.p.dial(ctx, rc, s, set, "backup")
+		c, e := h.restorePBMClient(ctx, s, set)
 		if e != nil && len(recoveryPassword) > 0 {
 			c, e = mongoadmin.Dial(ctx, mongoadmin.DialOptions{Hosts: hosts(s.setMembers(set)), Dialer: rc.Dialer, ReplicaSet: set, Username: "userAdmin", Password: string(recoveryPassword), CAPEM: ca, TLS: s.TLSMode != "disabled"})
 		}
@@ -318,7 +337,7 @@ func (p *Provider) pbmEnv(ctx context.Context, rc *engine.Context, s *internalSt
 }
 
 func (p *Provider) pbmEnvInNamespace(ctx context.Context, rc *engine.Context, s *internalState, namespace string) (pbm.Env, error) {
-	env := pbm.Env{RC: rc, Sharded: rc.Cluster.Spec.Topology.Type == "sharded", Prefix: s.PBMPrefix, PITR: rc.Cluster.Spec.Backup.PITR, Hooks: hooks{p, rc}}
+	env := pbm.Env{RC: rc, Sharded: rc.Cluster.Spec.Topology.Type == "sharded", Prefix: s.PBMPrefix, PITR: rc.Cluster.Spec.Backup.PITR, Hooks: hooks{p: p, rc: rc, state: s}}
 	for _, m := range ordered(s) {
 		if m.Removing {
 			continue
@@ -326,11 +345,11 @@ func (p *Provider) pbmEnvInNamespace(ctx context.Context, rc *engine.Context, s 
 		if m.Role == agentapi.RoleRouter {
 			env.Routers = append(env.Routers, m.Name)
 		} else {
-			env.Nodes = append(env.Nodes, pbm.Node{Member: m.Name, ReplSet: m.Set})
+			env.Nodes = append(env.Nodes, pbm.Node{Member: m.Name, ReplSet: m.Set, Resources: appliedPBMResources(ctx, rc, s, m), CacheGB: m.CacheGB})
 		}
 	}
 	name := rc.Cluster.Spec.Backup.Storage
-	if name == "" && !s.CloneQueued && rc.Cluster.Spec.DataSource != nil {
+	if name == "" && !s.CloneQueued && rc.Cluster.Spec.DataSource != nil && !engine.InitialDataSourceUnproven(rc.Cluster) {
 		d := rc.Cluster.Spec.DataSource
 		sourceRef := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
 		if sourceRef.Namespace == "" {
@@ -366,9 +385,7 @@ func (p *Provider) pbmEnvInNamespace(ctx context.Context, rc *engine.Context, s 
 	}
 	env.Storage = *storage
 	env.Credentials = storage.Credentials
-	if storage.Prefix != "" {
-		env.Prefix = strings.TrimRight(storage.Prefix, "/") + "/" + s.PBMPrefix
-	}
+	env.Prefix = domain.BackupObjectPrefix(storage.Prefix, s.PBMPrefix)
 	var raw map[string]any
 	_ = jsonInternal(rc.Cluster, &raw)
 	if raw["freshBaseBackupPending"] == true {
@@ -419,7 +436,6 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		return domain.Placement{}, e
 	}
 	v := domain.Placement{Groups: map[string][]string{}}
-	unknown := false
 	for _, m := range ordered(s) {
 		group := ""
 		if rc.Backend.Capabilities().Placement {
@@ -436,18 +452,22 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 			group = st.HostFingerprint
 		}
 		if group == "" {
-			unknown = true
 			group = "unknown"
 		}
 		v.Groups[group] = append(v.Groups[group], m.Name)
 	}
+	return describePlacement(v, rc.Backend.Capabilities().Placement), nil
+}
+
+func describePlacement(v domain.Placement, authoritative bool) domain.Placement {
+	unknown := len(v.Groups["unknown"]) > 0
 	var warnings []string
-	if !rc.Backend.Capabilities().Placement {
+	if !authoritative {
 		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
 	}
 	for k, g := range v.Groups {
 		if k != "unknown" && len(g) > 1 {
-			if rc.Backend.Capabilities().Placement {
+			if authoritative {
 				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(g, ", ")))
 			} else {
 				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
@@ -455,14 +475,14 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		}
 	}
 	if unknown {
-		if rc.Backend.Capabilities().Placement {
+		if authoritative {
 			warnings = append(warnings, "backend placement is unknown for some members")
 		} else {
 			warnings = append(warnings, "placement unknown until members report host fingerprints")
 		}
 	}
 	v.Warning = strings.Join(warnings, "; ")
-	return v, nil
+	return v
 }
 
 // MemberLogs retrieves bounded node process logs.

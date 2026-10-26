@@ -25,7 +25,7 @@ import (
 )
 
 const sampleList = `{"snapshots":[{"name":"2024-01-05T11:10:54Z","status":"done","restoreTo":1704453059,"type":"logical"}],"pitr":{"on":false,"ranges":[{"start":1704453060,"end":1704453137}]}}`
-const sampleStatus = `{"backups":{"snapshot":[{"name":"2024-01-05T11:10:54Z","size":43178,"status":"done","restoreTo":1704453059,"type":"logical"}]},"running":{}}`
+const sampleStatus = `{"cluster":[{"rs":"rs0","nodes":[{"host":"m0:27017","role":"P","ok":true},{"host":"m1:27017","role":"S","ok":true}]}],"backups":{"snapshot":[{"name":"2024-01-05T11:10:54Z","size":43178,"status":"done","restoreTo":1704453059,"type":"logical"}]},"running":{}}`
 const sampleDescribe = `{"name":"2024-01-05T11:10:54Z","type":"logical","status":"done","size":43178,"last_write_ts":1704453059,"last_write_time":"2024-01-05T11:10:59Z","start":"2024-01-05T11:10:55Z","finish":"2024-01-05T11:11:01Z"}`
 
 type testDialer struct {
@@ -40,14 +40,19 @@ func (d testDialer) Dial(context.Context, domain.ClusterRef, string) (*agentapi.
 type fakeHooks struct {
 	reset     []string
 	balancers []bool
+	enabled   bool
 }
 
 func (h *fakeHooks) ResetSystemUsers(_ context.Context, s string) error {
 	h.reset = append(h.reset, s)
 	return nil
 }
+func (*fakeHooks) PreparePITRIdentity(context.Context, string) (bool, error) { return true, nil }
+func (*fakeHooks) FinishPITRIdentity(context.Context, string) (bool, error)  { return true, nil }
+func (h *fakeHooks) BalancerEnabled(context.Context) (bool, error)           { return h.enabled, nil }
 func (h *fakeHooks) SetBalancer(_ context.Context, b bool) error {
 	h.balancers = append(h.balancers, b)
+	h.enabled = b
 	return nil
 }
 
@@ -72,11 +77,71 @@ type fakeAgent struct {
 	restoreDescribeError    string
 	restoreStartUnavailable bool
 	restoreDescribeOutput   json.RawMessage
+	restoreStorageOutput    json.RawMessage
+	restoreStorageError     string
 	requireConfig           bool
 	configured              bool
+	configError             string
 	activeBackup            bool
+	backupStatusOutput      string
+	backupListOutput        string
+	backupDescribeOutput    string
+	backupStatusUnavailable bool
 	cancelledBackup         bool
 	backupCancelCalls       int
+	unknownReceipt          bool
+	pbmFenceCapability      bool
+	fenceNoExit             bool
+	fenceClockBehind        bool
+	fenceStarts             map[string]agentapi.PBMRestartFence
+	fenceCalls              int
+	fenceRejectReplay       bool
+}
+
+func (f *fakeAgent) recordedRequests() []agentapi.PBMRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]agentapi.PBMRequest(nil), f.requests...)
+}
+
+func (f *fakeAgent) recordedActions() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.actions...)
+}
+
+func (f *fakeAgent) startCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.starts
+}
+
+func (f *fakeAgent) recordedFences() map[string]agentapi.PBMRestartFence {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fences := make(map[string]agentapi.PBMRestartFence, len(f.fenceStarts))
+	for requestID, fence := range f.fenceStarts {
+		fences[requestID] = fence
+	}
+	return fences
+}
+
+func (f *fakeAgent) fenceCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.fenceCalls
+}
+
+func (f *fakeAgent) restorePollingCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.restorePolling
+}
+
+func (f *fakeAgent) backupCancelCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.backupCancelCalls
 }
 
 func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +150,7 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	enc := json.NewEncoder(w)
 	switch {
 	case r.URL.Path == "/v1/status":
-		_ = enc.Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "pbm-agent": {State: "running"}}})
+		_ = enc.Encode(agentapi.Status{PBMRestoreFence: f.pbmFenceCapability, Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "pbm-agent": {State: "running"}}})
 	case r.URL.Path == "/v1/pbm":
 		var req agentapi.PBMRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -94,6 +159,11 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.requests = append(f.requests, req)
 		if req.RequestID != "" {
+			if f.unknownReceipt {
+				w.WriteHeader(http.StatusConflict)
+				_ = enc.Encode(agentapi.ErrorResponse{Error: "PBM initiation outcome unknown after interrupted execution; reconcile before issuing another request"})
+				return
+			}
 			if cached, ok := f.receipts[req.RequestID]; ok {
 				_ = enc.Encode(cached)
 				return
@@ -102,6 +172,10 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data := `{}`
 		switch req.Command {
 		case "config":
+			if f.configError != "" {
+				_ = enc.Encode(agentapi.PBMResponse{ExitCode: 1, Stderr: f.configError})
+				return
+			}
 			if len(req.Config) > 0 {
 				f.configured = true
 			}
@@ -111,13 +185,23 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			data = sampleList
+			if f.backupListOutput != "" {
+				data = f.backupListOutput
+			}
 			if f.deleted {
 				data = `{"snapshots":[],"pitr":{"ranges":[]}}`
 			} else if f.pitrDeleted {
 				data = `{"snapshots":[{"name":"2024-01-05T11:10:54Z","status":"done","type":"logical"}],"pitr":{"ranges":[]}}`
 			}
 		case "status":
+			if f.backupStatusUnavailable {
+				http.Error(w, "status temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			data = sampleStatus
+			if f.backupStatusOutput != "" {
+				data = f.backupStatusOutput
+			}
 		case "backup":
 			f.starts++
 			data = `{"name":"2024-01-05T11:10:54Z"}`
@@ -137,11 +221,22 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					data = `{"name":"2024-01-05T11:10:54Z","type":"logical","status":"cancelled","error":"Backup cancelled"}`
 				}
 			}
+			if f.backupDescribeOutput != "" {
+				data = f.backupDescribeOutput
+			}
 		case "cancel-backup":
 			f.cancelledBackup = true
 			f.backupCancelCalls++
 		case "describe-restore":
 			f.restorePolling++
+			if len(req.Config) > 0 && f.restoreStorageError != "" {
+				_ = enc.Encode(agentapi.PBMResponse{ExitCode: 1, Stderr: f.restoreStorageError})
+				return
+			}
+			if len(req.Config) > 0 && len(f.restoreStorageOutput) > 0 {
+				_ = enc.Encode(agentapi.PBMResponse{Output: f.restoreStorageOutput})
+				return
+			}
 			if f.restoreDescribeError != "" {
 				_ = enc.Encode(agentapi.PBMResponse{ExitCode: 1, Stderr: f.restoreDescribeError})
 				return
@@ -166,6 +261,30 @@ func (f *fakeAgent) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.receipts[req.RequestID] = response
 		}
 		_ = enc.Encode(response)
+	case r.URL.Path == "/v1/processes":
+		f.fenceCalls++
+		var request agentapi.ProcessAction
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if f.fenceStarts == nil {
+			f.fenceStarts = map[string]agentapi.PBMRestartFence{}
+		}
+		proof, exists := f.fenceStarts[request.RequestID]
+		if exists && f.fenceRejectReplay {
+			http.Error(w, "replacement session changed", http.StatusConflict)
+			return
+		}
+		if !exists {
+			stamp := time.Unix(request.RestoreCommandTS, 0).Add(agentapi.PBMRestoreFenceClockMargin)
+			proof = agentapi.PBMRestartFence{OldExited: !f.fenceNoExit, PID: 42, StartedAfter: stamp, MemberTime: stamp}
+			if f.fenceClockBehind {
+				proof.MemberTime = stamp.Add(-time.Second)
+			}
+			f.fenceStarts[request.RequestID] = proof
+		}
+		_ = enc.Encode(agentapi.ActionResponse{Success: true, PBMFence: &proof})
 	default:
 		f.actions = append(f.actions, r.URL.Path)
 		_ = enc.Encode(agentapi.ActionResponse{})
@@ -179,11 +298,15 @@ type routerBackend struct {
 }
 
 func (b *routerBackend) Stop(_ context.Context, name string) (infra.Op, error) {
+	b.agent.mu.Lock()
 	b.agent.actions = append(b.agent.actions, "/service/"+name+"/stop")
+	b.agent.mu.Unlock()
 	return infra.Op{ID: "stop"}, nil
 }
 func (b *routerBackend) Start(_ context.Context, name string) (infra.Op, error) {
+	b.agent.mu.Lock()
 	b.agent.actions = append(b.agent.actions, "/service/"+name+"/start")
+	b.agent.mu.Unlock()
 	return infra.Op{ID: "start"}, nil
 }
 func (b *routerBackend) OpStatus(context.Context, infra.Op) (infra.OpState, error) {
@@ -205,7 +328,7 @@ func setup(t *testing.T) (Env, *store.Store, *fakeAgent, *fakeHooks) {
 	server := httptest.NewTLSServer(fake)
 	t.Cleanup(server.Close)
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
-	hooks := &fakeHooks{}
+	hooks := &fakeHooks{enabled: true}
 	cluster := &domain.Cluster{Name: "target", Spec: domain.ClusterSpec{Provider: "psmdb"}, Internal: json.RawMessage(`{"uid":"target-id","pbmPrefix":"karakoram/target-target-id"}`)}
 	if err := st.SetClusterSecret(context.Background(), domain.ClusterRef{Name: "target"}, "users/userAdmin", []byte("snapshot-password")); err != nil {
 		t.Fatal(err)
@@ -214,6 +337,10 @@ func setup(t *testing.T) (Env, *store.Store, *fakeAgent, *fakeHooks) {
 		t.Fatal(err)
 	}
 	env := Env{RC: &engine.Context{Cluster: cluster, Store: st, Secrets: st, Agents: testDialer{server.URL, ca}, Events: &fakeEvents{}}, Nodes: []Node{{Member: "m0", ReplSet: "rs0"}, {Member: "m1", ReplSet: "rs0"}}, Storage: domain.BackupStorage{Name: "storage", Type: "s3", EndpointURL: "https://s3.example.test", Bucket: "bucket", ForcePathStyle: true, VerifyTLS: true}, Credentials: domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}, Prefix: "karakoram/target-target-id", PITR: domain.PITRConfig{OplogSpanMinutes: 1}, Hooks: hooks}
+	for i := range env.Nodes {
+		env.Nodes[i].Resources = domain.Resources{MinRAM: 1, MaxRAM: 1}
+		env.Nodes[i].CacheGB = 0.25
+	}
 	env.RC.Backend = &routerBackend{agent: fake, done: true}
 	return env, st, fake, hooks
 }
@@ -258,8 +385,9 @@ func TestBackupCrashResume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fake.starts != 1 || got.Phase != domain.PhaseSucceeded || got.Size != 43178 || got.LastWriteTime == nil || got.CompletedAt == nil {
-		t.Fatalf("starts=%d backup=%+v", fake.starts, got)
+	starts := fake.startCount()
+	if starts != 1 || got.Phase != domain.PhaseSucceeded || got.Size != 43178 || got.LastWriteTime == nil || got.CompletedAt == nil {
+		t.Fatalf("starts=%d backup=%+v", starts, got)
 	}
 }
 
@@ -357,17 +485,19 @@ func TestRestoreCrashResume(t *testing.T) {
 			if mode == "failed" {
 				want = domain.PhaseFailed
 			}
-			if fake.starts != 1 || got.Phase != want || got.CompletedAt == nil {
-				t.Fatalf("starts=%d restore=%+v", fake.starts, got)
+			starts := fake.startCount()
+			if starts != 1 || got.Phase != want || got.CompletedAt == nil {
+				t.Fatalf("starts=%d restore=%+v", starts, got)
 			}
 			var cp checkpoint
 			_ = json.Unmarshal(res.Checkpoint, &cp)
 			if cp.FreshBase != (mode != "failed") {
 				t.Fatalf("fresh base checkpoint: %s", res.Checkpoint)
 			}
+			requests := fake.recordedRequests()
 			if mode == "physical" {
 				configPoll := false
-				for _, req := range fake.requests {
+				for _, req := range requests {
 					if req.Command == "describe-restore" && len(req.Config) > 0 && strings.Contains(strings.Join(req.Args, " "), "--config") {
 						configPoll = true
 					}
@@ -375,7 +505,7 @@ func TestRestoreCrashResume(t *testing.T) {
 				if !configPoll {
 					t.Fatal("physical progress lacked offline storage config")
 				}
-				if len(fake.actions) == 0 {
+				if len(fake.recordedActions()) == 0 {
 					t.Fatal("physical lifecycle actions absent")
 				}
 			}
@@ -384,7 +514,7 @@ func TestRestoreCrashResume(t *testing.T) {
 					t.Fatal(hooks.reset)
 				}
 				var configs []string
-				for _, req := range fake.requests {
+				for _, req := range requests {
 					if len(req.Config) != 0 {
 						var cfg string
 						_ = json.Unmarshal(req.Config, &cfg)
@@ -415,7 +545,9 @@ func TestInventoryAdoptsAndMarksMissing(t *testing.T) {
 	if len(all) != 1 || all[0].Size != 43178 || summary.LastBackup == nil || summary.PITRWindow == nil || len(ranges) != 1 || ranges[0].Start.Unix() != 1704453060 {
 		t.Fatalf("backups=%+v status=%+v ranges=%+v", all, summary, ranges)
 	}
+	fake.mu.Lock()
 	fake.deleted = true
+	fake.mu.Unlock()
 	if _, _, err := SyncInventory(context.Background(), env); err != nil {
 		t.Fatal(err)
 	}
@@ -428,23 +560,27 @@ func TestInventoryAdoptsAndMarksMissing(t *testing.T) {
 func TestEnsureConfigHashAndPITRGate(t *testing.T) {
 	env, _, fake, _ := setup(t)
 	env.PITR.Enabled = true
+	fake.mu.Lock()
 	fake.deleted = true
+	fake.mu.Unlock()
 	hash, err := EnsureConfig(context.Background(), env, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	count := len(fake.requests)
+	requests := fake.recordedRequests()
+	count := len(requests)
 	again, err := EnsureConfig(context.Background(), env, hash)
 	if err != nil || again != hash {
 		t.Fatal(again, err)
 	}
-	for _, req := range fake.requests[count:] {
+	requests = fake.recordedRequests()
+	for _, req := range requests[count:] {
 		if req.Command == "config" {
 			t.Fatal("same hash reapplied")
 		}
 	}
 	var cfg string
-	for _, req := range fake.requests {
+	for _, req := range requests {
 		if req.Command == "config" {
 			_ = json.Unmarshal(req.Config, &cfg)
 		}
@@ -452,28 +588,13 @@ func TestEnsureConfigHashAndPITRGate(t *testing.T) {
 	if !strings.Contains(cfg, "enabled: false") {
 		t.Fatal(cfg)
 	}
+	fake.mu.Lock()
 	fake.deleted = false
+	fake.mu.Unlock()
 	enabled, err := EnsureConfig(context.Background(), env, hash)
 	if err != nil || enabled == hash {
 		t.Fatal(enabled, err)
 	}
-}
-
-func TestDeleteAllPreservesProviderInternal(t *testing.T) {
-	env, _, fake, _ := setup(t)
-	for range 40 {
-		res, err := DeleteAll(context.Background(), env)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if res.Done {
-			if !fake.deleted || !fake.pitrDeleted || !strings.Contains(string(env.RC.Cluster.Internal), "target-id") {
-				t.Fatal(string(env.RC.Cluster.Internal))
-			}
-			return
-		}
-	}
-	t.Fatal("cleanup did not finish")
 }
 
 func TestDecodeLast(t *testing.T) {

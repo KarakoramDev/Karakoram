@@ -39,6 +39,21 @@ type definitionsTestStore struct {
 	storageLookups    []string
 	failUpdate        bool
 	failRestoreUpdate bool
+	claimError        error
+	claimed           bool
+}
+
+func (s *definitionsTestStore) ClaimInitialDataSource(ctx context.Context, ref domain.ClusterRef) error {
+	if s.claimError != nil {
+		return s.claimError
+	}
+	if s.ClusterStore != nil {
+		if err := s.ClusterStore.ClaimInitialDataSource(ctx, ref); err != nil {
+			return err
+		}
+	}
+	s.claimed = true
+	return nil
 }
 
 func (s *definitionsTestStore) GetBackupStorage(_ context.Context, ns, name string) (*domain.BackupStorage, error) {
@@ -110,6 +125,7 @@ type definitionsFakeS3 struct {
 	mu            sync.Mutex
 	objects       map[string][]byte
 	puts, deletes int
+	readStatus    int
 }
 
 func (s *definitionsFakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +147,10 @@ func (s *definitionsFakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.puts++
 		w.Header().Set("ETag", `"definitions"`)
 	case "GET", "HEAD":
+		if s.readStatus != 0 {
+			w.WriteHeader(s.readStatus)
+			return
+		}
 		if !exists {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(404)

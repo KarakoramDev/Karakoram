@@ -202,6 +202,13 @@ func TestTokensPasswordInvalidationAndAccounts(t *testing.T) {
 	if err != nil || p.TokenID != tok.ID {
 		t.Fatal(p, err)
 	}
+	// Usage metadata is asynchronous and must not delay authentication.
+	select {
+	case s.tokenUsage <- struct{}{}:
+		<-s.tokenUsage
+	case <-time.After(2 * time.Second):
+		t.Fatal("token usage writer did not finish")
+	}
 	meta, err := s.GetToken(ctx, tok.ID)
 	if err != nil || meta.LastUsedAt == nil || meta.Hash != "" {
 		t.Fatal(meta, err)

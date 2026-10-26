@@ -55,23 +55,84 @@ func opResult(cp operationState, done bool, step string) (engine.OpResult, error
 
 // RunOperation resumes imperative operations from durable, secret-free checkpoints.
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	polledRestore := false
+	defer func() {
+		if op.Kind != domain.OperationRestore || (polledRestore && err == nil) {
+			return
+		}
+		raw := result.Checkpoint
+		if raw == nil {
+			raw = op.Checkpoint
+		}
+		reset, resetErr := pbm.ResetRestoreAbsence(raw)
+		if resetErr != nil {
+			err = errors.Join(err, resetErr)
+			return
+		}
+		result.Checkpoint = reset
+	}()
 	s, e := load(rc.Cluster)
 	if e != nil {
 		return result, e
 	}
 	defer func() {
+		if op.Kind == domain.OperationRestore {
+			raw := result.Checkpoint
+			if raw == nil {
+				raw = op.Checkpoint
+			}
+			outcome, outcomeErr := pbm.ReadRestoreOutcome(raw)
+			err = errors.Join(err, outcomeErr)
+			if outcomeErr == nil {
+				s.RestoreWorkerUnconfirmed = outcome.WorkerUnconfirmed && !result.Done
+				if outcome.MemoryBudgetUnknown && !result.Done && !strings.Contains(result.Message, pbm.MemoryBudgetUnknownMessage) {
+					result.Message = pbm.MemoryBudgetUnknownMessage + "; " + result.Message
+				}
+				if outcome.ConsistencyUncertain {
+					s.RestoreConsistency = &restoreConsistency{NativeName: outcome.NativeName, Failure: outcome.Failure}
+				} else if result.Done && err == nil && outcome.RecoveredSuccessfully &&
+					(s.RestoreConsistency == nil || s.RestoreConsistency.NativeName != outcome.NativeName) {
+					s.RestoreConsistency = nil
+				}
+			}
+			err = errors.Join(err, recordInitialRestore(rc.Cluster, s, op, result, err))
+		}
 		// Operations directly reconfigure PBM; never leave the primary hash
 		// claiming a destination is still applied after an alternate operation.
 		if op.Kind == domain.OperationBackup || op.Kind == domain.OperationDeleteBackup || op.Kind == domain.OperationRestore {
 			s.PBMHash = ""
 		}
-		if op.Kind == domain.OperationRestore && result.Done && err == nil {
+		if op.Kind == domain.OperationRestore && result.Done && (err == nil || s.RestoreConsistency != nil) {
+			// End the operation stage, not the durable consistency fence:
+			// Status keeps an uncertain target Degraded, never liveness-Ready.
 			s.Phase = "ready"
 		}
-		if e := save(rc.Cluster, s); err == nil {
-			err = e
-		}
+		err = errors.Join(err, save(rc.Cluster, s))
 	}()
+	if op.Kind == domain.OperationBackup && op.Step == "failure-cleanup" {
+		result, e = pbm.PrepareBackupFailureCleanup(ctx, rc, op)
+		if e != nil || result.Done {
+			return result, e
+		}
+		copyOp := *op
+		copyOp.Checkpoint = result.Checkpoint
+		op = &copyOp
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, pbm.BackupFailureCleanupTimeout)
+		defer cancel()
+	}
+	if op.Kind == domain.OperationRestore && op.Step == "failure-cleanup" {
+		result, e = pbm.PrepareRestoreFailureCleanup(ctx, rc, op)
+		if e != nil || result.Done {
+			return result, e
+		}
+		copyOp := *op
+		copyOp.Checkpoint = result.Checkpoint
+		op = &copyOp
+	}
+	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
+		return engine.OpResult{RequeueAfter: 5 * time.Second, Checkpoint: op.Checkpoint, Message: "Waiting for accepted runtime recovery"}, e
+	}
 	payload := map[string]string{}
 	if e = decodeJSON(op.Payload, &payload); e != nil {
 		return result, invalid("invalid operation payload")
@@ -131,6 +192,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			return pbm.RunDeleteBackup(ctx, env, op)
 		default:
 			s.Phase = "restore"
+			polledRestore = true
 			result, e = pbm.RunRestore(ctx, env, op)
 			if e != nil || !result.Done {
 				return result, e
@@ -171,7 +233,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	case domain.OperationRaiseFCV:
 		return p.raiseFCV(ctx, rc, s, cp, payload["version"], p.setFCV)
 	case domain.OperationRestart:
-		return p.rollingOperation(ctx, rc, s, cp, false)
+		return p.rollingOperation(ctx, rc, s, cp, false, op.ID)
 	case domain.OperationRotateTLS:
 		if cp.Stage == "" {
 			cp.Stage = "rotate-certificates"
@@ -180,7 +242,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			cp.Stage = "rotate-certificates"
 			return opResult(cp, false, "certificates-issued")
 		}
-		return p.rollingOperation(ctx, rc, s, cp, true)
+		return p.rollingOperation(ctx, rc, s, cp, true, op.ID)
 	case domain.OperationRotateSystemUser:
 		user := payload["user"]
 		if !users.IsSystemUser(user) {
@@ -229,7 +291,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			return opResult(cp, false, "password-persisted")
 		}
 		if user == "backup" || user == "clusterMonitor" {
-			result, e = p.rollingOperation(ctx, rc, s, cp, true)
+			result, e = p.rollingOperation(ctx, rc, s, cp, true, op.ID)
 		} else {
 			result, e = opResult(cp, true, "password-rotated")
 		}
@@ -339,7 +401,7 @@ func (p *Provider) setFCV(ctx context.Context, rc *engine.Context, s *internalSt
 	return mongoadmin.SetFCV(ctx, c, version)
 }
 
-func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, reload bool) (engine.OpResult, error) {
+func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *internalState, cp operationState, reload bool, requestID string) (engine.OpResult, error) {
 	// An operation may start while convergence still owns a platform action.
 	// Preserve its checkpoint until that action (including any retry) completes.
 	if s.Pending != nil || s.Retry != nil {
@@ -438,7 +500,7 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		if candidate.Role == agentapi.RoleRouter {
 			process = "mongos"
 		}
-		e = a.Process(ctx, agentapi.ProcessAction{Process: process, Action: "restart"})
+		e = a.Process(ctx, agentapi.ProcessAction{Process: process, Action: "restart", RequestID: requestID + "/restart/" + candidate.Name})
 	}
 	if e != nil {
 		return engine.OpResult{}, e

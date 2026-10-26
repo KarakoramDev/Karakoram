@@ -33,6 +33,20 @@ type Client struct {
 	dialInstance func(context.Context, string, string, string) (net.Conn, error)
 }
 
+// HTTPError exposes the response status for protocol capability negotiation.
+// Message contains only the client's bounded, redacted remote diagnostic.
+type HTTPError struct {
+	StatusCode              int
+	Method, Action, Message string
+}
+
+func (e *HTTPError) Error() string {
+	if e.Message != "" {
+		return fmt.Sprintf("agent request %s %s: HTTP %d: %s", e.Method, e.Action, e.StatusCode, e.Message)
+	}
+	return fmt.Sprintf("agent request %s %s: HTTP %d", e.Method, e.Action, e.StatusCode)
+}
+
 // ClientOptions supplies the HTTPS endpoint, token, trust roots, and request deadlines.
 // EngineTimeout bounds engine-owned actions such as broker drains, which may
 // legitimately outlast ordinary requests; it defaults to three minutes.
@@ -91,11 +105,6 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 	if net.ParseIP(host) == nil && !instanceHostname.MatchString(host) {
 		return nil, errors.New("invalid agent instance address")
 	}
-	port := c.base.Port()
-	if port == "" {
-		port = "443"
-	}
-	address := net.JoinHostPort(host, port)
 	pin := func(original *http.Client) *http.Client {
 		client := *original
 		transport := original.Transport.(*http.Transport).Clone()
@@ -107,7 +116,11 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 			if c.dialInstance != nil {
 				return c.dialInstance(ctx, network, logical, host)
 			}
-			return dial(ctx, network, address)
+			_, port, err := net.SplitHostPort(logical)
+			if err != nil {
+				return nil, err
+			}
+			return dial(ctx, network, net.JoinHostPort(host, port))
 		}
 		client.Transport = transport
 		return &client
@@ -115,7 +128,18 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine)}, nil
 }
 
+// DialContext uses this client's namespace transport and instance pin for a
+// native application probe. The caller retains the logical host for TLS.
+func (c *Client) DialContext(ctx context.Context, network, logical string) (net.Conn, error) {
+	dial := c.http.Transport.(*http.Transport).DialContext
+	if dial == nil {
+		dial = (&net.Dialer{}).DialContext
+	}
+	return dial(ctx, network, logical)
+}
+
 var instanceHostname = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,252}$`)
+var diagnosticCredential = regexp.MustCompile(`(?i)((?:password|token|secret|key)=|://)[^\s]+`)
 
 // Close releases idle HTTPS connections.
 func (c *Client) Close() { c.http.CloseIdleConnections(); c.engine.CloseIdleConnections() }
@@ -146,13 +170,35 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 	if input != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if action, ok := input.(ProcessAction); ok && action.RequestID != "" {
+		req.Header.Set("Idempotency-Key", action.RequestID)
+	}
 	res, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return fmt.Errorf("agent request %s %s: HTTP %d", method, parts[0], res.StatusCode)
+		var diagnostic ErrorResponse
+		data, readErr := io.ReadAll(io.LimitReader(res.Body, 8<<10))
+		if readErr == nil && json.Unmarshal(data, &diagnostic) == nil && diagnostic.Error != "" {
+			message := strings.ReplaceAll(diagnostic.Error, c.token, "[redacted]")
+			if strings.Contains(message, "PRIVATE KEY") {
+				message = "remote action failed (sensitive diagnostic omitted)"
+			}
+			message = diagnosticCredential.ReplaceAllString(message, "$1[redacted]")
+			message = strings.Map(func(r rune) rune {
+				if r < ' ' || r == 127 {
+					return ' '
+				}
+				return r
+			}, message)
+			if len(message) > 1024 {
+				message = message[:1024]
+			}
+			return &HTTPError{StatusCode: res.StatusCode, Method: method, Action: parts[0], Message: message}
+		}
+		return &HTTPError{StatusCode: res.StatusCode, Method: method, Action: parts[0]}
 	}
 	if output == nil {
 		_, err = io.Copy(io.Discard, io.LimitReader(res.Body, 1<<20))
@@ -195,7 +241,33 @@ func (c *Client) Process(ctx context.Context, a ProcessAction) error {
 	if a.Action != "start" && a.Action != "stop" && a.Action != "restart" {
 		return errors.New("invalid process action")
 	}
+	if a.RequestID != "" {
+		return c.request(ctx, "POST", "/v1/processes/"+a.Process+"/"+a.Action, a, nil)
+	}
 	return c.request(ctx, "POST", "/v1/processes/"+a.Process+"/"+a.Action, nil, nil)
+}
+
+// FencePBMRestore actively replaces PBM only on an agent advertising the
+// stop/wait/start protocol. Legacy success-only responses are never proof.
+func (c *Client) FencePBMRestore(ctx context.Context, requestID string, commandTS int64) (PBMRestartFence, error) {
+	status, err := c.Status(ctx)
+	if err != nil {
+		return PBMRestartFence{}, err
+	}
+	if !status.PBMRestoreFence {
+		return PBMRestartFence{}, errors.New("member lacks supervised PBM restore fencing capability")
+	}
+	request := ProcessAction{Process: "pbm-agent", Action: "restart", RequestID: requestID, RestoreCommandTS: commandTS}
+	var out ActionResponse
+	if err := c.request(ctx, "POST", "/v1/processes", request, &out); err != nil {
+		return PBMRestartFence{}, err
+	}
+	minimum := time.Unix(commandTS, 0).Add(PBMRestoreFenceClockMargin)
+	if !out.Success || out.PBMFence == nil || !out.PBMFence.OldExited || out.PBMFence.PID <= 0 ||
+		out.PBMFence.StartedAfter.Before(minimum) || out.PBMFence.MemberTime.Before(minimum) {
+		return PBMRestartFence{}, errors.New("PBM replacement exit/start or member clock confirmation unavailable")
+	}
+	return *out.PBMFence, nil
 }
 
 var processName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)

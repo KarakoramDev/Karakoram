@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -41,6 +42,7 @@ type Runner struct {
 	metaBridge     *http.Server
 	studioIngress  *http.Server
 	shipCancel     context.CancelFunc
+	storage        storageProbe
 }
 
 func (*Runner) Name() string        { return sbspec.Engine }
@@ -370,23 +372,29 @@ func healthy(ctx context.Context, s sbspec.Spec) error {
 		address = "127.0.0.1:9000"
 	case "auth":
 		address = "127.0.0.1:9999"
-		path = "/health"
+		// A primary-key lookup is bounded even on large tenants. Listing one
+		// user still executes COUNT(*) in GoTrue's default offset pagination.
+		// A valid absent UUID returns user_not_found only after a DB lookup.
+		path = "/admin/users/00000000-0000-0000-0000-000000000000"
 	case "rest":
 		address = "127.0.0.1:3001"
 		path = "/ready"
 	case "realtime":
 		address = "127.0.0.1:4000"
 		path = "/api/tenants/realtime-dev/health"
-		method = "HEAD"
+		// HTTP 200 can carry an unhealthy result; inspect the GET payload.
 	case "storage":
 		address = "127.0.0.1:5000"
-		path = "/status"
+		// /status is unconditional liveness. Listing buckets exercises the
+		// configured tenant database without creating application objects.
+		path = "/bucket"
 	case "imgproxy":
 		address = "127.0.0.1:5001"
 		path = "/health"
 	case "meta":
 		address = "127.0.0.1:8081"
-		path = "/health"
+		// /health returns a timestamp without consulting PostgreSQL.
+		path = "/schemas"
 	case "studio":
 		address = "127.0.0.1:3002"
 		path = "/api/platform/profile"
@@ -423,13 +431,55 @@ func healthy(ctx context.Context, s sbspec.Spec) error {
 	if s.Component == "studio" {
 		req.Header.Set("apikey", s.ServiceRoleKey)
 	}
+	if s.Component == "auth" || s.Component == "storage" {
+		req.Header.Set("Authorization", "Bearer "+s.ServiceRoleKey)
+	}
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
+		if s.Component == "auth" || s.Component == "storage" || s.Component == "meta" || s.Component == "rest" {
+			return fmt.Errorf("%s database readiness probe is unavailable; inspect the component and its PostgreSQL primary connectivity/schema readiness", s.Component)
+		}
 		return errors.New("component health endpoint is unavailable")
 	}
-	response.Body.Close()
+	defer response.Body.Close()
+	if s.Component == "auth" && response.StatusCode == http.StatusNotFound {
+		var result struct {
+			ErrorCode string `json:"error_code"`
+		}
+		if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&result); err == nil && result.ErrorCode == "user_not_found" {
+			return nil
+		}
+	}
 	if response.StatusCode != 200 && response.StatusCode != 204 {
+		if s.Component == "auth" || s.Component == "storage" || s.Component == "meta" || s.Component == "rest" {
+			return fmt.Errorf("%s database readiness probe returned HTTP %d; inspect the component and its PostgreSQL primary connectivity/schema readiness", s.Component, response.StatusCode)
+		}
 		return errors.New("component health endpoint is not ready")
+	}
+	if s.Component == "realtime" {
+		var health struct {
+			Data struct {
+				Healthy bool `json:"healthy"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&health); err != nil || !health.Data.Healthy {
+			return errors.New("tenant/database health of Realtime is not ready; inspect the tenant and its PostgreSQL primary connectivity")
+		}
+	}
+	if s.Component == "rest" {
+		// /ready can retain a live LISTEN connection and a loaded cache while
+		// serving requests fail to acquire/query a database connection. The
+		// read-only OpenAPI root exercises PostgREST's actual database path.
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:3000/", nil)
+		req.Header.Set("Authorization", "Bearer "+s.ServiceRoleKey)
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return errors.New("REST database/schema cache serving probe is unavailable; inspect PostgREST and its PostgreSQL primary connectivity")
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return fmt.Errorf("REST database/schema cache serving probe returned HTTP %d; inspect PostgREST and its PostgreSQL primary connectivity", response.StatusCode)
+		}
 	}
 	return nil
 }
@@ -447,6 +497,15 @@ func (r *Runner) status(ctx context.Context, n *agent.Node) sbspec.Status {
 		status.Message = err.Error()
 	} else {
 		status.Ready = true
+		if s.Component == "storage" {
+			at, message := r.storage.check(ctx, s.Storage)
+			status.StorageS3CheckedAt = &at
+			if message != "" {
+				status.Ready = false
+				status.Reason = "StorageS3Unavailable"
+				status.Message = message
+			}
+		}
 		// This observation gates final stack readiness only. Ready remains the
 		// listener/bootstrap signal so gateway-first provisioning can advance.
 		if s.Component == "gateway" {

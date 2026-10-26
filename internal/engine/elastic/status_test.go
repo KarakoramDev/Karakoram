@@ -7,6 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -14,11 +17,221 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
 )
+
+// Cover both connection establishment and a request sent over established TLS.
+func TestPausedNativeEndpointKeepsOtherMembersConnected(t *testing.T) {
+	for _, stage := range []string{"tls", "response"} {
+		t.Run(stage, func(t *testing.T) { testPausedNativeEndpoint(t, stage) })
+	}
+}
+
+func testPausedNativeEndpoint(t *testing.T, stage string) {
+	p, rc, f, es := coreSetup(t, 3)
+	coreConverge(t, p, rc, f)
+	es.master = "demon2"
+	original := rc.Dialer
+	var calls atomic.Int32
+	if stage == "tls" {
+		rc.Dialer = nativeHangDialer{next: original, calls: &calls}
+	} else {
+		es.hangingMembers = map[string]bool{"demon0": true}
+	}
+	status, err := engine.ObserveStatus(t.Context(), p, rc)
+	if err != nil || status.Phase != domain.PhaseDegraded {
+		t.Fatalf("paused endpoint status: %+v %v", status, err)
+	}
+	if stage == "tls" && calls.Load() == 0 {
+		t.Fatal("hung native endpoint was not exercised")
+	}
+	for _, member := range status.Members {
+		if !member.Agent.Healthy || member.Agent.LastSeen.IsZero() {
+			t.Fatalf("native stall revoked agent response: %+v", member)
+		}
+		if member.Name == "demon0" {
+			if member.Health || member.State != "unknown" || !strings.Contains(member.Agent.Message, "paused/stopped") {
+				t.Fatalf("missing affected member diagnostic: %+v", member)
+			}
+		} else if !member.Health || member.State == "absent" || member.Agent.Message != "" {
+			t.Fatalf("healthy peer lost native evidence: %+v", member)
+		}
+	}
+	found := false
+	for _, condition := range status.Conditions {
+		if condition.Type == "ClusterHealth" && condition.Status != "True" {
+			t.Fatalf("successful cluster evidence withdrawn: %+v", condition)
+		}
+		if condition.Type == "NativeObservation/demon0" {
+			found = condition.Status == "Unknown"
+		}
+	}
+	if !found {
+		t.Fatal("missing per-member native uncertainty condition")
+	}
+}
+
+func TestPausedMasterMembershipCannotBlockObservationCadence(t *testing.T) {
+	p, rc, f, es := coreSetup(t, 3)
+	coreConverge(t, p, rc, f)
+	es.master = "demon2"
+	es.hangingMembers = map[string]bool{"demon2": true}
+	ctx, cancel := context.WithTimeout(t.Context(), 4*time.Second)
+	defer cancel()
+	started := time.Now()
+	_, err := p.Sync(ctx, rc)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("paused membership must preserve deadline error: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed >= 3*time.Second {
+		t.Fatalf("membership fan-out blocked observation persistence for %s", elapsed)
+	}
+	for _, diagnostic := range []string{"elasticsearch convergence-membership read", "2s budget", "inspect member responsiveness/connectivity"} {
+		if !strings.Contains(err.Error(), diagnostic) {
+			t.Fatalf("membership timeout missing diagnostic %q: %v", diagnostic, err)
+		}
+	}
+}
+
+func TestMasterWideNativeOutageKeepsSuccessfulAgentsConnected(t *testing.T) {
+	for _, mode := range []string{"failure", "hang"} {
+		t.Run(mode, func(t *testing.T) {
+			p, rc, f, es := coreSetup(t, 3)
+			coreConverge(t, p, rc, f)
+			es.master = "demon2"
+			if mode == "hang" {
+				es.hangingMembers = map[string]bool{"demon0": true, "demon1": true, "demon2": true}
+			} else {
+				es.observationFailures = map[string]bool{"/_cluster/health": true}
+			}
+			status, err := engine.ObserveStatus(t.Context(), p, rc)
+			if err != nil || status.Phase != domain.PhaseDegraded || status.ObservedAt.IsZero() {
+				t.Fatalf("native-only outage failed sweep: %+v %v", status, err)
+			}
+			for _, member := range status.Members {
+				if !member.Agent.Healthy || member.Agent.LastSeen.Before(status.ObservedAt) || member.Health {
+					t.Fatalf("native-only outage revoked successful agent response: %+v", member)
+				}
+				if !strings.Contains(member.Agent.Message, "paused/stopped") {
+					t.Fatalf("missing actionable native diagnostic: %+v", member)
+				}
+				if !slices.ContainsFunc(status.Conditions, func(c domain.Condition) bool {
+					return c.Type == "NativeObservation/"+member.Name && c.Status == "Unknown"
+				}) {
+					t.Fatalf("missing native failure for %s: %+v", member.Name, status.Conditions)
+				}
+			}
+			if !slices.ContainsFunc(status.Conditions, func(c domain.Condition) bool {
+				return c.Type == "ClusterHealth" && c.Status == "Unknown"
+			}) {
+				t.Fatalf("native outage did not withhold cluster health: %+v", status.Conditions)
+			}
+		})
+	}
+}
+
+func TestHungComponentNativeProbeKeepsESPeersConnected(t *testing.T) {
+	p, rc, f, _ := coreSetup(t, 3)
+	component := rc.Cluster.Spec.Components.Extra[kindKibana]
+	component.Replicas = 1
+	rc.Cluster.Spec.Components.Extra[kindKibana] = component
+	coreConverge(t, p, rc, f)
+	var nativeCalls atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/status":
+			_ = json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 1 << 30, Processes: map[string]agentapi.ProcessStatus{"elasticsearch": {State: "running"}, "kibana": {State: "running"}}})
+		case "/v1/elasticsearch/readiness":
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+			nativeCalls.Add(1)
+			<-r.Context().Done()
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	rc.Agents = coreAgentDialer{url: server.URL, ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
+	status, err := engine.ObserveStatus(t.Context(), p, rc)
+	if err != nil || status.Phase != domain.PhaseDegraded || nativeCalls.Load() == 0 {
+		t.Fatalf("hung component status: %+v %v calls=%d", status, err, nativeCalls.Load())
+	}
+	for _, member := range status.Members {
+		if !member.Agent.Healthy {
+			t.Fatalf("component native stall revoked agent response: %+v", member)
+		}
+		if member.Name != "demokb" && (!member.Health || member.State == "absent") {
+			t.Fatalf("healthy ES peer lost evidence: %+v", member)
+		}
+		if member.Name == "demokb" && member.Health {
+			t.Fatalf("unobserved component reported healthy: %+v", member)
+		}
+	}
+}
+
+type nativeHangDialer struct {
+	next interface {
+		DialContext(context.Context, string, string) (net.Conn, error)
+	}
+	calls *atomic.Int32
+}
+
+func (d nativeHangDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if address != "demon0:9200" {
+		return d.next.DialContext(ctx, network, address)
+	}
+	d.calls.Add(1)
+	client, server := net.Pipe()
+	go func() {
+		defer server.Close()
+		_, _ = io.Copy(io.Discard, server)
+	}()
+	return client, nil
+}
+
+func TestNativeObservationFailureWithdrawsReadiness(t *testing.T) {
+	for _, health := range []string{"green", "yellow"} {
+		for _, endpoint := range []string{"/_nodes", "/_cat/master", "/_cluster/health"} {
+			t.Run(health+endpoint, func(t *testing.T) {
+				p, rc, f, es := coreSetup(t, 1)
+				coreConverge(t, p, rc, f)
+				es.health = health
+				if health == "yellow" {
+					es.replicas = 1 // One node cannot place the replica beside its primary.
+				}
+				before, err := p.Status(t.Context(), rc)
+				if err != nil || before.Phase != domain.PhaseReady {
+					t.Fatalf("baseline: %+v %v", before, err)
+				}
+				es.observationFailures = map[string]bool{endpoint: true}
+				status, err := p.Status(t.Context(), rc)
+				if err != nil || status.Phase == domain.PhaseReady || !strings.Contains(status.Message, "restore observations") {
+					t.Fatalf("silent native failure: %+v %v", status, err)
+				}
+				for _, member := range status.Members {
+					if member.Health || !member.Agent.Healthy || !strings.Contains(member.Agent.Message, "observation unavailable") {
+						t.Fatalf("native failure hidden behind healthy agent: %+v", member)
+					}
+				}
+				if !slices.ContainsFunc(status.Conditions, func(c domain.Condition) bool {
+					return c.Type == "ClusterHealth" && c.Status == "Unknown" && c.Reason == "ObservationUnavailable" && c.Message != ""
+				}) {
+					t.Fatalf("native uncertainty not projected: %+v", status.Conditions)
+				}
+				es.observationFailures = nil
+				recovered, err := p.Status(t.Context(), rc)
+				if err != nil || recovered.Phase != domain.PhaseReady || strings.Contains(recovered.Message, "observation unavailable") {
+					t.Fatalf("native recovery: %+v %v", recovered, err)
+				}
+			})
+		}
+	}
+}
 
 func TestBlockedScaleDownRetainsElectedMasterAndWarnsOnce(t *testing.T) {
 	p, rc, f, es := coreSetup(t, 3)
@@ -267,5 +480,93 @@ func TestStatusReportsAgentResourcesNotPlatformRecords(t *testing.T) {
 	reported.Store(&agentapi.ContainerResources{CPUCores: 2, MemoryBytes: 4 << 30, RootDiskBytes: 5 << 30})
 	if m := member(); m.Resources == nil || *m.Resources != (domain.ObservedResources{CPUCores: 2, MemoryGB: 4, DiskGB: 5}) {
 		t.Fatalf("agent reading must not be overwritten by platform records: %+v", m.Resources)
+	}
+}
+
+func TestProcessDiagnosticsPreserveAgentConnectivityAndNativeRole(t *testing.T) {
+	for _, kind := range []string{kindNode, kindKibana, kindLogstash, kindAPM} {
+		for _, scenario := range []string{"healthy", "paused", "error", "configuration-error"} {
+			t.Run(kind+"/"+scenario, func(t *testing.T) {
+				p, rc, f, _ := coreSetup(t, 1)
+				if kind != kindNode {
+					desired := rc.Cluster.Spec.Components.Extra[kind]
+					desired.Replicas = 1
+					rc.Cluster.Spec.Components.Extra[kind] = desired
+				}
+				s := coreConverge(t, p, rc, f)
+				target := s.members(kindNode)[0]
+				if kind != kindNode {
+					target = s.componentMembers()[0]
+				}
+				server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					switch r.URL.Path {
+					case "/v1/status":
+						processes := map[string]agentapi.ProcessStatus{"elasticsearch": {State: "running"}}
+						process := agentapi.ProcessStatus{State: "running"}
+						if scenario == "paused" {
+							process.State = "paused"
+						}
+						if scenario == "error" {
+							process.Error = "child failure"
+						}
+						processes[product(target)] = process
+						status := agentapi.Status{ConfigVersion: 1 << 30, Processes: processes}
+						if scenario == "configuration-error" {
+							status.Error = "configuration rejected"
+						}
+						_ = json.NewEncoder(w).Encode(status)
+					case "/v1/elasticsearch/readiness":
+						_ = json.NewEncoder(w).Encode(agentspec.Readiness{Ready: true, ConfigVersion: 1 << 30})
+					default:
+						http.NotFound(w, r)
+					}
+				}))
+				defer server.Close()
+				rc.Agents = coreAgentDialer{server.URL, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
+				if ready := p.componentReady(t.Context(), rc, target); ready != (scenario == "healthy") {
+					t.Fatalf("child/config diagnostic did not gate reconciliation readiness: %v", ready)
+				}
+				status, err := p.Status(t.Context(), rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ms := status.Members[slices.IndexFunc(status.Members, func(m domain.MemberStatus) bool { return m.Name == target.Name })]
+				if !ms.Agent.Healthy || ms.Agent.LastSeen.IsZero() || ms.Role == "" {
+					t.Fatalf("reachable agent/native role lost: %+v", ms)
+				}
+				if scenario == "healthy" {
+					if !ms.Health || status.Phase != domain.PhaseReady {
+						t.Fatalf("healthy processes changed native health: %+v", status)
+					}
+					for _, condition := range status.Conditions {
+						if strings.HasPrefix(condition.Type, "Process/") {
+							t.Fatalf("healthy process emitted condition: %+v", condition)
+						}
+					}
+					return
+				}
+				if ms.Health || status.Phase == domain.PhaseReady {
+					t.Fatalf("failed child/config reported Ready: %+v", status)
+				}
+				if scenario == "configuration-error" {
+					return
+				}
+				if ms.State != scenario {
+					t.Fatalf("child diagnostic lost: %+v", ms)
+				}
+				reason := "ProcessError"
+				if scenario == "paused" {
+					reason = "ProcessPaused"
+					if !strings.Contains(ms.Agent.Message, "SIGCONT") {
+						t.Fatalf("missing investigation guidance: %+v", ms)
+					}
+				}
+				if !slices.ContainsFunc(status.Conditions, func(c domain.Condition) bool {
+					return c.Type == "Process/"+target.Name+"/"+product(target) && c.Reason == reason
+				}) {
+					t.Fatalf("missing process condition: %+v", status.Conditions)
+				}
+			})
+		}
 	}
 }

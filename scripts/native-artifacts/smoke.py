@@ -102,6 +102,16 @@ if name in ('supabase-storage','supabase-realtime'):
             sql += response.read().decode()
     if name == 'supabase-storage':
         sql += 'CREATE ROLE supabase_storage_admin LOGIN NOINHERIT; GRANT anon, authenticated, service_role TO supabase_storage_admin; CREATE SCHEMA storage AUTHORIZATION supabase_storage_admin; GRANT USAGE ON SCHEMA auth TO supabase_storage_admin; GRANT SELECT ON auth.users TO supabase_storage_admin;'
+        # Match the product storage bootstrap's schema/default-privilege block.
+        sql += '''
+REVOKE ALL ON SCHEMA storage FROM PUBLIC;
+GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage
+  GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_storage_admin IN SCHEMA storage GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+'''
     else:
         sql += 'CREATE SCHEMA _realtime; CREATE SCHEMA realtime;'
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke'],input=sql,text=True,check=True,stdout=subprocess.DEVNULL)
@@ -184,8 +194,16 @@ try:
     while time.monotonic()<deadline:
         if process.poll() is not None:
             raise RuntimeError(f'native process exited with status {process.returncode}; see /tmp/native-smoke.log')
+        if meta_process is not None and meta_process.poll() is not None:
+            raise RuntimeError(f'postgres-meta fixture exited with status {meta_process.returncode}; see /tmp/native-smoke.log')
         healthy = False
         try:
+            if meta_process is not None:
+                # Studio can become ready before its independent meta fixture.
+                # Keep both processes alive and retry readiness within this deadline.
+                with urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=2) as meta:
+                    if meta.status != 200:
+                        raise OSError('postgres-meta fixture health did not return HTTP 200')
             headers = {'Authorization':'Bearer '+jwt('anon',env['JWT_SECRET'])} if name=='supabase-realtime' else {}
             request = urllib.request.Request(health,headers=headers,method='HEAD' if name=='supabase-realtime' else 'GET')
             with urllib.request.urlopen(request,timeout=2) as response:
@@ -246,8 +264,6 @@ try:
                         with urllib.request.urlopen('http://127.0.0.1:3000/',timeout=30) as home:
                             assert home.status == 200
                             assert b'<html' in home.read().lower()
-                        with urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=10) as meta:
-                            assert meta.status == 200
                         with urllib.request.urlopen('http://127.0.0.1:8080/tables',timeout=10) as tables:
                             assert tables.status == 200
                             assert isinstance(json.load(tables),list)

@@ -73,10 +73,36 @@ func (s *internalState) failPending(rc *engine.Context, message string) error {
 	}
 	r.CPUModeCooldown = false
 	r.Message = message
-	r.RetryAfter = now(rc).Add(platformRetryDelay(r.Failures))
+	recorded := now(rc)
+	r.RetryAfter = r.Schedule(recorded, recorded.Add(platformRetryDelay(r.Failures)))
 	v.Op = infra.Op{}
 	s.Retry, s.Pending = v, nil
 	return fmt.Errorf("%s", platformRetryMessage(v, r))
+}
+
+// failPendingCause retains backend scheduling metadata before converting the
+// failure into durable platform retry state.
+func (s *internalState) failPendingCause(rc *engine.Context, cause error) error {
+	v := s.Pending
+	var wait *engine.PlatformRetryWait
+	if errors.As(cause, &wait) {
+		s.Pending = nil
+		s.resetPlatformRetry(v)
+		return cause
+	}
+	if errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+		s.Pending = nil
+		s.resetPlatformRetry(v)
+		return cause
+	}
+	failure := s.failPending(rc, cause.Error())
+	if at := infra.RetryAt(cause); !at.IsZero() {
+		if r := s.PlatformRetries[platformRetryKey(v)]; r != nil && at.After(r.RetryAfter) {
+			r.RetryAfter = r.Schedule(now(rc), at)
+		}
+		return errors.Join(failure, cause)
+	}
+	return failure
 }
 
 func (s *internalState) resetPlatformRetry(v *pending) {
@@ -109,7 +135,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 			return true, err
 		}
 	}
-	if now(rc).Before(r.RetryAfter) {
+	if r.Waiting(now(rc), r.RetryAfter) {
 		return true, &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: platformRetryMessage(v, r)}
 	}
 	m := s.find(v.Member)
@@ -147,14 +173,14 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 		}
 		op, err = rc.Backend.SetContainerCount(ctx, m.Name, v.Containers, v.Containers)
 	case "delete-runtime", "delete-volume", "cleanup-runtime", "cleanup-volume":
-		name := m.Name
+		name, recordedID := m.Name, m.ServiceID
 		if v.Action == "delete-volume" || v.Action == "cleanup-volume" {
-			name = m.Volume
+			name, recordedID = m.Volume, m.VolumeID
 		}
 		// A failed delete may already have removed the service. Observe the
 		// existing absence as completion instead of deleting it a second time.
 		var service *infra.Service
-		service, err = rc.Backend.GetService(ctx, name)
+		service, err = engine.ObserveRetiringService(ctx, rc.Backend, name, recordedID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err == nil && service != nil {
 			op, err = rc.Backend.DeleteService(ctx, name)
 		}
@@ -172,7 +198,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 			v.Op = op
 		}
 		s.Pending = v
-		return true, s.failPending(rc, err.Error())
+		return true, s.failPendingCause(rc, err)
 	}
 	if v.Action != "import" && v.Action != "deploy" && v.Action != "upgrade" {
 		v.Op = op
@@ -213,8 +239,9 @@ func (s *internalState) scheduleCPUModeCooldown(rc *engine.Context, v *pending, 
 		s.PlatformRetries = make(map[string]*platformRetry)
 	}
 	r := &platformRetry{RetryAfter: at, Message: err.Error(), CPUModeCooldown: true}
+	r.RetryAfter = r.Schedule(now(rc), at)
 	s.PlatformRetries[platformRetryKey(v)] = r
 	v.Op = infra.Op{}
 	s.Retry, s.Pending = v, nil
-	return &engine.PlatformRetryWait{RetryAt: at, Message: platformRetryMessage(v, r)}
+	return &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: platformRetryMessage(v, r)}
 }

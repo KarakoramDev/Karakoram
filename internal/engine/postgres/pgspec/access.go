@@ -58,10 +58,27 @@ type Grant struct {
 }
 
 type AccessRequest struct {
-	Operation string     `json:"operation"`
-	Name      string     `json:"name,omitempty"`
-	Role      *RoleWrite `json:"role,omitempty"`
-	Database  *Database  `json:"database,omitempty"`
-	Grant     *Grant     `json:"grant,omitempty"`
-	Force     bool       `json:"force,omitempty"`
+	// Journal uses a distinct operation so older agents reject it before SQL.
+	RequestID     string     `json:"requestId,omitempty"`
+	RoleOperation string     `json:"roleOperation,omitempty"`
+	Operation     string     `json:"operation"`
+	Name          string     `json:"name,omitempty"`
+	Role          *RoleWrite `json:"role,omitempty"`
+	Database      *Database  `json:"database,omitempty"`
+	Grant         *Grant     `json:"grant,omitempty"`
+	Force         bool       `json:"force,omitempty"`
+}
+
+// AccessResult is returned with HTTP 200 for journaled role execution. Missing
+// or unrecognized outcomes are ambiguous, never evidence of application.
+type AccessResult struct {
+	Outcome string `json:"outcome"` // applied, rejected, unknown
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+	Status  int    `json:"status,omitempty"`
+	RoleOID uint32 `json:"roleOid,omitempty"`
+}
+
+type AccessCapabilities struct {
+	CredentialReceipts bool `json:"credentialReceipts"`
 }

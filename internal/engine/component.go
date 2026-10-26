@@ -5,11 +5,13 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"sort"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
@@ -311,4 +313,81 @@ func ReconcileStatelessComponent(ctx context.Context, def ComponentDef, current 
 	default:
 		return true, fmt.Errorf("component %s has unknown lifecycle stage %q", def.Name, current.Stage)
 	}
+}
+
+// ComponentProbe enriches failed-child observations without relaxing readiness.
+// Failed is optional and runs only after configuration and pause/maintenance gates.
+type ComponentProbe struct {
+	Ready  func(*agentapi.Client) (bool, error)
+	Failed func(*agentapi.Client) error
+}
+
+// ComponentInstancesHealthy requires fresh application and configuration
+// observations from every live instance, not a sample of logical service DNS.
+// At least replicas live instances must exist; extra live rollout instances must
+// also pass. A false native probe is attributed to its individual instance.
+// The caller owns probe timeouts and can return a credential-free native reason.
+func ComponentInstancesHealthy(ctx context.Context, rc *Context, member string, replicas int, configVersion int64, probe ComponentProbe, observe ...func(string, agentapi.Status)) (bool, error) {
+	all, count, err := VisitLiveInstancesWithIdentity(ctx, rc, member, componentInstanceProbe(ctx, member, configVersion, probe, observe))
+	return componentInstanceResult(member, replicas, all, count, err)
+}
+
+// ComponentObservedInstancesHealthy applies the same configuration/native
+// checks to this sweep's inventory, with bounded concurrent instance probes.
+func ComponentObservedInstancesHealthy(ctx context.Context, rc *Context, member string, replicas int, configVersion int64, inventory InstanceInventory, probe ComponentProbe, observe ...func(string, agentapi.Status)) (bool, error) {
+	all, count, err := VisitObservedInstancesWithIdentity(ctx, rc, member, inventory, componentInstanceProbe(ctx, member, configVersion, probe, observe))
+	return componentInstanceResult(member, replicas, all, count, err)
+}
+
+// Observers receive successful agent responses even when configuration or child
+// health prevents readiness. Observed-inventory callbacks must be concurrency-safe.
+func componentInstanceProbe(ctx context.Context, member string, configVersion int64, probe ComponentProbe, observe []func(string, agentapi.Status)) func(*agentapi.Client, string) (bool, error) {
+	return func(client *agentapi.Client, instance string) (bool, error) {
+		status, err := ObserveAgentStatus(ctx, client, "Component", member)
+		if err != nil {
+			return false, err
+		}
+		for _, observed := range observe {
+			observed(instance, status)
+		}
+		var processErr error
+		for name, process := range status.Processes {
+			if process.State == "paused" {
+				return false, fmt.Errorf("process %s is paused; investigate before resuming the verified process with SIGCONT", name)
+			}
+			if process.Error != "" {
+				processErr = fmt.Errorf("process %s reports an error; investigate the supervised process and agent logs before recovery", name)
+			}
+		}
+		if status.Error != "" {
+			return false, fmt.Errorf("configuration apply: %s", status.Error)
+		}
+		if status.ConfigVersion < configVersion {
+			return false, fmt.Errorf("configuration version %d is behind required %d", status.ConfigVersion, configVersion)
+		}
+		if status.Maintenance {
+			return false, fmt.Errorf("component is in maintenance")
+		}
+		if processErr != nil {
+			if probe.Failed != nil {
+				processErr = errors.Join(processErr, probe.Failed(client))
+			}
+			return false, processErr
+		}
+		ready, err := probe.Ready(client)
+		if err == nil && !ready {
+			err = fmt.Errorf("application is not ready")
+		}
+		return ready, err
+	}
+}
+
+func componentInstanceResult(member string, replicas int, all bool, count int, err error) (bool, error) {
+	if err != nil {
+		return false, err
+	}
+	if count < replicas || count == 0 {
+		return false, fmt.Errorf("member %s has %d live instances; requires %d", member, count, replicas)
+	}
+	return all, nil
 }

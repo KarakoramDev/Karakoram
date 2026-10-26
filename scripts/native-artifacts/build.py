@@ -112,8 +112,16 @@ fi'''
     install_toolchain('otp-'+version, installer=installer)
 
 
+def hex_toolchain_key(r):
+    key = 'hex-2.5.3-elixir-'+'.'.join(r['elixir'].split('.')[:2])+'-otp-'+r['otp'].split('.')[0]
+    if key not in TOOLCHAINS:
+        raise RuntimeError('no pinned Hex archive for Elixir '+r['elixir']+' / OTP '+r['otp'])
+    return key
+
+
 def toolchains(r):
     paths = []
+    hex_key = hex_toolchain_key(r) if 'otp' in r else None
     if 'node' in r:
         v = r['node']
         install_toolchain('node-'+v, '/opt/node-'+v)
@@ -152,7 +160,12 @@ def toolchains(r):
         pin = TOOLCHAINS[key]
         install_toolchain(key, installer=f'rm -rf /opt/elixir-{ev}; mkdir -p /opt/elixir-{ev}; unzip -oq /root/{pin["file"]} -d /opt/elixir-{ev}')
         paths.insert(0, '/opt/elixir-'+ev+'/bin')
-        for key in ('hex-2.5.3', 'rebar3-3.24.0'):
+        for key in (hex_key, 'rebar3-3.24.0'):
+            install_toolchain(key, installer='true')
+    if r.get('name') == 'supabase-realtime':
+        install_toolchain('tailwindcss-3.3.2-linux-x64', installer='chmod 0755 /root/tailwindcss-3.3.2-linux-x64')
+    if r.get('name') == 'supabase-edge-runtime':
+        for key in ('rusty-v8-130.0.7-x86_64-unknown-linux-gnu', 'rusty-v8-130.0.7-src-binding-x86_64-unknown-linux-gnu', 'edge-main-worker-bc27d2661edd'):
             install_toolchain(key, installer='true')
     if r.get('name') == 'supabase-studio':
         for pin in STUDIO_ASSETS:
@@ -215,6 +228,19 @@ def get_instances():
     return json.loads(subprocess.check_output(['incus','list','--format','json']))
 
 
+def builder_environment():
+    fingerprint = subprocess.check_output(
+        ['incus','config','get',BUILDER,'volatile.base_image'], text=True).strip()
+    if len(fingerprint) != 64 or any(c not in '0123456789abcdef' for c in fingerprint):
+        raise RuntimeError('builder image fingerprint is missing or invalid')
+    packages = subprocess.check_output(
+        ['incus','exec',BUILDER,'--','dpkg-query','-W','-f=${binary:Package}=${Version}\\n'],
+        text=True).splitlines()
+    if not packages or any('=' not in package for package in packages):
+        raise RuntimeError('builder installed APT package inventory is missing or invalid')
+    return {'imageFingerprint':fingerprint, 'aptPackages':sorted(packages)}
+
+
 def build(name):
     r = RECIPES[name] | {'name':name}; started = time.monotonic()
     TRANSPORTS.clear()
@@ -238,7 +264,7 @@ def build(name):
     guest(f'mkdir -p /build; rm -rf {Q(source)}; git init {Q(source)}; cd {Q(source)}; git remote add origin https://github.com/{r["repo"]}.git; git fetch --depth=1 origin {r["commit"]}; git checkout --detach FETCH_HEAD; test "$(git rev-parse HEAD)" = {r["commit"]}; git submodule update --init --recursive')
     epoch = subprocess.check_output(['incus','exec',BUILDER,'--','git','-C',source,'show','-s','--format=%ct','HEAD'], text=True).strip()
     filename = name+'-'+r['version']+'-ubuntu24.04-amd64.tar.gz'
-    manifest = r | {'name':name, 'build':'native-v1', 'platform':'ubuntu24.04-amd64', 'sourceDateEpoch':int(epoch), 'toolchainTransports':TRANSPORTS, 'buildInputFingerprint':fingerprint}
+    manifest = r | {'name':name, 'build':'native-v1', 'platform':'ubuntu24.04-amd64', 'sourceDateEpoch':int(epoch), 'toolchainTransports':TRANSPORTS, 'buildInputFingerprint':fingerprint, 'builderEnvironment':builder_environment()}
     local_manifest = OUT / (name+'.manifest.json'); local_manifest.write_text(json.dumps(manifest,indent=2)+'\n')
     run('incus','file','push',str(local_manifest),BUILDER+'/root/native-manifest.json')
     metadata = 'usr/share/postgresql/17/karakoram-native-artifacts' if name=='supabase-pg17-extensions' else '.'

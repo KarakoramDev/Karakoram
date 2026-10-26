@@ -6,6 +6,7 @@ package nomad
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -150,7 +151,9 @@ func TestClientTransportFailures(t *testing.T) {
 	defer server.Close()
 	c := newClient(server.URL, "", "tenant", "secret-token", &tls.Config{MinVersion: tls.VersionTLS12})
 	_, err := c.get(context.Background(), "/v1/jobs", nil, nil)
-	assertSilentUnavailable(t, err, server.URL)
+	if !errors.Is(err, infra.ErrConfiguration) || !strings.Contains(infra.SafeDetail(err), "KARAKORAM_NOMAD_CACERT") {
+		t.Fatalf("untrusted certificate = %v", err)
+	}
 	server.Close()
 	_, err = c.get(context.Background(), "/v1/jobs", nil, nil)
 	assertSilentUnavailable(t, err, server.URL)
@@ -160,6 +163,74 @@ func TestClientTransportFailures(t *testing.T) {
 	c.http.Timeout = 10 * time.Millisecond
 	_, err = c.get(context.Background(), "/v1/jobs", nil, nil)
 	assertSilentUnavailable(t, err, slow.URL)
+}
+
+func TestClientTLSHostnameConfigurationError(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("request reached server despite invalid TLS identity")
+	}))
+	defer server.Close()
+	roots := x509.NewCertPool()
+	roots.AddCert(server.Certificate())
+	c := newClient(server.URL, "", "tenant", "secret-token", &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    roots,
+		ServerName: "secret-requested-name.example.test",
+	})
+	_, err := c.get(t.Context(), "/v1/jobs", url.Values{"private": {"secret-query"}}, nil)
+	if !errors.Is(err, infra.ErrConfiguration) || errors.Is(err, infra.ErrRejected) || errors.Is(err, infra.ErrUnavailable) {
+		t.Fatalf("TLS error classification = %v", err)
+	}
+	detail := infra.SafeDetail(err)
+	if !strings.Contains(detail, "TLS verification failed") || !strings.Contains(detail, "KARAKORAM_NOMAD_TLS_SERVER_NAME") || !strings.Contains(detail, "SANs") {
+		t.Fatalf("missing TLS remediation: %q", detail)
+	}
+	for _, text := range []string{detail, err.Error()} {
+		if len(text) > 300 {
+			t.Fatalf("unbounded diagnostic: %q", text)
+		}
+		for _, secret := range []string{"secret-token", "secret-query", "secret-requested-name", server.URL, "BEGIN CERTIFICATE"} {
+			if strings.Contains(text, secret) {
+				t.Fatalf("unsafe TLS diagnostic: %q", text)
+			}
+		}
+	}
+}
+
+func TestNomadTLSTransportErrorClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"hostname", x509.HostnameError{}, "KARAKORAM_NOMAD_TLS_SERVER_NAME"},
+		{"authority", x509.UnknownAuthorityError{}, "KARAKORAM_NOMAD_CACERT"},
+		{"expired", x509.CertificateInvalidError{Reason: x509.Expired}, "system clock"},
+		{"invalid", x509.CertificateInvalidError{Reason: x509.IncompatibleUsage}, "KARAKORAM_NOMAD_CACERT"},
+		{"verification", &tls.CertificateVerificationError{Err: errors.New("private certificate details")}, "TLS verification failed"},
+		{"bad certificate alert", tls.AlertError(42), "KARAKORAM_NOMAD_CLIENT_CERT"},
+		{"unknown CA alert", tls.AlertError(48), "KARAKORAM_NOMAD_CLIENT_KEY"},
+		{"remote bad certificate", errors.New("remote error: tls: bad certificate"), "KARAKORAM_NOMAD_CLIENT_CERT"},
+		{"remote unknown CA", errors.New("remote error: tls: unknown certificate authority"), "KARAKORAM_NOMAD_CLIENT_KEY"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := transportError(&url.Error{Op: "Get", URL: "https://private.example.test/secret-token", Err: tc.err})
+			if !errors.Is(err, infra.ErrConfiguration) || errors.Is(err, infra.ErrRejected) || !strings.Contains(infra.SafeDetail(err), tc.want) {
+				t.Fatalf("TLS classification/remediation = %v", err)
+			}
+			for _, text := range []string{err.Error(), infra.SafeDetail(err)} {
+				if len(text) > 300 || strings.Contains(text, "private") || strings.Contains(text, "secret-token") || strings.Contains(text, "https://") {
+					t.Fatalf("unsafe diagnostic: %q", text)
+				}
+			}
+		})
+	}
+	for _, cause := range []error{errors.New("connection refused"), tls.AlertError(80), errors.New("remote error: tls: internal error")} {
+		err := transportError(cause)
+		if !errors.Is(err, infra.ErrUnavailable) || infra.SafeDetail(err) != "nomad: network request failed" {
+			t.Fatalf("ordinary network error changed classification: %v", err)
+		}
+	}
 }
 
 func assertSilentUnavailable(t *testing.T, err error, origin string) {

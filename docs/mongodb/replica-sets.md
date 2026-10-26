@@ -41,6 +41,13 @@ Ready means the desired `generation` is observed by `observedGeneration` **and**
 
 `spec.version` is desired; `status.version` reflects observed binaries, with missing observations unknown. Leaving members remain visible until removed; the UI counts active members and leaving members separately. Condition transition timestamps change on status/reason transitions, not every poll.
 
+Writable-primary readiness requires a freshly selected primary's `hello` and
+fresh reachability of the set's members, not just a secondary's potentially stale
+replication view. A failed observation is retried once within the same bounded
+cycle; it never extends cached readiness. See the shared
+[health freshness and transient tolerance contract](../clusters.md#operations-and-status)
+for the 2-second read-probe, 5-second sweep and 15-second maximum sample-age bounds.
+
 Use [application connection instructions](access-and-tls.md); private hosts belong to the namespace's project, not necessarily the control-plane project.
 
 ## Add, remove and replace members

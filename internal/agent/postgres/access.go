@@ -197,8 +197,7 @@ func readRoles(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Role, er
 	return result, rows.Err()
 }
 func writeRole(ctx context.Context, c *pgx.Conn, operation string, role pgspec.RoleWrite) error {
-	sql, args, err := roleStatement(operation, role)
-	if err != nil {
+	if _, _, err := roleStatement(operation, role); err != nil {
 		return err
 	}
 	tx, err := c.Begin(ctx)
@@ -206,6 +205,17 @@ func writeRole(ctx context.Context, c *pgx.Conn, operation string, role pgspec.R
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err = writeRoleTx(ctx, tx, operation, role); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.RoleWrite) error {
+	sql, args, err := roleStatement(operation, role)
+	if err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, sql, args...); err != nil {
 		return err
 	}
@@ -249,7 +259,7 @@ func writeRole(ctx context.Context, c *pgx.Conn, operation string, role pgspec.R
 			}
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 // ROW(d) has the anonymous record type. row_to_json(record) is an exact builtin
@@ -422,6 +432,14 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 	switch action {
 	case pgspec.ActionRoles:
 		switch req.Operation {
+		case "capabilities":
+			return nil
+		case "journal":
+			if req.RequestID == "" || !safeValue(req.RequestID, 256) || req.Role == nil ||
+				(req.RoleOperation != "create" && req.RoleOperation != "update") {
+				return invalidAccess("invalid journaled role request")
+			}
+			return validateRoleWrite(*req.Role)
 		case "list":
 			return nil
 		case "get":
@@ -478,6 +496,12 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.AccessRequest) (any, error) {
 	switch action {
 	case pgspec.ActionRoles:
+		if req.Operation == "capabilities" {
+			return pgspec.AccessCapabilities{CredentialReceipts: true}, nil
+		}
+		if req.Operation == "journal" {
+			return journalRole(ctx, c, req), nil
+		}
 		switch req.Operation {
 		case "list", "get":
 			roles, err := readRoles(ctx, c, req.Name)
@@ -565,6 +589,10 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				return
 			}
 			if err := validateAccessRequest(action, req); err != nil {
+				if action == pgspec.ActionRoles && req.Operation == "journal" {
+					actionJSON(w, http.StatusOK, accessRejected("invalid_request", err.Error(), http.StatusBadRequest))
+					return
+				}
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -601,6 +629,10 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 			})
 			if err != nil {
 				safe := accessFailure(err).(*accessError)
+				if action == pgspec.ActionRoles && req.Operation == "journal" {
+					actionJSON(w, http.StatusOK, pgspec.AccessResult{Outcome: "unknown", Code: "execution_unavailable", Message: safe.message})
+					return
+				}
 				http.Error(w, safe.message, safe.status)
 				return
 			}

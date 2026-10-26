@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -30,6 +31,8 @@ import (
 type verificationFailure struct {
 	reason string
 	err    error
+	// message is set only from the shared, fixed-string configuration validator.
+	message string
 }
 
 func (e *verificationFailure) Error() string {
@@ -48,12 +51,17 @@ func Failure(err error) (reason, message string) {
 	var failure *verificationFailure
 	if errors.As(err, &failure) {
 		reason = failure.reason
+		if failure.message != "" {
+			return reason, failure.message
+		}
 	}
 	switch reason {
 	case "access_denied":
 		message = "S3 authentication or permission denied; check credentials and bucket read/write/delete permissions"
 	case "bucket_not_found":
 		message = "S3 bucket does not exist; check the bucket name, endpoint and region"
+	case "clock_skew":
+		message = "S3 rejected the request time; check and synchronize the control-plane host clock, then run storage verification again"
 	case "endpoint_not_allowed":
 		message = "S3 endpoint is not permitted; use an HTTP(S) origin without credentials, path, query or fragment; redirects, loopback and metadata addresses are forbidden and private endpoints require an operator allowlist"
 	case "tls_error":
@@ -69,7 +77,8 @@ func Failure(err error) (reason, message string) {
 }
 
 // Verify probes put, get and delete permissions with a random, private object under the configured prefix.
-// TLS certificate verification and path-style addressing follow the storage settings exactly.
+// TLS certificate verification follows the storage setting; virtual hosting is
+// preferred only when the endpoint/bucket can safely use it.
 func Verify(ctx context.Context, s domain.BackupStorage, c domain.StorageCredentials) error {
 	return verify(ctx, s, c, nil)
 }
@@ -86,7 +95,10 @@ func verify(ctx context.Context, s domain.BackupStorage, c domain.StorageCredent
 	if _, err = rand.Read(random[:]); err != nil {
 		return fmt.Errorf("generate S3 probe name: %w", err)
 	}
-	key := strings.TrimRight(s.Prefix, "/")
+	if err := domain.ValidateBackupStoragePrefix(s.Prefix); err != nil {
+		return err
+	}
+	key := domain.BackupStoragePrefix(s.Prefix)
 	if key != "" {
 		key += "/"
 	}
@@ -136,9 +148,9 @@ func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTranspo
 	if s.Type != "s3" {
 		return nil, nil, fmt.Errorf("unsupported backup storage type %q", s.Type)
 	}
-	u, err := url.Parse(s.EndpointURL)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return nil, nil, &verificationFailure{reason: "endpoint_not_allowed", err: errors.New("invalid S3 origin")}
+	u, err := s3endpoint.Parse(s.EndpointURL)
+	if err != nil {
+		return nil, nil, &verificationFailure{reason: "endpoint_not_allowed", err: err, message: err.Error()}
 	}
 	if s.Bucket == "" {
 		return nil, nil, errors.New("S3 bucket is required")
@@ -158,7 +170,7 @@ func newClient(s domain.BackupStorage, c domain.StorageCredentials, probeTranspo
 		region = "us-east-1"
 	}
 	lookup := minio.BucketLookupDNS
-	if s.ForcePathStyle {
+	if s3endpoint.PathStyle(u, s.Bucket, s.ForcePathStyle) {
 		lookup = minio.BucketLookupPath
 	}
 	client, err := minio.New(u.Host, &minio.Options{Creds: credentials.NewStaticV4(c.AccessKeyID, c.SecretAccessKey, ""), Secure: u.Scheme == "https", Region: region, Transport: probeTransport, BucketLookup: lookup})
@@ -180,6 +192,8 @@ func probeError(action string, err error) error {
 		reason = "access_denied"
 	case "NoSuchBucket":
 		reason = "bucket_not_found"
+	case "RequestTimeTooSkewed", "RequestExpired", "RequestInTheFuture":
+		reason = "clock_skew"
 	default:
 		var tlsErr *tls.CertificateVerificationError
 		var unknownCA x509.UnknownAuthorityError

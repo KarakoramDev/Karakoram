@@ -16,18 +16,19 @@ import (
 // SnapshotKeys resolves the immutable PBM snapshot namespace. Never derive it
 // from a recreated cluster, or use a broad prefix that includes other snapshots.
 func SnapshotKeys(s domain.BackupStorage, b domain.Backup) (directory, metadata string, err error) {
-	prefix := strings.TrimRight(b.PBMPrefix, "/")
-	storagePrefix := strings.TrimRight(s.Prefix, "/")
+	prefix := domain.BackupStoragePrefix(b.PBMPrefix)
+	storagePrefix := domain.BackupStoragePrefix(s.Prefix)
 	if b.Storage != s.Name || domain.NormalizedNamespace(b.Namespace) != domain.NormalizedNamespace(s.Namespace) || prefix == "" || b.PBMName == "" || strings.ContainsAny(b.PBMName, "/\\") || b.PBMName == "." || b.PBMName == ".." {
 		return "", "", errors.New("backup lacks a safe recorded PBM snapshot identity")
 	}
 	if storagePrefix != "" && !strings.HasPrefix(prefix, storagePrefix+"/") {
 		return "", "", errors.New("recorded PBM prefix is outside the storage prefix")
 	}
-	for _, part := range strings.Split(prefix, "/") {
-		if part == "" || part == "." || part == ".." || strings.Contains(part, "\\") {
-			return "", "", errors.New("recorded PBM prefix is not a safe object namespace")
-		}
+	if err := domain.ValidateBackupStoragePrefix(s.Prefix); err != nil {
+		return "", "", err
+	}
+	if err := domain.ValidateBackupStoragePrefix(b.PBMPrefix); err != nil {
+		return "", "", err
 	}
 	base := prefix + "/" + b.PBMName
 	return base + "/", base + ".pbm.json", nil

@@ -55,10 +55,9 @@ func (s *Service) oidcSettings(ctx context.Context) (*OIDCSettings, error) {
 	return &cfg, nil
 }
 
-// Settings returns OIDC configuration without the sealed client secret.
+// Settings reads one persisted snapshot without joining identity mutations.
+// Public version discovery must remain available while a mutation waits to write.
 func (s *Service) Settings(ctx context.Context) (*OIDCSettings, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	cfg, err := s.oidcSettings(ctx)
 	if cfg != nil {
 		cfg.ClientSecret = ""

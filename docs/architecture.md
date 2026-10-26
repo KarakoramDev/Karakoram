@@ -43,6 +43,8 @@ Backend capabilities describe optional public routing, disk growth, quotas, plac
 
 Clusters separate desired `spec` from observed `status`, with generation tracking. Mutations persist intent before reconciliation. Per-cluster workers serialize synchronization and imperative operations; unrelated clusters can progress independently. Providers persist checkpoints and platform identifiers, then observe completion before advancing disruptive work.
 
+Provider persistence replaces each owned state value, not just its nonempty fields. PostgreSQL, Elasticsearch and Supabase replace their complete `Cluster.Internal` namespace objects. Flat MongoDB and RabbitMQ state uses `internal/statejson.ReplaceOwned`: explicit JSON tags define owned root keys, omitted empty fields remove prior values, and unrelated workflow keys survive. Nested values are replaced whole; adding an optional owned field must not require a second, hand-maintained deletion list.
+
 Neither HTTP acceptance nor a successful infrastructure configuration process proves engine health. There is no distributed exactly-once transaction across SQLite, Zerops and engine/storage APIs: durable identifiers and observation constrain replay, while ambiguous outcomes require investigation. [Clusters and operations](clusters.md#operations-and-status) defines generations, operation phases, health, cancellation and wait behavior.
 
 ## Node-local durability

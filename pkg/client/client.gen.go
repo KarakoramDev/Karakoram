@@ -370,6 +370,7 @@ const (
 const (
 	AccessDenied       StorageVerificationFailureReason = "access_denied"
 	BucketNotFound     StorageVerificationFailureReason = "bucket_not_found"
+	ClockSkew          StorageVerificationFailureReason = "clock_skew"
 	EndpointNotAllowed StorageVerificationFailureReason = "endpoint_not_allowed"
 	Timeout            StorageVerificationFailureReason = "timeout"
 	TlsError           StorageVerificationFailureReason = "tls_error"
@@ -600,6 +601,7 @@ type AgentStatus struct {
 	ConfigVersion *int64     `json:"configVersion,omitempty"`
 	Connected     bool       `json:"connected"`
 	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
+	Message       *string    `json:"message,omitempty"`
 	Version       *string    `json:"version,omitempty"`
 }
 
@@ -824,6 +826,9 @@ type ClusterInputSpec struct {
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
 
+	// RetryEpoch Server-managed; ignored on input and preserved on updates. Use retry-deployments to grant a new budget.
+	RetryEpoch *int64 `json:"retryEpoch,omitempty"`
+
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLSInput      `json:"tls,omitempty"`
 	Topology *TopologyInput `json:"topology,omitempty"`
@@ -889,6 +894,9 @@ type ClusterSpec struct {
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
 
+	// RetryEpoch Server-managed deployment retry budget epoch. Changed only by retry-deployments, never by ordinary spec updates.
+	RetryEpoch *int64 `json:"retryEpoch,omitempty"`
+
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLS     `json:"tls,omitempty"`
 	Topology Topology `json:"topology"`
@@ -905,7 +913,7 @@ type ClusterStatus struct {
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
 
-	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 	Phase ClusterStatusPhase `json:"phase"`
 
 	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
@@ -915,7 +923,7 @@ type ClusterStatus struct {
 	Version *string `json:"version,omitempty"`
 }
 
-// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 type ClusterStatusPhase string
 
 // Component defines model for Component.
@@ -4125,6 +4133,30 @@ type ResumeClusterParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RetryClusterDeploymentsParams defines parameters for RetryClusterDeployments.
+type RetryClusterDeploymentsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5328,6 +5360,9 @@ type ClientInterface interface {
 
 	// ResumeCluster request
 	ResumeCluster(ctx context.Context, cluster ClusterPath, params *ResumeClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RetryClusterDeployments request
+	RetryClusterDeployments(ctx context.Context, cluster ClusterPath, params *RetryClusterDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RotateClusterTLS request
 	RotateClusterTLS(ctx context.Context, cluster ClusterPath, params *RotateClusterTLSParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -7388,6 +7423,18 @@ func (c *Client) GetRestore(ctx context.Context, cluster ClusterPath, restore st
 
 func (c *Client) ResumeCluster(ctx context.Context, cluster ClusterPath, params *ResumeClusterParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewResumeClusterRequest(c.Server, cluster, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RetryClusterDeployments(ctx context.Context, cluster ClusterPath, params *RetryClusterDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRetryClusterDeploymentsRequest(c.Server, cluster, params)
 	if err != nil {
 		return nil, err
 	}
@@ -17133,6 +17180,88 @@ func NewResumeClusterRequest(server string, cluster ClusterPath, params *ResumeC
 	return req, nil
 }
 
+// NewRetryClusterDeploymentsRequest generates requests for RetryClusterDeployments
+func NewRetryClusterDeploymentsRequest(server string, cluster ClusterPath, params *RetryClusterDeploymentsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "cluster", runtime.ParamLocationPath, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/clusters/%s/retry-deployments", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Namespace != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "namespace", runtime.ParamLocationQuery, *params.Namespace); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.XKarakoramCSRF != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithLocation("simple", false, "X-Karakoram-CSRF", runtime.ParamLocationHeader, *params.XKarakoramCSRF)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("X-Karakoram-CSRF", headerParam0)
+		}
+
+		if params.IdempotencyKey != nil {
+			var headerParam1 string
+
+			headerParam1, err = runtime.StyleParamWithLocation("simple", false, "Idempotency-Key", runtime.ParamLocationHeader, *params.IdempotencyKey)
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam1)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewRotateClusterTLSRequest generates requests for RotateClusterTLS
 func NewRotateClusterTLSRequest(server string, cluster ClusterPath, params *RotateClusterTLSParams) (*http.Request, error) {
 	var err error
@@ -19840,6 +19969,9 @@ type ClientWithResponsesInterface interface {
 	// ResumeClusterWithResponse request
 	ResumeClusterWithResponse(ctx context.Context, cluster ClusterPath, params *ResumeClusterParams, reqEditors ...RequestEditorFn) (*ResumeClusterResponse, error)
 
+	// RetryClusterDeploymentsWithResponse request
+	RetryClusterDeploymentsWithResponse(ctx context.Context, cluster ClusterPath, params *RetryClusterDeploymentsParams, reqEditors ...RequestEditorFn) (*RetryClusterDeploymentsResponse, error)
+
 	// RotateClusterTLSWithResponse request
 	RotateClusterTLSWithResponse(ctx context.Context, cluster ClusterPath, params *RotateClusterTLSParams, reqEditors ...RequestEditorFn) (*RotateClusterTLSResponse, error)
 
@@ -21058,6 +21190,7 @@ type GetClusterBalancerResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -21152,6 +21285,7 @@ type ListDatabaseRolesResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -21244,6 +21378,7 @@ type GetDatabaseRoleResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -21306,6 +21441,7 @@ type ListDatabaseUsersResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -21398,6 +21534,7 @@ type GetDatabaseUserResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -23493,6 +23630,37 @@ func (r ResumeClusterResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ResumeClusterResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RetryClusterDeploymentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *Cluster
+	JSON400      *BadRequest
+	JSON401      *Unauthorized
+	JSON403      *Forbidden
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON413      *PayloadTooLarge
+	JSON415      *UnsupportedMediaType
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r RetryClusterDeploymentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RetryClusterDeploymentsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -25996,6 +26164,15 @@ func (c *ClientWithResponses) ResumeClusterWithResponse(ctx context.Context, clu
 		return nil, err
 	}
 	return ParseResumeClusterResponse(rsp)
+}
+
+// RetryClusterDeploymentsWithResponse request returning *RetryClusterDeploymentsResponse
+func (c *ClientWithResponses) RetryClusterDeploymentsWithResponse(ctx context.Context, cluster ClusterPath, params *RetryClusterDeploymentsParams, reqEditors ...RequestEditorFn) (*RetryClusterDeploymentsResponse, error) {
+	rsp, err := c.RetryClusterDeployments(ctx, cluster, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRetryClusterDeploymentsResponse(rsp)
 }
 
 // RotateClusterTLSWithResponse request returning *RotateClusterTLSResponse
@@ -29550,6 +29727,13 @@ func ParseGetClusterBalancerResponse(rsp *http.Response) (*GetClusterBalancerRes
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -29824,6 +30008,13 @@ func ParseListDatabaseRolesResponse(rsp *http.Response) (*ListDatabaseRolesRespo
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30084,6 +30275,13 @@ func ParseGetDatabaseRoleResponse(rsp *http.Response) (*GetDatabaseRoleResponse,
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	return response, nil
@@ -30261,6 +30459,13 @@ func ParseListDatabaseUsersResponse(rsp *http.Response) (*ListDatabaseUsersRespo
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -30521,6 +30726,13 @@ func ParseGetDatabaseUserResponse(rsp *http.Response) (*GetDatabaseUserResponse,
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -35764,6 +35976,95 @@ func ParseResumeClusterResponse(rsp *http.Response) (*ResumeClusterResponse, err
 	}
 
 	response := &ResumeClusterResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Cluster
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest PayloadTooLarge
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest UnsupportedMediaType
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRetryClusterDeploymentsResponse parses an HTTP response from a RetryClusterDeploymentsWithResponse call
+func ParseRetryClusterDeploymentsResponse(rsp *http.Response) (*RetryClusterDeploymentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RetryClusterDeploymentsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

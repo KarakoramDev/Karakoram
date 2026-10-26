@@ -57,7 +57,7 @@ func (s *Server) rabbitMQUserTagsAllowed(ctx context.Context, name string, rc *e
 func (s *Server) rabbitmq(ctx context.Context, name string, in input, rc *engine.Context, p engine.Provider) response {
 	a, yes := p.(rabbitmq.Access)
 	if !yes {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, p)
 	}
 	switch name {
 	case "ListRabbitMQVhosts":

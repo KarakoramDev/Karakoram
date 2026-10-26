@@ -129,7 +129,12 @@ func PrepareCommands(a Artifact, resolvedURL, destDir, owner string) []string {
 	}
 	switch {
 	case strings.HasSuffix(a.File, ".deb"):
-		script += "apt-get install -y \"$stage/$file\"\n"
+		// dpkg's automatic XZ parallelism budgets against host memory, not
+		// necessarily the allocation's cgroup. Serial decoding avoids buffering
+		// multiple expanded blocks while keeping apt's dependency/maintainer
+		// script semantics. Set this inside the privileged shell: sudo may
+		// discard an environment variable set by the caller.
+		script += "if DPKG_DEB_THREADS_MAX=1 apt-get install -y \"$stage/$file\"; then\n:\nelse\nstatus=$?\nprintf '%s\\n' \"native artifact $file: package installation failed (exit $status; serial decompression enabled); inspect apt/dpkg diagnostics and allocation memory limits\" >&2\nexit \"$status\"\nfi\n"
 	case a.Name == "supabase-pg17-extensions":
 		// Never extract into / or copy the archive's ancestor directories.
 		script += "umask 022\nmkdir unpacked\ntar --no-same-owner --no-same-permissions --keep-old-files --delay-directory-restore -xf \"$file\" -C unpacked\n"

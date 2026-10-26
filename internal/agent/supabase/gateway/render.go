@@ -129,7 +129,25 @@ func Render(in Input) ([]byte, error) {
 		// Bound negative/empty-answer convergence without trusting potentially long
 		// discovery TTLs. A short failure backoff also avoids five-second NXDOMAIN
 		// stalls while sequentially created services acquire discovery records.
-		clusters = append(clusters, object{"name": name, "type": "STRICT_DNS", "connect_timeout": "5s", "dns_refresh_rate": "1s", "respect_dns_ttl": false, "dns_failure_refresh_rate": object{"base_interval": "0.250s", "max_interval": "1s"}, "lb_policy": "ROUND_ROBIN", "load_assignment": object{"cluster_name": name, "endpoints": []any{object{"lb_endpoints": []any{object{"endpoint": object{"address": socket(host, n)}}}}}}})
+		// Only transport failures eject hosts; an application's HTTP 5xx must
+		// remain visible. At most half the pool is ejected, so the default 50%
+		// panic threshold is not crossed and a singleton is never ejected.
+		clusters = append(clusters, object{
+			"name": name, "type": "STRICT_DNS", "connect_timeout": "5s",
+			"dns_refresh_rate": "1s", "respect_dns_ttl": false,
+			"dns_failure_refresh_rate": object{"base_interval": "0.250s", "max_interval": "1s"},
+			"lb_policy":                "ROUND_ROBIN",
+			"outlier_detection": object{
+				"split_external_local_origin_errors": true,
+				"consecutive_local_origin_failure":   1, "enforcing_consecutive_local_origin_failure": 100,
+				"consecutive_5xx": 0, "enforcing_consecutive_5xx": 0,
+				"consecutive_gateway_failure": 0, "enforcing_consecutive_gateway_failure": 0,
+				"enforcing_success_rate": 0, "enforcing_local_origin_success_rate": 0,
+				"interval": "1s", "base_ejection_time": "5s", "max_ejection_time": "30s",
+				"max_ejection_percent": 50, "always_eject_one_host": false,
+			},
+			"load_assignment": object{"cluster_name": name, "endpoints": []any{object{"lb_endpoints": []any{object{"endpoint": object{"address": socket(host, n)}}}}}},
+		})
 	}
 	if in.Upstreams["studio"] != "" && (in.DashboardUsername == "" || in.DashboardPassword == "" || strings.ContainsAny(in.DashboardUsername, ":\r\n")) {
 		return nil, errors.New("dashboard basic-auth credentials are required for Studio")
@@ -188,7 +206,19 @@ func Render(in Input) ([]byte, error) {
 			routes = append(routes, r)
 			return
 		}
-		action := object{"cluster": component, "prefix_rewrite": rewrite, "timeout": "30s"}
+		// Envoy 1.39 supports reset-before-request: never replay a request
+		// after its headers were sent (Storage/REST writes may not be idempotent).
+		// The policy applies before an upgrade, not to an established websocket.
+		action := object{"cluster": component, "prefix_rewrite": rewrite, "timeout": "30s",
+			"retry_policy": object{
+				"retry_on": "connect-failure,refused-stream,reset-before-request", "num_retries": 2,
+				"retry_host_predicate": []any{object{
+					"name":         "envoy.retry_host_predicates.previous_hosts",
+					"typed_config": object{"@type": "type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate"},
+				}},
+				"host_selection_retry_max_attempts": 3,
+			},
+		}
 		if component == "functions" {
 			action["timeout"] = "410s"
 			action["idle_timeout"] = "160s"

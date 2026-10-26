@@ -30,6 +30,14 @@ func TestElasticClonePatchAfterSourceDeletion(t *testing.T) {
 	if w := call(s, "POST", "/api/v1/clusters", body, token); w.Code != 201 {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
+	completed, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "copied"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed.Internal = []byte(`{"elasticsearch":{"initialRestore":"done"}}`)
+	if err := s.Store.UpdateClusterState(t.Context(), completed); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Store.DeleteBackup(t.Context(), source.Ref(), backup.Name); err != nil {
 		t.Fatal(err)
 	}

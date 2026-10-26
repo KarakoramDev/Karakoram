@@ -242,6 +242,9 @@ func TestObservationDoesNotRacePendingRegistration(t *testing.T) {
 				r.RestartLease = &operationLease{Owner: "another-instance", Until: time.Now().Add(operationLeaseDuration)}
 			} else {
 				r.Pending.Phase = phase
+				// Observations now resume abandoned lifecycle work, but must
+				// never race a poller holding its durable mutation claim.
+				r.Pending.Lease = &operationLease{Owner: "another-instance", Until: time.Now().Add(operationLeaseDuration)}
 			}
 			if err := b.save(t.Context(), r); err != nil {
 				t.Fatal(err)

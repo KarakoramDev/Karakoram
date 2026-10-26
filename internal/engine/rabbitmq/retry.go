@@ -20,6 +20,31 @@ func (s *internalState) resetPlatformRetry(v *pending) {
 		s.Retry = nil
 	}
 }
+
+// failPendingCause preserves rate-limit deadlines in both the returned error
+// tree and the retry state that survives control-plane restarts.
+func (s *internalState) failPendingCause(rc *engine.Context, cause error) error {
+	v := s.Pending
+	var wait *engine.PlatformRetryWait
+	if errors.As(cause, &wait) {
+		s.Pending = nil
+		s.resetPlatformRetry(v)
+		return cause
+	}
+	if errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+		s.Pending = nil
+		s.resetPlatformRetry(v)
+		return cause
+	}
+	failure := s.failPending(rc, cause.Error())
+	if at := infra.RetryAt(cause); !at.IsZero() {
+		if r := s.PlatformRetries[platformRetryKey(v)]; r != nil && at.After(r.RetryAfter) {
+			r.RetryAfter = r.Schedule(now(rc), at)
+		}
+		return errors.Join(failure, cause)
+	}
+	return failure
+}
 func (s *internalState) failPending(rc *engine.Context, message string) error {
 	v := s.Pending
 	if s.PlatformRetries == nil {
@@ -33,7 +58,8 @@ func (s *internalState) failPending(rc *engine.Context, message string) error {
 	}
 	r.Failures++
 	r.Message = message
-	r.RetryAfter = now(rc).Add(engine.PlatformRetryDelay(r.Failures))
+	recorded := now(rc)
+	r.RetryAfter = r.Schedule(recorded, recorded.Add(engine.PlatformRetryDelay(r.Failures)))
 	r.LastAttemptAt = now(rc)
 	r.LastProcessID = v.Op.ID
 	if volumeDelete(v.Action) && strings.Contains(strings.ToLower(message), "still mounted") {
@@ -104,11 +130,11 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 		}
 		op, err = backend.SetSubdomainAccess(ctx, m.Name, o.ManagementUI.Public)
 	case "delete-runtime", "cleanup-runtime", "delete-volume", "cleanup-volume":
-		name := m.Name
+		name, recordedID := m.Name, m.ServiceID
 		if volumeDelete(v.Action) {
-			name = m.Volume
+			name, recordedID = m.Volume, m.VolumeID
 		}
-		service, e := rc.Backend.GetService(ctx, name)
+		service, e := engine.ObserveRetiringService(ctx, rc.Backend, name, recordedID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if e != nil {
 			return e
 		}
@@ -135,11 +161,13 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 				s.PlatformRetries = map[string]*platformRetry{}
 			}
 			s.PlatformRetries[platformRetryKey(v)] = &platformRetry{RetryAfter: at, Message: err.Error(), CPUModeCooldown: true}
+			r := s.PlatformRetries[platformRetryKey(v)]
+			r.RetryAfter = r.Schedule(now(rc), at)
 			s.Retry = v
 			s.Pending = nil
-			return &engine.PlatformRetryWait{RetryAt: at, Message: err.Error()}
+			return &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: err.Error()}
 		}
-		return s.failPending(rc, err.Error())
+		return s.failPendingCause(rc, err)
 	}
 	s.Retry = nil
 	return nil
@@ -158,7 +186,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 			return true, err
 		}
 	}
-	if now(rc).Before(r.RetryAfter) {
+	if r.Waiting(now(rc), r.RetryAfter) {
 		return true, &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: s.platformFailureMessage()}
 	}
 	return true, p.submit(ctx, rc, s, v)
@@ -168,10 +196,34 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	if v == nil {
 		return false, nil
 	}
+	var resizeErr error
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != "ready" && !m.Resume {
+		var changed bool
+		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources), &m.Resources, &v.Op)
+		if changed {
+			return true, nil
+		}
+	}
 	var st infra.OpState
-	if v.Op.ID != "" {
-		var err error
-		st, err = rc.Backend.OpStatus(ctx, v.Op)
+	if v.Op.ID != "" || resizeErr != nil {
+		err := resizeErr
+		if err == nil {
+			st, err = rc.Backend.OpStatus(ctx, v.Op)
+		}
+		if st.Status == "DeploymentRetriesExhausted" && err == nil {
+			err = &infra.DeploymentExhaustedError{Service: v.Member, LastError: st.Message}
+		}
+		if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
+			if m := s.find(v.Member); m != nil {
+				engine.ApplyDeploymentResourceRollback(err, &m.Resources)
+				if spec, specErr := p.runtimeSpec(rc, m, v.Version); specErr == nil {
+					err = engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, err)
+				}
+			}
+			s.Pending = nil
+			s.resetPlatformRetry(v)
+			return false, err
+		}
 		if err != nil {
 			return true, err
 		}
@@ -199,6 +251,7 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		// leave the member planned so importMember creates the rest.
 		if complete {
 			m.Stage = "imported"
+			m.ImportPlan = nil
 		}
 	case "deploy":
 		m.Stage = "deployed"
@@ -216,6 +269,12 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 		m.Resources = v.Resources
 		if m.ChangeAction == "resources" {
 			m.ChangeStep = "redeploy"
+			if resourceUpdatesDeployRuntime(rc.Backend) {
+				// The backend receipt already reapplied the stored runtime.
+				// Reload the published native configuration, then retain the
+				// same start/config/membership/revive gate before another broker.
+				m.ChangeStep = "reload"
+			}
 		}
 	case "disk":
 		m.Disk = v.Resources
@@ -234,6 +293,7 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			return true, err
 		}
 		removeRecord(s, m.Name)
+		delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 	}
 	s.resetPlatformRetry(v)
 	s.Pending = nil

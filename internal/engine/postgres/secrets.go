@@ -88,9 +88,8 @@ func (p *Core) ensureSecrets(ctx context.Context, rc *engine.Context, s *state) 
 	return ensureCertificates(ctx, rc, s, false)
 }
 
-// ensureCertificates stages renewed material without changing an active member's
-// pull response. Each member activates its staged pair immediately before its
-// rolling reload, and retries leave the same pending material in place.
+// ensureCertificates publishes hot-swappable agent identities independently of
+// member health. Database leaves remain staged until their rolling reload.
 func ensureCertificates(ctx context.Context, rc *engine.Context, s *state, force bool) error {
 	crt, err := secret(ctx, rc, "tls/ca.crt")
 	if err != nil {
@@ -124,9 +123,56 @@ func ensureCertificates(ctx context.Context, rc *engine.Context, s *state, force
 			if err != nil && !initial {
 				return err
 			}
+			if kind == "agents" {
+				// Older releases staged this transport behind a live health gate.
+				// Discard that journal: no database process uses this identity.
+				for _, suffix := range []string{".pending.crt", ".pending.key"} {
+					if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+suffix); err != nil && !missing(err) {
+						return err
+					}
+				}
+				renew := initial || force
+				if !renew {
+					renew, err = pki.NeedsRenewal(active, 30*24*time.Hour, now(rc))
+					if err != nil {
+						return err
+					}
+				}
+				if !renew {
+					continue
+				}
+				certPEM, keyPEM, err := ca.Issue(pki.CertRequest{
+					CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: ips, Server: true,
+					Now: now(rc),
+				})
+				if err != nil {
+					return err
+				}
+				if err := putSecret(ctx, rc, base+".key", keyPEM); err != nil {
+					return err
+				}
+				if err := putSecret(ctx, rc, base+".crt", certPEM); err != nil {
+					return err
+				}
+				continue
+			}
 			pending, err := secret(ctx, rc, base+".pending.crt")
 			if err != nil && !missing(err) {
 				return err
+			}
+			if len(pending) > 0 {
+				unusable, err := pki.NeedsRenewal(pending, 0, now(rc))
+				if err != nil {
+					return err
+				}
+				if unusable {
+					for _, suffix := range []string{".pending.crt", ".pending.key"} {
+						if err := rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), base+suffix); err != nil && !missing(err) {
+							return err
+						}
+					}
+					pending = nil
+				}
 			}
 			if len(pending) > 0 && !m.TLSPending {
 				// Secret writes may have committed before the cluster state.
@@ -187,6 +233,7 @@ func ensureCertificates(ctx context.Context, rc *engine.Context, s *state, force
 				certPEM, keyPEM, err = ca.Issue(pki.CertRequest{
 					CommonName: m.Name, DNSNames: []string{m.Name, "localhost"},
 					IPs: ips, Server: true, Client: kind == "servers",
+					Now: now(rc),
 				})
 				if err != nil {
 					return err
@@ -266,7 +313,7 @@ func activateCertificates(ctx context.Context, rc *engine.Context, m *member) er
 	if !m.TLSPending {
 		return nil
 	}
-	for _, kind := range []string{"agents", "servers"} {
+	for _, kind := range []string{"servers"} {
 		base := "tls/" + kind + "/" + m.Name
 		crt, err := secret(ctx, rc, base+".pending.crt")
 		if missing(err) {
@@ -292,6 +339,7 @@ func activateCertificates(ctx context.Context, rc *engine.Context, m *member) er
 		}
 	}
 	m.TLSPending = false
+	m.TLSReloadBlocked = ""
 	return nil
 }
 

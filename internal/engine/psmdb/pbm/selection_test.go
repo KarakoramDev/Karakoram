@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -54,8 +53,9 @@ func TestPhysicalBackupRequiresPSMDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := RunBackup(context.Background(), env, &domain.Operation{ID: "backup", Payload: json.RawMessage(`{"backup":"physical"}`)})
-	if err == nil || fake.starts != 0 {
-		t.Fatalf("error=%v starts=%d", err, fake.starts)
+	starts := fake.startCount()
+	if err == nil || starts != 0 {
+		t.Fatalf("error=%v starts=%d", err, starts)
 	}
 }
 
@@ -70,46 +70,6 @@ func TestInventoryShapeAndEpochRanges(t *testing.T) {
 	}
 	if !hasJSONKey([]byte(`{"snapshots":null}`), "snapshots") || hasJSONKey([]byte(`{"msg":"Storage resync is running"}`), "snapshots") {
 		t.Fatal("inventory availability classification")
-	}
-}
-
-func TestCleanupResetsForDifferentDestination(t *testing.T) {
-	env, _, fake, _ := setup(t)
-	first, err := DeleteAll(context.Background(), env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cp checkpoint
-	if err := json.Unmarshal(first.Checkpoint, &cp); err != nil {
-		t.Fatal(err)
-	}
-	original := cp.Destination
-	cp.Step = "done"
-	raw, _ := json.Marshal(cp)
-	state := map[string]json.RawMessage{}
-	if err := json.Unmarshal(env.RC.Cluster.Internal, &state); err != nil {
-		t.Fatal(err)
-	}
-	state["pbmCleanup"] = raw
-	env.RC.Cluster.Internal, _ = json.Marshal(state)
-	env.Storage.Name = "other-storage"
-	env.Prefix = "other-prefix"
-	second, err := DeleteAll(context.Background(), env)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(second.Checkpoint, &cp); err != nil {
-		t.Fatal(err)
-	}
-	if second.Done || cp.Step != "resync" || cp.Destination == original {
-		t.Fatalf("destination did not reset cleanup: %s", second.Checkpoint)
-	}
-	var cfg string
-	if err := json.Unmarshal(fake.requests[len(fake.requests)-1].Config, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(cfg, "prefix: other-prefix") {
-		t.Fatal(cfg)
 	}
 }
 
@@ -134,7 +94,7 @@ func TestSuppressionCommitsBeforeAgentAction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(fake.actions) != 0 {
+			if len(fake.recordedActions()) != 0 {
 				t.Fatal("agent action happened before desired state was committed")
 			}
 			var internal struct {
@@ -164,8 +124,9 @@ func TestSuppressionCommitsBeforeAgentAction(t *testing.T) {
 			if _, err := RunRestore(context.Background(), env, op); err != nil {
 				t.Fatal(err)
 			}
-			if len(fake.actions) != 1 {
-				t.Fatalf("agent actions after durable desire=%v", fake.actions)
+			actions := fake.recordedActions()
+			if len(actions) != 1 {
+				t.Fatalf("agent actions after durable desire=%v", actions)
 			}
 		})
 	}

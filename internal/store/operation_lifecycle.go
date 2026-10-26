@@ -24,18 +24,43 @@ func WithOperation(ctx context.Context, op *domain.Operation) context.Context {
 }
 
 func acceptClusterOperation(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef) error {
+	if initial, ok := ctx.Value(initialAmendmentKey{}).(*domain.Operation); ok {
+		if err := tx.QueryRowContext(ctx, "SELECT generation FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&initial.TargetGeneration); err != nil {
+			return err
+		}
+		initial.UpdatedAt = time.Now().UTC()
+		initial.Message = "Initial restore amended before native claim: placement/resource/replica settings updated"
+		if err := put(ctx, tx, "operation", ref.Key(), initial.ID, initial, "", "", string(initial.Phase), false); err != nil {
+			return err
+		}
+		if requested, ok := ctx.Value(operationContextKey{}).(*domain.Operation); ok && requested != nil {
+			*requested = *initial
+		}
+		return appendEvent(ctx, tx, &domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Operation: initial.ID, Type: "Normal", Reason: "InitialRestoreAmended", Message: initial.Message})
+	}
 	op, _ := ctx.Value(operationContextKey{}).(*domain.Operation)
 	if op == nil {
 		return nil
+	}
+	if op.Kind != domain.OperationCreate && op.Kind != domain.OperationDelete {
+		_, initial, err := initialDataSourceOperation(ctx, tx, ref)
+		if err != nil {
+			return err
+		}
+		if initial != nil {
+			return initialRestoreConflict(initial)
+		}
 	}
 	op.Namespace, op.Cluster = domain.NormalizedNamespace(ref.Namespace), ref.Name
 	op.Target = domain.OperationTarget{Kind: "cluster", Name: ref.Name}
 	if err := prepareOperation(ctx, op); err != nil {
 		return err
 	}
-	if err := tx.QueryRowContext(ctx, "SELECT generation FROM clusters WHERE namespace=? AND name=?", op.Namespace, ref.Name).Scan(&op.TargetGeneration); err != nil {
+	var created int64
+	if err := tx.QueryRowContext(ctx, "SELECT generation,created FROM clusters WHERE namespace=? AND name=?", op.Namespace, ref.Name).Scan(&op.TargetGeneration, &created); err != nil {
 		return typed(err)
 	}
+	op.ClusterIncarnation = clusterIncarnation(created)
 	rows, err := tx.QueryContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running')", ref.Key())
 	if err != nil {
 		return err
@@ -77,7 +102,7 @@ func finalizeOperationRecord(ctx context.Context, tx *sql.Tx, op *domain.Operati
 	}
 	kind, field := "", ""
 	switch op.Kind {
-	case domain.OperationBackup:
+	case domain.OperationBackup, domain.OperationDeleteBackup:
 		kind, field = "backup", "backup"
 	case domain.OperationRestore:
 		kind, field = "restore", "restore"
@@ -107,6 +132,15 @@ func finalizeOperationRecord(ctx context.Context, tx *sql.Tx, op *domain.Operati
 		var b domain.Backup
 		if err = json.Unmarshal(raw, &b); err != nil {
 			return err
+		}
+		if op.Kind == domain.OperationDeleteBackup {
+			if b.Phase != domain.PhaseDeleting {
+				return nil
+			}
+			// Keep the immutable remote identity for an idempotent retry. A
+			// failed deletion must not become an apparently successful backup.
+			b.Phase, b.Error = domain.PhaseFailed, "Backup deletion did not complete: "+op.Message
+			return put(ctx, tx, kind, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), name, &b, "", "", string(b.Phase), false)
 		}
 		if b.Phase == domain.PhaseSucceeded {
 			return nil
@@ -166,8 +200,13 @@ func (s *Store) RequestOperationCancellation(ctx context.Context, id string, exp
 }
 
 // completeDeletionOperations runs atomically with suspension/removal.
-func completeDeletionOperations(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef, message string) error {
-	rows, err := tx.QueryContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running')", ref.Key())
+func completeDeletionOperations(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef, suspended bool, message string) error {
+	var created, generation int64
+	if err := tx.QueryRowContext(ctx, "SELECT created,generation FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&created, &generation); err != nil {
+		return typed(err)
+	}
+	incarnation := clusterIncarnation(created)
+	rows, err := tx.QueryContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running','Failed')", ref.Key())
 	if err != nil {
 		return err
 	}
@@ -182,7 +221,11 @@ func completeDeletionOperations(ctx context.Context, tx *sql.Tx, ref domain.Clus
 			rows.Close()
 			return err
 		}
-		if op.Kind == domain.OperationDelete {
+		matchingGeneration := op.TargetGeneration == generation || (!suspended && op.TargetGeneration < generation)
+		matchingIncarnation := op.ClusterIncarnation == incarnation
+		// Actual removal also proves older, unidentified legacy targets absent;
+		// suspension alone cannot establish which incarnation they belonged to.
+		if op.Kind == domain.OperationDelete && (matchingIncarnation || (op.ClusterIncarnation == "" && !suspended)) && matchingGeneration {
 			ops = append(ops, op)
 		}
 	}

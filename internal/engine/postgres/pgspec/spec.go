@@ -133,6 +133,9 @@ type Backup struct {
 type Bootstrap struct {
 	// Method is "initdb" (default) or "restore".
 	Method string `json:"method"`
+	// AllowInitDB authorizes only the first cluster initialization. Formed
+	// clusters may clone surviving data or restore, never bootstrap empty.
+	AllowInitDB bool `json:"allowInitDB,omitempty"`
 	// SeedMember restricts DCS initialization during single-to-HA adoption.
 	// Other members may stream but must not initialize an empty cluster.
 	SeedMember string `json:"seedMember,omitempty"`
@@ -244,12 +247,24 @@ const (
 
 // StatusResponse is the live member state.
 type StatusResponse struct {
-	Role string `json:"role"` // primary, replica, standalone, proxy, starting, stopped
+	// HealthCapabilities distinguishes unsupported observations in older
+	// member protocols from failed probes in a capable implementation.
+	HealthCapabilities *HealthCapabilities `json:"healthCapabilities,omitempty"`
+	// CredentialReceipts advertises durable credential mutation replay.
+	CredentialReceipts bool   `json:"credentialReceipts,omitempty"`
+	Role               string `json:"role"` // primary, replica, standalone, proxy, starting, stopped
 	// Running reports whether PostgreSQL (or ProxySQL) accepts connections.
-	Running  bool   `json:"running"`
-	Leader   string `json:"leader,omitempty"`
-	Timeline int    `json:"timeline,omitempty"`
-	// LagBytes is replay lag behind the primary for replicas.
+	Running bool `json:"running"`
+	// DataRecoveryRequired refuses empty initialization after data loss.
+	DataRecoveryRequired bool `json:"dataRecoveryRequired,omitempty"`
+	// DataMissing is a successful filesystem observation, not a failed SQL
+	// probe. Individual HA replicas may still safely clone from a live leader.
+	DataMissing bool   `json:"dataMissing,omitempty"`
+	Leader      string `json:"leader,omitempty"`
+	Timeline    int    `json:"timeline,omitempty"`
+	// LagBytes is local receive-minus-replay backlog on replicas, or the
+	// maximum downstream replay distance on a primary. Cluster readiness
+	// compares WALPosition across matching system identifiers and timelines.
 	LagBytes  int64  `json:"lagBytes,omitempty"`
 	Streaming bool   `json:"streaming,omitempty"`
 	SyncState string `json:"syncState,omitempty"`
@@ -279,12 +294,40 @@ type StatusResponse struct {
 	// RetirementStopped confirms a durable stop hold and no running database.
 	RetirementStopped bool `json:"retirementStopped,omitempty"`
 	// LastArchivedAt is pg_stat_archiver.last_archived_time (primary).
-	LastArchivedAt string `json:"lastArchivedAt,omitempty"`
-	ArchiveFailing bool   `json:"archiveFailing,omitempty"`
+	LastArchivedAt     string `json:"lastArchivedAt,omitempty"`
+	ArchiveFailing     bool   `json:"archiveFailing,omitempty"`
+	ArchiveStatusKnown bool   `json:"archiveStatusKnown,omitempty"`
+	// WALStatusKnown distinguishes a failed sample from an empty WAL directory.
+	WALStatusKnown   bool              `json:"walStatusKnown,omitempty"`
+	WALBytes         int64             `json:"walBytes,omitempty"`
+	ArchivePending   int64             `json:"archivePending,omitempty"`
+	SlotStatusKnown  bool              `json:"slotStatusKnown,omitempty"`
+	ReplicationSlots []ReplicationSlot `json:"replicationSlots,omitempty"`
 	// RecoverableUntil bounds WAL content, not archive upload wall time.
 	RecoverableUntil string `json:"recoverableUntil,omitempty"`
 	// ProxyBackends reports ProxySQL runtime server states (proxy members).
 	ProxyBackends []ProxyBackend `json:"proxyBackends,omitempty"`
+}
+
+// HealthCapabilities announces implemented observations, independently of
+// whether an individual sample succeeded. Absent capabilities are informational
+// and must not introduce new readiness requirements for existing members.
+type HealthCapabilities struct {
+	LocalEtcd           bool `json:"localEtcd,omitempty"`
+	ReplicationSlots    bool `json:"replicationSlots,omitempty"`
+	WALArchive          bool `json:"walArchive,omitempty"`
+	ReplicationDistance bool `json:"replicationDistance,omitempty"`
+	PatroniPause        bool `json:"patroniPause,omitempty"`
+}
+
+// ReplicationSlot reports retention without changing or dropping the consumer.
+type ReplicationSlot struct {
+	Name          string `json:"name"`
+	Type          string `json:"type"`
+	Active        bool   `json:"active"`
+	RetainedBytes int64  `json:"retainedBytes"`
+	WALStatus     string `json:"walStatus"`
+	SafeWALBytes  *int64 `json:"safeWalBytes,omitempty"`
 }
 
 // ProxyBackend is one runtime pgsql_servers row.
@@ -292,6 +335,24 @@ type ProxyBackend struct {
 	Host      string `json:"host"`
 	Hostgroup int    `json:"hostgroup"`
 	Status    string `json:"status"`
+	// Diagnostics is optional for mixed-version agents. It contains only
+	// allowlisted error classes, never native messages or connection strings.
+	Diagnostics *ProxyDiagnostics `json:"diagnostics,omitempty"`
+}
+
+// ProxyMonitorError identifies the most recent failed native monitor check.
+type ProxyMonitorError struct {
+	Class         string `json:"class"`
+	TimeUnixMicro int64  `json:"timeUnixMicro"`
+}
+
+// ProxyDiagnostics attributes routing failures without exposing native errors.
+type ProxyDiagnostics struct {
+	Connect          *ProxyMonitorError `json:"connect,omitempty"`
+	Ping             *ProxyMonitorError `json:"ping,omitempty"`
+	ReadOnly         *ProxyMonitorError `json:"readOnly,omitempty"`
+	ConnectionErrors uint64             `json:"connectionErrors"`
+	PoolObserved     bool               `json:"poolObserved"`
 }
 
 // BackupRequest starts (or polls, by Receipt) a pgBackRest backup.

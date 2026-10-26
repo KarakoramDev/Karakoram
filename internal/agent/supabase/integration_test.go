@@ -167,6 +167,26 @@ func TestNativeAPI(t *testing.T) {
 		}
 	}
 	launch("auth", "2.197.0", auth)
+	t.Run("AuthPinnedEmptyDatabaseLookup", func(t *testing.T) {
+		// Exercise the actual pinned 2.197.0 handler, not a liveness fixture:
+		// no users exist yet, and loadUser must complete its indexed DB query.
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:9999/admin/users/00000000-0000-0000-0000-000000000000", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+base.ServiceRoleKey)
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		var result struct {
+			ErrorCode string `json:"error_code"`
+		}
+		if err := json.NewDecoder(io.LimitReader(response.Body, 4096)).Decode(&result); err != nil || response.StatusCode != http.StatusNotFound || result.ErrorCode != "user_not_found" {
+			t.Fatalf("pinned Auth absent-user lookup: HTTP %d, error code %q, decode=%v", response.StatusCode, result.ErrorCode, err)
+		}
+	})
 	launch("rest", "14.18", rest)
 	launch("gateway", "1.39.1", envoy)
 	request := func(method, path, key string, body []byte) (int, []byte) {

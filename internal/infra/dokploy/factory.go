@@ -14,12 +14,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-var dokployCapabilities = infra.Capabilities{PublicTCP: true, PublicHTTPS: true, Placement: true, Logs: true, HorizontalScaling: true}
+var dokployCapabilities = infra.Capabilities{PublicTCP: true, PublicHTTPS: true, Placement: true, Logs: true, HorizontalScaling: true, StatelessRolloutSurge: 1}
 
 var configEnv = [...]struct{ key, env string }{
 	{"url", "KARAKORAM_DOKPLOY_URL"},
@@ -35,6 +36,52 @@ var environmentID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 var networkName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$`)
 var registryToken = regexp.MustCompile(`^[^\s/\\]+$`)
 var dnsLabel = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
+
+// Dokploy has no conditional metadata writes. All backend instances for a target
+// in this control plane must share mutation exclusion, including observations.
+var targetLocks sync.Map
+
+type targetState struct {
+	mu      contextMutex
+	knownMu sync.Mutex
+	known   map[string]string
+	imports map[string]string
+}
+
+// contextMutex preserves target-wide import/restoration exclusion without
+// trapping canceled callers behind another application's long artifact upload.
+type contextMutex struct {
+	once sync.Once
+	gate chan struct{}
+}
+
+func (m *contextMutex) Lock(ctx context.Context) error {
+	m.once.Do(func() { m.gate = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *contextMutex) Unlock() { <-m.gate }
+
+func stateForTarget(origin, environment string) *targetState {
+	key := origin + "\x00" + environment
+	if state, ok := targetLocks.Load(key); ok {
+		return state.(*targetState)
+	}
+	state, _ := targetLocks.LoadOrStore(key, &targetState{known: map[string]string{}, imports: map[string]string{}})
+	return state.(*targetState)
+}
 
 var urlSharedAddressPrefix = netip.MustParsePrefix("100.64.0.0/10")
 var urlThisNetworkPrefix = netip.MustParsePrefix("0.0.0.0/8")
@@ -163,6 +210,9 @@ func defaultNetworkName(envID string) string {
 }
 
 func (f factory) New(t infra.Target) (infra.Backend, error) {
+	if _, err := deploymentLimit(); err != nil {
+		return nil, err
+	}
 	origin, err := normalizeOrigin(t.Config["url"])
 	if err != nil || f.invalidPolicy || (!f.allowed[origin] && (f.restricted || !implicitHTTPSOrigin(origin))) {
 		return nil, urlRejected()
@@ -209,7 +259,8 @@ func (f factory) New(t infra.Target) (infra.Backend, error) {
 	}
 	t.Config = config
 	c := newClient(origin, t.Token)
-	return &Backend{c: c, target: t}, nil
+	state := stateForTarget(origin, t.ID)
+	return &Backend{c: c, target: t, mu: &state.mu, state: state}, nil
 }
 
 func (f factory) Validate(ctx context.Context, t infra.Target) (infra.Backend, infra.Project, error) {

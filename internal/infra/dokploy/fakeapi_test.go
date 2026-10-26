@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -28,20 +29,28 @@ const fakeAPIKey = "test-dokploy-api-key"
 // accidentally make the API more capable than the observed v0.30.8 behavior.
 // holdTasks and one-shot failures expose convergence and partial-write edges.
 type fakeAPI struct {
-	mu             sync.Mutex
-	server         *httptest.Server
-	serial         int
-	apps           map[string]*fakeApplication
-	projects       map[string]map[string]any
-	environments   map[string]map[string]any
-	nodes          []map[string]any
-	networks       []map[string]any
-	calls          map[string]int
-	volumes        map[string]string // volume name -> node hostname (local driver)
-	removedVolumes []string
-	failure        map[string]fakeResponse
-	failureOnce    map[string]fakeResponse
-	failureEffect  map[string]func() // Called under mu to model concurrent deletion.
+	mu               sync.Mutex
+	latency          time.Duration
+	requestHook      func(http.ResponseWriter, *http.Request) (bool, func())
+	server           *httptest.Server
+	serial           int
+	apps             map[string]*fakeApplication
+	projects         map[string]map[string]any
+	environments     map[string]map[string]any
+	nodes            []map[string]any
+	networks         []map[string]any
+	calls            map[string]int
+	volumes          map[string]string // volume name -> node hostname (local driver)
+	removedVolumes   []string
+	failure          map[string]fakeResponse
+	failureOnce      map[string]fakeResponse
+	failureEffect    map[string]func()         // Called under mu to model concurrent deletion.
+	services         map[string]map[string]any // Swarm objects survive application-row loss.
+	images           map[string]bool
+	uninspectable    map[string]bool
+	omitApplications map[string]bool
+	omitSearch       map[string]bool
+	deploymentQueue  []map[string]any
 }
 
 type fakeResponse struct {
@@ -59,6 +68,8 @@ type fakeApplication struct {
 	taskPolls              int
 	holdTasks              bool
 	holdDeployments        bool
+	taskCapacity           int // Zero is unlimited; start-first needs a spare slot.
+	reloadOrders           []string
 	logs                   string
 	wiping                 bool
 	upload                 []byte
@@ -76,6 +87,11 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.volumes = map[string]string{}
 	f.failureOnce = map[string]fakeResponse{}
 	f.failureEffect = map[string]func(){}
+	f.services = map[string]map[string]any{"dokploy": {"ID": "s0000000000000000000000000", "Spec": map[string]any{"Name": "dokploy"}}}
+	f.images = map[string]bool{}
+	f.uninspectable = map[string]bool{}
+	f.omitApplications = map[string]bool{}
+	f.omitSearch = map[string]bool{}
 	for i, host := range []string{"node-a", "node-b", "node-c"} {
 		role := "worker"
 		if i == 0 {
@@ -84,7 +100,12 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		f.nodes = append(f.nodes, map[string]any{"ID": fmt.Sprintf("node%d", i), "Spec": map[string]any{"Labels": map[string]any{"karakoram.data": "true"}, "Availability": "active", "Role": role}, "Description": map[string]any{"Hostname": host}, "Status": map[string]any{"State": "ready"}})
 	}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serveHTTP))
-	t.Cleanup(f.server.Close)
+	t.Cleanup(func() {
+		// Discard this server's admission state before Close releases its port.
+		// A later fake can reuse both the URL and the generated application IDs.
+		deploymentServers.Delete(f.server.URL)
+		f.server.Close()
+	})
 	return f
 }
 func (f *fakeAPI) next(prefix string) string {
@@ -150,6 +171,9 @@ func (f *fakeAPI) environmentRow(id string) map[string]any {
 	e := fakeCopy(f.environments[id])
 	apps := []map[string]any{}
 	for _, a := range f.apps {
+		if f.omitApplications[fakeString(a.row, "applicationId")] {
+			continue
+		}
 		if a.row["environmentId"] == id {
 			summary := map[string]any{}
 			for _, key := range []string{"name", "applicationId", "createdAt", "applicationStatus", "description", "serverId", "icon", "server"} {
@@ -239,6 +263,30 @@ func (f *fakeAPI) applyReplicas(a *fakeApplication, replicas int) {
 	for i := range replicas {
 		a.tasks = append([]map[string]any{{"containerId": f.next("task"), "name": fmt.Sprintf("%s.%d", a.row["appName"], i+1), "state": "running", "currentState": "Preparing 1 second ago", "node": host, "error": ""}}, a.tasks...)
 	}
+	name := fakeString(a.row, "appName")
+	image := name + ":latest"
+	if configured := fakeString(a.row, "dockerImage"); a.row["sourceType"] == "docker" && configured != "" {
+		image = configured
+	}
+	f.serial++
+	id := fmt.Sprintf("s%011d%013d", f.serial, f.serial)
+	if previous := f.services[name]; previous != nil {
+		id = fakeString(previous, "ID")
+	}
+	published := make([]map[string]any, 0, len(a.appliedPorts))
+	for _, p := range a.appliedPorts {
+		published = append(published, map[string]any{"PublishedPort": p["publishedPort"], "TargetPort": p["targetPort"], "Protocol": p["protocol"], "PublishMode": p["publishMode"]})
+	}
+	endpointMode := "vip"
+	if endpoint, ok := a.row["endpointSpecSwarm"].(map[string]any); ok {
+		endpointMode = fakeString(endpoint, "Mode")
+	}
+	f.services[name] = map[string]any{"ID": id, "Spec": map[string]any{
+		"Name": name, "Mode": map[string]any{"Replicated": map[string]any{"Replicas": replicas}},
+		"EndpointSpec": map[string]any{"Ports": published, "Mode": endpointMode},
+		"TaskTemplate": map[string]any{"ContainerSpec": map[string]any{"Image": image, "Labels": a.row["labelsSwarm"]}},
+	}}
+	f.images[image] = true
 	a.row["applicationStatus"] = "done"
 }
 func (f *fakeAPI) deploy(a *fakeApplication) {
@@ -272,6 +320,28 @@ func (f *fakeAPI) advanceDeployments(a *fakeApplication) {
 }
 func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
+	delay := f.latency
+	hook := f.requestHook
+	f.mu.Unlock()
+	if hook != nil {
+		handled, finish := hook(w, r)
+		if finish != nil {
+			defer finish()
+		}
+		if handled {
+			return
+		}
+	}
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	f.mu.Lock()
 	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	respond := func(v any) { _ = json.NewEncoder(w).Encode(v) }
@@ -286,6 +356,14 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		if effect := f.failureEffect[proc]; effect != nil {
 			effect()
 		}
+		if proc == "application.reload" && response.status == 500 && response.message == "Error reloading application" {
+			var body map[string]any
+			if json.NewDecoder(r.Body).Decode(&body) == nil {
+				if app := f.apps[fakeString(body, "applicationId")]; app != nil {
+					app.row["applicationStatus"] = "error"
+				}
+			}
+		}
 		fakeError(w, response.status, response.code, response.message, proc)
 	}
 	if failure, ok := f.failureOnce[proc]; ok {
@@ -297,7 +375,7 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(failure)
 		return
 	}
-	get := strings.HasSuffix(proc, ".one") || slices.Contains([]string{"project.all", "environment.all", "network.all", "cluster.getNodes", "dockerVolume.getVolumes", "docker.getServiceContainersByAppName", "deployment.all", "application.readLogs"}, proc)
+	get := strings.HasSuffix(proc, ".one") || slices.Contains([]string{"application.search", "project.all", "environment.all", "network.all", "cluster.getNodes", "dockerVolume.getVolumes", "docker.getServiceContainersByAppName", "docker.getConfig", "swarm.getNodeApps", "dockerImage.getImages", "deployment.all", "deployment.queueList", "application.readLogs"}, proc)
 	method := http.MethodPost
 	if get {
 		method = http.MethodGet
@@ -339,6 +417,70 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conflict := func() { fakeError(w, 409, "CONFLICT", "Resource already exists", proc) }
 	switch proc {
+	case "deployment.queueList":
+		rows := []map[string]any{}
+		rows = append(rows, f.deploymentQueue...)
+		respond(rows)
+		return
+	case "application.search":
+		rows := []map[string]any{}
+		for id, a := range f.apps {
+			if !f.omitSearch[id] && a.row["environmentId"] == body["environmentId"] && strings.Contains(strings.ToLower(fakeString(a.row, "name")), strings.ToLower(fakeString(body, "name"))) {
+				rows = append(rows, f.appRow(a, false))
+			}
+		}
+		slices.SortFunc(rows, func(a, b map[string]any) int {
+			return strings.Compare(fakeString(a, "applicationId"), fakeString(b, "applicationId"))
+		})
+		total := len(rows)
+		offset := 0
+		if value, err := strconv.Atoi(fakeString(body, "offset")); err == nil {
+			offset = min(value, len(rows))
+		}
+		rows = rows[offset:min(offset+100, len(rows))]
+		respond(map[string]any{"items": rows, "total": total})
+		return
+	case "docker.getConfig":
+		id := fakeString(body, "containerId")
+		if f.uninspectable[id] {
+			respond(nil)
+			return
+		}
+		if f.images[id] || f.images[id+":latest"] {
+			respond(map[string]any{"Id": "sha256:" + strings.Repeat("a", 64), "RepoTags": []string{id + ":latest"}, "Config": map[string]any{}, "RootFS": map[string]any{}})
+			return
+		}
+		for name, service := range f.services {
+			if name == id || strings.HasPrefix(fakeString(service, "ID"), id) {
+				if f.uninspectable[name] {
+					respond(nil)
+				} else {
+					respond(service)
+				}
+				return
+			}
+		}
+		respond(nil)
+		return
+	case "swarm.getNodeApps":
+		rows := []map[string]any{}
+		for name, service := range f.services {
+			if strings.HasPrefix(name, "dokploy-") {
+				continue
+			}
+			id := fakeString(service, "ID")
+			rows = append(rows, map[string]any{"ID": id[:min(12, len(id))], "Name": name})
+		}
+		respond(rows)
+		return
+	case "dockerImage.getImages":
+		rows := []map[string]any{}
+		for image := range f.images {
+			repo, tag, _ := strings.Cut(image, ":")
+			rows = append(rows, map[string]any{"Repository": repo, "Tag": tag})
+		}
+		respond(rows)
+		return
 	case "project.create":
 		if !required("name") {
 			return
@@ -469,6 +611,10 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, a := range f.apps {
 			if a.row["appName"] == body["appName"] {
 				f.advanceDeployments(a)
+				if f.services[fakeString(a.row, "appName")] == nil {
+					respond([]any{})
+					return
+				}
 				a.taskPolls++
 				if a.taskPolls >= 2 && !a.holdTasks {
 					for _, task := range a.tasks {
@@ -580,6 +726,12 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	a := f.apps[id]
 	if a == nil {
+		// v0.30.8 queries deployment rows directly; an absent application
+		// (including cascaded deletion) has an empty list, not a 404.
+		if proc == "deployment.all" {
+			respond([]any{})
+			return
+		}
 		notFound()
 		return
 	}
@@ -626,6 +778,20 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			fakeError(w, 400, "BAD_REQUEST", "Application name mismatch", proc)
 			return
 		}
+		update, _ := a.row["updateConfigSwarm"].(map[string]any)
+		order := fakeString(update, "Order")
+		a.reloadOrders = append(a.reloadOrders, order)
+		running := 0
+		for _, task := range a.tasks {
+			if task["state"] == "running" {
+				running++
+			}
+		}
+		if a.taskCapacity > 0 && running >= a.taskCapacity && order != "stop-first" {
+			// The native update is accepted but no replacement can start.
+			respond(true)
+			return
+		}
 		f.apply(a)
 		respond(true)
 	case "application.start":
@@ -634,6 +800,9 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	case "application.stop":
 		a.taskPolls = 0
 		a.row["applicationStatus"] = "idle"
+		if service := f.services[fakeString(a.row, "appName")]; service != nil {
+			service["Spec"].(map[string]any)["Mode"] = map[string]any{"Replicated": map[string]any{"Replicas": 0}}
+		}
 		for _, task := range a.tasks {
 			if task["state"] == "running" {
 				task["state"] = "remove"
@@ -642,6 +811,7 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(f.appRow(a, false))
 	case "application.delete":
 		f.shutdown(a)
+		delete(f.services, fakeString(a.row, "appName"))
 		delete(f.apps, id)
 		respond(f.appRow(a, false))
 	case "deployment.all":

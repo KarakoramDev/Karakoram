@@ -273,10 +273,12 @@ func IsAuthenticationError(err error) bool {
 // Is exposes stable backend-neutral classifications without losing API details.
 func (e *APIError) Is(target error) bool {
 	switch target {
+	case infra.ErrPublicIPTypeUnsupported:
+		return e.Code == "publicIpTypeNotSupported"
 	case infra.ErrUnauthorized:
 		return IsAuthenticationError(e)
 	case infra.ErrNotFound:
-		return e.StatusCode == http.StatusNotFound || e.Code == "serviceStackNotFound"
+		return notFound(e)
 	case infra.ErrConflict:
 		return e.StatusCode == http.StatusConflict
 	case infra.ErrUnavailable:
@@ -284,7 +286,7 @@ func (e *APIError) Is(target error) bool {
 	case infra.ErrResourceChangeCooldown:
 		return e.Code == "lastCpuModeChangeTooRecent"
 	case infra.ErrRejected:
-		return e.Code == "lastCpuModeChangeTooRecent" || (e.StatusCode >= 400 && e.StatusCode < 500 && !IsAuthenticationError(e) && e.StatusCode != 404 && e.StatusCode != 409 && e.StatusCode != 429 && e.Code != "serviceStackNotFound")
+		return e.Code == "lastCpuModeChangeTooRecent" || (e.StatusCode >= 400 && e.StatusCode < 500 && !IsAuthenticationError(e) && !notFound(e) && e.StatusCode != 409 && e.StatusCode != 429)
 	}
 	return false
 }

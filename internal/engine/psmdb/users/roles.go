@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -188,6 +189,8 @@ func validateRoleDeletion(db, name string, assigned []domain.DatabaseUser, roles
 }
 
 func queryRoles(ctx context.Context, c *mongo.Client, selector any) ([]wireRole, error) {
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	defer cancel()
 	if c == nil {
 		return nil, invalid("MongoDB client is nil")
 	}
@@ -196,6 +199,9 @@ func queryRoles(ctx context.Context, c *mongo.Client, selector any) ([]wireRole,
 	}
 	err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "rolesInfo", Value: selector},
 		{Key: "showPrivileges", Value: true}, {Key: "showBuiltinRoles", Value: false}}).Decode(&response)
+	if err != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+		return nil, fmt.Errorf("PSMDB rolesInfo read exceeded 4s budget: inspect member responsiveness/connectivity: %w", context.DeadlineExceeded)
+	}
 	if err != nil {
 		return nil, commandError(err)
 	}

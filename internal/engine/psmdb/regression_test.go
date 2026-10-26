@@ -35,7 +35,7 @@ func responder(t *testing.T, handler http.HandlerFunc) testDialer {
 }
 
 func TestBootstrapFollowsPrimaryAndAcceptsVerifiedResume(t *testing.T) {
-	p, rc, _, _ := setup(t)
+	p, rc, f, _ := setup(t)
 	ctx := context.Background()
 	rc.Cluster.Spec.Components.Engine.Replicas = 3
 	s, _ := load(rc.Cluster)
@@ -49,6 +49,10 @@ func TestBootstrapFollowsPrimaryAndAcceptsVerifiedResume(t *testing.T) {
 	for _, m := range s.Members {
 		name := m.Name
 		d[name] = responder(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/status" {
+				_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}}, ConfigVersion: 1})
+				return
+			}
 			calls = append(calls, name)
 			result := agentapi.BootstrapResponse{Initialized: true}
 			if name == "demom0" {
@@ -58,6 +62,7 @@ func TestBootstrapFollowsPrimaryAndAcceptsVerifiedResume(t *testing.T) {
 		})
 	}
 	rc.Agents = d
+	seedFormedServices(t, p, rc, f, s)
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -84,6 +89,10 @@ func TestConfigReplicaSetBootstrapsBeforeRouterDeployment(t *testing.T) {
 		}
 	}
 	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/status" {
+			_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "mongos": {State: "running"}}, ConfigVersion: 1})
+			return
+		}
 		var req agentapi.BootstrapRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.ReplSetName != "cfg" {
@@ -91,6 +100,7 @@ func TestConfigReplicaSetBootstrapsBeforeRouterDeployment(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(agentapi.BootstrapResponse{Initialized: true})
 	})
+	seedFormedServices(t, p, rc, f, s)
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
@@ -294,10 +304,16 @@ func TestRenewsMemberAndAgentCertificatesBeforeExpiry(t *testing.T) {
 			t.Fatal(err)
 		}
 		renew, err := pki.NeedsRenewal(active, 30*24*time.Hour, time.Now())
-		if err != nil || !renew {
-			t.Fatalf("%s active certificate changed before disruption check: %v", kind, err)
+		if err != nil || renew != (kind == "members") {
+			t.Fatalf("%s active certificate renewal=%v: %v", kind, renew, err)
 		}
 		cert, err := secret(ctx, rc, "tls/"+kind+"/"+s.Members[0].Name+".pending.pem")
+		if kind == "agents" {
+			if !missing(err) {
+				t.Fatal("agent renewal was staged behind the database disruption gate")
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -374,12 +390,17 @@ func TestShardedExposureRemovesInternalRoutesAndPublishesOnlyRouter(t *testing.T
 		set.Stage = "ready"
 		set.Added = true
 	}
-	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "mongos": {State: "running"}}, ConfigVersion: 100})
+	seedFormedServices(t, p, rc, f, s)
+	p.ensureManagedUsers = func(context.Context, *engine.Context, *internalState) error { return nil }
+	statusAgent := responder(t, func(w http.ResponseWriter, r *http.Request) {
+		ready := true
+		_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}, "mongos": {State: "running"}}, ConfigVersion: 100, MongoReady: &ready})
 	})
+	rc.Agents = pinnedFixtureDialer{statusAgent}
+	rc.Backend = &routerInventory{fakeInfra: f, instances: []infra.Container{{ID: "router-instance", Hostname: "router-a", Status: infra.ContainerRunning}}}
 	_ = save(rc.Cluster, s)
 	for range 12 {
-		if _, err := p.Sync(context.Background(), rc); err != nil {
+		if _, err := p.sync(context.Background(), rc, p.prepareDisruption, healthyTestReplication); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -482,6 +503,11 @@ func TestExplicitInPlaceRestoreUsesBackupRecordedStorage(t *testing.T) {
 	rc.Cluster.Spec.Backup.Storage = "primary"
 	s, _ := load(rc.Cluster)
 	plan(rc.Cluster, s)
+	// This is an already-serving in-place target, not an unplaced intent.
+	for _, member := range s.Members {
+		member.Resources = runtimeResources(component(rc.Cluster.Spec, member).Resources)
+		member.CacheGB = max(0.25, 0.5*(member.Resources.MaxRAM-0.5))
+	}
 	s.PBMPrefix = "target-prefix"
 	_ = save(rc.Cluster, s)
 	if err := st.CreateBackup(ctx, &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Name: "alternate-base", Cluster: rc.Cluster.Name, Storage: "alternate", PBMPrefix: "recorded-prefix", Type: "logical", PBMName: "snapshot", Phase: domain.PhaseSucceeded}); err != nil {

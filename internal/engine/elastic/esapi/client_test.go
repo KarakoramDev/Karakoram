@@ -65,6 +65,13 @@ func TestRESTMethods(t *testing.T) {
 			}
 			return e
 		}},
+		{name: "local-nodes", method: "GET", path: "/_nodes/_local", q: url.Values{"filter_path": {"nodes.*.name,nodes.*.version,nodes.*.roles,nodes.*.host,nodes.*.ip"}}, response: `{"nodes":{"id":{"name":"n1","version":"9.5.5","roles":["master","data"]}}}`, call: func(c *Client) error {
+			v, e := c.LocalNodes(ctx)
+			if len(v) != 1 || v[0].ID != "id" || v[0].Name != "n1" || len(v[0].Roles) != 2 {
+				t.Errorf("local nodes: %+v", v)
+			}
+			return e
+		}},
 		{name: "master", method: "GET", path: "/_cat/master", q: url.Values{"format": {"json"}}, response: `[{"node":"n1"}]`, call: func(c *Client) error {
 			v, e := c.MasterNode(ctx)
 			if v != "n1" {
@@ -197,7 +204,7 @@ func TestRESTMethods(t *testing.T) {
 			}
 			return e
 		}},
-		{name: "restore", method: "POST", path: "/_snapshot/repo/snap/_restore", q: url.Values{"wait_for_completion": {"false"}}, body: `{"indices":"docs","include_global_state":false,"feature_states":["none"],"include_aliases":true,"ignore_unavailable":false}`, call: func(c *Client) error {
+		{name: "restore", method: "POST", path: "/_snapshot/repo/snap/_restore", q: url.Values{"wait_for_completion": {"true"}}, response: `{"snapshot":{"shards":{"total":1,"successful":1,"failed":0}}}`, body: `{"indices":"docs","include_global_state":false,"feature_states":["none"],"include_aliases":true,"ignore_unavailable":false}`, call: func(c *Client) error {
 			return c.RestoreSnapshot(ctx, "repo", "snap", RestoreRequest{Indices: "docs", FeatureStates: []string{"none"}, IncludeAliases: true})
 		}},
 		{name: "recovery", method: "GET", path: "/_cat/recovery", q: url.Values{"active_only": {"true"}, "format": {"json"}}, response: `[{"index":"docs"}]`, call: func(c *Client) error {

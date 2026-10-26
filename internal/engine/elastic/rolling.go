@@ -36,13 +36,16 @@ func rollingProgress(s *state) (string, string) {
 	name, step := r.Current, r.Step
 	if name == "" {
 		for _, next := range r.Order {
-			if !slices.Contains(r.Done, next) && s.find(next) != nil {
+			if !slices.Contains(r.Done, next) && !slices.Contains(r.Skipped, next) && s.find(next) != nil {
 				name, step = next, "prepare"
 				break
 			}
 		}
 	}
 	if name == "" {
+		if len(r.Skipped) > 0 {
+			return "complete", fmt.Sprintf("Rolling %s complete; disabled components skipped: %v", r.Reason, r.Skipped)
+		}
 		return "complete", "Rolling " + r.Reason + " complete: " + order
 	}
 	m := s.find(name)
@@ -79,10 +82,19 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	if busy, _, err := p.retryPending(ctx, rc, s); busy || err != nil {
 		return false, "waiting for platform retry", err
 	}
+	if changed, err := p.revokeComponentExposure(ctx, rc, s); changed || err != nil {
+		return false, "revoking component public access", err
+	}
 	r := s.Rolling
 	if r == nil {
 		return true, "", nil
 	}
+	// Skips are desired-state decisions, not successful restarts. Reconsider
+	// them on every step, including the final step and after a process restart.
+	r.Skipped = slices.DeleteFunc(r.Skipped, func(name string) bool {
+		m := s.find(name)
+		return m != nil && component(rc.Cluster.Spec, m).Replicas > 0
+	})
 	if len(r.Order) == 0 {
 		c, err := p.es(ctx, rc, s)
 		if err != nil {
@@ -149,7 +161,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	}
 	if r.Current == "" {
 		for _, name := range r.Order {
-			if !slices.Contains(r.Done, name) && s.find(name) != nil {
+			if !slices.Contains(r.Done, name) && !slices.Contains(r.Skipped, name) && s.find(name) != nil {
 				r.Current = name
 				r.Step = "prepare"
 				break
@@ -157,6 +169,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		}
 		if r.Current == "" {
 			s.Rolling = nil
+			if len(r.Skipped) > 0 {
+				return true, fmt.Sprintf("rolling pass complete; disabled components skipped: %v", r.Skipped), nil
+			}
 			return true, "rolling pass complete", nil
 		}
 	}
@@ -171,6 +186,13 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		version = rc.Cluster.Spec.Version
 	}
 	if !isES(m) {
+		if r.Reason == "restart" && component(rc.Cluster.Spec, m).Replicas == 0 {
+			// The desired component no longer exists. Its readiness cannot be
+			// required to finish a restart; ordinary Sync owns its deletion.
+			r.Skipped = append(r.Skipped, m.Name)
+			r.Current = ""
+			return false, "component disabled; skipping restart", nil
+		}
 		switch r.Step {
 		case "prepare":
 			if r.Reason == "upgrade" {
@@ -188,6 +210,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 				return false, "resizing component", p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
 			}
 			if r.Reason == "upgrade" {
+				if spec, err := p.deploymentSpec(rc, m, version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+					return false, "deployment retries exhausted; operator re-arm required", nil
+				}
 				err := p.deploy(ctx, rc, s, m, "upgrade", version)
 				if err == nil || s.Retry != nil {
 					r.Step = "rejoin"
@@ -259,6 +284,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			return false, "resizing node", p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
 		}
 		if r.Reason == "upgrade" {
+			if spec, err := p.deploymentSpec(rc, m, version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+				return false, "deployment retries exhausted; operator re-arm required", nil
+			}
 			err := p.deploy(ctx, rc, s, m, "upgrade", version)
 			if err == nil || s.Retry != nil {
 				r.Step = "rejoin"
@@ -272,6 +300,20 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		p.reloadMembers(ctx, rc, m.Name)
 		return false, "restarting node", nil
 	case "rejoin":
+		desired, err := p.desiredSpec(ctx, rc, s, m, version)
+		if err != nil {
+			return false, "", err
+		}
+		if desired.RestartToken != m.ConfigHash {
+			// Repair only the already-disrupted member. Re-entering apply would
+			// wait for this failed master to join before publishing its repair.
+			// Keep the journal's version: correcting settings is not a downgrade.
+			if err := p.publishConfig(ctx, rc, s, m, version, rollingNonce(r)); err != nil {
+				return false, "", err
+			}
+			p.reloadMembers(ctx, rc, m.Name)
+			return false, "node configuration changed; applying current configuration to the failed member", nil
+		}
 		nodes, err := c.Nodes(ctx)
 		if err != nil {
 			return false, "", err

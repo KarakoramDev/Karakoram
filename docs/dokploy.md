@@ -23,6 +23,144 @@ Docker is used on this backend only because Dokploy runs Swarm services. Each me
 
 Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking Bash with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
+### Platform deployment admission
+
+Dokploy queues application deployments and builds uploaded Dockerfiles on its server.
+Karakoram therefore admits at most **two** in-flight deployments per Dokploy origin,
+shared across all environments/namespaces in the control-plane process. Set the
+control-plane environment variable `KARAKORAM_DOKPLOY_MAX_INFLIGHT_DEPLOYS` to an
+integer **>= 1** to change this limit; it is not a per-namespace setting.
+
+Admission covers archive uploads, retained-source rebuilds and volume-wipe deployments.
+It reads owned applications across the server's projects/environments and their
+authoritative deployment rows, adding local reservations while submission visibility
+is uncertain. A queued/running/unknown deployment blocks another submission for that
+application even if it was started outside Karakoram. Terminal `done`, `error` and
+`cancelled` rows release capacity. Waiting returns a typed deployment wait with a
+retry deadline at least 15 seconds away, for example
+`waiting for a platform deployment slot: 2/2 in flight (Dokploy server)`;
+it does not upload or enqueue another build.
+
+Additional admission observations are bounded to **128 reads per attempt**, shared
+by project details, application deployment lists and exact-ID corroboration of
+reserved applications missing from inventory (plus one project-list request).
+This is an inventory-size ceiling, not a throughput limit: one project with 128
+owned applications already exceeds it, even with no builds running. Waiting for
+deployments to finish or increasing the deployment limit will not resolve this
+diagnostic. Reduce the total project/owned-application inventory on that Dokploy
+installation (safely delete retired resources), or use a separate installation;
+splitting namespaces/environments on the same origin does not help. Unavailable or
+incomplete inventory fails closed. The API key must see all Karakoram applications
+on the installation. This is process-wide admission, not a distributed semaphore:
+independent control-plane processes and direct operator submissions must
+coordinate their own combined limit.
+
+The cap also applies during initial cluster bootstrap; there is no quorum-group
+exception. Initial member deployment readiness means the agent supervisor is
+running and initialising, not that the database has formed a quorum. Stateless
+day-2 replacements retain native readiness when dependencies are healthy; the
+engine persists that choice for stable retries. Dokploy does not map either
+probe to a Docker `HEALTHCHECK`, because Swarm service
+discovery must be available to bootstrapping tasks. Application/native health,
+configuration acknowledgement and rolling-replacement catch-up remain enforced
+by Karakoram's engine-level convergence gates. See
+[member startup and admission](operations.md#deployment-admission-and-member-startup).
+
+
+Synchronous Swarm `application.reload` operations reuse an existing image and do not
+enter Dokploy's build queue, so they do not consume deployment slots. Existing pending
+build/lost-delivery fences still protect lifecycle operations. Failed runtime builds
+already require explicit operator action; a failed volume-wipe deployment/task now
+also remains terminal, retaining the holder, rather than resubmitting on every delete
+reconciliation. Ambiguous wipe submission responses retain their original fence.
+
+Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
+change. A pure count reduction back to an already-running count therefore uses
+temporary `stop-first`, `Parallelism=1` when at least two replicas remain running.
+This frees one replacement slot without deliberately stopping the entire service.
+The saved policy returns to `start-first` after the operation becomes terminal,
+without another reload; superseding specification changes and Start/Restart/Stop
+also restore it before replacing the pending operation, including Stop→Start.
+Singleton reductions retain `start-first` because `stop-first` would retire the
+only remaining serving task before its replacement starts.
+
+This exception requires a matching application-specification receipt from a
+successful deployment or reload. Staged environment, resource, port or image
+changes cannot use the count-only exception; older records without that receipt
+conservatively keep their existing policy until an ordinary rollout establishes
+it. Unlike Nomad's count-only reconciliation, Dokploy still replaces tasks because
+its API exposes no count-only Swarm update. Runtime Running is not native SQL/API
+readiness; the engine's application-health and every-instance gates still apply.
+Specification receipts use the shared versioned HMAC-SHA256 helper, keyed by the
+control-plane-held Dokploy API credential with a dedicated value domain. This
+prevents a metadata reader from guessing low-entropy environment secrets offline.
+API-credential rotation invalidates older receipts conservatively until a
+successful ordinary apply establishes a receipt under the new credential.
+
+### Resolving an unknown receipt or failed wipe
+
+An unknown enqueue stays pending (a runtime may eventually report
+stalled/unknown-outcome); admission shows a previous-deployment or deployment-slot
+wait. A failed wipe reports `volume wipe deployment failed; the holder was retained`
+or `volume wipe task failed; the holder was retained`. It can block cluster
+deletion. Restarting alone does **not** clear durable receipts, and
+`retry-deployments` is not a Dokploy wipe-rearm command.
+
+1. Identify the **exact application ID**, environment, generated `appName`, pinned
+   node and volume from the Karakoram service/operation and the Dokploy application
+   description. Preserve a copy of the description before any manual change.
+   In Dokploy's application Deployments UI, or
+   `GET /api/deployment.all?applicationId=<ID>`, inspect the deployment IDs and
+   terminal state, logs and queue entries. Compare against `pending.deployments`
+   (runtime) or `wipePreviousDeployment` (holder) in the description. Inspect
+   `docker service ps --no-trunc <appName>` on a manager and the pinned node's
+   containers/mounts. Do not mistake an empty deployment list for absence:
+   `GET /api/application.one?applicationId=<ID>` must return not-found to establish
+   that the application was removed.
+2. If the original deployment appears, let Karakoram track it; new authoritative
+   rows replace the unknown capacity reservation automatically. If the exact
+   application is absent, the reservation is retired automatically, including
+   after restart. A wipe still waits for running tasks and final volume cleanup.
+   Do not remove a data-bearing runtime application just to free capacity.
+3. If no row appears, first obtain authoritative confirmation from the Dokploy
+   queue/worker and request logs that the original request cannot still execute.
+   **No row and elapsed time alone are not sufficient.** Stop every Karakoram
+   control plane managing this installation before changing metadata. **For a
+   runtime only**, when the request is confirmed never enqueued, edit that
+   application's description via Dokploy's settings or
+   `POST /api/application.update` with only `applicationId` and the updated
+   `description`. Keep the existing prefix and all unrelated JSON fields intact;
+   remove only `pending` and `mutationUntil`. Restart the control plane to discard
+   its in-memory reservation. The next reconciliation can make a fresh admitted
+   attempt. Never clear ownership, volume, node or writer-fence fields, and never
+   edit Karakoram's SQLite operation records.
+4. For an **unknown or failed wipe**, use manual erasure and exact-holder removal,
+   not a metadata reset. Clearing `wiping`, `wipePreviousTasks` or
+   `wipePreviousDeployment` and restarting does **not** re-arm a wipe operation
+   handle already persisted by an engine: that handle will keep waiting for its
+   original task/deployment, even if Dokploy confirms nothing was enqueued.
+   There is no product wipe-rearm action. If these fields were already cleared,
+   the manual cleanup below still resolves the original tracked handle.
+   With control planes stopped, conclusively exclude late enqueue delivery and
+   confirm no queued/running deployment or task for that holder. Verify no runtime
+   still mounts its exact named volume; a failed task is not proof of erased data.
+   Correct the platform cause (node access, image pull, permissions), then manually
+   complete the intended erasure on the original pinned node. This is destructive:
+   back up anything that must survive. Remove the holder application by exact ID
+   through Dokploy (`POST /api/application.delete`), remove its stopped task
+   containers, and remove the **exact named Docker volume on the original node**
+   once no container uses it. Never use a broad volume prune. Confirm application
+   not-found, no running task/service, and volume absence on that node. Restart
+   Karakoram: the existing wipe operation observes the absent holder, verifies
+   cleanup and can finish cluster deletion. Keep the original node available
+   until Karakoram acknowledges completion.
+
+If queue delivery cannot be conclusively resolved, keep the receipt fenced and
+repair Dokploy observation/queue state; do not force a second potentially
+destructive deployment.
+
+
+
 ## Capabilities
 
 |Capability|Dokploy|Notes|
@@ -36,6 +174,17 @@ Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking Bas
 |`horizontalScaling`|yes|Stateless components (Kibana, Logstash, APM, mongos) scale by replicas.|
 |`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this backend needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
 |`exec`, `metrics`, `dedicatedCpu`, `envChangeRestarts`|no|Variable writes apply at the next restart.|
+
+Swarm ownership checks resolve the service ID from `swarm.getNodeApps` before
+calling `docker.getConfig`; inspecting an application name can return its local
+build image instead. This also works for zero-replica services with no task
+containers and does not require cached metadata. An empty/unavailable inventory,
+or an ambiguous inspection of a listed service, blocks mutations until observation
+can be retried; it is not evidence of a foreign owner. Dokploy excludes service
+names starting with `dokploy-` from this inventory: these names (including generated
+application names for a `dokploy` hostname) cannot be inspected safely. Observation
+and lifecycle mutations refuse them rather than treating them as absent or falling
+back to ambiguous name inspection. Use hostnames outside this reserved prefix.
 
 ## Requirements
 
@@ -115,9 +264,181 @@ karactl namespaces create --name swarm --backend dokploy --project-id '<environm
 
 ## Operations and limitations
 
+### Desired state and partial platform loss
+
+Karakoram owns its application records and their randomly suffixed Swarm service
+names. Use **Karakoram Stop**, not Dokploy Stop or `docker service scale ...=0`,
+for an intentional suspension. For an owned application with durable running
+intent, service observation recreates a missing Swarm service and restores an
+externally zeroed replica count, including a stop from Dokploy's UI. It reuses
+the recorded built image when it is present on the manager; otherwise it requests
+one rebuild from the retained Drop Dockerfile source. Application identity,
+mounts, node placement, environment and configured replica count are retained.
+
+The application description durably records desired state and the current
+lifecycle operation. A target-wide lock serializes backend instances within the
+control-plane process. Restoration submissions have a ten-second request deadline;
+an ambiguous response retains a one-minute delivery fence. Stop/Delete record
+their intent before waiting on that fence. A queued/running build must complete
+before another build, Stop or Delete is submitted: an accepted build can create
+the service much later, after a nominal stop would otherwise finish. A lost
+submission response with no new deployment record is deliberately not resubmitted:
+inspect Dokploy's queue/deployment logs before resolving it. Archive bytes are
+hashed while rendering, and an identical retry recovers the saved attempt handle
+instead of uploading again. Queued and running builds have a separate six-hour
+progress bound: after it, the operation fails with a stalled/unknown-outcome
+diagnostic, but retains its exclusion because the original work may still commit.
+
+Delete and stop waits older than **three minutes** report their elapsed age,
+exact owned-service desired replica count, and task desired/current state counts.
+The message distinguishes tasks still stopping from a Swarm inconsistency
+(`desired 0 but a task is desired-running`). Unknown/failed ownership or service
+inspection remains a wait, not evidence that deletion succeeded.
+
+During PostgreSQL full-cluster deletion, that inconsistency can trigger a single
+**escalated removal** through Dokploy's final `application.delete` step. This
+requires persisted full-delete intent, the exact CP-recorded application identity,
+matching immutable Swarm ownership labels/service identity, fresh zero-replica
+inspection, no active or queued deployment, and no competing pending mutation or
+delivery fence. Suspension/retained-volume cleanup and ordinary Stop never
+escalate. The attempt is durably recorded before submission; uncertain delivery
+is not replayed. The original receipt continues polling until application and
+running-task absence are observed, including after a control-plane restart.
+Missing queue permissions or incomplete observations disable escalation safely.
+The generic two-hour operation-tracking deadline still does not cancel desired
+cleanup; eventual authoritative deletion can complete the original operation.
+The preceding idempotent stop has a separate durable confirmation: if a delete
+journal survives before stop delivery (or after a refused stop), cleanup recovers
+the stop against the exact owned service without replacing the receipt. An
+explicitly observed native zero confirms older receipts without resending Stop.
+Missing or null replica counts are unknown, never proof of zero.
+
+Resolve the original queue/build and obtain a terminal deployment receipt before
+retrying; never clear the receipt merely to force a second build. Failed terminal
+deployments require an explicit corrected deployment, not an automatic retry loop.
+
+An authoritative enqueue refusal (HTTP 4xx other than a request timeout) is
+different from lost/ambiguous acceptance: archive uploads, retained-source rebuilds
+and wipes retire that attempt's local and durable receipt, permitting a later
+corrected retry. HTTP 429 still carries its `Retry-After` deadline. Transport
+failures, timeouts and 5xx responses retain the original exclusion; elapsed time
+is never permission to duplicate that submission.
+Waiters for the shared target guard honor request cancellation even while another
+application uploads an artifact. A canceled waiter does not detach or interrupt
+the already-running upload.
+
+Automatic restoration refuses visible foreign service labels/identity, a missing
+or changed volume holder/mount/node, a wiping holder, and ambiguous Docker
+observations. Dokploy can return `null`/`[]` when Docker commands fail; those
+responses alone **do not prove absence**. Restoration requires a nonempty valid
+Swarm service inventory that omits the service name. An application record removed
+while its labelled Swarm service remains is reported as an orphan conflict, not
+adopted or replaced. Restore the original record from backup, or stop/remove the
+orphan after verifying its data and ownership before requesting replacement.
+No holder or named volume is automatically recreated by this repair.
+
+Runtime metadata binds the original holder application ID and that holder's own
+ownership marker, as well as its node and exact randomly named volume mount.
+Runtime and holder ownership markers are intentionally different because each
+marker authenticates its own service hostname; equality between them is not
+evidence of a valid attachment.
+
+New volume-backed images hold an exclusive file lock on
+`.karakoram-writer.lock` for the member's lifetime, so a recreated Swarm service
+cannot start a second writer while an old task is still draining after deletion.
+Existing images must be explicitly redeployed through Karakoram to acquire this
+fence before automatic service recreation is enabled. Legacy application metadata
+without durable desired state is migrated only while an owned running service is
+visible; if it is already missing/stopped, explicitly Start it after verifying
+retained data. A lost or physically damaged node-local volume still requires
+operator recovery or engine member replacement; a holder record is not a backup.
+
+Application creation itself includes a non-serving ownership/import-spec receipt.
+Interrupted imports remain identifiable as CREATING and are resumed by replaying
+the original specifications; setup failures do not silently roll back or orphan
+that identity. Independent application search and known-ID reads corroborate
+environment listings. Same-named foreign or duplicate receipts are refused.
+Unknown creation outcomes are not blindly retried while their receipt is hidden.
+The in-process fence is not a durable distributed uniqueness primitive: after a
+control-plane restart, an API that simultaneously hides the committed receipt
+from all lookup paths can still defeat name-based discovery. Restore reliable
+platform visibility before retrying an unknown creation.
+The neutral service observation explicitly marks unfinished reservations as
+`importing`; ordinary reconciliation resumes setup rather than adopting a
+nonnull owned service as deployment-ready. Relay enrollment is not rotated
+mid-import, so replay retains the original sensitive environment.
+
+Public-port changes record pending desired state before changing Dokploy rows.
+A matching row or an empty port list is not an apply receipt: retries complete
+the remaining Swarm reload after lost create/delete/reload responses. Stopped
+services retain their desired settings without being started.
+PostgreSQL whole-cluster cleanup withdraws saved port rows without requesting a
+replacement task immediately before deletion. Any already-issued restart keeps
+its exact journal and must converge before deletion submits Stop; ambiguous
+port-delivery and queued-build fences are not discarded.
+
+Ingress-published TCP/UDP ports are Swarm-wide, not per application, environment,
+namespace or IP family: only one service can own a given ingress port/protocol.
+Before a new publication, Karakoram checks Dokploy's Swarm service inventory,
+including unmanaged services and other environments. A confirmed conflict fails
+the operation promptly with `ExposureSupported=False` / `PublicPortInUse`; a
+concurrent conflict discovered after a refused reload restores the prior Dokploy
+port rows, endpoint settings, application status and update policy **without
+reloading the healthy private service**. The requested public exposure remains visible in the spec:
+free the port at its other owner or disable public exposure here.
+Dokploy omits `dokploy-*` services from that inventory and can hide Docker's
+reason behind `Error reloading application`. When that explicit failure is
+followed by proof that the original owned private DNSRR service is still
+unchanged, Karakoram restores the staged settings and fails with
+`PublicPortPublishFailed` instead of claiming an unobserved port owner.
+Lost/unknown reload delivery retains its durable pending journal and blocks a
+new publication, private correction or other lifecycle mutation until the
+applied port specification and original replacement-task outcome are observed.
+A competing owner alone is not evidence that an outstanding request failed:
+it might free the port before that request reaches Docker. Only explicit
+completed refusal evidence permits rollback and a terminal clean-refusal claim.
+If the handler fails after applying the requested ports, Karakoram durably
+records that completed response; fresh matching service settings and the
+original replacement tasks' completion repair Dokploy's error status without a
+second reload. Stopped/undeployed settings-only changes do not acquire a reload
+fence and can finish after reconstruction without an applied-service receipt.
+If recording the completed response is interrupted before the rollback
+decision, later observation resumes either the applied-public outcome or the
+proven-unchanged-private refusal classification; it does not wait indefinitely
+for a refused publication to appear.
+
+Resource and replica-count updates consume any completed prior deployment before
+merging new settings, so the platform settings and persisted intent stay aligned.
+Volume-less application updates use start-first rolling replacement; namespace
+relays remain serial stop-first singletons, including rollback, because two live
+relay sessions can evict one another.
+
+Unavailable, drained/paused and missing original storage nodes are diagnosed
+separately. Reactivate/restore the original node and retained volume, or explicitly
+replace the member using healthy replicas or a verified backup; Karakoram does
+not relocate a local volume to empty storage. Volume-wipe completion is not
+acknowledged if the original cleanup node can no longer be identified.
+
+HTTP 429 responses carry their `Retry-After` reset (seconds or HTTP date) to the
+control-plane scheduler without immediate transport retry or a short reset cap.
+The original unavailable classification and credential-silent detail are retained.
+
+**Exclusivity requirement and API limitation.** Run one Karakoram control plane
+per target; all writes to its managed applications/service names must go through
+it. Dokploy v0.30.8 has neither metadata compare-and-swap nor an absent-only
+reload/deploy API. The shared lock is not a distributed lease across independent
+control planes. A privileged operator creating a foreign service under the exact
+randomly suffixed name *between* the ownership/absence check and Dokploy's
+unconditional update-or-create can still race restoration; a queued build has
+the same limitation. Do not create or mutate foreign objects under those owned
+names. Visible foreign objects are refused, but the API cannot enforce the
+check atomically.
+
+
 - **Node loss = member loss.** A member is pinned to the node that holds its volume. If the node fails, the member stays pending until the node returns; replace the member through Karakoram to rebuild it elsewhere from its replica set or cluster peers.
 - **Member replacement needs headroom.** Karakoram replaces a member by adding the new one before removing the old one. When the cluster already uses every eligible node, the new member is placed on the node of the member it replaces, so that node must have free CPU and memory (Swarm reservations) for one extra member during the replacement; otherwise the new task stays pending until capacity is available. Add a node or free capacity first.
-- **Changing public ports restarts the member** (Dokploy applies ports with a service update).
+- **Changing public ports restarts the member** (Dokploy applies ports with a service update). Endpoint-mode/port cutovers use temporary `stop-first` with `Parallelism=0` (all replicas in one batch), rather than serial per-slot replacement, to avoid old/new endpoint overlap. This deliberately interrupts the whole service during cutover, including multi-replica proxies. The exact previous update policy is journaled and restored after completion or lifecycle supersession; ordinary updates retain their existing rolling policy. Public addresses still use the configured Swarm-node address and routing mesh.
+- **Published PostgreSQL proxy endpoint recovery.** If every proxy task is natively healthy but the logical private endpoint fails, reconciliation can force a journaled stop-first update even when the public-port rows already match. Recovery is limited to three attempts per incident, at least five minutes apart; a successful logical endpoint probe acknowledges recovery and resets that budget. Task convergence alone never acknowledges recovery. A repair that was journaled but never delivered can consume the next bounded attempt after its startup deadline; queued or uncertain deployments are never superseded. Ownership and lifecycle delivery fences still apply. If the logical endpoint remains broken after the final completed attempt, the tracking operation fails with `PublishedEndpointRepairExhausted` and an actionable condition instead of remaining Running. Automatic repair stays stopped across control-plane restarts; inspect and repair the Swarm private DNS alias/VIP and overlay connectivity, or disable public exposure. A later successful logical probe resets the incident budget. Public addresses and ports are not changed by this repair.
 - **Deleting a volume** wipes its contents with a one-shot task on its node and removes the holder application. Dokploy can remove Docker volume objects only on the manager; an empty volume object can remain on workers (`docker volume prune` on that node removes it).
 - `keepVolumes` deletion keeps the holder application and its Docker volume; resuming the cluster reattaches it on the same node.
 - Images are rebuilt by Dokploy for each deployment; the layer cache makes later members fast, but the first build of an engine version takes about one to two minutes. Use Dokploy's cleanup settings for old images.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -138,11 +139,12 @@ func (p *Provider) ensureSecurity(ctx context.Context, rc *engine.Context, s *st
 	values[secretKibanaToken] = string(token)
 	b, _ := json.Marshal(values)
 	hash := digest(b)
-	if !force && s.SecurityHash == hash {
-		return nil
-	}
-	if err = c.ChangePassword(ctx, "elastic", values[secretElastic]); err != nil {
-		return err
+	// The hash records desired secrets, not observed native users or roles.
+	// Reassert only provider-owned writer objects even when secrets are unchanged.
+	if force || s.SecurityHash != hash {
+		if err = c.ChangePassword(ctx, "elastic", values[secretElastic]); err != nil {
+			return err
+		}
 	}
 	for _, entry := range []struct {
 		role, user, key string
@@ -179,3 +181,30 @@ func healthAcceptable(ctx context.Context, c *esapi.Client, h esapi.Health, inte
 	}
 	return c.UnassignedReplicasUnplaceable(ctx, max(h.NumberOfDataNodes, intendedDataNodes))
 }
+
+func healthShardCounts(h esapi.Health) string {
+	return fmt.Sprintf("initializing=%d, relocating=%d, unassigned=%d, active=%d, activePrimaries=%d, dataNodes=%d", h.InitializingShards, h.RelocatingShards, h.UnassignedShards, h.ActiveShards, h.ActivePrimaryShards, h.NumberOfDataNodes)
+}
+
+func healthConvergenceMessage(h esapi.Health) string {
+	reason := "shard health is not acceptable"
+	switch {
+	case h.InitializingShards != 0 || h.RelocatingShards != 0:
+		reason = "waiting for initializing or relocating shards"
+	case h.Status == "yellow":
+		reason = "yellow shard health: unassigned shards are not proven unplaceable replicas"
+	case h.Status == "red":
+		reason = "red shard health"
+	}
+	return "Elasticsearch convergence: " + reason + "; " + healthShardCounts(h)
+}
+
+// healthProbeError retains the cause for error classification without exposing
+// native request or response details in persisted reconciliation diagnostics.
+type healthProbeError struct {
+	cause   error
+	message string
+}
+
+func (e *healthProbeError) Error() string { return e.message }
+func (e *healthProbeError) Unwrap() error { return e.cause }

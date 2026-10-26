@@ -88,7 +88,7 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	s.trigger(ctx, ref)
 	return response{status: 202, body: operationAPI(op), operationID: op.ID}
 }
-func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster) *response {
+func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previousExposure *domain.Exposure) *response {
 	kind := "zerops"
 	namespace := domain.NormalizedNamespace(c.Namespace)
 	n, err := s.Store.GetNamespace(ctx, namespace)
@@ -109,6 +109,16 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 	if s.namespaces != nil {
 		if backend, err := s.namespaces.Backend(namespace); err == nil && backend != nil {
 			have = backend.Capabilities()
+			unchangedExposure := previousExposure != nil &&
+				previousExposure.Public == c.Spec.Exposure.Public &&
+				previousExposure.IPType == c.Spec.Exposure.IPType &&
+				slices.Equal(previousExposure.Allowlist, c.Spec.Exposure.Allowlist)
+			if !unchangedExposure {
+				if _, err := engine.CheckExposureSupport(ctx, backend, c.Spec.Exposure); err != nil {
+					r := fail(400, "invalid_request", err.Error())
+					return &r
+				}
+			}
 		}
 	}
 	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, have); err != nil {
@@ -190,6 +200,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
 		}
 		p.ApplyDefaults(&c.Spec)
+		preserveExplicitSpecValues(&c.Spec, b.Spec)
 		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
 			return s.failure(err)
 		}
@@ -197,7 +208,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = p.Validate(ctx, nil, &c); err != nil {
 			return s.failure(err)
 		}
-		if failure := s.validateBackendCapabilities(ctx, p, &c); failure != nil {
+		if failure := s.validateBackendCapabilities(ctx, p, &c, nil); failure != nil {
 			return *failure
 		}
 		if err = s.validateStorages(ctx, &c); err != nil {
@@ -208,6 +219,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		op := domain.Operation{Kind: domain.OperationCreate, Actor: principal(ctx).Actor()}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			accepted := c
+			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+			return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
+		})
 		ctx = store.WithOperation(ctx, &op)
 		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
 			c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
@@ -248,14 +264,21 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.failure(err)
 	}
 	c := rc.Cluster
+	ctx = store.WithClusterSnapshot(ctx, c)
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, p)
 	}
 	switch name {
 	case "GetCluster":
 		return ok(s.clusterAPI(*c))
 	case "GetClusterStatus":
-		return ok(s.statusAPI(clusterRef(ctx, c.Name), c.Status))
+		status := s.projectedClusterStatus(*c)
+		if projector, ok := p.(interface {
+			ProjectCredentialsStatus(context.Context, *engine.Context, domain.ClusterStatus) domain.ClusterStatus
+		}); ok {
+			status = projector.ProjectCredentialsStatus(ctx, rc, status)
+		}
+		return ok(s.statusAPI(clusterRef(ctx, c.Name), status))
 	case "ReplaceCluster", "PatchCluster":
 		var spec api.ClusterInputSpec
 		if name == "ReplaceCluster" {
@@ -276,7 +299,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			// Acknowledgement belongs to this request, not the merge-patch base.
 			// Unchanged legacy routing is still accepted by ValidateExposureUpdate.
 			base.Exposure.AllowAllAddresses = false
-			data, err := json.Marshal(map[string]any{"spec": specAPI(base)})
+			data, err := json.Marshal(map[string]any{"spec": specPatchBase(base)})
 			if err != nil {
 				return s.failure(err)
 			}
@@ -297,6 +320,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		next := *c
 		next.Spec = specDomain(spec)
+		next.Spec.RetryEpoch = c.Spec.RetryEpoch
 		if next.Spec.Provider == "" {
 			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
 		}
@@ -307,6 +331,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			next.Spec.DataSource.Namespace = namespaceOrDefaultSource(next.Spec.DataSource.Namespace, c.Namespace)
 		}
 		p.ApplyDefaults(&next.Spec)
+		preserveExplicitSpecValues(&next.Spec, spec)
 		if next.Spec.Exposure.Public {
 			if err = domain.ValidateExposureUpdate(&c.Spec.Exposure, next.Spec.Exposure); err != nil {
 				return s.failure(err)
@@ -316,7 +341,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = p.Validate(ctx, c, &next); err != nil {
 			return s.failure(err)
 		}
-		if failure := s.validateBackendCapabilities(ctx, p, &next); failure != nil {
+		if failure := s.validateBackendCapabilities(ctx, p, &next, &c.Spec.Exposure); failure != nil {
 			return *failure
 		}
 		if next.Spec.Version != c.Spec.Version {
@@ -351,6 +376,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			kind = domain.OperationTLS
 		}
 		op := domain.Operation{Kind: kind, Actor: principal(ctx).Actor()}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			accepted := next
+			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+			return response{status: 200, body: s.clusterAPI(accepted), operationID: op.ID}
+		})
 		ctx = store.WithOperation(ctx, &op)
 		audit := &store.SpecUpdateAudit{Build: func(before, after domain.ClusterSpec, generation int64, secrets []store.SpecSecretChange) domain.Event {
 			e := clusterSpecAuditEvent(c.Name, generation, before, after, secrets)
@@ -380,6 +410,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ResumeCluster":
 		op := domain.Operation{Kind: domain.OperationResume, Actor: principal(ctx).Actor()}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			accepted := *c
+			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+			accepted.Status.Phase = domain.PhaseCreating
+			accepted.Status.Message = "Creating: queued runtime resume from retained volumes"
+			return response{status: 202, body: s.clusterAPI(accepted), operationID: op.ID}
+		})
 		ctx = store.WithOperation(ctx, &op)
 		if err = s.Store.ResumeCluster(ctx, clusterRef(ctx, c.Name)); err != nil {
 			return s.failure(err)
@@ -391,6 +428,43 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, clusterRef(ctx, c.Name))
 		updated.OperationID = op.ID
 		return response{status: 202, body: s.clusterAPI(*updated), operationID: op.ID}
+	case "RetryClusterDeployments":
+		var exhausted []string
+		for component, failure := range c.Status.DeploymentFailures {
+			if failure.RetryEpoch == c.Spec.RetryEpoch {
+				exhausted = append(exhausted, component)
+			}
+		}
+		if len(exhausted) == 0 {
+			return fail(409, "conflict", "No platform deployments are in DeploymentRetriesExhausted for the current retry epoch")
+		}
+		slices.Sort(exhausted)
+		op := domain.Operation{Kind: domain.OperationUpdate, Actor: principal(ctx).Actor()}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			accepted := *c
+			accepted.Spec.RetryEpoch++
+			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+			return response{status: 202, body: s.clusterAPI(accepted), operationID: op.ID}
+		})
+		ctx = store.WithOperation(ctx, &op)
+		audit := &store.SpecUpdateAudit{Build: func(before, after domain.ClusterSpec, generation int64, _ []store.SpecSecretChange) domain.Event {
+			return domain.Event{
+				Namespace: c.Namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
+				Actor: principal(ctx).Actor(), Operation: op.ID, Type: "Normal", Reason: "DeploymentRetriesRearmed",
+				Message: fmt.Sprintf("Deployment retry epoch %d -> %d; re-armed members/components: %s", before.RetryEpoch, after.RetryEpoch, strings.Join(exhausted, ", ")),
+			}
+		}}
+		ctx = store.WithSpecUpdateAudit(ctx, audit)
+		if err = s.Store.IncrementClusterRetryEpoch(ctx, c.Ref()); err != nil {
+			return s.failure(err)
+		}
+		updated, err := s.Store.GetCluster(ctx, c.Ref())
+		if err != nil {
+			return s.failure(err)
+		}
+		s.trigger(ctx, c.Ref())
+		updated.OperationID = op.ID
+		return response{status: 202, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
 	case "RotateClusterTLS":
@@ -419,12 +493,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "RotateSystemUser":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "rotate-system-user", map[string]string{"user": in.User})
 	case "ListClusterMembers":
+		c.Status = s.freshStatus(c.Status)
 		out := make([]api.Member, 0, len(c.Status.Members))
 		for _, m := range c.Status.Members {
 			out = append(out, s.memberAPI(clusterRef(ctx, c.Name), m))
 		}
 		return ok(page[api.Member]{Items: out})
 	case "GetClusterMember":
+		c.Status = s.freshStatus(c.Status)
 		for _, m := range c.Status.Members {
 			if m.Name == in.Member {
 				return ok(s.memberAPI(clusterRef(ctx, c.Name), m))
@@ -487,6 +563,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			v.Provider = c.Spec.Provider
 		}
 		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "backup", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"backup":` + strconv.Quote(b.Name) + `}`)}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			return response{status: 202, body: backupAPI(v), operationID: op.ID}
+		})
 		if err = s.Store.EnqueueBackup(ctx, &v, &op); err != nil {
 			return s.failure(err)
 		}
@@ -584,6 +663,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: source}, Phase: domain.PhasePending}
 		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: principal(ctx).Actor(), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
+		})
 		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
 			return s.failure(err)
 		}
@@ -609,7 +691,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, p)
 	}
 	switch name {
 	case "GetClusterConnection":
@@ -631,6 +713,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "ReplaceClusterBalancer":
 		b := in.Body.(*api.Balancer)
 		if err = dp.SetBalancer(ctx, rc, b.Enabled); err != nil {
+			if errors.Is(err, engine.ErrNotSupported) {
+				return s.unsupportedClusterAction(name, p)
+			}
 			return s.failure(err)
 		}
 		v, err := dp.Balancer(ctx, rc)
@@ -647,7 +732,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		if len(windows) == 0 {
-			return ok(api.PITRWindow{Available: false})
+			msg := "No recoverable window yet: PITR needs a successful backup in the current backup chain and continuously archived logs covering a later point; check the cluster's backup conditions"
+			if !c.Spec.Backup.PITR.Enabled {
+				msg = "PITR is not enabled for this cluster (spec.backup.pitr.enabled is false)"
+			}
+			return ok(api.PITRWindow{Available: false, Message: &msg})
 		}
 		latest := windows[0]
 		for _, w := range windows[1:] {

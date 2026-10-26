@@ -90,6 +90,22 @@ after a lost response. Authenticated userAdmin reconciles PBM and system roles.
 The config-server replica set must reach ready before any mongos deployment.
 Shards use shardsvr; mongos receives cfg/<config-hosts> and registers new shards.
 
+Normal convergence also repairs reserved users with unchanged desired credentials.
+Election, stepdown, network and timeout failures publish ManagedSystemUsers as
+Unknown/RepairRetrying and retain the reconciler's bounded exponential retry
+(default one second to one minute); authentication and privilege failures retain
+False/CredentialRepairRequired. Successful repair clears the durable error and
+condition without a restart or scale change. State checkpoints replace every
+owned JSON field, including omitted empty values, while preserving PBM-owned
+fields; an earlier failure must not survive a successful repair.
+
+The desired member-configuration fingerprint excludes component replica counts.
+Scale-only changes use membership/platform reconciliation without an empty
+rolling reload or primary handoff afterward. Resource/config/TLS changes and
+config-server host-list changes still invalidate that fingerprint. An unchanged
+legacy fingerprint is normalized without a reload; a scale submitted before
+that first normalization may still take the legacy reload path once.
+
 Scale-up creates fresh monotonically indexed members. A member enters
 healthy -> syncing through a non-voting, priority-zero reconfig. It becomes
 active only after SECONDARY/PRIMARY health and replication lag <=10 seconds
@@ -101,11 +117,24 @@ changes are rejected. Adding shards follows the initial replica-set bootstrap
 and addShard path. Router replica changes use SetContainerCount; CPU/RAM
 updates send complete runtime resources; persistent disk growth targets the
 volume service rather than the ephemeral runtime root disk.
+Never-placed surplus members instead persist infrastructure-only retirement
+before polling obsolete deployment readiness. Exact-ID runtime deletion and
+positive absence precede owned volume and credential cleanup; no replica-set
+reconfiguration is needed for a member that never joined. Retirement checkpoints
+requeue after one second rather than the ordinary five-second provisioning
+interval, retaining separate durable steps without multiplying idle waits.
 Runtime deployments describe the release artifact, pinned preparation commands,
 environment, ports, readiness and volume mount independently of the backend.
 Data paths follow the backend layout. Public TCP exposure and allowlists,
 persistent disk growth and multi-container routers require the corresponding
 backend capabilities and return an unsupported-feature error when unavailable.
+
+Status observes replica sets, generic member agents, backup inventory and pinned
+router instances independently. Router instance checks start alongside the
+logical agent request, not after it: one blocked embedded metadata observation
+must not consume two serial probe budgets and invalidate healthy member evidence.
+Each generic/router observation is bounded by four seconds within the five-second
+status sweep; legacy router metadata additionally has its own three-second bound.
 
 Version changes use deployed per-member versions rather than assuming an
 accepted deployment changed every process. A member enters upgrade-wait after
@@ -151,11 +180,31 @@ advertised private member hostnames; a directConnection to a public member
 can be used where such DNS mapping is unavailable.
 
 A dataSource queues one deterministic Restore record and operation after
-initialization, with SourceCluster preserved. The terminal Sync path removes
-retained-volume bookkeeping, observes the desired generation and becomes
-ready. Pending work requeues in five seconds; a converged cluster requeues
-in thirty seconds. At most one disruptive database/infrastructure action is
-performed by a call; primary stepdown returns without also restarting it.
+initialization, with SourceCluster preserved. cloneQueued records submission,
+not success. The generation-independent initialRestore marker requires observed
+native PBM success followed by completed target recovery before Sync can observe
+the desired generation or expose Ready. Pending restores survive controller
+restart; failed, cancelled or missing restores fail the target without automatic
+re-initiation. The shared admission and source-backup deletion fences remain in
+force until this durable completion evidence exists. The terminal Sync path then
+removes retained-volume bookkeeping and becomes ready. Pending work requeues in
+five seconds; a converged cluster requeues in thirty seconds. At most one
+disruptive database/infrastructure action is performed by a call; primary
+stepdown returns without also restarting it.
+Upgrade migration accepts a legacy completed restore only when the deterministic
+operation, successful Restore record, source and failure-free native checkpoint
+agree. Legacy in-flight post-native recovery checkpoints preserve their durable
+success evidence while finishing recovery; initiation/polling, cancellation and
+uncertain outcomes never qualify. No liveness probe substitutes for these receipts.
+Retry diagnostics on a Running Restore do not negate an otherwise proven native
+recovery checkpoint. Native checkpoint failure/cancellation/uncertainty still
+blocks migration, and a successful completed Restore receipt must have no error.
+A legacy superseded create with no restore receipt enters the durable
+LegacyRestoreUnproven hold: readiness remains false while ordinary runtime,
+credential, backup and exposure convergence continues. This hold neither queues
+an initial restore nor consults historical source storage as a PBM bootstrap
+fallback; missing sources therefore cannot block management of the existing
+target. It never manufactures restore-completion evidence.
 
 # Imperative operations and cleanup
 
@@ -172,8 +221,26 @@ staged credential after a crash), persists the cluster credential, then
 reloads backup/monitor credentials one member at a time. TLS rotation issues
 and reloads one member certificate at a time. Restore hooks reset system users
 after both in-place and clone recovery through the preserved target PBM account,
-or encrypted snapshot-time userAdmin credentials for physical recovery, while
-the whole router service remains stopped. Backup provenance (destination prefix,
+or encrypted snapshot-time userAdmin credentials when restored users replace
+target credentials, while the whole router service remains stopped. Logical
+PITR prepares a unique target-only PBM account before native initiation. Its
+password is encrypted centrally and delivered in TLS-protected member config;
+the permission-protected on-member config cache is plaintext (0600), not sealed.
+Source passwords are never copied. Creating/active/releasing intent is committed
+before external effects, each credential publication has a newer config version,
+and capable agents must acknowledge the committed generation before native
+initiation or temporary-account revocation. Source managed-user updates/rotations
+cannot overwrite this account. After native termination the existing user-reset
+hook reasserts target credentials; agents return to ordinary backup credentials
+before the temporary user and secret are removed. An unobservable native outcome
+retains this target-only recovery identity for operator inspection until target
+deletion, never reinitiates native recovery, and retains Degraded/operator-required
+consistency uncertainty despite healthy processes. Native diagnostic credential
+documents, plaintext secrets and SCRAM verifiers are redacted before agent logs,
+PBM receipts/API responses, state, events or CP logging.
+Failure cleanup has a durable one-minute bound, including resumed operations;
+unobservable outcomes require a fresh-name recovery into a fresh cluster or
+target deletion, not liveness-based Ready. Backup provenance (destination prefix,
 topology/version and protected recovery-identity reference) survives source deletion.
 Running replacements opt into Sync only for join/removal; other operations,
 especially restore, exclude ordinary convergence.

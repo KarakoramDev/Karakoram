@@ -163,6 +163,7 @@ var OperationRBAC = map[string]RBACRule{
 	"resetAccountPassword":           {Resource: "accounts", Action: "update", ObjectParam: "*", Public: false},
 	"restartCluster":                 {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"resumeCluster":                  {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
+	"retryClusterDeployments":        {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"revokePostgresPrivileges":       {Resource: "database-users", Action: "update", ObjectParam: "cluster", Public: false},
 	"rotateClusterTLS":               {Resource: "clusters", Action: "update", ObjectParam: "cluster", Public: false},
 	"rotateNamespaceToken":           {Resource: "namespaces", Action: "update", ObjectParam: "namespace", Public: false},

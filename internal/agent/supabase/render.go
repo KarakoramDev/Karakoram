@@ -3,6 +3,9 @@
 package supabase
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/url"
@@ -151,6 +154,8 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		// discovery adds a linked DB failure path without connecting peers.
 		// An explicit empty value makes the pinned runtime build no topologies.
 		env["CLUSTER_STRATEGIES"] = ""
+		// Realtime's internal RPC listener is bound to loopback and must never be reachable.
+		env["GEN_RPC_SOCKET_IP"] = "127.0.0.1"
 		env["API_JWT_SECRET"] = s.RealtimeAdminSecret
 		env["DB_SSL"] = boolstr(s.DatabaseTLS)
 		if s.DatabaseTLS {
@@ -243,6 +248,22 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		files["supabase/vector.json"] = config
 		p.Args = []string{"--config", filepath.Join(dir, "supabase/vector.json")}
 	}
+	switch s.Component {
+	case "realtime", "pooler", "analytics":
+		// The pinned releases force distribution on in env.sh. Keep their
+		// local runtime semantics, but never trust the public artifact cookie
+		// or expose distribution/epmd on the member's private network.
+		// All three already receive this random, sealed per-cluster password.
+		password := s.DBRoles["supabase_admin"]
+		if password == "" {
+			return p, nil, errors.New("missing BEAM distribution secret material")
+		}
+		cookie := hmac.New(sha256.New, []byte(password))
+		cookie.Write([]byte("karakoram/erlang-cookie/v1\x00" + s.Component))
+		env["RELEASE_COOKIE"] = hex.EncodeToString(cookie.Sum(nil))
+		env["ERL_AFLAGS"] += " -kernel inet_dist_use_interface {127,0,0,1}"
+		env["ERL_EPMD_ADDRESS"] = "127.0.0.1"
+	}
 	keys := make([]string, 0, len(env))
 	for key := range env {
 		keys = append(keys, key)
@@ -254,6 +275,9 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		}
 		p.Env = append(p.Env, key+"="+env[key])
 	}
+	// The distribution credential belongs only in the child environment,
+	// never in the diagnostic environment dump.
+	delete(env, "RELEASE_COOKIE")
 	encoded, _ := json.Marshal(env)
 	files["supabase/environment.json"] = encoded
 	return p, files, nil

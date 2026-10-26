@@ -145,6 +145,8 @@ func TestRenderStatelessAndResourceFallbacks(t *testing.T) {
 	renderJSONEqual(t, task["Resources"], `{"CPU":241,"MemoryMB":64}`)
 	renderJSONEqual(t, group["ReschedulePolicy"], `{"Attempts":0,"Unlimited":true,"Delay":30000000000,"DelayFunction":"exponential","MaxDelay":3600000000000}`)
 	renderJSONEqual(t, group["Disconnect"], `{"LostAfter":60000000000,"Replace":true,"Reconcile":"keep_replacement"}`)
+	renderJSONEqual(t, group["Update"], `{"MaxParallel":1,"Canary":1,"AutoPromote":true,"AutoRevert":true,"HealthCheck":"checks","MinHealthyTime":10000000000,"HealthyDeadline":600000000000,"ProgressDeadline":720000000000}`)
+	renderJSONEqual(t, group["Services"], `[{"Name":"examplem0","Provider":"nomad","AddressMode":"alloc","PortLabel":"9443","Checks":[{"Name":"serving-27017","Type":"tcp","AddressMode":"alloc","PortLabel":"27017","Interval":2000000000,"Timeout":1000000000}]}]`)
 	if group["Volumes"] != nil || task["VolumeMounts"] != nil {
 		t.Fatal("stateless member has a volume")
 	}
@@ -246,7 +248,7 @@ func TestRenderTemplatesAndEntrypoint(t *testing.T) {
 		t.Fatal("prepare hash did not change")
 	}
 	renderJSONEqual(t, templates[1].(map[string]any)["EmbeddedTmpl"], `"{{ if nomadVarExists \"nomad/jobs/examplem0\" }}{{ with nomadVar \"nomad/jobs/examplem0\" }}{{ range .Tuples }}export {{ .K }}='{{ .V | replaceAll \"'\" \"'\\\\''\" }}'\n{{ end }}{{ end }}{{ end }}"`)
-	renderJSONEqual(t, templates[2].(map[string]any)["EmbeddedTmpl"], `"127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ .Address }} {{ $name }}\n{{ end }}{{ end }}"`)
+	renderJSONEqual(t, templates[2].(map[string]any)["EmbeddedTmpl"], `"127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n{{ $hostname := env \"attr.unique.hostname\" }}{{ $registered := false }}{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ if eq $name $hostname }}{{ $registered = true }}{{ end }}{{ .Address }} {{ $name }}\n{{ end }}{{ end }}{{ if and $hostname (not $registered) }}127.0.1.1 {{ $hostname }}\n{{ end }}"`)
 }
 
 func TestRenderEntrypointPrivilegeAndDiscoveryOrder(t *testing.T) {
@@ -474,6 +476,7 @@ func TestRenderHostsTemplateSelfAndPeers(t *testing.T) {
 	type service struct{ Name string }
 	type registration struct{ Address string }
 	functions := template.FuncMap{
+		"env": func(string) string { return "" },
 		"nomadServices": func() []service {
 			return []service{{Name: "examplem0"}, {Name: "examplem1"}}
 		},
@@ -514,5 +517,57 @@ func TestRenderRejectsMissingDeployment(t *testing.T) {
 	r.Deployment = nil
 	if _, err := b.renderJob(t.Context(), r); err == nil {
 		t.Fatal("missing deployment accepted")
+	}
+}
+
+func TestRenderHostsInheritedHostname(t *testing.T) {
+	type service struct{ Name string }
+	type registration struct{ Address string }
+	for _, tc := range []struct {
+		name, hostname string
+	}{
+		{"node-name", "worker-a"},
+		{"fqdn", "worker-a.example.net"},
+		{"service-name-collision", "examplem0"},
+		{"missing-attribute", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Re-render after service discovery changes: the local hostname
+			// must survive, while replaced peer addresses must not.
+			for _, peer := range []string{"192.0.2.11", "192.0.2.12"} {
+				functions := template.FuncMap{
+					"env": func(key string) string {
+						if key != "attr.unique.hostname" {
+							t.Fatalf("hostname must use the OS attribute, not the scheduler node name: %s", key)
+						}
+						return tc.hostname
+					},
+					"nomadServices": func() []service {
+						return []service{{"examplem0"}, {"examplem1"}}
+					},
+					"nomadService": func(name string) []registration {
+						if name == "examplem0" {
+							return []registration{{"192.0.2.10"}}
+						}
+						return []registration{{peer}}
+					},
+				}
+				parsed, err := template.New("hosts").Funcs(functions).Parse(renderHostsTemplate())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var output bytes.Buffer
+				if err := parsed.Execute(&output, nil); err != nil {
+					t.Fatal(err)
+				}
+				want := "127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n192.0.2.10 examplem0\n" + peer + " examplem1\n"
+				if tc.hostname != "" && tc.hostname != "examplem0" {
+					want += "127.0.1.1 " + tc.hostname + "\n"
+				}
+				if output.String() != want {
+					t.Fatalf("hosts = %q, want %q", output.String(), want)
+				}
+			}
+		})
 	}
 }

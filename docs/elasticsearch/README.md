@@ -10,7 +10,7 @@ Deploy Elasticsearch and its optional, version-coupled Elastic Stack components 
 |---|---|
 | Versions | `9.5.5` (default), `9.5.4`, `9.4.8`, `8.19.23`; use your installation's catalog |
 | Topologies | Combined master/data nodes or dedicated masters plus data nodes; counts below |
-| Minimum RAM per instance | Data/combined: 1.5 GiB; dedicated master, Kibana, Logstash: 1 GiB; APM: 0.25 GiB |
+| Minimum RAM per instance | Data/combined: 1.5 GiB; dedicated master and Logstash: 1 GiB; enabled Kibana: 1.5 GiB on 9.x, 1 GiB on 8.x; APM: 0.25 GiB |
 | Minimum disk | Elasticsearch nodes: 5 GiB persistent; optional components: 1 GiB runtime disk |
 | Security | Elasticsearch HTTP/transport TLS required; `requireTLS` only |
 | Backups | Native S3 snapshots; see [Snapshots](snapshots.md) |
@@ -38,6 +38,8 @@ Use one combined node for disposable development; usually choose 3/5 for product
 
 Optional replicas are Kibana 0–3, Logstash 0–5 and APM 0–3. Zero disables a component. Each uses one service with multiple containers and ephemeral disks; components cannot attach to another cluster or upgrade independently. Without a preset, defaults are three combined nodes, or three dedicated masters plus two data nodes, with optional components disabled.
 
+If a restart is waiting for an optional component to become ready, setting that component's replicas to zero skips it in the restart pass. Normal reconciliation then deletes its service without requiring it to recover first. Skipped components are recorded separately from completed restarts, including across control-plane restarts; re-enabling one before the pass finishes requires its restart and readiness before completion. Enabled components and Elasticsearch nodes still retain their restart readiness gates.
+
 ## Sizing and heap
 
 API RAM/disk values use GiB; CPU values use cores. Provider starting resources are:
@@ -52,10 +54,14 @@ API RAM/disk values use GiB; CPU values use cores. Provider starting resources a
 
 The `dev` preset caps Kibana at 1.5 GiB. All components start with shared CPU bounds 1–2. CPU bounds are whole cores, at least one; maximum bounds cannot be below minima. Omitted resource bounds use provider defaults. Size for replicas, rebalance/recovery, disk watermarks and queues, not just current data size. More nodes cannot drain shards onto disks without headroom. See [resource changes](../clusters.md) for platform growth constraints.
 
+Enabled Kibana 9.x requires at least **1.5 GiB minimum RAM** for creation, enablement, replica increases, intentional RAM changes and every version change (including patch upgrades). Kibana 8.x retains its 1-GiB admission floor; neither floor is a startup-time or workload-capacity guarantee. Disabled Kibana retains structural resource checks.
+
+Existing smaller Kibana 9.x instances are not resized automatically: unchanged same-version updates and replica decreases/disable remain accepted. Status identifies the below-minimum allocation and directs an explicit increase of `spec.components.extra.kibana.resources.minRam` and `maxRam` together to at least 1.5 GiB. Before any version change, **resize Kibana first** at the current version and wait for readiness; a combined resize and upgrade is refused when the old enabled Kibana is below the target floor.
+
 Heap derives from configured **minimum** RAM, not the current autoscaled allocation:
 
 - Elasticsearch: equal initial/maximum heap; 40% through 4 GiB, otherwise 50%, rounded down to a 64-MiB multiple and clamped to 512–31744 MiB. At 2 GiB: 768 MiB.
-- Kibana: Node.js old-space cap 60%, minimum 512 MiB.
+- Kibana: Node.js old-space cap 60%, minimum 512 MiB; 614 MiB at 1 GiB and 921 MiB at 1.5 GiB. Legacy allocations retain this same formula.
 - Logstash: equal initial/maximum heap 50%, minimum 384 MiB.
 - APM: Go process, no JVM heap.
 

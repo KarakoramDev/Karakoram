@@ -55,10 +55,10 @@ func IsSystemUser(name string) bool {
 }
 
 // EnsureSystemUsers reconciles system-user roles and ensures the PBM role.
-// A supplied password is always written with updateUser, since MongoDB cannot
-// reveal or compare stored passwords. Missing passwords preserve existing users'
-// credentials; creating a missing user requires a non-empty supplied password.
-// This is state-idempotent, but supplied passwords cause writes on every call.
+// Supplied passwords are compared against stored SCRAM credentials before any
+// write. If MongoDB denies access to showCredentials, reconciliation falls back
+// to writing supplied passwords on every call. Other read failures are returned.
+// Missing passwords preserve credentials; creating a user requires a password.
 func EnsureSystemUsers(ctx context.Context, c *mongo.Client, passwords map[string]string) error {
 	if c == nil {
 		return invalid("MongoDB client is nil")
@@ -79,7 +79,7 @@ func EnsureSystemUsers(ctx context.Context, c *mongo.Client, passwords map[strin
 	// while all other users are being reconciled.
 	sort.SliceStable(defs, func(i, j int) bool { return defs[i].Name != "userAdmin" && defs[j].Name == "userAdmin" })
 	for _, def := range defs {
-		current, err := getUser(ctx, c, "admin", def.Name)
+		current, credentialsVisible, err := getSystemUser(ctx, c, def.Name)
 		if err != nil && !errors.Is(err, engine.ErrNotFound) {
 			return err
 		}
@@ -94,10 +94,14 @@ func EnsureSystemUsers(ctx context.Context, c *mongo.Client, passwords map[strin
 			}
 			continue
 		}
-		if supplied || !sameRoles(current.Roles, def.Roles) {
+		passwordChanged := supplied && (!credentialsVisible || !current.passwordMatches(def.Name, password))
+		if passwordChanged || !sameRoles(decodeRoles(current.Roles), def.Roles) {
 			cmd := bson.D{{Key: "updateUser", Value: def.Name}, {Key: "roles", Value: encodeRoles(def.Roles)}}
-			if supplied {
+			if passwordChanged {
 				cmd = append(cmd, bson.E{Key: "pwd", Value: password})
+				if credentialsVisible {
+					cmd = append(cmd, bson.E{Key: "mechanisms", Value: current.requiredMechanisms()})
+				}
 			}
 			if err := run(ctx, c, "admin", cmd); err != nil {
 				return err
@@ -292,8 +296,11 @@ func commandError(err error) error {
 		}
 	}
 	if sentinel == nil {
-		return err
+		// Retain only classification metadata, never the raw response/message:
+		// dataplane reads still need to recognize temporary topology failures.
+		return mongo.CommandError{Code: ce.Code, Labels: ce.Labels,
+			Message: fmt.Sprintf("MongoDB command failed (code %d)", ce.Code)}
 	}
 	// Do not interpolate the server message: it can echo command values.
-	return fmt.Errorf("MongoDB command failed (code %d, %s): %w", ce.Code, ce.Name, sentinel)
+	return fmt.Errorf("MongoDB command failed (code %d): %w", ce.Code, sentinel)
 }

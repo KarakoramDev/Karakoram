@@ -56,6 +56,9 @@ func TestNamedResourceErrorsPreserveSentinels(t *testing.T) {
 func TestEnqueueDuplicateNamesAndDeletionState(t *testing.T) {
 	s, _ := testStore(t)
 	ctx := t.Context()
+	if err := s.CreateCluster(ctx, &domain.Cluster{Name: "demo"}); err != nil {
+		t.Fatal(err)
+	}
 	b := &domain.Backup{Name: "baseline", Cluster: "demo", Phase: domain.PhasePending}
 	if err := s.EnqueueBackup(ctx, b, &domain.Operation{Cluster: "demo", Kind: "backup"}); err != nil {
 		t.Fatal(err)

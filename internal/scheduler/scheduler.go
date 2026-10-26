@@ -82,7 +82,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.mu.Unlock()
 	if err := s.Reload(ctx); err != nil {
-		return err
+		s.opts.Logger.Error("load backup schedules; preserving state and retrying", "error", err)
 	}
 	s.cron.Start()
 	defer func() { <-s.cron.Stop().Done() }()
@@ -104,7 +104,11 @@ func (s *Scheduler) Run(ctx context.Context) error {
 func (s *Scheduler) Reload(ctx context.Context) error {
 	clusters, err := s.opts.Store.ListClusters(ctx, "")
 	if err != nil {
-		return err
+		var damaged *store.ClusterDataError
+		if !errors.As(err, &damaged) {
+			return err
+		}
+		s.opts.Logger.Error("isolating unreadable clusters from scheduling; restore verified control-plane state", "error", err)
 	}
 	desired := map[string]struct {
 		cluster domain.ClusterRef
@@ -115,6 +119,13 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 			continue
 		}
 		for _, spec := range c.Spec.Backup.Schedules {
+			// Persist disabled policy too, so re-enabling it starts a new
+			// schedule epoch rather than replaying the disabled period.
+			if !spec.Enabled {
+				if _, err := s.opts.Store.LoadScheduleCursor(ctx, &c, spec, s.opts.Clock.Now()); err != nil {
+					return err
+				}
+			}
 			if !spec.Enabled {
 				continue
 			}
@@ -147,7 +158,7 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 			if runCtx == nil {
 				runCtx = context.Background()
 			}
-			if err := s.Fire(runCtx, cluster, name); err != nil {
+			if err := s.catchUp(runCtx, cluster, name); err != nil {
 				s.opts.Logger.Error("scheduled backup", "cluster", cluster, "schedule", name, "error", err)
 			}
 		})
@@ -158,6 +169,12 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 		s.entries[key] = entry{id: id, spec: d.spec}
 	}
 	s.mu.Unlock()
+	var failures error
+	for _, d := range desired {
+		if err := s.catchUp(ctx, d.cluster, d.spec.Name); err != nil {
+			failures = errors.Join(failures, err)
+		}
+	}
 	for _, c := range clusters {
 		if c.Deleting || c.Status.Phase == domain.PhaseSuspended {
 			continue
@@ -166,7 +183,7 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return failures
 }
 
 // Fire re-reads the current spec, so removed or disabled schedules cannot fire
@@ -176,6 +193,7 @@ func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedul
 	if err != nil {
 		return err
 	}
+	ctx = store.WithClusterSnapshot(ctx, c)
 	if c.Deleting || c.Status.Phase == domain.PhaseSuspended {
 		return nil
 	}
@@ -190,6 +208,43 @@ func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedul
 	if spec == nil {
 		return nil
 	}
+	return s.fireBackup(ctx, c, spec, nil, time.Time{})
+}
+
+// catchUp admits at most one overdue occurrence per reload/callback. Its cursor
+// advances only with a committed backup operation, including after CP restart.
+func (s *Scheduler) catchUp(ctx context.Context, cluster domain.ClusterRef, schedule string) error {
+	c, err := s.opts.Store.GetCluster(ctx, cluster)
+	if err != nil {
+		return err
+	}
+	if c.Deleting || c.Status.Phase == domain.PhaseSuspended {
+		return nil
+	}
+	for i := range c.Spec.Backup.Schedules {
+		spec := &c.Spec.Backup.Schedules[i]
+		if spec.Name != schedule || !spec.Enabled {
+			continue
+		}
+		now := s.opts.Clock.Now()
+		cursor, err := s.opts.Store.LoadScheduleCursor(ctx, c, *spec, now)
+		if err != nil {
+			return err
+		}
+		parsed, err := s.parser.Parse(spec.Cron)
+		if err != nil {
+			return err
+		}
+		due := parsed.Next(cursor.LastDueAt)
+		if due.IsZero() || due.After(now) {
+			return nil
+		}
+		return s.fireBackup(store.WithClusterSnapshot(ctx, c), c, spec, &cursor, due)
+	}
+	return nil
+}
+
+func (s *Scheduler) fireBackup(ctx context.Context, c *domain.Cluster, spec *domain.BackupSchedule, cursor *store.ScheduleCursor, due time.Time) error {
 	suffix, err := secrets.RandomString(8)
 	if err != nil {
 		return err
@@ -200,17 +255,22 @@ func (s *Scheduler) Fire(ctx context.Context, cluster domain.ClusterRef, schedul
 		storage = c.Spec.Backup.Storage
 	}
 	name := "scheduled-" + now.Format("20060102t150405") + "-" + strings.ToLower(suffix)
-	backup := domain.Backup{Namespace: c.Namespace, Name: name, Cluster: c.Name, Storage: storage, Type: spec.Type, Trigger: "schedule", Schedule: schedule, Phase: domain.PhasePending, CreatedAt: now}
+	backup := domain.Backup{Namespace: c.Namespace, Name: name, Cluster: c.Name, Storage: storage, Type: spec.Type, Trigger: "schedule", Schedule: spec.Name, Phase: domain.PhasePending, CreatedAt: now}
 	if c.Spec.Provider != "" && c.Spec.Provider != "psmdb" {
 		backup.Provider = c.Spec.Provider
 	}
 	payload, _ := json.Marshal(map[string]string{"backup": name})
 	op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationBackup, Payload: payload, Actor: "scheduler", CreatedAt: now}
-	if err = s.opts.Store.EnqueueBackup(ctx, &backup, &op); err != nil {
+	if cursor != nil {
+		err = s.opts.Store.EnqueueScheduledBackup(ctx, &backup, &op, *cursor, due)
+	} else {
+		err = s.opts.Store.EnqueueBackup(ctx, &backup, &op)
+	}
+	if err != nil {
 		return err
 	}
 	if s.opts.Trigger != nil {
-		s.opts.Trigger.Trigger(cluster)
+		s.opts.Trigger.Trigger(c.Ref())
 	}
 	return nil
 }
@@ -221,6 +281,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 	if err != nil {
 		return err
 	}
+	ctx = store.WithClusterSnapshot(ctx, c)
 	backups, err := s.opts.Store.ListBackups(ctx, cluster)
 	if err != nil {
 		return err
@@ -284,7 +345,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 		payload, _ := json.Marshal(map[string]string{"backup": b.Name})
 		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: domain.OperationDeleteBackup, Payload: payload, Actor: "scheduler", CreatedAt: s.opts.Clock.Now()}
 		if err = s.opts.Store.EnqueueBackupDeletion(ctx, &b, &op); errors.Is(err, store.ErrConflict) {
-			continue
+			return nil // Abandon this candidate set after its snapshot changed.
 		} else if err != nil {
 			return err
 		}

@@ -571,6 +571,14 @@ func TestDeployStreamsArtifactAndLifecycle(t *testing.T) {
 			return
 		}
 		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/process"):
+			fakePage(w, r, []Process{})
+		case strings.HasSuffix(r.URL.Path, "/user-data"):
+			_ = json.NewEncoder(w).Encode(Process{ID: "receipt"})
+		case r.URL.Path == "/process/receipt":
+			_ = json.NewEncoder(w).Encode(Process{ID: "receipt", Status: "FINISHED"})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/app-version"):
+			fakePage(w, r, []AppVersion{})
 		case strings.HasSuffix(r.URL.Path, "/app-version"):
 			reply(t, w, "appVersion")
 		case strings.HasSuffix(r.URL.Path, "/upload"):
@@ -1018,5 +1026,38 @@ func TestImportRejectionReportsEffectiveValuesWithoutEnvironment(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "do-not-show") || strings.Contains(err.Error(), "PASSWORD") {
 		t.Fatalf("environment leaked: %s", err)
+	}
+}
+
+func TestMetadataProcessObservationDoesNotAddDeploymentPollingFloor(t *testing.T) {
+	b := &Backend{pollInterval: 2 * time.Second}
+	// Replay the four ~50ms receipt writes observed before each Z17 deploy
+	// using a fake clock. Process completion must still be observed positively.
+	for _, kind := range []string{"receipt", "secret"} {
+		t.Run(kind, func(t *testing.T) {
+			var elapsed time.Duration
+			for range 4 {
+				var at time.Duration
+				for attempt := 0; at < 50*time.Millisecond; attempt++ {
+					at += b.waitOpInterval(infra.Op{Kind: kind}, attempt == 0)
+				}
+				elapsed += at
+			}
+			if elapsed > 400*time.Millisecond {
+				t.Fatalf("four metadata writes cost %s despite 50ms native completion; want <=400ms", elapsed)
+			}
+			if got := b.waitOpInterval(infra.Op{Kind: kind}, false); got != b.pollInterval {
+				t.Fatalf("slow metadata polling accelerated indefinitely: %s", got)
+			}
+		})
+	}
+	for _, kind := range []string{"deploy", "import", "routing", "stop"} {
+		if got := b.waitOpInterval(infra.Op{Kind: kind}, true); got != b.pollInterval {
+			t.Fatalf("%s polling cadence changed: %s", kind, got)
+		}
+	}
+	b.pollInterval = 10 * time.Millisecond
+	if got := b.waitOpInterval(infra.Op{Kind: "receipt"}, true); got != b.pollInterval {
+		t.Fatalf("explicit short polling interval was increased: %s", got)
 	}
 }

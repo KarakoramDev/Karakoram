@@ -29,10 +29,12 @@ func (s Spec) ProjectSecrets() Spec {
 	case "auth":
 		roles = []string{"supabase_auth_admin"}
 		s.JWTSecret, s.JWTKeys = all.JWTSecret, all.JWTKeys
+		s.ServiceRoleKey = all.ServiceRoleKey // Authenticated database readiness.
 		s.Auth.SMTP = all.Auth.SMTP
 	case "rest":
 		roles = []string{"authenticator"}
 		s.JWTSecret, s.JWKS = all.JWTSecret, all.JWKS
+		s.ServiceRoleKey = all.ServiceRoleKey // Authenticated database readiness.
 	case "realtime":
 		roles = []string{"supabase_admin"}
 		s.JWTSecret, s.JWKS, s.AnonKey = all.JWTSecret, all.JWKS, all.AnonKey

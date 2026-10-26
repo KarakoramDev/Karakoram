@@ -36,6 +36,11 @@ type Engine struct {
 	applied         bool
 	configVersion   int64
 	configAppliedAt time.Time
+	memoryPressure  memoryPressureSampler
+	heapSince       time.Time
+	oldSpaceMiB     int
+	heapFailure     *agentspec.HeapExhaustion
+	heapFirstLaunch uint64
 }
 
 // NewEngine returns an Elastic Stack engine for agent registration.
@@ -81,11 +86,16 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	}
 	fileLimitOnce.Do(RaiseFileLimit)
 	h := nodeHost{Node: n}
+	heapAppliedAt := time.Now()
 	changes, err := e.runner.Apply(ctx, h, spec, c.Cluster, c.Member)
 	if err != nil {
 		return changes, err
 	}
 	appliedAt := time.Now()
+	oldSpaceMiB := 0
+	if spec.Component == agentspec.ComponentKibana {
+		oldSpaceMiB = renderedOldSpaceMiB(filepath.Join(n.DataDir(), "karakoram", "config", "node.options"))
+	}
 	// Explicit empty intent stops children without releasing operator holds.
 	states, _ := n.Snapshot()
 	for name := range states {
@@ -98,8 +108,17 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	e.mu.Lock()
 	if e.spec.RestartToken != spec.RestartToken {
 		e.configAppliedAt = appliedAt
+		e.heapSince = heapAppliedAt
+		e.heapFailure = nil
+		process := states[spec.Component]
+		e.heapFirstLaunch = process.Launch
+		if process.StartedAt != nil && process.StartedAt.Before(heapAppliedAt) {
+			// A held child still belongs to the previous rendered configuration.
+			e.heapFirstLaunch++
+		}
 	}
 	e.spec, e.applied, e.configVersion = spec, true, c.ConfigVersion
+	e.oldSpaceMiB = oldSpaceMiB
 	e.mu.Unlock()
 	return changes, nil
 }
@@ -157,9 +176,26 @@ func (e *Engine) Routes(mux *http.ServeMux, n *agent.Node) {
 	mux.HandleFunc("POST /v1/elasticsearch/readiness", func(w http.ResponseWriter, r *http.Request) {
 		e.mu.RLock()
 		spec, applied, configVersion, appliedAt := e.spec, e.applied, e.configVersion, e.configAppliedAt
+		heapSince, oldSpaceMiB, firstLaunch := e.heapSince, e.oldSpaceMiB, e.heapFirstLaunch
 		e.mu.RUnlock()
 		observation := agentspec.Readiness{Component: spec.Component, ConfigVersion: configVersion}
 		states, maintenance := n.Snapshot()
+		if applied && spec.Component == agentspec.ComponentKibana && !maintenance && !n.Stopped(spec.Component) {
+			observation.HeapExhaustion = kibanaHeapFailure(n.LogTail(spec.Component, heapTailLines), states[spec.Component], heapSince, oldSpaceMiB)
+			if observation.HeapExhaustion != nil && observation.HeapExhaustion.Launch < firstLaunch {
+				observation.HeapExhaustion = nil
+			}
+			e.mu.Lock()
+			if e.spec.RestartToken == spec.RestartToken && e.heapSince.Equal(heapSince) {
+				if observation.HeapExhaustion != nil {
+					e.heapFailure = observation.HeapExhaustion
+				}
+				if e.heapFailure != nil && e.heapFailure.SupervisorSession == states[spec.Component].SupervisorSession {
+					observation.HeapExhaustion = e.heapFailure
+				}
+			}
+			e.mu.Unlock()
+		}
 		switch {
 		case !applied:
 			observation.Message = "Component configuration has not been applied"
@@ -174,6 +210,39 @@ func (e *Engine) Routes(mux *http.ServeMux, n *agent.Node) {
 				observation.Message = err.Error()
 			} else {
 				observation.Ready = true
+			}
+			if observation.Ready && spec.Component == agentspec.ComponentKibana {
+				observation.HeapExhaustion = nil
+				e.mu.Lock()
+				if e.spec.RestartToken == spec.RestartToken {
+					e.heapSince = time.Now()
+					e.heapFailure = nil
+				}
+				e.mu.Unlock()
+			}
+		}
+		if !observation.Ready && observation.HeapExhaustion != nil {
+			observation.Message = heapExhaustionMessage(observation.HeapExhaustion.OldSpaceMiB, spec.Version)
+		}
+		if applied && spec.Component == agentspec.ComponentKibana && !maintenance && observation.HeapExhaustion == nil {
+			pressure := e.memoryPressure.observe()
+			if !observation.Ready && pressure == "" && e.memoryPressure.available() {
+				// RPC cadence is not a sampling clock: the first request or a
+				// request after a gap needs its own fresh counter comparison.
+				timer := time.NewTimer(time.Second)
+				select {
+				case <-r.Context().Done():
+				case <-timer.C:
+					pressure = e.memoryPressure.observe()
+				}
+				timer.Stop()
+			}
+			if !observation.Ready && pressure != "" {
+				observation.MemoryPressure = true
+				observation.Message = pressure + "; native readiness: " + observation.Message
+			} else if !observation.Ready && !e.memoryPressure.available() {
+				observation.MemoryPressureUnavailable = true
+				observation.Message = "Kibana memory pressure evidence unavailable in this runtime: the agent cannot resolve or read its own cgroup-v2 memory.events. Inspect allocation-scoped host memory.events and PSI; provide an operator-approved read-only scoped cgroup view to enable native pressure diagnosis; native readiness: " + observation.Message
 			}
 		}
 		if spec.Component == agentspec.ComponentLogstash && spec.Logstash != nil && !observation.Ready && !maintenance && applied {

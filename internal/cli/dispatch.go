@@ -459,6 +459,12 @@ func dispatch(ctx context.Context, c, root *client.Client, op string, args []str
 			return nil, err
 		}
 		return c.ResetAccountPasswordWithBody(ctx, args[0], &p, "application/json", bytes.NewReader(body))
+	case "retryClusterDeployments":
+		var p client.RetryClusterDeploymentsParams
+		if err = json.Unmarshal(q, &p); err != nil {
+			return nil, err
+		}
+		return c.RetryClusterDeployments(ctx, args[0], &p)
 	case "restartCluster":
 		var p client.RestartClusterParams
 		if err = json.Unmarshal(q, &p); err != nil {

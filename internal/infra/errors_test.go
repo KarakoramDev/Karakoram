@@ -6,7 +6,9 @@ package infra_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -44,5 +46,34 @@ func TestRejectedError(t *testing.T) {
 		if tc.err.Error() != tc.want || !errors.Is(tc.err, infra.ErrRejected) || errors.Is(tc.err, infra.ErrConflict) {
 			t.Fatalf("rejected error: %v", tc.err)
 		}
+	}
+}
+
+func TestRetryAtPreservesWrappedJoinedConstraints(t *testing.T) {
+	now := time.Now()
+	early := &infra.RetryAfterError{Cause: detailedError{}, At: now.Add(time.Minute)}
+	late := &infra.RetryAfterError{Cause: infra.ErrUnavailable, At: now.Add(time.Hour)}
+	err := fmt.Errorf("private context: %w", errors.Join(early, errors.New("private secret"), late))
+	if got := infra.RetryAt(err); !got.Equal(late.At) {
+		t.Fatalf("reset %v want %v", got, late.At)
+	}
+	if !errors.Is(err, infra.ErrUnavailable) {
+		t.Fatal("lost unavailable classification")
+	}
+	detail := infra.SafeDetail(early)
+	if strings.Contains(detail, "sensitive") || !strings.Contains(detail, early.At.UTC().Format(time.RFC3339)) {
+		t.Fatalf("unsafe or unactionable detail: %s", detail)
+	}
+	if !infra.RetryAt(nil).IsZero() || !infra.RetryAt(infra.ErrUnavailable).IsZero() {
+		t.Fatal("invented retry deadline")
+	}
+}
+
+func TestDeploymentWaitPreservesJoinedRetryDeadline(t *testing.T) {
+	at := time.Now().Add(time.Hour)
+	wait := &infra.DeploymentWaitError{Reason: "DeploymentSlot", Key: "service/process/RUNNING", Detail: "process age 15s", RetryAt: at}
+	err := fmt.Errorf("deploy: %w", errors.Join(wait, &infra.RetryAfterError{Cause: infra.ErrUnavailable, At: at.Add(-time.Minute)}))
+	if !wait.DeploymentWaiting() || infra.SafeDetail(wait) != wait.Error() || !infra.RetryAt(err).Equal(at) {
+		t.Fatalf("typed wait contract lost: %v", err)
 	}
 }

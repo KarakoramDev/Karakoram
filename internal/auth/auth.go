@@ -128,6 +128,7 @@ type Service struct {
 	dummy          string
 	attempts       map[string]attempt
 	loginWork      chan struct{}
+	tokenUsage     chan struct{}
 	verifyPassword func(string, string) bool
 	now            func() time.Time
 }
@@ -169,7 +170,7 @@ func New(o Options) (*Service, error) {
 	if o.AccessTTL < time.Second || o.RefreshTTL <= o.AccessTTL {
 		return nil, errors.New("invalid session lifetimes")
 	}
-	s := &Service{o: o, attempts: map[string]attempt{}, loginWork: make(chan struct{}, 2), verifyPassword: VerifyPassword, now: func() time.Time { return time.Now().UTC() }}
+	s := &Service{o: o, attempts: map[string]attempt{}, loginWork: make(chan struct{}, 2), tokenUsage: make(chan struct{}, 1), verifyPassword: VerifyPassword, now: func() time.Time { return time.Now().UTC() }}
 	raw, err := o.Store.GetSetting(context.Background(), "auth/signing-key")
 	if errors.Is(err, store.ErrNotFound) {
 		_, s.key, err = ed25519.GenerateKey(rand.Reader)

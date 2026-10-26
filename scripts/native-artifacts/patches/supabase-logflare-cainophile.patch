@@ -1,0 +1,29 @@
+# https://github.com/Logflare/logflare/issues/4075
+# Drop this patch once upstream fixes idle-publication WAL acknowledgments.
+diff --git a/deps/cainophile/lib/cainophile/adapters/postgres/epgsql_implementation.ex b/deps/cainophile/lib/cainophile/adapters/postgres/epgsql_implementation.ex
+--- a/deps/cainophile/lib/cainophile/adapters/postgres/epgsql_implementation.ex
++++ b/deps/cainophile/lib/cainophile/adapters/postgres/epgsql_implementation.ex
+@@ -28,7 +28,8 @@
+             self(),
+             [],
+             '#{xlog}/#{offset}',
+-            'proto_version \'1\', publication_names \'#{publication_names}\''
++            'proto_version \'1\', publication_names \'#{publication_names}\'',
++            %{align_lsn: true}
+           )
+ 
+         {:ok, %State{config: config, connection: epgsql_pid}}
+# Backport alignment for ordinary keepalives; upstream development fix:
+# https://github.com/epgsql/epgsql/pull/306
+diff --git a/deps/epgsql/src/epgsql_sock.erl b/deps/epgsql/src/epgsql_sock.erl
+--- a/deps/epgsql/src/epgsql_sock.erl
++++ b/deps/epgsql/src/epgsql_sock.erl
+@@ -761,7 +761,7 @@
+                                              align_lsn = AlignLsn} = Repl} = State) ->
+     Repl1 =
+         case ReplyRequired of
+-            1 when AlignLsn ->
++            _ when AlignLsn ->
+                 send(State, ?COPY_DATA,
+                      epgsql_wire:encode_standby_status_update(LSN, LSN, LSN)),
+                 Repl#repl{feedback_required = false,

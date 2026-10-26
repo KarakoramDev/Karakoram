@@ -136,8 +136,8 @@ func TestClusterCreateVersionDefaults(t *testing.T) {
 		{name: "catalog default"},
 		{name: "empty version", flags: []string{"--version", ""}},
 		{name: "explicit version", version: "8.0.29-13", flags: []string{"--version", "8.0.29-13"}},
-		{name: "file default", input: `{"name":"demo","spec":{"provider":"psmdb"}}`, flags: []string{"-f", "-", "--version", "ignored"}},
-		{name: "file version", input: `{"name":"demo","spec":{"provider":"psmdb","version":"7.0.43-23"}}`, version: "7.0.43-23", flags: []string{"-f", "-", "--version", "ignored"}},
+		{name: "file default", input: `{"name":"demo","spec":{"provider":"psmdb"}}`, flags: []string{"-f", "-"}},
+		{name: "file version", input: `{"name":"demo","spec":{"provider":"psmdb","version":"7.0.43-23"}}`, version: "7.0.43-23", flags: []string{"-f", "-"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var body map[string]any

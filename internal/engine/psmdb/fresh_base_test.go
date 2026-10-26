@@ -13,6 +13,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -20,6 +21,7 @@ func TestSyncReplacesLostFreshBase(t *testing.T) {
 	for _, phase := range []domain.Phase{domain.PhaseFailed, domain.PhaseCancelled, "missing"} {
 		t.Run(string(phase), func(t *testing.T) {
 			p, rc, _, _ := setup(t)
+			p.ensureManagedUsers = func(context.Context, *engine.Context, *internalState) error { return nil }
 			ctx := context.Background()
 			// Reach bootstrap completion using the real Sync path, then resume
 			// after the database-user setup boundary with an active replica set.
@@ -67,7 +69,7 @@ func TestSyncReplacesLostFreshBase(t *testing.T) {
 			events := &orphanEvents{}
 			rc.Events = events
 			for range 10 {
-				if _, err := p.Sync(ctx, rc); err != nil {
+				if _, err := p.sync(ctx, rc, p.prepareDisruption, healthyTestReplication); err != nil {
 					t.Fatal("lost base blocked Sync", err)
 				}
 				if err := decodeJSON(rc.Cluster.Internal, &fresh); err != nil {

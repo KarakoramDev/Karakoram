@@ -36,7 +36,8 @@ func (p *Provider) failPending(ctx context.Context, rc *engine.Context, s *state
 	r.Failures++
 	r.Message = message
 	r.LastProcessID = v.Op.ID
-	r.RetryAfter = now(rc).Add(engine.PlatformRetryDelay(r.Failures))
+	recorded := now(rc)
+	r.RetryAfter = r.Schedule(recorded, recorded.Add(engine.PlatformRetryDelay(r.Failures)))
 	if strings.Contains(strings.ToLower(message), "still mounted") {
 		r.StillMountedFailures++
 	}
@@ -88,6 +89,42 @@ func (p *Provider) failPending(ctx context.Context, rc *engine.Context, s *state
 	}
 	return fmt.Errorf("platform %s failed; retry scheduled", v.Action)
 }
+
+// failPendingCause retains backend reset constraints when platform operations
+// become durable retry records instead of discarding them with Error().
+func (p *Provider) failPendingCause(ctx context.Context, rc *engine.Context, s *state, v *pending, cause error) error {
+	var wait *engine.PlatformRetryWait
+	if errors.As(cause, &wait) || errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+		s.Pending, s.Retry = nil, nil
+		delete(s.PlatformRetries, retryKey(v))
+		if s.Rolling != nil && s.Rolling.Current == v.Member && (v.Action == "upgrade" || v.Action == "deploy") {
+			// Keep the same disruption owner and its recovery action, without
+			// charging a new failure or requiring the absent target to rejoin.
+			s.Retry = v
+			if wait != nil {
+				if s.PlatformRetries == nil {
+					s.PlatformRetries = make(map[string]*platformRetry)
+				}
+				r := &platformRetry{}
+				at := wait.RetryAt
+				if backendAt := infra.RetryAt(cause); backendAt.After(at) {
+					at = backendAt
+				}
+				r.RetryAfter = r.Schedule(now(rc), at)
+				s.PlatformRetries[retryKey(v)] = r
+			}
+		}
+		return cause
+	}
+	failure := p.failPending(ctx, rc, s, v, cause.Error())
+	if at := infra.RetryAt(cause); !at.IsZero() {
+		if r := s.PlatformRetries[retryKey(v)]; r != nil && at.After(r.RetryAfter) {
+			r.RetryAfter = r.Schedule(now(rc), at)
+		}
+		return errors.Join(failure, cause)
+	}
+	return failure
+}
 func (p *Provider) issueAction(ctx context.Context, rc *engine.Context, s *state, v *pending) error {
 	m := s.find(v.Member)
 	if m == nil {
@@ -137,7 +174,7 @@ func (p *Provider) issueAction(ctx context.Context, rc *engine.Context, s *state
 		if errors.Is(err, infra.ErrUnsupported) || errors.Is(err, engine.ErrNotSupported) {
 			return err
 		}
-		return p.failPending(ctx, rc, s, v, err.Error())
+		return p.failPendingCause(ctx, rc, s, v, err)
 	}
 	s.Pending = v
 	return nil
@@ -147,10 +184,32 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 	if v == nil {
 		return false, nil
 	}
+	var resizeErr error
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != stageJoined {
+		var changed bool
+		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, runtimeResources(m, component(rc.Cluster.Spec, m).Resources), &m.Resources, &v.Op)
+		if changed {
+			return true, nil
+		}
+	}
 	var status infra.OpState
-	if v.Op.ID != "" {
-		var err error
-		status, err = rc.Backend.OpStatus(ctx, v.Op)
+	if v.Op.ID != "" || resizeErr != nil {
+		err := resizeErr
+		if err == nil {
+			status, err = rc.Backend.OpStatus(ctx, v.Op)
+		}
+		if status.Status == "DeploymentRetriesExhausted" && err == nil {
+			err = &infra.DeploymentExhaustedError{Service: v.Member, LastError: status.Message}
+		}
+		if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
+			if m := s.find(v.Member); m != nil {
+				engine.ApplyDeploymentResourceRollback(err, &m.Resources)
+				if spec, specErr := p.deploymentSpec(rc, m, v.Version); specErr == nil {
+					err = engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, err)
+				}
+			}
+			return false, p.failPendingCause(ctx, rc, s, v, err)
+		}
 		if err != nil {
 			return true, err
 		}
@@ -179,6 +238,14 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 				m.Resources = v.Resources
 				m.Containers = v.Containers
 				m.Disk = component(rc.Cluster.Spec, m).Resources
+				if m.ImportPlan != nil {
+					for _, spec := range m.ImportPlan.Specs {
+						if spec.Hostname == m.Volume {
+							m.Disk.MinDisk, m.Disk.MaxDisk = spec.Resources.MinDisk, spec.Resources.MaxDisk
+						}
+					}
+				}
+				m.ImportPlan = nil
 				if rc.Store != nil && m.Volume != "" {
 					if err := rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); err != nil && !missing(err) {
 						return true, err
@@ -217,8 +284,16 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 	if v == nil {
 		return false, 0, nil
 	}
+	if m := s.find(v.Member); m != nil && (v.Action == "upgrade" || v.Action == "deploy") {
+		if spec, err := p.deploymentSpec(rc, m, v.Version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+			// Retain the action for a changed artifact or operator re-arm, but
+			// let independent observations and convergence continue.
+			return false, 0, nil
+		}
+	}
 	if r := s.PlatformRetries[retryKey(v)]; r != nil {
-		if delay := r.RetryAfter.Sub(now(rc)); delay > 0 {
+		recorded := now(rc)
+		if delay := r.RetryAfter.Sub(recorded); r.Waiting(recorded, r.RetryAfter) {
 			return true, delay, &engine.PlatformRetryWait{RetryAt: r.RetryAfter, Message: "waiting for scheduled platform retry"}
 		}
 	}
@@ -256,6 +331,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *stat
 	err := p.issueAction(ctx, rc, s, v)
 	return true, 5 * time.Second, err
 }
+
 func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *state, m *member) error {
 	if err := verifyMemberServices(ctx, rc, m); err != nil {
 		return err
@@ -266,11 +342,13 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 	}
 	comp := component(rc.Cluster.Spec, m)
 	specs := []infra.ServiceSpec{}
+	incomplete := false
 	if m.Volume != "" {
 		volume, err := rc.Backend.GetService(ctx, m.Volume)
 		if err != nil {
 			return err
 		}
+		incomplete = incomplete || volume != nil && volume.Importing
 		if volume == nil {
 			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, comp.Resources)
 			if old := s.find(m.Replaces); old != nil {
@@ -287,6 +365,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 	if err != nil {
 		return err
 	}
+	incomplete = incomplete || service != nil && service.Importing
 	containers := 1
 	if !isES(m) {
 		containers = comp.Replicas
@@ -295,17 +374,33 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *stat
 	if service == nil {
 		specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: r, Containers: containers}))
 	}
+	if incomplete && m.ImportPlan == nil {
+		return fmt.Errorf("%w: member %s has an incomplete import without its original durable batch; recover the original import plan before deployment", engine.ErrConflict, m.Name)
+	}
+	if m.ImportPlan != nil && (len(specs) > 0 || incomplete) {
+		specs = m.ImportPlan.Services(rc.Backend.Layout(), rc.Cluster.Name, m.Name, tok.Token)
+		for _, spec := range specs {
+			if spec.Hostname == m.Name {
+				r, containers = spec.Resources, spec.MinContainers
+			}
+		}
+	}
 	if len(specs) == 0 {
 		m.Stage = stageImported
+		m.ImportPlan = nil
 		m.Resources = r
 		m.Containers = containers
 		m.Disk = comp.Resources
 		return nil
 	}
-	op, err := rc.Backend.ImportServices(ctx, specs)
+	if m.ImportPlan == nil {
+		m.ImportPlan = engine.NewImportPlan(specs)
+		return nil // Commit the exact batch before a backend can reserve it.
+	}
+	op, err := m.ImportPlan.Submit(ctx, rc, m.Name, tok.Token)
 	v := &pending{Op: op, Action: "import", Member: m.Name, Resources: r, Containers: containers}
 	if err != nil {
-		return p.failPending(ctx, rc, s, v, err.Error())
+		return p.failPendingCause(ctx, rc, s, v, err)
 	}
 	s.Pending = v
 	return nil
@@ -317,21 +412,43 @@ func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *state, m *
 	if err := p.publishConfig(ctx, rc, s, m, version, ""); err != nil {
 		return err
 	}
+	spec, err := p.deploymentSpec(rc, m, version)
+	if err != nil {
+		return err
+	}
+	if action == "deploy" && m.Stage == stageImported {
+		desired := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, desired, m.Resources); changed || err != nil {
+			if err == nil {
+				s.Pending = &pending{Op: op, Action: "resources", Member: m.Name, Resources: desired, Version: version}
+			}
+			return err
+		}
+	}
+	op, err := engine.Deploy(ctx, rc, m.Name, spec)
+	v := &pending{Op: op, Action: action, Member: m.Name, Version: version}
+	if err != nil {
+		return p.failPendingCause(ctx, rc, s, v, err)
+	}
+	s.Pending = v
+	return nil
+}
+
+func (p *Provider) deploymentSpec(rc *engine.Context, m *member, version string) (infra.RuntimeSpec, error) {
 	url := rc.AgentURL
 	if url == "" {
 		url = p.options.ControlPlaneURL
 	}
 	spec, err := RuntimeSpec(rc.Backend.Layout(), RuntimeInput{Hostname: m.Name, Cluster: rc.Cluster.Name, Component: product(m), Version: version, Volume: m.Volume, AgentURL: url, InternalCAPEM: p.options.InternalCAPEM})
 	if err != nil {
-		return err
+		return spec, err
 	}
-	op, err := engine.Deploy(ctx, rc, m.Name, spec)
-	v := &pending{Op: op, Action: action, Member: m.Name, Version: version}
-	if err != nil {
-		return p.failPending(ctx, rc, s, v, err.Error())
+	if !isES(m) {
+		if args := engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=elasticsearch", "--data-dir="+rc.Backend.Layout().DataDir(m.Volume), product(m)); len(args) > 0 {
+			spec.Readiness.Args = append([]string{"agent", "readiness"}, args...)
+		}
 	}
-	s.Pending = v
-	return nil
+	return spec, nil
 }
 
 // componentConfigurationError is terminal for an applied generation, not for
@@ -341,7 +458,24 @@ type componentConfigurationError struct{ message string }
 func (e *componentConfigurationError) Error() string { return e.message }
 func (*componentConfigurationError) Unwrap() error   { return engine.ErrInvalid }
 
+// componentMemoryPressure is diagnostic, never a terminal configuration error.
+type componentMemoryPressure struct{ message string }
+
+func (e *componentMemoryPressure) Error() string { return e.message }
+
+// componentMemoryEvidenceUnavailable is an observation gap, not measured pressure.
+type componentMemoryEvidenceUnavailable struct{ message string }
+
+func (e *componentMemoryEvidenceUnavailable) Error() string { return e.message }
+
+// componentHeapExhausted is a retryable child failure, never invalid intent.
+type componentHeapExhausted struct{ message string }
+
+func (e *componentHeapExhausted) Error() string { return e.message }
+
 func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
 	var observation agentspec.Readiness
 	if err := a.Engine(ctx, "elasticsearch", "readiness", nil, &observation); err != nil {
 		return false, "Component application readiness unavailable", nil
@@ -352,6 +486,15 @@ func componentReadiness(ctx context.Context, a *agentapi.Client, m *member) (boo
 	if observation.ConfigurationError {
 		return false, observation.Message, &componentConfigurationError{message: observation.Message}
 	}
+	if !observation.Ready && observation.Component == agentspec.ComponentKibana && observation.HeapExhaustion != nil {
+		return false, observation.Message, &componentHeapExhausted{message: observation.Message}
+	}
+	if !observation.Ready && observation.MemoryPressure {
+		return false, observation.Message, &componentMemoryPressure{message: observation.Message}
+	}
+	if !observation.Ready && observation.MemoryPressureUnavailable {
+		return false, observation.Message, &componentMemoryEvidenceUnavailable{message: observation.Message}
+	}
 	return observation.Ready, observation.Message, nil
 }
 
@@ -360,34 +503,114 @@ func (p *Provider) componentReady(ctx context.Context, rc *engine.Context, m *me
 	return ready
 }
 
-func (p *Provider) componentReadyResult(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	a, err := p.agentClient(ctx, rc, m.Name)
-	if err != nil {
-		return false, nil
+func componentInstancesReady(ctx context.Context, rc *engine.Context, m *member, observed ...engine.InstanceInventory) (bool, string, error) {
+	return componentInstancesObservation(ctx, rc, m, observed)
+}
+
+func componentInstancesObservation(ctx context.Context, rc *engine.Context, m *member, observed []engine.InstanceInventory, observe ...func(string, agentapi.Status)) (bool, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var configurationErr *componentConfigurationError
+	replicas := max(m.Containers, component(rc.Cluster.Spec, m).Replicas)
+	probe := func(client *agentapi.Client) (bool, error) {
+		ready, message, nativeErr := componentReadiness(ctx, client, m)
+		if nativeErr != nil {
+			return false, nativeErr
+		}
+		if !ready && message != "" {
+			return false, errors.New(message)
+		}
+		return ready, nil
 	}
-	defer a.Close()
-	if !isES(m) {
-		ready, _, readinessErr := componentReadiness(ctx, a, m)
-		if readinessErr != nil {
-			warning := m.ConfigHash + "\n" + readinessErr.Error()
-			if m.ConfigurationWarning != warning {
-				if rc.Events != nil {
-					if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "ComponentConfigurationError", Message: m.Name + ": " + readinessErr.Error(), CreatedAt: now(rc)}); err != nil {
-						return false, err
-					}
-				}
-				m.ConfigurationWarning = warning
+	componentProbe := engine.ComponentProbe{Ready: probe}
+	if m.Kind == kindKibana {
+		componentProbe.Failed = func(client *agentapi.Client) error {
+			_, _, diagnostic := componentReadiness(ctx, client, m)
+			var heap *componentHeapExhausted
+			if errors.As(diagnostic, &heap) {
+				return heap
+			}
+			return nil
+		}
+	}
+	var ready bool
+	var err error
+	if len(observed) == 0 {
+		ready, err = engine.ComponentInstancesHealthy(ctx, rc, m.Name, replicas, m.ConfigVersion, componentProbe, observe...)
+	} else {
+		ready, err = engine.ComponentObservedInstancesHealthy(ctx, rc, m.Name, replicas, m.ConfigVersion, observed[0], componentProbe, observe...)
+	}
+	if err != nil {
+		errors.As(err, &configurationErr)
+		if configurationErr != nil {
+			// Preserve the typed refusal consumed by rolling reconciliation.
+			return false, err.Error(), &componentConfigurationError{message: err.Error()}
+		}
+		var pressure *componentMemoryPressure
+		var unavailable *componentMemoryEvidenceUnavailable
+		var diagnostic error
+		var heap *componentHeapExhausted
+		if errors.As(err, &heap) {
+			diagnostic = &componentHeapExhausted{message: err.Error()}
+		}
+		if errors.As(err, &pressure) {
+			diagnostic = errors.Join(diagnostic, &componentMemoryPressure{message: err.Error()})
+		}
+		if errors.As(err, &unavailable) {
+			diagnostic = errors.Join(diagnostic, &componentMemoryEvidenceUnavailable{message: err.Error()})
+		}
+		if diagnostic != nil {
+			return false, err.Error(), diagnostic
+		}
+		return false, err.Error(), nil
+	}
+	return ready, "", nil
+}
+
+func (p *Provider) componentReadyResult(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	if isES(m) {
+		a, err := p.agentClient(ctx, rc, m.Name)
+		if err != nil {
+			return false, nil
+		}
+		defer a.Close()
+		status, err := engine.ObserveAgentStatus(ctx, a, "Elasticsearch", m.Name)
+		if err != nil || status.Error != "" || status.ConfigVersion < m.ConfigVersion {
+			return false, nil
+		}
+		for _, process := range status.Processes {
+			if process.State == "paused" || process.Error != "" {
+				return false, nil
 			}
 		}
-		return ready, readinessErr
+		return strings.EqualFold(status.Processes[product(m)].State, "running"), nil
 	}
-	status, err := a.Status(ctx)
-	return err == nil && strings.EqualFold(status.Processes[product(m)].State, "running") && status.ConfigVersion >= m.ConfigVersion, nil
+	ready, _, readinessErr := componentInstancesReady(ctx, rc, m)
+	var pressure *componentMemoryPressure
+	var unavailable *componentMemoryEvidenceUnavailable
+	var heap *componentHeapExhausted
+	if errors.As(readinessErr, &pressure) || errors.As(readinessErr, &unavailable) || errors.As(readinessErr, &heap) {
+		// Pressure is a retryable native-readiness wait, not invalid intent.
+		return false, nil
+	}
+	if readinessErr != nil {
+		warning := m.ConfigHash + "\n" + readinessErr.Error()
+		if m.ConfigurationWarning != warning {
+			if rc.Events != nil {
+				if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Type: "Warning", Reason: "ComponentConfigurationError", Message: m.Name + ": " + readinessErr.Error(), CreatedAt: now(rc)}); err != nil {
+					return false, err
+				}
+			}
+			m.ConfigurationWarning = warning
+		}
+	}
+	return ready, readinessErr
 }
 
 // Sync makes at most one disruptive platform or database transition per call.
 func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
 	result.RequeueAfter = 5 * time.Second
+	rc.SyncWait = ""
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return result, err
@@ -401,8 +624,17 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			err = e
 		}
 	}()
+	if e := observeInitialRestore(ctx, rc, s); e != nil {
+		return result, e
+	}
 	if s.Phase == "ready" {
 		s.Phase = "updating"
+	}
+	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
+		return result, e
 	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return result, e
@@ -411,6 +643,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		if delay > 0 {
 			result.RequeueAfter = delay
 		}
+		return result, e
+	}
+	if changed, e := p.revokeComponentExposure(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
 	if s.UID == "" {
@@ -450,12 +685,16 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			s.ResumeRestoreReset = true
 			if s.InitialRestore == "initial-restore" {
 				s.InitialRestore = "abandoned"
+				s.InitialRestoreError = "deletion interrupted restore initial-restore; retained data may be incomplete"
 			}
 			p.bumpConfig(s)
 		}
 		s.Suspended = false
 		s.CleanupBackups = false
 		s.CleanupSecrets = false
+		s.BackupCleanupStarted = nil
+		s.CleanedRepositories = nil
+		s.RetainedRepositories = nil
 		for _, m := range s.Members {
 			m.Stage = stagePlanned
 		}
@@ -473,6 +712,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
 		return result, err
 	}
+	if busy, err := p.recoverRuntimes(ctx, rc, s); busy || err != nil {
+		return result, err
+	}
 	for _, m := range s.esNodes() {
 		if m.Removing {
 			if cancelled, e := p.cancelRemoval(ctx, rc, s, m); cancelled || e != nil {
@@ -484,6 +726,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		case stagePlanned:
 			return result, p.importMember(ctx, rc, s, m)
 		case stageImported:
+			if spec, err := p.deploymentSpec(rc, m, rc.Cluster.Spec.Version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+				continue
+			}
 			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		}
 	}
@@ -493,6 +738,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			case stagePlanned:
 				return result, p.importMember(ctx, rc, s, m)
 			case stageImported:
+				if spec, err := p.deploymentSpec(rc, m, rc.Cluster.Spec.Version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+					continue
+				}
 				return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 			}
 		}
@@ -507,9 +755,13 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, e
 	}
 	defer c.Close()
-	nodes, e := c.Nodes(ctx)
+	// Membership fans out to every JVM, including paused peers. Keep this
+	// read inside the observation cadence: Sync shares the status worker.
+	membership, cancelMembership := context.WithTimeout(ctx, 2*time.Second)
+	nodes, e := c.Nodes(membership)
+	cancelMembership()
 	if e != nil {
-		return result, e
+		return result, fmt.Errorf("elasticsearch convergence-membership read failed (2s budget): inspect member responsiveness/connectivity: %w", e)
 	}
 	missingMember := false
 	for _, m := range s.esNodes() {
@@ -580,7 +832,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.ResumeRestoreReset = false
 		return result, nil
 	}
-	if rc.Cluster.Spec.DataSource != nil && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
+	if rc.Cluster.Spec.DataSource != nil && !engine.InitialDataSourceUnproven(rc.Cluster) && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
 		if s.InitialRestore == "" {
 			d := rc.Cluster.Spec.DataSource
 			ns := d.Namespace
@@ -594,8 +846,8 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 					return result, engine.ErrConflict
 				}
 				s.InitialRestore = "initial-restore"
-				if existing.Phase == domain.PhaseSucceeded {
-					s.InitialRestore = "done"
+				if e = observeInitialRestore(ctx, rc, s); e != nil {
+					return result, e
 				}
 				return result, nil
 			}
@@ -674,11 +926,18 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if changed, e := p.expose(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
-	ok, e := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
+	h, e := c.Health(ctx, esapi.HealthOptions{})
 	if e != nil {
-		return result, e
+		rc.SyncWait = "Elasticsearch health probe failed; shard health is unavailable"
+		return result, &healthProbeError{cause: e, message: rc.SyncWait}
+	}
+	ok, e := healthAcceptable(ctx, c, h, rc.Cluster.Spec.Components.Engine.Replicas)
+	if e != nil {
+		rc.SyncWait = "Elasticsearch health probe failed while checking unassigned replica placement; " + healthShardCounts(h)
+		return result, &healthProbeError{cause: e, message: rc.SyncWait}
 	}
 	if !ok {
+		rc.SyncWait = healthConvergenceMessage(h)
 		s.Phase = "recovering"
 		return result, nil
 	}
@@ -688,6 +947,19 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			s.Phase = "components"
 			return result, readinessErr
 		}
+	}
+	for _, m := range s.componentMembers() {
+		m.NativeReadiness = nil
+	}
+	if rc.Cluster.Spec.DataSource != nil && s.InitialRestore == "abandoned" {
+		s.Phase = "restore-failed"
+		result.ConvergenceError = operationInvalid("initial snapshot restore was abandoned during deletion; retained data may be incomplete")
+		return result, nil
+	}
+	if engine.InitialDataSourceUnproven(rc.Cluster) {
+		s.Phase = "restore"
+		result.RequeueAfter = 30 * time.Second
+		return result, nil
 	}
 	s.Phase = "ready"
 	rc.Cluster.Status.Phase = domain.PhaseReady

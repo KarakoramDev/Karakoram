@@ -13,7 +13,6 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
-	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/xdg-go/scram"
 )
 
@@ -81,6 +80,8 @@ func TestManagedRoleRecoveryManifestCloneAndCurrentRotation(t *testing.T) {
 						t.Error(err)
 					}
 					switch request.Operation {
+					case "capabilities":
+						w.WriteHeader(http.StatusBadRequest)
 					case "list":
 						json.NewEncoder(w).Encode([]Role{{Name: "app", Login: true, ConnectionLimit: 42, MemberOf: []string{"pg_read_all_data"}}})
 					case "update":
@@ -175,9 +176,6 @@ func TestPITRRejectsUploadTimeBeforeAnyRestoreStop(t *testing.T) {
 	upload := start.Add(2 * time.Minute)
 	target := covered.Add(30 * time.Second)
 	rc.Cluster.Spec.Backup.PITR.Enabled = true
-	if err := rc.Store.(*store.Store).CreateCluster(t.Context(), rc.Cluster); err != nil {
-		t.Fatal(err)
-	}
 	b := &domain.Backup{Namespace: "default", Cluster: "demo", Name: "base", Storage: "archive", Provider: "postgres", Phase: domain.PhaseSucceeded, CompletedAt: &start, SourceVersion: rc.Cluster.Spec.Version, Postgres: &domain.PostgresBackup{Label: "20261017-021859F", Repository: "prefix/postgres/default/demo-incarnation", SystemID: "system"}}
 	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
 		t.Fatal(err)

@@ -25,6 +25,7 @@ type Namespace struct {
 	PreviousCertNotAfter   time.Time            `json:"previousCertNotAfter,omitempty"`
 	PendingOpID            string               `json:"pendingOpId,omitempty"`
 	PendingOpKind          string               `json:"pendingOpKind,omitempty"`
+	PendingOpStartedAt     time.Time            `json:"pendingOpStartedAt,omitempty"`
 	DeployedExecutableHash string               `json:"deployedExecutableHash,omitempty"`
 	OwnershipMarker        string               `json:"ownershipMarker,omitempty"`
 	PendingExecutableHash  string               `json:"pendingExecutableHash,omitempty"`

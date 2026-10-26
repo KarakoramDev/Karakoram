@@ -292,6 +292,15 @@ func TestPrivateDNSAndPublicEndpointModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("vip")
+	row := fakeAppSnapshot(t, f, "runtime")
+	update, ok := row["updateConfigSwarm"].(map[string]any)
+	if !ok || update["Order"] != "stop-first" {
+		t.Fatalf("public endpoint cutover must stop the old DNSRR task first: %#v", row["updateConfigSwarm"])
+	}
+	m, ok := parseMetadata(fakeString(row, "description"))
+	if !ok || m.Pending == nil || len(m.Pending.RestoreUpdateConfig) == 0 {
+		t.Fatalf("public endpoint cutover must journal restoration of its update policy: %+v", m.Pending)
+	}
 	deployFake(t, b, "runtime", "")
 	check("vip")
 	if err := b.DeletePublicPorts(t.Context(), "runtime"); err != nil {
@@ -952,7 +961,7 @@ func TestFakeQueuesDeploymentsAndReturnsEnvironmentSummaries(t *testing.T) {
 	}
 }
 
-func TestWipeSubmissionFailureCanBeRetried(t *testing.T) {
+func TestAmbiguousWipeSubmissionIsNotRetried(t *testing.T) {
 	f := newFakeAPI(t)
 	b := fakeBackend(t, f, nil)
 	importFake(t, b, volumeSpec("volume"))
@@ -969,9 +978,9 @@ func TestWipeSubmissionFailureCanBeRetried(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	awaitFake(t, b, op)
-	if fakeCalls(f, "application.deploy") != 2 {
-		t.Fatal("persistent wiping marker prevented explicit retry")
+	state, err := b.OpStatus(t.Context(), op)
+	if err != nil || state.Done || state.Failed || fakeCalls(f, "application.deploy") != 1 {
+		t.Fatal("ambiguous submission must retain its fence without resubmitting")
 	}
 }
 
@@ -999,7 +1008,10 @@ func TestWipeDeploymentFailureRetainsHolder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	awaitFake(t, b, retry)
+	state, err = b.OpStatus(t.Context(), retry)
+	if err != nil || !state.Failed || fakeCalls(f, "application.deploy") != 1 {
+		t.Fatal("terminal wipe deployment must not be resubmitted")
+	}
 }
 
 func TestReplacementVolumeReusesItsSpreadGroupNode(t *testing.T) {
@@ -1065,6 +1077,7 @@ func TestContainersAddressEveryStillRunningSwarmTask(t *testing.T) {
 			continue
 		}
 		app.holdTasks = true
+		f.services[fakeString(app.row, "appName")] = map[string]any{"ID": "proxy-service"}
 		app.tasks = []map[string]any{
 			{"containerId": "task-a", "name": "app.1", "state": "running", "currentState": "Running 1 minute ago"},
 			{"containerId": "task-b", "name": `\_ app.2`, "state": "shutdown", "currentState": "Running 1 minute ago"},

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
@@ -31,6 +32,35 @@ type IdempotencyRecord struct {
 	BodyHash string
 	Owner    string
 	Response *IdempotentResponse
+}
+
+type idempotentOperationKey struct{}
+type idempotentOperationCommit func(context.Context, executor, *domain.Operation) error
+
+// WithIdempotentOperation records a recovery response in the same transaction
+// as accepted work. The final handler response may subsequently replace it.
+// A crash or failed final response write therefore cannot erase acceptance.
+func (s *Store) WithIdempotentOperation(ctx context.Context, identity, owner string, build func(*domain.Operation) (IdempotentResponse, error)) context.Context {
+	commit := idempotentOperationCommit(func(ctx context.Context, db executor, op *domain.Operation) error {
+		response, err := build(op)
+		if err != nil {
+			return err
+		}
+		sealed, err := s.seal("idempotency/"+identity, response)
+		if err != nil {
+			return err
+		}
+		result, err := db.ExecContext(ctx, "UPDATE idempotency_requests SET response=?,expires=? WHERE identity=? AND owner=? AND response='' AND expires>?", sealed, time.Now().Add(IdempotencyTTL).UnixNano(), identity, owner, time.Now().UnixNano())
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err == nil && n == 0 {
+			return ErrConflict
+		}
+		return err
+	})
+	return context.WithValue(ctx, idempotentOperationKey{}, commit)
 }
 
 // IdempotencyBodyHash keys canonical request bodies independently of encryption
@@ -87,7 +117,7 @@ func (s *Store) BeginIdempotency(ctx context.Context, identity, bodyHash string,
 // RenewIdempotency extends only an unexpired reservation held by this owner.
 // A handler that loses its lease cannot revive it or overwrite its replacement.
 func (s *Store) RenewIdempotency(ctx context.Context, identity, owner string, now time.Time) error {
-	r, err := s.writer.ExecContext(ctx, "UPDATE idempotency_requests SET expires=? WHERE identity=? AND owner=? AND response='' AND expires>?", now.Add(IdempotencyLease).UnixNano(), identity, owner, now.UnixNano())
+	r, err := s.writer.ExecContext(ctx, "UPDATE idempotency_requests SET expires=CASE WHEN response='' THEN ? ELSE expires END WHERE identity=? AND owner=? AND expires>?", now.Add(IdempotencyLease).UnixNano(), identity, owner, now.UnixNano())
 	if err != nil {
 		return err
 	}
@@ -107,7 +137,7 @@ func (s *Store) CompleteIdempotency(ctx context.Context, identity, owner string,
 	if err != nil {
 		return err
 	}
-	r, err := s.writer.ExecContext(ctx, "UPDATE idempotency_requests SET response=?,expires=? WHERE identity=? AND owner=? AND response=''", sealed, now.Add(IdempotencyTTL).UnixNano(), identity, owner)
+	r, err := s.writer.ExecContext(ctx, "UPDATE idempotency_requests SET response=?,expires=? WHERE identity=? AND owner=?", sealed, now.Add(IdempotencyTTL).UnixNano(), identity, owner)
 	if err != nil {
 		return err
 	}

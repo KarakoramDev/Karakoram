@@ -81,10 +81,13 @@ case "$name" in
         python3 /root/extensions.py
         ;;
     supabase-edge-runtime)
-        GIT_V_TAG=v1.77.4 cargo build --profile release --features ""
+        # Upstream GitHub release asset digest; independently downloaded on two paths.
+        export RUSTY_V8_ARCHIVE=/root/librusty_v8_release_x86_64-unknown-linux-gnu.a.gz
+        export RUSTY_V8_SRC_BINDING_PATH=/root/src_binding_release_x86_64-unknown-linux-gnu.rs
+        GIT_V_TAG=v1.77.4 cargo build --locked --profile release --features ""
         cp target/release/edge-runtime "$stage/bin/"
         mkdir -p "$stage/app/main"
-        curl -fsSL https://raw.githubusercontent.com/supabase/supabase/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/docker/volumes/functions/main/index.ts -o "$stage/app/main/upstream-index.ts"
+        cp /root/edge-main-worker.ts "$stage/app/main/upstream-index.ts"
         python3 /root/worker.py "$stage/app/main/upstream-index.ts" "$stage/app/main/index.ts"
         cat > "$stage/bin/start" <<'EOF'
 #!/bin/sh
@@ -96,9 +99,22 @@ EOF
     supabase-realtime|supabase-supavisor|supabase-logflare)
         export MIX_ENV=prod
         export HEX_CACERTS_PATH=/etc/ssl/certs/ca-certificates.crt
+        if [ "$name" = supabase-realtime ]; then
+            # Tailwind v0.5.1 honors :path (not MIX_TAILWIND_PATH directly).
+            export MIX_TAILWIND_PATH=/root/tailwindcss-3.3.2-linux-x64
+            printf '\nconfig :tailwind, path: System.fetch_env!("MIX_TAILWIND_PATH")\n' >> config/config.exs
+        fi
         mix archive.install /root/hex-2.5.3.ez --force
         mix local.rebar rebar3 /root/rebar3-3.24.0 --force
         mix deps.get --only prod
+        if [ "$name" = supabase-logflare ]; then
+            # Dependency sources exist only after deps.get; patch before compilation.
+            patch=supabase-logflare-cainophile.patch
+            (cd /root && printf '%s\n' "0b27ac258324e7d0110b21533fca139f7277974fdfafca7a57a28e7f30abc27b  $patch" | sha256sum -c -)
+            git apply "/root/$patch"
+            cp "/root/$patch" "$stage/native-patches/"
+            (cd /root && sha256sum "$patch") >> "$stage/native-patches/SHA256SUMS"
+        fi
         mix deps.compile
         app=${name#supabase-}
         if [ "$app" = realtime ]; then

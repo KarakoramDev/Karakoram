@@ -25,6 +25,8 @@ const (
 	defaultCAValidity   = 10 * 365 * 24 * time.Hour
 	defaultCertValidity = 397 * 24 * time.Hour
 	clockSkew           = 5 * time.Minute
+	// LeafClockSkew tolerates modest clock differences without extending expiry.
+	LeafClockSkew = time.Hour
 )
 
 // CA holds a certificate authority and its unencrypted signing key. PEM values
@@ -130,10 +132,12 @@ func LoadCA(certPEM, keyPEM []byte) (*CA, error) {
 // CertRequest defines leaf identities and allowed TLS uses. MongoDB member
 // certificates must request both Server and Client for intra-cluster TLS.
 type CertRequest struct {
-	CommonName     string
-	DNSNames       []string
-	IPs            []net.IP
-	Validity       time.Duration
+	CommonName string
+	DNSNames   []string
+	IPs        []net.IP
+	Validity   time.Duration
+	// Now selects the issuer clock; zero uses the local wall clock.
+	Now            time.Time
 	Server, Client bool
 }
 
@@ -165,11 +169,18 @@ func (ca *CA) Issue(req CertRequest) (certPEM, keyPEM []byte, err error) {
 			return nil, nil, errors.New("empty DNS SAN")
 		}
 	}
-	now := time.Now().UTC().Truncate(time.Second)
-	if !now.Before(ca.Cert.NotAfter) || now.Before(ca.Cert.NotBefore) {
-		return nil, nil, errors.New("CA is not currently valid")
+	now := req.Now
+	if now.IsZero() {
+		now = time.Now()
 	}
-	notBefore := now.Add(-clockSkew)
+	now = now.UTC().Truncate(time.Second)
+	if now.Before(ca.Cert.NotBefore) {
+		return nil, nil, errors.New("CA is not yet valid; correct the system clock or restore the valid CA; automatic CA replacement is refused")
+	}
+	if !now.Before(ca.Cert.NotAfter) {
+		return nil, nil, errors.New("CA has expired; check the system clock and arrange coordinated CA migration; leaf renewal cannot extend CA validity")
+	}
+	notBefore := now.Add(-LeafClockSkew)
 	if notBefore.Before(ca.Cert.NotBefore) {
 		notBefore = ca.Cert.NotBefore
 	}
@@ -208,7 +219,7 @@ func (ca *CA) Issue(req CertRequest) (certPEM, keyPEM []byte, err error) {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), keyPEM, nil
 }
 
-// NeedsRenewal reports whether the certificate expires at or before now+before.
+// NeedsRenewal reports whether the leaf is not yet valid or expires at or before now+before.
 func NeedsRenewal(certPEM []byte, before time.Duration, now time.Time) (bool, error) {
 	if before < 0 {
 		return false, errors.New("renewal window must not be negative")
@@ -217,7 +228,7 @@ func NeedsRenewal(certPEM []byte, before time.Duration, now time.Time) (bool, er
 	if err != nil {
 		return false, err
 	}
-	return !cert.NotAfter.After(now.Add(before)), nil
+	return now.Before(cert.NotBefore) || !cert.NotAfter.After(now.Add(before)), nil
 }
 
 func parseCertificate(data []byte) (*x509.Certificate, error) {

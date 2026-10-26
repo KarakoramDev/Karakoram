@@ -42,7 +42,7 @@ func TestFakeStartOnlyScalesToOne(t *testing.T) {
 	}
 }
 
-func TestImportMountFailureRollsBackPartialApplication(t *testing.T) {
+func TestImportMountFailureRetainsResumableApplication(t *testing.T) {
 	for _, preexisting := range []bool{false, true} {
 		t.Run(map[bool]string{false: "holder", true: "runtime"}[preexisting], func(t *testing.T) {
 			f := newFakeAPI(t)
@@ -62,12 +62,15 @@ func TestImportMountFailureRollsBackPartialApplication(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := 0
+			want := 1
 			if preexisting {
-				want = 1
+				want = 2
 			}
 			if len(services) != want {
-				t.Fatalf("failed import left partially managed service(s): %+v", services)
+				t.Fatalf("failed import lost its durable creation receipt: %+v", services)
+			}
+			if fakeCalls(f, "application.delete") != 0 {
+				t.Fatal("partial import deleted its resumable ownership receipt")
 			}
 			importFake(t, b, specs...)
 			holder := fakeAppSnapshot(t, f, "volume")
@@ -84,7 +87,7 @@ func TestImportMountFailureRollsBackPartialApplication(t *testing.T) {
 	}
 }
 
-func TestDoneDeploymentFailedWipeTaskCanRetry(t *testing.T) {
+func TestDoneDeploymentFailedWipeTaskDoesNotRetry(t *testing.T) {
 	f := newFakeAPI(t)
 	b := fakeBackend(t, f, nil)
 	importFake(t, b, volumeSpec("volume"))
@@ -108,9 +111,9 @@ func TestDoneDeploymentFailedWipeTaskCanRetry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	awaitFake(t, b, retry)
-	if fakeCalls(f, "application.deploy") != 2 {
-		t.Fatal("done deployment with failed wipe task was not resubmitted")
+	state, err = b.OpStatus(t.Context(), retry)
+	if err != nil || !state.Failed || fakeCalls(f, "application.deploy") != 1 {
+		t.Fatal("failed wipe must remain terminal without resubmission")
 	}
 }
 
@@ -321,10 +324,12 @@ func TestFailedUploadDoesNotMarkServiceDeployed(t *testing.T) {
 		t.Fatal("failed first upload left deployed metadata")
 	}
 	s, err := b.GetService(t.Context(), "runtime")
-	if err != nil || s == nil || s.Status != infra.StatusReadyToDeploy {
-		t.Fatalf("failed first upload service: %+v %v", s, err)
+	if err != nil || s == nil || s.Status != infra.StatusCreating {
+		t.Fatalf("ambiguous first upload service: %+v %v", s, err)
 	}
-	deployFake(t, b, "runtime", "")
+	if op, err := b.Deploy(t.Context(), "runtime", testDeployment(t, "")); err != nil || op.ID == "" || fakeCalls(f, "application.dropDeployment") != 1 {
+		t.Fatalf("ambiguous upload did not recover its original attempt without replay: %+v %v", op, err)
+	}
 }
 
 func TestExistingExternalOverlayIsTolerated(t *testing.T) {
@@ -617,6 +622,182 @@ func TestDataNodeLabelsExcludeUnlabelledFallback(t *testing.T) {
 			}
 			if fakeCalls(f, "application.create") != 0 {
 				t.Fatal("unavailable data tier created a partial volume holder")
+			}
+		})
+	}
+}
+
+func TestScaleBackUsesTemporaryStopFirstWithoutSpareCapacity(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	spec := runtimeSpec("runtime", "")
+	spec.MinContainers, spec.MaxContainers = 2, 2
+	id := importFake(t, b, spec).Services["runtime"]
+	deployFake(t, b, "runtime", "")
+	f.mu.Lock()
+	f.apps[id].taskCapacity = 2
+	f.mu.Unlock()
+	up, err := b.SetContainerCount(t.Context(), "runtime", 3, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := b.OpStatus(t.Context(), up)
+	if err != nil || state.Done || state.Failed {
+		t.Fatalf("scale-up should be placement blocked: %+v %v", state, err)
+	}
+	down, err := b.SetContainerCount(t.Context(), "runtime", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if policy := fakeAppSnapshot(t, f, "runtime")["updateConfigSwarm"].(map[string]any); policy["Parallelism"] != float64(1) {
+		t.Fatalf("ordinary scale-back must remain a per-slot update: %#v", policy)
+	}
+	b = fakeBackend(t, f, nil)
+	awaitFake(t, b, roundTripOp(t, down))
+	f.mu.Lock()
+	orders := append([]string(nil), f.apps[id].reloadOrders...)
+	f.mu.Unlock()
+	if len(orders) != 2 || orders[0] != "start-first" || orders[1] != "stop-first" {
+		t.Fatalf("unexpected rollout request sequence: %v", orders)
+	}
+	row := fakeAppSnapshot(t, f, "runtime")
+	if policy := row["updateConfigSwarm"].(map[string]any); policy["Order"] != "start-first" {
+		t.Fatalf("temporary policy was not restored without reload: %v", policy)
+	}
+	if metadata := fakeMeta(t, f, "runtime"); metadata.Pending != nil || metadata.Max != 2 {
+		t.Fatalf("scale-back did not finish durably: %+v", metadata)
+	}
+	f.mu.Lock()
+	f.apps[id].taskCapacity = 0
+	f.mu.Unlock()
+	update, err := b.SetResources(t.Context(), "runtime", infra.Resources{MinCPU: 1, MaxCPU: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitFake(t, b, update)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if orders := f.apps[id].reloadOrders; len(orders) != 3 || orders[2] != "start-first" {
+		t.Fatalf("ordinary specification change inherited stop-first: %v", orders)
+	}
+}
+
+func TestScaleBackPreservesStartFirstForSingletonAndPendingSpecification(t *testing.T) {
+	for _, scenario := range []string{"singleton", "pending-specification", "staged-environment"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := newFakeAPI(t)
+			b := fakeBackend(t, f, nil)
+			spec := runtimeSpec("runtime", "")
+			spec.MinContainers, spec.MaxContainers = 2, 2
+			id := importFake(t, b, spec).Services["runtime"]
+			deployFake(t, b, "runtime", "")
+			f.mu.Lock()
+			f.apps[id].taskCapacity = 2
+			f.mu.Unlock()
+			target := 1
+			if scenario == "pending-specification" {
+				target = 2
+				if _, err := b.SetResources(t.Context(), "runtime", infra.Resources{MinCPU: 1, MaxCPU: 2}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario == "staged-environment" {
+				target = 2
+				if err := b.SetEnvVars(t.Context(), "runtime", map[string]string{"EXAMPLE_SETTING": "changed"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			op, err := b.SetContainerCount(t.Context(), "runtime", target, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err := b.OpStatus(t.Context(), op)
+			if err != nil || state.Done || state.Failed {
+				t.Fatalf("unplaceable safe update should wait: %+v %v", state, err)
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			orders := f.apps[id].reloadOrders
+			if len(orders) == 0 || orders[len(orders)-1] != "start-first" {
+				t.Fatalf("unsafe stop-first update: %v", orders)
+			}
+		})
+	}
+}
+
+func TestLifecycleSupersessionRestoresScaleBackPolicyAndReceipt(t *testing.T) {
+	for _, action := range []string{"start", "restart", "stop-start"} {
+		t.Run(action, func(t *testing.T) {
+			f := newFakeAPI(t)
+			b := fakeBackend(t, f, nil)
+			spec := runtimeSpec("runtime", "")
+			spec.MinContainers, spec.MaxContainers = 2, 2
+			id := importFake(t, b, spec).Services["runtime"]
+			deployFake(t, b, "runtime", "")
+			applied := fakeMeta(t, f, "runtime").AppliedSpecification
+			if !strings.HasPrefix(applied, "hmac-sha256:v1:") {
+				t.Fatalf("specification receipt is not keyed: %q", applied)
+			}
+			f.mu.Lock()
+			f.apps[id].taskCapacity = 2
+			f.mu.Unlock()
+			if _, err := b.SetContainerCount(t.Context(), "runtime", 3, 3); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := b.SetContainerCount(t.Context(), "runtime", 2, 2); err != nil {
+				t.Fatal(err)
+			}
+			if pending := fakeMeta(t, f, "runtime").Pending; pending == nil || len(pending.RestoreUpdateConfig) == 0 {
+				t.Fatal("scale-back did not retain its temporary policy")
+			}
+			f.mu.Lock()
+			f.apps[id].taskCapacity = 0
+			f.mu.Unlock()
+			b = fakeBackend(t, f, nil)
+			if action == "stop-start" {
+				stop, err := b.Stop(t.Context(), "runtime")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if policy := fakeAppSnapshot(t, f, "runtime")["updateConfigSwarm"].(map[string]any); policy["Order"] != "start-first" {
+					t.Fatalf("Stop lost policy restoration: %v", policy)
+				}
+				awaitFake(t, b, stop)
+				if got := fakeMeta(t, f, "runtime").AppliedSpecification; got != applied {
+					t.Fatalf("Stop erased the applied receipt: %q", got)
+				}
+				b = fakeBackend(t, f, nil)
+			}
+			if err := b.SetEnvVars(t.Context(), "runtime", map[string]string{"EXAMPLE_SETTING": "next"}); err != nil {
+				t.Fatal(err)
+			}
+			var op infra.Op
+			var err error
+			if action == "restart" {
+				op, err = b.Restart(t.Context(), "runtime")
+			} else {
+				op, err = b.Start(t.Context(), "runtime")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			requested := fakeMeta(t, f, "runtime")
+			if requested.Pending == nil || requested.Pending.Specification == "" || requested.Pending.Specification == applied {
+				t.Fatal("lifecycle reload did not record its changed requested specification")
+			}
+			if requested.AppliedSpecification != applied {
+				t.Fatal("lifecycle reload installed its receipt before completion")
+			}
+			want := requested.Pending.Specification
+			awaitFake(t, fakeBackend(t, f, nil), roundTripOp(t, op))
+			if got := fakeMeta(t, f, "runtime").AppliedSpecification; got != want {
+				t.Fatalf("successful lifecycle reload lost its receipt: got=%q want=%q", got, want)
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			orders := f.apps[id].reloadOrders
+			if len(orders) == 0 || orders[len(orders)-1] != "start-first" {
+				t.Fatalf("superseding lifecycle used stale stop-first policy: %v", orders)
 			}
 		})
 	}

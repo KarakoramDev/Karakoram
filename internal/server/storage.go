@@ -8,8 +8,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"github.com/KarakoramDev/Karakoram/internal/store"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -18,9 +19,15 @@ func storageAPI(b domain.BackupStorage) api.BackupStorage {
 	configured := b.Credentials.AccessKeyID != "" && b.Credentials.SecretAccessKey != ""
 	out := api.BackupStorage{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Type: api.BackupStorageType(b.Type), EndpointURL: b.EndpointURL, Region: b.Region, Bucket: b.Bucket, Prefix: &b.Prefix, ForcePathStyle: b.ForcePathStyle, VerifyTLS: b.VerifyTLS, Description: &b.Description, CredentialsConfigured: &configured}
 	if v := b.Verification; v != nil {
-		out.Verification = &api.StorageVerification{Verified: v.Verified, CheckedAt: v.CheckedAt, Message: v.Message}
+		out.Verification = &api.StorageVerification{Verified: v.Verified, CheckedAt: v.CheckedAt, Message: redact.Diagnostic(v.Message)}
 		if v.FailureReason != "" {
 			out.Verification.FailureReason = ptr(api.StorageVerificationFailureReason(v.FailureReason))
+		}
+	}
+	if b.Type == "s3" {
+		if _, err := s3endpoint.Parse(b.EndpointURL); err != nil {
+			reason := api.StorageVerificationFailureReason("endpoint_not_allowed")
+			out.Verification = &api.StorageVerification{Verified: false, CheckedAt: time.Now().UTC(), FailureReason: &reason, Message: err.Error()}
 		}
 	}
 	return out
@@ -45,11 +52,10 @@ func validateStorage(b domain.BackupStorage, create bool) error {
 	if b.Type != "s3" {
 		return domain.InvalidField("type", domain.ReasonUnsupported, "type must be s3")
 	}
-	u, err := url.Parse(b.EndpointURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return domain.InvalidField("endpointURL", domain.ReasonInvalid, "endpointURL must be an HTTP(S) URL without credentials, query or fragment")
+	if _, err := s3endpoint.Parse(b.EndpointURL); err != nil {
+		return domain.InvalidField("endpointURL", domain.ReasonInvalid, "%s", err.Error())
 	}
-	return nil
+	return domain.ValidateBackupStoragePrefix(b.Prefix)
 }
 func (s *Server) storage(ctx context.Context, name string, in input) response {
 	namespace := domain.NormalizedNamespace(namespaceFilter(ctx))

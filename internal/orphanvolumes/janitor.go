@@ -167,6 +167,7 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 		st, err := backend.OpStatus(ctx, infra.Op{ID: v.LastProcessID, Kind: "delete", ServiceID: v.ServiceID})
 		if err != nil {
 			// A polling error is not a failed delete: preserve the in-flight fence.
+			v.LastError = fmt.Sprintf("Cannot inspect delete process %q for service %q; inspect the namespace backend operation; deletion remains fenced until its outcome or service absence is confirmed", v.LastProcessID, v.ServiceID)
 			v.NextAttemptAt = j.Now().Add(InitialBackoff)
 			if saveErr := j.Store.PutOrphanedVolume(ctx, v); saveErr != nil {
 				return saveErr
@@ -188,6 +189,18 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 				return j.removed(ctx, v, true)
 			}
 			return j.failed(ctx, v, "delete process completed but volume still exists")
+		}
+		if v.LastAttemptAt.IsZero() {
+			v.LastAttemptAt = j.Now()
+		}
+		if j.Now().Sub(v.LastAttemptAt) >= 15*time.Minute {
+			message := fmt.Sprintf("Delete process %q for service %q has not finished for at least 15 minutes; inspect or cancel it in the namespace backend; deletion remains fenced until its terminal outcome or service absence is confirmed", v.LastProcessID, v.ServiceID)
+			if v.LastError != message {
+				v.LastError = message
+				if err := j.event(ctx, v, "Warning", "OrphanedVolumeDeleteStuck", message); err != nil {
+					return err
+				}
+			}
 		}
 		v.NextAttemptAt = j.Now().Add(PollInterval)
 		return j.Store.PutOrphanedVolume(ctx, v)

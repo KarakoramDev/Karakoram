@@ -9,6 +9,7 @@ import type { Schemas } from '@/api/client';
 test('every storage verification failure reason has a human-readable label', () => {
   assert.equal(storageFailureLabel('access_denied'), 'Access denied');
   assert.equal(storageFailureLabel('bucket_not_found'), 'Bucket not found');
+  assert.equal(storageFailureLabel('clock_skew'), 'Host clock out of sync');
   assert.equal(storageFailureLabel('endpoint_not_allowed'), 'Endpoint not allowed');
   assert.equal(storageFailureLabel('tls_error'), 'TLS verification failed');
   assert.equal(storageFailureLabel('unreachable'), 'Endpoint unreachable');

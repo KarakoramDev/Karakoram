@@ -52,7 +52,7 @@ func validateSupabaseFunction(files map[string]string) error {
 func (s *Server) supabase(ctx context.Context, name string, in input, rc *engine.Context, p engine.Provider) response {
 	access, yes := p.(supabaseAccess)
 	if p.Name() != "supabase" || !yes {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, p)
 	}
 	if in.Name != "" && !supabaseFunctionName.MatchString(in.Name) {
 		return invalidField("name", domain.ReasonInvalid, "invalid function name")

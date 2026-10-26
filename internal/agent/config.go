@@ -94,6 +94,12 @@ func RenderConfig(c agentapi.MemberConfig, dataDir string) ([]byte, error) {
 }
 
 func atomicWrite(path string, data []byte, mode os.FileMode) error {
+	// Identical durable files remain usable on read-only/full filesystems.
+	if stat, err := os.Lstat(path); err == nil && stat.Mode().IsRegular() && stat.Mode().Perm() == mode.Perm() {
+		if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, data) {
+			return nil
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}

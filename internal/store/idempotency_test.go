@@ -227,6 +227,7 @@ func TestIdempotencyLeaseMigration(t *testing.T) {
 	if _, err := s.writer.ExecContext(ctx, string(script)); err != nil {
 		t.Fatal(err)
 	}
+	migrated := time.Now()
 	for _, identity := range []string{"legacy", "short", "completed"} {
 		var expiry int64
 		if err := s.reader.QueryRowContext(ctx, "SELECT expires FROM idempotency_requests WHERE identity=?", identity).Scan(&expiry); err != nil {
@@ -234,7 +235,7 @@ func TestIdempotencyLeaseMigration(t *testing.T) {
 		}
 		switch identity {
 		case "legacy":
-			if expiry > now.Add(IdempotencyLease).UnixNano() || expiry <= now.UnixNano() {
+			if expiry > migrated.Add(IdempotencyLease).UnixNano() || expiry <= now.UnixNano() {
 				t.Fatal("legacy reservation not bounded by lease", expiry)
 			}
 		case "short":

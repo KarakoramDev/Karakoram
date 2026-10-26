@@ -5,15 +5,19 @@ package namespaces
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 func TestTokenValidationRetainsKnownValidity(t *testing.T) {
@@ -122,5 +126,126 @@ func TestTokenReplacementOutageDoesNotReplaceCredentials(t *testing.T) {
 	token, err := r.o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)
 	if err != nil || token != "valid-token" {
 		t.Fatal("failed rotation replaced credentials", err)
+	}
+}
+
+func TestAutomaticValidationClassifiesCredentialReadFailures(t *testing.T) {
+	for _, failure := range []string{"store", "missing", "version", "encoding", "truncated", "authentication"} {
+		t.Run(failure, func(t *testing.T) {
+			r, _, log := setupRegistry(t)
+			ctx := t.Context()
+			path := filepath.Join(t.TempDir(), "state.db")
+			key, err := secrets.New(strings.Repeat("k", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			st, err := store.Open(path, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer st.Close()
+			r.o.Store = st
+			n := createTestNamespace(t, r)
+			n.Token.LastValidatedAt = time.Now().UTC().Add(-10 * time.Minute)
+			n.Token.LastError = "Previous diagnostic"
+			n.Phase, n.Relay.Phase = "Pending", "Pending"
+			// Isolate periodic validation from relay provisioning.
+			n.RetryAt = time.Now().Add(time.Hour)
+			if err := st.UpdateNamespace(ctx, n); err != nil {
+				t.Fatal(err)
+			}
+			before := n.Token
+			db, err := sql.Open("sqlite", path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			switch failure {
+			case "store":
+				// Fail the secret SELECT after the namespace SELECT succeeds.
+				_, err = db.Exec("ALTER TABLE records RENAME TO unavailable_records")
+			case "missing":
+				err = st.DeleteNamespaceToken(ctx, n)
+			default:
+				sealed := "unsupported"
+				switch failure {
+				case "encoding":
+					sealed = "kk:v1:!"
+				case "truncated":
+					sealed = "kk:v1:YQ"
+				case "authentication":
+					otherKey, e := secrets.New(strings.Repeat("x", 32))
+					if e != nil {
+						t.Fatal(e)
+					}
+					sealed, err = otherKey.SealFor("namespace/"+n.Name+"/token", []byte("private-token"))
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				_, err = db.Exec("UPDATE records SET secret=? WHERE kind='namespace-secret' AND scope=?", sealed, n.Name)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, readErr := st.GetNamespaceTokenForUpdate(ctx, n.Name)
+			if readErr == nil {
+				t.Fatal("credential read did not fail")
+			}
+			switch failure {
+			case "store":
+				if errors.Is(readErr, store.ErrNotFound) || errors.Is(readErr, store.ErrSecretUnreadable) {
+					t.Fatalf("store failure classified as credential failure: %v", readErr)
+				}
+			case "missing":
+				if !errors.Is(readErr, store.ErrNotFound) {
+					t.Fatalf("missing credential classification: %v", readErr)
+				}
+			default:
+				if !errors.Is(readErr, store.ErrSecretUnreadable) {
+					t.Fatalf("unreadable credential classification: %v", readErr)
+				}
+			}
+			validations := 0
+			factory := registryFactory(r.o.Backends)
+			validate := factory.validate
+			factory.validate = func(ctx context.Context, target infra.Target) (Backend, infra.Project, error) {
+				validations++
+				return validate(ctx, target)
+			}
+			r.step(ctx, n.Name)
+			after, err := st.GetNamespaceForUpdate(ctx, n.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if validations != 0 {
+				t.Fatal("backend validation ran without readable credentials")
+			}
+			failedEvents := 0
+			for _, reason := range log.reasons {
+				if reason == "NamespaceValidationFailed" {
+					failedEvents++
+				}
+			}
+			if failure == "store" {
+				if after.Token != before || after.Phase != n.Phase || failedEvents != 0 {
+					t.Fatalf("store failure changed token health or phase: before=%+v after=%+v phase=%s events=%d", before, after.Token, after.Phase, failedEvents)
+				}
+				if _, err := db.Exec("ALTER TABLE unavailable_records RENAME TO records"); err != nil {
+					t.Fatal(err)
+				}
+				// No five-minute wait: recovery is validated on the very next step.
+				r.step(ctx, n.Name)
+				after, err = st.GetNamespaceForUpdate(ctx, n.Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if validations != 1 || !after.Token.Valid || !after.Token.LastValidatedAt.After(before.LastValidatedAt) || after.Token.LastError != "" || after.Phase != n.Phase {
+					t.Fatalf("next step did not validate recovered credentials: %+v validations=%d", after, validations)
+				}
+			} else if after.Token.Valid || after.Phase != "Error" || !after.Token.LastValidatedAt.After(before.LastValidatedAt) || !strings.Contains(after.Token.LastError, "Stored project credentials are unavailable") || failedEvents != 1 {
+				t.Fatalf("genuine credential failure did not invalidate: %+v events=%d", after, failedEvents)
+			}
+		})
 	}
 }

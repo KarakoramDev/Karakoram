@@ -230,7 +230,8 @@ func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, h
 	getCertificate := func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		if cert.Leaf != nil && cert.Leaf.NotAfter.After(time.Now().Add(30*24*time.Hour)) {
+		now := time.Now()
+		if cert.Leaf != nil && !now.Before(cert.Leaf.NotBefore) && cert.Leaf.NotAfter.After(now.Add(30*24*time.Hour)) {
 			return &cert, nil
 		}
 		ca, err := pki.LoadCA(identity.CACert, identity.CAKey)
@@ -252,6 +253,12 @@ func internalTLS(ctx context.Context, st *store.Store, sealer *secrets.Sealer, h
 			renewalCtx = ctx
 		}
 		if err := persistInternalIdentity(renewalCtx, st, sealer, renewed); err != nil {
+			// Renewal storage failure must not interrupt a still-valid identity.
+			// Never use this continuity fallback after expiry or before NotBefore.
+			currentTime := time.Now()
+			if cert.Leaf != nil && !currentTime.Before(cert.Leaf.NotBefore) && currentTime.Before(cert.Leaf.NotAfter) {
+				return &cert, nil
+			}
 			return nil, err
 		}
 		identity, cert = renewed, next

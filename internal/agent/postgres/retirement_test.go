@@ -50,6 +50,8 @@ func TestRetirementClusterTags(t *testing.T) {
 	}{
 		{`{"nofailover":true,"noloadbalance":true}`, true},
 		{`{"nofailover":true,"noloadbalance":true,"clonefrom":false,"failover_priority":0}`, true},
+		{`{"noloadbalance":true,"failover_priority":0}`, true},
+		{`{"nofailover":false,"noloadbalance":true,"failover_priority":0}`, false},
 		{`{"nofailover":true,"noloadbalance":true,"clonefrom":true}`, false},
 		{`{"nofailover":true}`, false},
 		{`{}`, false},

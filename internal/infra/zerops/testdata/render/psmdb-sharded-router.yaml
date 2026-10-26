@@ -5,7 +5,7 @@ zerops:
                 command: /var/www/karakoram agent readiness
             failureTimeout: 300s
             retryPeriod: 10s
-        temporaryShutdown: true
+        temporaryShutdown: false
       run:
         base: ubuntu@24.04
         envVariables:

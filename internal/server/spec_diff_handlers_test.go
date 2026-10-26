@@ -73,10 +73,10 @@ func TestSpecChangeHandlersMaskTLSAndOpaqueConfig(t *testing.T) {
 				if i == 0 {
 					expected = 3
 				}
-				if c.Spec.Backup.Schedules == nil {
+				if method == "PUT" && c.Spec.Backup.Schedules == nil {
 					expected++
 				}
-				if c.Spec.Exposure.Allowlist == nil {
+				if method == "PUT" && c.Spec.Exposure.Allowlist == nil {
 					expected++
 				}
 				if len(details.Changes) != expected {

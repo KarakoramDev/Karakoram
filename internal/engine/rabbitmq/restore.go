@@ -14,6 +14,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/minio/minio-go/v7"
 )
 
@@ -100,11 +101,17 @@ func (p *Provider) importDefinitionsBackup(ctx context.Context, rc *engine.Conte
 	defer closeClient()
 	object, err := client.GetObject(ctx, s.Bucket, b.Location, minio.GetObjectOptions{})
 	if err != nil {
+		if definitionsMissingObject(err) {
+			return engine.InvalidField("source.backup", domain.ReasonNotFound, "Source definitions backup object is no longer available in storage; select another successful backup and retry the restore")
+		}
 		return definitionsS3Error("download", err)
 	}
 	defer object.Close()
 	// Surface S3 failures separately from corrupt gzip payloads (GetObject is lazy).
 	if _, err = object.Stat(); err != nil {
+		if definitionsMissingObject(err) {
+			return engine.InvalidField("source.backup", domain.ReasonNotFound, "Source definitions backup object is no longer available in storage; select another successful backup and retry the restore")
+		}
 		return definitionsS3Error("download", err)
 	}
 	reader, err := gzip.NewReader(io.LimitReader(object, maxDefinitionsBytes+1))
@@ -187,12 +194,17 @@ func (p *Provider) restoreOp(ctx context.Context, rc *engine.Context, op *domain
 	case "import":
 		if e := p.importDefinitionsBackup(ctx, rc, b); e != nil {
 			var invalid *invalidDefinitionsError
+			var field *engine.ValidationError
 			switch {
 			case errors.As(e, &invalid):
 				cp.Failure = invalid.Error()
+			case errors.As(e, &field):
+				cp.Failure = e.Error()
 			case errors.Is(e, engine.ErrInvalid):
 				cp.Failure = "RabbitMQ rejected definitions import"
 			default:
+				// Transport/backend failures leave the import checkpoint retryable;
+				// only validated invalid definitions populate Failure.
 				return definitionsResult(cp), e
 			}
 			cp.Step = "failed"
@@ -242,6 +254,16 @@ func definitionsRestoreEvent(ctx context.Context, rc *engine.Context, op *domain
 	return rc.Events.Record(ctx, domain.Event{Namespace: r.SourceNamespace, Cluster: source, Operation: op.ID, Type: kind, Reason: reason, Message: message + " into " + rc.Cluster.Ref().Namespace + "/" + rc.Cluster.Name, CreatedAt: now(rc)})
 }
 
+// InitialDataSourceApplied reports the durable definitions-import receipt, not
+// broker health or the generation at which provisioning happened.
+func (*Provider) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := loadState(c)
+	if err != nil {
+		return false, err
+	}
+	return s.CloneImported, nil
+}
+
 // cloneStep runs after bootstrap and readiness. A persisted successful import is
 // never repeated; an interrupted import may be safely replayed because definitions
 // merge by object identity. Message contents are not part of this backup type.
@@ -253,12 +275,19 @@ func (p *Provider) cloneStep(ctx context.Context, rc *engine.Context) (bool, err
 	if rc.Cluster.Spec.DataSource == nil || s.CloneImported {
 		return true, nil
 	}
+	if engine.InitialDataSourceUnproven(rc.Cluster) {
+		return false, nil
+	}
 	source := rc.Cluster.Spec.DataSource
 	if source.PITRTime != nil {
 		return false, errors.New("RabbitMQ definitions clone does not support PITR")
 	}
 	b, err := definitionsSource(ctx, rc, domain.ClusterRef{Namespace: source.Namespace, Name: source.Cluster}, source.Backup)
 	if err != nil {
+		return false, err
+	}
+	// Atomically fence mutation/supersession before the first native import.
+	if err = rc.Store.ClaimInitialDataSource(store.WithClusterSnapshot(ctx, rc.Cluster), rc.Cluster.Ref()); err != nil {
 		return false, err
 	}
 	if err = p.importDefinitionsBackup(ctx, rc, b); err != nil {

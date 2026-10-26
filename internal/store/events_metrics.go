@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 // EventFilter selects a durable event page. Pages are ascending from SinceID
@@ -118,10 +119,10 @@ func (s *Store) ListEvents(ctx context.Context, filter EventFilter) ([]domain.Ev
 		if err = rows.Scan(&id, &namespace, &data, &details); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(data, &v); err != nil {
+		if err = json.Unmarshal(redact.DiagnosticsJSON(data), &v); err != nil {
 			return nil, err
 		}
-		v.Details = json.RawMessage(details)
+		v.Details = redact.EventDetailsJSON(json.RawMessage(details))
 		v.ID = id
 		v.Namespace = namespace
 		out = append(out, v)
@@ -212,11 +213,27 @@ func (s *Store) QueryMetricSamples(ctx context.Context, q MetricQuery) ([]domain
 	return out, rows.Err()
 }
 
-// PruneMetricSamples removes expired metric samples.
+// MetricPruneMaxRows bounds one sweep. A caller seeing this count should
+// schedule another bounded sweep without waiting for the next scrape interval.
+const MetricPruneMaxRows = 4096
+
+// PruneMetricSamples yields the writer between small indexed batches and leaves
+// excess work for the next sweep. Its own deadline also bounds pool admission
+// when the caller is the long-lived monitoring controller.
 func (s *Store) PruneMetricSamples(ctx context.Context, before time.Time) (int64, error) {
-	r, err := s.writer.ExecContext(ctx, "DELETE FROM metrics WHERE timestamp<?", before.UnixNano())
-	if err != nil {
-		return 0, err
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var total int64
+	for total < MetricPruneMaxRows {
+		result, err := s.execWriter(ctx, "PruneMetricSamples", "DELETE FROM metrics WHERE id IN (SELECT id FROM metrics WHERE timestamp<? ORDER BY timestamp,id LIMIT 256)", before.UnixNano())
+		if err != nil {
+			return total, err
+		}
+		n, err := result.RowsAffected()
+		total += n
+		if err != nil || n < 256 {
+			return total, err
+		}
 	}
-	return r.RowsAffected()
+	return total, nil
 }

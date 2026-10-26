@@ -5,11 +5,9 @@ package rabbitmq
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -99,11 +97,6 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		return domain.Placement{}, e
 	}
 	out := domain.Placement{Groups: map[string][]string{}}
-	var warnings []string
-	if !rc.Backend.Capabilities().Placement {
-		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
-	}
-	unknown := false
 	for _, m := range ordered(s) {
 		fingerprint := ""
 		if rc.Backend.Capabilities().Placement {
@@ -119,7 +112,7 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		} else {
 			a, err := p.agent(ctx, rc, m.Name)
 			if err == nil {
-				st, err := a.Status(ctx)
+				st, err := engine.ObserveAgentStatus(ctx, a, "RabbitMQ", m.Name)
 				a.Close()
 				if err == nil {
 					fingerprint = st.HostFingerprint
@@ -128,28 +121,10 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		}
 		if fingerprint == "" {
 			fingerprint = "unknown"
-			unknown = true
 		}
 		out.Groups[fingerprint] = append(out.Groups[fingerprint], m.Name)
 	}
-	for k, g := range out.Groups {
-		if k != "unknown" && len(g) > 1 {
-			if rc.Backend.Capabilities().Placement {
-				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(g, ", ")))
-			} else {
-				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
-			}
-		}
-	}
-	if unknown {
-		if rc.Backend.Capabilities().Placement {
-			warnings = append(warnings, "backend placement is unknown for some members")
-		} else {
-			warnings = append(warnings, "physical-host placement is unknown for some members")
-		}
-	}
-	out.Warning = strings.Join(warnings, "; ")
-	return out, nil
+	return describePlacement(out, rc.Backend.Capabilities().Placement), nil
 }
 func (p *Provider) MemberLogs(ctx context.Context, rc *engine.Context, name, process string, lines int) ([]domain.MemberLogLine, error) {
 	s, e := loadState(rc.Cluster)

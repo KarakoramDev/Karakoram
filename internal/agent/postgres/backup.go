@@ -24,6 +24,164 @@ import (
 )
 
 var backupActionMu sync.Mutex
+
+// backupDiagnostic retains only bounded native codes and a capacity flag, never
+// free text (which can contain signed object URLs, responses and credentials).
+type backupDiagnostic struct {
+	line        [4096]byte
+	used        int
+	code        string
+	httpStatus  string
+	lastHTTP5xx string
+	s3Code      string
+	capacity    bool
+}
+
+var backupErrorCode = regexp.MustCompile(`(?:ERROR|P[0-9]+ ERROR): \[([0-9]{3})\]:`)
+var backupHTTPStatus = regexp.MustCompile(`HTTP request failed with ([0-9]{3})(?:[^0-9]|$)`)
+var backupS3Code = regexp.MustCompile(`<Code>([A-Za-z0-9]{1,64})</Code>`)
+var backupCapacity = regexp.MustCompile(`(?i)quota exceeded|no space left on device|XMinioStorageFull|QuotaExceeded|storage full|disk full`)
+var backupHTTPCapacity = regexp.MustCompile(`(?i)HTTP (507)(?:[^0-9]|$)`)
+var backupHTTPServiceError = regexp.MustCompile(`(?:^|[ \t])(?:ERROR: \[101\]: |\[ServiceError\] (?:on retry at [0-9]+|on [0-9]+ retries from [0-9]+-[0-9]+)ms: )(?:raised from local-[0-9]{1,10} protocol: )?\[(5[0-9]{2}|408|429)\]([ \t]|$)`)
+
+func (d *backupDiagnostic) Write(data []byte) (int, error) {
+	for _, c := range data {
+		if c == '\n' {
+			d.consume(true)
+			d.used = 0
+		} else {
+			if d.used == len(d.line) {
+				d.consume(false)
+				// Preserve enough overlap for any accepted code/indicator split
+				// across chunks of an oversized physical line.
+				d.used = copy(d.line[:128], d.line[len(d.line)-128:])
+			}
+			d.line[d.used] = c
+			d.used++
+		}
+	}
+	return len(data), nil
+}
+
+func (d *backupDiagnostic) observeHTTPStatus(status string) {
+	d.httpStatus = status
+	if status[0] == '5' {
+		d.lastHTTP5xx = status
+	}
+	d.capacity = d.capacity || status == "507"
+}
+
+func (d *backupDiagnostic) consume(endOfLine bool) {
+	line := d.line[:d.used]
+	if match := backupErrorCode.FindSubmatch(line); match != nil {
+		d.code = string(match[1])
+	}
+	// A scan window is not a physical line ending: reject a numeric token
+	// ending at its edge until overlap scanning sees a delimiter or real EOF.
+	if match := backupHTTPStatus.FindSubmatchIndex(line); match != nil && (endOfLine || match[3] < len(line)) {
+		d.observeHTTPStatus(string(line[match[2]:match[3]]))
+	}
+	// Retryable HTTP responses use ServiceError [101], not the ProtocolError
+	// "HTTP request failed" format. Only retain statuses actually emitted.
+	if match := backupHTTPServiceError.FindSubmatchIndex(line); match != nil && (endOfLine || match[4] < match[5]) {
+		d.observeHTTPStatus(string(line[match[2]:match[3]]))
+	}
+	if match := backupS3Code.FindSubmatch(line); match != nil {
+		// Syntax alone is not a secret boundary: servers or headers can put
+		// arbitrary credential-like alphanumerics inside a Code element.
+		switch string(match[1]) {
+		case "InternalError":
+			d.s3Code = "InternalError"
+		case "AccessDenied":
+			d.s3Code = "AccessDenied"
+		case "InvalidAccessKeyId":
+			d.s3Code = "InvalidAccessKeyId"
+		case "SignatureDoesNotMatch":
+			d.s3Code = "SignatureDoesNotMatch"
+		case "NoSuchBucket":
+			d.s3Code = "NoSuchBucket"
+		case "NoSuchUpload":
+			d.s3Code = "NoSuchUpload"
+		case "NoSuchKey":
+			d.s3Code = "NoSuchKey"
+		case "SlowDown":
+			d.s3Code = "SlowDown"
+		case "ServiceUnavailable":
+			d.s3Code = "ServiceUnavailable"
+		case "XMinioStorageFull":
+			d.s3Code = "XMinioStorageFull"
+		case "QuotaExceeded":
+			d.s3Code = "QuotaExceeded"
+		case "EntityTooLarge":
+			d.s3Code = "EntityTooLarge"
+		case "RequestTimeout":
+			d.s3Code = "RequestTimeout"
+		default:
+			d.s3Code = "unrecognized S3 error"
+		}
+	}
+	if match := backupHTTPCapacity.FindSubmatchIndex(line); match != nil && (endOfLine || match[3] < len(line)) {
+		d.observeHTTPStatus("507")
+		d.capacity = true
+	}
+	d.capacity = d.capacity || d.httpStatus == "507" || backupCapacity.Match(line)
+}
+
+func (d *backupDiagnostic) failure(err error) string {
+	d.consume(true)
+	if d.code == "082" {
+		return "pgBackRest error [082]: required WAL segment was not archived before the archive timeout; inspect target archiving and repository reachability"
+	}
+	prefix := "pgBackRest backup"
+	if d.code != "" {
+		prefix = "pgBackRest error [" + d.code + "]"
+	}
+	if d.httpStatus != "" || d.s3Code != "" {
+		details := ""
+		if d.httpStatus != "" {
+			details = "HTTP " + d.httpStatus
+		}
+		if d.lastHTTP5xx != "" && d.lastHTTP5xx != d.httpStatus {
+			details += ", last observed HTTP 5xx " + d.lastHTTP5xx
+		}
+		if d.s3Code != "" {
+			if details != "" {
+				details += ", "
+			}
+			if d.s3Code == "unrecognized S3 error" {
+				details += d.s3Code
+			} else {
+				details += "S3 " + d.s3Code
+			}
+		}
+		message := prefix + ": backup repository request failed (" + details + "); "
+		if d.capacity {
+			return message + "repository storage is full or over quota — free or extend repository storage, then run a new backup"
+		}
+		if d.s3Code == "NoSuchUpload" {
+			return message + "repository multipart upload is missing; check capacity, upload lifecycle and concurrent cleanup, then run a new backup"
+		}
+		if d.s3Code == "NoSuchKey" {
+			return message + "repository object is missing; check capacity, object lifecycle and concurrent cleanup, then run a new backup"
+		}
+		return message + "check repository credentials, permissions, health and capacity"
+	}
+	if d.capacity {
+		return prefix + ": member backup spool/disk is full — free or extend member storage, then run a new backup"
+	}
+	if d.code != "" {
+		return "pgBackRest error [" + d.code + "]: native backup command failed; inspect member diagnostics"
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			return fmt.Sprintf("pgBackRest backup terminated by signal %s; inspect member process and memory events", status.Signal())
+		}
+		return fmt.Sprintf("pgBackRest backup exited with status %d; no native error code was captured", exit.ExitCode())
+	}
+	return "pgBackRest backup could not complete; no native error code was captured"
+}
+
 var backupLabel = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[DI])?$`)
 
 // durableJSON publishes a complete owner-only receipt before acknowledging work.
@@ -278,6 +436,9 @@ func (e *Runner) backup(ctx context.Context, s pgspec.Spec, p paths, r pgspec.Ba
 	}
 	cmd := exec.Command("/usr/bin/pgbackrest", args...)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "PGPASSFILE=" + filepath.Join(p.root, "backup.pgpass")}
+	var diagnostic backupDiagnostic
+	cmd.Stdout = &diagnostic
+	cmd.Stderr = &diagnostic
 	if err = cmd.Start(); err != nil {
 		receipt.Response = pgspec.BackupResponse{State: "failed", Message: "pgBackRest backup could not start"}
 		return receipt.Response, durableJSON(name, receipt)
@@ -295,10 +456,13 @@ func (e *Runner) backup(ctx context.Context, s pgspec.Spec, p paths, r pgspec.Ba
 		backupActionMu.Lock()
 		defer backupActionMu.Unlock()
 		defer activeBackups.Delete(name)
-		receipt.Response = pgspec.BackupResponse{State: "failed", Message: "pgBackRest backup failed or the primary changed"}
+		receipt.Response = pgspec.BackupResponse{State: "failed", Message: diagnostic.failure(err)}
 		finish, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		current := e.status(finish, s, p)
+		if err == nil {
+			receipt.Response.Message = "pgBackRest exited successfully but completion inventory or primary/timeline validation failed"
+		}
 		if err == nil && current.Running && (current.Role == "primary" || current.Role == "standalone") && current.Timeline == receipt.Timeline {
 			inv, infoErr := backupInfo(finish, s, p, r.Repository)
 			if infoErr == nil {

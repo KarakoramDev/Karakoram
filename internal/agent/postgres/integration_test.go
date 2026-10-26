@@ -47,7 +47,14 @@ func startNativeAgent(t *testing.T, s pgspec.Spec) *nativeAgent {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(s)
-	h := &nativeAgent{dir: t.TempDir(), done: make(chan error, 1), config: agentapi.MemberConfig{Cluster: "integration", Member: s.Member, Engine: pgspec.Engine, EngineSpec: raw, AgentTLS: agentapi.Certificate{CertPEM: cert.CertPEM, KeyPEM: cert.KeyPEM}, ConfigVersion: 1}}
+	// Native PostgreSQL sockets must fit Linux's 107-byte pathname limit,
+	// independent of the Go test name and the caller's temporary root.
+	dir, err := os.MkdirTemp("/tmp", "kkpg-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	h := &nativeAgent{dir: dir, done: make(chan error, 1), config: agentapi.MemberConfig{Cluster: "integration", Member: s.Member, Engine: pgspec.Engine, EngineSpec: raw, AgentTLS: agentapi.Certificate{CertPEM: cert.CertPEM, KeyPEM: cert.KeyPEM}, ConfigVersion: 1}}
 	cp := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/internal/agent/v1/config" || r.Header.Get("Authorization") != "Bearer integration-token" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -313,8 +320,13 @@ func TestNativePostgres(t *testing.T) {
 			t.Fatal("proxy backend resource/TLS settings did not reconcile")
 		}
 		status := h.status(t)
-		if !status.Running || status.Role != "proxy" || len(status.ProxyBackends) == 0 {
-			t.Fatalf("unexpected proxy status: %+v", status)
+		if status.Running || status.Role != "proxy" || len(status.ProxyBackends) == 0 {
+			t.Fatalf("unexpected configured proxy status without a PostgreSQL writer: %+v", status)
+		}
+		for _, backend := range status.ProxyBackends {
+			if backend.Hostgroup == 10 && backend.Status == "ONLINE" {
+				t.Fatalf("proxy without a PostgreSQL backend reported an ONLINE writer: %+v", backend)
+			}
 		}
 		if len(proxyMetrics(ctx, p.Proxy)) == 0 {
 			t.Fatal("proxy pool metrics missing")

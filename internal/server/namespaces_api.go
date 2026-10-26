@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 // requireNamespace checks registration, not relay health: unavailable namespaces
@@ -31,6 +32,10 @@ func (s *Server) requireNamespace(ctx context.Context, name string) *response {
 }
 
 func namespaceAPI(n *domain.Namespace, count int, capabilities infra.Capabilities) api.Namespace {
+	safe := *n
+	n = &safe
+	n.Token.LastError = redact.Diagnostic(n.Token.LastError)
+	n.Relay.LastError = redact.Diagnostic(n.Relay.LastError)
 	optionalString := func(v string) *string {
 		if v == "" {
 			return nil

@@ -10,6 +10,7 @@ import (
 	"math"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -50,6 +51,9 @@ func (*Provider) Describe() domain.ProviderInfo {
 	}
 	for _, topology := range []string{"cluster", "dedicatedMasters"} {
 		comps := stackComponents.Info()
+		kibana := comps["kibana"]
+		kibana.Schema = json.RawMessage(`{"type":"object","description":"Enabled Kibana requires minRam >= 1.5 GiB on 9.x and >= 1 GiB on 8.x, with maxRam >= minRam. Existing smaller 9.x instances allow unchanged same-version updates and replica decreases; resize minRam and maxRam before enabling, adding replicas or upgrading. Disabled instances retain structural resource checks."}`)
+		comps["kibana"] = kibana
 		comps["engine"] = ci("engine", 3, 1, 9)
 		if topology == "dedicatedMasters" {
 			comps["engine"] = ci("engine", 2, 1, 20)
@@ -151,6 +155,35 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 }
 func invalid(format string, args ...any) error { return engine.Invalid(format, args...) }
 
+func validateKibanaAdmission(old, n *domain.Cluster) error {
+	k := n.Spec.Components.Extra["kibana"]
+	if k.Replicas == 0 {
+		return nil
+	}
+	floor := KibanaActiveMinimumRAM(n.Spec.Version)
+	field := "spec.components.extra.kibana.resources.minRam"
+	if old != nil {
+		previous := old.Spec.Components.Extra["kibana"]
+		if old.Spec.Version != n.Spec.Version && previous.Replicas > 0 && previous.Resources.MinRAM < floor {
+			return engine.InvalidField(field, domain.ReasonConflict, "Kibana %s requires at least %g GiB minimum RAM; resize Kibana first by increasing spec.components.extra.kibana.resources minRam and maxRam together to at least %g GiB at the current version, wait for readiness, then change version", n.Spec.Version, floor, floor)
+		}
+		if old.Spec.Version != n.Spec.Version && floor > 1 &&
+			(old.Status.ObservedGeneration != old.Generation || old.Status.Phase != domain.PhaseReady) {
+			return engine.InvalidField("spec.version", domain.ReasonConflict, "wait for the pending change (including any Kibana resize) to finish and Kibana to become ready before changing version")
+		}
+		if old.Spec.Version == n.Spec.Version && previous.Replicas > 0 &&
+			k.Replicas <= previous.Replicas &&
+			k.Resources.MinRAM == previous.Resources.MinRAM &&
+			k.Resources.MaxRAM == previous.Resources.MaxRAM {
+			return nil
+		}
+	}
+	if k.Resources.MinRAM < floor {
+		return engine.InvalidField(field, domain.ReasonOutOfRange, "Kibana %s requires at least %g GiB minimum RAM; increase spec.components.extra.kibana.resources minRam and maxRam together to at least %g GiB before enabling or increasing replicas", n.Spec.Version, floor, floor)
+	}
+	return nil
+}
+
 // Validate rejects unsupported configurations and unsafe simultaneous changes.
 func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if n == nil {
@@ -190,6 +223,13 @@ func (p *Provider) Validate(ctx context.Context, old, n *domain.Cluster) error {
 		}
 	}
 	if err := stackComponents.Validate(optional); err != nil {
+		k := s.Components.Extra["kibana"]
+		if k.Resources.MaxRAM < k.Resources.MinRAM {
+			return engine.InvalidField("spec.components.extra.kibana.resources.minRam", domain.ReasonConflict, "Kibana %s maxRam must be at least minRam; increase spec.components.extra.kibana.resources minRam and maxRam together (active minimum %g GiB)", s.Version, KibanaActiveMinimumRAM(s.Version))
+		}
+		return err
+	}
+	if err := validateKibanaAdmission(old, n); err != nil {
 		return err
 	}
 	comps := map[string]domain.ComponentSpec{"engine": s.Components.Engine}
@@ -393,6 +433,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			err = e
 		}
 	}()
+	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
+		return engine.OpResult{RequeueAfter: 5 * time.Second, Checkpoint: op.Checkpoint, Message: "Waiting for accepted runtime recovery"}, e
+	}
 	return p.runOperation(ctx, rc, s, op)
 }
 

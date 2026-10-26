@@ -197,10 +197,10 @@ func TestSpecChangeAuditPatchAndPut(t *testing.T) {
 				t.Fatal(err)
 			}
 			expectedChanges := 1
-			if c.Spec.Backup.Schedules == nil {
+			if method == "PUT" && c.Spec.Backup.Schedules == nil {
 				expectedChanges++
 			}
-			if c.Spec.Exposure.Allowlist == nil {
+			if method == "PUT" && c.Spec.Exposure.Allowlist == nil {
 				expectedChanges++
 			}
 			if len(details.Changes) != expectedChanges {
@@ -474,7 +474,7 @@ func TestSpecChangeReportsNullToEmptyCollections(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w := call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{}}`, token); w.Code != 200 {
+	if w := call(s, "PATCH", "/api/v1/clusters/prod", `{"spec":{"backup":{"schedules":[]},"exposure":{"allowlist":[]}}}`, token); w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	after, err := s.Store.GetCluster(t.Context(), before.Ref())

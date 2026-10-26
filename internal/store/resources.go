@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
@@ -188,6 +189,12 @@ func (s *Store) CreateBackupStorage(ctx context.Context, v *domain.BackupStorage
 	if err := ValidateBackupStorageName(v.Name); err != nil {
 		return err
 	}
+	// Preserve the store's legacy/incomplete rows; API admission requires endpointURL.
+	if v.Type == "s3" && v.EndpointURL != "" {
+		if _, err := s3endpoint.Parse(v.EndpointURL); err != nil {
+			return domain.InvalidField("endpointURL", domain.ReasonInvalid, "%s", err.Error())
+		}
+	}
 	v.Namespace = domain.NormalizedNamespace(v.Namespace)
 	if err := domain.ValidateNamespaceName(v.Namespace); err != nil {
 		return err
@@ -212,6 +219,11 @@ func (s *Store) CreateBackupStorage(ctx context.Context, v *domain.BackupStorage
 
 // UpdateBackupStorage persists configuration and invalidates checks of a changed connection.
 func (s *Store) UpdateBackupStorage(ctx context.Context, v *domain.BackupStorage) error {
+	if v.Type == "s3" && v.EndpointURL != "" {
+		if _, err := s3endpoint.Parse(v.EndpointURL); err != nil {
+			return domain.InvalidField("endpointURL", domain.ReasonInvalid, "%s", err.Error())
+		}
+	}
 	return s.updateBackupStorage(ctx, v, false)
 }
 
@@ -417,14 +429,18 @@ func (s *Store) FindSessionByHash(ctx context.Context, hash string) (*domain.Ses
 	return s.GetSession(ctx, key)
 }
 
-// TouchApiToken updates usage metadata for api token.
+// TouchApiToken updates only advisory usage metadata, without overwriting a
+// concurrent rename/expiry edit or recreating a revoked token.
 func (s *Store) TouchApiToken(ctx context.Context, id string, at time.Time) error {
-	v, err := s.GetApiToken(ctx, id)
+	result, err := s.execWriter(ctx, "TouchApiToken", "UPDATE records SET data=json_set(data,'$.lastUsedAt',?),updated=? WHERE kind='api-token' AND scope='' AND key=?", at.UTC().Format(time.RFC3339Nano), time.Now().UTC().UnixNano(), id)
 	if err != nil {
-		return err
+		return typed(err)
 	}
-	v.LastUsedAt = &at
-	return s.UpdateApiToken(ctx, v)
+	n, err := result.RowsAffected()
+	if err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return err
 }
 
 // RotateSession atomically consumes the old refresh hash; replay fails.

@@ -15,15 +15,23 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"gopkg.in/yaml.v3"
 )
 
 // Node identifies a mongod running a PBM agent. Config-server nodes must be listed first for sharded clusters.
-type Node struct{ Member, ReplSet string }
+type Node struct {
+	Member, ReplSet string
+	// Resources and CacheGB describe this mongod's applied allocation and
+	// active cache, never the cluster's possibly-unapplied desired sizing.
+	Resources domain.Resources
+	CacheGB   float64
+}
 
 // Hooks performs authenticated database administration around restores.
 type Hooks interface {
 	ResetSystemUsers(context.Context, string) error
+	BalancerEnabled(context.Context) (bool, error)
 	SetBalancer(context.Context, bool) error
 }
 
@@ -48,6 +56,10 @@ func RenderConfig(env Env) ([]byte, error) {
 	if env.Storage.EndpointURL == "" || env.Storage.Bucket == "" {
 		return nil, errors.New("PBM S3 endpoint and bucket are required")
 	}
+	endpoint, err := s3endpoint.Parse(env.Storage.EndpointURL)
+	if err != nil {
+		return nil, err
+	}
 	if env.Credentials.AccessKeyID == "" || env.Credentials.SecretAccessKey == "" {
 		return nil, errors.New("PBM S3 credentials are required")
 	}
@@ -63,6 +75,7 @@ func RenderConfig(env Env) ([]byte, error) {
 	if prefix == "" {
 		prefix = env.Storage.Prefix
 	}
+	prefix = domain.BackupStoragePrefix(prefix)
 	cfg := struct {
 		Storage struct {
 			Type string `yaml:"type"`
@@ -87,19 +100,38 @@ func RenderConfig(env Env) ([]byte, error) {
 			Compression string `yaml:"compression"`
 		} `yaml:"backup"`
 		Restore struct {
-			Workers int `yaml:"numDownloadWorkers"`
-			Buffer  int `yaml:"maxDownloadBufferMb"`
-			Chunk   int `yaml:"downloadChunkMb"`
+			Workers             int `yaml:"numDownloadWorkers"`
+			Buffer              int `yaml:"maxDownloadBufferMb"`
+			Chunk               int `yaml:"downloadChunkMb"`
+			BatchSize           int `yaml:"batchSize"`
+			InsertionWorkers    int `yaml:"numInsertionWorkers"`
+			ParallelCollections int `yaml:"numParallelCollections"`
 		} `yaml:"restore"`
 	}{}
 	cfg.Storage.Type = "s3"
 	cfg.Storage.S3.Endpoint, cfg.Storage.S3.Region, cfg.Storage.S3.Bucket, cfg.Storage.S3.Prefix = env.Storage.EndpointURL, region, env.Storage.Bucket, prefix
-	cfg.Storage.S3.PathStyle, cfg.Storage.S3.Insecure = env.Storage.ForcePathStyle, !env.Storage.VerifyTLS
+	cfg.Storage.S3.PathStyle, cfg.Storage.S3.Insecure = s3endpoint.PathStyle(endpoint, env.Storage.Bucket, env.Storage.ForcePathStyle), !env.Storage.VerifyTLS
 	cfg.Storage.S3.Credentials.Access, cfg.Storage.S3.Credentials.Secret = env.Credentials.AccessKeyID, env.Credentials.SecretAccessKey
 	cfg.PITR.Enabled, cfg.PITR.Span = env.PITR.Enabled, span
 	cfg.Backup.Compression = "s2"
 	cfg.Restore.Workers, cfg.Restore.Buffer, cfg.Restore.Chunk = 1, 64, 8
+	cfg.Restore.BatchSize = 500 // Keep efficient small-document bulk inserts.
+	cfg.Restore.InsertionWorkers, cfg.Restore.ParallelCollections = logicalRestoreConcurrency(env)
 	return yaml.Marshal(cfg)
+}
+
+// Logical concurrency and the agent's Go soft limit share one budget. Buffer
+// limits alone are not RSS limits: Go GC slack and mongod compete for the same
+// allocation. Keep at least one worker; admission rejects undersized new restores.
+func logicalRestoreConcurrency(env Env) (int, int) {
+	budget, _ := minimumGoMemoryBudget(env)
+	budgetMiB := int(budget / mebibyte)
+	collections := 1
+	if budgetMiB >= 2*(256+128) {
+		collections = 2
+	}
+	workers := min(10, max(1, (budgetMiB/collections-256)/128))
+	return workers, collections
 }
 
 // EnsureConfig applies a changed configuration on a healthy node, enabling PITR only with a successful base snapshot.
@@ -183,9 +215,7 @@ func sourceEnv(ctx context.Context, env Env, source domain.ClusterRef, storage s
 		state.Prefix = "karakoram/" + source.Name + "-" + state.UID
 	}
 	env.Storage, env.Credentials, env.Prefix = *s, s.Credentials, state.Prefix
-	if s.Prefix != "" {
-		env.Prefix = strings.TrimRight(s.Prefix, "/") + "/" + env.Prefix
-	}
+	env.Prefix = domain.BackupObjectPrefix(s.Prefix, env.Prefix)
 	env.PITR.Enabled = false
 	return env, nil
 }

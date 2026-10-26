@@ -20,6 +20,12 @@ func pendingMemberImport(t *testing.T) (*Provider, *engine.Context, *fakeInfra, 
 	if _, err := p.Sync(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
+	if state(t, rc).Members[0].ImportPlan == nil || len(f.imports) != 0 {
+		t.Fatal("import plan was not checkpointed before submission")
+	}
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
 	s := state(t, rc)
 	if s.Pending == nil || s.Pending.Action != "import" || len(s.Members) != 1 {
 		t.Fatalf("missing pending member import: %+v", s)
@@ -224,17 +230,8 @@ func TestExpiredImportReimportsMissingServices(t *testing.T) {
 			if s.Pending == nil || s.Pending.Action != "import" || len(f.imports) != 2 {
 				t.Fatalf("missing services were not re-imported: %+v", s)
 			}
-			want := 1
-			if missing == "both" {
-				want = 2
-			}
-			if len(f.imports[1]) != want {
-				t.Fatalf("imported %d services, want %d", len(f.imports[1]), want)
-			}
-			for _, spec := range f.imports[1] {
-				if missing == "runtime" && spec.Hostname != m.Name || missing == "volume" && spec.Hostname != m.Volume {
-					t.Fatalf("re-imported existing service %s", spec.Hostname)
-				}
+			if !reflect.DeepEqual(f.imports[0], f.imports[1]) {
+				t.Fatal("expired import did not resume its original immutable batch")
 			}
 		})
 	}

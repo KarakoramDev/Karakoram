@@ -38,8 +38,9 @@ func restoreStartupSetup(t *testing.T, physical bool) (Env, *fakeAgent, *routerR
 	t.Helper()
 	env, agent, clock, op := prepareRestoreStartup(t, physical)
 	started, err := RunRestore(t.Context(), env, op)
-	if err != nil || started.Step != "poll" || agent.starts != 1 {
-		t.Fatal("restore was not started", started, err, agent.starts)
+	starts := agent.startCount()
+	if err != nil || started.Step != "poll" || starts != 1 {
+		t.Fatal("restore was not started", started, err, starts)
 	}
 	op.Checkpoint = started.Checkpoint
 	cp, err := loadCheckpoint(op)
@@ -85,8 +86,9 @@ func TestRestoreMetadataDelayIsStartingProgress(t *testing.T) {
 			op.Checkpoint = res.Checkpoint
 			drive(t, env, op, RunRestore, false)
 			restore, err := env.RC.Store.GetRestore(t.Context(), env.RC.Cluster.Ref(), "clone")
-			if err != nil || restore.Phase != domain.PhaseSucceeded || agent.starts != 1 {
-				t.Fatal("restore did not finish without resubmission", restore, err, agent.starts)
+			starts := agent.startCount()
+			if err != nil || restore.Phase != domain.PhaseSucceeded || starts != 1 {
+				t.Fatal("restore did not finish without resubmission", restore, err, starts)
 			}
 		})
 	}
@@ -138,8 +140,9 @@ func TestRestoreMetadataStartupGraceDoesNotHideFailures(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), message) || res.Step != "poll" || strings.Contains(res.Message, "restore starting") {
 				t.Fatal("genuine restore observation failure was suppressed", res, err)
 			}
-			if agent.starts != 1 {
-				t.Fatal("failed metadata observation resubmitted the restore", agent.starts)
+			starts := agent.startCount()
+			if starts != 1 {
+				t.Fatal("failed metadata observation resubmitted the restore", starts)
 			}
 		})
 	}
@@ -147,22 +150,86 @@ func TestRestoreMetadataStartupGraceDoesNotHideFailures(t *testing.T) {
 
 func TestRestoreFailureDuringStartupStillFailsAfterRecovery(t *testing.T) {
 	env, agent, _, op := restoreStartupSetup(t, false)
+	env.RC.Cluster.Spec.Backup.PITR.Enabled = true
+	initial, err := loadCheckpoint(op)
+	if err != nil || initial.PBMName == "" {
+		t.Fatal("missing original native identity", initial, err)
+	}
 	agent.mu.Lock()
-	agent.failRestore = true
+	agent.restoreDescribeOutput = json.RawMessage(`{"status":"starting"}`)
+	agent.mu.Unlock()
+	starting, err := RunRestore(t.Context(), env, op)
+	if err != nil || starting.Done || starting.Step != "poll" {
+		t.Fatal("starting observation did not retain native polling", starting, err)
+	}
+	op.Checkpoint = append(json.RawMessage(nil), starting.Checkpoint...)
+	const nativeError = "mongorestore: restore mongo dump (successes: 0 / fails: 0): admin.pbmRRoles: error creating collection admin.pbmRRoles: applyOps: (NotWritablePrimary) not primary"
+	failed, err := json.Marshal(map[string]string{"status": "error", "error": nativeError})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent.mu.Lock()
+	agent.restoreDescribeOutput = failed
 	agent.mu.Unlock()
 	res, err := RunRestore(t.Context(), env, op)
-	if err != nil || res.Step != "mongod-start" {
+	if err != nil || res.Done || res.Step != "mongod-start" {
 		t.Fatal("restore failure did not enter compensating recovery", res, err)
 	}
-	op.Checkpoint = res.Checkpoint
-	cp, _ := loadCheckpoint(op)
-	if cp.Failure != "restore failed" || cp.RestoreMetadataDeadline != nil {
-		t.Fatal("terminal restore failure was hidden by startup grace", cp)
+	op.Checkpoint = append(json.RawMessage(nil), res.Checkpoint...)
+	cp, err := loadCheckpoint(op)
+	if err != nil || cp.RestoreMetadataDeadline != nil || cp.RestoreAbsentSince != nil ||
+		cp.PBMName != initial.PBMName || !cp.RestoreConsistencyUncertain {
+		t.Fatal("terminal failure lost native identity or retained startup absence", cp, err)
 	}
-	drive(t, env, op, RunRestore, true)
+	for _, text := range []string{
+		"PBM restore " + initial.PBMName + " failed: " + nativeError,
+		"partial changes cannot be excluded",
+		"no automatic re-initiation",
+		"Ready indicates database health, not restore success",
+		"Operator action required",
+		"quiesce writers",
+		"native restore workers have stopped",
+		"assess data and authentication",
+		"new-named restore",
+		"verified backup into a fresh cluster",
+	} {
+		if !strings.Contains(cp.Failure, text) {
+			t.Fatalf("failure lost original error or actionable guidance %q: %s", text, cp.Failure)
+		}
+	}
+	// drive discards every result once, round-trips the durable Operation and
+	// replays compensation after a simulated controller restart.
+	final := drive(t, env, op, RunRestore, true)
+	completed, err := loadCheckpoint(op)
+	if err != nil || !final.Done || completed.Step != "done" || completed.Failure != cp.Failure ||
+		completed.PBMName != initial.PBMName || completed.FreshBase || !completed.RestoreConsistencyUncertain {
+		t.Fatal("replayed compensation lost failure or requested a success base", final, completed, err)
+	}
 	restore, err := env.RC.Store.GetRestore(t.Context(), env.RC.Cluster.Ref(), "clone")
-	if err != nil || restore.Phase != domain.PhaseFailed || restore.Error != "restore failed" {
-		t.Fatal("terminal restore error was not preserved", restore, err)
+	if err != nil || restore.Phase != domain.PhaseFailed || restore.Error != cp.Failure || restore.CompletedAt == nil {
+		t.Fatal("terminal restore error and guidance were not preserved", restore, err)
+	}
+	for _, forbidden := range []string{"RestoreNeverStarted", "data unchanged"} {
+		if strings.Contains(restore.Error, forbidden) {
+			t.Fatal("native failure acquired an unsupported no-mutation claim", restore.Error)
+		}
+	}
+	starts := 0
+	requests := agent.recordedRequests()
+	for _, request := range requests {
+		if request.Command == "restore" {
+			starts++
+			if request.RequestID != op.ID {
+				t.Fatal("replay changed initiation request identity", request.RequestID, op.ID)
+			}
+		}
+		if request.Command == "describe-restore" && !strings.Contains(strings.Join(request.Args, " "), initial.PBMName) {
+			t.Fatal("polling switched native restore identity", request)
+		}
+	}
+	nativeStarts := agent.startCount()
+	if starts != 1 || nativeStarts != 1 || len(env.Hooks.(*fakeHooks).reset) != 0 {
+		t.Fatal("failure replay re-initiated restore or reset users as success", starts, nativeStarts, env.Hooks)
 	}
 }
 
@@ -177,8 +244,9 @@ func TestRestoreMetadataGraceBeginsAfterSuccessfulStart(t *testing.T) {
 	}
 	op.Checkpoint = failed.Checkpoint
 	cp, err := loadCheckpoint(op)
-	if err != nil || cp.RestoreMetadataDeadline != nil || cp.PBMName != "" || agent.starts != 0 {
-		t.Fatal("failed submission started the metadata grace window", cp, err, agent.starts)
+	starts := agent.startCount()
+	if err != nil || cp.RestoreMetadataDeadline != nil || cp.PBMName != "" || starts != 0 {
+		t.Fatal("failed submission started the metadata grace window", cp, err, starts)
 	}
 	clock.at = clock.at.Add(5 * restoreMetadataGrace)
 	agent.mu.Lock()
@@ -195,15 +263,17 @@ func TestRestoreMetadataGraceBeginsAfterSuccessfulStart(t *testing.T) {
 	}
 	agent.mu.Lock()
 	agent.restoreDescribeError = missingRestoreMetadata
-	for _, request := range agent.requests {
+	agent.mu.Unlock()
+	requests := agent.recordedRequests()
+	for _, request := range requests {
 		if request.Command == "restore" && request.RequestID != op.ID {
 			t.Error("start retry changed its receipt identity", request.RequestID)
 		}
 	}
-	agent.mu.Unlock()
 	progress, err := RunRestore(t.Context(), env, op)
-	if err != nil || progress.Step != "poll" || !strings.Contains(progress.Message, "restore starting") || agent.starts != 1 {
-		t.Fatal("transport retries consumed the accepted restore's startup grace", progress, err, agent.starts)
+	starts = agent.startCount()
+	if err != nil || progress.Step != "poll" || !strings.Contains(progress.Message, "restore starting") || starts != 1 {
+		t.Fatal("transport retries consumed the accepted restore's startup grace", progress, err, starts)
 	}
 }
 

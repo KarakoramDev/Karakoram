@@ -4,11 +4,13 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // upgradeState journals the maintenance workflow independently of the tracked
@@ -200,36 +202,7 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 		m.Stage = "joined"
 		u.Stage, u.Index, u.Waiting = "replicas", 0, false
 	case "replicas":
-		data := s.data()
-		if u.Index >= len(data) {
-			u.Stage = "stanza"
-			break
-		}
-		m := data[u.Index]
-		if m.Name == u.Primary {
-			u.Index++
-			break
-		}
-		if !u.Waiting {
-			request.Replica = true
-			if err := upgradeAction(ctx, rc, m.Name, "upgrade-run", request); err != nil {
-				return true, err
-			}
-			m.Version, m.Offline = u.To, false
-			m.ConfigVersion = s.ConfigVersion
-			u.Waiting = true
-			break
-		}
-		if err := reloadPublished(ctx, rc, s, m); err != nil {
-			return true, err
-		}
-		ok, err := ready(ctx, rc, m)
-		if err != nil || !ok {
-			return true, err
-		}
-		m.Stage = "joined"
-		u.Index++
-		u.Waiting = false
+		return true, p.rebuildUpgradeReplicas(ctx, rc, s, request)
 	case "stanza":
 		if err := p.EnsureStanza(ctx, rc, true); err != nil {
 			return true, err
@@ -304,6 +277,17 @@ func (p *Core) upgradeDeploy(ctx context.Context, rc *engine.Context, s *state) 
 	if u.Waiting {
 		if m.DeployOp != nil {
 			status, err := rc.Backend.OpStatus(ctx, *m.DeployOp)
+			if status.Status == "DeploymentRetriesExhausted" && err == nil {
+				err = &infra.DeploymentExhaustedError{Service: m.Name, LastError: status.Message}
+			}
+			if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
+				spec, specErr := p.runtimeSpec(rc, m)
+				if specErr != nil {
+					return false, specErr
+				}
+				m.DeployOp, u.Waiting = nil, false
+				return false, engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, err)
+			}
 			if err != nil || (!status.Done && !status.Failed) {
 				return false, err
 			}
@@ -337,6 +321,9 @@ func (p *Core) upgradeDeploy(ctx context.Context, rc *engine.Context, s *state) 
 	if err != nil {
 		return false, err
 	}
+	if engine.DeploymentBlocked(rc, m.Name, spec) {
+		return false, nil
+	}
 	op, err := engine.Deploy(ctx, rc, m.Name, spec)
 	if err != nil {
 		return false, err
@@ -354,7 +341,7 @@ func awaitUpgradeOffline(ctx context.Context, rc *engine.Context, m *member) (bo
 	if err != nil {
 		return false, err
 	}
-	status, err := a.Status(ctx)
+	status, err := engine.ObserveAgentStatus(ctx, a, "PostgreSQL", m.Name)
 	if err != nil {
 		return false, err
 	}

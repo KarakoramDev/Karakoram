@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 func sourceForRestore(r *domain.Restore, target *domain.Cluster) restoreSource {
@@ -145,12 +146,15 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 		if err != nil {
 			return err
 		}
+		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
+			return err
+		}
 		recovery, err := recoverySuperuser(ctx, rc, b)
 		if err != nil {
 			return err
 		}
 		sp.Bootstrap = &pgspec.Bootstrap{Method: "restore", Restore: &restore, RecoverySuperuser: recovery, Generation: bs.Generation}
-	} else if d := rc.Cluster.Spec.DataSource; d != nil && !bs.CloneComplete {
+	} else if d := rc.Cluster.Spec.DataSource; d != nil && !bs.CloneComplete && !engine.InitialDataSourceUnproven(rc.Cluster) {
 		source := restoreSource{Namespace: d.Namespace, Cluster: d.Cluster, Backup: d.Backup}
 		if source.Namespace == "" {
 			source.Namespace = rc.Cluster.Ref().Namespace
@@ -162,8 +166,17 @@ func (p *Core) configureBackup(ctx context.Context, rc *engine.Context, s *state
 		if err != nil {
 			return err
 		}
+		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
+			return err
+		}
 		recovery, err := recoverySuperuser(ctx, rc, b)
 		if err != nil {
+			return err
+		}
+		// Bootstrap performs native recovery before the later imperative
+		// bookkeeping operation exists. Close amendment admission before any
+		// agent can receive this restore configuration.
+		if err = rc.Store.ClaimInitialDataSource(store.WithClusterSnapshot(ctx, rc.Cluster), rc.Cluster.Ref()); err != nil {
 			return err
 		}
 		sp.Bootstrap = &pgspec.Bootstrap{Method: "restore", Restore: &restore, RecoverySuperuser: recovery, Generation: s.BootstrapGeneration}
@@ -194,7 +207,26 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 	if err != nil {
 		return false, err
 	}
-	if d := rc.Cluster.Spec.DataSource; d != nil && !bs.InitialQueued {
+	if rc.Cluster.Spec.DataSource != nil && bs.InitialQueued && !bs.InitialApplied && !engine.InitialDataSourceUnproven(rc.Cluster) {
+		if err = p.MigrateInitialDataSource(ctx, rc); err != nil {
+			return false, err
+		}
+		bs, err = loadBackupState(rc.Cluster)
+		if err != nil {
+			return false, err
+		}
+		r, readErr := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), "initial-restore")
+		if readErr != nil {
+			return false, readErr
+		}
+		if r.Phase == domain.PhaseFailed || r.Phase == domain.PhaseCancelled {
+			return false, engine.Invalid("Initial data source restore operation %s ended %s: %s", r.OperationID, r.Phase, r.Error)
+		}
+		if r.Phase == domain.PhaseSucceeded && !bs.InitialApplied {
+			return false, engine.Invalid("Initial data source restore operation %s has no validated completed recovery checkpoint", r.OperationID)
+		}
+	}
+	if d := rc.Cluster.Spec.DataSource; d != nil && !bs.InitialQueued && !engine.InitialDataSourceUnproven(rc.Cluster) {
 		source := restoreSource{Namespace: d.Namespace, Cluster: d.Cluster, Backup: d.Backup}
 		if source.Namespace == "" {
 			source.Namespace = rc.Cluster.Ref().Namespace
@@ -204,6 +236,9 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 		}
 		b, _, err := p.resolveRestore(ctx, rc, source)
 		if err != nil {
+			return false, err
+		}
+		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
 			return false, err
 		}
 		if b.RecoveryIdentity == "" {
@@ -222,9 +257,9 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 				return false, err
 			}
 		}
-		// Queuing earlier would let the serialized restore operation own the
-		// worker before ordinary reconciliation has provisioned the members.
-		for _, member := range s.Members {
+		// Only DATA formation is required for recovery. An unplaceable proxy
+		// must not prevent completion and indefinitely fence its own correction.
+		for _, member := range s.data() {
 			if member.Stage != "joined" {
 				return false, nil
 			}
@@ -255,7 +290,7 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 		bs.InitialQueued = true
 		return false, saveBackupState(rc.Cluster, bs)
 	}
-	if rc.Cluster.Spec.Backup.Storage == "" || (rc.Cluster.Spec.DataSource != nil && !bs.CloneComplete) {
+	if rc.Cluster.Spec.Backup.Storage == "" || (rc.Cluster.Spec.DataSource != nil && !bs.CloneComplete && !engine.InitialDataSourceUnproven(rc.Cluster)) {
 		return false, nil
 	}
 	storage, err := p.backupStorage(ctx, rc, "", rc.Cluster.Ref().Namespace)
@@ -298,6 +333,11 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	if err != nil {
 		return backupResult(cp, false), err
 	}
+	if cp.Step == "" && bs.RestoreOperation == op.ID && len(bs.RestoreCheckpoint) > 0 {
+		if err = json.Unmarshal(bs.RestoreCheckpoint, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
+	}
 	clone := r.Name == "initial-restore" && rc.Cluster.Spec.DataSource != nil
 	source := sourceForRestore(r, rc.Cluster)
 	if cp.Source != nil {
@@ -306,6 +346,14 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	b, restore, err := p.resolveRestore(ctx, rc, source)
 	if err != nil {
 		return backupResult(cp, false), err
+	}
+	// Check while the source set is still needed, including a clone waiting
+	// for bootstrap. Later cutover/cleanup must not depend on retained storage.
+	switch cp.Step {
+	case "", "hold-access", "stop", "credentials", "restore-configure", "dcs-reset", "wipe", "restore-single", "publish-seed", "start-seed", "primary", "clone-primary":
+		if err := p.preflightRestoreSet(ctx, rc, b); err != nil {
+			return backupResult(cp, false), err
+		}
 	}
 	switch cp.Step {
 	case "":
@@ -329,6 +377,7 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		// Freeze the selected set; newly scheduled backups cannot change a resumed restore.
 		source.Backup = b.Name
 		cp.Source = &source
+		cp.Label = b.Postgres.Label
 		cp.Member = s.data()[0].Name
 		cp.Generation = max(s.BootstrapGeneration, bs.Generation, s.RepositoryGeneration) + 1
 		if !clone && rc.Cluster.Spec.Backup.Storage != "" {
@@ -345,12 +394,20 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			}
 		}
 		cp.Step = "hold-access"
+		if clone {
+			cp.Step = "clone-primary"
+		}
 		stamp := now(rc)
 		// Replicas must basebackup from the restored primary. A repository's
 		// latest old-lineage backup may lie after the requested PITR target.
 		bs.Replicas = false
 		bs.ManagedRolesHeld = true
 		bs.LineageStart = &stamp
+		bs.RestoreOperation = op.ID
+		bs.RestoreCheckpoint, err = json.Marshal(cp)
+		if err != nil {
+			return backupResult(cp, false), err
+		}
 		if err = saveBackupState(rc.Cluster, bs); err != nil {
 			return backupResult(cp, false), err
 		}
@@ -361,9 +418,6 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		if err = backupEvent(ctx, rc, op, "RestoreStarted", "PostgreSQL restore started"); err != nil {
 			return backupResult(cp, false), err
-		}
-		if clone {
-			cp.Step = "clone-primary"
 		}
 	case "hold-access":
 		// Revoke cached proxy logins before recovery credentials are delivered
@@ -484,8 +538,13 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		cp.Step = "primary"
 	case "primary", "clone-primary":
-		member, _, err := primary(ctx, rc, s)
+		member, observation, err := primary(ctx, rc, s)
 		if err != nil {
+			return backupResult(cp, false), nil
+		}
+		if clone && (s.BootstrapGeneration <= 0 || observation.BootstrapGeneration != s.BootstrapGeneration) {
+			// An old/empty running primary is not evidence of restored data.
+			// Agents publish this receipt only after native pgBackRest bootstrap.
 			return backupResult(cp, false), nil
 		}
 		if !clone && member != cp.Member {
@@ -513,6 +572,11 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	case "publish-access":
 		for _, member := range s.Members {
 			if member.Role != "proxy" && member.Role != "data" {
+				continue
+			}
+			// A never-joined proxy has never published target access. It will
+			// fetch the durable, recovered credentials on first formation.
+			if clone && member.Role == "proxy" && member.Stage != "joined" {
 				continue
 			}
 			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), member.Name)
@@ -622,11 +686,19 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		stamp := now(rc)
 		r.CompletedAt = &stamp
-		r.Phase = domain.PhaseSucceeded
+		r.Phase, r.Error = domain.PhaseSucceeded, ""
 		if err = rc.Store.UpdateRestore(ctx, r); err != nil {
 			return backupResult(cp, false), err
 		}
 		if err = backupEvent(ctx, rc, op, "RestoreCompleted", "PostgreSQL restore completed"); err != nil {
+			return backupResult(cp, false), err
+		}
+		bs.RestoreOperation = ""
+		if clone {
+			bs.InitialApplied = true
+		}
+		bs.RestoreCheckpoint = nil
+		if err = saveBackupState(rc.Cluster, bs); err != nil {
 			return backupResult(cp, false), err
 		}
 		cp.Step = "done"

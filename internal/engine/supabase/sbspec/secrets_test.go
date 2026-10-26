@@ -48,6 +48,10 @@ func TestProjectSecrets(t *testing.T) {
 			if !reflect.DeepEqual(got.DBRoles, wantRoles) {
 				t.Fatal("incorrect projected database role credentials")
 			}
+			needsServiceKey := component == "gateway" || component == "auth" || component == "rest" || component == "storage" || component == "meta" || component == "studio" || component == "functions"
+			if (got.ServiceRoleKey != "") != needsServiceKey || (needsServiceKey && got.ServiceRoleKey != full.ServiceRoleKey) {
+				t.Fatal("service API credential over-distributed or missing")
+			}
 			if (got.Auth.SMTP.Password != "") != (component == "auth") {
 				t.Fatal("SMTP password over-distributed or missing")
 			}

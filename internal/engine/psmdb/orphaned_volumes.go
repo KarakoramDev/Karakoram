@@ -86,6 +86,7 @@ func (p *Provider) orphanVolume(ctx context.Context, rc *engine.Context, s *inte
 			return true, err
 		}
 		removeRecord(s, m.Name)
+		delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 	}
 	return true, nil
 }
@@ -119,6 +120,9 @@ func skipOccupiedPlans(ctx context.Context, rc *engine.Context, s *internalState
 				for _, name := range []string{m.Name, m.Volume} {
 					if name == "" {
 						continue
+					}
+					if rc.Backend == nil {
+						return fmt.Errorf("cannot allocate member %s: namespace backend is unavailable", m.Name)
 					}
 					service, err := rc.Backend.GetService(ctx, name)
 					if err != nil {

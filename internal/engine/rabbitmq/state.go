@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/statejson"
 )
 
 // internalState checkpoints each observed lifecycle transition. Unknown fields belong to other durable workflows.
@@ -27,27 +28,49 @@ type internalState struct {
 	PlatformRetries map[string]*platformRetry `json:"platformRetries,omitempty"`
 	CloneImported   bool                      `json:"cloneImported,omitempty"`
 	Bootstrapped    bool                      `json:"bootstrapped"`
-	Rebalance       bool                      `json:"rebalance"`
-	FeatureFlags    bool                      `json:"featureFlags"`
-	ReplaceActive   bool                      `json:"replaceActive"`
-	CleanupBackups  bool                      `json:"cleanupBackups"`
-	CleanupSecrets  bool                      `json:"cleanupSecrets"`
-	Suspended       bool                      `json:"suspended"`
-	RotationSecrets []string                  `json:"rotationSecrets,omitempty"`
-	InterNodeTLS    bool                      `json:"interNodeTLS"`
-	DistributionSet bool                      `json:"distributionSet"`
+	// CreationSeed is elected before peer deployment; capability gates native start.
+	CreationSeed            string    `json:"creationSeed,omitempty"`
+	CreationGateChecked     bool      `json:"creationGateChecked,omitempty"`
+	SystemUsersReconciledAt time.Time `json:"systemUsersReconciledAt"`
+	SystemUsersError        string    `json:"systemUsersError"`
+	// Rejections from older snapshots are expected during peer reloads.
+	AdminCredentialVersion int64      `json:"adminCredentialVersion,omitempty"`
+	Rebalance              bool       `json:"rebalance"`
+	FeatureFlags           bool       `json:"featureFlags"`
+	ReplaceActive          bool       `json:"replaceActive"`
+	CleanupBackups         bool       `json:"cleanupBackups"`
+	BackupCleanupStarted   *time.Time `json:"backupCleanupStarted,omitempty"`
+	RetainedBackups        []string   `json:"retainedBackups,omitempty"`
+	CleanupSecrets         bool       `json:"cleanupSecrets"`
+	Suspended              bool       `json:"suspended"`
+	RotationSecrets        []string   `json:"rotationSecrets,omitempty"`
+	InterNodeTLS           bool       `json:"interNodeTLS"`
+	DistributionSet        bool       `json:"distributionSet"`
 }
 type member struct {
-	Name   string `json:"name"`
-	Volume string `json:"volume"`
+	Name               string                     `json:"name"`
+	RuntimeRecovery    engine.RuntimeRecovery     `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement *engine.UnplacedRetirement `json:"unplacedRetirement,omitempty"`
+	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
+	Volume             string                     `json:"volume"`
 	// ReplacesVolume preserves the replacement placement hint across reconciles.
-	ReplacesVolume          string                  `json:"replacesVolume,omitempty"`
-	Index                   int                     `json:"index"`
-	Stage                   string                  `json:"stage"`
-	ServiceID               string                  `json:"serviceId,omitempty"`
-	VolumeID                string                  `json:"volumeId,omitempty"`
-	VolumeOrphaned          bool                    `json:"volumeOrphaned,omitempty"`
-	Resume                  bool                    `json:"resume,omitempty"`
+	ReplacesVolume string `json:"replacesVolume,omitempty"`
+	Index          int    `json:"index"`
+	Stage          string `json:"stage"`
+	ServiceID      string `json:"serviceId,omitempty"`
+	VolumeID       string `json:"volumeId,omitempty"`
+	VolumeOrphaned bool   `json:"volumeOrphaned,omitempty"`
+	Resume         bool   `json:"resume,omitempty"`
+	// ResumeDeploy checkpoints non-rolling provisioning, both fresh and retained.
+	// The wire name is retained so already accepted receipts survive upgrades.
+	ResumeDeploy     *pending `json:"resumeDeploy,omitempty"`
+	InitialFormation bool     `json:"initialFormation,omitempty"`
+	// FormationVerified records native bootstrap/seed membership, not merely
+	// a mounted volume or an exec'd supervisor child.
+	FormationVerified       bool                    `json:"formationVerified,omitempty"`
+	FormationChecked        bool                    `json:"formationChecked,omitempty"`
+	FormationGate           bool                    `json:"formationGate,omitempty"`
+	FormationLegacyRelease  bool                    `json:"formationLegacyRelease,omitempty"`
 	Version                 string                  `json:"version"`
 	DesiredVersion          string                  `json:"desiredVersion"`
 	ConfigVersion           int64                   `json:"configVersion"`
@@ -65,6 +88,7 @@ type member struct {
 	PublicHash              string                  `json:"publicHash"`
 	ManagementPublic        bool                    `json:"managementPublic"`
 	RemoveStep              string                  `json:"removeStep,omitempty"`
+	CleanupStopReason       string                  `json:"cleanupStopReason,omitempty"`
 	GrowIndex               int                     `json:"growIndex"`
 	Lost                    bool                    `json:"lost,omitempty"`
 	RemovalBlocked          string                  `json:"removalBlocked,omitempty"`
@@ -72,6 +96,8 @@ type member struct {
 	QuorumBlockers          []rmqspec.QuorumBlocker `json:"quorumBlockers,omitempty"`
 	QuorumBlockerCount      int                     `json:"quorumBlockerCount,omitempty"`
 	ChangeStep              string                  `json:"changeStep,omitempty"`
+	ChangeDisruptedAt       time.Time               `json:"changeDisruptedAt,omitempty"`
+	ChangeStartupMessage    string                  `json:"changeStartupMessage,omitempty"`
 	TargetVersion           string                  `json:"targetVersion,omitempty"`
 	TargetResources         domain.Resources        `json:"targetResources"`
 	TargetTLS               string                  `json:"targetTLS,omitempty"`
@@ -86,6 +112,7 @@ type pending struct {
 	Resources domain.Resources `json:"resources"`
 }
 type platformRetry struct {
+	engine.RetrySchedule
 	Failures             int       `json:"failures"`
 	RetryAfter           time.Time `json:"retryAfter"`
 	Message              string    `json:"message"`
@@ -120,21 +147,9 @@ func (s *internalState) save(c *domain.Cluster) error {
 			return err
 		}
 	}
-	b, err := json.Marshal(s)
+	raw, err := statejson.ReplaceOwned(raw, s)
 	if err != nil {
 		return err
-	}
-	owned := map[string]json.RawMessage{}
-	if err = json.Unmarshal(b, &owned); err != nil {
-		return err
-	}
-	for k, v := range owned {
-		raw[k] = v
-	}
-	for _, k := range []string{"pending", "retry", "platformRetries"} {
-		if _, ok := owned[k]; !ok {
-			delete(raw, k)
-		}
 	}
 	c.Internal, err = json.Marshal(raw)
 	return err

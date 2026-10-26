@@ -4,8 +4,10 @@
 package server
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
@@ -84,5 +86,75 @@ func TestMetricsAcceptsSignedInBrowserSession(t *testing.T) {
 	}
 	if unauthenticated := call(s, "GET", "/metrics", "", ""); unauthenticated.Code != 401 {
 		t.Fatal(unauthenticated.Code)
+	}
+}
+
+func TestPausedProcessPreservesObservedMongoRoleInPublicMember(t *testing.T) {
+	s, _, _ := testServer(t)
+	for _, tc := range []struct {
+		role, set, want string
+	}{
+		{"primary", "rs0", "primary"},
+		{"secondary", "rs0", "secondary"},
+		{"primary", "cfg", "config-primary"},
+		{"config-secondary", "cfg", "config-secondary"},
+		{"arbiter", "rs0", "arbiter"},
+		{"router", "router", "router"},
+	} {
+		for _, state := range []string{"paused", "error"} {
+			member := s.memberAPI(domain.ClusterRef{Namespace: "default", Name: "demo"}, domain.MemberStatus{
+				Name: "member", Role: tc.role, Set: tc.set, State: state, Agent: domain.AgentStatus{Healthy: true},
+			})
+			if string(member.Role) != tc.want || member.State != state || member.Health || member.Agent == nil || !member.Agent.Connected {
+				t.Fatalf("process diagnostic erased public member truth: %+v", member)
+			}
+		}
+	}
+}
+
+func TestMemberAgentMessageExposedRedactedAndOmittedWhenEmpty(t *testing.T) {
+	s, _, _ := testServer(t)
+	encoded := base64.StdEncoding.EncodeToString([]byte("synthetic-verifier-material-12345"))
+	for _, tc := range []struct {
+		name, message, want, secret string
+	}{
+		{name: "empty"},
+		{name: "diagnostic", message: "Waiting for process readiness", want: "Waiting for process readiness"},
+		{name: "credential", message: "AuthenticationFailed password: synthetic-password", want: "AuthenticationFailed", secret: "synthetic-password"},
+		{name: "base64", message: "native value " + encoded, want: "native value", secret: encoded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			member := s.memberAPI(domain.ClusterRef{Namespace: "default", Name: "demo"}, domain.MemberStatus{
+				Name: "member", Agent: domain.AgentStatus{Message: tc.message},
+			})
+			raw, err := json.Marshal(member)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var body struct {
+				Agent map[string]json.RawMessage `json:"agent"`
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Fatal(err)
+			}
+			message, present := body.Agent["message"]
+			if tc.message == "" {
+				if present || member.Agent.Message != nil {
+					t.Fatal("empty agent message must be omitted")
+				}
+				return
+			}
+			var text string
+			if !present || json.Unmarshal(message, &text) != nil {
+				t.Fatal("agent message missing from public member JSON")
+			}
+			if tc.secret == "" {
+				if text != tc.want {
+					t.Fatal("ordinary agent diagnostic changed")
+				}
+			} else if strings.Contains(string(raw), tc.secret) || !strings.Contains(text, "[redacted]") || !strings.Contains(text, tc.want) {
+				t.Fatal("agent diagnostic escaped redaction or lost safe context")
+			}
+		})
 	}
 }

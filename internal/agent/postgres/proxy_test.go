@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -193,5 +194,139 @@ func TestProxyAcceptsNoPublishedBackendsDuringBootstrap(t *testing.T) {
 	s.CAPEM, _ = testTLS(t)
 	if err := validate(s); err != nil {
 		t.Fatalf("proxy must start without publishing unready bootstrap identities: %v", err)
+	}
+}
+
+func proxyStatusWireFixture(t *testing.T, address string, query func(string) ([]string, [][]string, bool)) {
+	t.Helper()
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var connections sync.WaitGroup
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			connections.Add(1)
+			go func() {
+				defer connections.Done()
+				defer conn.Close()
+				_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+				backend := pgproto3.NewBackend(conn, conn)
+				if _, err := backend.ReceiveStartupMessage(); err != nil {
+					return
+				}
+				backend.Send(&pgproto3.AuthenticationOk{})
+				backend.Send(&pgproto3.ParameterStatus{Name: "client_encoding", Value: "UTF8"})
+				backend.Send(&pgproto3.ParameterStatus{Name: "standard_conforming_strings", Value: "on"})
+				backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+				if backend.Flush() != nil {
+					return
+				}
+				for {
+					message, err := backend.Receive()
+					if err != nil {
+						return
+					}
+					request, ok := message.(*pgproto3.Query)
+					if !ok {
+						return
+					}
+					names, rows, fail := query(request.String)
+					if fail {
+						backend.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "08006", Message: "backend unavailable"})
+					} else {
+						fields := make([]pgproto3.FieldDescription, len(names))
+						for i, name := range names {
+							fields[i] = pgproto3.FieldDescription{Name: []byte(name), DataTypeOID: 25, DataTypeSize: -1}
+						}
+						backend.Send(&pgproto3.RowDescription{Fields: fields})
+						for _, row := range rows {
+							values := make([][]byte, len(row))
+							for i, value := range row {
+								values[i] = []byte(value)
+							}
+							backend.Send(&pgproto3.DataRow{Values: values})
+						}
+						backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("SELECT 1")})
+					}
+					backend.Send(&pgproto3.ReadyForQuery{TxStatus: 'I'})
+					if backend.Flush() != nil {
+						return
+					}
+				}
+			}()
+		}
+	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		<-done
+		connections.Wait()
+	})
+}
+
+func TestProxyStatusProbesIdleShunnedWriter(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		replica, fails bool
+		want           bool
+	}{
+		{"primary-recovers-on-demand", false, false, true},
+		{"replica-is-not-writable", true, false, false},
+		{"unavailable-stays-unready", false, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var demanded atomic.Bool
+			proxyStatusWireFixture(t, "[::1]:5432", func(query string) ([]string, [][]string, bool) {
+				if query != "SHOW transaction_read_only" {
+					t.Errorf("unexpected frontend health query: %s", query)
+				}
+				demanded.Store(true)
+				value := "off"
+				if tc.replica {
+					value = "on"
+				}
+				return []string{"transaction_read_only"}, [][]string{{value}}, tc.fails
+			})
+			proxyStatusWireFixture(t, "127.0.0.1:6132", func(query string) ([]string, [][]string, bool) {
+				if strings.Contains(query, "runtime_pgsql_users") {
+					return []string{"username", "active"}, [][]string{{"postgres", "1"}}, false
+				}
+				if strings.Contains(query, "monitor.pgsql_server_") {
+					return []string{"hostname", "time_start_us", "error"}, nil, false
+				}
+				if strings.Contains(query, "stats_pgsql_connection_pool") {
+					return []string{"hostname", "conn_errors"}, nil, false
+				}
+				if query != "SELECT hostname,hostgroup_id,status FROM runtime_pgsql_servers" {
+					t.Errorf("unexpected admin health query: %s", query)
+				}
+				status := "SHUNNED"
+				if demanded.Load() {
+					status = "ONLINE"
+				}
+				return []string{"hostname", "hostgroup_id", "status"}, [][]string{{"primary", "10", status}}, false
+			})
+			s := testSpec()
+			s.Role = pgspec.RoleProxy
+			s.ListenHost = "::"
+			s.Proxy = &pgspec.Proxy{
+				Admin:   pgspec.Credentials{Username: "admin", Password: "admin-password"},
+				Users:   []pgspec.ProxyUser{{Username: "postgres", Password: "database-password"}},
+				Servers: []string{"primary"},
+			}
+			status := New().status(t.Context(), s, dataPaths(t.TempDir()))
+			if status.Running != tc.want {
+				t.Fatalf("proxy running=%t, want %t; frontend demand=%t", status.Running, tc.want, demanded.Load())
+			}
+			if !demanded.Load() {
+				t.Fatal("TCP and runtime-table probes did not exercise lazy backend recovery")
+			}
+		})
 	}
 }

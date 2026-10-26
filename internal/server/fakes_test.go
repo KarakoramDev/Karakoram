@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -250,7 +251,7 @@ func testServerWithDatabase(t *testing.T, path string) (*Server, *secrets.Sealer
 		t.Fatal(err)
 	}
 	hub := events.NewHub(128)
-	rc := engine.Context{Backend: fakeBackend{}, Store: st, Secrets: st, Events: events.NewRecorder(st, hub), Clock: engine.RealClock{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	rc := engine.Context{Backend: fakeBackend{}, Store: st, Secrets: st, Events: events.NewRecorder(st, hub), Clock: engine.RealClock{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), ObservationEpoch: rand.Text()}
 	for _, name := range []string{"prod", "dev"} {
 		c := domain.Cluster{Name: name, Spec: domain.ClusterSpec{Provider: "fake", Version: "8.0", Topology: domain.Topology{Type: "replicaSet"}}, Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1, Members: []domain.MemberStatus{{Name: name + "m0", Set: "rs0", Health: true}}}}
 		(&fakeProvider{}).ApplyDefaults(&c.Spec)

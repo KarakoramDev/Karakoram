@@ -48,6 +48,7 @@ var commandSpecs = append(append([]commandSpec{
 	{"clusters delete <cluster>", "deleteCluster", 1, false, []queryFlag{{"keep-volumes", "keepVolumes", "bool"}, {"keep-backups", "keepBackups", "bool"}}},
 	{"clusters resume <cluster>", "resumeCluster", 1, false, []queryFlag{}},
 	{"clusters restart <cluster>", "restartCluster", 1, false, []queryFlag{}},
+	{"clusters retry-deployments <cluster>", "retryClusterDeployments", 1, false, []queryFlag{}},
 	{"clusters raise-fcv <cluster>", "raiseClusterFCV", 1, true, []queryFlag{}},
 	{"clusters replace-member <cluster> <member>", "replaceClusterMember", 2, false, []queryFlag{}},
 	{"clusters rotate-tls <cluster>", "rotateClusterTLS", 1, false, []queryFlag{}},

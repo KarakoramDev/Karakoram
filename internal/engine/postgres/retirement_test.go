@@ -472,3 +472,73 @@ func TestRetirementSelectsBackendFenceForTransportFailure(t *testing.T) {
 		t.Fatal("unreachable status transport did not select infrastructure fence", err)
 	}
 }
+
+func TestRetirementFencesReachableStoppedSupervisor(t *testing.T) {
+	for _, stage := range []string{"switchover", "untag", "tags", "stop"} {
+		for _, processState := range []string{"failed", "stopped"} {
+			t.Run(stage+"/"+processState, func(t *testing.T) {
+				p, rc, b := setup(t, "ha")
+				s := converge(t, p, rc)
+				m := s.find("demop1")
+				m.Retirement = stage
+				b.statusOverrides = map[string]pgspec.StatusResponse{
+					m.Name: {Role: "unknown", Running: false, Leader: "demop0"},
+				}
+				b.genericOverrides = map[string]agentapi.Status{
+					m.Name: {Processes: map[string]agentapi.ProcessStatus{
+						"patroni": {State: processState},
+					}},
+				}
+				if err := save(rc.Cluster, s); err != nil {
+					t.Fatal(err)
+				}
+				fenced := false
+				for range 10 {
+					ok, err := fenceRetirement(t.Context(), rc, s, m)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if ok {
+						fenced = true
+						break
+					}
+					if m.Retirement == "runtime-wait" {
+						b.runtimeStopBusy = true
+						if ok, err := fenceRetirement(t.Context(), rc, s, m); ok || err != nil || m.Retirement != "runtime-wait" {
+							t.Fatal("an accepted stop was mistaken for terminal runtime evidence", err)
+						}
+						b.runtimeStopBusy = false
+					}
+				}
+				if !fenced || !slices.Contains(b.actions, "runtime-stop:"+m.Name) {
+					t.Fatal("reachable stopped supervisor stranded retirement without a runtime fence")
+				}
+				if slices.Contains(b.actions, "retire-stop:"+m.Name) {
+					t.Fatal("stopped supervisor was treated as a streaming, locally fenced replica")
+				}
+			})
+		}
+	}
+}
+
+func TestStoppedSupervisorRetirementRequiresSurvivingLeader(t *testing.T) {
+	p, rc, b := setup(t, "ha")
+	s := converge(t, p, rc)
+	m := s.find("demop1")
+	m.Retirement = "tags"
+	b.statusOverrides = map[string]pgspec.StatusResponse{
+		m.Name: {Role: "unknown", Running: false},
+	}
+	b.genericOverrides = map[string]agentapi.Status{
+		m.Name: {Processes: map[string]agentapi.ProcessStatus{
+			"patroni": {State: "failed"},
+		}},
+	}
+	b.leader = "missing"
+	if ok, err := fenceRetirement(t.Context(), rc, s, m); ok || !errors.Is(err, engine.ErrUnavailable) || m.Retirement != "tags" {
+		t.Fatal("stopped supervisor bypassed the surviving-primary prerequisite", err)
+	}
+	if slices.Contains(b.actions, "runtime-stop:"+m.Name) {
+		t.Fatal("runtime stop preceded surviving-primary evidence")
+	}
+}

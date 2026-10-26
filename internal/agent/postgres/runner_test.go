@@ -26,7 +26,7 @@ import (
 )
 
 func testSpec() pgspec.Spec {
-	return pgspec.Spec{Role: pgspec.RoleData, Topology: pgspec.TopologySingle, Scope: "test-scope", Member: "member0", Major: 17, BinDir: "/usr/lib/postgresql/17/bin", Version: "17.11.1", Superuser: pgspec.Credentials{Username: "postgres", Password: "super-secret"}, Replication: pgspec.Credentials{Username: "kk_replicator", Password: "replication-secret"}, Rewind: pgspec.Credentials{Username: "kk_rewind", Password: "rewind-secret"}, Monitor: pgspec.Credentials{Username: "kk_monitor", Password: "monitor-secret"}, PatroniREST: pgspec.Credentials{Username: "kk_admin", Password: "rest-secret"}, Postgres: &pgspec.Postgres{Synchronous: pgspec.SyncStrict, ClientCIDRs: []string{"127.0.0.0/8"}}}
+	return pgspec.Spec{Bootstrap: &pgspec.Bootstrap{Method: "initdb", AllowInitDB: true}, Role: pgspec.RoleData, Topology: pgspec.TopologySingle, Scope: "test-scope", Member: "member0", Major: 17, BinDir: "/usr/lib/postgresql/17/bin", Version: "17.11.1", Superuser: pgspec.Credentials{Username: "postgres", Password: "super-secret"}, Replication: pgspec.Credentials{Username: "kk_replicator", Password: "replication-secret"}, Rewind: pgspec.Credentials{Username: "kk_rewind", Password: "rewind-secret"}, Monitor: pgspec.Credentials{Username: "kk_monitor", Password: "monitor-secret"}, PatroniREST: pgspec.Credentials{Username: "kk_admin", Password: "rest-secret"}, Postgres: &pgspec.Postgres{Synchronous: pgspec.SyncStrict, ClientCIDRs: []string{"127.0.0.0/8"}}}
 }
 func testTLS(t *testing.T) (string, *pgspec.Certificate) {
 	t.Helper()
@@ -148,7 +148,7 @@ func TestConversionOnlyOriginalMemberMayBootstrap(t *testing.T) {
 			s := testSpec()
 			s.Topology = pgspec.TopologyHA
 			s.Member = name
-			s.Bootstrap = &pgspec.Bootstrap{Method: "initdb", SeedMember: "member0"}
+			s.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: true, SeedMember: "member0"}
 			text, err := renderPatroni(s, dataPaths("/volume"))
 			if err != nil {
 				t.Fatal(err)

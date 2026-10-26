@@ -19,6 +19,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/store"
@@ -60,9 +61,15 @@ func joinComponentsWithoutFinalReadiness(t *testing.T, p *Provider, rc *engine.C
 		if err != nil || status.Phase != phase || status.ObservedGeneration != observed {
 			t.Fatalf("final discovery wait: phase=%s observed=%d, want %s/%d, err=%v", status.Phase, status.ObservedGeneration, phase, observed, err)
 		}
+		if !strings.Contains(status.Message, "Gateway upstream observation") {
+			t.Fatalf("missing final gateway cluster diagnosis: %s", status.Message)
+		}
 		for _, member := range status.Members {
 			if member.Set == "gateway" && !member.Health {
 				t.Fatal("unresolved upstreams must not revoke gateway bootstrap health")
+			}
+			if member.Set == "gateway" && !strings.Contains(member.Agent.Message, "Gateway upstream observation") {
+				t.Fatalf("missing final gateway member diagnosis: %+v", member)
 			}
 		}
 		return
@@ -198,8 +205,14 @@ type gatewayInstanceFixture struct {
 	version      int64
 	hosts        map[string]int
 	ready        bool
+	message      string
+	reason       string
+	s3CheckedAt  *time.Time
+	delay        time.Duration
 	unobservable bool
+	hung         bool
 	observations int
+	processes    map[string]agentapi.ProcessStatus
 	server       *httptest.Server
 }
 
@@ -219,14 +232,29 @@ func newGatewayInstanceFixture(t *testing.T, member string, version int64, tlsCo
 		}
 		switch r.URL.Path {
 		case "/v1/status":
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: f.version})
+			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: f.version, Processes: f.processes})
 		case "/v1/supabase/status":
+			var request struct{}
+			_ = json.NewDecoder(r.Body).Decode(&request)
 			f.observations++
+			if f.hung {
+				f.mu.Unlock()
+				<-r.Context().Done()
+				f.mu.Lock()
+				return
+			}
+			if f.delay > 0 {
+				select {
+				case <-time.After(f.delay):
+				case <-r.Context().Done():
+					return
+				}
+			}
 			if f.unobservable {
 				http.Error(w, "observation unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			json.NewEncoder(w).Encode(sbspec.Status{Ready: f.ready, GatewayUpstreamHosts: f.hosts})
+			json.NewEncoder(w).Encode(sbspec.Status{Ready: f.ready, Message: f.message, Reason: f.reason, StorageS3CheckedAt: f.s3CheckedAt, GatewayUpstreamHosts: f.hosts})
 		default:
 			http.NotFound(w, r)
 		}
@@ -331,6 +359,17 @@ func TestFinalGatewayReadinessRequiresEveryLiveInstance(t *testing.T) {
 					t.Fatalf("one healthy gateway acknowledged the stack: phase=%s observed=%d/%d err=%v",
 						status.Phase, status.ObservedGeneration, rc.Cluster.Status.ObservedGeneration, err)
 				}
+				if !strings.Contains(status.Message, "Gateway upstream observation") {
+					t.Fatalf("gateway cluster diagnosis missing: %s", status.Message)
+				}
+				for _, member := range status.Members {
+					if member.Name == m.Name && !strings.Contains(member.Agent.Message, "Gateway upstream observation") {
+						t.Fatalf("gateway uncertainty hidden: %+v", member)
+					}
+					if member.Name == m.Name && (failure == "unresolved" || failure == "missing-upstream") && !member.Health {
+						t.Fatalf("final upstream evidence revoked bootstrap health: %+v", member)
+					}
+				}
 			}
 			b.mu.Lock()
 			b.version, b.hosts["rest"], b.unobservable, b.ready = m.ConfigVersion, 1, false, true
@@ -387,5 +426,55 @@ func TestFinalGatewayReadinessRefreshesLiveInventory(t *testing.T) {
 				t.Fatal("replacement inherited another instance's acknowledgement")
 			}
 		})
+	}
+}
+
+func TestSupabaseReadyPreservesSlotRetentionReason(t *testing.T) {
+	p, rc, backend := setupProvider(t)
+	convergeProvider(t, p, rc)
+	client, err := rc.Agents.Dial(t.Context(), rc.Cluster.Ref(), "demop0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	var native pgspec.StatusResponse
+	if err := client.Engine(t.Context(), "postgres", "status", struct{}{}, &native); err != nil {
+		t.Fatal(err)
+	}
+	native.SlotStatusKnown = true
+	native.ReplicationSlots = []pgspec.ReplicationSlot{{Name: "application_consumer", Type: "logical", RetainedBytes: 4 << 30, WALStatus: "extended"}}
+	backend.nativeStatus = map[string]pgspec.StatusResponse{"demop0": native}
+	rc.Cluster.Generation++
+	status, err := p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]domain.Condition{}
+	for _, condition := range status.Conditions {
+		found[condition.Type] = condition
+	}
+	ready, slots, components := found["Ready"], found["ReplicationSlots"], found["ComponentsReady"]
+	if ready.Status != "False" || ready.Reason != "SlotWALRetention" || slots.Status != "False" || slots.Reason != ready.Reason || components.Status != "True" {
+		t.Fatalf("slot-only Supabase blocker misreported: Ready=%+v slots=%+v components=%+v", ready, slots, components)
+	}
+	for _, member := range status.Members {
+		if !member.Health {
+			t.Fatalf("slot-only blocker changed serving member health: %+v", member)
+		}
+	}
+	if status.ObservedGeneration >= rc.Cluster.Generation {
+		t.Fatal("slot-only blocker acknowledged the new generation")
+	}
+	// An unrelated optional-component outage must not overwrite this genuine
+	// database blocker with a component-level Ready reason.
+	backend.deployed[rc.Cluster.Name+"au"] = false
+	status, err = p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, condition := range status.Conditions {
+		if condition.Type == "Ready" && (condition.Status != "False" || condition.Reason != "SlotWALRetention") {
+			t.Fatalf("component outage hid the database slot blocker: %+v", condition)
+		}
 	}
 }

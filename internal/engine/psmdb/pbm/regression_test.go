@@ -17,15 +17,18 @@ func TestFirstPITRBaseCheckFollowsDisabledConfiguration(t *testing.T) {
 	env, _, fake, _ := setup(t)
 	env.PITR.Enabled = true
 	fake.requireConfig = true
+	fake.mu.Lock()
 	fake.deleted = true
+	fake.mu.Unlock()
 	if _, err := EnsureConfig(context.Background(), env, ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.requests) < 2 || fake.requests[0].Command != "config" {
+	requests := fake.recordedRequests()
+	if len(requests) < 2 || requests[0].Command != "config" {
 		t.Fatal("list ran before initial configuration")
 	}
 	var config string
-	_ = json.Unmarshal(fake.requests[0].Config, &config)
+	_ = json.Unmarshal(requests[0].Config, &config)
 	if !strings.Contains(config, "enabled: false") {
 		t.Fatal("PITR started without a base")
 	}
@@ -50,7 +53,7 @@ func TestAlternateBackupReestablishesPrimaryBeforeCompletion(t *testing.T) {
 	drive(t, env, &domain.Operation{ID: "alternate-backup", Payload: json.RawMessage(`{"backup":"alt"}`)}, RunBackup, false)
 	configured := []string{}
 	resyncs := 0
-	for _, req := range fake.requests {
+	for _, req := range fake.recordedRequests() {
 		if req.Command == "config" && len(req.Config) > 0 {
 			var text string
 			_ = json.Unmarshal(req.Config, &text)
@@ -75,7 +78,7 @@ func TestDeleteResynchronizesRecordedDestinationBeforeDeletion(t *testing.T) {
 	if err := st.CreateBackupStorage(ctx, &alternate); err != nil {
 		t.Fatal(err)
 	}
-	b := &domain.Backup{Name: "alt", Cluster: "target", Storage: "alternate", PBMPrefix: "immutable/old-prefix", PBMName: "2024-01-05T11:10:54Z", Type: "logical"}
+	b := &domain.Backup{Name: "alt", Cluster: "target", Storage: "alternate", PBMPrefix: "immutable/old-prefix", PBMName: "2024-01-05T11:10:54Z", Location: "unrelated/public/reference/", Type: "logical"}
 	if err := st.CreateBackup(ctx, b); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +86,7 @@ func TestDeleteResynchronizesRecordedDestinationBeforeDeletion(t *testing.T) {
 	resynced := false
 	configured := false
 	deleted := false
-	for _, req := range fake.requests {
+	for _, req := range fake.recordedRequests() {
 		if req.Command == "config" && len(req.Config) > 0 {
 			var text string
 			_ = json.Unmarshal(req.Config, &text)
@@ -95,6 +98,9 @@ func TestDeleteResynchronizesRecordedDestinationBeforeDeletion(t *testing.T) {
 			resynced = true
 		}
 		if req.Command == "delete-backup" {
+			if !slices.Equal(req.Args, []string{b.PBMName, "--yes"}) {
+				t.Fatalf("delete used public location instead of native name: %v", req.Args)
+			}
 			if !configured || !resynced {
 				t.Fatal("delete checked wrong destination")
 			}
@@ -136,7 +142,7 @@ func TestRestoreUsesProvenanceAfterSourceDeletionAndResetsAllModes(t *testing.T)
 				t.Fatal("snapshot credential recovery missing")
 			}
 			var first string
-			for _, req := range fake.requests {
+			for _, req := range fake.recordedRequests() {
 				if len(req.Config) > 0 {
 					_ = json.Unmarshal(req.Config, &first)
 					break
@@ -217,8 +223,9 @@ func TestRoutersWaitForWholeServiceStopAndStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cp.Step != "routers-off" || cp.Index != 0 || cp.RouterOp == nil || !slices.Equal(fake.actions, []string{"/service/routers/stop"}) {
-		t.Fatalf("did not wait for entire service: %s %v", op.Checkpoint, fake.actions)
+	actions := fake.recordedActions()
+	if cp.Step != "routers-off" || cp.Index != 0 || cp.RouterOp == nil || !slices.Equal(actions, []string{"/service/routers/stop"}) {
+		t.Fatalf("did not wait for entire service: %s %v", op.Checkpoint, actions)
 	}
 	backend.done = true
 	res, err := RunRestore(ctx, env, op)
@@ -238,7 +245,8 @@ func TestRoutersWaitForWholeServiceStopAndStart(t *testing.T) {
 		}
 		op.Checkpoint = res.Checkpoint
 	}
-	if !slices.Equal(fake.actions, []string{"/service/routers/stop", "/service/routers/start"}) {
-		t.Fatal("did not restart entire service", fake.actions)
+	actions = fake.recordedActions()
+	if !slices.Equal(actions, []string{"/service/routers/stop", "/service/routers/start"}) {
+		t.Fatal("did not restart entire service", actions)
 	}
 }

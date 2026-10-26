@@ -53,7 +53,7 @@ func TestVerifyProbeLifecycle(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	storage := domain.BackupStorage{Type: "s3", EndpointURL: server.URL, Bucket: "test-bucket", Prefix: "nested/prefix/", ForcePathStyle: true, VerifyTLS: true}
+	storage := domain.BackupStorage{Type: "s3", EndpointURL: server.URL, Bucket: "test-bucket", Prefix: "nested/prefix/", ForcePathStyle: false, VerifyTLS: true}
 	err := verifyLocal(t, storage, domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestVerifyTLSChoice(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	storage := domain.BackupStorage{Type: "s3", EndpointURL: server.URL, Bucket: "test-bucket", ForcePathStyle: true, VerifyTLS: true}
+	storage := domain.BackupStorage{Type: "s3", EndpointURL: server.URL, Bucket: "test-bucket", ForcePathStyle: false, VerifyTLS: true}
 	creds := domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}
 	if err := verifyLocal(t, storage, creds); err == nil || !strings.Contains(err.Error(), "TLS certificate verification") {
 		t.Fatalf("TLS verification error: %v", err)
@@ -99,7 +99,7 @@ func TestVerifyErrors(t *testing.T) {
 		code    string
 		status  int
 		message string
-	}{{"AccessDenied", 403, "authentication or permission"}, {"InvalidAccessKeyId", 403, "authentication or permission"}, {"NoSuchBucket", 404, "bucket does not exist"}} {
+	}{{"AccessDenied", 403, "authentication or permission"}, {"InvalidAccessKeyId", 403, "authentication or permission"}, {"NoSuchBucket", 404, "bucket does not exist"}, {"RequestTimeTooSkewed", 403, "control-plane host clock"}} {
 		t.Run(item.code, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/xml")

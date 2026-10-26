@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -76,7 +77,8 @@ type state struct {
 	PlatformRetries map[string]*platformRetry `json:"platformRetries,omitempty"`
 	// InitialRestore tracks spec.dataSource: empty, initial-restore, done, or
 	// abandoned when deletion interrupts it; abandoned is never retried implicitly.
-	InitialRestore string `json:"initialRestore,omitempty"`
+	InitialRestore      string `json:"initialRestore,omitempty"`
+	InitialRestoreError string `json:"initialRestoreError,omitempty"`
 	// RestoreActive suspends component restarts and security re-ensure while a
 	// restore runs; retained-volume resume abandons and clears retired intent.
 	RestoreActive bool `json:"restoreActive,omitempty"`
@@ -91,19 +93,26 @@ type state struct {
 	// retained Elasticsearch nodes rejoin; the retired restore is not resumed.
 	ResumeRestoreReset bool `json:"resumeRestoreReset,omitempty"`
 	// Cleanup progress.
-	CleanupBackups bool `json:"cleanupBackups,omitempty"`
-	CleanupSecrets bool `json:"cleanupSecrets,omitempty"`
+	CleanupBackups       bool       `json:"cleanupBackups,omitempty"`
+	CleanupSecrets       bool       `json:"cleanupSecrets,omitempty"`
+	BackupCleanupStarted *time.Time `json:"backupCleanupStarted,omitempty"`
+	CleanedRepositories  []string   `json:"cleanedRepositories,omitempty"`
+	RetainedRepositories []string   `json:"retainedRepositories,omitempty"`
 }
 
 // member is one Zerops service: an Elasticsearch node (with its own volume)
 // or a stateless component service.
 type member struct {
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	Index     int    `json:"index"`
-	Volume    string `json:"volume,omitempty"`
-	ServiceID string `json:"serviceId,omitempty"`
-	VolumeID  string `json:"volumeId,omitempty"`
+	Name               string                     `json:"name"`
+	NativeReadiness    *bool                      `json:"nativeReadiness,omitempty"`
+	RuntimeRecovery    engine.RuntimeRecovery     `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement *engine.UnplacedRetirement `json:"unplacedRetirement,omitempty"`
+	ImportPlan         *engine.ImportPlan         `json:"importPlan,omitempty"`
+	Kind               string                     `json:"kind"`
+	Index              int                        `json:"index"`
+	Volume             string                     `json:"volume,omitempty"`
+	ServiceID          string                     `json:"serviceId,omitempty"`
+	VolumeID           string                     `json:"volumeId,omitempty"`
 	// VolumeOrphaned marks a volume Zerops refused to delete (tracked as an
 	// orphaned volume record, as for PSMDB).
 	VolumeOrphaned bool   `json:"volumeOrphaned,omitempty"`
@@ -162,6 +171,9 @@ type rolling struct {
 	Order []string `json:"order"`
 	// Done lists members finished.
 	Done []string `json:"done"`
+	// Skipped lists disabled optional components, not completed restarts.
+	// Re-enabled components must re-enter the pass before it can finish.
+	Skipped []string `json:"skipped,omitempty"`
 	// Current member and its step: "prepare" (allocation primaries + flush),
 	// "apply", "rejoin", "recover".
 	Current string `json:"current,omitempty"`
@@ -183,6 +195,7 @@ type pending struct {
 
 // platformRetry is durable backoff for a failed platform action.
 type platformRetry struct {
+	engine.RetrySchedule
 	Failures      int       `json:"failures"`
 	RetryAfter    time.Time `json:"retryAfter"`
 	Message       string    `json:"message"`

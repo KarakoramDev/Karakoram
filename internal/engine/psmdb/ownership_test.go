@@ -47,6 +47,9 @@ func failedMemberImport(t *testing.T) (*Provider, *engine.Context, *fakeInfra) {
 	if _, err := p.Sync(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal("checkpoint import batch", err)
+	}
 	if _, err := p.Sync(t.Context(), rc); err == nil {
 		t.Fatal("expected partial import failure")
 	}
@@ -82,7 +85,7 @@ func TestPartialImportProcessRetryAdoptsUntaggedVolume(t *testing.T) {
 	p, rc, f, _ := setup(t)
 	rc.Backend = &partialImportInfra{fakeInfra: f, processFailure: true}
 	rc.Clock = &retryClock{at: time.Now()}
-	for range 2 {
+	for range 3 {
 		if _, err := p.Sync(t.Context(), rc); err != nil {
 			t.Fatal(err)
 		}

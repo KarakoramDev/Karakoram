@@ -279,7 +279,13 @@ func TestLegacyCloneCanBePatchedAfterMigration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(`INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,'{"phase":"Ready"}','{}',1,0,'{}',1,1)`, name, data); err != nil {
+		// A legacy Ready phase alone is not proof that a clone restored data.
+		// Preserve an actual successful native restore receipt through migration.
+		internal := `{}`
+		if name == "clone" {
+			internal = `{"initialRestore":{"operationID":"legacy-initial-restore","nativeName":"native-restored","completed":true}}`
+		}
+		if _, err = db.Exec(`INSERT INTO clusters(name,spec,status,internal,generation,deleting,delete_options,created,updated) VALUES(?,?,'{"phase":"Ready"}',?,1,0,'{}',1,1)`, name, data, internal); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 func (s *Store) GetNamespace(ctx context.Context, name string) (*domain.Namespace, error) {
@@ -33,7 +34,7 @@ func getNamespace(ctx context.Context, db *sql.DB, name string) (*domain.Namespa
 		return nil, err
 	}
 	var n domain.Namespace
-	if err := json.Unmarshal(data, &n); err != nil {
+	if err := json.Unmarshal(redact.DiagnosticsJSON(data), &n); err != nil {
 		return nil, err
 	}
 	normalizeNamespace(&n)
@@ -61,7 +62,7 @@ func listNamespaces(ctx context.Context, db *sql.DB) ([]domain.Namespace, error)
 		if err = rows.Scan(&data); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(data, &n); err != nil {
+		if err = json.Unmarshal(redact.DiagnosticsJSON(data), &n); err != nil {
 			return nil, err
 		}
 		normalizeNamespace(&n)
@@ -177,12 +178,20 @@ func (s *Store) namespaceSecret(ctx context.Context, name, kind string) ([]byte,
 	return s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
 }
 
+// ErrSecretUnreadable means persisted namespace credentials could not be decrypted.
+// Database and context failures do not match this sentinel.
+var ErrSecretUnreadable = errors.New("stored namespace secret is unreadable")
+
 func (s *Store) namespaceSecretForUpdate(ctx context.Context, name, kind string) ([]byte, error) {
 	var sealed string
 	if err := s.writer.QueryRowContext(ctx, "SELECT secret FROM records WHERE kind='namespace-secret' AND scope=? AND key=?", name, kind).Scan(&sealed); err != nil {
 		return nil, typed(err)
 	}
-	return s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
+	plain, err := s.sealer.OpenFor("namespace/"+name+"/"+kind, sealed)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrSecretUnreadable, err)
+	}
+	return plain, nil
 }
 func (s *Store) GetNamespaceToken(ctx context.Context, name string) (string, error) {
 	n, err := s.GetNamespace(ctx, name)

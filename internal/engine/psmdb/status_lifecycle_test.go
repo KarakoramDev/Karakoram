@@ -6,9 +6,12 @@ package psmdb
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
@@ -144,6 +147,83 @@ func TestCancellationRejectsDataMutationAndSupportsWaitingCheckpoints(t *testing
 		err := p.CanCancelOperation(context.Background(), &domain.Operation{ID: "task", Kind: tc.kind, Checkpoint: json.RawMessage(tc.checkpoint)})
 		if (err == nil) != tc.allowed {
 			t.Fatalf("%s %s: %v", tc.kind, tc.checkpoint, err)
+		}
+	}
+}
+
+func TestStatusPausedProcessRemainsConnectedAndExplainsRecovery(t *testing.T) {
+	for _, process := range []string{"mongos", "mongod", "pbm-agent"} {
+		t.Run(process, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			rc.Cluster.Spec.Topology = domain.Topology{Type: "sharded", Shards: 1}
+			p.ApplyDefaults(&rc.Cluster.Spec)
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.UID = "paused-runtime"
+			plan(rc.Cluster, s)
+			if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+				t.Fatal(err)
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
+				_ = json.NewEncoder(w).Encode(agentapi.Status{Processes: map[string]agentapi.ProcessStatus{
+					"mongos": {State: "running"}, "mongod": {State: "running"},
+					process: {State: "paused", Error: "stopped by signal; inspect before SIGCONT"},
+				}})
+			})
+			got, err := p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, member := range got.Members {
+				if !member.Agent.Healthy || member.Health || member.State != "paused" || !strings.Contains(member.Agent.Message, "SIGCONT") {
+					t.Fatalf("paused process not surfaced independently of agent connectivity: %+v", member)
+				}
+				found := false
+				for _, condition := range got.Conditions {
+					if condition.Type == "Process/"+member.Name+"/"+process {
+						found = condition.Reason == "ProcessPaused" && condition.Status == "False" && strings.Contains(condition.Message, "investigate") && strings.Contains(condition.Message, "SIGCONT")
+					}
+				}
+				if !found {
+					t.Fatalf("missing paused condition for %s: %+v", member.Name, got.Conditions)
+				}
+			}
+			if len(got.Members) == 0 {
+				t.Fatal("no members observed")
+			}
+		})
+	}
+}
+
+func TestStatusConfigurationErrorPreservesAgentConnectivity(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.UID = "configuration-diagnostic"
+	plan(rc.Cluster, s)
+	if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	rc.Agents = responder(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(agentapi.Status{Error: "publication refused", Processes: map[string]agentapi.ProcessStatus{"mongod": {State: "running"}}})
+	})
+	got, err := p.Status(t.Context(), rc)
+	if err != nil || len(got.Members) == 0 {
+		t.Fatal(got, err)
+	}
+	for _, member := range got.Members {
+		if member.Health || !member.Agent.Healthy || !strings.Contains(member.Agent.Message, "publication refused") {
+			t.Fatalf("configuration error hid responding agent: %+v", member)
 		}
 	}
 }

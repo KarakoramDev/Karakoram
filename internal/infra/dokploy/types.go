@@ -6,7 +6,6 @@ package dokploy
 import (
 	"encoding/json"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -17,8 +16,9 @@ const metadataPrefix = "karakoram:v1:"
 type Backend struct {
 	c      *client
 	target infra.Target
-	mu     sync.Mutex
+	mu     *contextMutex
 	now    func() time.Time
+	state  *targetState
 }
 
 var _ infra.Backend = (*Backend)(nil)
@@ -26,9 +26,16 @@ var _ infra.SubdomainAccess = (*Backend)(nil)
 var _ infra.CredentialRotator = (*Backend)(nil)
 
 type metadata struct {
-	Kind                   infra.ServiceKind  `json:"kind"`
-	Hostname               string             `json:"hostname"`
-	Volume                 string             `json:"volume,omitempty"`
+	Kind         infra.ServiceKind `json:"kind"`
+	Hostname     string            `json:"hostname"`
+	Environment  string            `json:"environment,omitempty"`
+	ImportDigest string            `json:"importDigest,omitempty"`
+	Importing    bool              `json:"importing,omitempty"`
+	Volume       string            `json:"volume,omitempty"`
+	// Holder identity and its own hostname-bound marker are not the runtime's
+	// ownership marker. Bind both at import alongside the exact named mount.
+	VolumeID               string             `json:"volumeId,omitempty"`
+	VolumeOwner            string             `json:"volumeOwner,omitempty"`
 	Node                   string             `json:"node,omitempty"`
 	SpreadGroup            string             `json:"spreadGroup,omitempty"`
 	VarKeys                []string           `json:"varKeys,omitempty"`
@@ -38,10 +45,23 @@ type metadata struct {
 	SubdomainEnabled       bool               `json:"subdomainEnabled,omitempty"`
 	DomainHosts            []string           `json:"domainHosts,omitempty"`
 	PublicPorts            []infra.PublicPort `json:"publicPorts,omitempty"`
+	PortsPending           bool               `json:"portsPending,omitempty"`
+	PortChange             *portChange        `json:"portChange,omitempty"`
+	EndpointRepairAttempts int                `json:"endpointRepairAttempts,omitempty"`
+	EndpointRepairAfter    time.Time          `json:"endpointRepairAfter,omitempty"`
 	Resources              infra.Resources    `json:"resources"`
 	Min                    int                `json:"min"`
 	Max                    int                `json:"max"`
 	Deployed               bool               `json:"deployed,omitempty"`
+	AppliedSpecification   string             `json:"appliedSpecification,omitempty"`
+	DeploymentDigest       string             `json:"deploymentDigest,omitempty"`
+	Desired                string             `json:"desired,omitempty"`
+	Pending                *operation         `json:"pending,omitempty"`
+	MutationUntil          time.Time          `json:"mutationUntil,omitempty"`
+	DeleteRemoval          *deleteRemoval     `json:"deleteRemoval,omitempty"`
+	DeleteStopConfirmed    bool               `json:"deleteStopConfirmed,omitempty"`
+	Image                  string             `json:"image,omitempty"`
+	WriterFenced           bool               `json:"writerFenced,omitempty"`
 	Wiping                 bool               `json:"wiping,omitempty"`
 	WipePreviousTasks      []string           `json:"wipePreviousTasks,omitempty"`
 	WipePreviousDeployment string             `json:"wipePreviousDeployment,omitempty"`
@@ -58,17 +78,21 @@ func parseMetadata(s string) (metadata, bool) {
 }
 
 type application struct {
-	ID          string   `json:"applicationId"`
-	Name        string   `json:"name"`
-	AppName     string   `json:"appName"`
-	Description string   `json:"description"`
-	Env         string   `json:"env"`
-	Status      string   `json:"applicationStatus"`
-	Replicas    int      `json:"replicas"`
-	Mounts      []mount  `json:"mounts"`
-	Ports       []port   `json:"ports"`
-	Domains     []domain `json:"domains"`
-	Networks    []struct {
+	ID           string         `json:"applicationId"`
+	Name         string         `json:"name"`
+	AppName      string         `json:"appName"`
+	Environment  string         `json:"environmentId"`
+	Description  string         `json:"description"`
+	Env          string         `json:"env"`
+	Status       string         `json:"applicationStatus"`
+	Replicas     int            `json:"replicas"`
+	SourceType   string         `json:"sourceType"`
+	BuildType    string         `json:"buildType"`
+	UpdateConfig map[string]any `json:"updateConfigSwarm"`
+	Mounts       []mount        `json:"mounts"`
+	Ports        []port         `json:"ports"`
+	Domains      []domain       `json:"domains"`
+	Networks     []struct {
 		Target string `json:"Target"`
 	} `json:"networkSwarm"`
 }

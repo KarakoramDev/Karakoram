@@ -130,7 +130,9 @@ func (b *Backend) setEnv(ctx context.Context, hostname string, values map[string
 	if _, err := encodeEnvironment(values); err != nil {
 		return err
 	}
-	b.mu.Lock()
+	if err := b.mu.Lock(ctx); err != nil {
+		return err
+	}
 	defer b.mu.Unlock()
 	a, m, err := b.require(ctx, hostname)
 	if err != nil {

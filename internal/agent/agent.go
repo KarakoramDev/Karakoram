@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -47,6 +48,17 @@ func OptionsFromEnv() (Options, error) {
 
 // Readiness dispatches the local probe, defaulting to the built-in PSMDB TCP probe.
 func Readiness(ctx context.Context, o Options, args []string, engines ...Engine) error {
+	if len(args) > 0 && args[0] == "--startup" {
+		dir := o.DataDir
+		for _, arg := range args[1:] {
+			v, ok := strings.CutPrefix(arg, "--data-dir=")
+			if !ok {
+				return errors.New("startup readiness accepts only --data-dir=<absolute path>")
+			}
+			dir = v
+		}
+		return startupReadiness(ctx, dir)
+	}
 	engine, err := selectEngine(o.Engine, engines)
 	if err != nil {
 		return err
@@ -62,20 +74,25 @@ func Readiness(ctx context.Context, o Options, args []string, engines ...Engine)
 }
 
 type nodeAgent struct {
-	o          Options
-	client     *agentapi.Client
-	sup        *supervisor
-	mu         sync.RWMutex
-	applyMu    controlMutex
-	pbmMu      sync.Mutex
-	c          agentapi.MemberConfig
-	controls   localControls
-	files      map[string][]byte
-	cert       *tls.Certificate
-	started    time.Time
-	version    string
-	engine     Engine
-	controlsMu sync.RWMutex
+	o               Options
+	client          *agentapi.Client
+	sup             *supervisor
+	mu              sync.RWMutex
+	applyMu         controlMutex
+	pbmMu           sync.Mutex
+	c               agentapi.MemberConfig
+	controls        localControls
+	files           map[string][]byte
+	cert            *tls.Certificate
+	started         time.Time
+	version         string
+	engine          Engine
+	controlsMu      sync.RWMutex
+	controlsErr     error
+	lastError       string
+	startupErr      error
+	acceptedVersion int64
+	volume          *agentapi.VolumeStatus
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -86,47 +103,105 @@ func (a *nodeAgent) reload(ctx context.Context) ([]string, error) {
 	}
 	return a.apply(ctx, c)
 }
-func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]string, error) {
-	a.applyMu.Lock()
+func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes []string, applyErr error) {
+	if err := a.applyMu.LockContext(ctx); err != nil {
+		return nil, err
+	}
 	defer a.applyMu.Unlock()
+	agentInitialization := true
+	superseded := false
+	defer func() {
+		if superseded {
+			return
+		}
+		a.mu.Lock()
+		a.lastError = ""
+		if applyErr != nil {
+			a.lastError = applyErr.Error()
+		}
+		if agentInitialization {
+			a.startupErr = applyErr
+		}
+		a.mu.Unlock()
+	}()
 	if c.Cluster != a.o.Cluster || c.Member != a.o.Member {
 		return nil, errors.New("configuration identity does not match this member")
 	}
 	if engineName(c.Engine) != engineName(a.o.Engine) {
 		return nil, errors.New("configuration engine does not match this member")
 	}
-	if a.engine != nil {
-		return a.applyEngine(ctx, c)
+	if c.ConfigVersion < a.acceptedVersion || c.ConfigVersion < a.config().ConfigVersion {
+		superseded = true
+		if a.o.Logger != nil {
+			a.o.Logger.Warn("superseded configuration refused", "version", c.ConfigVersion, "accepted_version", a.acceptedVersion)
+		}
+		return nil, fmt.Errorf("stale configuration version %d refused", c.ConfigVersion)
 	}
-	c.Maintenance = c.Maintenance || a.controls.Maintenance
 	cert, err := tls.X509KeyPair([]byte(c.AgentTLS.CertPEM), []byte(c.AgentTLS.KeyPEM))
 	if err != nil {
 		return nil, fmt.Errorf("agent TLS: %w", err)
 	}
+	// Transport recovery must not depend on successful storage or engine recovery.
+	a.mu.Lock()
+	if a.cert == nil || !slices.EqualFunc(a.cert.Certificate, cert.Certificate, bytes.Equal) {
+		a.cert = &cert
+	}
+	a.mu.Unlock()
+	a.acceptedVersion = c.ConfigVersion
+	if err := a.volumeSafety(ctx, c); err != nil {
+		return nil, err
+	}
+	if c.Volume != nil {
+		volume := *c.Volume
+		volume.Initialized = true
+		c.Volume = &volume
+	}
+	if a.controlsErr != nil {
+		controls, err := loadControls(a.o.DataDir)
+		if err != nil {
+			return nil, err
+		}
+		a.controls, a.controlsErr = controls, nil
+	}
+	if err := a.saveControls(a.controls); err != nil {
+		return nil, fmt.Errorf("persist safety controls: %w", err)
+	}
+	a.setStartupError(nil)
+	agentInitialization = false
+	if a.engine != nil {
+		return a.applyEngine(ctx, c)
+	}
+	c.Maintenance = c.Maintenance || a.controls.Maintenance
+	old := a.config()
 	files, err := renderedFiles(c, a.o.DataDir)
 	if err != nil {
 		return nil, err
 	}
-	changes := changedFiles(a.files, files)
+	changes = changedFiles(a.files, files)
 	if err = os.MkdirAll(filepath.Join(a.o.DataDir, "db"), 0700); err != nil {
+		a.setStartupError(err)
 		return nil, err
 	}
 	for name, data := range files {
-		if bytes.Equal(a.files[name], data) {
-			continue
-		}
+		path := filepath.Join(a.o.DataDir, "karakoram", name)
+		current, readErr := os.ReadFile(path)
+		stat, statErr := os.Lstat(path)
 		mode := os.FileMode(0600)
 		if name == "keyfile" {
 			mode = 0400
 		}
+		if readErr == nil && statErr == nil && stat.Mode().IsRegular() && stat.Mode().Perm() == mode && bytes.Equal(current, data) {
+			continue
+		}
 		if err = atomicWrite(filepath.Join(a.o.DataDir, "karakoram", name), data, mode); err != nil {
+			a.setStartupError(err)
 			return nil, err
 		}
 	}
 	if err = cacheConfig(c, a.o.DataDir); err != nil {
+		a.setStartupError(err)
 		return nil, err
 	}
-	old := a.config()
 	a.sup.setMaintenance(c.Maintenance)
 	engine := "mongod"
 	if c.Role == agentapi.RoleRouter {
@@ -152,7 +227,9 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]strin
 		if err != nil {
 			return nil, err
 		}
-		a.sup.configure("pbm-agent", processSpec{binary: "pbm-agent", env: []string{"PBM_MONGODB_URI=" + uri}})
+		// Budget changes configure the next launch only. Never restart a
+		// possibly-mutating PBM restore just to apply a new Go soft limit.
+		a.sup.configure("pbm-agent", pbmProcessSpec(c, uri))
 	}
 	desired := func(name string) bool {
 		if a.controls.Stopped[name] {
@@ -168,11 +245,6 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]strin
 		}
 		return false
 	}
-	a.mu.Lock()
-	a.c = c
-	a.cert = &cert
-	a.mu.Unlock()
-	a.files = files
 	states, _ := a.sup.snapshot()
 	for _, name := range []string{engine, "pbm-agent"} {
 		if _, ok := states[name]; !ok {
@@ -190,9 +262,13 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) ([]strin
 			continue
 		}
 		if err = a.sup.action(ctx, name, action); err != nil {
-			a.o.Logger.Warn("process action failed", "process", name, "action", action, "error", err)
+			return changes, fmt.Errorf("apply %s %s: %w", name, action, err)
 		}
 	}
+	a.mu.Lock()
+	a.c = c
+	a.mu.Unlock()
+	a.files = files
 	if pbmChanged && old.Role != "" {
 		changes = append(changes, "pbm-agent credentials")
 	}
@@ -220,30 +296,72 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 	}
 	defer client.Close()
 	a := &nodeAgent{o: o, client: client, sup: newSupervisor(os.Stdout), started: time.Now(), engine: engine}
-	a.controls, err = loadControls(o.DataDir)
-	if err != nil {
-		return err
+	a.sup.ownershipDir = filepath.Join(o.DataDir, "karakoram", "processes")
+	a.sup.beforeStart = func() error {
+		c := a.config()
+		if c.Volume == nil {
+			if observed := a.volumeObservation(); observed != nil {
+				c.Volume = &observed.Identity
+			}
+		}
+		return a.volumeSafety(context.Background(), c)
 	}
-	defer func() {
+	a.controls, a.controlsErr = loadControls(o.DataDir)
+	if a.controlsErr != nil {
+		a.setStartupError(a.controlsErr)
+		o.Logger.Error("local safety controls unavailable", "error", a.controlsErr)
+		a.sup.setMaintenance(true)
+	}
+	shutdownProcesses := sync.OnceFunc(func() {
 		shutdown, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		if err := a.sup.shutdown(shutdown); err != nil {
+		if err := a.shutdown(shutdown); err != nil {
 			o.Logger.Error("child shutdown incomplete", "error", err)
 		}
-	}()
+	})
+	defer shutdownProcesses()
+	// Engine maintenance shares the agent lifetime and stops before native drain.
+	if background, ok := engine.(interface {
+		RunBackground(context.Context, *Node)
+	}); ok {
+		backgroundCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			background.RunBackground(backgroundCtx, &Node{a: a})
+		}()
+		defer func() {
+			cancel()
+			<-done
+		}()
+	}
+	startup, err := serveStartup(o.DataDir, a.startupHealth)
+	if err != nil {
+		return fmt.Errorf("agent startup listener: %w", err)
+	}
+	defer startup.Close()
 	data, err := os.ReadFile(filepath.Join(o.DataDir, "karakoram", "config.json"))
 	if err == nil {
 		var c agentapi.MemberConfig
-		if err = json.Unmarshal(data, &c); err != nil {
-			return err
+		if err = json.Unmarshal(data, &c); err == nil {
+			_, err = a.apply(ctx, c)
+		} else {
+			a.setStartupError(err)
 		}
-		if _, err = a.apply(ctx, c); err != nil {
-			return err
+		if err != nil {
+			o.Logger.Warn("cached configuration unavailable; awaiting authoritative repair", "error", err)
 		}
 	} else if !os.IsNotExist(err) {
-		return err
+		o.Logger.Warn("cached configuration unreadable; awaiting authoritative repair", "error", err)
+		a.setStartupError(err)
 	}
 	for {
+		a.mu.RLock()
+		serving := a.cert != nil
+		a.mu.RUnlock()
+		if serving {
+			break
+		}
 		if _, err = a.reload(ctx); err == nil {
 			break
 		}
@@ -283,11 +401,19 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 	}}}
 	failures := make(chan error, 1)
 	go func() { failures <- server.Serve(tls.NewListener(listener, server.TLSConfig)) }()
+	go func() {
+		if _, err := a.reload(ctx); err != nil {
+			o.Logger.Warn("configuration pull failed", "error", err)
+		}
+	}()
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			// Hand off the database while its DCS is alive, before slow API
+			// clients can consume the platform's termination grace period.
+			shutdownProcesses()
 			shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			return server.Shutdown(shutdown)
@@ -321,11 +447,27 @@ func (a *nodeAgent) handler() http.Handler {
 	}
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		states, maintenance := a.sup.snapshot()
+		var mongoReady *bool
+		var mongoError string
+		if process := states["mongos"]; process.State == "paused" {
+			ready := false
+			mongoReady, mongoError = &ready, process.Error
+		} else {
+			mongoReady, mongoError = a.mongoRouterHealth(r.Context())
+		}
 		disk, err := diskUsage(a.o.DataDir)
 		a.mu.RLock()
 		version := a.version
+		stateError := a.lastError
 		a.mu.RUnlock()
-		respond(w, agentapi.Status{Processes: states, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, err)
+		if err != nil {
+			stateError = fmt.Sprintf("data filesystem unavailable: %v; %s", err, stateError)
+		}
+		certificateReloadOnly := false
+		if capability, ok := a.engine.(interface{ SupportsCertificateReloadOnly() bool }); ok {
+			certificateReloadOnly = capability.SupportsCertificateReloadOnly()
+		}
+		respond(w, agentapi.Status{Processes: states, PBMRestoreFence: a.allowedProcess("pbm-agent"), PBMRestoreIdentity: true, CertificateReloadOnly: certificateReloadOnly, Maintenance: maintenance, Disk: disk, EngineVersion: version, ConfigVersion: a.config().ConfigVersion, Error: stateError, MongoReady: mongoReady, MongoError: mongoError, Volume: a.volumeObservation(), HostFingerprint: hostFingerprint(), UptimeSeconds: int64(time.Since(a.started).Seconds()), Resources: containerResources()}, nil)
 	})
 	mux.HandleFunc("POST /v1/reload", func(w http.ResponseWriter, r *http.Request) {
 		changed, err := a.reload(r.Context())
@@ -333,22 +475,26 @@ func (a *nodeAgent) handler() http.Handler {
 	})
 	mux.HandleFunc("POST /v1/processes/{process}/{action}", func(w http.ResponseWriter, r *http.Request) {
 		name, action := r.PathValue("process"), r.PathValue("action")
-		err := a.processAction(r.Context(), name, action)
+		err := a.processActionRequest(r.Context(), agentapi.ProcessAction{Process: name, Action: action, RequestID: r.Header.Get("Idempotency-Key")})
 		respond(w, agentapi.ActionResponse{Success: err == nil}, err)
 	})
 	mux.HandleFunc("POST /v1/processes", func(w http.ResponseWriter, r *http.Request) {
 		var v agentapi.ProcessAction
 		err := decode(w, r, &v)
 		if err == nil {
-			err = a.processAction(r.Context(), v.Process, v.Action)
+			err = a.processActionRequest(r.Context(), v)
 		}
-		respond(w, agentapi.ActionResponse{Success: err == nil}, err)
+		out := agentapi.ActionResponse{Success: err == nil}
+		if err == nil {
+			out, err = a.processActionResult(v)
+		}
+		respond(w, out, err)
 	})
 	mux.HandleFunc("POST /v1/maintenance", func(w http.ResponseWriter, r *http.Request) {
 		var v agentapi.Maintenance
 		err := decode(w, r, &v)
 		if err == nil {
-			err = a.maintenance(v.Enabled)
+			err = a.maintenanceContext(r.Context(), v.Enabled)
 		}
 		respond(w, agentapi.ActionResponse{Success: err == nil}, err)
 	})

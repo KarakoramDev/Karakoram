@@ -65,6 +65,29 @@ Rotation validates the **same project**, seals the replacement and updates live 
 
 Each relay is one private Ubuntu runtime running `karakoram relay`, with private TCP 9443 and no public access. It connects outbound using WSS, inner mTLS 1.3 and multiplexed streams. Remote agents pull configuration through `https://<relay hostname>:9443` with end-to-end internal TLS.
 
+The outer HTTPS certificate must match the host in `KARAKORAM_PUBLIC_URL`
+and chain to the **relay runtime's system trust store**. `KARAKORAM_RELAY_CA`
+pins the separate inner mTLS connection; it does not trust your HTTPS ingress.
+With a private HTTPS issuer, install its public CA certificate in the
+operator-provided runtime image (on Ubuntu, under
+`/usr/local/share/ca-certificates/`, then run `update-ca-certificates`) before
+deploying the relay. Updating a node's or CLI's trust store alone does not
+update an existing allocation's private rootfs. Never disable verification.
+
+Disconnected status distinguishes an authenticated session that dropped from
+no session observed by this control plane and names the outbound endpoint.
+Observation history is process-local: after a control-plane restart, absence
+does not prove the relay never connected in its lifetime. Pre-connect DNS,
+TCP, outer TLS and WebSocket failures cannot reach the hub; inspect the relay
+runtime logs for the typed failure stage and reason. Logs intentionally omit
+raw transport error text, HTTP response bodies and credential material.
+Outer HTTPS unknown-authority failures require system trust installation;
+inner mTLS unknown-authority failures instead require checking the pinned
+`KARAKORAM_RELAY_CA` and hub enrollment. HTTP 401/403 means ingress
+authentication/authorization rejection, not just a missing Upgrade route.
+Diagnostic authorities are capped at 192 bytes; longer targets are abbreviated
+so reconnect logs and persisted health messages remain bounded.
+
 The hostname appends `relay` to the control-plane hostname; over 25 characters it uses the first sixteen characters, four hexadecimal SHA-256 characters and `relay`. `KARAKORAM_RELAY_HOSTNAME` affects new enrollments only; recorded hostnames/SANs remain unchanged.
 
 The relay's destination policy authorizes exact logical member/port pairs, not
@@ -105,6 +128,17 @@ karactl -n prod orphaned-volumes list
 Invalid credentials/unavailable routing degrade that namespace's management; other namespaces continue reconciling. Existing engine processes may continue, but observations, new configuration pulls and backup control/scheduling can fail or pause. Cached configuration can preserve startup; uncached bootstrap requires connectivity. Do not clear maintenance holds or repeat restores solely because management disconnected.
 
 Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and Zerops deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
+
+Observed owned relays that are stopped or failed are restarted even when their
+deployed executable digest is current; a runtime awaiting its executable is
+redeployed. Recovery has a persisted one-minute cooldown and does not restart a
+connected healthy relay. An accepted backend operation remains a safety fence:
+Karakoram never treats an elapsed timeout as permission for a duplicate mutation.
+`lastError` identifies a pending operation and, after 15 minutes, asks for backend
+inspection or cancellation. Let the backend expose its terminal outcome; never
+erase the control-plane operation checkpoint to unblock deletion or deployment.
+Cancelled namespace mutation requests stop waiting for an occupied lifecycle
+lock without cancelling or duplicating the operation that already owns it.
 
 ## Backup storages
 
@@ -148,6 +182,7 @@ Deletion returns **202 without an Operation ID/body** and marks `Deleting`; poll
 | --- | --- | --- |
 | Token invalid | Explicit access rejection | Validate scope/project; rotate the infrastructure token, not a Karakoram API token |
 | Temporary Zerops API error | Rate limit/outage/connectivity | Keep token; inspect timestamps; allow automatic retry or validate after recovery |
+| Nomad namespace validation returns 422 `invalid_namespace` with a TLS diagnostic | Server certificate verification or client certificate rejection | Follow the named TLS setting: check `KARAKORAM_NOMAD_TLS_SERVER_NAME` against certificate SANs, `KARAKORAM_NOMAD_CACERT` for trust, or `KARAKORAM_NOMAD_CLIENT_CERT` / `KARAKORAM_NOMAD_CLIENT_KEY` for mTLS; no namespace or token is saved |
 | Relay Pending/Deploying/Error | Capacity, deployment or ownership conflict | Inspect `lastError`/platform logs; never adopt a foreign hostname or replace enrollment manually |
 | Disconnected | Origin/certificate/WebSocket failure | Check outbound HTTPS/Upgrade and session fields; do not restart database members first |
 | Target refused | Unresolved/unavailable target or policy update lag | Brief refusals during topology changes are expected; persistent refusals need generated-hostname checks; never broaden policy to arbitrary services/IPs |

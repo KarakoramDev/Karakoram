@@ -169,7 +169,7 @@ func (c *Client) DeleteSnapshot(ctx context.Context, repo, name string) error {
 	return c.do(ctx, "DELETE", snapshotPath(repo, name), nil, nil, nil)
 }
 
-// RestoreRequest selects data and state for an asynchronous restore.
+// RestoreRequest selects data and state for a restore.
 type RestoreRequest struct {
 	Indices            string   `json:"indices,omitempty"`
 	IncludeGlobalState bool     `json:"include_global_state"`
@@ -178,9 +178,42 @@ type RestoreRequest struct {
 	IgnoreUnavailable  bool     `json:"ignore_unavailable"`
 }
 
-// RestoreSnapshot starts a restore without waiting for completion.
+// ErrRestoreFailed identifies an explicit unsuccessful native completion.
+var ErrRestoreFailed = errors.New("snapshot restore failed")
+
+// RestoreSnapshot waits for native completion and requires an explicit complete
+// shard result. Submission acceptance or an empty recovery list is not evidence
+// that a snapshot restored successfully.
 func (c *Client) RestoreSnapshot(ctx context.Context, repo, name string, req RestoreRequest) error {
-	return c.do(ctx, "POST", snapshotPath(repo, name)+"/_restore", boolQuery("wait_for_completion", false), req, nil)
+	var result struct {
+		Snapshot *struct {
+			Shards *struct {
+				Total      *int `json:"total"`
+				Successful *int `json:"successful"`
+				Failed     *int `json:"failed"`
+			} `json:"shards"`
+		} `json:"snapshot"`
+	}
+	// Recovery may outlast ordinary API calls. Retain transport bounds and
+	// caller cancellation without the short ordinary request timeout.
+	restoreClient := *c
+	httpClient := *c.http
+	httpClient.Timeout = 0
+	restoreClient.http = &httpClient
+	if err := restoreClient.do(ctx, "POST", snapshotPath(repo, name)+"/_restore", boolQuery("wait_for_completion", true), req, &result); err != nil {
+		return err
+	}
+	if result.Snapshot == nil || result.Snapshot.Shards == nil {
+		return errors.New("snapshot restore returned no native completion evidence")
+	}
+	shards := result.Snapshot.Shards
+	if shards.Failed != nil && *shards.Failed > 0 {
+		return ErrRestoreFailed
+	}
+	if shards.Total == nil || shards.Successful == nil || shards.Failed == nil || *shards.Failed != 0 || *shards.Total != *shards.Successful || *shards.Total < 0 {
+		return errors.New("snapshot restore did not report successful completion of every shard")
+	}
+	return nil
 }
 
 // RecoveryInProgress reports whether any active shard recovery remains.

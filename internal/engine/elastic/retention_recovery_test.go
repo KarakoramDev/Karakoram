@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -31,11 +32,14 @@ func (s *interruptedSnapshotCleanupStore) DeleteBackup(ctx context.Context, ref 
 }
 
 func TestCleanupSnapshotInventoryAfterConfirmedDeletion(t *testing.T) {
-	p, rc, f, es := coreSetup(t, 1)
+	p, rc, f, _ := coreSetup(t, 1)
 	ctx := context.Background()
 	s := coreConverge(t, p, rc, f)
 	storage := &domain.BackupStorage{Name: "archive", Bucket: "backups"}
 	s.Repositories[rc.Cluster.Ref().Namespace+"/archive"] = &repository{Name: "kk-archive", BasePath: "owned"}
+	s.CleanedRepositories = []string{rc.Cluster.Ref().Namespace + "/archive"}
+	started := time.Now()
+	s.BackupCleanupStarted = &started
 	b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: "one", Storage: "archive", Provider: "elasticsearch", Type: "snapshot", Phase: domain.PhaseSucceeded, Location: snapshotLocation(storage, "owned", "kk-archive", "one")}
 	if err := rc.Store.CreateBackup(ctx, b); err != nil {
 		t.Fatal(err)
@@ -43,29 +47,28 @@ func TestCleanupSnapshotInventoryAfterConfirmedDeletion(t *testing.T) {
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
-	es.snapshots = []string{"one"}
 	inventory := &interruptedSnapshotCleanupStore{ClusterStore: rc.Store}
 	rc.Store = inventory
-	if _, err := p.Cleanup(ctx, rc, domain.DeleteOptions{}); err != nil {
-		t.Fatal(err)
+	for range 30 {
+		_, err := p.Cleanup(ctx, rc, domain.DeleteOptions{})
+		if err != nil {
+			if !inventory.interrupted {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if !inventory.interrupted {
+		t.Fatal("expected interrupted inventory deletion")
 	}
 	if _, err := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), "one"); err != nil {
-		t.Fatal("inventory removed before observing native deletion", err)
-	}
-	if len(es.snapshots) != 0 {
-		t.Fatal("snapshot not deleted")
-	}
-	if _, err := p.Cleanup(ctx, rc, domain.DeleteOptions{}); err == nil {
-		t.Fatal("expected interrupted inventory deletion")
+		t.Fatal("inventory removed before its checkpoint", err)
 	}
 	if _, err := p.Cleanup(ctx, rc, domain.DeleteOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rc.Store.GetBackup(ctx, rc.Cluster.Ref(), "one"); !missing(err) {
-		t.Fatal("deleted snapshot remained in inventory", err)
-	}
-	if _, err := p.Cleanup(ctx, rc, domain.DeleteOptions{}); err != nil {
-		t.Fatal("cleanup retry was not idempotent", err)
+		t.Fatal("deleted repository remained in inventory", err)
 	}
 }
 
@@ -76,6 +79,8 @@ func TestCleanupPreservesRetainedSnapshotInventory(t *testing.T) {
 			ctx := context.Background()
 			s := coreConverge(t, p, rc, f)
 			s.Repositories["owned"] = &repository{Name: "kk-archive", BasePath: "owned", ReadOnly: mode == "readonly"}
+			started := time.Now().Add(-3 * time.Minute)
+			s.BackupCleanupStarted = &started
 			b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: "one", Storage: "archive", Provider: "elasticsearch", Phase: domain.PhaseSucceeded, Location: snapshotLocation(&domain.BackupStorage{Bucket: "backups"}, "owned", "kk-archive", "one")}
 			if err := rc.Store.CreateBackup(ctx, b); err != nil {
 				t.Fatal(err)
@@ -140,7 +145,35 @@ func TestRetainedResumeAbandonsInterruptedRestore(t *testing.T) {
 			if !done {
 				t.Fatal("cleanup did not suspend")
 			}
-			s = coreConverge(t, p, rc, f)
+			if mode == "restore" {
+				s = coreConverge(t, p, rc, f)
+			} else {
+				// Retained runtimes and destructive settings still recover, but an
+				// abandoned initial snapshot must never establish cluster readiness.
+				failed := false
+				for range 300 {
+					result, err := p.Sync(ctx, rc)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if result.ConvergenceError != nil {
+						failed = true
+						break
+					}
+				}
+				if !failed {
+					t.Fatal("abandoned initial restore never reached terminal failure")
+				}
+				var err error
+				s, err = load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				status, _ := p.Status(ctx, rc)
+				if status.Phase != domain.PhaseFailed {
+					t.Fatal("abandoned initial restore became ready", status)
+				}
+			}
 			if s.RestoreActive || s.ResumeRestoreReset || s.find("demokb").Stage != stageJoined || f.services["demokb"] == nil {
 				t.Fatal("resume did not restore normal component convergence", s)
 			}
@@ -155,7 +188,8 @@ func TestRetainedResumeAbandonsInterruptedRestore(t *testing.T) {
 				t.Fatal("component process intent not released", cfg.DesiredProcesses, err)
 			}
 			events := rc.Events.(*coreEvents).events
-			if len(events) != 1 || events[0].Type != "Warning" || events[0].Reason != "RestoreAbandoned" {
+			warnings := slices.DeleteFunc(slices.Clone(events), func(e domain.Event) bool { return e.Reason != "RestoreAbandoned" })
+			if len(warnings) != 1 || warnings[0].Type != "Warning" {
 				t.Fatal("missing interrupted-restore warning", events)
 			}
 		})

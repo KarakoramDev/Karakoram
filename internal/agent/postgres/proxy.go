@@ -5,8 +5,11 @@ package postgres
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +26,71 @@ const (
 	proxyDNSRefreshInterval = "1000"
 	proxyDNSResolverQueue   = "128"
 )
+
+func proxyWriterReady(p *pgspec.Proxy, backends []pgspec.ProxyBackend) bool {
+	if len(p.Servers) == 0 {
+		return true // No writer is expected before bootstrap publication.
+	}
+	for _, backend := range backends {
+		if backend.Hostgroup == 10 && backend.Status == "ONLINE" {
+			return true
+		}
+	}
+	return false
+}
+
+func proxyBackendStatus(ctx context.Context, c *pgx.Conn) ([]pgspec.ProxyBackend, error) {
+	rows, err := queryTable(ctx, c, "SELECT hostname,hostgroup_id,status FROM runtime_pgsql_servers")
+	if err != nil {
+		return nil, err
+	}
+	backends := make([]pgspec.ProxyBackend, 0, len(rows))
+	for _, row := range rows {
+		group, _ := strconv.Atoi(row["hostgroup_id"])
+		backends = append(backends, pgspec.ProxyBackend{Host: row["hostname"], Hostgroup: group, Status: row["status"]})
+	}
+	return backends, nil
+}
+
+// A recovered backend can remain automatically SHUNNED until the proxy handles
+// frontend demand. TCP connects and admin-table reads never exercise that path.
+// Use a bounded, read-only writer request, not an administrative ONLINE override.
+func proxyProbeWriter(ctx context.Context, s pgspec.Spec) bool {
+	if len(s.Proxy.Users) == 0 {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	cfg, err := pgx.ParseConfig("")
+	if err != nil {
+		return false
+	}
+	cfg.Host, _, err = net.SplitHostPort(frontendAddress(s.ListenHost))
+	if err != nil {
+		return false
+	}
+	cfg.Port, cfg.Database = 5432, "postgres"
+	cfg.User, cfg.Password = s.Proxy.Users[0].Username, s.Proxy.Users[0].Password
+	cfg.TLSConfig, cfg.Fallbacks = nil, nil
+	cfg.RuntimeParams = map[string]string{}
+	cfg.ConnectTimeout = time.Second
+	cfg.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	if s.Proxy.ServerCert != nil || s.Proxy.Users[0].RequireTLS {
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(s.CAPEM)) {
+			return false
+		}
+		cfg.TLSConfig = &tls.Config{RootCAs: roots, ServerName: s.Member, MinVersion: tls.VersionTLS12}
+	}
+	c, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		return false
+	}
+	defer c.Close(ctx)
+	var readOnly string
+	// SHOW retains the default writer hostgroup even with SELECT splitting.
+	return c.QueryRow(ctx, "SHOW transaction_read_only").Scan(&readOnly) == nil && readOnly == "off"
+}
 
 func proxyConnect(ctx context.Context, p *pgspec.Proxy) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig("")
@@ -137,6 +205,31 @@ func setProxyServerHostgroups(servers, observed []tableRow) {
 	}
 }
 
+// Native monitoring moves servers between hostgroups. Compare stable intent
+// across layers without treating that live role decision as configuration drift.
+func proxyLayerMatches(key string, current, desired []tableRow, servers bool) bool {
+	old := keyRows(current, key)
+	next := keyRows(desired, key)
+	if len(old) != len(next) {
+		return false
+	}
+	for id, row := range next {
+		prior, ok := old[id]
+		if !ok {
+			return false
+		}
+		for k, v := range row {
+			if servers && k == "hostgroup_id" {
+				continue
+			}
+			if prior[k] != v {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func proxyPlan(ctx context.Context, c *pgx.Conn, p *pgspec.Proxy, host, caFile string) ([]string, error) {
 	if p.BackendTLS && caFile == "" {
 		return nil, errors.New("ProxySQL backend TLS requires a CA file")
@@ -176,6 +269,14 @@ func proxyPlan(ctx context.Context, c *pgx.Conn, p *pgspec.Proxy, host, caFile s
 		if err != nil {
 			return nil, err
 		}
+		runtime, err := queryTable(ctx, c, "SELECT "+strings.Join(t.columns, ",")+" FROM runtime_"+t.name)
+		if err != nil {
+			return nil, err
+		}
+		disk, err := queryTable(ctx, c, "SELECT "+strings.Join(t.columns, ",")+" FROM disk."+t.name)
+		if err != nil {
+			return nil, err
+		}
 		// Role-only changes must not churn configuration. If stable settings
 		// do change, preserve the monitor's runtime roles across the LOAD.
 		compare := t.desired
@@ -183,23 +284,34 @@ func proxyPlan(ctx context.Context, c *pgx.Conn, p *pgspec.Proxy, host, caFile s
 			setProxyServerHostgroups(compare, old)
 		}
 		diff := proxyTableDiff(t.name, t.key, old, compare, t.columns)
-		if t.name == "pgsql_servers" && len(diff) > 0 {
-			runtime, err := queryTable(ctx, c, "SELECT hostname,hostgroup_id FROM runtime_pgsql_servers")
-			if err != nil {
-				return nil, err
-			}
+		runtimeDrift := !proxyLayerMatches(t.key, runtime, compare, t.name == "pgsql_servers")
+		diskDrift := !proxyLayerMatches(t.key, disk, compare, t.name == "pgsql_servers")
+		if t.name == "pgsql_servers" && (len(diff) > 0 || runtimeDrift) {
 			setProxyServerHostgroups(compare, runtime)
 			diff = proxyTableDiff(t.name, t.key, old, compare, t.columns)
 		}
-		if len(diff) > 0 {
-			statements = append(statements, diff...)
-			statements = append(statements, "LOAD PGSQL "+t.load+" TO RUNTIME", "SAVE PGSQL "+t.load+" TO DISK")
+		statements = append(statements, diff...)
+		if len(diff) > 0 || runtimeDrift {
+			statements = append(statements, "LOAD PGSQL "+t.load+" TO RUNTIME")
+		}
+		if len(diff) > 0 || diskDrift {
+			statements = append(statements, "SAVE PGSQL "+t.load+" TO DISK")
 		}
 	}
 	old, err := queryTable(ctx, c, "SELECT variable_name,variable_value FROM global_variables")
 	if err != nil {
 		return nil, err
 	}
+	runtimeVariables, err := queryTable(ctx, c, "SELECT variable_name,variable_value FROM runtime_global_variables")
+	if err != nil {
+		return nil, err
+	}
+	diskVariables, err := queryTable(ctx, c, "SELECT variable_name,variable_value FROM disk.global_variables")
+	if err != nil {
+		return nil, err
+	}
+	runtimeMap, diskMap := keyRows(runtimeVariables, "variable_name"), keyRows(diskVariables, "variable_name")
+	pgsqlLoaded := false
 	vmap := keyRows(old, "variable_name")
 	pgsqlSettings := proxyRuntimeSettings(p, caFile)
 	for _, group := range []struct {
@@ -207,25 +319,35 @@ func proxyPlan(ctx context.Context, c *pgx.Conn, p *pgspec.Proxy, host, caFile s
 		values map[string]string
 	}{
 		{"PGSQL", pgsqlSettings},
+		// ProxySQL 3.0.11's PostgreSQL shun_and_killall reads the MySQL
+		// ping interval when advancing its recovery timestamp.
+		{"MYSQL", map[string]string{"mysql-monitor_ping_interval": "1000"}},
 		{"ADMIN", map[string]string{"admin-admin_credentials": p.Admin.Username + ":" + p.Admin.Password, "admin-mysql_ifaces": "127.0.0.1:6032", "admin-pgsql_ifaces": "127.0.0.1:6132"}},
 	} {
 		changed := false
+		runtimeDrift, diskDrift := false, false
 		for _, key := range sortedKeys(group.values) {
+			runtimeDrift = runtimeDrift || runtimeMap[key]["variable_value"] != group.values[key]
+			diskDrift = diskDrift || diskMap[key]["variable_value"] != group.values[key]
 			if vmap[key]["variable_value"] == group.values[key] {
 				continue
 			}
 			statements = append(statements, "UPDATE global_variables SET variable_value="+sqlQuote(group.values[key])+" WHERE variable_name="+sqlQuote(key))
 			changed = true
 		}
-		if changed {
-			statements = append(statements, "LOAD "+group.name+" VARIABLES TO RUNTIME", "SAVE "+group.name+" VARIABLES TO DISK")
+		if changed || runtimeDrift {
+			statements = append(statements, "LOAD "+group.name+" VARIABLES TO RUNTIME")
+			pgsqlLoaded = pgsqlLoaded || group.name == "PGSQL"
+		}
+		if changed || diskDrift {
+			statements = append(statements, "SAVE "+group.name+" VARIABLES TO DISK")
 		}
 	}
 	// Listener and thread settings are startup-only. Save them without LOAD,
 	// which can reset a non-dynamic value to its currently running setting.
 	startupChanged := false
 	for key, value := range proxyStartupSettings(p, host) {
-		if vmap[key]["variable_value"] == value {
+		if vmap[key]["variable_value"] == value && !pgsqlLoaded && diskMap[key]["variable_value"] == value {
 			continue
 		}
 		statements = append(statements, "UPDATE global_variables SET variable_value="+sqlQuote(value)+" WHERE variable_name="+sqlQuote(key))
@@ -252,14 +374,35 @@ func reconcileProxy(ctx context.Context, c *pgx.Conn, p *pgspec.Proxy, host, caF
 }
 func proxyRuntimeSettings(p *pgspec.Proxy, caFile string) map[string]string {
 	settings := map[string]string{
-		"pgsql-authentication_method":                    "3",
-		"pgsql-monitor_username":                         p.Monitor.Username,
-		"pgsql-monitor_password":                         p.Monitor.Password,
-		"pgsql-monitor_dbname":                           "postgres",
-		"pgsql-monitor_writer_is_also_reader":            "false",
-		"pgsql-monitor_local_dns_cache_ttl":              proxyDNSCacheTTL,
-		"pgsql-monitor_local_dns_cache_refresh_interval": proxyDNSRefreshInterval,
-		"pgsql-monitor_local_dns_resolver_queue_maxsize": proxyDNSResolverQueue,
+		"pgsql-authentication_method":         "3",
+		"pgsql-monitor_username":              p.Monitor.Username,
+		"pgsql-monitor_password":              p.Monitor.Password,
+		"pgsql-monitor_dbname":                "postgres",
+		"pgsql-monitor_writer_is_also_reader": "false",
+		// Bound reconnect amplification, not query/transaction execution.
+		"pgsql-connect_retries_on_failure":                "2",
+		"pgsql-connect_retries_delay":                     "100",
+		"pgsql-connect_timeout_server":                    "1000",
+		"pgsql-connect_timeout_server_max":                "3000",
+		"pgsql-shun_on_failures":                          "3",
+		"pgsql-shun_recovery_time_sec":                    "1",
+		"pgsql-throttle_connections_per_sec_to_hostgroup": "20",
+		"pgsql-free_connections_pct":                      "10",
+		"pgsql-connection_warming":                        "false",
+		"pgsql-ping_interval_server_msec":                 "1000",
+		"pgsql-ping_timeout_server":                       "500",
+		"pgsql-monitor_enabled":                           "true",
+		"pgsql-monitor_read_only_interval":                "500",
+		"pgsql-monitor_read_only_timeout":                 "500",
+		"pgsql-monitor_read_only_max_timeout_count":       "2",
+		"pgsql-monitor_ping_interval":                     "1000",
+		"pgsql-monitor_ping_timeout":                      "500",
+		"pgsql-monitor_ping_max_failures":                 "2",
+		"pgsql-monitor_connect_interval":                  "1000",
+		"pgsql-monitor_connect_timeout":                   "500",
+		"pgsql-monitor_local_dns_cache_ttl":               proxyDNSCacheTTL,
+		"pgsql-monitor_local_dns_cache_refresh_interval":  proxyDNSRefreshInterval,
+		"pgsql-monitor_local_dns_resolver_queue_maxsize":  proxyDNSResolverQueue,
 	}
 	if p.BackendTLS {
 		// Both the data and monitor libpq connections use this trust source.

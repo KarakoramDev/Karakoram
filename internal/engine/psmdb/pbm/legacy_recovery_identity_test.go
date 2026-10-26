@@ -67,7 +67,10 @@ func TestLegacyPhysicalCloneProtectsSourceRecoveryIdentity(t *testing.T) {
 			if err != nil || persisted.RecoveryIdentity == "" || persisted.RecoveryIdentity == source.Name {
 				t.Fatalf("protected provenance=%+v error=%v", persisted, err)
 			}
-			if len(fake.requests) != 0 || len(fake.actions) != 0 || fake.starts != 0 {
+			requests := fake.recordedRequests()
+			actions := fake.recordedActions()
+			starts := fake.startCount()
+			if len(requests) != 0 || len(actions) != 0 || starts != 0 {
 				t.Fatal("restore performed side effects before durable identity resolution")
 			}
 			// Recovery no longer depends on the source cluster surviving the clone.
@@ -77,8 +80,9 @@ func TestLegacyPhysicalCloneProtectsSourceRecoveryIdentity(t *testing.T) {
 			op.Checkpoint = first.Checkpoint
 			drive(t, env, op, RunRestore, false)
 			got, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, r.Name)
-			if err != nil || got.Phase != domain.PhaseSucceeded || fake.starts != 1 {
-				t.Fatalf("clone=%+v starts=%d error=%v", got, fake.starts, err)
+			starts = fake.startCount()
+			if err != nil || got.Phase != domain.PhaseSucceeded || starts != 1 {
+				t.Fatalf("clone=%+v starts=%d error=%v", got, starts, err)
 			}
 			if len(hooks.reset) == 0 || hooks.reset[0] != persisted.RecoveryIdentity {
 				t.Fatalf("clone reset did not receive protected identity: %v", hooks.reset)
@@ -119,7 +123,10 @@ func TestLegacyPhysicalRestoreRejectsUnrecoverableIdentityBeforeSideEffects(t *t
 			if err == nil || !strings.Contains(err.Error(), "unrecoverable") || (!strings.Contains(err.Error(), "recovery identity") && !strings.Contains(err.Error(), "recoverable userAdmin credential")) {
 				t.Fatalf("missing clear recovery preflight error: %v", err)
 			}
-			if fake.starts != 0 || len(fake.requests) != 0 || len(fake.actions) != 0 || len(hooks.reset) != 0 || len(hooks.balancers) != 0 {
+			starts := fake.startCount()
+			requests := fake.recordedRequests()
+			actions := fake.recordedActions()
+			if starts != 0 || len(requests) != 0 || len(actions) != 0 || len(hooks.reset) != 0 || len(hooks.balancers) != 0 {
 				t.Fatal("unrecoverable clone modified the target")
 			}
 			got, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, "clone")

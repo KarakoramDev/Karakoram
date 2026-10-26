@@ -100,26 +100,33 @@ func (b *Backend) applyPorts(ctx context.Context, r *record) error {
 	}
 	// Initiate, but do not wait under b.mu for shutdown or preparation.
 	// Observations resume this durable operation; later mutations supersede it
-	// using the latest persisted ports and the same stop-before-start fence.
+	// using the latest persisted ports and the runtime's rollout policy.
 	_, err := b.begin(ctx, r, "ports")
 	return err
 }
 
-func (b *Backend) resumePorts(ctx context.Context, r *record) error {
-	if r.Pending == nil || r.Pending.Action != "ports" || r.Pending.Phase == "done" || r.Pending.Phase == "failed" {
+func (b *Backend) resumePending(ctx context.Context, r *record) error {
+	if r.Pending == nil || r.Pending.Phase == "done" || r.Pending.Phase == "failed" {
 		return nil
 	}
+	ctx = infra.WithoutObservation(ctx)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	current, err := b.require(ctx, r.Hostname)
 	if err != nil {
 		return err
 	}
-	if current.Pending != nil && current.Pending.Action == "ports" {
+	if current.ID != r.ID {
+		return infra.ErrConflict
+	}
+	if current.Pending != nil {
 		if _, err = b.opStatus(ctx, encodeOp(*current.Pending)); err != nil {
 			return err
 		}
-		current, err = b.require(ctx, r.Hostname)
+		current, err = b.load(ctx, r.Hostname)
+		if current == nil && err == nil {
+			return nil // Delete completed while observing its durable operation.
+		}
 		if err != nil {
 			return err
 		}

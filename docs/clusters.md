@@ -53,7 +53,9 @@ karactl -n <namespace> clusters edit <cluster> --wait
 
 `spec` is desired state; `status` is observation. Accepted changes increment `generation`; `status.observedGeneration` records the generation reconciled. `Ready` alone can describe the previous generation: compare both numbers. `spec.version` is requested; `status.version` is observed, absent when unavailable and the oldest observed member version during a mixed-version rollout.
 
-PATCH merges only `{spec: {...}}`; arrays replace the whole previous array. Edit replaces the complete specification. Omitted create fields select provider defaults; explicit zero is not a request for defaults. See [REST API](api.md) for request validation and transport details.
+PATCH merges only `{spec: {...}}`; arrays replace the whole previous array. Edit replaces the complete specification. The write is conditional on the cluster incarnation and generation that admission inspected: a concurrent edit returns `409` rather than silently erasing another accepted change. Reload the cluster, merge your intended changes, and retry. Queued actions are likewise rejected if that inspected cluster was deleted, replaced, suspended, or changed before admission committed. Omitted create fields select provider defaults; explicit zero is not a request for defaults. See [REST API](api.md) for request validation and transport details.
+
+Omitted PATCH collections retain their stored state, including absence; response-only empty arrays do not create a desired-state change. Supply `backup.schedules: []` or `exposure.allowlist: []` explicitly to clear the corresponding list.
 
 ## Operations and status
 
@@ -63,7 +65,128 @@ PATCH merges only `{spec: {...}}`; arrays replace the whole previous array. Edit
 | Operation phase | `Pending`, `Running`, then `Succeeded`, `Failed` or `Cancelled`. Inspect `target`, `targetGeneration`, `step`, `message` and timestamps. |
 | Cluster phase/health | `Creating`, `Initializing`, `Ready`, `Updating`, `Scaling`, `Upgrading`, `Restoring`, `Degraded`, `Error`, `Deleting` or `Suspended`. Inspect conditions and individual members/agents, not just the phase. |
 
-**Operation `Succeeded` is not a health guarantee.** Desired-state tracking can succeed after its target generation is observed in `Degraded` with an explanation. A newer generation cancels superseded tracking; failed/cancelled tracking does not undo desired state or stop convergence.
+**Operation `Succeeded` is not a lasting health guarantee.** Creation requires its target generation to be observed `Ready`; a diagnostic `Degraded` result keeps create tracking Running until recovery or its normal deadline. Other desired-state tracking can succeed after its target generation is observed in `Degraded` with an explanation. A newer generation cancels superseded tracking; failed/cancelled tracking does not undo desired state or stop convergence.
+
+Reconciler-generated `PhaseChanged` events retain the new phase's sanitized user-visible status message and a bounded summary of non-True conditions (`type / status / reason`), so the explanation remains available after recovery, including transitions without a generation change. They do not include cluster specs, internal state or condition message bodies. The admission-time transition to `Deleting` records only the phase arrow.
+
+When an engine returns fresh health observations alongside a secondary error,
+nonempty safety snapshots (for example, a failed quorum condition) are published
+instead of leaving old `Ready` conditions visible. A safe diagnostic for the error
+remains in the cluster message, a partial `Ready` result is reported as `Degraded`, and the
+failed observation does not itself advance `observedGeneration`. An empty
+error-only snapshot retains historical diagnostics, not positive availability:
+`Ready`, `Healthy` and writable-primary claims become unknown/degraded.
+
+Formed clusters request health observation at most five seconds after the
+preceding reconciliation. Health is observed before recovery `Sync`; withdrawn
+readiness is persisted by the existing serialized cluster worker before platform
+repair can block. Read-only member probes allow four seconds for cold namespace/TLS
+connection setup and the native response (separate from restart/restore/backup
+action deadlines), and each complete health sweep has a
+five-second deadline. One immediate fresh sweep retry is the entire transient
+failure tolerance: a single failed probe can be absorbed by a successful retry
+without publishing a degraded intermediate result. Failed/stale samples are never
+reused as ready across cycles.
+
+MongoDB, RabbitMQ and Elasticsearch collect project/service inventory once per
+sweep and overlap per-member platform reads, with at most eight backend method
+observations in flight per sweep. The same instance inventory is reused for placement and
+instance readiness checks; native replica-set and independent Elasticsearch
+reads run in parallel. Five-member regressions with 1.5-second platform calls
+complete within the existing five-second sweep. The deadline is unchanged:
+platform responses that cannot complete within it are unknown, not cached
+successes, and additional worker waves still consume the same bounded budget.
+
+Backend inventory also bounds its own read traversal rather than hiding a
+serial per-runtime HTTP chain inside a single platform call. Dokploy overlaps
+read-only runtime observations while retaining its target lock; pending
+operation completion, legacy adoption and restoration decisions still execute
+serially under that lock. A real-backend regression with three persistent
+members and 600-millisecond platform HTTP responses completes a fresh sweep
+within five seconds. Concurrent instance diagnostics reduce in inventory order,
+and MongoDB FCV observations use bounded set probes with sorted successful
+fallback instead of depending on map iteration.
+Nomad likewise bounds variable reads, service observations and missing-CNI
+allocation hydration to eight concurrent reads per traversal; pending-operation
+and missing-job mutation helpers retain their existing mutex/reload fences.
+Zerops uses bulk paginated service/container inventories, not a per-runtime
+service-list traversal.
+
+Dokploy and Nomad additionally enforce a shared ceiling of **eight HTTP
+observation GETs per backend/platform origin**, across nested traversals,
+backend instances and concurrently observed clusters in the same control-plane
+process. Admission honors cancellation. Slots are released after each response,
+before retry backoff; serialized lifecycle/mutation reads bypass the observation
+queue rather than being starved by health sweeps. Concurrent read failures are
+joined in stable input order, retaining cancellation and every observed
+`Retry-After` constraint; the latest deadline controls retry scheduling. A failed
+read-only prerequisite batch does not authorize mutation fallbacks.
+
+A completed sweep that reports an unreachable or unhealthy member is a fresh
+negative observation, not a failure to observe the entire cluster. After the
+same-cycle retry, its `Degraded` status retains member-specific failure reasons
+and fresh health for reachable siblings. Those positive member observations
+still expire under the same sample-age lease. A failed/empty sweep or stale
+positive member sample cannot renew availability. During creation, expected
+not-yet-deployed agents remain unavailable without replacing deployment progress
+diagnostics or gating recovery/provisioning `Sync`.
+
+Persisted health has a **15-second maximum sample age**: five seconds between
+cycles plus at most two five-second sweeps. Cluster/status/member API projections
+withdraw positive availability after that bound even if recovery, an operation,
+or a backend call blocks further publication. Sample age uses the start of the
+successful sweep, not condition transition times; missing/future timestamps are
+unknown. Legacy snapshots therefore require one successful health observation
+before they can report Ready. This is a bounded observation guarantee, not an
+instantaneous failure detector or a writable-transaction guarantee.
+After a CP restart, status reads Degraded/Unknown until the first post-start observation.
+Successful sweeps carry private provenance of the current control-plane process,
+independent of wall-clock timestamps. Old-process snapshots cannot replay Ready
+after a restart or clock correction, even if their wall time exactly matches a
+new sweep. Fresh current-process samples still require the normal timestamp lease;
+future and expired samples remain unknown. API projection never rewrites persisted
+observations or changes reconciliation's readiness decisions.
+While one member or agent is hung, bounded reads can slow per-cluster observation publication enough that healthy members briefly report `ObservationStale`; this is fail-closed and clears once the sweep completes and a fresh observation is persisted.
+This lease also expires positive member health during Creating, Initializing,
+Scaling, Updating and Upgrading, even when overall readiness is already false.
+Current component, DCS/failover, replication, WAL-capacity and archive health
+conditions expire too; durable formation/certificate facts and definitive
+negative diagnostics are preserved.
+
+MongoDB additionally requires a current primary `hello` and fresh reachability
+of its replica-set members. A surviving secondary's heartbeat-delayed PRIMARY
+view alone cannot retain `WritablePrimary`. MongoDB, RabbitMQ and Elasticsearch
+probe member agents concurrently. RabbitMQ and PostgreSQL also overlap generic
+agent and native status requests because their HTTP transports establish separate
+TLS connections. All use the same shared four-second read-probe limit; the
+five-second sweep, 15-second readiness lease and same-cycle retry policy are unchanged.
+
+MongoDB replication health uses the primary's `replSetGetStatus` view, rather
+than a nearest secondary's possibly partitioned view; unhealthy-member conditions
+name the affected member. PBM inventory `list`/`status` reads race eligible members
+with independent four-second limits (config-server members only for sharded
+clusters). A blocked local PBM on one secondary cannot starve PITR configuration
+inventory or the reachable members' health probes. Backup inventory runs alongside
+member observation with its own four-second budget: failure reports
+`Backup=False/InventoryUnavailable` and retains the last backup summary without
+discarding fresh member health or reporting every agent disconnected. Backup and
+restore initiation/cancellation receipts remain pinned; this parallelism applies
+only to read-only inventory.
+
+A MongoDB member is healthy only when its native state is PRIMARY or SECONDARY,
+native health is 1, its agent and runtime are healthy, and its optime is no more
+than **10 seconds** behind the newest replica-set optime. Reachability alone does
+not establish replication health: a reachable secondary may temporarily fall
+behind while MongoDB changes away from a partitioned sync source. Such observed
+lag remains `health=false`; it is not an agent disconnection.
+`Replication/<set>` enumerates affected members in member order with individual
+reasons (observation unavailable or measured replication lag). Any unavailable
+member observation takes precedence: status/reason is
+`Unknown/MemberObservationUnavailable`, even when another member has observed
+excessive lag. With only observed lag failures it is `False/ReplicationLag`.
+Lag classification requires successful, non-empty, all-running runtime inventory.
+The message is bounded to 2048 bytes, with an omitted-member count on overflow;
+individual member health and lag remain available in the member list.
 
 `operations wait` succeeds on Operation `Succeeded` without checking cluster health. Mutation `--wait` first waits for the operation, then checks cluster generation/phase; `clusters wait` observes the cluster directly. Cluster waiting fails on `Degraded`/`Error`; deletion waits for absence or the requested `Suspended` state. A client timeout/disconnect does not cancel server work.
 
@@ -76,7 +199,20 @@ karactl operations wait <operation-id>
 karactl operations cancel <operation-id>
 ```
 
-Ordinary work defaults to 20 consecutive retryable failures or two hours from acceptance; restores allow six hours. Successful steps reset consecutive failures; scheduled waits consume time, not failures. Provider-supported failure compensation has a separate six-hour window; expiration requires manual recovery. Tracking deadlines do not discard desired state or halt cleanup.
+Ordinary work defaults to 20 consecutive retryable failures or two hours of observed control-plane execution time; restores allow six hours. Successful steps reset consecutive failures; scheduled waits consume time, not failures. Elapsed budgets are persisted and measured with a monotonic clock: changing the host clock cannot expire active work, and control-plane downtime does not consume the budget. Provider-supported failure compensation has a separate six-hour observed-time window; expiration requires manual recovery. Tracking deadlines do not discard desired state or halt cleanup. If deletion later finishes, its failed tracking record is corrected to `Succeeded` atomically with cluster removal or suspension; startup also repairs historical failed deletion records whose original cluster is demonstrably absent.
+
+Observed-time accounting includes waits between reconciliations and persists
+each observation before reloading tracking state. Deletion completion uses an
+explicit persisted cluster-incarnation equality token, not ordering of host-clock
+timestamps. For legacy tracking without that token, startup proves completion
+only when the same-named cluster is actually absent.
+
+RabbitMQ rolling updates treat a refused agent reload connection and an
+explicitly booting broker observation as scheduled startup waits, including
+after the five-minute startup diagnostic threshold. These waits consume the
+operation's observed-time budget, not its consecutive-failure budget. The
+member's applied configuration and native cluster membership must still be
+verified before the rollout advances or succeeds.
 
 Cancellation requires `clusters/update` on the operation's recorded namespace/cluster. Pending work becomes `Cancelled` immediately, without reversing accepted spec changes. Running work is cancellable only at provider-supported safe checkpoints: acceptance sets `cancelRequested`, and cleanup may keep it Running. Terminal/unsafe work returns `409`. Cancellation is not rollback; wait for a terminal outcome before dependent actions. Checkpoint rules live in [MongoDB operations](mongodb/operations.md) and [backups](mongodb/backups.md), [RabbitMQ operations](rabbitmq/operations.md), and [Elasticsearch operations](elasticsearch/operations.md).
 
@@ -120,7 +256,18 @@ When a waiting PATCH does not converge, inspect `karactl clusters get <cluster> 
 karactl -n <namespace> clusters restart <cluster> --wait
 ```
 
-Restart persists per-member progress and uses provider health/quorum gates before advancing. It is not a control-plane redeploy or agent executable upgrade; agents receive a newer executable on a provider-driven member deployment. A singleton is unavailable during its restart; multi-member rolling work is not a zero-disruption guarantee. For engine-specific order, drain and recovery rules, see [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md) and [Elasticsearch](elasticsearch/operations.md).
+Restart persists per-member progress and uses provider health/quorum gates before advancing. It is not a control-plane redeploy or agent executable upgrade; agents receive a newer executable on a provider-driven member deployment. A singleton is unavailable during its restart; multi-member rolling work is not a zero-disruption guarantee. For engine-specific order, drain and recovery rules, see [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md) and [Supabase](supabase/operations.md#cluster-restart-and-member-software). Supabase includes every enabled application component after the PostgreSQL core, verifying each live instance's process restart and readiness.
+
+## Retry exhausted platform deployments
+
+`DeploymentRetriesExhausted` is terminal: normal reconciliation and control-plane restarts do not reset the exact-version deployment retry limit. Investigate and correct the platform failure before explicitly granting a fresh budget:
+
+```sh
+karactl clusters retry-deployments <cluster> --namespace <namespace>
+karactl clusters retry-deployments <cluster> --namespace <namespace> -o json
+```
+
+The action requires `clusters/update`, atomically advances the server-managed `spec.retryEpoch` and desired generation, records the actor, old/new epochs and exhausted members/components in an event, and triggers reconciliation. It does not restart healthy members. If no deployment is exhausted in the current epoch, it returns `409 conflict` without changing the epoch. Reuse an `Idempotency-Key` when retrying the API request to replay its original result without granting another budget. Ordinary spec edits cannot reset or advance this epoch.
 
 ## Delete or suspend
 
@@ -145,4 +292,4 @@ Suspended member allocation is historical; agents are disconnected. Resume recre
 
 Deletion needs `clusters/delete`; resume, patch/edit/scale/restart need `clusters/update`. Read/create need `clusters/read` and `clusters/create`, respectively, on namespace-qualified cluster objects. See [Access control](access-control.md).
 
-Running deletion cannot be cancelled. Repeating it with identical retention choices reuses the active operation; changing choices supersedes tracking, not already-issued platform deletions. Check cluster, backup and orphan-volume inventories separately. See [Backups and storage](backups.md) for retained recovery objects and pending cleanup, and [orphaned volumes](operations.md#orphaned-platform-volumes).
+Running deletion cannot be cancelled. Repeating it with identical retention choices reuses the active operation. Before provider cleanup starts, changed retention choices supersede queued deletion tracking. A retain-volumes cleanup can be superseded by full deletion; stale suspension completion cannot clear that newer request. Once provider cleanup has started with removal of volumes or backups permitted, changing the corresponding flag to retain them returns `409`: already-issued deletions cannot safely promise retention. The cleanup-start fence is durable across control-plane restarts. Check cluster, backup and orphan-volume inventories separately. See [Backups and storage](backups.md) for retained access and cleanup.

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -60,6 +61,8 @@ func agent(ctx context.Context, rc *engine.Context, name string) (*agentapi.Clie
 	return rc.Agents.Dial(ctx, rc.Cluster.Ref(), name)
 }
 func agentStatus(ctx context.Context, rc *engine.Context, name string) (agentapi.Status, error) {
+	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
 	a, e := agent(ctx, rc, name)
 	if e != nil {
 		return agentapi.Status{}, e
@@ -80,10 +83,36 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 	if v == nil {
 		return false, nil
 	}
+	var resizeErr error
+	if m := s.find(v.Member); v.Action == "deploy" && m != nil && !m.RuntimeRecovery.Initialized && m.Stage != "active" {
+		desired := runtimeResources(component(rc.Cluster.Spec, m).Resources)
+		var changed bool
+		changed, resizeErr = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, desired, &m.Resources, &v.Op)
+		if changed {
+			m.CacheGB = max(0.25, 0.5*(desired.MaxRAM-0.5))
+			return true, nil
+		}
+	}
 	var st infra.OpState
-	if v.Op.ID != "" {
-		var e error
-		st, e = rc.Backend.OpStatus(ctx, v.Op)
+	if v.Op.ID != "" || resizeErr != nil {
+		e := resizeErr
+		if e == nil {
+			st, e = rc.Backend.OpStatus(ctx, v.Op)
+		}
+		if st.Status == "DeploymentRetriesExhausted" && e == nil {
+			e = &infra.DeploymentExhaustedError{Service: v.Member, LastError: st.Message}
+		}
+		if errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
+			if m := s.find(v.Member); m != nil {
+				if engine.ApplyDeploymentResourceRollback(e, &m.Resources) {
+					m.CacheGB = max(0.25, 0.5*(m.Resources.MaxRAM-0.5))
+				}
+				e = engine.RecordDeploymentExhausted(ctx, rc, m.Name, p.runtimeSpec(rc, m, v.Version), e)
+			}
+			s.Pending = nil
+			s.resetPlatformRetry(v)
+			return false, e
+		}
 		if e != nil {
 			return true, e
 		}
@@ -109,6 +138,7 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			// leave the member planned so importMember creates the rest.
 			if complete {
 				m.Stage = "imported"
+				m.ImportPlan = nil
 			}
 		case "deploy":
 			m.Stage = "deployed"
@@ -121,6 +151,11 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 				m.CPUModeChangedAt = now(rc)
 			}
 			m.Resources = v.Resources
+			if m.Stage == "imported" {
+				m.CacheGB = max(0.25, 0.5*(m.Resources.MaxRAM-0.5))
+				s.ConfigVersion = max(s.ConfigVersion, m.ConfigVersion) + 1
+				m.ConfigVersion = s.ConfigVersion
+			}
 		case "disk":
 			m.Disk = v.Resources
 		case "containers":
@@ -132,6 +167,7 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 				return true, err
 			}
 			removeRecord(s, m.Name)
+			delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 		}
 	}
 	s.resetPlatformRetry(v)
@@ -141,6 +177,18 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 func (p *Provider) deploy(ctx context.Context, rc *engine.Context, s *internalState, m *member, action, version string) error {
 	if err := verifyMemberServices(ctx, rc, m); err != nil {
 		return err
+	}
+	if action == "deploy" && m.Stage == "imported" {
+		desired := runtimeResources(component(rc.Cluster.Spec, m).Resources)
+		if op, changed, err := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, p.runtimeSpec(rc, m, version), desired, m.Resources); changed || err != nil {
+			if err == nil {
+				m.CacheGB = min(m.CacheGB, max(0.25, 0.5*(desired.MaxRAM-0.5)))
+				s.ConfigVersion = max(s.ConfigVersion, m.ConfigVersion) + 1
+				m.ConfigVersion = s.ConfigVersion
+				s.Pending = &pending{Op: op, Action: "resources", Member: m.Name, Resources: desired, Version: version}
+			}
+			return err
+		}
 	}
 	m.DesiredVersion = version
 	if e := save(rc.Cluster, s); e != nil {
@@ -161,6 +209,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		return err
 	}
 	specs := []infra.ServiceSpec{}
+	incomplete := false
 	tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 	if e != nil {
 		return e
@@ -170,6 +219,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		if e != nil {
 			return e
 		}
+		incomplete = incomplete || v != nil && v.Importing
 		if v == nil {
 			r := component(rc.Cluster.Spec, m).Resources
 			spec := engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, r)
@@ -191,6 +241,7 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 	if e != nil {
 		return e
 	}
+	incomplete = incomplete || runtime != nil && runtime.Importing
 	if runtime == nil {
 		specs = append(specs, serviceSpec(rc.Backend.Layout(), rc.Cluster, m, tok.Token))
 	} else {
@@ -199,30 +250,58 @@ func (p *Provider) importMember(ctx context.Context, rc *engine.Context, s *inte
 		}
 		m.ServiceID = runtime.ID
 	}
+	if incomplete && m.ImportPlan == nil {
+		return fmt.Errorf("%w: member %s has an incomplete import without its original durable batch; recover the original import plan before deployment", engine.ErrConflict, m.Name)
+	}
+	if m.ImportPlan != nil && (len(specs) > 0 || incomplete) {
+		specs = m.ImportPlan.Services(rc.Backend.Layout(), rc.Cluster.Name, m.Name, tok.Token)
+	}
 	if len(specs) == 0 {
 		m.Stage = "imported"
+		m.ImportPlan = nil
 		s.resetPlatformRetry(&pending{Action: "import", Member: m.Name})
 		return nil
 	}
-	op, e := rc.Backend.ImportServices(ctx, specs)
+	if m.ImportPlan == nil {
+		m.ImportPlan = engine.NewImportPlan(specs)
+		return nil // Commit the exact batch before a backend can reserve it.
+	}
+	op, e := m.ImportPlan.Submit(ctx, rc, m.Name, tok.Token)
 	if e != nil {
 		return e
 	}
-	m.Resources = runtimeResources(component(rc.Cluster.Spec, m).Resources)
-	m.Containers = 1
-	if m.Role == agentapi.RoleRouter {
-		m.Containers = rc.Cluster.Spec.Components.Router.Replicas
+	for _, spec := range specs {
+		if spec.Hostname == m.Name {
+			m.Resources, m.Containers = spec.Resources, spec.MinContainers
+		}
+		if spec.Hostname == m.Volume {
+			m.Disk.MinDisk, m.Disk.MaxDisk = spec.Resources.MinDisk, spec.Resources.MaxDisk
+		}
 	}
 	s.Pending = &pending{Op: op, Action: "import", Member: m.Name}
 	return nil
 }
-func (p *Provider) replication(ctx context.Context, rc *engine.Context, s *internalState, m *member) (mongoadmin.Status, error) {
+
+const observationReadBudget = 4 * time.Second
+
+func (p *Provider) replication(ctx context.Context, rc *engine.Context, s *internalState, m *member) (status mongoadmin.Status, err error) {
+	ctx, cancel := context.WithTimeout(ctx, observationReadBudget)
+	defer cancel()
+	defer func() {
+		if err != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded)) {
+			status = mongoadmin.Status{}
+			err = fmt.Errorf("PSMDB replication observation read exceeded %s budget: inspect member %s and set %s responsiveness/connectivity: %w", observationReadBudget, m.Name, m.Set, context.DeadlineExceeded)
+		}
+	}()
 	c, e := p.dial(ctx, rc, s, m.Set, "clusterMonitor")
 	if e != nil {
 		return mongoadmin.Status{}, e
 	}
 	defer c.Disconnect(ctx)
-	return mongoadmin.GetStatus(ctx, c)
+	if err := mongoadmin.CheckWritablePrimary(ctx, c); err != nil {
+		return mongoadmin.Status{}, err
+	}
+	return mongoadmin.GetPrimaryStatus(ctx, c)
 }
 func caught(s mongoadmin.Status, name string) bool {
 	for _, x := range s.Members {
@@ -244,7 +323,7 @@ func (p *Provider) prepareDisruption(ctx context.Context, rc *engine.Context, s 
 	if e = mongoadmin.SafeToRestart(ctx, c, m.Name+":27017"); e != nil {
 		return false, e
 	}
-	st, e := mongoadmin.GetStatus(ctx, c)
+	st, e := mongoadmin.GetObservedStatus(ctx, c, m.Name+":27017")
 	if e != nil {
 		return false, e
 	}
@@ -288,6 +367,24 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		}
 	}()
 	result.RequeueAfter = 5 * time.Second
+	if s.CloneQueued {
+		if complete, err := reconcileInitialRestore(ctx, rc, s); err != nil {
+			return result, err
+		} else if !complete {
+			return result, nil
+		}
+	}
+	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
+		// Retirement checkpoints still persist independently, including the
+		// exact-ID deletion receipt and positive runtime absence before storage
+		// cleanup. They do not need the ordinary provisioning cadence: serial
+		// five-second sleeps multiply across never-placed surplus members.
+		result.RequeueAfter = time.Second
+		return result, e
+	}
+	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	if s.UID == "" {
 		s.UID, e = secrets.RandomString(12)
 		if e != nil {
@@ -315,6 +412,8 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		s.CleanupBackups = false
 		s.CleanedStorages = nil
 		s.FinalizedStorages = nil
+		s.BackupCleanupStarted = nil
+		s.RetainedStorages = nil
 		for _, m := range s.Members {
 			m.PublicHash = ""
 			m.ConfigVersion = 0
@@ -350,6 +449,14 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		if err := verifyMemberServices(ctx, rc, m); err != nil {
 			return result, err
 		}
+	}
+	// Revocation needs ownership evidence, not a writable primary or caught-up
+	// replicas. Keep it serialized with pending platform work above.
+	if err := restrictExposure(ctx, rc, s); err != nil {
+		return result, err
+	}
+	if busy, err := p.recoverRuntimes(ctx, rc, s); busy || err != nil {
+		return result, err
 	}
 	// Finish the last gated reload before allowing any other disruption.
 	// The publish stage is durable so secret-write/reload failures cannot
@@ -401,6 +508,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			s.Phase = "import"
 			return result, p.importMember(ctx, rc, s, m)
 		case "imported":
+			if engine.DeploymentBlocked(rc, m.Name, p.runtimeSpec(rc, m, rc.Cluster.Spec.Version)) {
+				continue
+			}
 			s.Phase = "deploy"
 			return result, p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version)
 		case "deployed":
@@ -434,6 +544,16 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		if set.Stage == "planned" {
 			s.Phase = "bootstrap"
 			members := s.setMembers(m.Set)
+			allHealthy := true
+			for _, member := range members {
+				if member.Stage != "healthy" {
+					allHealthy = false
+					break
+				}
+			}
+			if !allHealthy {
+				continue
+			}
 			req := agentapi.BootstrapRequest{ReplSetName: m.Set, ConfigServer: m.Role == agentapi.RoleConfigServer}
 			for _, x := range members {
 				req.Members = append(req.Members, agentapi.BootstrapMember{ID: x.Index, Host: x.Name + ":27017"})
@@ -516,10 +636,18 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 	}
+	// A terminally blocked deployment must not make an unstarted member
+	// eligible for bootstrap, upgrades or other native mutations.
+	for _, m := range s.Members {
+		if !m.Removing && (m.Stage == "planned" || m.Stage == "imported") {
+			return result, nil
+		}
+	}
 	if rc.Cluster.Spec.Topology.Type == "sharded" {
 		for _, m := range ordered(s) {
 			if m.Role == agentapi.RoleRouter && m.Stage == "healthy" {
 				m.Stage = "active"
+				m.NativeReadiness = nil
 			}
 			if m.Role != agentapi.RoleReplicaSet || s.Sets[m.Set].Added {
 				continue
@@ -545,7 +673,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		switch m.Stage {
 		case "delete-volume":
 			if m.Volume != "" && !m.VolumeOrphaned {
-				v, e := rc.Backend.GetService(ctx, m.Volume)
+				v, e := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 				if e != nil {
 					return result, e
 				}
@@ -553,7 +681,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 					op, e := rc.Backend.DeleteService(ctx, m.Volume)
 					s.Pending = &pending{Op: op, Action: "delete-volume", Member: m.Name}
 					if e != nil {
-						return result, s.failPending(rc, e.Error())
+						return result, s.failPendingCause(rc, e)
 					}
 					return result, nil
 				}
@@ -562,6 +690,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 				return result, err
 			}
 			removeRecord(s, m.Name)
+			delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 			return result, nil
 		case "removed":
 			if e := rc.Backend.DeletePublicPorts(ctx, m.Name); e != nil {
@@ -583,7 +712,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 				return result, e
 			}
 			defer c.Disconnect(ctx)
-			rs, e := mongoadmin.GetStatus(ctx, c)
+			rs, e := mongoadmin.GetObservedStatus(ctx, c, m.Name+":27017")
 			if e != nil {
 				return result, e
 			}
@@ -620,15 +749,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			}
 		}
 		if rc.Cluster.Spec.Topology.Type == "sharded" && !s.BalancerStopped {
-			v, e := p.Balancer(ctx, rc)
-			if e != nil {
-				return result, e
+			if err := stopUpgradeBalancer(ctx, rc, s, p); err != nil {
+				return result, err
 			}
-			s.BalancerWasEnabled = v.Enabled
-			if e = p.SetBalancer(ctx, rc, false); e != nil {
-				return result, e
-			}
-			s.BalancerStopped = true
 			return result, nil
 		}
 		candidate := m
@@ -649,6 +772,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 				}
 			}
 		}
+		if engine.DeploymentBlocked(rc, candidate.Name, p.runtimeSpec(rc, candidate, rc.Cluster.Spec.Version)) {
+			continue
+		}
 		stepped, e := prepareDisruption(ctx, rc, s, candidate)
 		if e != nil || stepped {
 			return result, e
@@ -662,6 +788,7 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			}
 		}
 		s.BalancerStopped = false
+		s.BalancerObserved = false
 		return result, nil
 	}
 	for _, m := range ordered(s) {
@@ -758,6 +885,61 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		}
 		m.ConfigVersion = s.ConfigVersion
 	}
+	if err := p.ensureManagedUsers(ctx, rc, s); err != nil {
+		s.ManagedUsersError = err.Error()
+		// Returning the error keeps the reconciler's bounded exponential
+		// backoff armed (default one second through one minute).
+		s.ManagedUsersRetryable = managedUsersTransient(err)
+		s.Phase = "replication"
+		rc.Cluster.Status.Phase = domain.PhaseDegraded
+		return result, err
+	}
+	s.ManagedUsersError = ""
+	s.ManagedUsersRetryable = false
+	for _, m := range ordered(s) {
+		if m.Role == agentapi.RoleRouter {
+			ready, _, err := routerInstancesHealthy(ctx, rc, m, s.ConfigVersion)
+			if err != nil || !ready {
+				s.Phase = "replication"
+				rc.Cluster.Status.Phase = domain.PhaseDegraded
+				rc.Cluster.Status.Message = "Router " + m.Name + " cannot observe config-server metadata; inspect router instance health, config-server quorum and network"
+				if err != nil {
+					rc.Cluster.Status.Message += ": " + err.Error()
+				}
+				if errors.Is(err, context.DeadlineExceeded) {
+					return result, err
+				}
+				return result, nil
+			}
+		}
+	}
+	// A running mongod can be a secondary, recovering, or an empty member
+	// awaiting initial sync. None proves that the retained set can serve writes.
+	observedSets := make(map[string]bool, len(s.Sets))
+	for _, m := range ordered(s) {
+		if m.Removing || m.Role == agentapi.RoleRouter || observedSets[m.Set] {
+			continue
+		}
+		observedSets[m.Set] = true
+		rs, err := replication(ctx, rc, s, m)
+		if err != nil || !rs.HasWritablePrimary() {
+			s.Phase = "replication"
+			rc.Cluster.Status.Phase = domain.PhaseDegraded
+			rc.Cluster.Status.Message = "NoWritablePrimary in " + m.Set + ": restore retained members and quorum; inspect election, storage and network diagnostics; automatic reinitialization is refused"
+			if errors.Is(err, context.DeadlineExceeded) {
+				return result, err
+			}
+			return result, nil
+		}
+		for _, n := range s.setMembers(m.Set) {
+			if !n.Removing && !caught(rs, n.Name) {
+				s.Phase = "replication"
+				rc.Cluster.Status.Phase = domain.PhaseDegraded
+				rc.Cluster.Status.Message = "Replica set " + m.Set + " is waiting for " + n.Name + " to complete replication"
+				return result, nil
+			}
+		}
+	}
 	if s.TargetTLS != "" {
 		s.TLSMode = nextTLSMode(s.TLSMode, s.TargetTLS)
 		if s.TLSMode == s.TargetTLS {
@@ -794,47 +976,31 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			ex.Public = false
 		}
 		h := hash(ex)
-		if m.PublicHash == h && (ex.Public || m.PublicPort == 0) {
+		if !ex.Public || m.PublicHash == h {
 			continue
 		}
-		if ex.Public {
-			if err := engine.RequirePublicTCP(rc.Backend, ex); err != nil {
-				return result, err
-			}
-			port, err := p.allocatePublicPort(ctx, rc, s, m)
-			if err != nil {
-				return result, err
-			}
-			if m.PublicPort != port {
-				m.PublicPort = port
-				return result, nil
-			}
-			if e = rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: port, TargetPort: 27017, Protocol: "tcp", IPType: ex.IPType, Allowlist: ex.Allowlist}); e != nil {
-				return result, e
-			}
-			m.PublicPort = port
-		} else {
-			if e = rc.Backend.DeletePublicPorts(ctx, m.Name); e != nil {
-				return result, e
-			}
-			m.PublicPort = 0
+		if err := engine.RequirePublicTCP(rc.Backend, ex); err != nil {
+			return result, err
 		}
+		port, err := p.allocatePublicPort(ctx, rc, s, m)
+		if err != nil {
+			return result, err
+		}
+		if m.PublicPort != port {
+			m.PublicPort = port
+			return result, nil
+		}
+		if e = rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: port, TargetPort: 27017, Protocol: "tcp", IPType: ex.IPType, Allowlist: ex.Allowlist}); e != nil {
+			return result, e
+		}
+		m.PublicPort = port
 		m.PublicHash = h
 		return result, nil
 	}
-	if d := rc.Cluster.Spec.DataSource; d != nil && !s.CloneQueued {
-		name := "initial-restore"
-		r := &domain.Restore{Namespace: rc.Cluster.Ref().Namespace, SourceNamespace: d.Namespace, Name: name, Cluster: rc.Cluster.Name, Source: domain.RestoreSource{Backup: d.Backup, PITRTime: d.PITRTime, SourceCluster: d.Cluster}, Phase: domain.PhasePending}
-		payload, _ := json.Marshal(map[string]string{"restore": name})
-		op := &domain.Operation{Namespace: rc.Cluster.Ref().Namespace, ID: rc.Cluster.Ref().Key() + "-" + s.UID + "-initial-restore", Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: payload, Phase: domain.PhasePending}
-		if _, e = rc.Store.GetOperation(ctx, op.ID); missing(e) {
-			if e = rc.Store.EnqueueRestore(ctx, r, op); e != nil {
-				return result, e
-			}
-		} else if e != nil {
-			return result, e
-		}
-		s.CloneQueued = true
+	if complete, err := reconcileInitialRestore(ctx, rc, s); err != nil {
+		return result, err
+	} else if !complete {
+		result.RequeueAfter = 5 * time.Second
 		return result, nil
 	}
 	retained, e := rc.Store.ListRetainedVolumes(ctx, rc.Cluster.Ref())
@@ -846,9 +1012,23 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, e
 		}
 	}
+	for _, m := range s.Members {
+		if m.Role == agentapi.RoleRouter {
+			m.NativeReadiness = nil
+		}
+	}
 	s.Phase = "ready"
 	rc.Cluster.Status.Phase = domain.PhaseReady
-	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+	if s.RestoreConsistency != nil {
+		rc.Cluster.Status.Phase = domain.PhaseDegraded
+		rc.Cluster.Status.Message = s.RestoreConsistency.Failure
+	}
+	if engine.InitialDataSourceUnproven(rc.Cluster) {
+		rc.Cluster.Status.Phase = domain.PhaseDegraded
+		rc.Cluster.Status.Message = "Legacy initial restore completion is unproven; runtime convergence continues without replaying the restore"
+	} else {
+		rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+	}
 	result.RequeueAfter = 30 * time.Second
 	return result, nil
 }
@@ -919,14 +1099,35 @@ func reconcileConfig(ctx context.Context, rc *engine.Context, s *internalState) 
 		}
 		materialHash = hash(string(crt))
 	}
-	configHash := hash(struct {
+	input := struct {
 		Engine          string
 		TLS             domain.TLSConfig
 		RAM             domain.Components
 		CertificateHash string
 		ConfigDB        string
-	}{rc.Cluster.Spec.EngineConfig, rc.Cluster.Spec.TLS, rc.Cluster.Spec.Components, materialHash, strings.Join(hosts(s.setMembers("cfg")), ",")})
+	}{rc.Cluster.Spec.EngineConfig, rc.Cluster.Spec.TLS, rc.Cluster.Spec.Components, materialHash, strings.Join(hosts(s.setMembers("cfg")), ",")}
+	// Replica counts drive membership and platform reconciliation, not the
+	// member process configuration. Including them forces an otherwise empty
+	// rolling reload after every scale operation.
+	input.RAM.Engine.Replicas = 0
+	input.RAM.ConfigServer.Replicas = 0
+	input.RAM.Router.Replicas = 0
+	if len(input.RAM.Extra) != 0 {
+		input.RAM.Extra = make(map[string]domain.ComponentSpec, len(input.RAM.Extra))
+		for name, component := range rc.Cluster.Spec.Components.Extra {
+			component.Replicas = 0
+			input.RAM.Extra[name] = component
+		}
+	}
+	configHash := hash(input)
 	if configHash == s.ConfigHash {
+		return false, nil
+	}
+	// Upgrade an unchanged legacy fingerprint without disrupting the set.
+	// A concurrent material change still follows the normal reload path.
+	input.RAM = rc.Cluster.Spec.Components
+	if s.ConfigHash == hash(input) {
+		s.ConfigHash = configHash
 		return false, nil
 	}
 	s.ConfigHash = configHash

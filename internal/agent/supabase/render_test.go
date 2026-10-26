@@ -64,6 +64,73 @@ func TestRenderComponents(t *testing.T) {
 	}
 }
 
+func TestBEAMDistributionIsPrivate(t *testing.T) {
+	cookies := map[string]bool{}
+	expectedCookies := map[string]string{
+		"realtime":  "e43bf41360e81ac8ce09fb30f93251281e2a3c21d98addbdd3c60ea1ace59c8d",
+		"pooler":    "2b3b0c1b1670902312b46b2d0d3b350212ef23510279efe4387ce5a92f33bf55",
+		"analytics": "585dc198f3abfcb9763a46f4bdc54dd784fef3e831724d04788fb4ec7e13c34b",
+	}
+	cookieFromEnv := func(env []string) string {
+		for _, entry := range env {
+			if cookie, ok := strings.CutPrefix(entry, "RELEASE_COOKIE="); ok {
+				return cookie
+			}
+		}
+		return ""
+	}
+	for _, component := range []string{"realtime", "pooler", "analytics"} {
+		t.Run(component, func(t *testing.T) {
+			s := testSpec(component)
+			p, files, err := Render(s, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var environment map[string]string
+			if err := json.Unmarshal(files["supabase/environment.json"], &environment); err != nil {
+				t.Fatal(err)
+			}
+			cookie := cookieFromEnv(p.Env)
+			if len(cookie) != 64 || strings.Trim(cookie, "0123456789abcdef") != "" || cookies[cookie] {
+				t.Fatal("distribution cookie must be secret-derived and component-specific")
+			}
+			cookies[cookie] = true
+			if cookie != expectedCookies[component] {
+				t.Fatal("distribution cookie does not match versioned HMAC-SHA256 derivation")
+			}
+			if _, present := environment["RELEASE_COOKIE"]; present || strings.Contains(string(files["supabase/environment.json"]), cookie) {
+				t.Fatal("distribution cookie leaked into diagnostic environment dump")
+			}
+			if !contains(p.Env, "ERL_EPMD_ADDRESS=127.0.0.1") ||
+				!strings.Contains(environment["ERL_AFLAGS"], "-kernel inet_dist_use_interface {127,0,0,1}") {
+				t.Fatal("distribution or epmd is not bound to loopback")
+			}
+			if !strings.Contains(environment["ERL_AFLAGS"], "+S 2:2 +SDcpu 1 +SDio 1") {
+				t.Fatal("BEAM scheduler limits lost")
+			}
+			projected, _, err := Render(s.ProjectSecrets(), t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cookieFromEnv(projected.Env) != cookie {
+				t.Fatal("cookie changed across rendering or secret projection")
+			}
+			s.DBRoles["supabase_admin"] = "another-cluster-password"
+			other, _, err := Render(s, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cookieFromEnv(other.Env) == cookie {
+				t.Fatal("different cluster secret reused distribution cookie")
+			}
+			delete(s.DBRoles, "supabase_admin")
+			if _, _, err := Render(s, t.TempDir()); err == nil {
+				t.Fatal("missing secret material produced a guessable cookie")
+			}
+		})
+	}
+}
+
 func TestComponentListenerAddressFamily(t *testing.T) {
 	for _, component := range []string{"storage", "studio", "rest", "gateway", "vector"} {
 		for _, ipv6 := range []bool{false, true} {
@@ -209,5 +276,42 @@ func TestRealtimeClusterStrategy(t *testing.T) {
 	}
 	if _, present := environment["DNS_NODES"]; present {
 		t.Fatal("unused DNS discovery configuration retained")
+	}
+}
+
+func TestRealtimeGenRPCIsPrivate(t *testing.T) {
+	for _, ipv6 := range []bool{false, true} {
+		s := testSpec("realtime")
+		s.DatabaseIPv6 = ipv6
+		process, files, err := Render(s, t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !contains(process.Env, "GEN_RPC_SOCKET_IP=127.0.0.1") {
+			t.Fatalf("IPv6=%v: Realtime's internal RPC listener must be bound to loopback", ipv6)
+		}
+		var environment map[string]string
+		if err := json.Unmarshal(files["supabase/environment.json"], &environment); err != nil {
+			t.Fatal(err)
+		}
+		if environment["GEN_RPC_SOCKET_IP"] != "127.0.0.1" {
+			t.Fatal("non-secret internal RPC listener bind configuration missing from diagnostics")
+		}
+		for _, name := range []string{"GEN_RPC_TCP_SERVER_PORT", "GEN_RPC_SSL_SERVER_PORT"} {
+			if _, present := environment[name]; present {
+				t.Fatalf("unexpected override of native internal RPC port: %s", name)
+			}
+		}
+	}
+	for _, component := range []string{"pooler", "analytics"} {
+		process, _, err := Render(testSpec(component), t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range process.Env {
+			if strings.HasPrefix(entry, "GEN_RPC_") {
+				t.Fatalf("%s must not receive Realtime internal RPC settings", component)
+			}
+		}
 	}
 }

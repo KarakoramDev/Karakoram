@@ -6,10 +6,14 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -481,7 +485,7 @@ func TestCapabilityLookupFallsBackWhenBackendUnavailable(t *testing.T) {
 	}
 	p := rabbitmq.New(rabbitmq.Options{})
 	c := &domain.Cluster{Spec: domain.ClusterSpec{EngineOptions: json.RawMessage(`{"managementUI":{"public":true}}`)}}
-	if failure := s.validateBackendCapabilities(t.Context(), p, c); failure != nil {
+	if failure := s.validateBackendCapabilities(t.Context(), p, c, nil); failure != nil {
 		t.Fatal("admission did not fall back to factory capabilities")
 	}
 }
@@ -553,6 +557,179 @@ func TestNamespaceNomadConfigAndAddressPolicy(t *testing.T) {
 			}
 			if requests.Load() != before {
 				t.Fatal("rejected Nomad configuration reached the API")
+			}
+		})
+	}
+}
+
+func TestNamespaceNomadRelayInspectionFailures(t *testing.T) {
+	const credential = "namespace-nomad-test-token"
+	for _, status := range []int{http.StatusForbidden, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var inspections atomic.Int64
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodGet || r.URL.Query().Get("namespace") != "nomad-project" || r.Header.Get("X-Nomad-Token") != credential {
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+					http.Error(w, "invalid request", http.StatusBadRequest)
+					return
+				}
+				switch {
+				case r.URL.Path == "/v1/namespace/nomad-project":
+					_, _ = w.Write([]byte(`{"Name":"nomad-project"}`))
+				case r.URL.Path == "/v1/jobs" || r.URL.Path == "/v1/vars":
+					_, _ = w.Write([]byte(`[]`))
+				case strings.HasPrefix(r.URL.Path, "/v1/var/karakoram/services/"):
+					inspections.Add(1)
+					// Variable errors must never expose secret Items from upstream.
+					http.Error(w, `{"Items":{"token":"`+credential+`","password":"private-value"}}`, status)
+				default:
+					t.Errorf("unexpected API path: %s", r.URL.Path)
+					http.NotFound(w, r)
+				}
+			}))
+			t.Cleanup(upstream.Close)
+			s, token := namespaceTestServer(t)
+			if err := s.Backends.Register(nomad.NewFactory(nomad.WithAllowedAddrs(upstream.URL))); err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(map[string]any{"name": "nomadtarget", "backend": "nomad", "projectId": "nomad-project", "token": credential, "config": map[string]string{"address": upstream.URL}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, http.MethodPost, "/api/v1/namespaces", string(body), token)
+			var result api.Error
+			if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			want := http.StatusUnprocessableEntity
+			if status == http.StatusServiceUnavailable {
+				want = http.StatusInternalServerError
+			}
+			if w.Code != want || !strings.Contains(result.Message, "nomad HTTP "+strconv.Itoa(status)) {
+				t.Fatalf("relay inspection lost classification/diagnostic: %d %s", w.Code, w.Body.String())
+			}
+			if status == http.StatusForbidden && (result.Code != "invalid_namespace" || !strings.Contains(result.Message, "relay") || !strings.Contains(result.Message, "read permissions")) {
+				t.Fatalf("missing remediation: %s", w.Body.String())
+			}
+			for _, secret := range []string{credential, "private-value", "Items", upstream.URL} {
+				if strings.Contains(w.Body.String(), secret) {
+					t.Fatalf("inspection diagnostic leaked %q", secret)
+				}
+			}
+			if inspections.Load() != 1 {
+				t.Fatal("did not exercise relay inspection")
+			}
+			if _, err := s.Store.GetNamespace(t.Context(), "nomadtarget"); err == nil {
+				t.Fatal("failed inspection registered namespace")
+			}
+			if _, err := s.Store.GetNamespaceTokenForUpdate(t.Context(), "nomadtarget"); err == nil {
+				t.Fatal("failed inspection stored credentials")
+			}
+		})
+	}
+}
+
+func TestNamespaceNomadTLSConfigurationFailure(t *testing.T) {
+	const credential = "namespace-nomad-test-token"
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("namespace validation reached server despite invalid TLS identity")
+	}))
+	t.Cleanup(upstream.Close)
+	roots := x509.NewCertPool()
+	roots.AddCert(upstream.Certificate())
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    roots,
+		ServerName: "private-requested-name.example.test",
+	}
+	t.Cleanup(transport.CloseIdleConnections)
+	s, token := namespaceTestServer(t)
+	if err := s.Backends.Register(nomad.NewFactory(nomad.WithAllowedAddrs(upstream.URL), nomad.WithHTTPClient(&http.Client{Transport: transport}))); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]any{"name": "nomadtls", "backend": "nomad", "projectId": "nomad-project", "token": credential, "config": map[string]string{"address": upstream.URL}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, http.MethodPost, "/api/v1/namespaces", string(body), token)
+	var result api.Error
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != http.StatusUnprocessableEntity || result.Code != "invalid_namespace" || !strings.Contains(result.Message, "TLS verification failed") || !strings.Contains(result.Message, "KARAKORAM_NOMAD_TLS_SERVER_NAME") {
+		t.Fatalf("TLS validation lost classification/remediation: %d %s", w.Code, w.Body.String())
+	}
+	for _, secret := range []string{credential, upstream.URL, "private-requested-name", "BEGIN CERTIFICATE", "retrying", "temporarily unavailable"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatalf("unsafe or transient TLS diagnostic: %s", w.Body.String())
+		}
+	}
+	if _, err := s.Store.GetNamespace(t.Context(), "nomadtls"); err == nil {
+		t.Fatal("TLS failure registered namespace")
+	}
+	if _, err := s.Store.GetNamespaceTokenForUpdate(t.Context(), "nomadtls"); err == nil {
+		t.Fatal("TLS failure stored credentials")
+	}
+}
+
+func TestNamespaceNomadLocalTLSConfigurationDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  string
+		pem  bool
+		want string
+	}{
+		{"missing CA", "KARAKORAM_NOMAD_CACERT", false, "cannot load KARAKORAM_NOMAD_CACERT"},
+		{"bad CA PEM", "KARAKORAM_NOMAD_CACERT", true, "cannot load KARAKORAM_NOMAD_CACERT"},
+		{"incomplete client identity", "KARAKORAM_NOMAD_CLIENT_CERT", false, "KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY must be set together"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, key := range []string{"KARAKORAM_NOMAD_CACERT", "KARAKORAM_NOMAD_CLIENT_CERT", "KARAKORAM_NOMAD_CLIENT_KEY"} {
+				t.Setenv(key, "")
+			}
+			file := filepath.Join(t.TempDir(), "private-certificate-material")
+			if tc.pem {
+				if err := os.WriteFile(file, []byte("private-invalid-certificate"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv(tc.env, file)
+			s, token := namespaceTestServer(t)
+			n := &domain.Namespace{Name: "existing", Backend: "nomad", ProjectID: "proj-existing", Phase: "Ready", Config: map[string]string{"address": "https://nomad.example.test"}}
+			if err := s.Store.CreateNamespaceCredentials(t.Context(), n, "original-token", nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Backends.Register(nomad.NewFactory(nomad.WithAllowedAddrs("https://nomad.example.test"))); err != nil {
+				t.Fatal(err)
+			}
+			for _, request := range []struct{ method, path, body string }{
+				{http.MethodPost, "/api/v1/namespaces", `{"name":"nomadtls","backend":"nomad","projectId":"nomad-project","token":"new-secret-token","config":{"address":"https://nomad.example.test"}}`},
+				{http.MethodPut, "/api/v1/namespaces/existing/token", `{"token":"replacement-secret-token"}`},
+			} {
+				w := call(s, request.method, request.path, request.body, token)
+				var result api.Error
+				if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+					t.Fatal(err)
+				}
+				if w.Code != http.StatusUnprocessableEntity || result.Code != "invalid_namespace" || !strings.Contains(result.Message, tc.want) || !strings.Contains(result.Message, "TLS configuration failed") {
+					t.Fatalf("local TLS diagnostic lost: %d %s", w.Code, w.Body.String())
+				}
+				for _, secret := range []string{file, "private-invalid-certificate", "new-secret-token", "replacement-secret-token", "retrying", "infra: request rejected"} {
+					if strings.Contains(w.Body.String(), secret) {
+						t.Fatalf("unsafe or generic TLS diagnostic: %s", w.Body.String())
+					}
+				}
+			}
+			if _, err := s.Store.GetNamespace(t.Context(), "nomadtls"); err == nil {
+				t.Fatal("TLS configuration failure saved namespace")
+			}
+			if _, err := s.Store.GetNamespaceTokenForUpdate(t.Context(), "nomadtls"); err == nil {
+				t.Fatal("TLS configuration failure saved token")
+			}
+			stored, err := s.Store.GetNamespaceTokenForUpdate(t.Context(), "existing")
+			if err != nil || stored != "original-token" {
+				t.Fatal("TLS configuration failure replaced token", err)
 			}
 		})
 	}

@@ -8,6 +8,7 @@ type FailureReason = NonNullable<Schemas['StorageVerification']['failureReason']
 const FAILURE_LABELS: Record<FailureReason, string> = {
   access_denied: 'Access denied',
   bucket_not_found: 'Bucket not found',
+  clock_skew: 'Host clock out of sync',
   endpoint_not_allowed: 'Endpoint not allowed',
   tls_error: 'TLS verification failed',
   unreachable: 'Endpoint unreachable',

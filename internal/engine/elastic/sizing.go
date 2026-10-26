@@ -67,6 +67,20 @@ func DefaultResources(component string) (domain.Resources, error) {
 	return r, nil
 }
 
+// KibanaActiveMinimumRAM returns the version-dependent active admission floor
+// in GiB. Invalid versions return zero; provider catalog validation rejects them.
+// Structural validation remains separate so persisted smaller specs can be read.
+func KibanaActiveMinimumRAM(version string) float64 {
+	v, ok := parseVersion(version)
+	if !ok {
+		return 0
+	}
+	if v[0] >= 9 {
+		return 1.5
+	}
+	return 1
+}
+
 // ValidateMinimumRAM checks each spec component's minimum RAM requirement in GB.
 func ValidateMinimumRAM(component string, ramGB float64) error {
 	minimum := 1.0

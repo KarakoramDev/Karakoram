@@ -111,7 +111,7 @@ func TestFactoryTLSEnvironmentErrors(t *testing.T) {
 
 func TestFactoryConfigAndEnvironment(t *testing.T) {
 	values := map[string]string{"KARAKORAM_NOMAD_NAMESPACE": "tenant", "KARAKORAM_NOMAD_TOKEN": "environment-token"}
-	want := map[string]string{"address": "https://nomad.example.test", "region": "global", "datacenters": "dc1,dc2", "nodePool": "default", "network": "member", "publicIPv4": "192.0.2.1", "publicIPv6": "2001:db8::1"}
+	want := map[string]string{"address": "https://nomad.example.test", "region": "global", "datacenters": "dc1,dc2", "nodePool": "default", "network": "member", "publicIPv4": "192.0.2.1", "publicIPv6": "2001:db8::1", "ephemeralDiskMB": "6144"}
 	for _, entry := range configEnv {
 		values[entry.env] = want[entry.key]
 	}
@@ -124,7 +124,7 @@ func TestFactoryConfigAndEnvironment(t *testing.T) {
 	if info.Kind != "nomad" || !info.Experimental || !info.Relay || info.DisplayName != "HashiCorp Nomad" {
 		t.Fatalf("factory metadata: %+v", info)
 	}
-	keys := []string{"address", "region", "datacenters", "nodePool", "network", "publicIPv4", "publicIPv6"}
+	keys := []string{"address", "region", "datacenters", "nodePool", "network", "publicIPv4", "publicIPv6", "ephemeralDiskMB"}
 	if !reflect.DeepEqual(info.ConfigKeys, keys) {
 		t.Fatalf("config discovery keys: %v", info.ConfigKeys)
 	}

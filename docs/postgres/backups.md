@@ -40,6 +40,10 @@ After source deletion, retained cleanup uses recorded repository/dependency meta
 
 Retained expiration tracks surviving backups separately for each database-history ID. When the final backup chain for an older major's history is removed, its entire WAL archive-ID prefix is deleted; histories still referenced by backups retain WAL from their oldest required segment onward. A surviving history with no known archive-start boundary keeps its WAL rather than being treated as unreferenced.
 
+Whole-cluster deletion (including Supabase's PostgreSQL core) retires runtime services and non-retained volumes before touching backup objects. The control plane then removes only the exact current/retired incarnation repositories using the registered backup-store binding; no working PostgreSQL/pgBackRest member credentials are required. `--keep-backups` skips artifact and inventory removal. Active restore/clone dependencies still refuse destructive deletion with **409**, including the stricter PITR live-source fence.
+
+Object cleanup retries transient binding/storage/authentication failures within a durable **two-minute total window**, checkpointing each confirmed repository removal. The window survives controller restarts. At exhaustion, **`BackupArtifactsRetained`** identifies the storage, bucket/repositories when known, and cluster incarnation; affected inventory remains while cluster-record deletion completes. Terminal cluster deletion therefore does not alone prove empty remote storage. Restore the original storage binding, verify the recorded incarnation ownership, remove only its exact repository prefixes with object-store tooling, then delete retained backup records. Never infer an unknown prefix from a reused cluster name. Resume from a retained-volume suspension clears cleanup deadlines/outcomes so a later deletion receives a new bounded attempt.
+
 ## PITR
 
 Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinutes` controls PostgreSQL `archive_timeout`, defaulting to one minute; the inherited field name does not mean MongoDB oplog behavior. Low-activity WAL switching is not an exact commit-time recovery guarantee.
@@ -76,12 +80,60 @@ replicas that the restore workflow has not started yet. This transaction-local
 setting does not change the cluster's configured synchronous policy or reopen
 client access.
 
+### Missing database data and interrupted recovery
+
+Ordinary startup never recreates an initialized database from an empty data
+directory. A durable member receipt outside PGDATA records initialization, and
+the control plane revokes first-initialization authorization once the cluster
+forms. A singleton with missing data reports `DataRecoveryRequired`: preserve
+remaining files and restore a validated backup with the supported restore
+workflow. Do not remove the receipt, reset control-plane state, or run `initdb`
+to make health green. The same protection applies to Supabase's PostgreSQL core.
+An interrupted first initialization is also fail-closed if its receipt exists
+but no database data remains.
+
+HA consumes first-initialization authorization in a durable attempt receipt
+**before** Patroni invokes native `initdb`. This guard also runs on supervised
+restarts using cached configuration, without a control-plane connection. A failed
+`initdb` or post-bootstrap hook cannot authorize another empty database, even if
+Patroni moves the failed data directory aside. Preserve that directory and both
+receipts for recovery; do not delete them to retry initialization. Replica cloning
+from surviving data and explicitly authorized backup restores remain separate
+from first initialization.
+
+A formed HA cluster retains replica cloning from surviving authoritative data,
+but cannot bootstrap an empty cluster if every member loses its database.
+Loss of all authoritative data requires backup recovery; missing DCS consensus
+is not permission to reset DCS and initialize a fresh database.
+
+Retry exhaustion or a restore deadline does not release durable stop/wipe
+holds. Failure cleanup transfers the original operation ID, selected source
+backup, generation and checkpoint to ordinary reconciliation. `RestoreRecovery`
+reports that continuing owner and its checkpoint. Reconciliation resumes when
+the agent, backup repository or sealed-state store becomes available, using
+the same receipts rather than selecting another backup or starting old data.
+This applies to access fencing, stop, credentials/config publication, DCS reset,
+wipe, singleton restore, seed publication/start, primary/rekey, replica rebuild,
+readiness, archive publication, cleanup, role reconciliation and fresh-base
+enqueue. Correct an unavailable dependency; do not clear process holds or start
+members manually. An invalid or missing frozen source remains an actionable
+recovery hold rather than authorizing a new empty database.
+
+Recovery ownership begins only after the first durable access hold. Invalid,
+deleted or incompatible source backups and rejected PITR preflight requests
+terminate without fencing the next operation when no hold was installed. The
+first hold stores its operation ID and frozen checkpoint atomically, so a lost
+queue checkpoint response cannot discard an already-started recovery.
+
 For a new cluster, `spec.dataSource` names a source backup or PITR target, optionally in another namespace. Use the shared [clone commands and permission rules](../backups.md#cross-namespace-recovery). Requirements:
 
 - Provider matches exactly: postgres→postgres or supabase→supabase, never across providers.
 - PostgreSQL major matches; source/target topology may differ.
 - Configure target-local backup storage to establish an independent history.
 - Source bootstrap is read-only with archiving disabled; target stanza creation and a fresh full establish its own repository afterward.
+- A failed restore-triggered fresh backup retries only the backup, at most three native attempts with a 30-second delay between attempts. Durable attempt receipts and retry-not-before timestamps preserve the bound and minimum delay across controller restarts and early reconciliations; the completed restore is never re-initiated. `BackupRetry` events and the backup error retain the reason. Exhaustion marks the backup Failed without claiming that Ready data has a valid backup.
+- Native backup failures expose the pgBackRest numeric error code (with a fixed archive-timeout explanation for `[082]`), or the process exit status/signal if no code was captured. Repository failures additionally expose only the HTTP status and explicitly allowlisted public S3 error codes; unknown S3 codes become `unrecognized S3 error`, never raw server-provided tokens. Recognized full/quota errors advise freeing or extending repository storage; HTTP/S3 failures without a capacity indicator advise checking repository credentials, permissions, health and capacity. Local disk-full errors identify the member backup spool/disk instead. Raw native text, object URLs, headers and credential-bearing server responses are not published. A successful process exit without verified inventory/primary continuity is reported separately.
+- Native HTTP retry failures (`ServiceError [101]`) retain their emitted status; HTTP 507 identifies repository capacity exhaustion. If an earlier 5xx is actually present in native output before a later failure, the error also reports the last observed 5xx; hidden native retries are not inferred and debug logging is not enabled. `NoSuchUpload` and `NoSuchKey` identify missing repository multipart-upload/object state and advise checking capacity, lifecycle and concurrent cleanup before a new backup. These 404 codes and opaque HTTP 500 alone do **not** assert that storage is full.
 - Retained-source clones use a sealed snapshot credential only for temporary offline recovery where necessary, never a deleted source's live credential scope or a target-visible source system identity.
 
 Supabase backups contain PostgreSQL data only, **not Storage API S3 objects, sealed function sources or all control-plane-held service keys**. Protect object storage and control-plane state independently, and plan coordinated recovery; a database clone is not a complete application clone.

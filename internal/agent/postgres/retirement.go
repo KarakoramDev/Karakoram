@@ -15,21 +15,35 @@ import (
 
 type patroniCluster struct {
 	Members []struct {
-		Name string      `json:"name"`
-		Role string      `json:"role"`
-		Tags patroniTags `json:"tags"`
+		Name       string      `json:"name"`
+		Role       string      `json:"role"`
+		State      string      `json:"state"`
+		ReceiveLSN string      `json:"receive_lsn"`
+		Timeline   int         `json:"timeline"`
+		Tags       patroniTags `json:"tags"`
 	} `json:"members"`
+	Pause bool `json:"pause"`
 }
 
 type patroniTags struct {
-	NoFailover    bool `json:"nofailover"`
-	NoLoadBalance bool `json:"noloadbalance"`
-	CloneFrom     bool `json:"clonefrom"`
+	NoFailover       *bool `json:"nofailover"`
+	FailoverPriority *int  `json:"failover_priority"`
+	NoLoadBalance    bool  `json:"noloadbalance"`
+	CloneFrom        bool  `json:"clonefrom"`
+}
+
+func (tags patroniTags) failoverDisabled() bool {
+	// Patroni 4.x gives an explicit nofailover (even false) precedence over
+	// failover_priority. An omitted priority defaults to eligible.
+	if tags.NoFailover != nil {
+		return *tags.NoFailover
+	}
+	return tags.FailoverPriority != nil && *tags.FailoverPriority <= 0
 }
 
 func retirementTagsApplied(tags patroniTags) bool {
 	// Patroni omits false-valued clonefrom from its DCS member record.
-	return tags.NoFailover && tags.NoLoadBalance && !tags.CloneFrom
+	return tags.failoverDisabled() && tags.NoLoadBalance && !tags.CloneFrom
 }
 
 func retirementStopped(n *agent.Node, s pgspec.Spec, p paths) bool {

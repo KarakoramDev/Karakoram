@@ -17,11 +17,61 @@ func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.Dele
 	if err != nil {
 		return false, err
 	}
+	identities := make(map[string]string, len(s.Members))
+	for _, m := range s.Members {
+		identities[m.Name] = m.ServiceID
+	}
+	ctx = infra.WithCleanupIntent(ctx, infra.CleanupIntent{
+		FullDelete: rc.Cluster.Deleting && !opts.KeepVolumes,
+		Services:   identities,
+	})
+	// Backend-owned deletion fences survive this whole-cluster takeover.
+	for _, m := range s.Members {
+		m.UnplacedRetirement = nil
+	}
+	rc.Cluster.Status.Message = "Removing PostgreSQL runtime services and owned backup data"
 	defer func() {
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
 		}
 	}()
+	if s.Pending != nil && engine.CleanupSupersedesDeployment(rc.Backend, s.Pending.Op) {
+		s.Pending = nil
+	}
+	for _, m := range s.Members {
+		if m.RuntimeRecovery.Op == nil && m.RuntimeRecovery.ImportPlan == nil {
+			continue
+		}
+		token, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+		if e != nil {
+			return false, e
+		}
+		if token == nil {
+			return false, engine.ErrNotFound
+		}
+		out, e := engine.ObserveRuntimeRecovery(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: token.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery})
+		if e != nil || out.Busy {
+			return false, e
+		}
+	}
+	if s.Pending == nil {
+		for _, m := range s.Members {
+			if m.ImportBatch == nil {
+				continue
+			}
+			op, e := resumePlannedImport(ctx, rc, m)
+			if e != nil {
+				return false, e
+			}
+			if op != nil {
+				p.track(s, m, "import", *op)
+				return false, nil
+			}
+			// No incomplete reservation remains. Cleanup may remove completed
+			// services, or discard an intent which never submitted any setup.
+			m.ImportBatch = nil
+		}
+	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 		return false, e
 	}
@@ -123,4 +173,30 @@ func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.Dele
 		}
 	}
 	return true, nil
+}
+
+func resumePlannedImport(ctx context.Context, rc *engine.Context, m *member) (*infra.Op, error) {
+	if m.ImportBatch == nil {
+		for _, name := range []string{m.Volume, m.Name} {
+			if name == "" {
+				continue
+			}
+			service, err := rc.Backend.GetService(ctx, name)
+			if err != nil {
+				return nil, err
+			}
+			if service != nil && service.Importing {
+				return nil, engine.Invalid("incomplete import for %s has no frozen batch; recover the original import intent before continuing", m.Name)
+			}
+		}
+		return nil, nil
+	}
+	token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+	if err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, engine.ErrNotFound
+	}
+	return engine.ResumeImportPlan(ctx, rc, m.ImportBatch, m.Name, token.Token)
 }

@@ -61,7 +61,7 @@ func TestCrossNamespaceRestoreUsesSourceStorageAndRecoveryIdentity(t *testing.T)
 		}
 	}
 	configuredSource := false
-	for _, req := range fake.requests {
+	for _, req := range fake.recordedRequests() {
 		var config string
 		_ = json.Unmarshal(req.Config, &config)
 		if strings.Contains(config, "source-prefix") {

@@ -58,6 +58,25 @@ karactl -n default clusters balancer set analytics --enabled=true
 
 Inspect balancer status separately from member health; manual disablement is not automatically an error. Binary upgrades save, stop and restore its prior state. Restores coordinate balancer/router holds; do not override those holds during an operation.
 
+While restore holds routers stopped or they are restarting, balancer GET returns HTTP 503 `unavailable`; retry after router connectivity recovers. Database-user and database-role reads use the same availability contract. Authentication and non-transient command failures are not reported as temporary unavailability.
+
+## Router readiness
+
+Router readiness uses an authenticated `clusterMonitor` read of `config.shards`
+through each mongos, with primary read preference and majority read concern.
+The metadata command has a two-second deadline within the three-second probe
+budget; the MongoDB driver derives the server-side time limit from that deadline.
+One config-server member is supported but has no config-server redundancy;
+majority is one in that topology. A running mongos or an open TCP port alone
+does not satisfy readiness. `Router/<member>` / `ConfigMetadataUnavailable`
+reports a failed probe. Native command failures include the bounded MongoDB
+numeric code and code name in the condition and agent log. Client-side timeout,
+cancellation, network, TLS certificate/handshake and authentication failures use
+fixed diagnostic categories. Server-selection failures identify typed handshake
+causes from the observed servers when available, rather than hiding them behind
+the selection deadline. Raw native messages, connection URIs and credentials
+are not exposed by this diagnostic.
+
 ## Backups, access and failure domains
 
 [PBM](backups.md) runs on every config/shard mongod, never mongos; sharded PBM commands use `cfg`. Recovery is whole-cluster and disruptive, not a per-shard restore or topology conversion.

@@ -46,6 +46,13 @@ Secondaries upgrade first, then primary stepdown/former-primary deployment, wait
 
 **Upgrades** shows observed **Running version**, possibly mixed during rollout, separately from **Desired version**. Missing observations mean **not yet observed**, not deployment success.
 
+Zerops exact-version deployment retries have a hard budget.
+`DeploymentRetriesExhausted` records the blocked member and stops submissions for
+that target while other members remain observable and can finish provisioning.
+An unstarted member is not treated as bootstrapped or upgraded, and existing
+replication/quorum fences remain in effect. Correct the platform/runtime failure,
+then run `karactl --namespace NS clusters retry-deployments NAME` to re-arm.
+
 ## Explicit FCV promotion
 
 Binary upgrades do not raise featureCompatibilityVersion automatically. Observe application compatibility with old FCV, then use **Upgrades → FCV** or:
@@ -69,6 +76,14 @@ Use validated `engineConfig` YAML only for non-managed settings; see the [overvi
 ## Processes, files and readiness
 
 `mongod` serves data/config members; `mongos` serves routers; PBM placement is described in [sharding](sharding.md). Platform `karakoram agent readiness` probes **TCP 127.0.0.1:27017 only**, without credentials/environment; it does not validate users, replication or PBM. Authenticated provider observations determine [cluster health](replica-sets.md).
+
+Ready requires an observed, writable primary in every replica set (including config servers and each shard), with data members in PRIMARY/SECONDARY state and within the managed replication-lag gate. Reachable secondary processes alone are not healthy write service. `Replication/<set>` reports `NoWritablePrimary` when election/quorum cannot provide a verified primary. Restore retained voters, disk capacity, DNS and connectivity; Karakoram does not force replica-set reconfiguration or reinitialize a previously formed set. A missing last data copy requires recovery from a verified backup, not an empty replacement. A lost secondary may be safely reseeded only from a verified retained writable primary.
+
+Every live mongos instance must acknowledge its configuration and perform an authenticated majority read of config-server metadata. One healthy logical DNS endpoint or a running mongos PID cannot hide a failed sibling or unavailable config-server quorum. `Router/<member>` identifies failed instance observations.
+
+Normal steady-state reconciliation reapplies the five reserved system-user credentials/roles and `pbmAnyAction`; it does not rewrite customer-created users or roles. If the retained `userAdmin` credential or privileges no longer authorize repair, `ManagedSystemUsers` reports `CredentialRepairRequired`. Restore that account's managed credential and `userAdminAnyDatabase` access using a surviving authorized administrator; restarting MongoDB does not repair authentication drift.
+
+Reconciliation bounds each replication observation (connect, writable-primary check and replication status together) to four seconds. Managed-user connection checks, native `rolesInfo`/`usersInfo` reads, and each router instance status read also have independent four-second observation budgets. An expired read fails closed and identifies the read and connectivity/responsiveness checks; user/role mutations retain their original administration context and are not replayed by the observation timeout.
 
 Agents pin internal trust and pull assigned protected configuration. With usable cache they can run through control-plane outages; without it, first configuration retries every five seconds. Normal pull is every 60 seconds, with immediate reload available to the controller. Activated member snapshots prevent simultaneous disruptive adoption; stateless router replacement loses cache.
 

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -179,6 +180,22 @@ func TestCommandErrors(t *testing.T) {
 	generic := errors.New("connection failed")
 	if commandError(generic) != generic {
 		t.Fatal("non-command error changed")
+	}
+}
+
+func TestCommandErrorPreservesSafeClassification(t *testing.T) {
+	for _, code := range []int32{91, 18, 59} {
+		raw, _ := bson.Marshal(bson.M{"password": "private-value"})
+		err := commandError(mongo.CommandError{Code: code, Name: "private-value",
+			Message: "private-value", Raw: raw, Wrapped: errors.New("private-value"),
+			Labels: []string{"NetworkError"}})
+		var command mongo.CommandError
+		if !errors.As(err, &command) || command.Code != code || !mongo.IsNetworkError(err) {
+			t.Fatalf("classification lost: %v", err)
+		}
+		if strings.Contains(err.Error(), "private-value") || len(command.Raw) != 0 || command.Wrapped != nil || command.Name != "" {
+			t.Fatalf("native command secrets retained: %+v", command)
+		}
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -156,5 +157,67 @@ func TestFailedResizeSupersessionObservesRunningRuntimeResources(t *testing.T) {
 				t.Fatalf("backend resource drift was not corrected safely: actions=%v resources=%+v", b.actions, b.services[target].Resources)
 			}
 		})
+	}
+}
+
+// Exercise the public convergence path: capacity recovery must remain possible
+// after a full data/WAL filesystem has stopped PostgreSQL or its agent.
+func TestSyncStoppedMemberSubmitsVolumeGrowthBeforeReadiness(t *testing.T) {
+	for _, topology := range []string{"single", "ha"} {
+		for _, unavailableAgent := range []bool{false, true} {
+			name := topology + "/stopped-postgres"
+			if unavailableAgent {
+				name = topology + "/unavailable-agent"
+			}
+			t.Run(name, func(t *testing.T) {
+				p, rc, b := setup(t, topology)
+				s := converge(t, p, rc)
+				target := s.data()[0]
+				observedGeneration := rc.Cluster.Status.ObservedGeneration
+				rc.Cluster.Generation++
+				rc.Cluster.Spec.Components.Engine.Resources.MinDisk += 10
+				rc.Cluster.Spec.Components.Engine.Resources.MaxDisk += 10
+				wanted := domain.Resources{
+					MinDisk: rc.Cluster.Spec.Components.Engine.Resources.MinDisk,
+					MaxDisk: rc.Cluster.Spec.Components.Engine.Resources.MaxDisk,
+				}
+				if unavailableAgent {
+					rc.Agents = unavailableResizeAgent{AgentDialer: rc.Agents, member: target.Name}
+				} else {
+					b.statusOverrides = map[string]pgspec.StatusResponse{
+						target.Name: {Running: false, Role: "stopped"},
+					}
+				}
+				rc.Backend = growthRecoveryBackend{b}
+				b.actions = nil
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(b.actions, []string{"resize:" + target.Volume}) {
+					t.Fatalf("stopped member blocked volume growth: actions=%v wait=%s", b.actions, rc.SyncWait)
+				}
+				current, err := load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if current.Pending == nil || current.Pending.Action != "resize-volume" ||
+					current.Pending.Member != target.Name || current.Pending.Resources != wanted {
+					t.Fatalf("volume growth lacks serialized receipt: %+v", current.Pending)
+				}
+				if current.find(target.Name).Disk != target.Disk {
+					t.Fatal("volume bounds acknowledged before the operation receipt")
+				}
+				if rc.Cluster.Status.ObservedGeneration != observedGeneration {
+					t.Fatal("volume submission acknowledged the unhealthy generation")
+				}
+				status, err := p.Status(t.Context(), rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if status.Phase == domain.PhaseReady {
+					t.Fatal("volume submission made a stopped member Ready")
+				}
+			})
+		}
 	}
 }

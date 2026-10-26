@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"net"
 	"strconv"
+	"time"
 )
 
 type state struct {
@@ -19,6 +21,9 @@ type state struct {
 	BootstrapGeneration          int               `json:"bootstrapGeneration"`
 	RepositoryGeneration         int               `json:"repositoryGeneration,omitempty"`
 	RetiredRepositoryGenerations []int             `json:"retiredRepositoryGenerations,omitempty"`
+	BackupCleanupStarted         *time.Time        `json:"backupCleanupStarted,omitempty"`
+	CleanedBackupRepositories    []string          `json:"cleanedBackupRepositories,omitempty"`
+	RetainedBackupStorages       []string          `json:"retainedBackupStorages,omitempty"`
 	Topology                     string            `json:"topology"`
 	Members                      []*member         `json:"members"`
 	ConversionSeed               string            `json:"conversionSeed,omitempty"`
@@ -28,35 +33,49 @@ type state struct {
 	Replacement                  *replacementState `json:"replacement,omitempty"`
 	Upgrade                      *upgradeState     `json:"upgrade,omitempty"`
 	Rolling                      *rollingState     `json:"rolling,omitempty"`
+	RestoreRecovery              *domain.Operation `json:"restoreRecovery,omitempty"`
+	SwitchoverBlocked            string            `json:"switchoverBlocked,omitempty"`
 }
 type member struct {
-	Name              string           `json:"name"`
-	Role              string           `json:"role"`
-	Index             int              `json:"index"`
-	Volume            string           `json:"volume,omitempty"`
-	ServiceID         string           `json:"serviceId,omitempty"`
-	VolumeID          string           `json:"volumeId,omitempty"`
-	Stage             string           `json:"stage"`
-	Version           string           `json:"version"`
-	Resources         domain.Resources `json:"resources"`
-	Disk              domain.Resources `json:"disk"`
-	Replicas          int              `json:"replicas"`
-	ConfigVersion     int64            `json:"configVersion"`
-	EtcdState         string           `json:"etcdState,omitempty"`
-	EtcdID            string           `json:"etcdId,omitempty"`
-	Public            bool             `json:"public,omitempty"`
-	Options           json.RawMessage  `json:"options,omitempty"`
-	DeployOp          *infra.Op        `json:"deployOp,omitempty"`
-	Topology          string           `json:"topology,omitempty"`
-	Removing          bool             `json:"removing,omitempty"`
-	ProxyDrainVersion int64            `json:"proxyDrainVersion,omitempty"`
-	ProxyReady        bool             `json:"proxyReady,omitempty"`
-	Retirement        string           `json:"retirement,omitempty"`
-	RetirementOp      *infra.Op        `json:"retirementOp,omitempty"`
-	EtcdLearner       bool             `json:"etcdLearner,omitempty"`
-	InitialCluster    string           `json:"initialCluster,omitempty"`
-	TLSPending        bool             `json:"tlsPending,omitempty"`
-	Offline           bool             `json:"offline,omitempty"`
+	Name            string `json:"name"`
+	NativeReadiness *bool  `json:"nativeReadiness,omitempty"`
+	Role            string `json:"role"`
+	Index           int    `json:"index"`
+	Volume          string `json:"volume,omitempty"`
+	ServiceID       string `json:"serviceId,omitempty"`
+	VolumeID        string `json:"volumeId,omitempty"`
+	// ImportBatch preserves the exact original subset across ambiguous imports.
+	// Resources/Replicas are frozen with it; sensitive Env is rebuilt from the
+	// sealed member token, never stored in Cluster.Internal.
+	ImportBatch        *engine.ImportPlan             `json:"importBatch,omitempty"`
+	Stage              string                         `json:"stage"`
+	Version            string                         `json:"version"`
+	Resources          domain.Resources               `json:"resources"`
+	Disk               domain.Resources               `json:"disk"`
+	Replicas           int                            `json:"replicas"`
+	ConfigVersion      int64                          `json:"configVersion"`
+	EtcdState          string                         `json:"etcdState,omitempty"`
+	EtcdID             string                         `json:"etcdId,omitempty"`
+	Public             bool                           `json:"public,omitempty"`
+	Options            json.RawMessage                `json:"options,omitempty"`
+	DeployOp           *infra.Op                      `json:"deployOp,omitempty"`
+	Topology           string                         `json:"topology,omitempty"`
+	Removing           bool                           `json:"removing,omitempty"`
+	ProxyDrainVersion  int64                          `json:"proxyDrainVersion,omitempty"`
+	ProxyReady         bool                           `json:"proxyReady,omitempty"`
+	Retirement         string                         `json:"retirement,omitempty"`
+	RetirementOp       *infra.Op                      `json:"retirementOp,omitempty"`
+	EtcdLearner        bool                           `json:"etcdLearner,omitempty"`
+	InitialCluster     string                         `json:"initialCluster,omitempty"`
+	TLSPending         bool                           `json:"tlsPending,omitempty"`
+	TLSReloadPending   bool                           `json:"tlsReloadPending,omitempty"`
+	TLSReloadVersion   int64                          `json:"tlsReloadVersion,omitempty"`
+	TLSReloadOnly      bool                           `json:"tlsReloadOnly,omitempty"`
+	TLSReloadBlocked   string                         `json:"tlsReloadBlocked,omitempty"`
+	ProxyClockRecovery map[string]*proxyClockRecovery `json:"proxyClockRecovery,omitempty"`
+	Offline            bool                           `json:"offline,omitempty"`
+	RuntimeRecovery    engine.RuntimeRecovery         `json:"runtimeRecovery,omitempty"`
+	UnplacedRetirement *engine.UnplacedRetirement     `json:"unplacedRetirement,omitempty"`
 }
 type pending struct {
 	Op        infra.Op         `json:"op"`

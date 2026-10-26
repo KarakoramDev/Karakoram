@@ -7,13 +7,51 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"debug/elf"
+	"fmt"
 	"io"
 	"os"
+	"sync"
 )
 
 // ExecutableArtifact streams the running control plane binary as a tar.gz named
 // karakoram, matching the runtime deployment command without temporary files.
 type ExecutableArtifact struct{}
+
+// ArtifactIdentity supplies a cheap, stable identity without opening or hashing
+// a deployment archive. Custom artifact sources may implement it as well.
+func (ExecutableArtifact) ArtifactIdentity() string {
+	executableIdentityOnce.Do(func() {
+		path, err := os.Executable()
+		if err != nil {
+			return
+		}
+		stat, err := os.Stat(path)
+		if err != nil {
+			return
+		}
+		executableIdentity = fmt.Sprintf("%s/%d/%d", ArtifactBinary, stat.Size(), stat.ModTime().UnixNano())
+		if binary, err := elf.Open(path); err == nil {
+			defer binary.Close()
+			if note := binary.Section(".note.go.buildid"); note != nil {
+				if id, err := note.Data(); err == nil {
+					executableIdentity = fmt.Sprintf("%s/%d/%x", ArtifactBinary, stat.Size(), id)
+				}
+			}
+		}
+	})
+	return executableIdentity
+}
+
+var executableIdentityOnce sync.Once
+var executableIdentity string
+
+func artifactIdentity(source ArtifactSource) string {
+	if source, ok := source.(interface{ ArtifactIdentity() string }); ok {
+		return source.ArtifactIdentity()
+	}
+	return ""
+}
 
 // Open streams the current executable as a deployment tar.gz.
 func (ExecutableArtifact) Open(ctx context.Context) (io.ReadCloser, error) {

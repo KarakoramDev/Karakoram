@@ -21,31 +21,38 @@ import (
 
 // fakeAPI keeps REST state rather than replacing the backend being exercised.
 type fakeAPI struct {
-	mu        sync.Mutex
-	url       string
-	serial    int
-	services  map[string]*ServiceStack
-	env       map[string][]EnvItem
-	routes    map[string]PublicPortRouting
-	versions  map[string]string
-	uploaded  map[string]bool
-	processes map[string]Process
+	mu            sync.Mutex
+	url           string
+	serial        int
+	services      map[string]*ServiceStack
+	env           map[string][]EnvItem
+	routes        map[string]PublicPortRouting
+	versions      map[string]string
+	uploaded      map[string]bool
+	versionStatus map[string]string
+	processes     map[string]Process
 }
 
 func newFakeAPI(t *testing.T) *httptest.Server {
 	t.Helper()
-	f := &fakeAPI{services: map[string]*ServiceStack{}, env: map[string][]EnvItem{}, routes: map[string]PublicPortRouting{}, versions: map[string]string{}, uploaded: map[string]bool{}, processes: map[string]Process{}}
+	server, _ := newFakeAPIWithState(t)
+	return server
+}
+
+func newFakeAPIWithState(t *testing.T) (*httptest.Server, *fakeAPI) {
+	t.Helper()
+	f := &fakeAPI{services: map[string]*ServiceStack{}, env: map[string][]EnvItem{}, routes: map[string]PublicPortRouting{}, versions: map[string]string{}, uploaded: map[string]bool{}, versionStatus: map[string]string{}, processes: map[string]Process{}}
 	server := httptest.NewServer(http.HandlerFunc(f.serveHTTP))
 	f.url = server.URL
 	t.Cleanup(server.Close)
-	return server
+	return server, f
 }
 func (f *fakeAPI) next(prefix string) string {
 	f.serial++
 	return fmt.Sprintf("%s%d", prefix, f.serial)
 }
 func (f *fakeAPI) process(service string) Process {
-	p := Process{ID: f.next("op"), ProjectID: "project", ServiceStackID: service, Status: "FINISHED"}
+	p := Process{ID: f.next("op"), ProjectID: "project", ServiceStackID: service, Status: "FINISHED", Created: time.Now()}
 	f.processes[p.ID] = p
 	return p
 }
@@ -251,7 +258,25 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		case "disable-subdomain-access":
 			s.SubdomainAccess = false
 			respond(f.process(id))
+		case "process":
+			list := []Process{}
+			for _, process := range f.processes {
+				if process.ServiceStackID == id {
+					list = append(list, process)
+				}
+			}
+			fakePage(w, r, list)
 		case "app-version":
+			if r.Method == http.MethodGet {
+				list := []AppVersion{}
+				for version, service := range f.versions {
+					if service == id {
+						list = append(list, AppVersion{ID: version, Status: f.versionStatus[version]})
+					}
+				}
+				fakePage(w, r, list)
+				return
+			}
 			var body map[string]string
 			if !decode(&body) {
 				return
@@ -262,6 +287,7 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			version := f.next("version")
 			f.versions[version] = id
+			f.versionStatus[version] = "UPLOADING"
 			respond(AppVersion{ID: version})
 		case "public-port-routing":
 			if r.Method == "POST" {
@@ -327,10 +353,18 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(map[string]bool{"deleted": false})
 		return
 	}
+	if len(parts) == 2 && parts[0] == "app-version" && r.Method == http.MethodGet {
+		if _, ok := f.versions[parts[1]]; !ok {
+			fakeError(w, 400, "appVersionNotFound")
+			return
+		}
+		respond(AppVersion{ID: parts[1], Status: f.versionStatus[parts[1]]})
+		return
+	}
 	if len(parts) == 3 && parts[0] == "app-version" {
 		id, ok := f.versions[parts[1]]
 		if !ok {
-			fakeError(w, 404, "notFound")
+			fakeError(w, 400, "appVersionNotFound")
 			return
 		}
 		switch parts[2] {
@@ -341,6 +375,7 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			f.uploaded[parts[1]] = true
+			f.versionStatus[parts[1]] = "WAITING_TO_DEPLOY"
 			respond(map[string]bool{"success": true})
 		case "deploy":
 			if !f.uploaded[parts[1]] {
@@ -404,7 +439,12 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s.Status = "ACTIVE"
-			respond(f.process(id))
+			f.versionStatus[parts[1]] = "ACTIVE"
+			process := f.process(id)
+			process.ActionName = "appVersion.deploy"
+			process.AppVersion = &AppVersion{ID: parts[1], Status: "ACTIVE"}
+			f.processes[process.ID] = process
+			respond(process)
 		default:
 			fakeError(w, 404, "notFound")
 		}

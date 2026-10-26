@@ -190,10 +190,20 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 	if journal.Version == 0 {
 		s.ConfigVersion++
 		journal.Version = s.ConfigVersion
-		for _, m := range s.data() {
+		for _, m := range s.Members {
 			m.ConfigVersion = journal.Version
 		}
 		return true, nil
+	}
+	// A decreasing writer cannot restart until every existing proxy has
+	// acknowledged the smaller shared capacity budget.
+	for _, m := range s.Members {
+		if m.Role == "proxy" && desiredComponent(rc, m).Replicas > 0 {
+			applied, err := proxyApplied(ctx, rc, m, journal.Version, false)
+			if err != nil || !applied {
+				return true, err
+			}
+		}
 	}
 	// Acknowledging every pull also rules out a delayed old-phase PATCH before
 	// any restart. All periodic pulls now render this journal's phase options.
@@ -202,7 +212,7 @@ func (p *Core) reconcileSharedMemory(ctx context.Context, rc *engine.Context, s 
 		if err != nil {
 			return true, err
 		}
-		status, err := a.Status(ctx)
+		status, err := engine.ObserveAgentStatus(ctx, a, "PostgreSQL", m.Name)
 		if err != nil {
 			return true, err
 		}

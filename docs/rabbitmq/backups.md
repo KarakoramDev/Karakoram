@@ -76,3 +76,23 @@ karactl -n NS backups delete brokers before-change --yes
 ```
 
 Choose `keepBackups` independently of `keepVolumes` when [deleting/suspending](../clusters.md#delete-or-suspend). Retained objects require control-plane state, the original master key and storage credentials. Retained broker volumes preserve secrets for coordinated resume, not portable message backups; see [operations](operations.md).
+
+Whole-cluster deletion first retires owned broker runtimes and deletes volumes (or
+retains them for suspension). It then deletes this incarnation's recorded
+definitions objects directly through the control-plane storage binding, without
+requiring working broker credentials. Object cleanup has a durable **two-minute**
+window shared across backups and controller restarts; transient failures retry
+within that window. `keepBackups=true` bypasses object and inventory removal,
+independently of `keepVolumes`; backups from earlier incarnations remain untouched.
+
+If object cleanup cannot finish safely within that window, deletion still removes
+the cluster record (or completes suspension when retaining volumes). A
+`BackupArtifactsRetained` warning event names the retained backup, storage, recorded
+object location and bucket when available; its inventory is preserved. This means
+**cluster removal with retained artifacts**, not successful object removal.
+Restore the original storage binding, verify the recorded object's exact ownership,
+remove only that object with object-store tooling, then remove its retained backup
+record. Never guess a missing or ambiguous location or delete a shared prefix.
+Runtime ownership, backend deletion and control-plane persistence failures still
+block unsafe cleanup. Active restore/clone dependency fences still reject
+destructive source deletion with HTTP 409 before any cleanup begins.

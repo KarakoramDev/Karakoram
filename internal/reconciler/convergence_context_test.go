@@ -69,3 +69,66 @@ func TestConvergenceTrackingDeadlineDoesNotShortenProviderContext(t *testing.T) 
 		})
 	}
 }
+
+type eventualDeleteProvider struct {
+	*fakeProvider
+	calls    int
+	complete bool
+}
+
+func (p *eventualDeleteProvider) Cleanup(_ context.Context, rc *engine.Context, _ domain.DeleteOptions) (bool, error) {
+	p.calls++
+	rc.Cluster.Status.Message = "Swarm inconsistency: desired 0 but a task is desired-running"
+	return p.complete, nil
+}
+
+func TestDeleteTrackingDeadlineRetainsCleanupAndEventuallySucceeds(t *testing.T) {
+	p := &eventualDeleteProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	m, st := newTestManager(t, p)
+	ctx := t.Context()
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}}
+	if err := st.CreateCluster(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	op := &domain.Operation{Kind: domain.OperationDelete}
+	if err := st.MarkClusterDeleting(store.WithOperation(ctx, op), c.Ref(), domain.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if DefaultOperationTimeout != 2*time.Hour {
+		t.Fatal("unexpected generic tracking deadline")
+	}
+	m.budgets[c.Ref().Key()][op.ID] = operationBudget{observed: time.Now().Add(-DefaultOperationTimeout - time.Minute)}
+	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	failed, err := st.GetOperation(ctx, op.ID)
+	if err != nil || failed.Phase != domain.PhaseFailed {
+		t.Fatalf("tracking did not expire: %+v %v", failed, err)
+	}
+	retained, err := st.GetCluster(ctx, c.Ref())
+	if err != nil || !retained.Deleting || retained.DeleteOptions.KeepVolumes {
+		t.Fatalf("deadline erased desired cleanup: %+v %v", retained, err)
+	}
+	before := p.calls
+	m, err = New(m.opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	if p.calls <= before {
+		t.Fatal("cleanup stopped after failed tracking and reconstruction")
+	}
+	p.complete = true
+	if _, err := m.reconcile(ctx, c.Ref()); err != errClusterGone {
+		t.Fatal(err)
+	}
+	done, err := st.GetOperation(ctx, op.ID)
+	if err != nil || done.Phase != domain.PhaseSucceeded {
+		t.Fatalf("authoritative removal did not complete original operation: %+v %v", done, err)
+	}
+}

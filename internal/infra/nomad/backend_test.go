@@ -271,7 +271,7 @@ func TestVolumeNamesAreIsolatedAcrossNamespaces(t *testing.T) {
 			t.Fatal(err)
 		}
 		digest := sha256.Sum256([]byte(namespace))
-		want := fmt.Sprintf("kk-%x-volume", digest[:4])
+		want := fmt.Sprintf("kk-%x-volume-%s", digest[:4], r.ID)
 		if volume.Name != want || names[volume.Name] {
 			t.Fatalf("namespace %s physical volume name = %q, want unique %q", namespace, volume.Name, want)
 		}

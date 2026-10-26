@@ -132,11 +132,18 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 	if rc.Cluster.Spec.Backup.PITR.Enabled {
 		windows, err := p.PITRWindow(ctx, rc)
 		if err != nil {
-			return err
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "PITR", Status: "Unknown", Reason: "ObservationUnavailable", Message: "The conservative PITR window could not be collected; restore writer/repository access. Database and DCS health are reported independently.", LastTransitionTime: now(rc)})
+			return nil
 		}
 		if len(windows) > 0 {
 			status.Backup.PITRWindow = &windows[0]
 		}
+		condition := domain.Condition{Type: "PITR", Status: "True", Reason: "WindowAvailable", LastTransitionTime: now(rc)}
+		if len(windows) == 0 {
+			condition.Status, condition.Reason = "False", "WindowUnavailable"
+			condition.Message = "No conservative WAL recovery window is available. Check WALArchive health and the repository backup chain."
+		}
+		status.Conditions = append(status.Conditions, condition)
 	}
 	return nil
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/pbm"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
@@ -60,7 +61,7 @@ func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 				ctx := context.Background()
 				m, st := newTestManager(t, &psmdb.Provider{})
 				m.opts.OperationRetryLimit = 2
-				backend := &cleanupBackend{}
+				backend := &cleanupBackend{Backend: fake.New(fake.Options{})}
 				m.opts.Namespaces = engine.StaticNamespaces{DefaultBackend: backend}
 				failures, starts, maintenanceOff, configs, restorePolls := 0, 0, 0, 0, 0
 				agent := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +121,7 @@ func TestExpiredRestoreRunsCompensationBeforeFailure(t *testing.T) {
 				raw, _ := json.Marshal(cp)
 				op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Phase: domain.PhaseRunning, Step: step, Checkpoint: raw, Payload: json.RawMessage(`{"restore":"recover"}`), CreatedAt: time.Now(), LastError: "PBM unavailable"}
 				if expiry == "deadline" {
-					op.CreatedAt = time.Now().Add(-7 * time.Hour)
+					op.Elapsed = 7 * time.Hour
 				} else {
 					op.Failures = m.opts.OperationRetryLimit
 				}
@@ -217,7 +218,7 @@ func TestExpiredReplaceMemberReleasesConvergenceGate(t *testing.T) {
 			}
 			op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationReplaceMember, Phase: domain.PhaseRunning, Step: "replacement-remove", Checkpoint: json.RawMessage(`{"stage":"remove","newMember":"replacement"}`), Payload: json.RawMessage(`{"member":"old"}`), CreatedAt: time.Now(), LastError: "platform unavailable"}
 			if expiry == "deadline" {
-				op.CreatedAt = time.Now().Add(-3 * time.Hour)
+				op.Elapsed = 3 * time.Hour
 			} else {
 				op.Failures = m.opts.OperationRetryLimit
 			}
@@ -290,7 +291,7 @@ func TestFailureCleanupDeadlineReleasesQueueWithRecoveryWarning(t *testing.T) {
 	if err := st.CreateCluster(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Phase: domain.PhaseRunning, Step: failureCleanupStep, LastError: "original failure", Checkpoint: json.RawMessage(`{"step":"routers-on"}`)}
+	op := &domain.Operation{Cluster: c.Name, Kind: domain.OperationRestore, Phase: domain.PhaseRunning, Step: failureCleanupStep, LastError: "original failure", FailureCleanupElapsed: 7 * time.Hour, Checkpoint: json.RawMessage(`{"step":"routers-on"}`)}
 	// Use the durable representation so this also covers process restarts.
 	raw, _ := json.Marshal(op)
 	var fields map[string]any

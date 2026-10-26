@@ -368,6 +368,7 @@ const (
 const (
 	AccessDenied       StorageVerificationFailureReason = "access_denied"
 	BucketNotFound     StorageVerificationFailureReason = "bucket_not_found"
+	ClockSkew          StorageVerificationFailureReason = "clock_skew"
 	EndpointNotAllowed StorageVerificationFailureReason = "endpoint_not_allowed"
 	Timeout            StorageVerificationFailureReason = "timeout"
 	TlsError           StorageVerificationFailureReason = "tls_error"
@@ -598,6 +599,7 @@ type AgentStatus struct {
 	ConfigVersion *int64     `json:"configVersion,omitempty"`
 	Connected     bool       `json:"connected"`
 	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
+	Message       *string    `json:"message,omitempty"`
 	Version       *string    `json:"version,omitempty"`
 }
 
@@ -822,6 +824,9 @@ type ClusterInputSpec struct {
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
 
+	// RetryEpoch Server-managed; ignored on input and preserved on updates. Use retry-deployments to grant a new budget.
+	RetryEpoch *int64 `json:"retryEpoch,omitempty"`
+
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLSInput      `json:"tls,omitempty"`
 	Topology *TopologyInput `json:"topology,omitempty"`
@@ -887,6 +892,9 @@ type ClusterSpec struct {
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
 	Provider string `json:"provider"`
 
+	// RetryEpoch Server-managed deployment retry budget epoch. Changed only by retry-deployments, never by ordinary spec updates.
+	RetryEpoch *int64 `json:"retryEpoch,omitempty"`
+
 	// Tls PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only.
 	Tls      *TLS     `json:"tls,omitempty"`
 	Topology Topology `json:"topology"`
@@ -903,7 +911,7 @@ type ClusterStatus struct {
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
 
-	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 	Phase ClusterStatusPhase `json:"phase"`
 
 	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
@@ -913,7 +921,7 @@ type ClusterStatus struct {
 	Version *string `json:"version,omitempty"`
 }
 
-// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
+// ClusterStatusPhase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 type ClusterStatusPhase string
 
 // Component defines model for Component.
@@ -4123,6 +4131,30 @@ type ResumeClusterParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RetryClusterDeploymentsParams defines parameters for RetryClusterDeployments.
+type RetryClusterDeploymentsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
@@ -5170,6 +5202,9 @@ type ServerInterface interface {
 	// Recreate runtimes on retained volumes
 	// (POST /clusters/{cluster}/resume)
 	ResumeCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ResumeClusterParams)
+	// Re-arm platform deployments stopped by the retry limit
+	// (POST /clusters/{cluster}/retry-deployments)
+	RetryClusterDeployments(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RetryClusterDeploymentsParams)
 	// Roll cluster TLS material
 	// (POST /clusters/{cluster}/rotate-tls)
 	RotateClusterTLS(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RotateClusterTLSParams)
@@ -13260,6 +13295,90 @@ func (siw *ServerInterfaceWrapper) ResumeCluster(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// RetryClusterDeployments operation middleware
+func (siw *ServerInterfaceWrapper) RetryClusterDeployments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RetryClusterDeploymentsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RetryClusterDeployments(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RotateClusterTLS operation middleware
 func (siw *ServerInterfaceWrapper) RotateClusterTLS(w http.ResponseWriter, r *http.Request) {
 
@@ -15348,6 +15467,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/restores", wrapper.CreateRestore)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/restores/{restore}", wrapper.GetRestore)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/resume", wrapper.ResumeCluster)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/retry-deployments", wrapper.RetryClusterDeployments)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/rotate-tls", wrapper.RotateClusterTLS)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/status", wrapper.GetClusterStatus)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/supabase/credentials", wrapper.GetSupabaseCredentials)
@@ -19807,6 +19927,15 @@ func (response GetClusterBalancer500JSONResponse) VisitGetClusterBalancerRespons
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetClusterBalancer503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetClusterBalancer503JSONResponse) VisitGetClusterBalancerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReplaceClusterBalancerRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  ReplaceClusterBalancerParams
@@ -20174,6 +20303,15 @@ func (response ListDatabaseRoles500JSONResponse) VisitListDatabaseRolesResponse(
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListDatabaseRoles503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListDatabaseRoles503JSONResponse) VisitListDatabaseRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type CreateDatabaseRoleRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  CreateDatabaseRoleParams
@@ -20535,6 +20673,15 @@ func (response GetDatabaseRole500JSONResponse) VisitGetDatabaseRoleResponse(w ht
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetDatabaseRole503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetDatabaseRole503JSONResponse) VisitGetDatabaseRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ReplaceDatabaseRoleRequestObject struct {
 	Cluster  ClusterPath `json:"cluster"`
 	Database string      `json:"database"`
@@ -20774,6 +20921,15 @@ func (response ListDatabaseUsers500JSONResponse) VisitListDatabaseUsersResponse(
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListDatabaseUsers503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListDatabaseUsers503JSONResponse) VisitListDatabaseUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type CreateDatabaseUserRequestObject struct {
@@ -21135,6 +21291,15 @@ func (response GetDatabaseUser500JSONResponse) VisitGetDatabaseUserResponse(w ht
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetDatabaseUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetDatabaseUser503JSONResponse) VisitGetDatabaseUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ReplaceDatabaseUserRequestObject struct {
@@ -27746,6 +27911,127 @@ func (response ResumeCluster500JSONResponse) VisitResumeClusterResponse(w http.R
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RetryClusterDeploymentsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RetryClusterDeploymentsParams
+}
+
+type RetryClusterDeploymentsResponseObject interface {
+	VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error
+}
+
+type RetryClusterDeployments202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RetryClusterDeployments202JSONResponse struct {
+	Body    Cluster
+	Headers RetryClusterDeployments202ResponseHeaders
+}
+
+func (response RetryClusterDeployments202JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RetryClusterDeployments400JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RetryClusterDeployments401JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RetryClusterDeployments403JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RetryClusterDeployments404JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RetryClusterDeployments405JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RetryClusterDeployments409JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RetryClusterDeployments413JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RetryClusterDeployments415JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RetryClusterDeployments500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RetryClusterDeployments500JSONResponse) VisitRetryClusterDeploymentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type RotateClusterTLSRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  RotateClusterTLSParams
@@ -32077,6 +32363,9 @@ type StrictServerInterface interface {
 	// Recreate runtimes on retained volumes
 	// (POST /clusters/{cluster}/resume)
 	ResumeCluster(ctx context.Context, request ResumeClusterRequestObject) (ResumeClusterResponseObject, error)
+	// Re-arm platform deployments stopped by the retry limit
+	// (POST /clusters/{cluster}/retry-deployments)
+	RetryClusterDeployments(ctx context.Context, request RetryClusterDeploymentsRequestObject) (RetryClusterDeploymentsResponseObject, error)
 	// Roll cluster TLS material
 	// (POST /clusters/{cluster}/rotate-tls)
 	RotateClusterTLS(ctx context.Context, request RotateClusterTLSRequestObject) (RotateClusterTLSResponseObject, error)
@@ -35763,6 +36052,33 @@ func (sh *strictHandler) ResumeCluster(w http.ResponseWriter, r *http.Request, c
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ResumeClusterResponseObject); ok {
 		if err := validResponse.VisitResumeClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RetryClusterDeployments operation middleware
+func (sh *strictHandler) RetryClusterDeployments(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RetryClusterDeploymentsParams) {
+	var request RetryClusterDeploymentsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RetryClusterDeployments(ctx, request.(RetryClusterDeploymentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RetryClusterDeployments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RetryClusterDeploymentsResponseObject); ok {
+		if err := validResponse.VisitRetryClusterDeploymentsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

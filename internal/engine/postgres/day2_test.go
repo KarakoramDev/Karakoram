@@ -197,6 +197,9 @@ func TestReplacementResumesEveryCheckpoint(t *testing.T) {
 					t.Fatalf("checkpoint %s was not exercised", checkpoint)
 				}
 			}
+			// The injected response represents the learner, not the promoted
+			// voter. Re-enable full DCS/lineage observations after cutover.
+			delete(b.statusOverrides, "demop3")
 			s := converge(t, p, rc)
 			if s.find(target) != nil || s.find("demop3") == nil || len(s.data()) != 3 || len(b.etcd) != 3 {
 				t.Fatal("replacement did not cut over membership")
@@ -646,7 +649,10 @@ func TestReinitRejectsWriterAndWaitsForStreaming(t *testing.T) {
 func TestPublishedReloadRetriesAfterLostRequest(t *testing.T) {
 	p, rc, b := setup(t, "single")
 	s := converge(t, p, rc)
-	b.appliedVersions = map[string]int64{"demop0": s.find("demop0").ConfigVersion}
+	b.appliedVersions = map[string]int64{
+		"demop0": s.find("demop0").ConfigVersion,
+		"demopx": s.find("demopx").ConfigVersion,
+	}
 	b.reloadFailures = 1
 	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"parameters":{"work_mem":"8MB"}}`)
 	rc.Cluster.Generation++
@@ -657,11 +663,12 @@ func TestPublishedReloadRetriesAfterLostRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.find("demop0").Stage != "deployed" {
+	// Proxies receive their capacity/configuration publication before data.
+	if s.find("demopx").Stage != "deployed" {
 		t.Fatal("published reload lost its pending acknowledgement checkpoint")
 	}
 	converge(t, p, rc)
-	if b.appliedVersions["demop0"] != s.ConfigVersion {
+	if b.appliedVersions["demop0"] != s.ConfigVersion || b.appliedVersions["demopx"] != s.ConfigVersion {
 		t.Fatal("reconciliation did not retry the lost reload")
 	}
 }

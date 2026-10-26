@@ -21,13 +21,16 @@ type allocationTaskState struct {
 }
 
 type allocation struct {
-	ID, JobID, NodeID, NodeName, ClientStatus string
-	JobVersion                                uint64
-	CreateIndex                               uint64
-	NetworkStatus                             struct {
+	ID, JobID, NodeID, NodeName, ClientStatus, DesiredStatus string
+	JobVersion                                               uint64
+	CreateIndex                                              uint64
+	NetworkStatus                                            struct {
 		Address, AddressIPv6 string
 	}
-	TaskStates map[string]allocationTaskState
+	TaskStates       map[string]allocationTaskState
+	DeploymentStatus *struct {
+		Healthy *bool
+	}
 }
 
 func allocationTerminal(a allocation) bool {
@@ -53,7 +56,7 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	if err != nil {
 		return nil, err
 	}
-	if err := b.resumePorts(ctx, r); err != nil {
+	if err := b.resumePending(ctx, r); err != nil {
 		return nil, err
 	}
 	out := []infra.Container{}
@@ -64,23 +67,32 @@ func (b *Backend) Containers(ctx context.Context, hostname string) ([]infra.Cont
 	if err != nil {
 		return nil, err
 	}
-	for _, a := range allocs {
-		if allocationTerminal(a) {
-			continue
+	hydration := make([]struct {
+		gone bool
+	}, len(allocs))
+	if err := infra.ObserveParallel(ctx, len(allocs), func(i int) error {
+		a := allocs[i]
+		if allocationTerminal(a) || a.NetworkStatus.Address != "" || a.NetworkStatus.AddressIPv6 != "" {
+			return nil
 		}
-		// Nomad's job-allocation list can omit CNI NetworkStatus. Hydrate it
-		// from allocation detail, but never substitute a host network address
-		// when CNI has not assigned an allocation address yet.
-		if a.NetworkStatus.Address == "" && a.NetworkStatus.AddressIPv6 == "" {
-			if _, err := b.c.get(ctx, "/v1/allocation/"+url.PathEscape(a.ID), nil, &a); err != nil {
-				if errors.Is(err, infra.ErrNotFound) {
-					continue
-				}
-				return nil, err
-			}
-			if allocationTerminal(a) {
-				continue
-			}
+		// Hydrate CNI addresses independently; host-network addresses remain
+		// excluded and disappeared allocations are omitted, never adopted.
+		_, err := b.c.get(ctx, "/v1/allocation/"+url.PathEscape(a.ID), nil, &a)
+		if errors.Is(err, infra.ErrNotFound) {
+			hydration[i].gone = true
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		allocs[i] = a
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	for i, a := range allocs {
+		if hydration[i].gone || allocationTerminal(a) {
+			continue
 		}
 		status := infra.StatusCreating
 		if a.ClientStatus == "running" {

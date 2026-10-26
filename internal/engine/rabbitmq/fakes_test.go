@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -93,7 +94,7 @@ func (f *fakeInfra) ImportServices(_ context.Context, specs []infra.ServiceSpec)
 		ownership := make(map[string]string, len(s.Env)+len(s.Vars))
 		maps.Copy(ownership, s.Env)
 		maps.Copy(ownership, s.Vars)
-		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Resources: s.Resources, Ownership: ownership}
+		f.services[s.Hostname] = &infra.Service{ID: s.Hostname, Hostname: s.Hostname, Kind: s.Kind, Status: infra.StatusActive, Resources: s.Resources, Ownership: ownership}
 		op.Services[s.Hostname] = s.Hostname
 	}
 	return op, nil
@@ -243,36 +244,47 @@ type testClock struct{ at time.Time }
 func (c *testClock) Now() time.Time { return c.at }
 
 type fakeBroker struct {
-	running      bool
-	down         bool
-	joined       bool
-	critical     bool
-	blockers     []rmqspec.QuorumBlocker
-	maintenance  bool
-	appStopped   bool
-	version      string
-	agentVersion *string
-	config       int64
-	alarms       json.RawMessage
-	partitions   json.RawMessage
-	resources    *agentapi.ContainerResources
+	running          bool
+	down             bool
+	joined           bool
+	critical         bool
+	blockers         []rmqspec.QuorumBlocker
+	maintenance      bool
+	appStopped       bool
+	version          string
+	agentVersion     *string
+	config           int64
+	reportedConfig   *int64
+	alarms           json.RawMessage
+	partitions       json.RawMessage
+	observationError string
+	membershipError  string
+	runningNodes     []string
+	resources        *agentapi.ContainerResources
 }
 type fakeAgents struct {
-	t             *testing.T
-	p             *Provider
-	rc            *engine.Context
-	log           *callLog
-	brokers       map[string]*fakeBroker
-	servers       map[string]*httptest.Server
-	clients       map[string]*agentapi.Client
-	failures      map[string]int
-	streamHandler func(rmqspec.StreamReplicasRequest)
-	queueSource   func() []mgmt.Queue
-	forgetHandler func(string)
-	requestHook   func(string)
+	mu              sync.Mutex // Broker lookup and client/server caches.
+	requestMu       sync.Mutex // Mutable broker state shared by HTTP handlers.
+	t               *testing.T
+	p               *Provider
+	rc              *engine.Context
+	log             *callLog
+	brokers         map[string]*fakeBroker
+	servers         map[string]*httptest.Server
+	clients         map[string]*agentapi.Client
+	failures        map[string]int
+	streamHandler   func(rmqspec.StreamReplicasRequest)
+	queueSource     func() []mgmt.Queue
+	forgetHandler   func(string)
+	requestHook     func(string)
+	joinHandler     func(string, string)
+	legacyFormation map[string]bool
+	volumeStatus    func(string) *agentapi.VolumeStatus
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	b := a.brokers[name]
 	if b == nil {
 		b = &fakeBroker{running: true}
@@ -281,6 +293,8 @@ func (a *fakeAgents) broker(name string) *fakeBroker {
 	return b
 }
 func (a *fakeAgents) redeploy(name string) {
+	a.requestMu.Lock()
+	defer a.requestMu.Unlock()
 	b := a.broker(name)
 	b.running = true
 	b.maintenance = false
@@ -288,20 +302,30 @@ func (a *fakeAgents) redeploy(name string) {
 	b.config = 0
 }
 func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (*agentapi.Client, error) {
+	a.requestMu.Lock()
 	b := a.broker(name)
-	if b.down {
+	down := b.down
+	a.requestMu.Unlock()
+	if down {
 		return nil, fmt.Errorf("member %s unavailable", name)
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if client := a.clients[name]; client != nil {
 		return client, nil
 	}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a.requestMu.Lock()
+		defer a.requestMu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			a.t.Error("missing agent bearer authentication")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		action := strings.TrimPrefix(r.URL.Path, "/v1/rabbitmq/")
-		if r.URL.Path != "/v1/status" && action != "status" {
+		if action == "observe" {
+			action = "status"
+		}
+		if r.URL.Path != "/v1/status" && action != "status" && action != "formation-capabilities" {
 			a.log.add("agent:" + name + ":" + action)
 		}
 		if a.requestHook != nil {
@@ -312,6 +336,12 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			return
 		}
 		switch r.URL.Path {
+		case "/v1/rabbitmq/formation-capabilities":
+			if a.legacyFormation[name] {
+				http.NotFound(w, r)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(rmqspec.FormationCapabilities{FixedSeed: true})
 		case "/v1/status":
 			if b.config == 0 {
 				cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
@@ -332,7 +362,15 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if b.agentVersion != nil {
 				version = *b.agentVersion
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: b.config, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources})
+			configVersion := b.config
+			if b.reportedConfig != nil {
+				configVersion = *b.reportedConfig
+			}
+			var volume *agentapi.VolumeStatus
+			if a.volumeStatus != nil {
+				volume = a.volumeStatus(name)
+			}
+			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: configVersion, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources, Volume: volume})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {
@@ -348,10 +386,17 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			}
 			b.maintenance = req.Enabled
 			_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
-		case "/v1/rabbitmq/status":
+		case "/v1/rabbitmq/status", "/v1/rabbitmq/observe":
+			if b.observationError != "" {
+				write := agentapi.ErrorResponse{Error: b.observationError}
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(write)
+				return
+			}
 			nodes := []string{}
 			diskNodes := []string{}
 			if b.joined {
+				a.mu.Lock()
 				for peer, pb := range a.brokers {
 					if pb.joined {
 						diskNodes = append(diskNodes, "rabbit@"+peer)
@@ -360,12 +405,16 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 						nodes = append(nodes, "rabbit@"+peer)
 					}
 				}
+				a.mu.Unlock()
 			} else if b.running && !b.appStopped {
 				nodes = append(nodes, "rabbit@"+name)
 				diskNodes = append(diskNodes, "rabbit@"+name)
 			}
 			slices.Sort(nodes)
 			slices.Sort(diskNodes)
+			if b.runningNodes != nil {
+				nodes = b.runningNodes
+			}
 			alarms, partitions := b.alarms, b.partitions
 			if len(alarms) == 0 {
 				alarms = json.RawMessage(`[]`)
@@ -373,7 +422,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if len(partitions) == 0 {
 				partitions = json.RawMessage(`[]`)
 			}
-			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: diskNodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version})
+			_ = json.NewEncoder(w).Encode(rmqspec.StatusResponse{NodeName: "rabbit@" + name, RunningNodes: nodes, DiskNodes: diskNodes, Alarms: alarms, Partitions: partitions, Maintenance: b.maintenance, Version: b.version, MembershipError: b.membershipError})
 		case "/v1/rabbitmq/quorum-critical":
 			blockers := b.blockers
 			if b.critical && len(blockers) == 0 {
@@ -403,6 +452,9 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Seed == "" {
 					a.t.Errorf("bad join request: %+v %v", req, err)
 				}
+				if a.joinHandler != nil {
+					a.joinHandler(name, req.Seed)
+				}
 				b.joined = true
 			case "drain":
 				b.maintenance = true
@@ -424,9 +476,11 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 				if a.forgetHandler != nil {
 					a.forgetHandler(req.Node)
 				}
+				a.mu.Lock()
 				if peer := a.brokers[strings.TrimPrefix(req.Node, "rabbit@")]; peer != nil {
 					peer.joined = false
 				}
+				a.mu.Unlock()
 			case "grow", "shrink":
 				var req rmqspec.NodeRequest
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Node == "" {
@@ -471,7 +525,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fakeInfra, *fakeAgents) {
 	}
 	log := &callLog{}
 	f := &fakeInfra{services: map[string]*infra.Service{}, done: true, subdomains: map[string]bool{}, failures: map[string]error{}, states: map[string]infra.OpState{}, log: log}
-	rc := &engine.Context{Cluster: c, Store: st, Secrets: st, Backend: f, Artifact: fakeArtifact{}, Clock: &testClock{at: time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)}}
+	rc := &engine.Context{Cluster: c, Store: st, Secrets: st, Backend: f, Artifact: fakeArtifact{}, Clock: &testClock{at: time.Now().UTC()}}
 	a := &fakeAgents{t: t, p: p, rc: rc, log: log, brokers: map[string]*fakeBroker{}, servers: map[string]*httptest.Server{}, clients: map[string]*agentapi.Client{}, failures: map[string]int{}}
 	rc.Agents = a
 	f.agents = a
@@ -541,4 +595,101 @@ func countCall(calls []string, want string) int {
 		}
 	}
 	return n
+}
+
+func TestFakeAgentsConcurrentDialAndStatus(t *testing.T) {
+	p, rc, _, warm := setup(t)
+	ready(t, p, rc)
+	agents := &fakeAgents{
+		t: t, p: p, rc: rc, log: warm.log,
+		brokers:  maps.Clone(warm.brokers),
+		servers:  map[string]*httptest.Server{},
+		clients:  map[string]*agentapi.Client{},
+		failures: map[string]int{},
+	}
+	const requests = 24
+	clients := make([]*agentapi.Client, requests)
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for i := range requests {
+		workers.Go(func() {
+			<-start
+			name := fmt.Sprintf("demom%d", i%3)
+			client, err := agents.Dial(t.Context(), rc.Cluster.Ref(), name)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			clients[i] = client
+			if _, err := client.Status(t.Context()); err != nil {
+				t.Error(err)
+			}
+			var status rmqspec.StatusResponse
+			if err := client.Engine(t.Context(), "rabbitmq", "status", struct{}{}, &status); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	close(start)
+	workers.Wait()
+	for i := 3; i < requests; i++ {
+		if clients[i] != clients[i%3] {
+			t.Fatal("concurrent dials did not share the cached member client")
+		}
+	}
+}
+
+type delayedStatusBackend struct {
+	infra.Backend
+	containers atomic.Int32
+	inventory  atomic.Int32
+}
+
+func waitStatusBackend(ctx context.Context) error {
+	timer := time.NewTimer(1500 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (b *delayedStatusBackend) ProjectInfo(ctx context.Context) (infra.Project, error) {
+	if err := waitStatusBackend(ctx); err != nil {
+		return infra.Project{}, err
+	}
+	return b.Backend.ProjectInfo(ctx)
+}
+
+func (b *delayedStatusBackend) ListServices(ctx context.Context, prefix string) ([]infra.Service, error) {
+	b.inventory.Add(1)
+	if err := waitStatusBackend(ctx); err != nil {
+		return nil, err
+	}
+	return b.Backend.ListServices(ctx, prefix)
+}
+
+func (b *delayedStatusBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
+	b.containers.Add(1)
+	if err := waitStatusBackend(ctx); err != nil {
+		return nil, err
+	}
+	return b.Backend.Containers(ctx, name)
+}
+
+func TestObservationSlowPlatformInventoryFitsSweep(t *testing.T) {
+	p, rc, _, _ := setup(t)
+	rc.Cluster.Spec.Components.Engine.Replicas = 5
+	ready(t, p, rc)
+	backend := &delayedStatusBackend{Backend: rc.Backend}
+	rc.Backend = backend
+	status, err := engine.ObserveStatus(t.Context(), p, rc)
+	if err != nil || status.Phase != domain.PhaseReady || status.ObservedAt.IsZero() {
+		t.Fatal("healthy platform observations exhausted the sweep", status, err)
+	}
+	if backend.inventory.Load() != 1 || backend.containers.Load() != 5 {
+		t.Fatal("inventory was duplicated across the sweep", backend.inventory.Load(), backend.containers.Load())
+	}
 }

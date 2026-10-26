@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
@@ -533,13 +534,17 @@ func (e *Runner) upgradeRoutes(mux *http.ServeMux, n *agent.Node) {
 			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 			defer cancel()
 			var response pgspec.UpgradeResponse
+			diagnostic := "PostgreSQL major upgrade action could not acquire the member lock; retry the same operation after the member dependency recovers."
 			err := n.WithLock(ctx, func(locked *agent.Node) error {
 				var err error
 				response, err = performUpgrade(ctx, locked, request, action == pgspec.ActionUpgradeRun)
+				if err != nil {
+					diagnostic = upgradeFailureDiagnostic(dataPaths(locked.DataDir()), request)
+				}
 				return err
 			})
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusConflict)
+				actionJSON(w, http.StatusConflict, agentapi.ErrorResponse{Error: diagnostic})
 				return
 			}
 			actionJSON(w, http.StatusOK, response)

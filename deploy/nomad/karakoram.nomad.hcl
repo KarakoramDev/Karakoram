@@ -103,6 +103,11 @@ variable "memory_mb" {
   default = 1024
 }
 
+variable "member_ephemeral_disk_mb" {
+  type    = number
+  default = 0 # Zero keeps per-component defaults; positive values raise the floor.
+}
+
 job "karakoram" {
   namespace   = var.namespace
   datacenters = var.datacenters
@@ -115,6 +120,14 @@ job "karakoram" {
 
   group "control-plane" {
     count = 1
+
+    # Copied rootfs plus downloaded/extracted control-plane artifacts.
+    # SQLite remains on the persistent host volume, never this scratch disk.
+    ephemeral_disk {
+      size    = 1024
+      sticky  = false
+      migrate = false
+    }
 
     update {
       max_parallel      = 1
@@ -233,6 +246,7 @@ job "karakoram" {
         KARAKORAM_NOMAD_NETWORK             = var.network
         KARAKORAM_NOMAD_PUBLIC_IPV4         = var.public_ipv4
         KARAKORAM_NOMAD_PUBLIC_IPV6         = var.public_ipv6
+        KARAKORAM_NOMAD_EPHEMERAL_DISK_MB   = var.member_ephemeral_disk_mb > 0 ? tostring(var.member_ephemeral_disk_mb) : ""
         KARAKORAM_NOMAD_ARTIFACT_URL        = var.artifact_url
         KARAKORAM_ARTIFACT_MIRROR          = var.native_artifact_mirror
         KARAKORAM_NOMAD_CACERT              = "/secrets/nomad-ca.pem"
@@ -306,8 +320,9 @@ EOF
         data = <<EOF
 127.0.0.1 localhost
 ::1 localhost ip6-localhost ip6-loopback
-{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ .Address }} {{ $name }}
-{{ end }}{{ end }}
+{{ $hostname := env "attr.unique.hostname" }}{{ $registered := false }}{{ range nomadServices }}{{ $name := .Name }}{{ range nomadService $name }}{{ if eq $name $hostname }}{{ $registered = true }}{{ end }}{{ .Address }} {{ $name }}
+{{ end }}{{ end }}{{ if and $hostname (not $registered) }}127.0.1.1 {{ $hostname }}
+{{ end }}
 EOF
       }
 

@@ -8,32 +8,37 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"path"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
 // backupState contains identifiers only; repository credentials are resolved
 // afresh from the sealed storage on every agent configuration or dispatch.
 type backupState struct {
-	Stanza             string         `json:"stanza,omitempty"`
-	Replicas           bool           `json:"replicas,omitempty"`
-	InitialQueued      bool           `json:"initialQueued,omitempty"`
-	CloneComplete      bool           `json:"cloneComplete,omitempty"`
+	Stanza        string `json:"stanza,omitempty"`
+	Replicas      bool   `json:"replicas,omitempty"`
+	InitialQueued bool   `json:"initialQueued,omitempty"`
+	CloneComplete bool   `json:"cloneComplete,omitempty"`
+	// InitialApplied is written only after the initial restore has finished its
+	// native recovery, access publication and source-credential cleanup.
+	InitialApplied     bool           `json:"initialApplied,omitempty"`
 	CloneCredentials   bool           `json:"cloneCredentials,omitempty"`
 	ManagedRolesHeld   bool           `json:"managedRolesHeld,omitempty"`
 	Restore            *restoreSource `json:"restore,omitempty"`
 	Generation         int            `json:"generation,omitempty"`
 	RepositoryStorages []string       `json:"repositoryStorages,omitempty"`
 	LineageStart       *time.Time     `json:"lineageStart,omitempty"`
+	// The first access hold and its exact restore identity are saved together,
+	// before the operation queue can acknowledge its first checkpoint.
+	RestoreOperation  string          `json:"restoreOperation,omitempty"`
+	RestoreCheckpoint json.RawMessage `json:"restoreCheckpoint,omitempty"`
 }
 type restoreSource struct {
 	Namespace string `json:"namespace"`
@@ -72,10 +77,71 @@ func saveBackupState(c *domain.Cluster, s backupState) error {
 	c.Internal, err = json.Marshal(root)
 	return err
 }
+
+func (p *Core) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := loadBackupState(c)
+	return s.InitialApplied, err
+}
+
+// MigrateInitialDataSource accepts a completed pre-marker recovery receipt, not
+// its (possibly superseded) create tracker. No source/native I/O is replayed.
+func (p *Core) MigrateInitialDataSource(ctx context.Context, rc *engine.Context) error {
+	d := rc.Cluster.Spec.DataSource
+	if d == nil || rc.Store == nil {
+		return nil
+	}
+	bs, err := loadBackupState(rc.Cluster)
+	if err != nil || bs.InitialApplied {
+		return err
+	}
+	for _, condition := range rc.Cluster.Status.Conditions {
+		if condition.Type == "InitialDataSource" && condition.Reason == "RestoreAborted" && condition.Status == "False" {
+			return nil
+		}
+	}
+	r, err := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), "initial-restore")
+	if missing(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	sourceNamespace := d.Namespace
+	if sourceNamespace == "" {
+		sourceNamespace = rc.Cluster.Ref().Namespace
+	}
+	restoreNamespace := r.SourceNamespace
+	if restoreNamespace == "" {
+		restoreNamespace = rc.Cluster.Ref().Namespace
+	}
+	sameTime := d.PITRTime == nil && r.Source.PITRTime == nil ||
+		d.PITRTime != nil && r.Source.PITRTime != nil && d.PITRTime.Equal(*r.Source.PITRTime)
+	if r.Phase != domain.PhaseSucceeded || r.CompletedAt == nil || r.Error != "" || r.OperationID == "" ||
+		sourceNamespace != restoreNamespace || d.Cluster != r.Source.SourceCluster || d.Backup != r.Source.Backup || !sameTime {
+		return nil
+	}
+	op, err := rc.Store.GetOperation(ctx, r.OperationID)
+	if missing(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var cp backupCheckpoint
+	if err = json.Unmarshal(op.Checkpoint, &cp); err != nil {
+		return err
+	}
+	if op.Kind != domain.OperationRestore && op.Kind != "initial-restore" || op.Phase != domain.PhaseSucceeded ||
+		op.Cluster != rc.Cluster.Name || domain.NormalizedNamespace(op.Namespace) != rc.Cluster.Ref().Namespace || cp.Step != "done" {
+		return nil
+	}
+	bs.InitialQueued, bs.InitialApplied = true, true
+	return saveBackupState(rc.Cluster, bs)
+}
 func repository(storage *domain.BackupStorage, prefix string) (pgspec.Repository, error) {
-	u, err := url.Parse(storage.EndpointURL)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return pgspec.Repository{}, engine.Invalid("invalid backup storage endpoint")
+	u, err := s3endpoint.Parse(storage.EndpointURL)
+	if err != nil {
+		return pgspec.Repository{}, engine.Invalid("%s", err.Error())
 	}
 	port := 0
 	if u.Port() != "" {
@@ -86,11 +152,11 @@ func repository(storage *domain.BackupStorage, prefix string) (pgspec.Repository
 	}
 	return pgspec.Repository{
 		Stanza: "kk",
-		Path:   "/" + strings.Trim(prefix, "/"),
+		Path:   "/" + domain.BackupStoragePrefix(prefix),
 		S3: pgspec.S3{
 			Endpoint: storage.EndpointURL, Port: port,
 			Bucket: storage.Bucket, Region: storage.Region,
-			PathStyle: storage.ForcePathStyle, VerifyTLS: storage.VerifyTLS,
+			PathStyle: s3endpoint.PathStyle(u, storage.Bucket, storage.ForcePathStyle), VerifyTLS: storage.VerifyTLS,
 			AccessKey: storage.Credentials.AccessKeyID,
 			SecretKey: storage.Credentials.SecretAccessKey,
 		},
@@ -101,7 +167,7 @@ func repoPrefix(storage *domain.BackupStorage, c *domain.Cluster, s *state) stri
 	if s.RepositoryGeneration > 0 {
 		identity += "-g" + strconv.Itoa(s.RepositoryGeneration)
 	}
-	return path.Join(strings.Trim(storage.Prefix, "/"), "postgres", c.Ref().Namespace, identity)
+	return domain.PostgresObjectPrefix(storage.Prefix, "postgres/"+c.Ref().Namespace+"/"+identity)
 }
 func (p *Core) backupStorage(ctx context.Context, rc *engine.Context, name, namespace string) (*domain.BackupStorage, error) {
 	st := rc.Store
@@ -210,6 +276,8 @@ type backupCheckpoint struct {
 	Generation           int            `json:"generation,omitempty"`
 	RepositoryGeneration int            `json:"repositoryGeneration,omitempty"`
 	Failure              string         `json:"failure,omitempty"`
+	BackupAttempt        int            `json:"backupAttempt,omitempty"`
+	BackupRetryNotBefore time.Time      `json:"backupRetryNotBefore,omitempty"`
 }
 
 func backupResult(cp backupCheckpoint, done bool) engine.OpResult {
@@ -355,8 +423,19 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 		}
 		cp.Step = "backup"
 	case "backup":
+		if remaining := cp.BackupRetryNotBefore.Sub(now(rc)); remaining > 0 {
+			result := backupResult(cp, false)
+			result.Message = b.Error
+			result.RequeueAfter = remaining
+			return result, nil
+		}
+		cp.BackupRetryNotBefore = time.Time{}
 		var response pgspec.BackupResponse
-		err = pgAction(ctx, rc, member, "backup", pgspec.BackupRequest{Receipt: op.ID, Type: b.Type, Repository: &repo}, &response)
+		receipt := op.ID
+		if cp.BackupAttempt > 0 {
+			receipt = fmt.Sprintf("%s/backup-retry-%d", op.ID, cp.BackupAttempt)
+		}
+		err = pgAction(ctx, rc, member, "backup", pgspec.BackupRequest{Receipt: receipt, Type: b.Type, Repository: &repo}, &response)
 		if err != nil {
 			return backupResult(cp, false), err
 		}
@@ -369,14 +448,40 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 			}
 		}
 		if response.State == "failed" {
+			reason := response.Message
+			if reason == "" {
+				reason = "pgBackRest backup failed without a native diagnostic; inspect member diagnostics"
+			}
+			// A terminal native backup receipt confirms this attempt is over.
+			// Retry only the fresh backup, never the already-mutating restore.
+			// Keep the attempt in the durable checkpoint so CP restarts cannot
+			// reset the bound or replay a failed native receipt forever.
+			if b.Trigger == "restore" && cp.BackupAttempt < 2 {
+				cp.BackupAttempt++
+				cp.BackupRetryNotBefore = now(rc).Add(30 * time.Second)
+				b.Error = fmt.Sprintf("pgBackRest attempt %d/3 failed: %s; retrying the fresh backup only", cp.BackupAttempt, reason)
+				if err = rc.Store.UpdateBackup(ctx, b); err != nil {
+					return backupResult(cp, false), err
+				}
+				if err = backupEvent(ctx, rc, op, "BackupRetry", b.Error); err != nil {
+					return backupResult(cp, false), err
+				}
+				result := backupResult(cp, false)
+				result.Message = b.Error
+				result.RequeueAfter = 30 * time.Second
+				return result, nil
+			}
 			stamp := now(rc)
 			b.Phase = domain.PhaseFailed
 			b.CompletedAt = &stamp
-			b.Error = response.Message
+			b.Error = reason
+			if cp.BackupAttempt > 0 {
+				b.Error = fmt.Sprintf("pgBackRest backup failed after %d attempts: %s", cp.BackupAttempt+1, reason)
+			}
 			if err = rc.Store.UpdateBackup(ctx, b); err != nil {
 				return backupResult(cp, false), err
 			}
-			return backupResult(cp, true), errors.New("pgBackRest backup failed")
+			return backupResult(cp, true), errors.New(b.Error)
 		}
 		if response.State == "done" {
 			cp.Label = response.Label
@@ -416,6 +521,7 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 			b.LastWriteTime = &stop
 			b.Size = item.SizeBytes
 			b.Phase = domain.PhaseSucceeded
+			b.Error = ""
 			b.Location = prefix + "/backup/kk/" + item.Label
 			b.Postgres = &domain.PostgresBackup{
 				Label: item.Label, Repository: prefix,

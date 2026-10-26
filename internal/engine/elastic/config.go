@@ -135,7 +135,7 @@ func (p *Provider) storageReferences(ctx context.Context, rc *engine.Context, s 
 		refs[source.Namespace+"/"+b.Storage] = true
 		return nil
 	}
-	if d := rc.Cluster.Spec.DataSource; d != nil && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
+	if d := rc.Cluster.Spec.DataSource; d != nil && !engine.InitialDataSourceUnproven(rc.Cluster) && s.InitialRestore != "done" && s.InitialRestore != "abandoned" {
 		if err = addSource(domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, d.Backup); err != nil {
 			return nil, err
 		}
@@ -294,7 +294,10 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state
 		}
 		v.APM = &agentspec.APMSpec{ESHosts: hosts, Writer: agentspec.Credentials{Username: APMUser, Password: pw}, SecretToken: token, APIKeys: o.APM.APIKeys != nil && *o.APM.APIKeys}
 	}
-	if m.HeapMB > 0 {
+	// Resource-only changes must not restart an activated stateless component.
+	// Initial readiness instead needs the desired RAM-derived heap, but a
+	// rolling upgrade's deployed stage still belongs to its activated member.
+	if m.HeapMB > 0 && (m.Stage == stageJoined || s.Rolling != nil && s.Rolling.Current == m.Name) {
 		v.HeapMB = m.HeapMB
 	}
 	static := v
@@ -331,9 +334,7 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state
 // publishConfig activates restart-relevant content for exactly one member. The
 // encrypted payload keeps future desired changes out of other members' pulls.
 func (p *Provider) publishConfig(ctx context.Context, rc *engine.Context, s *state, m *member, version, nonce string) error {
-	intent := *m
-	intent.HeapMB = 0
-	v, err := p.desiredSpec(ctx, rc, s, &intent, version)
+	v, err := p.desiredSpec(ctx, rc, s, m, version)
 	if err != nil {
 		return err
 	}
@@ -366,6 +367,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		return agentapi.MemberConfig{}, engine.ErrNotFound
 	}
 	v := agentapi.MemberConfig{Cluster: rc.Cluster.Name, Member: name, Engine: agentspec.Engine, Role: m.Kind, ConfigVersion: s.ConfigVersion, DesiredProcesses: []string{product(m)}, EngineVersion: m.Version}
+	v.Volume = engine.RuntimeVolumeIdentity(s.UID, m.Name, m.Volume, m.VolumeID, m.RuntimeRecovery.Initialized || m.Stage == stageJoined)
 	b, err := secret(ctx, rc, "members/"+name+"/restart-spec")
 	if err != nil {
 		return v, err

@@ -8,9 +8,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // resourceDecimal keeps the API's shortest float32 decimal representation;
@@ -104,6 +106,33 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	return s
 }
 
+// preserveExplicitSpecValues restores values whose zero representation is also
+// used by provider defaults for omission. Input pointers retain that distinction
+// for create/PUT and for the fully merged PATCH document.
+func preserveExplicitSpecValues(s *domain.ClusterSpec, input api.ClusterInputSpec) {
+	if input.Monitoring != nil {
+		s.Monitoring.Enabled = input.Monitoring.Enabled
+	}
+	if input.Components == nil || input.Components.Extra == nil {
+		return
+	}
+	for name, c := range *input.Components.Extra {
+		component := s.Components.Extra[name]
+		if c.Replicas != nil {
+			component.Replicas = *c.Replicas
+		}
+		if c.Resources != nil {
+			if c.Resources.MinDisk != nil {
+				component.Resources.MinDisk = resourceDecimal(*c.Resources.MinDisk)
+			}
+			if c.Resources.MaxDisk != nil {
+				component.Resources.MaxDisk = resourceDecimal(*c.Resources.MaxDisk)
+			}
+		}
+		s.Components.Extra[name] = component
+	}
+}
+
 // optionalString omits values that are absent, rather than inventing an empty
 // identifier in a successful response.
 func optionalString(v string) *string {
@@ -122,6 +151,7 @@ func nonNil[T any](v []T) []T {
 
 func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: optionalString(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, Allowlist: ptr(nonNil(s.Exposure.Allowlist))}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
+	a.RetryEpoch = ptr(s.RetryEpoch)
 	if s.Exposure.IPType != "" {
 		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
 	}
@@ -160,6 +190,19 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	}
 	return a
 }
+
+// specPatchBase preserves absent collections instead of feeding response-only
+// empty arrays back into desired state. Explicit empty arrays remain present.
+func specPatchBase(s domain.ClusterSpec) api.ClusterSpec {
+	a := specAPI(s)
+	if s.Backup.Schedules == nil {
+		a.Backup.Schedules = nil
+	}
+	if s.Exposure.Allowlist == nil {
+		a.Exposure.Allowlist = nil
+	}
+	return a
+}
 func connectionAPI(c domain.Connection) api.ConnectionSummary {
 	a := api.ConnectionSummary{Hosts: nonNil(c.Hosts), ReplicaSet: optionalString(c.ReplicaSet), Uri: c.URI, PublicHosts: ptr(nonNil(c.PublicHosts))}
 	if len(c.Endpoints) > 0 {
@@ -174,6 +217,7 @@ func connectionAPI(c domain.Connection) api.ConnectionSummary {
 func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api.Member {
 	usage := s.Monitoring.MemberUsage(cluster, m.Name)
 	a := api.Member{Name: m.Name, Set: m.Set, Role: memberRole(m), State: m.State, Health: m.Health, Version: &m.Version, LagSeconds: ptr(float32(m.LagSeconds)), Optime: &m.Optime, Uptime: &m.Uptime, RamUsageBytes: usage.RAMBytes, DiskUsageBytes: usage.DiskBytes, DiskTotalBytes: usage.DiskTotalBytes, PlacementGroup: &m.PlacementGroup, Agent: &api.AgentStatus{Connected: m.Agent.Healthy, ConfigVersion: &m.Agent.ConfigVersion, LastSeenAt: &m.Agent.LastSeen}}
+	a.Agent.Message = optionalString(redact.Diagnostic(m.Agent.Message))
 	a.ComponentVersion = optionalString(m.ComponentVersion)
 	if usage.CPUPercent != nil {
 		a.CpuUsage = ptr(float32(*usage.CPUPercent))
@@ -202,7 +246,7 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 		return api.MemberRole("router")
 	}
 	state := strings.ToLower(m.State)
-	if state == "" {
+	if state == "" || state == "paused" || state == "error" {
 		state = strings.ToLower(m.Role)
 	}
 	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
@@ -222,6 +266,7 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 	return api.MemberRole("unknown")
 }
 func placementAPI(p domain.Placement) api.Placement {
+	p.Warning = redact.Diagnostic(p.Warning)
 	a := api.Placement{Warning: p.Warning, GuaranteedAntiAffinity: false, Groups: []api.PlacementGroup{}}
 	names := make([]string, 0, len(p.Groups))
 	for n := range p.Groups {
@@ -233,10 +278,30 @@ func placementAPI(p domain.Placement) api.Placement {
 	}
 	return a
 }
+
+// freshStatus is an API-only projection. Only successful observations from this
+// CP process can establish availability; wall time cannot prove that provenance.
+// Never pass this projection to reconciliation or persist it.
+func (s *Server) freshStatus(status domain.ClusterStatus) domain.ClusterStatus {
+	return s.freshStatusAt(status, engine.RealClock{}.Now())
+}
+
+func (s *Server) freshStatusAt(status domain.ClusterStatus, at time.Time) domain.ClusterStatus {
+	observedAt := status.ObservedAt
+	if s.Context.ObservationEpoch == "" || status.ObservationEpoch != s.Context.ObservationEpoch {
+		status.ObservedAt = time.Time{}
+	}
+	status = engine.FreshStatus(status, at)
+	status.ObservedAt = observedAt
+	return status
+}
+
 func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatus) api.ClusterStatus {
+	status.Message = redact.Diagnostic(status.Message)
+	status = s.freshStatus(status)
 	a := api.ClusterStatus{Phase: api.ClusterStatusPhase(status.Phase), Message: optionalString(status.Message), ObservedGeneration: status.ObservedGeneration, Version: optionalString(status.Version), Fcv: optionalString(status.FCV), Connection: ptr(connectionAPI(status.Connection)), Placement: ptr(placementAPI(status.Placement)), Conditions: []api.Condition{}, Members: []api.Member{}}
 	for _, c := range status.Conditions {
-		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: c.Message, LastTransitionTime: c.LastTransitionTime})
+		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: redact.Diagnostic(c.Message), LastTransitionTime: c.LastTransitionTime})
 	}
 	for _, m := range status.Members {
 		a.Members = append(a.Members, s.memberAPI(cluster, m))
@@ -251,7 +316,25 @@ func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatu
 	}
 	return a
 }
+
+// projectedClusterStatus applies the restore receipt fence even to a fresh
+// persisted Ready lease, before reconciliation has run after a restart.
+func (s *Server) projectedClusterStatus(c domain.Cluster) domain.ClusterStatus {
+	status := c.Status
+	if c.Spec.DataSource == nil {
+		return status
+	}
+	status.Conditions = append([]domain.Condition(nil), status.Conditions...)
+	var provider engine.Provider
+	if s.Registry != nil {
+		provider, _ = s.Registry.Get(c.Spec.Provider)
+	}
+	// Missing providers also fail closed; the shared gate needs no native IO.
+	_ = engine.ApplyInitialDataSourceStatus(provider, &c, &status)
+	return status
+}
 func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
+	c.Status = s.projectedClusterStatus(c)
 	a := api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
 	if c.OperationID != "" {
 		a.OperationId = &c.OperationID
@@ -259,6 +342,8 @@ func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
 	return a
 }
 func operationAPI(o domain.Operation) api.Operation {
+	o.Message = redact.Diagnostic(o.Message)
+	o.Step = redact.Diagnostic(o.Step)
 	if o.Target.Kind == "" {
 		o.Target = domain.OperationTarget{Kind: "cluster", Name: o.Cluster}
 	}
@@ -278,6 +363,7 @@ func operationAPI(o domain.Operation) api.Operation {
 	return a
 }
 func backupAPI(b domain.Backup) api.Backup {
+	b.Error = redact.Diagnostic(b.Error)
 	a := api.Backup{Namespace: ptr(domain.NormalizedNamespace(b.Namespace)), Name: b.Name, Cluster: b.Cluster, Storage: b.Storage, Type: api.BackupType(b.Type), Trigger: api.BackupTrigger(b.Trigger), Schedule: optionalString(b.Schedule), Phase: api.BackupPhase(b.Phase), PbmName: optionalString(b.PBMName), StartedAt: b.StartedAt, CompletedAt: b.CompletedAt, LastWriteTime: b.LastWriteTime, Size: &b.Size, Error: optionalString(b.Error), OperationId: optionalString(b.OperationID)}
 	if b.Provider != "" {
 		a.Provider = &b.Provider
@@ -299,9 +385,12 @@ func backupAPI(b domain.Backup) api.Backup {
 	return a
 }
 func restoreAPI(r domain.Restore) api.Restore {
+	r.Error = redact.Diagnostic(r.Error)
 	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
 }
 func eventAPI(e domain.Event) api.Event {
+	e.Message = redact.Diagnostic(e.Message)
+	e.Details = redact.EventDetailsJSON(e.Details)
 	var namespace *string
 	if e.Namespace != "" {
 		namespace = &e.Namespace

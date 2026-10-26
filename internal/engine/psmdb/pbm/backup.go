@@ -16,6 +16,9 @@ import (
 
 // RunBackup checkpoints configuration, initiation and terminal metadata. Starts use durable agent receipts keyed by operation ID.
 func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpResult, error) {
+	if op.Step == "failure-cleanup" {
+		return runBackupFailureCleanup(ctx, env, op)
+	}
 	cp, err := loadCheckpoint(op)
 	if err != nil {
 		return engine.OpResult{}, err
@@ -40,7 +43,7 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 	if b.Type == "physical" && env.RC.Cluster.Spec.Provider != "psmdb" {
 		return result(cp, false), errors.New("physical backups require PSMDB")
 	}
-	if cp.Cancelling && cp.Step == "configure" {
+	if cp.Cancelling && (cp.Step == "configure" || cp.Step == "ready") {
 		cp.Failure, cp.Step = "Backup cancelled before start", "target-configure"
 	}
 	switch cp.Step {
@@ -69,30 +72,34 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 		if err != nil {
 			return result(cp, false), err
 		}
-		cp.Step = "start"
+		cp.Step = "ready"
+	case "ready":
+		return waitBackupAgents(ctx, env, op, cp)
 	case "start":
 		if op.ID == "" {
 			return result(cp, false), errors.New("durable PBM start requires an operation ID")
 		}
-		if b.PBMName != "" {
+		if cp.PBMName == "" && b.PBMName != "" {
 			cp.PBMName = b.PBMName
-		} else {
+		}
+		if cp.PBMName == "" {
 			out, e := command(ctx, env, cp.Member, op.ID, "backup", nil, "--type="+b.Type, "--out=json")
 			if e != nil {
-				return result(cp, false), e
+				return failBackupStart(ctx, env, op, cp, e)
 			}
 			var started struct {
 				Name string `json:"name"`
 			}
 			if e = decodeLast(out, &started); e != nil {
-				return result(cp, false), e
+				return failBackupStart(ctx, env, op, cp, e)
 			}
 			if started.Name == "" {
-				return result(cp, false), errors.New("PBM backup start returned no name")
+				return failBackupStart(ctx, env, op, cp, errors.New("PBM backup start returned no name"))
 			}
 			cp.PBMName = started.Name
 		}
 		b.PBMName, b.Phase = cp.PBMName, domain.PhaseRunning
+		setSnapshotLocation(b)
 		stamp := now(env)
 		if b.StartedAt == nil {
 			b.StartedAt = &stamp
@@ -115,6 +122,33 @@ func RunBackup(ctx context.Context, env Env, op *domain.Operation) (engine.OpRes
 		}
 		if s.Name == "" {
 			s.Name = cp.PBMName
+		}
+		// describe-backup exposes persisted metadata, which can remain running
+		// after its owner dies. PBM status additionally classifies expired native
+		// heartbeats; use only the exact snapshot's failure, never another
+		// operation or an absent inventory entry.
+		if s.Status != "done" && s.Status != "error" && s.Status != "cancelled" && s.Status != "canceled" {
+			out, e = command(ctx, env, "", "", "status", nil, "--out=json")
+			var status statusData
+			if e == nil {
+				e = decodeLast(out, &status)
+			}
+			if e != nil && (!cp.Cancelling || cp.CancelIssued) {
+				return result(cp, false), e
+			}
+			if e != nil {
+				status = statusData{}
+			}
+			// A secondary status outage must not prevent a requested native
+			// cancellation after describe confirmed nonterminal metadata. This
+			// never asserts termination: the following polls still require a
+			// terminal native outcome.
+			for _, observed := range status.Backups.Snapshot {
+				if observed.Name == cp.PBMName && observed.Status == "error" {
+					s.Status, s.Error = observed.Status, observed.Error
+					break
+				}
+			}
 		}
 		applySnapshot(b, s, now(env))
 		if err = env.RC.Store.UpdateBackup(ctx, b); err != nil {

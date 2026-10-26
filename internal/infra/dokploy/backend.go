@@ -5,15 +5,12 @@ package dokploy
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -145,18 +142,49 @@ func (b *Backend) application(ctx context.Context, hostname string) (*applicatio
 	if err != nil {
 		return nil, err
 	}
+	id := ""
 	for _, a := range e.Applications {
-		m, ok := parseMetadata(a.Description)
-		if ok && m.Hostname == hostname {
-			var full application
-			err = b.c.get(ctx, "application.one", map[string]string{"applicationId": a.ID}, &full)
-			if errors.Is(err, infra.ErrNotFound) {
-				return nil, nil
+		if m, ok := parseMetadata(a.Description); ok && m.Hostname == hostname {
+			if id != "" && id != a.ID {
+				return nil, restoreConflict("multiple applications claim the requested hostname; refusing ambiguous lookup")
 			}
-			return &full, err
+			id = a.ID
 		}
 	}
-	return nil, nil
+	if remembered := b.remembered(hostname); id == "" {
+		id = remembered
+	}
+	if id == "" {
+		matches, err := b.searchApplications(ctx, hostname)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range matches {
+			if m, ok := parseMetadata(a.Description); ok && m.Hostname == hostname {
+				if id != "" && id != a.ID {
+					return nil, restoreConflict("multiple applications claim the requested hostname; refusing ambiguous lookup")
+				}
+				id = a.ID
+			}
+		}
+	}
+	if id == "" {
+		return nil, nil
+	}
+	var full application
+	if err = b.c.get(ctx, "application.one", map[string]string{"applicationId": id}, &full); err != nil {
+		if errors.Is(err, infra.ErrNotFound) {
+			b.remember(hostname, "")
+			return nil, nil
+		}
+		return nil, err
+	}
+	m, ok := parseMetadata(full.Description)
+	if !ok || m.Hostname != hostname || full.Name != hostname || full.Environment != b.target.ID || m.Environment != "" && m.Environment != b.target.ID {
+		return nil, restoreConflict("application identity or ownership changed; refusing lookup/adoption")
+	}
+	b.remember(hostname, full.ID)
+	return &full, nil
 }
 func (b *Backend) require(ctx context.Context, hostname string) (*application, metadata, error) {
 	a, err := b.application(ctx, hostname)
@@ -171,7 +199,9 @@ func (b *Backend) require(ctx context.Context, hostname string) (*application, m
 }
 func observe(a application, m metadata) infra.Service {
 	status := infra.StatusReadyToDeploy
-	if m.Kind == infra.KindVolume {
+	if m.Importing {
+		status = infra.StatusCreating
+	} else if m.Kind == infra.KindVolume {
 		status = infra.StatusActive
 	} else if m.Deployed {
 		status = infra.StatusCreating
@@ -180,6 +210,7 @@ func observe(a application, m metadata) infra.Service {
 		}
 	}
 	s := infra.Service{ID: a.ID, Hostname: m.Hostname, Kind: m.Kind, Status: status, Resources: m.Resources, MinContainers: m.Min, MaxContainers: m.Max, Ownership: map[string]string{}}
+	s.Importing = m.Importing
 	for k, v := range m.Vars {
 		if identityKey(k) {
 			s.Ownership[k] = v
@@ -201,61 +232,119 @@ func identityKey(k string) bool {
 }
 func (b *Backend) observedService(ctx context.Context, a application, m metadata) (infra.Service, error) {
 	s := observe(a, m)
-	if m.Kind == infra.KindRuntime && m.Deployed && a.Status != "error" {
-		ts, err := b.tasks(ctx, a.AppName)
-		if err != nil {
+	if m.Importing {
+		return s, nil
+	}
+	if m.Kind == infra.KindVolume {
+		if err := b.checkPinnedNode(ctx, m.Node); err != nil {
+			s.Status = infra.StatusFailed
 			return s, err
 		}
-		s.Status = infra.StatusStopped
-		for _, t := range ts {
-			if strings.EqualFold(t.State, "running") {
-				s.Status = infra.StatusCreating
-				if strings.HasPrefix(strings.ToLower(t.CurrentState), "running") {
-					s.Status = infra.StatusRunning
-				}
-				break
-			}
-		}
-		if s.Status == infra.StatusStopped && a.Status == "running" {
-			s.Status = infra.StatusCreating
-		}
 	}
-	return s, nil
+	if m.Kind != infra.KindRuntime || !m.Deployed && m.Pending == nil {
+		return s, nil
+	}
+	return b.observeRuntime(ctx, a, m)
 }
 func (b *Backend) GetService(ctx context.Context, hostname string) (*infra.Service, error) {
-	a, err := b.application(ctx, hostname)
-	if err != nil || a == nil {
+	if err := b.mu.Lock(ctx); err != nil {
 		return nil, err
+	}
+	defer b.mu.Unlock()
+	a, err := b.application(ctx, hostname)
+	if err != nil {
+		return nil, err
+	}
+	if a == nil {
+		return b.orphanService(ctx, hostname)
 	}
 	m, _ := parseMetadata(a.Description)
 	s, err := b.observedService(ctx, *a, m)
 	return &s, err
 }
 func (b *Backend) ListServices(ctx context.Context, prefix string) ([]infra.Service, error) {
+	if err := b.mu.Lock(ctx); err != nil {
+		return nil, err
+	}
+	defer b.mu.Unlock()
 	e, err := b.environment(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := []infra.Service{}
+	candidates := make([]application, 0, len(e.Applications))
 	for _, a := range e.Applications {
-		m, ok := parseMetadata(a.Description)
-		if ok && strings.HasPrefix(m.Hostname, prefix) {
-			if m.Kind == infra.KindRuntime && m.Deployed {
-				var full application
-				if err = b.c.get(ctx, "application.one", map[string]string{"applicationId": a.ID}, &full); err != nil {
-					if errors.Is(err, infra.ErrNotFound) {
-						continue
-					}
-					return nil, err
-				}
-				a = full
-			}
-			s, err := b.observedService(ctx, a, m)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, s)
+		if m, ok := parseMetadata(a.Description); ok && strings.HasPrefix(m.Hostname, prefix) {
+			candidates = append(candidates, a)
 		}
+	}
+	type result struct {
+		application    application
+		service        infra.Service
+		skip, mutation bool
+	}
+	results := make([]result, len(candidates))
+	if err := infra.ObserveParallel(ctx, len(candidates), func(i int) error {
+		a := candidates[i]
+		m, _ := parseMetadata(a.Description)
+		if m.Kind == infra.KindRuntime && (m.Deployed || m.Pending != nil) {
+			var full application
+			if err := b.c.get(ctx, "application.one", map[string]string{"applicationId": a.ID}, &full); err != nil {
+				if errors.Is(err, infra.ErrNotFound) {
+					results[i].skip = true
+					return nil
+				}
+				return err
+			}
+			a = full
+		}
+		m, ok := parseMetadata(a.Description)
+		if !ok {
+			return restoreConflict("application ownership changed during observation; refusing adoption")
+		}
+		results[i].application = a
+		var err error
+		if m.Kind == infra.KindRuntime && (m.Deployed || m.Pending != nil) {
+			results[i].service, err = b.observeRuntimeMode(ctx, a, m, true)
+		} else {
+			results[i].service, err = b.observedService(ctx, a, m)
+		}
+		if errors.Is(err, errObservationMutation) {
+			results[i].mutation = true
+			return nil
+		}
+		return err
+	}); err != nil {
+		// No mutation is authorized after failed prerequisites; retain every
+		// observed error, retry deadline and cancellation from the read batch.
+		return nil, err
+	}
+	out := make([]infra.Service, 0, len(results))
+	for _, result := range results {
+		if result.skip {
+			continue
+		}
+		if result.mutation {
+			mutationCtx := infra.WithoutObservation(ctx)
+			// Reload under the existing target lock: an earlier serialized
+			// decision may already have advanced this application's journal.
+			var current application
+			if err := b.c.get(mutationCtx, "application.one", map[string]string{"applicationId": result.application.ID}, &current); err != nil {
+				return nil, errors.Join(err, ctx.Err())
+			}
+			m, ok := parseMetadata(current.Description)
+			if !ok {
+				return nil, restoreConflict("application ownership changed during observation; refusing adoption")
+			}
+			service, err := b.observedService(mutationCtx, current, m)
+			if err != nil {
+				return nil, errors.Join(err, ctx.Err())
+			}
+			result.service = service
+		}
+		out = append(out, result.service)
+	}
+	if err = b.checkOrphans(ctx, prefix, e.Applications); err != nil {
+		return out, err
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Hostname < out[j].Hostname })
 	return out, nil
@@ -318,178 +407,4 @@ func (b *Backend) update(ctx context.Context, a *application, m metadata, settin
 	settings["applicationId"] = a.ID
 	settings["description"] = m.description()
 	return b.c.post(ctx, "application.update", settings, nil)
-}
-func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec) (op infra.Op, err error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	var created []string
-	defer func() {
-		if err == nil {
-			return
-		}
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		for i := len(created) - 1; i >= 0; i-- {
-			_ = b.c.post(cleanup, "application.delete", map[string]any{"applicationId": created[i]}, nil)
-		}
-	}()
-	e, err := b.environment(ctx)
-	if err != nil {
-		return infra.Op{}, err
-	}
-	if err = b.ensureNetwork(ctx); err != nil {
-		return infra.Op{}, err
-	}
-	existing := map[string]application{}
-	ms := []metadata{}
-	for _, a := range e.Applications {
-		if m, ok := parseMetadata(a.Description); ok {
-			existing[m.Hostname] = a
-			ms = append(ms, m)
-		}
-	}
-	seen := map[string]bool{}
-	for _, s := range specs {
-		if !safeHostname(s.Hostname) {
-			return infra.Op{}, reject("service hostname must be a DNS label")
-		}
-		if seen[s.Hostname] || existing[s.Hostname].ID != "" {
-			return infra.Op{}, infra.ErrConflict
-		}
-		seen[s.Hostname] = true
-		if s.Kind != infra.KindVolume && s.Kind != infra.KindRuntime {
-			return infra.Op{}, reject("unknown service kind")
-		}
-		if s.Kind == infra.KindRuntime && s.Base != infra.BaseUbuntu2404 {
-			return infra.Op{}, reject("unsupported runtime base")
-		}
-		if err = resourceValidation(s.Resources); err != nil {
-			return infra.Op{}, err
-		}
-		if _, err = encodeEnvironment(s.Env); err != nil {
-			return infra.Op{}, err
-		}
-		if _, err = encodeEnvironment(s.Vars); err != nil {
-			return infra.Op{}, err
-		}
-	}
-	// Holders must exist before the runtimes which reference them.
-	ordered := append([]infra.ServiceSpec(nil), specs...)
-	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Kind == infra.KindVolume && ordered[j].Kind != infra.KindVolume })
-	ids := map[string]string{}
-	var pending []struct {
-		app  application
-		meta metadata
-	}
-	for _, s := range ordered {
-		m := metadata{Kind: s.Kind, Hostname: s.Hostname, Volume: s.Volume, SpreadGroup: s.SpreadGroup, Resources: s.Resources, Min: s.MinContainers, Max: s.MaxContainers, Vars: map[string]string{}}
-		if m.Min == 0 {
-			m.Min = 1
-		}
-		if m.Max == 0 {
-			m.Max = 1
-		}
-		if m.Min < 1 || m.Max < m.Min {
-			return infra.Op{}, reject("invalid container bounds")
-		}
-		if m.Volume != "" && m.Max != 1 {
-			return infra.Op{}, reject("a volume runtime requires one replica")
-		}
-		for k, v := range s.Vars {
-			m.Vars[k] = v
-			m.VarKeys = append(m.VarKeys, k)
-		}
-		for k := range s.Env {
-			if _, ok := s.Vars[k]; ok {
-				return infra.Op{}, reject("variable cannot be both secret and readable")
-			}
-			m.SecretKeys = append(m.SecretKeys, k)
-		}
-		sort.Strings(m.VarKeys)
-		sort.Strings(m.SecretKeys)
-		if m.Kind == infra.KindVolume {
-			if m.SpreadGroup == "" {
-				sum := sha256.Sum256([]byte(s.Env["KARAKORAM_CLUSTER"]))
-				m.SpreadGroup = hex.EncodeToString(sum[:])
-			}
-			ns, err := b.nodes(ctx)
-			if err != nil {
-				return infra.Op{}, err
-			}
-			m.Node, err = chooseNode(ns, ms, m.SpreadGroup, s.SpreadReplaces)
-			if err != nil {
-				return infra.Op{}, err
-			}
-		} else if m.Volume != "" {
-			v, ok := existing[m.Volume]
-			if !ok {
-				return infra.Op{}, reject("runtime references an absent volume")
-			}
-			if v.AppName == "" {
-				var full application
-				if err = b.c.get(ctx, "application.one", map[string]string{"applicationId": v.ID}, &full); err != nil {
-					return infra.Op{}, err
-				}
-				v = full
-				existing[m.Volume] = full
-			}
-			vm, ok := parseMetadata(v.Description)
-			if !ok || vm.Kind != infra.KindVolume {
-				return infra.Op{}, reject("runtime volume is not a volume service")
-			}
-			m.Node = vm.Node
-		}
-		var a application
-		if err = b.c.post(ctx, "application.create", map[string]any{"name": s.Hostname, "appName": s.Hostname, "description": "Infrastructure import in progress", "environmentId": b.target.ID, "sourceType": "docker"}, &a); err != nil {
-			return infra.Op{}, err
-		}
-		created = append(created, a.ID)
-		ids[s.Hostname] = a.ID
-		a.Description = m.description()
-		existing[s.Hostname] = a
-		ms = append(ms, m)
-		settings := resourceSettings(s.Resources)
-		settings["dockerImage"] = baseImage
-		settings["replicas"] = m.Max
-		if m.Node != "" {
-			settings["placementSwarm"] = map[string]any{"Constraints": []string{"node.hostname==" + m.Node}}
-		}
-		settings["applicationId"] = a.ID
-		if err = b.c.post(ctx, "application.update", settings, nil); err != nil {
-			return infra.Op{Services: ids}, err
-		}
-		all := map[string]string{}
-		for k, v := range s.Env {
-			all[k] = v
-		}
-		for k, v := range s.Vars {
-			all[k] = v
-		}
-		if err = b.saveEnv(ctx, a.ID, all); err != nil {
-			return infra.Op{Services: ids}, err
-		}
-		if m.Kind == infra.KindVolume {
-			err = b.c.post(ctx, "mounts.create", map[string]any{"type": "volume", "volumeName": a.AppName, "mountPath": "/data", "serviceType": "application", "serviceId": a.ID}, nil)
-		} else if m.Volume != "" {
-			v := existing[m.Volume]
-			err = b.c.post(ctx, "mounts.create", map[string]any{"type": "volume", "volumeName": v.AppName, "mountPath": b.Layout().VolumePath(m.Volume), "serviceType": "application", "serviceId": a.ID}, nil)
-		}
-		if err != nil {
-			return infra.Op{Services: ids}, err
-		}
-		pending = append(pending, struct {
-			app  application
-			meta metadata
-		}{a, m})
-	}
-	// Publish ownership metadata only after every mount and environment is ready.
-	for _, p := range pending {
-		if err = b.update(ctx, &p.app, p.meta, nil); err != nil {
-			return infra.Op{Services: ids}, err
-		}
-	}
-	if len(ids) == 0 {
-		return infra.Op{}, nil
-	}
-	return encodeOp(operation{Action: "import", Services: ids}), nil
 }

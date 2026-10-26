@@ -56,7 +56,7 @@ func TestRestoreRepositoryGenerationIsDurable(t *testing.T) {
 		}
 		cp.Step = "credentials"
 		for range 2 { // Repeat the same checkpoint, as after a crash before publication.
-			p = New(Options{Store: rc.Store})
+			p = &Core{options: Options{Store: rc.Store}, restoreSetPresent: p.restoreSetPresent}
 			if _, err = p.runRestore(t.Context(), rc, op, cp); err != nil {
 				t.Fatal(err)
 			}

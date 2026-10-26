@@ -85,6 +85,8 @@ Elasticsearch `spec.exposure` explicitly enables public TCP, chooses IPv6 or ded
 
 Set `engineOptions.kibana.public` or `engineOptions.apm.public` and include the corresponding request-only `allowAllAddresses: true` when creating/enabling that route. An unchanged public route needs no new acknowledgement; disabling/re-enabling does. The acknowledgement is consumed, not persisted or inherited by future PATCH requests. The wizard/topology editor confirms this exposure and Review lists every public route even with private database access.
 
+Setting either public switch to `false` revokes that component's HTTPS route before configuration rolls or component-readiness waits, including an already-running roll. Revocation still waits for any accepted platform operation and uses the normal ownership checks and operation receipt; it does not mark the component ready or acknowledge the new generation. Enabling a route remains part of normal reconciliation.
+
 These are Zerops shared subdomains, not custom-domain HTTP locations; custom-domain source-IP policies cannot attach to them. Karakoram supplies Kibana's public base URL and secure cookies. Zerops documents a 50-MB upload cap and does not recommend the shared subdomain balancer for production. Custom-domain management is outside this feature; see [Zerops public access](https://docs.zerops.io/references/networking/public-access).
 
 ## Users, roles and API keys
@@ -154,6 +156,8 @@ Native user/role writes and API-key creation support [safe HTTP retries](../api.
 ## Managed credentials and secret locations
 
 Every node has file-realm `karakoram` (superuser control/recovery) and `karakoram-monitor` (cluster/index monitoring). The control identity remains usable when restoring native security state; it is not an app identity or a revealed credential. Kibana uses an `elastic/kibana` service-account token; Logstash/APM have separate scoped backend writers.
+
+Regular reconciliation reasserts the provider-owned Logstash/APM writer roles, native users, enabled state and sealed passwords even when desired secrets have not changed. Native edits/deletion of these managed objects are repaired; customer-owned users and roles are not modified. Kibana's service token is separately authenticated and replaced if revoked.
 
 Node S3 keys reside in `elasticsearch.keystore`; rendered configuration, TLS keys, file-realm files and component secrets are owner-only (0600 files, 0700 directories). Kibana's token/encryption keys and APM's intake token/writer password are in component configuration; Logstash's writer credential is injected into its process environment. These are accessible to privileged runtime administrators: see [trust boundaries and encryption at rest](../security.md).
 

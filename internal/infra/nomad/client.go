@@ -16,16 +16,19 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 const jsonResponseLimit int64 = 16 << 20
 
 type client struct {
-	origin    string
-	region    string
-	namespace string
-	token     atomic.Value // string
-	http      *http.Client
+	origin       string
+	region       string
+	namespace    string
+	token        atomic.Value // string
+	http         *http.Client
+	observations *infra.ReadBudget
 }
 
 func newClient(origin, region, namespace, token string, tlsConfig *tls.Config) *client {
@@ -36,6 +39,7 @@ func newClient(origin, region, namespace, token string, tlsConfig *tls.Config) *
 	}
 	transport.TLSClientConfig = tlsConfig.Clone()
 	c := &client{origin: origin, region: region, namespace: namespace, http: &http.Client{Transport: transport, Timeout: 60 * time.Second, CheckRedirect: noRedirect}}
+	c.observations = infra.ObservationBudget("nomad\x00" + origin)
 	c.setToken(token)
 	return c
 }
@@ -146,19 +150,30 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 		h.Timeout = 60 * time.Second
 	}
 	h.Timeout += wait
+	if method == http.MethodGet && infra.IsObservation(ctx) {
+		if err := c.observations.Acquire(ctx); err != nil {
+			return nil, 0, err
+		}
+		defer c.observations.Release()
+	}
 	resp, err := h.Do(req)
 	if err != nil {
-		return nil, 0, silentFailure("network request failed")
+		return nil, 0, transportError(err)
 	}
 	defer resp.Body.Close()
 	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && (strings.HasPrefix(parsed.Path, "/v1/var/") || parsed.Path == "/v1/vars") {
-		// Variable failures (especially CAS conflicts) can contain all Items.
-		// Never use any part of that body as an error diagnostic.
+		// CAS failures may contain secret Items. Preserve only the exact
+		// plaintext revoked-token marker, never text extracted from JSON.
 		message := "variable request failed"
 		if resp.StatusCode == http.StatusConflict {
 			message = "stale variable index"
+		} else if resp.StatusCode == http.StatusBadRequest {
+			marker, err := io.ReadAll(io.LimitReader(resp.Body, 65))
+			if err == nil && len(marker) < 65 && strings.TrimSpace(string(marker)) == "ACL token not found" {
+				message = "ACL token not found"
+			}
 		}
-		return nil, 0, &APIError{Status: resp.StatusCode, Op: method, Message: message}
+		return nil, 0, responseRetryAfter(resp, &APIError{Status: resp.StatusCode, Op: method, Message: message})
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
@@ -171,7 +186,7 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 		data = data[:limit]
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, 0, responseError(resp.StatusCode, method, data, token)
+		return nil, 0, responseRetryAfter(resp, responseError(resp.StatusCode, method, data, token))
 	}
 	var index uint64
 	if value := resp.Header.Get("X-Nomad-Index"); value != "" {
@@ -181,4 +196,22 @@ func (c *client) request(ctx context.Context, method, path string, query url.Val
 		}
 	}
 	return data, index, nil
+}
+
+func responseRetryAfter(resp *http.Response, cause error) error {
+	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusServiceUnavailable {
+		return cause
+	}
+	now := time.Now()
+	value := strings.TrimSpace(resp.Header.Get("Retry-After"))
+	var at time.Time
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds >= 0 && seconds <= int64((time.Duration(1<<63-1))/time.Second) {
+		at = now.Add(time.Duration(seconds) * time.Second)
+	} else {
+		at, _ = http.ParseTime(value)
+	}
+	if at.After(now) {
+		return &infra.RetryAfterError{Cause: cause, At: at}
+	}
+	return cause
 }

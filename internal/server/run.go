@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
@@ -44,7 +45,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	st, err := store.Open(c.DatabasePath(), sealer)
+	st, err := openState(ctx, c.DatabasePath(), sealer, logger, 5*time.Second)
 	if err != nil {
 		return err
 	}
@@ -112,7 +113,8 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	defer namespaceRegistry.Close()
 	dialer := NewAgentDialer(st, namespaceRegistry)
 	defer dialer.Close()
-	rc := engine.Context{Namespace: domain.DefaultNamespace, AgentURL: c.AdvertiseURL, Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}}
+	// Generate provenance once, before either the observer or API starts.
+	rc := engine.Context{Namespace: domain.DefaultNamespace, AgentURL: c.AdvertiseURL, Backend: backend, Secrets: st, Store: st, Events: recorder, Agents: dialer, Artifact: engine.ExecutableArtifact{}, Logger: logger, Clock: engine.RealClock{}, ObservationEpoch: rand.Text()}
 	manager, err := reconciler.New(reconciler.Options{Store: st, Registry: registry, Namespaces: namespaceRegistry, Context: rc})
 	if err != nil {
 		return err
@@ -131,7 +133,11 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	collector := monitoring.New(monitoring.Options{Store: st, Dialer: dialer, Logger: logger, Vocabulary: vocabulary, Targets: func(ctx context.Context) ([]monitoring.Target, error) {
 		clusters, err := st.ListClusters(ctx, "")
 		if err != nil {
-			return nil, err
+			var damaged *store.ClusterDataError
+			if !errors.As(err, &damaged) {
+				return nil, err
+			}
+			logger.Error("isolating unreadable clusters from monitoring", "error", err)
 		}
 		out := []monitoring.Target{}
 		for _, c := range clusters {
@@ -195,6 +201,28 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return nil
 	}
 	return runErr
+}
+
+// openState retries without replacing authoritative state. In particular,
+// SQLite's read-only fallback must be reopened after write access is restored.
+func openState(ctx context.Context, path string, sealer *secrets.Sealer, logger *slog.Logger, retryInterval time.Duration) (*store.Store, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		st, err := store.Open(path, sealer)
+		if err == nil {
+			return st, nil
+		}
+		logger.Error("Control-plane state unavailable; startup remains unready and will retry without replacing state", "error", err)
+		timer := time.NewTimer(retryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // logTokenCapability reports, without blocking startup, whether the Zerops

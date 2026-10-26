@@ -55,7 +55,8 @@ func TestSupervisorConfiguredStopSignal(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			supervisor := newSupervisor(io.Discard)
-			environment := []string{"KARAKORAM_STOP_SIGNAL_HELPER=1"}
+			// Race-instrumented helpers otherwise sleep one second at exit, beyond the signal deadlines under test.
+			environment := []string{"GORACE=atexit_sleep_ms=0", "KARAKORAM_STOP_SIGNAL_HELPER=1"}
 			if tc.intOnly {
 				environment = append(environment, "KARAKORAM_STOP_SIGNAL_HELPER_INT=1")
 			}

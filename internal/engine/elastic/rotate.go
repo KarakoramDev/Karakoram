@@ -171,7 +171,7 @@ func (p *Provider) runRotateUser(ctx context.Context, rc *engine.Context, s *sta
 					return operationResult(cp, false), err
 				}
 				defer agent.Close()
-				if err = agent.Process(ctx, agentapi.ProcessAction{Process: componentProcess(m), Action: "restart"}); err != nil {
+				if err = agent.Process(ctx, agentapi.ProcessAction{Process: componentProcess(m), Action: "restart", RequestID: op.ID + "/restart/" + name}); err != nil {
 					return operationResult(cp, false), err
 				}
 			}
@@ -216,7 +216,7 @@ func (p *Provider) rotationAcknowledged(ctx context.Context, rc *engine.Context,
 			return false, err
 		}
 		defer agent.Close()
-		status, err := agent.Status(ctx)
+		status, err := engine.ObserveAgentStatus(ctx, agent, "Elasticsearch", name)
 		if err != nil {
 			return false, err
 		}

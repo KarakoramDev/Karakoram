@@ -23,6 +23,176 @@ The `nomad` backend runs Karakoram clusters on a [HashiCorp Nomad](https://devel
 
 The runtime layout is `/opt/karakoram` for binaries and `/var/lib/karakoram/volumes/<volume-hostname>` for mounted data. Engine preparation runs as `karakoram` with passwordless sudo. A short root entrypoint bounds capabilities, takes the volume's lifetime writer lock, waits for its own service hostname, and restores sudo's setuid permission in the private copy for prepare. After prepare and binary installation it removes the sudoers grant and resets sudo to mode 0755 **before** sourcing secrets and dropping to uid/gid **10001**. Every start recreates the prepare-only sudo grant, including restarts that reuse a prepare marker. Engine data must remain on the member volume, not the disposable allocation rootfs.
 
+The exec task inherits the client's OS/UTS hostname, which can differ from the
+Nomad node name and the member service name. Its allocation-private, watched
+`/etc/hosts` also maps Nomad's `attr.unique.hostname` to `127.0.1.1`, unless that
+name already has a native-service address (service addresses take precedence).
+This avoids repeated external hostname lookups by sudo during preparation even
+when the client hostname is absent from allocation DNS. Discovery updates retain
+the local alias; neither node `/etc/hosts` nor shared DNS is modified. Keep the
+client OS hostname stable while Nomad is running so its fingerprint matches the
+inherited UTS hostname.
+
+Each replacement still copies the rootfs and installs the pinned engine packages
+in its own allocation; there is no shared prepared-runtime cache. Repository,
+download and package-install time therefore still contributes to replacement
+latency. The hostname mapping applies to newly rendered job specifications;
+upgrading the control plane alone does not rewrite running jobs or their templates.
+
+### Platform-care policy
+
+Nomad job registration submits desired scheduler state, producing evaluations and
+deployments; it does **not** enqueue a server-side image-build pipeline. Artifact
+download and native engine preparation run on the selected allocation clients under
+Nomad placement/resource policies. A Dokploy-style global build-slot semaphore would
+therefore throttle scheduling rather than protect a shared build server, and is not
+added here.
+
+Per-runtime safety remains enforced by durable operation phases, Variables CAS,
+registration delivery fences and exact job-modify-index checks. Registration resumes
+by observing the operation's existing job/evaluation instead of registering it again.
+Failed allocation/deployment health or the startup deadline durably fails the operation;
+ordinary polling and missing-job restoration do not automatically restart a failed
+operation. Operator-requested retry/restart is distinct from an automatic deployment
+retry loop. Nomad's own task restart/reschedule and deployment-revert policies remain
+scheduler responsibilities, not new Karakoram job submissions.
+
+Corrected resource bounds can supersede an initial placement-blocked deployment.
+PostgreSQL (including Supabase), MongoDB, RabbitMQ,
+Elasticsearch and Supabase component reconciliation submit the latest bounds
+before waiting for the obsolete rollout. The replacement keeps the backend's
+ordinary registration, ownership, single-writer and deployment-health fences.
+The backend conditionally supersedes the exact initial receipt, not an unrelated
+successor operation. Already-initialized/previously-ready volume members,
+observation errors and initial-deployment allocation history retain the normal
+lifecycle path.
+
+For stateless non-relay jobs, an unchanged owned job and its current blocked
+evaluation may authorize non-destructive correction after Nomad garbage-collects
+the registration evaluation, provided that blocked evaluation directly names the
+saved registration receipt as `PreviousEval`. This preserves canary-first rollout
+without a backend-issued predecessor stop; Nomad replaces remaining predecessors
+destructively after promotion. It is not proof that the task never executed:
+volume correction and destructive unplaced-member retirement still require their
+original complete scheduling evidence and fail closed when it is missing.
+
+For a never-ready volume member, stopping its old job is the scheduling fence;
+allocation history is re-read after that fence and before replacement registration.
+This is not an atomic check-and-stop: an allocation placed in the intervening
+window can be stopped during initial bootstrap. If any allocation appears,
+`UnplacedResizeDeferred` refuses replacement registration and terminates with an
+actionable deployment-exhaustion diagnostic. The backend and provider retain that
+terminal evidence across polling/restarts, retire the obsolete receipt and preserve
+previous applied bounds; ordinary reconciliation cannot silently redeploy it.
+Inspect that bootstrap allocation, then explicitly re-arm with
+`karactl clusters retry-deployments CLUSTER --namespace NS`.
+Re-arm reconciles the latest capacity before retrying the initial deployment.
+Stateless specification updates do not issue a backend stop; Nomad retires
+predecessors during the canary-first rollout.
+This shortcut never authorizes stopping an unreachable previously-serving writer.
+
+A PostgreSQL proxy count reduction can supersede an unfinished larger-count
+rollout, including one blocked on public host-port placement. The control plane
+submits the smaller count without waiting for the obsolete count to become
+healthy, retains the already-published surge-safe connection budget, and keeps
+the previous operation handle if Nomad rejects the superseding mutation. A
+concurrent public-port revocation remains part of the replacement specification.
+Count increases still require their normal all-instance configuration barrier.
+This does not treat a running allocation with desired status `stop` as terminal:
+an unreachable live proxy continues to fail readiness and data-retirement
+barriers closed. A Nomad client/executor stuck in `Killing` beyond its kill timeout
+requires client-side diagnosis; a count change is not proof that it exited.
+
+### Public exposure and proxy rollout timing
+
+Stateless specification changes register a new version of the existing owned job;
+they do not stop the whole proxy job first. Only the serving-checked canary is
+start-first; promotion is followed by serial stop-before-start replacements.
+Each new allocation copies the rootfs, downloads the pinned artifact and runs
+native preparation.
+The prepare marker is allocation-local, so a replacement must prepare again.
+Serving TCP checks run every 2 seconds and must remain healthy for 10 seconds.
+Ready additionally requires the deployment and every live proxy instance to
+finish applying its published configuration and expose a working writer route.
+First successful traffic can therefore substantially precede fresh Ready.
+
+Count-only changes (including increases and cancelling an unplaceable scale-up
+back to the serving count) do not require canary capacity. The backend compares
+the current owned job with the jobs embedded in healthy serving allocations,
+ignoring only count and rollout policy. Increases require the existing count
+healthy with that exact specification; reductions require the desired retained
+count healthy. It preserves serving Meta and registers `Canary=0` with
+`AutoPromote=false`: Nomad adds only the deficit or terminates only the surplus.
+Polling also repairs an already-running scale-back operation registered with a
+blocked canary before this policy applied. Image, configuration, resource and
+public-port changes retain canary-first safety; healthy allocations running an
+older specification cannot acknowledge an unready replacement.
+Sparse desired jobs are compared with native canonicalized jobs without treating
+Nomad's implicit SIGTERM, service-discovery and minimum-version constraints as
+placement-specification removals. Only those exact server-injected constraint
+shapes are defaults; removing any other placement constraint still requires the
+ordinary specification rollout.
+
+A terminal proxy rollout failure is reported as `ProxyRolloutFailed`, not an
+indefinite pending rollout. PostgreSQL can request one new, retain-only scale
+operation when the exact owned desired specification is already natively healthy
+at the desired count, including after Nomad reverts to an older owned operation
+marker. The failed handle is not revived. If that proof is unavailable, no job is
+registered; if it disappears before registration, recovery fails rather than
+falling back to new placement. A failed automatic attempt is not retried endlessly.
+Terminal runtime failure remains an error on subsequent convergence sweeps so
+the tracking operation's existing failure budget can terminate truthfully.
+If the admission/completion response or engine receipt is lost, a same-target
+scale adopts the durable retain-only receipt rather than starting an ordinary
+canary rollout. Count-only registrations preserve the serving job's Meta because
+Nomad includes job/group/task Meta in its destructive-update comparison. Their
+durable receipt uses the exact native job version and JobModifyIndex instead of a
+new job-Meta operation marker. Before registration, the CAS base index, expected
+next version and exact normalized specification digest are persisted; a lost
+response adopts only that exact content/version, never a later superseding or
+auto-reverted registration. Current runtime health still gates fresh Ready.
+Ownership loss before registration terminates recovery without touching the
+foreign job. Terminal proxy failures are surfaced even when the proxy's native
+status is unavailable or reports not-running.
+
+An identical replica PATCH creates a new tracking operation at the same generation,
+but does not force a new native rollout or override these proof checks. Restore
+native health/capacity first. If a failed native deployment genuinely requires
+new placement, submit a genuine corrective count/resource update through the
+normal product API; unchanged PATCH is not an unsafe backend retry/re-arm.
+
+PostgreSQL distinguishes healthy serving writer routes from missing desired proxy
+instances. An unplaced desired instance keeps Ready false with
+`ProxyInstanceUnplaced` and native placement details; `WriterRouteUnavailable`
+is reserved for an actual serving-instance route/probe failure. Every serving
+proxy still needs a fresh ONLINE hostgroup-10 route to the current primary.
+
+Public exposure changes add/remove static host-port reservations and CNI port
+mapping, replacing allocations rather than hot-editing a firewall. Concurrent
+public proxies need distinct eligible nodes with the requested port free. A
+canary also needs spare placement capacity; occupied static ports can block it.
+Do not assume that a blocked canary automatically stops all predecessors to free
+ports, or that a load balancer's old node mapping follows a relocated allocation.
+Supply sufficient capacity and operator-managed load-balancer membership.
+
+In one two-proxy PostgreSQL exposure cycle, OFF reached fresh Ready in 143.185 s.
+The subsequent ON request served its first acknowledged write after 122.310 s
+and reached fresh Ready after 241.130 s. Of the combined 232.207 s acknowledgement
+gap, 109.897 s preceded the ON request while public access was intentionally off;
+that interval is not an ON rollout outage. These are observations, not guaranteed
+latencies or proof of the time spent in each preparation/placement stage.
+Deployment health/progress deadlines (10/12 minutes for stateless jobs) and the
+backend's 15-minute startup window bound waiting for an unsuccessful rollout;
+they are failure limits, not availability guarantees. External load-balancer
+check intervals and failure/rise thresholds add operator-controlled delay.
+
+For measurements, separate OFF submission, actual route withdrawal, ON submission,
+first successful ON traffic and fresh current-generation Ready. Probe every live
+proxy by allocation identity as well as the public load-balancer route, rediscover
+replacements, and retain Nomad job/deployment/allocation timestamps. A single
+OFF-to-ON writer gap cannot distinguish intentional denial from rollout downtime.
+
+
 ## Capabilities
 
 |Capability|Nomad|Notes|
@@ -46,8 +216,90 @@ The runtime layout is `/opt/karakoram` for binaries and `/var/lib/karakoram/volu
 - Nomad ACLs and native service discovery enabled; one existing Nomad namespace **dedicated exclusively to Karakoram (no other jobs or services)** and a client ACL token per target. Every namespace-native service is trusted for `/etc/hosts`: a foreign registration can hijack a member hostname and redirect engine traffic. Runtime import rejects an existing Nomad job without a Karakoram record, but this is not a replacement for namespace exclusivity. The built-in dynamic host-volume `mkdir` plugin needs no external executable.
 - The read-only rootfs below, mounted on a **different filesystem/device from Nomad's allocation/data directory**. Nomad otherwise hardlinks source files, allowing writes in an allocation to affect the source. A read-only directory on the same filesystem is not sufficient.
 - Routed CNI bridge networking: one non-overlapping subnet per node, routes between all nodes and from the control plane to all allocation subnets, working allocation DNS, and outbound HTTPS for Ubuntu/Percona/RabbitMQ/Elastic package sources and artifacts. Members also need access to configured S3 endpoints.
-- Enough node disk for persistent data, rootfs copies, package caches, extracted archives and allocations awaiting garbage collection. Requested volume sizes do not reserve space.
+- Enough node disk for persistent data, rootfs copies, package caches, extracted archives and allocations awaiting garbage collection, with the [disk and GC policy](#allocation-disk-and-client-garbage-collection) below. Requested volume sizes do not reserve space.
 - Client `max_kill_timeout` at least **120 s**, so the backend's 120 s shutdown grace period is not truncated.
+
+### Allocation disk and client garbage collection
+
+Every native allocation receives its own rootfs copy and engine installation.
+The job's `ephemeral_disk.size` reserves **MiB per allocation**, not per job or
+persistent volume. New member deployments use these budgets, including space for
+package caches and compressed/extracted artifacts:
+
+|Component|Reservation (MiB)|Sizing basis|
+|---|---:|---|
+|MongoDB (including router/config roles)|3072|Prepared replica-set allocation measured ~1.90 GiB, plus ~1.10 GiB margin; router/config-role sizing is conservative|
+|RabbitMQ|2048|Prepared allocation measured ~0.66 GiB, plus ~1.34 GiB rootfs/package/artifact growth margin|
+|PostgreSQL data (including Supabase database)|3072|Provisional native-install budget including Patroni/pgBackRest and extension preparation|
+|PostgreSQL ProxySQL|1024|Provisional smaller rootfs/proxy-package/artifact budget|
+|Elasticsearch / Kibana|4096|Provisional larger unpacked distribution/JVM or Node.js budget|
+|Logstash|3072|Provisional distribution/JVM budget|
+|APM server|1024|Provisional standalone-binary budget|
+|Supabase Studio|4096|Provisional Node.js dependency-tree budget|
+|Supabase realtime / analytics / functions|3072|Provisional BEAM/edge-runtime and native dependency budget|
+|Other Supabase components|2048|Provisional native component/dependency budget|
+|Relay / shipped control-plane job|1024|Control-plane allocation measured ~0.27 GiB, plus binary/artifact margin; relay sizing is provisional; SQLite is separate|
+|Unknown/custom member runtime|3072|Conservative fallback, not a bound on arbitrary prepare commands|
+
+These are scheduler reservations, **not filesystem quotas**, and exclude all
+persistent data. Measure peak preparation usage on the allocation directory
+from the node (not allocation exec), for example
+`du -sx --block-size=1 --exclude='*/var/lib/karakoram/volumes/*' <allocation-dir>`.
+Explicitly exclude host-volume contents even when they share the allocation
+filesystem; `-x` alone does not exclude same-filesystem bind mounts. Compare
+with `df` on both `alloc_dir` and `data_dir`. Rootfs image,
+engine version, package indexes and mirrors affect the footprint. Raise the
+`ephemeralDiskMB` target setting (`KARAKORAM_NOMAD_EPHEMERAL_DISK_MB`) for larger
+images/preparation; this is an upward floor over each component default, with
+an accepted range of **1–65536 MiB** (maximum 64 GiB). Configuration outside this
+range is rejected before deployment side effects. This ceiling is not proof
+that a particular node has room. The shipped control-plane job exposes it as
+`member_ephemeral_disk_mb` (default `0` means no override).
+Increase the shipped control-plane job's `ephemeral_disk.size` separately if needed.
+The budget is persisted on **Deploy**, before environment values are removed
+from deployment metadata. Existing deployments, including legacy jobs without
+an explicit disk stanza, keep their original budget across control-plane
+upgrades, observation, restart, resize and scale; the next intended member
+deployment adopts the new policy. No background migration rolls running members.
+An explicit subsequent deployment recalculates its budget from the current
+setting, so lowering a previously unplaceable override takes effect on an
+operator-requested redeploy without silently rewriting the existing job.
+
+Clients **must explicitly configure** `gc_disk_usage_threshold`,
+`gc_inode_usage_threshold`, `gc_max_allocs` and `gc_interval`; the example below
+uses 60%, 70%, 8 allocations and 15 seconds. Choose a lower allocation-count cap
+for small disks or large chroots, and reserve at least the peak concurrent
+replacement/preparation footprint plus OS and client-state space. The count
+includes live allocations: GC never removes live allocations merely to meet it.
+Budget persistent data separately, preferably on a separate filesystem with
+its own capacity policy; `mkdir` host volumes do not enforce requested sizes.
+Allow additional room for stateless canaries and terminal directories waiting
+for destruction. Scheduler disk accounting does not enforce a free-space
+watermark or account for all retained/orphan directories and host-volume growth.
+
+Nomad 2.0.7 [defaults](https://github.com/hashicorp/nomad/blob/v2.0.7/client/config/config.go)
+to 80% disk, 70% inodes, 50 allocations and a one-minute GC interval.
+Its [client GC](https://github.com/hashicorp/nomad/blob/v2.0.7/client/gc.go)
+checks the **allocation directory's filesystem**, independently of the
+allocation-count limit; it does not ignore chroot bytes when measuring disk.
+It collects only terminal runners known to that client, and removes them from
+its queue before asynchronous destruction. A runner/executor stuck in teardown
+can retain mounts/directories and a GC destruction slot indefinitely; a
+“no terminal allocations” message does not prove that allocation directories
+were removed. Lower thresholds are headroom, not a fix for a wedged executor.
+
+Monitor free bytes/inodes on allocation, client-state and persistent-data
+filesystems. On pressure, stop new workload churn and diagnose client teardown
+before the client state database itself reaches ENOSPC. Scheduler
+`DimensionExhausted.disk` already appears in `BackendPlacementFailed` member
+conditions and pending operation messages; it is not engine readiness.
+Allocation setup ENOSPC is a client/runtime failure, not proof of a scheduler
+disk rejection. For a wedged client, use operator-controlled node maintenance:
+identify the exact old allocation, prove its processes no longer own or write
+any retained volume, and recover the client using your Nomad procedure.
+Never blindly remove allocation directories, unmount database volumes or force
+GC from a control-plane readiness loop. Karakoram does not mutate client GC
+configuration or automatically reap orphan executors.
 
 ### Build and mount the node rootfs
 
@@ -97,6 +349,15 @@ client {
   max_kill_timeout = "120s"
   cni_path         = "/opt/cni/bin"
   cni_config_dir   = "/opt/cni/config"
+  # Required explicit GC policy for native per-allocation installations.
+  # Re-size these thresholds/headroom for your disks and allocation churn.
+  gc_disk_usage_threshold  = 60
+  gc_inode_usage_threshold = 70
+  gc_max_allocs            = 8
+  gc_interval              = "15s"
+  reserved {
+    disk = 4096 # MiB for OS/client state and replacement/GC headroom; not data.
+  }
   chroot_env = {
     "/opt/karakoram-rootfs" = "/"
   }
@@ -217,6 +478,15 @@ host_volume "kk-PREFIX-*" {
 }
 ```
 
+Variables paths are relative to the selected Nomad namespace, not prefixed by its
+name. Keep `karakoram/*` and `nomad/jobs/*` unchanged when replacing `databases`.
+For example, `path "databases/*"` does not authorize the service records, and
+`path "nomad/jobs/databases*"` does not authorize a relay or members with other
+hostnames. Nomad can return an empty successful Variables list with such a token
+while denying an exact record read. Namespace creation checks the exact relay
+record as well: rejected read access returns **422 `invalid_namespace`** with a
+relay read-permissions diagnostic before credentials or enrollment are saved.
+
 `PREFIX` is the **first eight lowercase hex characters of SHA-256 of the exact Nomad namespace name**, with no trailing newline. Compute the full allowed name prefix with:
 
 ```sh
@@ -245,6 +515,7 @@ Set `KARAKORAM_BACKEND=nomad` for the default namespace. Additional namespaces u
 |`network`|`KARAKORAM_NOMAD_NETWORK`|CNI conflist name; default `karakoram` (jobs use `cni/karakoram`)|
 |`publicIPv4`|`KARAKORAM_NOMAD_PUBLIC_IPV4`|IPv4 address clients use for public TCP, normally the operator load balancer|
 |`publicIPv6`|`KARAKORAM_NOMAD_PUBLIC_IPV6`|IPv6 address clients use for public TCP; requires matching operator ingress support|
+|`ephemeralDiskMB`|`KARAKORAM_NOMAD_EPHEMERAL_DISK_MB`|Optional integer MiB floor, range 1–65536 (64 GiB maximum), for new member deployments; cannot lower component defaults; subsequent intended Deploy adopts a changed floor|
 
 These settings are **operator-wide**, not accepted namespace config keys:
 
@@ -354,6 +625,8 @@ The examples default to the **Nomad namespace `karakoram`**, which backs Karakor
 
 Back up the volume and `KARAKORAM_MASTER_KEY` separately ([Backups and storage](backups.md)). **Upgrades:** publish the new archive and update its URL/checksum, then run `nomad job stop -namespace=karakoram karakoram` **without `-purge`**, wait for every allocation to become terminal, and register the updated job with the same volume. Do not rely on `update.max_parallel = 1` to imply stop-first ordering for SQLite. Keep one writer and the lifetime lock; never launch a second control plane against the same data. Variable/TLS changes use `change_mode = "noop"` and need a deliberate restart.
 
+Nomad does not reserve the stopped control plane's CPU and memory. Because its allocation is pinned to the volume's node, a placement that is waiting for room there (for example a member resize that could not be placed) can take the freed capacity while the control plane is stopped, and the updated control-plane job then stays pending with no control plane to reconcile anything. Before stopping, confirm `nomad eval list -namespace=karakoram -status=blocked` is empty and no member operation is waiting for placement, and that the volume's node will keep at least the control-plane job's CPU and memory free. If the control plane is left pending, free that node's capacity deliberately (for example stop the member job that claimed it, without `-purge`); the pending control-plane allocation is then placed.
+
 ## Managing Nomad from another control plane
 
 Additional namespaces of kind `nomad` use an outbound [relay](namespaces.md), deployed in that target Nomad namespace with the same rootfs and routed CNI prerequisites. The relay connects to the control plane's public HTTPS URL, which must support WebSocket upgrades and have a certificate trusted by the Ubuntu rootfs CA bundle. Example:
@@ -371,21 +644,99 @@ The control plane must approve that API origin and have the required operator-wi
 
 **Public TCP.** `portmap` forwards a reserved host port only on the node running the allocation. Configure the target's public address as a stable load-balancer address, and route each advertised public port to that member's **actual node and host port**. Sending it to an arbitrary node fails; there is no Swarm-style routing mesh. Update routes when replacing a member. Karakoram does not configure or reconcile this external load balancer. Apply client source filtering at the LB and restrict **every published node port to only the LB/proxy sources** in the node's forwarding firewall; backend allowlists are not enforced. Also protect the configured dynamic host-port range against accidental publication. For public IPv6, provide a working IPv6 listener and suitable forwarding to the prepared allocation network; merely setting `publicIPv6` does not configure networking.
 
+For PostgreSQL proxy replica reductions, configure both bounded TCP checks and
+connect-failure retry/redispatch, without closing established sessions on DOWN.
+The agent pauses a healthy retiring proxy's listeners, allows a 10-second LB
+detection window and drains existing sessions for at most 25 seconds total
+before native shutdown. No Nomad `shutdown_delay` is necessary: a delay before
+SIGTERM alone would leave static TCP checks healthy until the eventual stop.
+See the [PostgreSQL LB contract and HAProxy example](postgres/access-and-tls.md#planned-proxy-drain-and-external-load-balancers).
+
+
 **HTTPS, SSE and WebSocket.** Terminate public HTTPS for the control plane at your reverse proxy and forward to its HTTP listener on port **8080**. UI live updates use **SSE** at `/api/v1/events/stream`; preserve streaming responses without buffering. The relay carrier uses **WebSocket** at `/relay/v1/connect`; preserve its upgrade and bidirectional binary traffic. Both passed through an operator HAProxy in testing. The control-plane private TLS listener on **9443** must be reachable from default-namespace members over the routed network but must not be exposed as the browser/API listener. Set `KARAKORAM_PUBLIC_URL` to the external HTTPS origin and `KARAKORAM_ADVERTISE_URL` to the private member-reachable TLS address. Member public HTTPS remains unsupported by the backend even if you manually operate a separate proxy.
 
 ## Operations and limitations
 
+### Noninteractive exec sessions and stalled stops
+
+Use closed stdin, no TTY, and a bounded observer timeout for administrative
+commands, for example:
+
+```sh
+timeout 60s nomad alloc exec -i=false -t=false -namespace=databases -task=member ALLOCATION COMMAND
+```
+
+Never leave an administrative `nomad alloc exec` session open. On the tested
+Nomad 2.0.7 / runc 1.5.1 combination, a failed streaming exec start retained the
+container mutex while `os/exec.Wait` waited for its stdin-copy goroutine. Task
+shutdown then blocked in `Container.Status` **before** sending its termination
+signal or starting the kill timeout. This is an upstream exec-stream lifecycle
+failure, not an engine drain barrier; increasing the task timeout cannot release
+that lock. Closing the CLI session is the first diagnostic step, but an already
+orphaned server-side stream may remain blocked even after the CLI exits.
+
+Karakoram reports `BackendStopStalled` with the exact allocation/node and an
+open-exec hint after a fresh `Killing` event exceeds that allocation's original
+task kill timeout plus 15 seconds. The condition and a deduplicated warning event
+also appear during deletion, and clear after fresh inventory confirms recovery.
+Elapsed time is **not** fencing proof: Karakoram neither purges the allocation
+nor releases volume/single-writer or all-live-proxy barriers. If closing sessions
+does not release the stop, inspect the Nomad client/executor goroutines and plan
+platform recovery under your normal operator change procedure. In our tests a
+Nomad agent restart did not release it and the wedged executor ignored `SIGQUIT`;
+sending `SIGTERM` to the task's own processes and then `SIGKILL` to that
+allocation's executor process only let the stop complete without touching other
+allocations. Do this only after confirming the stalled allocation is the one being
+stopped.
+
+### Lifecycle and backend limits
+
+- **Imports reserve identity before creating resources.** A Variables CAS claim records each service's incarnation, original import-batch fingerprint and pinned volume name/node before any volume or environment creation. Accepted-but-lost create/save replies are reconciled by exact record/environment read-back and reserved physical-volume identity, not destructive rollback. An incomplete import remains Creating and retains its partial service IDs; retry the original batch/specification to resume it. Changing that specification, deploying or deleting an unresolved reservation is refused with an actionable conflict. The logical service ID is independent of Nomad's physical host-volume ID; never derive one from the other. Completed imports still expose ordinary contract statuses, and explicit deletion removes their records/resources.
+- **Volume health is observed, not inferred from metadata.** Volume GetService/ListServices validate physical ID/name/namespace/node and inspect the original node. Missing/mismatched storage reports Failed with restore/explicit-replacement guidance; absent, down, draining and scheduling-ineligible nodes have distinct diagnostics; a non-ready host volume is not Active. Runtime mutations cannot recreate a missing/mismatched/non-ready original volume. This does not detect missing files inside an otherwise ready physical volume.
+- **Lost lifecycle replies do not strand persisted operations.** Ordinary service/container observations resume any active persisted operation, not only public-port changes, using the same CAS lease and delivery quarantine. A caller can recover through observation after losing the returned operation handle; failed historical operations are not automatically reissued.
+- **Confirmed external job stops are recoverable.** An owned Nomad job with `Stop=true`, desired-running state, and completed/no pending lifecycle work is reported Stopped so the engine can call Start with the saved deployment. Held lifecycle/restart claims, restoration fences and failed/pending operations are not mistaken for an external stop. Unknown allocation state or an empty allocation list without a confirmed job stop is not reported Stopped.
+- **Backend retry deadlines remain observable.** HTTP 429/503 responses with a valid future Retry-After retain their uncapped retry deadline in the neutral error alongside the unavailable classification. Nomad Variable errors continue to hide secret Items while preserving revoked-token authentication classification.
 - **Node loss pins recovery to the original node.** A volume-bearing member is never automatically rebuilt on a different node: sticky single-node-single-writer storage pins replacements to its volume's node. Members and the supplied SQLite control-plane job enable unlimited failed-allocation rescheduling with exponential delays from **30 s to 1 h**, while `disconnect` retains `lost_after = "12h"`, `replace = false`, `reconcile = "keep_original"`. This is not an unconditional recovery guarantee: [Nomad still applies the deployment progress deadline](https://developer.hashicorp.com/nomad/docs/job-specification/reschedule#unlimited), configured here as **20 minutes**; a never-healthy deployment can exhaust that window and need Start/Restart. Once a deployment is healthy, later task failures can retry without an attempt limit. The volume's lifetime `flock` serializes old/replacement writers. Wait for the node to recover, or explicitly replace the member through Karakoram to rebuild elsewhere from healthy peers/backups. If no allocation is running despite desired running state, **Restart** recreates the saved job with stop → terminal → register; **Start** can likewise recover a dead or absent job. Restart of a running allocation still uses Nomad's allocation restart endpoint. Recovery requires a healthy node/rootfs/CNI and available capacity.
 - **Single-writer fencing is required.** Sticky `single-node-single-writer` claims alone did not prevent old and new allocations overlapping after node-loss reconciliation in our tests. The entrypoint holds an exclusive `flock` on the member volume across preparation and the final execution; a contender waits rather than writing. Do not remove the lock file or bypass the entrypoint while a writer may exist.
+- **Agent death and host reboot are different recovery boundaries.** A failed member task gets two in-allocation retries within 30 minutes, then Nomad reschedules it on the same volume's node under the policy above. The lifetime volume lock remains mandatory. New process-launch receipts record the kernel boot identity, so an interrupted launch cannot strand startup after a proven host reboot; task/agent restarts within the same boot do not clear ambiguous ownership. Older ambiguous receipts without boot evidence remain fail-closed and require reconciliation.
+- **PostgreSQL retirement can fence a reachable but stopped member.** If generic agent status explicitly reports Patroni stopped or failed with no owned PID, replacement/scale-in can use the backend runtime-stop path instead of waiting for that member to stream. This still requires a healthy surviving primary with linearizable DCS health, the exact owned runtime/volume identity, completed stop acknowledgement and terminal runtime observation before membership or storage removal. A transient demotion or an engine RPC error alone is not stopped evidence.
 - **Replacement needs headroom.** A replacement is added before its predecessor is removed. Placement ignores the replaced volume when spreading the new one, so if every eligible node is already used, the replacement may share its predecessor's node temporarily. Reserve CPU, memory, disk and host-port headroom for both, or add a node/free capacity first.
-- **Destructive changes restart the member.** Deployment, resource, scale and public-port changes use explicit stop → wait for terminal allocations → register, not an assumed stop-first rolling update. Allow the full 120 s shutdown timeout plus scheduling and preparation time. Allocation completion proves task state, not engine readiness; Karakoram's normal engine health checks remain authoritative.
+- **Volume-bearing changes retain the destructive fence.** Deployment, resource and public-port changes on volume members use explicit stop → wait for terminal allocations → register. Stop/Delete use that fence for every runtime. Allow the full 120 s shutdown timeout plus scheduling and preparation time; the lifetime writer lock remains required.
+- **Stateless changes roll without stopping the job.** Deployments, resources, counts and public-port changes register over the exact owned job using Nomad index enforcement. Only the single canary is start-first: it auto-promotes after passing checks and takes one predecessor's place. Nomad then replaces each remaining predecessor serially (`max_parallel = 1`) with a destructive update, stopping it before starting its replacement. Multi-instance components temporarily serve with one fewer instance per step (never zero when count ≥ 2); readiness reports the live deficit until convergence. TCP checks on declared application listeners (not the agent port) must pass for **10 s**; they do not restart tasks or remove discovery during bootstrap. For a runtime without application TCP ports, the healthy interval covers task state only. These listener checks are not SQL/REST correctness probes: engine application-readiness and every-live-proxy configuration/drain barriers remain authoritative. A singleton's old allocation is retained until its canary passes; connections to an allocation eventually retired can still need reconnecting.
+  Supabase's native gateway additionally retries only pre-processing transport
+  failures (at most two retries, preferring another host) and passively ejects
+  locally failing upstreams, covering replacement-before-listen and stale retired
+  discovery records when a healthy reachable alternative exists. HTTP 5xx and
+  resets after request headers were sent are not replayed; in-flight requests
+  on a killed member can still fail and websocket sessions may need reconnecting.
+  The 50% ejection cap retains singleton reachability and avoids Envoy's default
+  panic threshold; it is not application readiness or a guarantee against retry
+  exhaustion. See [gateway rollout limits](supabase/operations.md).
+- **Count-only changes are the canary exception.** With the exact current specification healthy at the existing count (increase) or desired retained count (reduction), registration preserves serving Meta and uses `Canary=0`, `AutoPromote=false`. Increases retain serving allocation identities and schedule only additional instances; reductions wait for surplus termination without new placement. This also repairs an already-running scale-back blocked under the former policy. A different serving image/configuration/resource/port specification never acknowledges an unready replacement.
+- **Relays are singleton, not stateless application rollouts.** Namespace relay updates stop the predecessor and wait for terminal allocations before registering their replacement. They never receive an overlapping canary, including on volume-less relay jobs; overlapping relay sessions can evict one another.
+- **Stateless rollouts require spare placement capacity.** Reserve CPU/memory and, for an already published static port, a free slot on another eligible node for the canary. Operators needing full-count serving capacity during rollout must size the configured count to accommodate the temporary one-instance deficit. Canary placement blockage leaves old allocations serving and reports a capacity/host-port diagnostic; do not free capacity by stopping the job. The application healthy deadline is **10 minutes**, deployment progress deadline **12 minutes**, and failed deployments auto-revert to the previous stable job when one exists. Failed/reverted operations report an actionable failure rather than succeeding because an old allocation still runs. The backend's **15 minute** startup window bounds a rollout that cannot place even its first canary. Correct capacity/readiness and retry. An operator-managed load balancer must select healthy backends across allocation relocation; Karakoram does not update its routes.
 - **Purged running jobs are derived-object repairs.** GetService/ListServices restore an absent deployed job from its durable Variables record, preserving the service ID, deployment, environment and public ports. Repair waits for completed lifecycle operations and a **5 second registration grace**, uses Variables CAS plus absent-only job registration, and never restores desired-stopped jobs. Existing jobs must match the record ID/kind, namespace and owner marker; mismatches fail explicitly rather than being adopted. A data member is registered only while its original host-volume ID/name/node still match and the volume is ready; missing or changed storage reports **FAILED** for engine replacement, never silently creates a new volume. Stateful jobs explicitly constrain placement to the volume's recorded node.
 - **Restoration cleanup belongs to the superseding lifecycle operation.** Repair persists its registration claim with Variables CAS before submitting an absent-only job, with a **10 second submission deadline**. Stop, Delete and replacement/retirement keep that durable claim and cannot finalize their terminal stop/purge phase until **60 seconds after the claim**. Delete retains both service and environment Variables during this fence; Stop retains its desired-stopped record and reports in progress rather than stopped. After the fence, operation polling re-observes the hostname, refuses foreign ownership, stops any owned job that landed late (including a restore-tagged job), and waits for terminal allocations before purging/completing. The obligation survives lost responses, caller cancellation and control-plane/backend reconstruction; failed cleanup is retried from the retained operation record. The restorer never issues a compensating stop or purge, so it cannot delete a successor.
 - **Bounded-delivery assumption:** a restoration request must be delivered and committed by Nomad within the 60 second claim window, including server work that continues after the 10 second client deadline. The deadline starts before the claim is saved, leaving margin for server commit latency; clocks across control-plane processes must be synchronized. This is not a fence against an arbitrarily delayed server commit or an external writer deliberately recreating jobs after cleanup.
 - **Multi-instance lifecycle exclusion.** Before stopping, purging, registering or advancing a lifecycle operation, each poll CAS-acquires a persisted lease with a random backend-instance owner and a **120 second expiry**. The complete mutation attempt has a **10 second deadline**, and no destructive request starts without at least that much lease remaining. Attempts track whether an issued mutation (including Variables CAS/phase writes) has an unacknowledged outcome. Fully acknowledged attempts, read-only failures and definitive **4xx mutation rejections** release only the exact acquired lease from fresh durable state, without persisting unsaved failed-attempt changes. Only **unknown mutation outcomes** (transport failures, deadlines/cancellation and 5xx responses to writes) retain delivery quarantine. Another attempt (including the original instance after an uncertain mutation) waits until lease expiry **plus a 60 second bounded-delivery margin** before taking over. New lifecycle operations honor the same exclusion. Ownership is checked before the initial stop; stops re-register the exact observed jobspec with `Stop=true` and an enforced job modify-index, so a changed job is not stopped. Purge requires an observed stopped job, terminal allocations and the lease; a stopping-phase poll never stops/purges its own operation's registered successor. Older records without leases remain readable and acquire one on their next mutation. These guarantees require synchronized clocks and delivery/commit of in-flight requests within the stated margin; arbitrary external writers are not serialized by a Karakoram lease.
 - **Running-allocation Restart uses the same exclusion.** It acquires a durable service-level restart claim before selecting allocations, refuses held/quarantined lifecycle claims, and bounds every allocation restart request by the attempt deadline and remaining lease. It still restarts existing allocations without replacing their job or the caller's pending operation, including older deployed records without a pending handle. Successful or definitively rejected writes and read-only failures release the claim; an unknown restart-write outcome retains exclusion until safe takeover.
-- Public-port methods return once the route is saved and its stop-before-start change is initiated; they do not wait for preparation. Service/container observations and operation polling advance the persisted restart, including after a control-plane restart. A later lifecycle change uses the saved ports and supersedes the pending port operation.
-- **Placement blockage is pending, not terminal failure.** An evaluation that is complete but has `FailedTGAllocs`/a blocked evaluation waits for node/capacity recovery, with its placement diagnostic, until the **15 minute startup window measured from replacement registration** expires. Waiting for an old allocation to become terminal is not bounded by that startup window: a disconnected node can hold the stop fence pending. Deadline expiry or failed tasks can fail the registered replacement's operation, but **do not stop/deregister that job**: blocked evaluations and rescheduling remain active within Nomad's deployment policy. A late running allocation of the current job version makes service status **RUNNING** even when its historical operation remains failed; obsolete-version allocations do not. A subsequent Start, Restart, Deploy or changed public-port request supersedes the failure through stop → terminal → register. Retrying an unchanged **failed port operation** also restarts it; an idempotent port call does not restart a member solely because an unrelated historical operation failed.
+- Public-port methods return once the route is saved and its rolling stateless change (or fenced volume-member change) is initiated; they do not wait for preparation. Service/container observations and operation polling advance the persisted operation, including after a control-plane restart. Stateless service status stays **CREATING** through native canary promotion and serial deployment completion; a running task or healthy predecessor alone is not rollout readiness. PostgreSQL additionally requires fresh configuration and writer-health acknowledgement from every live proxy before acknowledging the exposure generation. A later lifecycle change uses the saved ports and supersedes the pending port operation.
+- **Placement blockage is pending, not terminal failure.** Current scheduler rejections expose per-member `Placement/<member>` conditions and warning events with reason `BackendPlacementFailed`, including the pinned node and Nomad's exhausted resource dimensions or filtered constraints. These are read-only evaluation observations, not placement overrides. While placement remains blocked, the existing registration stays pending without spending deployment retries or expiring its startup window. Once current-version allocations are placed, historical evaluation failures no longer count as current placement failures; the condition clears and the runtime receives a fresh **15 minute unblocked startup window**. Native deployment health, application readiness and single-writer fences still apply. Waiting for an old allocation to become terminal is not bounded by the startup window: a disconnected node can hold the stop fence pending. Deadline expiry or failed tasks can fail an unblocked replacement's operation, but **do not stop/deregister that job**; Nomad rescheduling remains active and stateless deployments may auto-revert. A matching successful native deployment proves stateless completion even after evaluation garbage collection; otherwise its evaluation must report complete and its desired allocation count must be running. A reverted job or unhealthy canary is never completion proof. Volume-member observation retains its current-version allocation rule. A subsequent Start, Restart, Deploy or changed public-port request supersedes a historical failure using the normal rollout policy. Retrying an unchanged **failed port operation** also retries it; an idempotent port call does not restart a member solely because an unrelated historical operation failed.
+
+- **Corrected stateless resources replace blocked rollouts.** A corrected Supabase
+  component resource spec replaces a placement-blocked stateless resource rollout,
+  including a revert to the last successful bounds. The exact owned blocked job
+  must have created no allocations for its current version; older serving
+  allocations remain in place. Once the new version has allocated, even if it is
+  still awaiting health, reconciliation waits for that deployment's normal outcome
+  rather than resubmitting. Volume-bearing members, singleton relays, restore
+  operations and count-only update rules are unchanged.
+  If the control plane loses its checkpoint after a correction is accepted, the
+  backend recovers that exact predecessor-and-target receipt without submitting
+  another rollout; unrelated or different-target successors are not adopted.
+- **Placement diagnostics are member-scoped and cannot revive a failed rollout.** Only exact member identities from the engine's current cluster snapshot are probed; overlapping cluster-name prefixes are not ownership boundaries. Stateless operation polling checks the exact job version/operation identity and native failed/cancelled deployment outcomes before waiting on placement. Automatic reversion or another terminal native outcome ends the operation even if an old evaluation still contains placement failures; only genuinely pending placement suspends the startup deadline.
+- **Delete supersedes obsolete deployment readiness.** All engine cleanup paths on Nomad can delete a never-placed or never-started runtime without waiting for its deployment startup window. Import reservations must still resolve to exact owned identities. Deletion keeps the backend's CAS leases, delayed-registration quarantine, stop acknowledgement and terminal-allocation checks; it does not weaken the writer fence or purge a live allocation early. Delete progress describes resource removal rather than a superseded create attempt.
+- **Shrinking supersedes never-placed scale-up members.** If the desired count is reduced while a new member's original deployment is blocked, Sync retires that undesired identity before polling or retrying its obsolete deployment. This infrastructure-only path requires provider evidence that the member never joined and positive Nomad proof: no current or terminal allocations, an exact owned job/operation, and its original still-blocked evaluation chain. Missing/garbage-collected history or a previously initialized member never authorizes this shortcut. A persisted retirement journal submits exact-ID runtime deletion before service observations can restore the obsolete job, then removes the volume only after runtime absence. Normal backend leases, delivery quarantine and terminal-allocation fences remain; PostgreSQL also removes an already-added etcd learner through a surviving voter. Imports and replacement/maintenance ownership are not discarded. Disabled Supabase components similarly replace their obsolete deployment handle with exact-ID deletion. Whole-cluster cleanup takes over remaining work and preserves unissued volume deletion when suspending with `keepVolumes`.
 - **Rootfs copies cost disk and time.** In our tests, new-allocation preparation used approximately **25 s / 333 MiB for RabbitMQ**, **100 s / 1.6 GiB for PSMDB + PBM**, and **95 s / 1.4 GiB for Elasticsearch**. These figures include installed packages/caches, exclude scheduling/artifact/template delays, and are not performance promises. A new allocation repeats preparation; a task restart in the same allocation can reuse its rootfs and prepare marker. Monitor garbage collection and transient extraction space as well as persistent data.
 - **Disk requests are not enforced.** The built-in `mkdir` plugin returns no capacity quota; minimum/maximum sizes are metadata, not reservations. Disk growth and volume quotas are false. A custom capacity-enforcing plugin would need a separately supported lifecycle and does not enable these capabilities today.
 - **Logs have no per-line timestamps.** Nomad returns plain stdout/stderr. Karakoram labels lines with the task's latest start time; `since` excludes only runs with a known finish time before that bound, not ongoing runs or individual messages. Unreadable terminal or disconnected-allocation logs are skipped, and oversized tails are truncated. Log retention is bounded by Nomad rotation/garbage collection.

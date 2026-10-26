@@ -342,8 +342,16 @@ func TestCleanupRetentionAndDeletion(t *testing.T) {
 				if f.services[m.Name] != nil {
 					t.Fatalf("runtime survived: %s", m.Name)
 				}
-				assertBefore(t, calls, "agent:"+m.Name+":drain", "agent:"+m.Name+":stop")
-				assertBefore(t, calls, "agent:"+m.Name+":stop", "infra:"+m.Name+":delete")
+				if slices.Contains(calls, "agent:"+m.Name+":drain") {
+					t.Fatalf("whole-cluster cleanup drained %s: %v", m.Name, calls)
+				}
+				if keep {
+					for _, peer := range members {
+						assertBefore(t, calls, "agent:"+peer.Name+":stop", "infra:"+m.Name+":delete")
+					}
+				} else if slices.Contains(calls, "agent:"+m.Name+":stop") {
+					t.Fatalf("full delete depended on broker RPC: %v", calls)
+				}
 				if (f.services[m.Volume] != nil) != keep {
 					t.Fatalf("volume retention mismatch: %s", m.Volume)
 				}

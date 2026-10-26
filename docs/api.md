@@ -82,7 +82,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Discovery/health | `/providers`, `/providers/{provider}`, `/backends`, `/version`; root `/healthz` | All |
 | Namespaces | `/namespaces`, `/namespaces/{namespace}`, `/token`, `/validate` suffixes | All |
 | Cluster state/connections | `/clusters`, `/clusters/{cluster}`; `/status`, `/members`, `/placement`, `/connection` | All |
-| Lifecycle | `/restart`, `/resume`, `/rotate-tls`, `/members/{member}/replace`, `/system-users`, `/system-users/{user}/rotate` | Provider-supported capabilities |
+| Lifecycle | `/restart`, `/resume`, `/retry-deployments`, `/rotate-tls`, `/members/{member}/replace`, `/system-users`, `/system-users/{user}/rotate` | Provider-supported capabilities |
 | Compatibility/balancing | `/raise-fcv`, `/balancer` | MongoDB only |
 | Database identities | `/database-users`, `/database-roles` and identity paths | MongoDB only |
 | Native access | `/rabbitmq/vhosts`, `/rabbitmq/users`, `/rabbitmq/permissions`, `/rabbitmq/topic-permissions`, `/rabbitmq/policies`, `/rabbitmq/operator-policies` | RabbitMQ only |
@@ -114,6 +114,10 @@ Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec:
 
 Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace backend's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the backend and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
 
+Cluster PUT/PATCH and queued actions commit against the cluster incarnation and desired generation inspected during admission. Concurrent changes return **409 conflict** rather than overwriting a newer spec or attaching work to a recreated cluster with the same name. Reload current state and retry the intended change. Suspended clusters still accept resume, full deletion, and backup deletion; ordinary runtime actions such as restart, backup, and restore require resume first.
+
+`POST /clusters/{cluster}/retry-deployments?namespace=NS` requires `clusters/update` and returns `202` with the cluster after advancing its server-managed retry epoch and generation. It re-arms deployments in `DeploymentRetriesExhausted`; when none remain exhausted in the current epoch it returns `409 conflict` without a mutation. An `Idempotency-Key` replay returns the original result, not another retry budget. See [deployment recovery](clusters.md#retry-exhausted-platform-deployments).
+
 Send the declared Content-Type: usually `application/json`, but cluster PATCH uses `application/merge-patch+json` (`application/json` is also accepted there for older clients). The request-body limit is **2 MiB**, including chunked requests. Responses echo `X-Request-ID`; optionally supply 1–128 characters from `[A-Za-z0-9._:-]`. Invalid/repeated IDs are replaced. Include the ID, never credentials, in error reports.
 
 Accepted cluster mutations have durable Operations. Cluster/backup/restore responses expose `operationId`; operation-bearing responses also set **`Karakoram-Operation-Id`**. Imperative work commonly returns **202**; cluster creation returns **201**, not completed provisioning. Cluster DELETE returns **202 with an Operation body**. Poll `/operations/{id}` and resource status/inventory. HTTP acceptance, terminal Operation phase and cluster health are distinct; see [operations and status](clusters.md#operations-and-status). A wait timeout/disconnect does not cancel work.
@@ -127,13 +131,18 @@ Supply the header only on operations declaring `IdempotencyKey` in OpenAPI: supp
 - Scope includes account creation identity/OIDC issuer or the specific bearer token, method, route, namespace and path parameters. Omitted namespace and explicit `default` share a scope. Authentication, CSRF and authorization are checked again on replay.
 - Successful **2xx** status/body/relevant headers are replayable for **24 hours**, including one-time secrets and operation IDs. Replay sets `Idempotent-Replayed: true`. It is the original response snapshot; query current state separately.
 - JSON whitespace/key order do not affect matching; array order, values, omitted fields, explicit null and numeric spellings do. A changed body returns **409 conflict**, `details.field: Idempotency-Key`, `details.reason: conflict`. Concurrent in-flight duplicates return **409** with reason `invalid_state`; retry the same key/body after completion.
-- **4xx/5xx are not cached**. Expiry permits new execution. Ambiguous timeouts or server interruption can occur after a mutation committed but before a replayable response was saved: inspect resources/operations before retrying. A fresh key is not a recovery shortcut or an exactly-once guarantee.
+- **4xx/5xx are not cached**. Operation-backed mutations atomically save a recovery response with their accepted operation. If the server stops or the final response cannot be saved after acceptance, the same key replays the accepted resource/Operation snapshot and its original `Karakoram-Operation-Id`, rather than creating another action. The recovery response keeps the endpoint's normal success status and response shape; once the ordinary successful response is saved, replay uses its exact status/body/headers. Non-operation-backed mutations can still have an ambiguous remote or response boundary: inspect their resources before retrying. Expiry permits new execution; a fresh key is not a recovery shortcut or an exactly-once guarantee.
 
 `karactl` does not send this header and has no flag for it. Raw HTTP clients set `Idempotency-Key`; Go callers can pass a per-call `client.RequestEditorFn` that sets the header, or configure request editing with `client.WithRequestEditorFn`. Retain each mutation's key across retries; never reuse one fixed key for unrelated writes or log replayed secrets.
 
 ## Pagination and events
 
 Lists return `{items: [...], nextCursor?: "..."}`. `limit` defaults to **100**, range **1–500**. Follow the opaque cursor with the same filters until absent; authorization precedes pagination. Multiple pages are not a transactional snapshot. Specialized status/log responses use their own schemas. Member logs are bounded tails: `process`/`lines` work, but `cursor`/`since` currently do not, and no next cursor is returned.
+
+Member responses and cluster status members include `agent.connected`, optional
+`agent.configVersion` and `agent.lastSeenAt`, and an optional `agent.message`
+diagnostic. The message is sanitized using the same credential and base64
+redaction rules as other diagnostic text and is omitted when empty.
 
 `/events` and `/events/stream` share namespace/cluster/type/operationId/actor/resource filters. Actor/resource matches are exact, case-sensitive AND intersections. Types are **Normal, Warning, Audit**; lifecycle names such as `OperationFailed` are reasons. Unknown types/resources return 400; explicitly unreadable resource categories return 403, while unfiltered results omit unauthorized records. Cluster events require `events:read` or `audit:read`; namespace/global audit requires the corresponding namespace/global audit permission. Lists default oldest-first; `order=desc` pages newest-to-oldest.
 
@@ -169,6 +178,12 @@ The stream sends an immediately flushed connected comment and **15-second heartb
 
 Errors are `{code, message, details?}`. Branch on code/field/reason, not English messages. An HTTP-successful poll can describe a failed Operation.
 
+Cluster create, PUT and PATCH return `400 invalid_request` when fresh backend information positively establishes that public `spec.exposure.ipType` is unavailable. Zerops checks current project IPv4/IPv6 addresses, not cached namespace identity. Select a provisioned family, provision the requested public address, or disable public exposure. A failed lookup or backend without authoritative family information does not reject the request: reconciliation reports `ExposureSupported=Unknown/PublicIPSupportUnknown` while attempting routing normally. Dokploy and Nomad accept both family selections for native published ports; configured public addresses advertise endpoints, not an authoritative inventory of host ingress families.
+
+Updates that preserve public/private mode, IP family and allowlist keep unchanged legacy exposure; an unrelated update is not rejected solely because that existing exposure is unavailable. New exposure choices or routing changes still undergo the availability check.
+
+For already accepted requests, a definitive unsupported-family result sets `ExposureSupported=False/PublicIPTypeUnsupported`, `Ready=False`, and phase `Degraded`; the current generation's convergence operation fails rather than remaining Running. Desired state is retained and reconciled, so correcting exposure (or provisioning the address) can recover it without recreating the database. Existing `400` response schemas are unchanged.
+
 | HTTP | Meaning |
 | --- | --- |
 | 400 | Invalid body/query/cursor/configuration/transition |
@@ -176,12 +191,28 @@ Errors are `{code, message, details?}`. Branch on code/field/reason, not English
 | 403 | RBAC/ownership/CSRF denial or `password_change_required` |
 | 404 | Missing/not-visible resource or route; namespace rules above apply |
 | 405 | Unsupported method on known route; inspect `Allow` |
-| 409 | Conflicting state, unsafe cancellation or retry-key conflict |
+| 409 | Conflicting state, unsafe cancellation, unsupported engine action or retry-key conflict |
 | 413 / 415 | Body over 2 MiB / missing or unsupported Content-Type |
 | 422 | Namespace token/project/relay-hostname validation failure |
 | 429 | Login backoff; honor `Retry-After` and `details.retryAfterSeconds` |
 | 500 | Generic unexpected failure, or sanitized dependency failure such as temporary namespace platform unavailability |
 | 503 | Route-specific store/monitoring unavailability or disabled/unavailable OIDC issuer |
+
+Actions and native credential/security mutations blocked by an unfinished initial
+restore return `409 conflict` with `details.resource: operation`,
+`details.name: <owning operation id>` and `details.reason: invalid_state`.
+This restore-owner check precedes capability, member-state and native-engine
+prechecks, so those checks cannot hide the actionable owner. Read operations,
+target deletion, own backup policy and the narrow pre-claim component amendment
+rules retain their separate admission behavior.
+
+Outside that fence, an unsupported engine action returns `409 conflict` with
+`details.resource: operation`, `details.name: <requested action>` and
+`details.reason: unsupported`; the message identifies the engine. PostgreSQL and
+Supabase do not support the generic system-user rotation action. Password
+rotation for **non-reserved PostgreSQL login roles** uses
+`POST /clusters/{cluster}/postgres/roles/{role}/password`; managed roles such as
+`postgres` remain engine-owned and are not made rotatable by that hint.
 
 ## Clients/SDK
 

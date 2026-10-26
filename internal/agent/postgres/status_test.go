@@ -143,6 +143,8 @@ func statusSQLFixture(t *testing.T, pending bool) (paths, *atomic.Int32) {
 				oids, values = []uint32{pgtype.BoolOID}, []any{pending}
 			case strings.Contains(query, "FROM pg_catalog.pg_database"):
 				oids, values = []uint32{pgtype.TextOID}, []any{"C"}
+			case strings.Contains(query, "pg_replication_slots"):
+				oids, values = []uint32{pgtype.JSONBOID}, []any{[]pgspec.ReplicationSlot{{Name: "test_slot", Type: "logical", RetainedBytes: 2 << 30, WALStatus: "extended"}}}
 			case strings.Contains(query, "jsonb_build_object"):
 				oids = []uint32{pgtype.JSONBOID}
 				values = []any{map[string]int64{"max_connections": 100, "max_prepared_transactions": 0, "max_locks_per_transaction": 64, "max_wal_senders": 10, "max_worker_processes": 8}}
@@ -156,6 +158,8 @@ func statusSQLFixture(t *testing.T, pending bool) (paths, *atomic.Int32) {
 				oids, values = []uint32{pgtype.TextOID}, []any{"0/100"}
 			case strings.Contains(query, "pg_stat_replication"):
 				oids, values = []uint32{pgtype.Int8OID, pgtype.TextOID}, []any{int64(0), "async"}
+			case strings.Contains(query, "pg_ls_waldir"):
+				oids, values = []uint32{pgtype.Int8OID, pgtype.Int8OID}, []any{int64(16 << 20), int64(2)}
 			default:
 				t.Errorf("unexpected status query: %s", query)
 			}

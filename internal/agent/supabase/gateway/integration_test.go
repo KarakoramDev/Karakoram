@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -421,6 +422,69 @@ func TestEnvoyConformance(t *testing.T) {
 			t.Fatal("legacy-only functions must leave API verification to the runtime")
 		}
 	})
+	t.Run("rollout-refusing-host-and-write-safety", func(t *testing.T) {
+		var writes atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			if err != nil || string(body) != "non-idempotent-write" {
+				t.Error("write payload changed", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			writes.Add(1)
+			switch r.URL.Path {
+			case "/fail":
+				w.WriteHeader(http.StatusServiceUnavailable)
+			case "/reset":
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				conn.Close()
+			default:
+				w.WriteHeader(http.StatusOK)
+			}
+		}))
+		defer server.Close()
+		host, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		deadPort := freePort(t)
+		testInput := fixture()
+		testInput.ListenAddress, testInput.ListenPort = "127.0.0.1", freePort(t)
+		testInput.Upstreams = map[string]string{"storage": net.JoinHostPort(host, port)}
+		base := startEnvoy(t, bin, testInput, func(bootstrap object) {
+			cluster := bootstrap["static_resources"].(map[string]any)["clusters"].([]any)[0].(map[string]any)
+			endpoints := cluster["load_assignment"].(map[string]any)["endpoints"].([]any)[0].(map[string]any)
+			endpoints["lb_endpoints"] = append(endpoints["lb_endpoints"].([]any), object{"endpoint": object{"address": socket("127.0.0.1", uint64(deadPort))}})
+		})
+		for i := range 40 {
+			resp, err := client.Post(base+"/storage/v1/object", "application/octet-stream", strings.NewReader("non-idempotent-write"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK || writes.Load() != int32(i+1) {
+				t.Fatalf("request %d: status=%d writes=%d", i, resp.StatusCode, writes.Load())
+			}
+		}
+		for _, path := range []string{"fail", "reset"} {
+			before := writes.Load()
+			resp, err := client.Post(base+"/storage/v1/"+path, "application/octet-stream", strings.NewReader("non-idempotent-write"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusServiceUnavailable || writes.Load() != before+1 {
+				t.Fatalf("%s: a sent write was retried: status=%d writes=%d", path, resp.StatusCode, writes.Load()-before)
+			}
+		}
+	})
+
 	t.Run("long-function-response", func(t *testing.T) {
 		start := time.Now()
 		status, seen, _ := request("/functions/v1/slow", "", "", nil)
@@ -455,7 +519,7 @@ func freePort(t *testing.T) uint16 {
 	listener.Close()
 	return uint16(port)
 }
-func startEnvoy(t *testing.T, bin string, in Input) string {
+func startEnvoy(t *testing.T, bin string, in Input, customize ...func(object)) string {
 	t.Helper()
 	config, err := Render(in)
 	if err != nil {
@@ -468,6 +532,9 @@ func startEnvoy(t *testing.T, bin string, in Input) string {
 		t.Fatal(err)
 	}
 	bootstrap["admin"].(map[string]any)["address"] = socket("127.0.0.1", uint64(freePort(t)))
+	for _, change := range customize {
+		change(bootstrap)
+	}
 	config, err = json.Marshal(bootstrap)
 	if err != nil {
 		t.Fatal(err)

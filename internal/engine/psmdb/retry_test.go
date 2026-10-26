@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -226,15 +227,8 @@ func TestPlatformImportRetryAdoptsAndVerifiesOwnership(t *testing.T) {
 					t.Fatal("already-created services were duplicated")
 				}
 			} else {
-				if len(f.imports) != 2 || len(f.imports[1]) != 1 {
-					t.Fatal("retry must import only the missing service")
-				}
-				missing := m.Name
-				if remaining == "runtime" {
-					missing = m.Volume
-				}
-				if f.imports[1][0].Hostname != missing {
-					t.Fatal("retry duplicated an existing service")
+				if len(f.imports) != 2 || !reflect.DeepEqual(f.imports[0], f.imports[1]) {
+					t.Fatal("retry must resume the exact original immutable batch")
 				}
 				if _, err := p.Sync(ctx, rc); err != nil {
 					t.Fatal(err)

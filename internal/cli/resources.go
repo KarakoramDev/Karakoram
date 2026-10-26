@@ -14,6 +14,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,6 +55,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("component", "engine", "Scale resources of engine, configServer or router")
 		if strings.HasPrefix(s.path, "clusters create") {
 			c.Long = "Create a cluster. Convenience flags use PSMDB defaults; --provider defaults to psmdb.\nFor other providers, presets or optional components, submit the complete JSON/YAML body with -f.\nRun karactl providers get <provider> -o json to inspect versions, presets and components,\nthen copy a preset spec into a body containing name and spec. There is no --preset flag."
+			c.Long += "\nDo not combine --file with convenience body/source flags; put initial data in the file's spec.dataSource.\nOperational flags such as --wait, --timeout, --namespace and --output still apply."
 			c.Flags().String("provider", "psmdb", "Engine provider")
 			c.Flags().String("version", "", "Exact engine version (defaults to provider catalog default; see providers get <provider>)")
 			c.Flags().String("topology", "replicaSet", "Provider topology (replicaSet, sharded, cluster, dedicatedMasters, single or ha)")
@@ -97,6 +99,9 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("object", "*", "RBAC object")
 		c.Flags().String("subject", "", "Optional subject")
 	}
+	if s.body {
+		c.Flags().Lookup("file").Usage = "Complete API request YAML/JSON ('-' for stdin); cannot combine with convenience body/source flags"
+	}
 }
 
 func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error) {
@@ -108,6 +113,36 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	}
 	file, _ := cmd.Flags().GetString("file")
 	if file != "" {
+		// A complete file replaces convenience body construction for every
+		// operation. Only execution/routing controls and API query flags may
+		// accompany it; new local flags are body flags unless allowed here.
+		var conflicts []string
+		cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
+			// Cobra builds this view with AddFlag; its Visit set is empty even
+			// when the original flag was parsed. Changed lives on the flag.
+			if !flag.Changed {
+				return
+			}
+			switch flag.Name {
+			case "file", "wait", "timeout", "yes", "into-new":
+				return
+			}
+			for _, query := range s.query {
+				if flag.Name == query.name {
+					return
+				}
+			}
+			conflicts = append(conflicts, "--"+flag.Name)
+		})
+		if len(conflicts) > 0 {
+			hint := "put request fields in the file instead"
+			if s.operation == "createCluster" {
+				hint = "put request fields in the file, with the data source in spec.dataSource"
+			} else if s.operation == "createRestore" {
+				hint = "put restore source fields in the file's source/sourceNamespace"
+			}
+			return nil, usageError("--file cannot be combined with %s; %s", strings.Join(conflicts, ", "), hint)
+		}
 		if s.operation == "replaceRBACPolicy" {
 			var b []byte
 			var err error

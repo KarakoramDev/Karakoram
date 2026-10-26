@@ -45,6 +45,9 @@ type Options struct {
 type Core struct {
 	options  Options
 	accessMu sync.Mutex
+	// Overrides only repository I/O in tests; nil uses the guarded S3 client.
+	restoreSetPresent func(context.Context, *domain.BackupStorage, string) (bool, error)
+	deleteRepository  func(context.Context, domain.BackupStorage, string, string, string) error
 }
 
 // New constructs the shared PostgreSQL core.

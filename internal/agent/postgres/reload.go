@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
@@ -24,6 +25,17 @@ func singleReloadChanged(changed []string) bool {
 		}
 	}
 	return false
+}
+
+// reloadPatroniConfig uses local process control before making verified HTTPS
+// requests: Patroni may still be serving an expired identity from its old context.
+func reloadPatroniConfig(changed []string, signal, patch func() error) error {
+	if len(changed) > 0 {
+		if err := signal(); err != nil {
+			return err
+		}
+	}
+	return patch()
 }
 
 // pg_file_settings parses the current files even before an asynchronous SIGHUP
@@ -58,4 +70,51 @@ func reloadSingle(ctx context.Context, s pgspec.Spec, p paths) (bool, error) {
 		return false, errors.New("cannot inspect PostgreSQL restart requirements")
 	}
 	return restart, nil
+}
+
+// SupportsCertificateReloadOnly is advertised on the generic agent API, whose
+// identity is independent of the invalid native certificate being replaced.
+func (*Runner) SupportsCertificateReloadOnly() bool { return true }
+
+// applyCertificateReload bypasses rendering, rollout, SQL restart inspection,
+// and supervisor start/restart actions. A pending postmaster change remains
+// pending; PostgreSQL's SIGHUP only reloads settings that support reload.
+func (e *Runner) applyCertificateReload(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
+	s, err := decodeSpec(c)
+	if err != nil {
+		return nil, err
+	}
+	if s.Role != pgspec.RoleData || s.ServerCert == nil {
+		return nil, errors.New("certificate-only reload requires a data member identity")
+	}
+	states, maintenance := n.Snapshot()
+	process := "postgres"
+	if s.Topology == pgspec.TopologyHA {
+		process = "patroni"
+	}
+	if maintenance || c.Maintenance || n.Stopped(process) {
+		return nil, errors.New("certificate-only reload is blocked by member maintenance or stop control")
+	}
+	p := dataPaths(n.DataDir())
+	changed := []string{}
+	for _, file := range []renderedFile{{"ca.pem", s.CAPEM, false}, {"server.pem", s.ServerCert.CertPEM, false}, {"server.key", s.ServerCert.KeyPEM, false}} {
+		if unchangedFile(filepath.Join(p.root, file.name), file.content, 0600) {
+			continue
+		}
+		if err := n.WriteFile(filepath.Join("postgres", file.name), []byte(file.content), 0600); err != nil {
+			return nil, err
+		}
+		changed = append(changed, file.name)
+	}
+	// Retry the signal even when files already match: a previous publication
+	// may have persisted its files before losing the reload response.
+	if states[process].PID != 0 {
+		if err := n.Signal(process, syscall.SIGHUP); err != nil {
+			return nil, err
+		}
+	}
+	e.mu.Lock()
+	e.current.CAPEM, e.current.ServerCert = s.CAPEM, s.ServerCert
+	e.mu.Unlock()
+	return changed, nil
 }

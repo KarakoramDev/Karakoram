@@ -4,6 +4,9 @@
 package nomad
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -84,3 +87,55 @@ func responseError(status int, op string, body []byte, token string) error {
 }
 
 func silentFailure(message string) error { return &APIError{Message: message} }
+
+type tlsConfigError struct {
+	message string
+}
+
+func (e *tlsConfigError) Error() string      { return e.SafeDetail() }
+func (e *tlsConfigError) SafeDetail() string { return e.message }
+func (e *tlsConfigError) Unwrap() error      { return infra.ErrConfiguration }
+
+func tlsConfigurationError(message string) error {
+	return &tlsConfigError{message: boundedDetail("nomad " + message)}
+}
+
+func transportError(err error) error {
+	var hostname x509.HostnameError
+	var authority x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var verification *tls.CertificateVerificationError
+	var alert tls.AlertError
+	message := ""
+	switch {
+	case errors.As(err, &hostname):
+		message = "TLS verification failed: certificate is not valid for the requested server name; check KARAKORAM_NOMAD_TLS_SERVER_NAME and the target certificate SANs"
+	case errors.As(err, &authority):
+		message = "TLS verification failed: unknown certificate authority; check KARAKORAM_NOMAD_CACERT and the target certificate chain"
+	case errors.As(err, &invalid):
+		message = "TLS verification failed: invalid certificate; check the target certificate and KARAKORAM_NOMAD_CACERT"
+		if invalid.Reason == x509.Expired {
+			message = "TLS verification failed: certificate has expired or is not yet valid; check the target certificate validity and system clock"
+		}
+	case errors.As(err, &verification):
+		message = "TLS verification failed; check KARAKORAM_NOMAD_CACERT, KARAKORAM_NOMAD_TLS_SERVER_NAME and the target certificate"
+	case errors.As(err, &alert) && (alert == 42 || alert == 43 || alert == 44 || alert == 45 || alert == 46 || alert == 48 || alert == 116):
+		message = "TLS client certificate rejected; check KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY and the server's client CA trust"
+	default:
+		// TCP TLS alerts use an unexported alert type, unlike QUIC's AlertError.
+		// Match only known remote certificate alerts, never echo transport text.
+		for cause := err; cause != nil; cause = errors.Unwrap(cause) {
+			switch cause.Error() {
+			case "remote error: tls: bad certificate", "remote error: tls: unsupported certificate", "remote error: tls: revoked certificate", "remote error: tls: expired certificate", "remote error: tls: unknown certificate", "remote error: tls: unknown certificate authority", "remote error: tls: certificate required":
+				message = "TLS client certificate rejected; check KARAKORAM_NOMAD_CLIENT_CERT and KARAKORAM_NOMAD_CLIENT_KEY and the server's client CA trust"
+			}
+			if message != "" {
+				break
+			}
+		}
+	}
+	if message != "" {
+		return tlsConfigurationError(message)
+	}
+	return silentFailure("network request failed")
+}

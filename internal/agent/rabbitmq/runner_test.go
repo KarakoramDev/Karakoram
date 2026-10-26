@@ -28,6 +28,27 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
+func TestDrainCLITimeoutFitsEngineDeadline(t *testing.T) {
+	// Maintenance transfers can take longer than an ordinary 60-second CLI
+	// request. The route and engine client both allow three minutes.
+	timeout := cliTimeout("rabbitmq-upgrade", jsonArgs("drain"))
+	if timeout <= 164*time.Second || timeout >= 3*time.Minute {
+		t.Fatalf("drain timeout %s does not cover leadership transfer with response headroom", timeout)
+	}
+	for _, request := range []struct {
+		tool string
+		args []string
+	}{
+		{"rabbitmq-upgrade", jsonArgs("revive")},
+		{"rabbitmqctl", jsonArgs("cluster_status")},
+		{"rabbitmq-upgrade", nil},
+	} {
+		if timeout := cliTimeout(request.tool, request.args); timeout != time.Minute {
+			t.Fatalf("ordinary CLI timeout changed: %s %v = %s", request.tool, request.args, timeout)
+		}
+	}
+}
+
 func testSpec() rmqspec.MemberSpec {
 	return rmqspec.MemberSpec{NodeName: "rabbit@rmqone", Peers: []string{"rabbit@rmqone"}, Cookie: strings.Repeat("a", 32), Version: "4.3.6", Plugins: []string{"rabbitmq_management", "rabbitmq_prometheus"}, AMQPPort: 5672, ManagementPort: 15672, PrometheusPort: 15692, MemoryHighWatermarkBytes: 512 << 20, TotalMemoryBytes: 1 << 30, DiskFreeLimitBytes: 1 << 30, DefaultQueueType: "quorum"}
 }
@@ -344,7 +365,8 @@ func TestRoutesRequireBearer(t *testing.T) {
 	if err != nil || after.Processes[process].PID == before.Processes[process].PID {
 		t.Fatal("released maintenance lost pending restart", after, err)
 	}
-	fakeCLI(t, "rabbitmq-upgrade", "echo '{\"result\":\"ok\"}'\n")
+	// A local stop must work even when maintenance RPCs cannot reach quorum.
+	fakeCLI(t, "rabbitmq-upgrade", "exit 1\n")
 	if err := client.Engine(context.Background(), "rabbitmq", "stop", rmqspec.EmptyRequest{}, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -413,7 +435,7 @@ func TestRoutesRequireBearer(t *testing.T) {
 	bad := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}, Timeout: time.Second}
 	defer bad.CloseIdleConnections()
 	for _, token := range []string{"", "wrong"} {
-		for _, action := range []string{"status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "stop-app", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
+		for _, action := range []string{"observe", "status", "bootstrap", "join", "forget", "await-quorum", "quorum-critical", "drain", "revive", "stop", "stop-app", "start", "grow", "shrink", "rebalance", "enable-feature-flags", "clear-pem-cache", "set-password", "stream-replicas"} {
 			req, _ := http.NewRequest(http.MethodPost, "https://"+address+"/v1/rabbitmq/"+action, strings.NewReader("{}"))
 			if token != "" {
 				req.Header.Set("Authorization", "Bearer "+token)

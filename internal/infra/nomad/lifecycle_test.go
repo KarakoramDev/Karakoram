@@ -235,14 +235,14 @@ func TestStartupWindowBeginsAfterRegistration(t *testing.T) {
 		t.Run(action, func(t *testing.T) {
 			f := newFakeNomad(t)
 			b := fakeBackend(t, f, nil)
-			importFake(t, b, runtimeSpec("runtime", ""))
-			deployFake(t, b, "runtime", "")
+			importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+			deployFake(t, b, "runtime", "volume")
 			f.setAutoTick(false)
 			var err error
 			if action == "stop" {
 				_, err = b.Stop(t.Context(), "runtime")
 			} else {
-				_, err = b.Deploy(t.Context(), "runtime", testDeployment(t, ""))
+				_, err = b.Deploy(t.Context(), "runtime", testDeployment(t, "volume"))
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -543,7 +543,7 @@ func TestPublicPortsReturnAfterInitiationAndResumeOnObservation(t *testing.T) {
 					t.Fatalf("port initiation waited for startup: %v", err)
 				}
 				r, err := b.require(t.Context(), "runtime")
-				if err != nil || r.Pending == nil || r.Pending.Phase != "stopping" || r.Pending.Action != "ports" {
+				if err != nil || r.Pending == nil || r.Pending.Phase != "registering" || r.Pending.Action != "ports" {
 					t.Fatalf("port change not durably initiated: %+v %v", r, err)
 				}
 				if err := b.SetEnvVars(t.Context(), "unrelated", map[string]string{"PLAIN": "value"}); err != nil {
@@ -646,8 +646,8 @@ func TestPublicPortTransientFailureIsNotRejected(t *testing.T) {
 		t.Run(map[bool]string{false: "ensure", true: "delete"}[remove], func(t *testing.T) {
 			f := newFakeNomad(t)
 			b := fakeBackend(t, f, nil)
-			importFake(t, b, runtimeSpec("runtime", ""))
-			deployFake(t, b, "runtime", "")
+			importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+			deployFake(t, b, "runtime", "volume")
 			if remove {
 				if err := b.EnsurePublicPort(t.Context(), "runtime", infra.PublicPort{Port: 18080, TargetPort: 8080, Protocol: "tcp", IPType: "IPV4"}); err != nil {
 					t.Fatal(err)
@@ -857,7 +857,11 @@ func TestFailedPendingOperationIsSuperseded(t *testing.T) {
 				t.Fatal(err)
 			}
 			r, err = b.require(t.Context(), "runtime")
-			if err != nil || r.Pending.Phase != "stopping" || r.Pending.Issued.Equal(oldIssued) {
+			wantPhase := "registering"
+			if action == "start" || action == "restart" {
+				wantPhase = "stopping"
+			}
+			if err != nil || r.Pending.Phase != wantPhase || r.Pending.Issued.Equal(oldIssued) {
 				t.Fatalf("failed operation was not superseded: %+v %v", r, err)
 			}
 			if op.ID == "" {
@@ -887,7 +891,15 @@ func TestFailedOperationDoesNotTrustObsoleteVersionAllocations(t *testing.T) {
 	job := f.jobs[fakeKey("default", "runtime")]
 	currentVersion := fakeInt(job.row, "Version") + 1
 	job.row["Version"] = currentVersion
+	job.deployment["JobVersion"] = currentVersion
+	job.deployment["Status"] = "running"
 	f.mu.Unlock()
+	// Keep the failed receipt scoped to the current job. Changing only the
+	// scheduler version would be a superseded/reverted operation, not recovery.
+	r.Pending.JobVersion = uint64(currentVersion)
+	if err := b.save(t.Context(), r); err != nil {
+		t.Fatal(err)
+	}
 	s, err := b.GetService(t.Context(), "runtime")
 	if err != nil || s.Status != infra.StatusFailed {
 		t.Fatalf("obsolete running allocation masked failure: %+v %v", s, err)
@@ -898,6 +910,7 @@ func TestFailedOperationDoesNotTrustObsoleteVersionAllocations(t *testing.T) {
 			a.row["JobVersion"] = currentVersion
 		}
 	}
+	job.deployment["Status"] = "successful"
 	f.mu.Unlock()
 	s, err = b.GetService(t.Context(), "runtime")
 	if err != nil || s.Status != infra.StatusRunning {

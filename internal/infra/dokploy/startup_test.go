@@ -105,6 +105,23 @@ func (s *startupFixture) setTasks(t *testing.T, desired, current, detail string)
 	}
 }
 
+func TestStartupFixtureCleanupRetiresDeploymentReservations(t *testing.T) {
+	var url string
+	t.Run("previousServer", func(t *testing.T) {
+		s := newStartupFixture(t, "deploy", 1)
+		url = s.api.server.URL
+		server := s.backend.deploymentServer()
+		if len(server.reservations) == 0 {
+			t.Fatal("fixture must leave a deployment reservation to exercise cleanup")
+		}
+	})
+	// A later httptest server can receive this exact URL and reuse the fake's
+	// application IDs. Its admission state must not inherit this server's claim.
+	if _, exists := deploymentServers.Load(url); exists {
+		t.Fatal("closed fake server retained deployment reservations")
+	}
+}
+
 func TestStartupBoundFailsNonReadyTasksAfterFifteenMinutes(t *testing.T) {
 	for _, action := range []string{"deploy", "start", "restart"} {
 		t.Run(action, func(t *testing.T) {
@@ -158,7 +175,7 @@ func TestStartupDeployDeadlineUsesCorrelatedFinishedAt(t *testing.T) {
 	}
 }
 
-func TestStartupQueuedAndRunningBuildsDoNotUseIssueDeadline(t *testing.T) {
+func TestStartupQueuedAndRunningBuildsHaveSeparateProgressDeadline(t *testing.T) {
 	for _, build := range []string{"queued", "running", "onlyPreviousDone"} {
 		t.Run(build, func(t *testing.T) {
 			s := newStartupFixture(t, "deploy", 1)
@@ -181,8 +198,8 @@ func TestStartupQueuedAndRunningBuildsDoNotUseIssueDeadline(t *testing.T) {
 			s.api.mu.Unlock()
 			s.clock = s.issued.Add(24 * time.Hour)
 			state, err := s.backend.OpStatus(t.Context(), roundTripOp(t, s.op))
-			if err != nil || state.Done || state.Failed {
-				t.Fatalf("%s build cannot start a task deadline: %+v %v", build, state, err)
+			if err != nil || state.Done || !state.Failed || state.Status != "stalled" {
+				t.Fatalf("%s build must have an actionable bounded progress failure, not a task deadline: %+v %v", build, state, err)
 			}
 		})
 	}

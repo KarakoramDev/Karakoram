@@ -17,6 +17,7 @@ import (
 )
 
 const taskStartupWindow = 15 * time.Minute
+const buildProgressWindow = 6 * time.Hour
 
 func (b *Backend) nowTime() time.Time {
 	if b.now != nil {
@@ -43,6 +44,36 @@ type operation struct {
 	Issued              time.Time         `json:"issued"`
 	Node                string            `json:"node,omitempty"`
 	Services            map[string]string `json:"services,omitempty"`
+	Failed              bool              `json:"failed,omitempty"`
+	WriterFenced        bool              `json:"writerFenced,omitempty"`
+	Digest              string            `json:"digest,omitempty"`
+	Uncertain           bool              `json:"uncertain,omitempty"`
+	ServiceIdentity     string            `json:"serviceIdentity,omitempty"`
+	RestoreUpdateConfig json.RawMessage   `json:"restoreUpdateConfig,omitempty"`
+	Specification       string            `json:"specification,omitempty"`
+}
+
+// UnmarshalJSON migrates journals and opaque handles written before exact
+// rollout-policy preservation. The legacy flag meant this specific policy;
+// newly written operations carry only the explicit original configuration.
+func (o *operation) UnmarshalJSON(data []byte) error {
+	type operationJSON operation
+	var wire struct {
+		operationJSON
+		RestoreStartFirst bool `json:"restoreStartFirst"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	*o = operation(wire.operationJSON)
+	if wire.RestoreStartFirst && len(o.RestoreUpdateConfig) == 0 {
+		o.RestoreUpdateConfig = json.RawMessage(`{"Parallelism":1,"Order":"start-first","FailureAction":"continue"}`)
+	}
+	return nil
+}
+
+func terminalEndpointRepair(o *operation) bool {
+	return o != nil && o.Action == "endpoint-repair" && o.Failed && !o.Uncertain
 }
 
 func encodeOp(o operation) infra.Op {
@@ -74,7 +105,7 @@ func decodeOp(op infra.Op) (operation, error) {
 		return o, reject("invalid Dokploy operation handle")
 	}
 	switch o.Action {
-	case "deploy", "start", "stop", "restart", "delete", "wipe":
+	case "deploy", "start", "stop", "restart", "scale", "delete", "wipe", "endpoint-repair":
 	default:
 		return o, reject("unknown Dokploy operation action")
 	}
@@ -120,7 +151,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if d.Runtime.Base != infra.BaseUbuntu2404 {
 		return infra.Op{}, reject("unsupported runtime base")
 	}
-	b.mu.Lock()
+	if err := b.mu.Lock(ctx); err != nil {
+		return infra.Op{}, err
+	}
 	defer b.mu.Unlock()
 	a, m, err := b.require(ctx, hostname)
 	if err != nil {
@@ -132,6 +165,23 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if d.Runtime.Volume != m.Volume {
 		return infra.Op{}, reject("deployment volume differs from imported service volume")
 	}
+	zipPath, digest, err := renderDeployment(d)
+	if err != nil {
+		return infra.Op{}, err
+	}
+	defer os.Remove(zipPath)
+	if m.Pending != nil && m.Pending.Action == "deploy" && m.Pending.Digest == digest && (!m.Pending.Failed || m.Pending.Uncertain) {
+		return encodeOp(*m.Pending), nil
+	}
+	if err = b.mutationReady(ctx, a, &m); err != nil {
+		return infra.Op{}, err
+	}
+	releaseSlot, err := b.deploymentSlot(ctx, a.ID)
+	if err != nil {
+		return infra.Op{}, err
+	}
+	submitted := false
+	defer func() { releaseSlot(submitted) }()
 	if err = b.ensureNetwork(ctx); err != nil {
 		return infra.Op{}, err
 	}
@@ -139,11 +189,6 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if err != nil {
 		return infra.Op{}, err
 	}
-	zipPath, err := renderDeployment(d)
-	if err != nil {
-		return infra.Op{}, err
-	}
-	defer os.Remove(zipPath)
 	m.HTTPPorts = nil
 	for _, p := range d.Runtime.Ports {
 		if p.HTTP {
@@ -162,32 +207,59 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	settings["networkSwarm"] = b.serviceNetworks(m)
 	settings["createEnvFile"] = false
 	settings["replicas"] = m.Max
-	settings["updateConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": "stop-first", "FailureAction": "continue"}
-	settings["rollbackConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": "stop-first", "FailureAction": "continue"}
+	order := "stop-first"
+	if m.Volume == "" && (len(d.Runtime.Args) == 0 || d.Runtime.Args[0] != "relay") {
+		order = "start-first"
+	}
+	settings["updateConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
+	settings["rollbackConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
 	settings["stopGracePeriodSwarm"] = int64(120 * time.Second)
 	settings["ulimitsSwarm"] = []map[string]any{{"Name": "nofile", "Soft": 65535, "Hard": 65535}}
 	settings["restartPolicySwarm"] = map[string]any{"Condition": "any"}
-	settings["labelsSwarm"] = map[string]string{"karakoram.managed": "true", "karakoram.hostname": hostname, "karakoram.kind": string(m.Kind), "karakoram.owner": m.Vars["KARAKORAM_OWNER"]}
+	settings["labelsSwarm"] = map[string]string{"karakoram.managed": "true", "karakoram.hostname": hostname, "karakoram.kind": string(m.Kind), "karakoram.owner": m.Vars["KARAKORAM_OWNER"], "karakoram.environment": b.target.ID, "karakoram.application": a.ID}
 	if id := b.target.Config["registryId"]; id != "" {
 		settings["registryId"] = id
 	}
 	if m.Node != "" {
 		settings["placementSwarm"] = map[string]any{"Constraints": []string{"node.hostname==" + m.Node}}
 	}
-	if err = b.update(ctx, a, m, settings); err != nil {
+	m.Desired = "running"
+	o.WriterFenced = true
+	m.DeploymentDigest = digest
+	o.Specification, err = b.applicationSpecification(ctx, a.ID, settings, digest)
+	if err != nil {
 		return infra.Op{}, err
 	}
-	o.Issued = b.nowTime().UTC()
+	o.Digest = digest
+	m.Pending = &o
+	if err = b.update(ctx, a, m, settings); err != nil {
+		return encodeOp(o), err
+	}
+	submitted = true
 	if err = b.c.upload(ctx, a.ID, zipPath); err != nil {
-		return infra.Op{}, err
+		if enqueueRefused(err) {
+			// An authoritative refusal did not enqueue a build. Retire only this
+			// attempt under target exclusion; transport/5xx ambiguity stays fenced.
+			m.Pending = nil
+			submitted = false
+			if saveErr := b.update(ctx, a, m, nil); saveErr != nil {
+				return encodeOp(o), errors.Join(err, saveErr)
+			}
+			return infra.Op{}, err
+		}
+		return encodeOp(o), err
 	}
 	m.Deployed = true
 	if err = b.update(ctx, a, m, nil); err != nil {
-		return infra.Op{}, err
+		return encodeOp(o), err
 	}
 	return encodeOp(o), nil
 }
 func (b *Backend) action(ctx context.Context, hostname, action string) (infra.Op, error) {
+	if err := b.mu.Lock(ctx); err != nil {
+		return infra.Op{}, err
+	}
+	defer b.mu.Unlock()
 	a, m, err := b.require(ctx, hostname)
 	if err != nil {
 		return infra.Op{}, err
@@ -195,18 +267,49 @@ func (b *Backend) action(ctx context.Context, hostname, action string) (infra.Op
 	if m.Kind != infra.KindRuntime {
 		return infra.Op{}, reject("volume holders cannot be started or stopped")
 	}
-	if !m.Deployed {
+	if !m.Deployed && m.Pending == nil {
 		return infra.Op{}, reject("service has not been deployed")
+	}
+	if action == "stop" {
+		m.Desired = "stopped"
+		if err = b.update(ctx, a, m, nil); err != nil {
+			return infra.Op{}, err
+		}
+	}
+	if err = b.mutationReady(ctx, a, &m); err != nil {
+		return infra.Op{}, err
+	}
+	if action != "stop" {
+		m.Desired = "running"
+		if err = b.checkStorage(ctx, *a, m); err != nil {
+			return infra.Op{}, err
+		}
 	}
 	o, err := b.operation(ctx, a, m, action)
 	if err != nil {
 		return infra.Op{}, err
+	}
+	var settings map[string]any
+	if m.Pending != nil && len(m.Pending.RestoreUpdateConfig) > 0 {
+		// Restore saved policy before replacing the pending operation. This
+		// also survives Stop followed by Start after backend reconstruction.
+		settings = map[string]any{"updateConfigSwarm": m.Pending.RestoreUpdateConfig}
+	}
+	if action == "start" || action == "restart" {
+		o.Specification, err = b.applicationSpecification(ctx, a.ID, settings, m.DeploymentDigest)
+		if err != nil {
+			return infra.Op{}, err
+		}
 	}
 	proc := action
 	body := map[string]any{"applicationId": a.ID}
 	if action == "restart" || action == "start" {
 		proc = "reload"
 		body["appName"] = a.AppName
+	}
+	m.Pending = &o
+	if err = b.update(ctx, a, m, settings); err != nil {
+		return infra.Op{}, err
 	}
 	if err = b.c.post(ctx, "application."+proc, body, nil); err != nil {
 		return infra.Op{}, err
@@ -231,6 +334,62 @@ func contains(xs []string, s string) bool {
 	return false
 }
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if err := b.mu.Lock(ctx); err != nil {
+		return infra.OpState{}, err
+	}
+	defer b.mu.Unlock()
+	return b.pollOperation(ctx, op)
+}
+
+func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	state, err := b.opStatus(ctx, op)
+	if err != nil || state.Expired || !state.Done && !state.Failed || op.ID == "" {
+		return state, err
+	}
+	o, err := decodeOp(op)
+	if err != nil || o.Action == "import" || o.Action == "wipe" || o.Action == "delete" {
+		return state, err
+	}
+	var a application
+	if err = b.c.get(ctx, "application.one", map[string]string{"applicationId": o.AppID}, &a); err != nil {
+		return state, err
+	}
+	m, ok := parseMetadata(a.Description)
+	if !ok || !sameOperation(m.Pending, o) {
+		return state, nil
+	}
+	if state.Failed {
+		m.Pending.Failed = true
+		m.Pending.Uncertain = state.Status == "stalled"
+	} else {
+		m.Pending = nil
+		if o.Action != "stop" && o.Specification != "" {
+			m.AppliedSpecification = o.Specification
+		}
+		m.MutationUntil = time.Time{}
+		if o.Action == "deploy" {
+			m.Deployed = true
+			m.WriterFenced = o.WriterFenced
+		}
+		if o.Action != "stop" {
+			service, err := b.inspectService(ctx, a.AppName)
+			if err != nil {
+				return state, err
+			}
+			if service != nil && b.ownsService(a, m, service) {
+				m.Image = service.Spec.TaskTemplate.ContainerSpec.Image
+			}
+		}
+	}
+	var settings map[string]any
+	if len(o.RestoreUpdateConfig) > 0 {
+		// This changes saved policy only; do not reload the healthy tasks.
+		settings = map[string]any{"updateConfigSwarm": o.RestoreUpdateConfig}
+	}
+	return state, b.update(ctx, &a, m, settings)
+}
+
+func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
 	if op.ID == "" {
 		return infra.OpState{Done: true, Status: "done"}, nil
 	}
@@ -242,7 +401,8 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		state := infra.OpState{Done: true, Status: "done"}
 		for _, id := range o.Services {
 			state.ServiceIDs = append(state.ServiceIDs, id)
-			err := b.c.get(ctx, "application.one", map[string]string{"applicationId": id}, nil)
+			var imported application
+			err := b.c.get(ctx, "application.one", map[string]string{"applicationId": id}, &imported)
 			if errors.Is(err, infra.ErrNotFound) {
 				state.Expired = true
 				state.Status = "expired"
@@ -251,6 +411,11 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 			if err != nil {
 				return infra.OpState{}, err
 			}
+			if m, ok := parseMetadata(imported.Description); ok && m.Importing {
+				state.Done = false
+				state.Status = "importing"
+				state.Message = "application creation is recorded but import setup is incomplete; resume the original import specifications"
+			}
 		}
 		return state, nil
 	}
@@ -258,6 +423,9 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	var a application
 	err = b.c.get(ctx, "application.one", map[string]string{"applicationId": o.AppID}, &a)
 	if errors.Is(err, infra.ErrNotFound) {
+		if err := b.retireDeployment(ctx, o.AppID); err != nil {
+			return state, err
+		}
 		if o.Action == "delete" || o.Action == "wipe" {
 			ts, e := b.tasks(ctx, o.AppName)
 			if e != nil {
@@ -271,6 +439,7 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 			if o.Action == "wipe" {
 				return b.finishWipe(ctx, o, state)
 			}
+			b.forgetDeleted(o.Hostname, o.AppID)
 			state.Done = true
 			state.Status = "done"
 			return state, nil
@@ -283,6 +452,26 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if err != nil {
 		return state, err
 	}
+	if m, ok := parseMetadata(a.Description); ok && m.Pending != nil && !sameOperation(m.Pending, o) {
+		state.Expired = true
+		state.Status = "expired"
+		return state, nil
+	}
+	if m, ok := parseMetadata(a.Description); ok && m.Desired != "" &&
+		(o.Action == "delete" && m.Desired != "deleting" || o.Action == "stop" && m.Desired != "stopped") {
+		state.Expired = true
+		state.Status = "expired"
+		return state, nil
+	}
+	if o.Action == "delete" {
+		m, ok := parseMetadata(a.Description)
+		if !ok {
+			return state, restoreConflict("delete ownership metadata is unavailable")
+		}
+		if err := b.ensureDeleteStopped(ctx, &a, &m, o); err != nil {
+			return state, err
+		}
+	}
 	ts, err := b.tasks(ctx, o.AppName)
 	if err != nil {
 		return state, err
@@ -292,12 +481,14 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	}
 	if o.Action == "delete" {
 		if runningTasks(ts) {
+			return b.agedShutdown(ctx, o, a, ts, state)
+		}
+		if m, ok := parseMetadata(a.Description); ok && m.DeleteRemoval != nil && m.DeleteRemoval.Attempted {
+			state.Message = "escalated removal already submitted; awaiting observed application and task absence without replay"
 			return state, nil
 		}
 		if err = b.c.post(ctx, "application.delete", map[string]any{"applicationId": o.AppID}, nil); err != nil {
 			if errors.Is(err, infra.ErrNotFound) {
-				state.Done = true
-				state.Status = "done"
 				return state, nil
 			}
 			return state, err
@@ -307,7 +498,7 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if o.Action == "stop" {
 		for _, t := range ts {
 			if strings.EqualFold(t.State, "running") || strings.HasPrefix(strings.ToLower(t.CurrentState), "running") {
-				return state, nil
+				return b.agedShutdown(ctx, o, a, ts, state)
 			}
 		}
 		state.Done = true
@@ -334,6 +525,19 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 				finishedAt = ds[0].FinishedAt
 			}
 		}
+		if !deploymentDone {
+			state.Status = "queued"
+			state.Message = "deployment attempt has no new build receipt; inspect Dokploy's queue before retrying; the upload must not be duplicated"
+			if found {
+				state.Status = "building"
+				state.Message = "Dokploy build is still running; inspect its deployment logs"
+			}
+			if !b.nowTime().Before(o.Issued.Add(buildProgressWindow)) {
+				state.Failed = true
+				state.Status = "stalled"
+				state.Message = "Dokploy deployment made no terminal progress within 6 hours; inspect and resolve the queue/build before retrying; automatic resubmission is refused because the original attempt may still commit"
+			}
+		}
 	}
 	ready := 0
 	for _, t := range ts {
@@ -350,8 +554,8 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		state.Status = "done"
 		return state, nil
 	}
-	// Dokploy serializes builds across applications. Only completed builds
-	// start the deployment startup window; queue/build time remains unbounded.
+	// Serialized builds have their own generous progress bound; task startup
+	// still starts only at the correlated build's successful finish timestamp.
 	if deploymentDone {
 		started := o.Issued
 		if o.Action == "deploy" {

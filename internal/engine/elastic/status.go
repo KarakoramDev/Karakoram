@@ -5,9 +5,13 @@ package elastic
 
 import (
 	"context"
+	"errors"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -73,6 +77,11 @@ func (p *Provider) observedConnection(ctx context.Context, rc *engine.Context, s
 	if err != nil {
 		return v, err
 	}
+	return p.connectionWithProject(ctx, rc, s, project)
+}
+
+func (p *Provider) connectionWithProject(ctx context.Context, rc *engine.Context, s *state, project infra.Project) (domain.Connection, error) {
+	v := connection(rc.Cluster, s)
 	for _, m := range s.members(kindNode) {
 		if m.PublicPort > 0 && !m.Removing {
 			ip := project.PublicIPv6
@@ -104,12 +113,19 @@ func (p *Provider) observedConnection(ctx context.Context, rc *engine.Context, s
 }
 
 // Status combines Elasticsearch health, member agents and infrastructure placement.
-func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.ClusterStatus, error) {
+func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
+	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return domain.ClusterStatus{}, err
 	}
+	defer func() {
+		statusErr = errors.Join(statusErr, engine.ApplyInitialDataSourceStatus(p, rc.Cluster, &status))
+	}()
 	v := domain.ClusterStatus{Phase: phase(s), Version: rc.Cluster.Spec.Version, ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}}
+	if v.Phase == domain.PhaseUpdating {
+		v.Message = rc.SyncWait
+	}
 	condition := func(kind string, ok bool, reason, message string) {
 		value := "False"
 		if ok {
@@ -159,8 +175,78 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			v.Message += "; waiting for a scheduled platform retry"
 		}
 	}
-	if v.Connection, err = p.observedConnection(ctx, rc, s); err != nil {
+	type instanceObservation struct {
+		instance string
+		status   agentapi.Status
+	}
+	type memberObservation struct {
+		status           agentapi.Status
+		err              error
+		at               time.Time
+		componentReady   bool
+		componentMessage string
+		componentErr     error
+		componentAt      time.Time
+		instances        []instanceObservation
+	}
+	samples := make([]memberObservation, len(s.Members))
+	memberNames := make([]string, len(s.Members))
+	for i, m := range s.Members {
+		memberNames[i] = m.Name
+	}
+	var inventory engine.PlatformObservation
+	var native nativeObservation
+	var memberNative map[string]nativeObservation
+	inventoryReady := make(chan struct{})
+	var probes sync.WaitGroup
+	probes.Go(func() {
+		inventory = engine.ObservePlatform(ctx, rc.Backend, rc.Cluster.Name, memberNames)
+		close(inventoryReady)
+	})
+	if !s.Suspended {
+		probes.Go(func() {
+			native, memberNative = p.observeNative(ctx, rc, s)
+		})
+		for i, m := range s.Members {
+			probes.Go(func() {
+				probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+				defer cancel()
+				a, err := p.agentClient(probe, rc, m.Name)
+				if err != nil {
+					samples[i].err = err
+				} else {
+					samples[i].status, samples[i].err = a.Status(probe)
+					a.Close()
+					samples[i].at = now(rc)
+				}
+			})
+			if !isES(m) {
+				probes.Go(func() {
+					<-inventoryReady
+					probe, cancel := context.WithTimeout(ctx, 2*time.Second)
+					defer cancel()
+					var mu sync.Mutex
+					observe := func(instance string, status agentapi.Status) {
+						mu.Lock()
+						samples[i].instances = append(samples[i].instances, instanceObservation{instance: instance, status: status})
+						mu.Unlock()
+					}
+					samples[i].componentReady, samples[i].componentMessage, samples[i].componentErr = componentInstancesObservation(probe, rc, m, []engine.InstanceInventory{inventory.Members[i]}, observe)
+					samples[i].componentAt = now(rc)
+				})
+			}
+		}
+	}
+	probes.Wait()
+	if inventory.ProjectErr != nil {
+		return v, inventory.ProjectErr
+	}
+	if v.Connection, err = p.connectionWithProject(ctx, rc, s, inventory.Project); err != nil {
 		return v, err
+	}
+	services := make(map[string]infra.Service, len(inventory.Services))
+	for _, service := range inventory.Services {
+		services[service.Hostname] = service
 	}
 	nodes := map[string]esapi.Node{}
 	master := ""
@@ -168,11 +254,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	if s.Suspended {
 		condition("ClusterHealth", false, "Suspended", "Elasticsearch is suspended; runtime health is not observed")
 		v.Message = "Runtime suspended; members and agents are not running"
-	} else if c, e := p.es(ctx, rc, s); e == nil {
-		defer c.Close()
-		h, e := c.Health(ctx, esapi.HealthOptions{})
+	} else if native.err == nil {
+		h, e := native.health, native.healthErr
 		if e == nil {
-			healthy, e = healthAcceptable(ctx, c, h, rc.Cluster.Spec.Components.Engine.Replicas)
+			healthy, e = native.acceptable, native.checkErr
 			message := "Elasticsearch shard health: " + h.Status
 			switch h.Status {
 			case "yellow":
@@ -187,20 +272,71 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		} else {
 			condition("ClusterHealth", false, "Unreachable", "Elasticsearch is unreachable")
 		}
-		observed, e := c.Nodes(ctx)
-		if e == nil {
-			for _, node := range observed {
-				nodes[node.Name] = node
+		blocks, blockErr := native.blocks, native.blockErr
+		switch {
+		case blockErr != nil:
+			healthy = false
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "IndexWriteBlocked", Status: "Unknown", Reason: "ObservationFailed", Message: "Unable to inspect index write blocks; verify Elasticsearch access and index settings", LastTransitionTime: now(rc)})
+			if v.Message == "" {
+				v.Message = "Index write-block observation unavailable"
 			}
+		case len(blocks) > 0:
+			healthy = false
+			message := "Writes blocked on indices: " + strings.Join(blocks, ", ") + ". For read_only_allow_delete, free disk space or add capacity below the high watermark; Elasticsearch automatically releases flood-stage blocks. Review operator-set read_only/write blocks before removing them."
+			condition("IndexWriteBlocked", true, "NativeIndexBlock", message)
+			v.Message = message
+		default:
+			condition("IndexWriteBlocked", false, "NoWriteBlocks", "No native index write blocks observed")
 		}
-		master, _ = c.MasterNode(ctx)
+		for _, node := range native.nodes {
+			nodes[node.Name] = node
+		}
+		master = native.master
 	} else {
 		condition("ClusterHealth", false, "Unreachable", "Elasticsearch is not yet reachable")
 	}
+	nativeMessage := ""
+	if !s.Suspended {
+		var unavailable []string
+		for _, probe := range []struct {
+			name string
+			err  error
+		}{
+			{"native access", native.err},
+			{"cluster health", native.healthErr},
+			{"shard availability", native.checkErr},
+			{"node membership (/_nodes)", native.nodesErr},
+			{"elected master (/_cat/master)", native.masterErr},
+		} {
+			if probe.err != nil {
+				unavailable = append(unavailable, probe.name)
+			}
+		}
+		if len(unavailable) > 0 {
+			healthy = false
+			nativeMessage = "Elasticsearch observation unavailable: " + strings.Join(unavailable, ", ") + "; inspect native API access, member process health and connectivity; restore observations before maintenance"
+			for i := range v.Conditions {
+				if v.Conditions[i].Type == "ClusterHealth" {
+					if v.Conditions[i].Status == "True" || native.err != nil || native.healthErr != nil || native.checkErr != nil {
+						v.Conditions[i].Status = "Unknown"
+					}
+					v.Conditions[i].Reason = "ObservationUnavailable"
+					v.Conditions[i].Message = nativeMessage
+				}
+			}
+			if v.Message != "" {
+				v.Message += "; "
+			}
+			v.Message += nativeMessage
+		}
+	}
 	componentsReady := !s.Suspended
 	componentMessages := []string{}
+	pressureMessages := []string{}
+	evidenceUnavailableMessages := []string{}
+	heapMessages := []string{}
 	allReady := healthy
-	for _, m := range s.Members {
+	for i, m := range s.Members {
 		ms := domain.MemberStatus{Name: m.Name, Role: m.Kind, Version: m.Version, State: "absent"}
 		if isES(m) {
 			if m.Kind == kindMaster {
@@ -224,39 +360,72 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ms.State = "suspended"
 			ms.Health = false
 			ms.Agent.Message = "Runtime suspended; member agent is not running"
-		} else if a, e := p.agentClient(ctx, rc, m.Name); e == nil {
-			status, e := a.Status(ctx)
+		} else {
+			status, e := samples[i].status, samples[i].err
 			if e == nil {
 				allocated = status.Resources
-				ms.Agent = domain.AgentStatus{Healthy: strings.EqualFold(status.Processes[product(m)].State, "running"), ConfigVersion: status.ConfigVersion, LastSeen: now(rc)}
+				ms.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: status.ConfigVersion, LastSeen: samples[i].at}
 				ms.Uptime = status.UptimeSeconds
 				ms.DiskUsage = float64(status.Disk.UsedBytes)
 				ms.PlacementGroup = status.HostFingerprint
 				if !isES(m) {
 					ms.Version = status.EngineVersion
-					ms.Health, ms.Agent.Message, _ = componentReadiness(ctx, a, m)
-					ms.Health = ms.Health && ms.Agent.Healthy
-					if ms.Health {
-						ms.State = "joined"
-					}
 				}
 			} else {
 				ms.Agent.Message = "Member status unavailable"
 			}
-			a.Close()
-		} else {
-			ms.Agent.Message = "Member agent unreachable"
+			if isES(m) {
+				ms.Health = ms.Health && strings.EqualFold(samples[i].status.Processes[product(m)].State, "running")
+			}
+			if len(samples[i].instances) > 0 {
+				ms.Agent.Healthy = true
+				ms.Agent.LastSeen = samples[i].componentAt
+			}
 		}
-		if service, e := rc.Backend.GetService(ctx, m.Name); e == nil && service != nil {
+		memberMessage := nativeMessage
+		if local, ok := memberNative[m.Name]; ok && local.failed() {
+			if local.err != nil || local.nodesErr != nil {
+				ms.State = "unknown"
+			}
+			memberMessage = "Elasticsearch native observation unavailable for " + m.Name + "; inspect its JVM for a paused/stopped process and verify port 9200; restore native responses before maintenance"
+			v.Conditions = append(v.Conditions, domain.Condition{Type: "NativeObservation/" + m.Name, Status: "Unknown", Reason: "ObservationUnavailable", Message: memberMessage, LastTransitionTime: now(rc)})
+		}
+		if isES(m) && memberMessage != "" {
+			ms.Health = false
+			if ms.Agent.Message != "" {
+				ms.Agent.Message += "; "
+			}
+			ms.Agent.Message += memberMessage
+		}
+		if !isES(m) && !s.Suspended {
+			ms.Health, ms.Agent.Message = samples[i].componentReady, samples[i].componentMessage
+			var heap *componentHeapExhausted
+			if errors.As(samples[i].componentErr, &heap) {
+				heapMessages = append(heapMessages, m.Name+": "+samples[i].componentMessage)
+			}
+			var pressure *componentMemoryPressure
+			if errors.As(samples[i].componentErr, &pressure) {
+				pressureMessages = append(pressureMessages, m.Name+": "+samples[i].componentMessage)
+			}
+			var unavailable *componentMemoryEvidenceUnavailable
+			if errors.As(samples[i].componentErr, &unavailable) {
+				evidenceUnavailableMessages = append(evidenceUnavailableMessages, m.Name+": "+samples[i].componentMessage)
+			}
+			if ms.Health {
+				ms.Agent.LastSeen = samples[i].componentAt
+				ms.State = "joined"
+			}
+		}
+		if service, ok := services[m.Name]; ok {
 			resources := service.Resources
 			ms.Autoscaling = &resources
 		}
-		containers, e := rc.Backend.Containers(ctx, m.Name)
+		containers, e := inventory.Members[i].Containers, inventory.Members[i].Err
 		if e != nil || len(containers) == 0 {
 			ms.Health = false
 		} else {
 			for _, container := range containers {
-				if !strings.EqualFold(container.Status, infra.ContainerActive) && !strings.EqualFold(container.Status, infra.ContainerRunning) {
+				if isES(m) && !strings.EqualFold(container.Status, infra.ContainerActive) && !strings.EqualFold(container.Status, infra.ContainerRunning) {
 					ms.Health = false
 				}
 				if ms.PlacementGroup == "" && rc.Backend.Capabilities().Placement {
@@ -272,6 +441,13 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				ms.State = "removing"
 			}
 			ms.Health = false
+		}
+		engine.ApplyAgentDiagnostic(&ms, samples[i].status.Error)
+		if !s.Suspended {
+			v.Conditions = append(v.Conditions, engine.ApplyProcessDiagnostics(&ms, samples[i].status.Processes, "", samples[i].at)...)
+			for _, instance := range samples[i].instances {
+				v.Conditions = append(v.Conditions, engine.ApplyProcessDiagnostics(&ms, instance.status.Processes, instance.instance, samples[i].componentAt)...)
+			}
 		}
 		if !isES(m) {
 			componentsReady = componentsReady && ms.Health
@@ -293,15 +469,33 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	}
 	componentMessage := strings.Join(componentMessages, "; ")
 	condition("ComponentsReady", componentsReady, "ComponentReadiness", componentMessage)
+	if len(pressureMessages) > 0 {
+		condition("MemoryPressure", true, "CgroupMemoryPressure", strings.Join(pressureMessages, "; "))
+	} else if len(evidenceUnavailableMessages) > 0 {
+		v.Conditions = append(v.Conditions, domain.Condition{Type: "MemoryPressure", Status: "Unknown", Reason: "CgroupMemoryEvidenceUnavailable", Message: strings.Join(evidenceUnavailableMessages, "; "), LastTransitionTime: now(rc)})
+	}
+	if len(heapMessages) > 0 {
+		condition("KibanaHeapExhausted", true, "HeapExhausted", strings.Join(heapMessages, "; "))
+	}
+	if message := kibanaMinimumRAMMessage(rc.Cluster.Spec); message != "" {
+		condition("KibanaResources", false, "BelowMinimumRAM", message)
+	}
 	if !componentsReady && v.Message == "" {
 		v.Message = componentMessage
 	}
 	if v.Phase == domain.PhaseReady && !allReady {
 		v.Phase = domain.PhaseDegraded
 	}
-	v.Placement, err = p.Placement(ctx, rc)
-	if err != nil {
-		return v, err
+	v.Placement = domain.Placement{Warning: "Infrastructure placement is best effort; independent failure domains are not guaranteed", Groups: map[string][]string{}}
+	for i, m := range s.Members {
+		if m.Stage == stagePlanned || inventory.Members[i].Err != nil {
+			continue
+		}
+		for _, container := range inventory.Members[i].Containers {
+			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
+				v.Placement.Groups[container.PlacementGroup] = append(v.Placement.Groups[container.PlacementGroup], m.Name)
+			}
+		}
 	}
 	if rc.Store != nil {
 		backups, e := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
@@ -314,6 +508,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 				v.Backup.LastBackup = &at
 			}
 		}
+	}
+	for _, m := range s.Members {
+		engine.ApplyRuntimeRecoveryStatus(&v, m.Name, m.Volume, m.RuntimeRecovery, now(rc))
 	}
 	return v, nil
 }
@@ -475,3 +672,117 @@ func (*Provider) PITRWindow(context.Context, *engine.Context) ([]domain.TimeWind
 }
 
 var _ engine.DataPlane = (*Provider)(nil)
+
+type nativeObservation struct {
+	err                 error
+	health              esapi.Health
+	healthErr, checkErr error
+	acceptable          bool
+	blocks              []string
+	blockErr            error
+	nodes               []esapi.Node
+	master              string
+	nodesErr, masterErr error
+}
+
+func (o nativeObservation) failed() bool {
+	return o.err != nil || o.healthErr != nil || o.checkErr != nil || o.blockErr != nil || o.nodesErr != nil || o.masterErr != nil
+}
+
+// Probe endpoints independently, never replaying a mutation or waiting for a
+// paused peer's /_nodes fan-out. Leave time inside the sweep for projection.
+func (p *Provider) observeNative(ctx context.Context, rc *engine.Context, s *state) (nativeObservation, map[string]nativeObservation) {
+	cfg, err := p.esConfig(ctx, rc, s)
+	if err != nil {
+		return nativeObservation{err: err}, nil
+	}
+	members := slices.DeleteFunc(s.esNodes(), func(m *member) bool {
+		return m.Stage != stageDeployed && m.Stage != stageJoined && !m.Removing
+	})
+	samples := make([]nativeObservation, len(members))
+	var probes sync.WaitGroup
+	for i, m := range members {
+		probes.Go(func() {
+			probe, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			memberConfig := cfg
+			memberConfig.Endpoints = []string{"https://" + m.Name + ":9200"}
+			memberConfig.Timeout = 2 * time.Second
+			c, err := esapi.New(memberConfig)
+			if err != nil {
+				samples[i].err = err
+				return
+			}
+			defer c.Close()
+			samples[i] = observeNativeEndpoint(probe, c, rc.Cluster.Spec.Components.Engine.Replicas)
+		})
+	}
+	probes.Wait()
+	out := nativeObservation{err: errWaiting, healthErr: errWaiting, checkErr: errWaiting, blockErr: errWaiting, nodesErr: errWaiting, masterErr: errWaiting}
+	byMember := make(map[string]nativeObservation, len(members))
+	for i, m := range members {
+		sample := samples[i]
+		byMember[m.Name] = sample
+		if sample.err != nil {
+			continue
+		}
+		out.err = nil
+		if sample.healthErr == nil {
+			if out.healthErr != nil {
+				out.health, out.healthErr = sample.health, nil
+				out.acceptable, out.checkErr = sample.acceptable, sample.checkErr
+			} else {
+				// Never let a later green sample overwrite observed red/yellow.
+				rank := func(health string) int {
+					switch health {
+					case "green":
+						return 2
+					case "yellow":
+						return 1
+					default:
+						return 0
+					}
+				}
+				if rank(sample.health.Status) < rank(out.health.Status) {
+					out.health = sample.health
+				}
+				out.acceptable = out.acceptable && sample.acceptable
+				out.checkErr = errors.Join(out.checkErr, sample.checkErr)
+			}
+		}
+		if sample.blockErr == nil {
+			out.blocks = append(out.blocks, sample.blocks...)
+			out.blockErr = nil
+		}
+		if sample.masterErr == nil {
+			out.master, out.masterErr = sample.master, nil
+		}
+		if sample.nodesErr == nil {
+			out.nodesErr = nil
+			for _, node := range sample.nodes {
+				if node.Name == m.Name {
+					out.nodes = append(out.nodes, node)
+				}
+			}
+		}
+	}
+	slices.Sort(out.blocks)
+	out.blocks = slices.Compact(out.blocks)
+	return out, byMember
+}
+
+func observeNativeEndpoint(ctx context.Context, c *esapi.Client, replicas int) nativeObservation {
+	var out nativeObservation
+	var probes sync.WaitGroup
+	probes.Go(func() {
+		out.health, out.healthErr = c.Health(ctx, esapi.HealthOptions{})
+		if out.healthErr == nil {
+			out.acceptable, out.checkErr = healthAcceptable(ctx, c, out.health, replicas)
+		}
+	})
+	probes.Go(func() { out.blocks, out.blockErr = c.IndexWriteBlocks(ctx) })
+	probes.Go(func() { out.nodes, out.nodesErr = c.LocalNodes(ctx) })
+	probes.Go(func() { out.master, out.masterErr = c.MasterNode(ctx) })
+	probes.Wait()
+	return out
+}

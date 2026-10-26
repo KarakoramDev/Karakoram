@@ -8,6 +8,63 @@ Use built-in charts for short-term inspection, authenticated Prometheus scraping
 
 Enable `spec.monitoring.enabled` and open **Cluster → Monitoring**. The CLI create convenience path enables monitoring by default. The control plane scrapes agents every **30 seconds** and retains **24 hours** of persisted samples by default. Control-plane downtime interrupts collection/aggregation; this is not independent availability monitoring.
 
+Collection uses at most eight concurrent member requests, each bounded by the
+scrape interval (at most 30 seconds). A slow member does not serialize every
+other target behind its timeout. Retention pruning runs independently of new
+ingestion, including when discovery or metric insertion fails. Storage failures
+are logged and retried; fresh in-memory usage/federation observations remain
+available even when their historical samples cannot be persisted. Pruning can
+still fail on a completely full or read-only filesystem: restore writable
+headroom rather than deleting the database or WAL.
+
+Global retention lookups use a timestamp index. Each sweep deletes at most
+4,096 expired rows in transactions of at most 256 rows, yielding the writer
+between batches and using a two-second admission/execution context. Saturated
+or deadline-limited sweeps wake one coalescing maintenance worker, which starts
+another bounded sweep after yielding for 25 ms; it does not wait another
+30-second scrape interval. The worker stops and is joined on collector shutdown.
+This removes a fixed 4,096-rows-per-interval ceiling, but retention remains
+best-effort under writer contention, slow disks, or sustained ingestion beyond
+available delete throughput; 24 hours is not a hard storage-size guarantee.
+Slow writer admission in retention and token-usage maintenance is logged after
+two seconds with the operation name; it does not expose SQL parameters or
+credentials. A one-second token-usage admission timeout normally completes
+before that warning threshold.
+HTTP requests exceeding two seconds also emit a warning with request ID,
+method, matched route pattern and elapsed duration; raw URLs and query values
+are not logged. These completion diagnostics cannot replace a failure-time
+goroutine dump when a request never returns.
+
+### Upgrading an existing metrics database
+
+Migration `011_metrics_retention.sql` creates `(timestamp,id)` in one SQLite
+transaction with its migration marker. Building it scans and sorts existing
+metrics: startup time and temporary/WAL disk headroom depend on retained rows
+and storage speed, not just the current cluster count. The control plane opens
+its listeners only after all migrations finish; `/healthz` and the API are
+unavailable during the build. Do not bypass this by deleting state or reporting
+healthy before migration completes.
+
+Before a large-table upgrade, preserve a consistent database/WAL backup and
+master key, measure the upgrade against a restored copy on comparable storage
+in an isolated environment with no access to member/platform endpoints, and
+allow sufficient free disk and startup time. Zerops's supplied readiness
+`failureTimeout` is **120 seconds**: increase it before deploying if the measured
+migration plus normal startup can exceed that window. The supplied Nomad job
+uses `health_check = "task_states"`; a running allocation is **not** API readiness.
+Wait explicitly for `/healthz` and `/api/v1/version` after deployment rather than
+treating allocation/deployment status as proof that migration completed.
+
+A failed or interrupted index transaction does not leave a committed migration
+marker; reopening retries it. Preserve authoritative state and repair disk/write
+access rather than repeatedly killing an index build. An older binary whose
+schema includes migrations through `010_lifecycle_recovery.sql` can reopen this
+additive index and ignores the unknown `011` marker; its existing metric SQL
+remains compatible. This statement is specific to `011`, not a guarantee that
+every other schema or durable-state change supports downgrade. Keep a single
+active control-plane writer; rolling back the binary also restores that binary's
+older, unbounded retention implementation.
+
 ```sh
 karactl -n default clusters metrics demo --range 1h --step 30s -o json
 karactl -n default clusters members demo
@@ -46,7 +103,18 @@ scrape_configs:
 
 Mount an owner-readable token-only credentials file from a secret manager; do not embed tokens in shared YAML. Keep server-certificate verification enabled; configure CA trust for a private issuer rather than `insecure_skip_verify`. `karactl metrics` reads this endpoint too.
 
-The endpoint serves the latest **successful** scrape snapshot. Failed scrapes can leave an older sample visible until success or target removal. Correlate freshness, status/agent connectivity and independent application checks; sample presence alone is not a heartbeat. Use external retention and alerting.
+The endpoint serves current scrape snapshots, not an indefinitely renewable
+cache. A failed member scrape omits that exporter's series and exposes
+`karakoram_member_scrape_success=0`. Failed target discovery immediately
+invalidates cached observations for all previously known targets. Federation
+also checks sample age on every request: after **two collector intervals**
+(**60 seconds** at the default 30-second cadence), or for missing/future sample
+timestamps, exporter series are absent and scrape success is zero. Repeated
+Prometheus requests cannot renew that lease while collection is stalled.
+Previously persisted historical series are unchanged. This metric lease is
+separate from the cluster API's 15-second readiness lease; exporter reachability
+does not prove application availability or quorum. Use external retention and
+independent application checks for alerting.
 
 ## Engine metric vocabularies
 
@@ -81,11 +149,13 @@ than reporting a healthy zero.
 | `proxysql_queries_total` | Counter | Queries sent through each backend pool. |
 
 PostgreSQL readiness means that local SQL accepts connections; proxy readiness
-means that its frontend TCP listener is open. Neither is a writable-primary or
-quorum guarantee. ProxySQL defaults to writer-only routing. Optional read/write
-split rules are deliberately simple and do not guarantee causal reads or
-classify every SQL construct. Native replication, LISTEN/NOTIFY and other
-session-sensitive protocols should connect directly to PostgreSQL.
+means that its frontend listener is open and its runtime writer hostgroup has an
+ONLINE backend at observation time. Neither is a quorum guarantee, and a ready
+proxy does not make the next connection infallible: clients keep reconnect and
+retry logic after member failures. ProxySQL defaults to writer-only routing.
+Optional read/write split rules are deliberately simple and do not guarantee
+causal reads or classify every SQL construct. Native replication, LISTEN/NOTIFY
+and other session-sensitive protocols should connect directly to PostgreSQL.
 
 ## Events and event streams
 

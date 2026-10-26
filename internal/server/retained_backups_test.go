@@ -22,6 +22,39 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
+// Only RFC1918 IPv4 addresses are suitable for this allowlisted local fixture.
+// Global-unicast also includes CGNAT/Tailscale addresses, which the production
+// endpoint policy rejects even when explicitly allowlisted.
+func retainedS3IP(addresses []net.Addr) net.IP {
+	for _, address := range addresses {
+		if n, ok := address.(*net.IPNet); ok && n.IP.To4() != nil && n.IP.IsPrivate() {
+			return n.IP
+		}
+	}
+	return nil
+}
+
+func TestRetainedS3IP(t *testing.T) {
+	addresses := []net.Addr{
+		&net.IPNet{IP: net.ParseIP("127.0.0.1")},
+		&net.IPNet{IP: net.ParseIP("100.116.236.21")},
+		&net.IPNet{IP: net.ParseIP("168.63.129.16")},
+		&net.IPNet{IP: net.ParseIP("fd00::1")},
+	}
+	if got := retainedS3IP(addresses); got != nil {
+		t.Fatalf("selected an unsuitable fixture address: %s", got)
+	}
+	for _, ip := range []string{"10.1.2.3", "172.16.1.2", "192.168.2.208"} {
+		t.Run(ip, func(t *testing.T) {
+			want := net.ParseIP(ip)
+			got := retainedS3IP(append(addresses, &net.IPNet{IP: want}))
+			if !got.Equal(want) {
+				t.Fatalf("selected %s, want %s after rejected addresses", got, want)
+			}
+		})
+	}
+}
+
 // Exercise the real signed S3 client, including its outbound policy. A private
 // interface is explicitly allowlisted; loopback remains forbidden in production.
 func retainedS3(t *testing.T, keys []string) (string, func() map[string]bool, func(string)) {
@@ -30,15 +63,9 @@ func retainedS3(t *testing.T, keys []string) (string, func() map[string]bool, fu
 	if err != nil {
 		t.Fatal(err)
 	}
-	var ip net.IP
-	for _, address := range addresses {
-		if n, ok := address.(*net.IPNet); ok && n.IP.To4() != nil && n.IP.IsGlobalUnicast() && !n.IP.IsLoopback() {
-			ip = n.IP
-			break
-		}
-	}
+	ip := retainedS3IP(addresses)
 	if ip == nil {
-		t.Fatal("S3 policy test needs a non-loopback IPv4 interface")
+		t.Fatal("S3 policy test needs a private RFC1918 IPv4 interface")
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), "0"))
 	if err != nil {
@@ -188,6 +215,11 @@ func TestRetainedBackupLifecycle(t *testing.T) {
 	if err != nil || b.Phase != domain.PhaseDeleting || !remaining()[base+".pbm.json"] {
 		t.Fatal("partial deletion lost its retry checkpoint", b, err)
 	}
+	for _, key := range owned[:2] {
+		if remaining()[key] {
+			t.Fatal("partial deletion did not reach S3 data removal", key)
+		}
+	}
 	if _, err := s.Store.GetClusterSecret(ctx, domain.ClusterRef{Name: backup.RecoveryIdentity}, "users/userAdmin"); err != nil {
 		t.Fatal("partial deletion removed recovery identity", err)
 	}
@@ -329,5 +361,82 @@ func TestRetainedNonMongoBackupDoesNotDeleteMongoRecoverySecret(t *testing.T) {
 	}
 	if _, err := s.Store.GetClusterSecret(ctx, ref, "users/userAdmin"); err != nil {
 		t.Fatal("non-Mongo provider deleted a Mongo recovery credential", err)
+	}
+}
+
+type retryRetainedProvider struct {
+	*fakeProvider
+	name   string
+	delete func(domain.Backup) error
+}
+
+func (p *retryRetainedProvider) Name() string { return p.name }
+func (p *retryRetainedProvider) DeleteRetainedBackup(_ context.Context, _ domain.BackupStorage, b domain.Backup) error {
+	return p.delete(b)
+}
+
+func TestRetainedFailedRemoteBackupDeletionDoesNotQueueAbsentCluster(t *testing.T) {
+	for _, provider := range []string{"rabbitmq", "postgres"} {
+		t.Run(provider, func(t *testing.T) {
+			s, _, admin := testServer(t)
+			ctx := t.Context()
+			calls, fail := 0, true
+			p := &retryRetainedProvider{fakeProvider: &fakeProvider{}, name: provider}
+			p.delete = func(b domain.Backup) error {
+				calls++
+				if (provider == "rabbitmq" && b.Location == "") || (provider == "postgres" && b.Postgres == nil) {
+					t.Fatal("remote identity was discarded", b)
+				}
+				if fail {
+					return errors.New("remote cleanup unavailable")
+				}
+				return nil
+			}
+			if err := s.Registry.Register(p); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Store.CreateBackupStorage(ctx, &domain.BackupStorage{Name: "archive", Type: "s3"}); err != nil {
+				t.Fatal(err)
+			}
+			b := &domain.Backup{Name: "saved", Cluster: "prod", Provider: provider, Storage: "archive", Phase: domain.PhaseSucceeded}
+			if provider == "rabbitmq" {
+				b.Location = "s3://archive/definitions.json"
+			} else {
+				b.Postgres = &domain.PostgresBackup{Label: "full", Repository: "repo"}
+			}
+			if err := s.Store.CreateBackup(ctx, b); err != nil {
+				t.Fatal(err)
+			}
+			op := &domain.Operation{Cluster: b.Cluster, Kind: domain.OperationDeleteBackup}
+			if err := s.Store.EnqueueBackupDeletion(ctx, b, op); err != nil {
+				t.Fatal(err)
+			}
+			op.Phase = domain.PhaseFailed
+			if err := s.Store.UpdateOperation(ctx, op); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Store.DeleteCluster(ctx, domain.ClusterRef{Name: b.Cluster}); err != nil {
+				t.Fatal(err)
+			}
+			path := "/api/v1/clusters/prod/backups/saved"
+			if response := call(s, "DELETE", path, "", admin); response.Code != 500 || calls != 1 {
+				t.Fatal("remote failure was not executed/preserved", response.Code, response.Body.String(), calls)
+			}
+			retained, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name)
+			if err != nil || retained.Phase != domain.PhaseDeleting {
+				t.Fatal("remote failure lost inventory", retained, err)
+			}
+			fail = false
+			if response := call(s, "DELETE", path, "", admin); response.Code != 204 || calls != 2 {
+				t.Fatal("retained deletion did not retry directly", response.Code, response.Body.String(), calls)
+			}
+			if _, err := s.Store.GetBackup(ctx, domain.ClusterRef{Name: b.Cluster}, b.Name); !errors.Is(err, store.ErrNotFound) {
+				t.Fatal("remote success retained inventory", err)
+			}
+			ops, err := s.Store.ListOperations(ctx, domain.ClusterRef{Name: b.Cluster}, domain.PhasePending, domain.PhaseRunning)
+			if err != nil || len(ops) != 0 {
+				t.Fatal("absent cluster owns stranded cleanup", ops, err)
+			}
+		})
 	}
 }

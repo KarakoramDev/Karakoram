@@ -27,15 +27,26 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/mgmt"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 )
 
 const rabbitMQImage = "karakoram-rabbitmq-agent:4.3.6-otp27.3.4.17"
-const rabbitMQDockerfile = `FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d && curl -fsSL https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA | gpg --dearmor -o /usr/share/keyrings/com.rabbitmq.team.gpg && printf 'deb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main\ndeb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-erlang/ubuntu/noble noble main\ndeb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb1.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main\ndeb [arch=amd64 signed-by=/usr/share/keyrings/com.rabbitmq.team.gpg] https://deb2.rabbitmq.com/rabbitmq-server/ubuntu/noble noble main\n' > /etc/apt/sources.list.d/rabbitmq.list && apt-get update && apt-get install -y --no-install-recommends rabbitmq-server=4.3.6-1 erlang-base=1:27.3.4.17-1 erlang-asn1=1:27.3.4.17-1 erlang-crypto=1:27.3.4.17-1 erlang-eldap=1:27.3.4.17-1 erlang-inets=1:27.3.4.17-1 erlang-mnesia=1:27.3.4.17-1 erlang-os-mon=1:27.3.4.17-1 erlang-parsetools=1:27.3.4.17-1 erlang-public-key=1:27.3.4.17-1 erlang-runtime-tools=1:27.3.4.17-1 erlang-ssl=1:27.3.4.17-1 erlang-syntax-tools=1:27.3.4.17-1 erlang-tools=1:27.3.4.17-1 erlang-xmerl=1:27.3.4.17-1 && rm -rf /var/lib/apt/lists/*
-`
+
+func rabbitMQDockerfile() string {
+	var b strings.Builder
+	b.WriteString("FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y --no-install-recommends sudo\n")
+	// Keep the fixture's repositories, package versions, and apt preferences
+	// identical to member deployments. JSON-form RUN preserves shell quoting.
+	for _, command := range rabbitmq.PrepareCommands("4.3.6") {
+		args, _ := json.Marshal([]string{"/bin/bash", "-o", "pipefail", "-c", command})
+		fmt.Fprintf(&b, "RUN %s\n", args)
+	}
+	b.WriteString("RUN rm -rf /var/lib/apt/lists/*\n")
+	return b.String()
+}
 
 func TestRabbitMQAgent(t *testing.T) {
 	if runtime.GOOS != "linux" {
@@ -56,7 +67,7 @@ func TestRabbitMQAgent(t *testing.T) {
 	docker("info")
 	if err := exec.CommandContext(ctx, "docker", "image", "inspect", rabbitMQImage).Run(); err != nil {
 		cmd := exec.CommandContext(ctx, "docker", "build", "-t", rabbitMQImage, "-")
-		cmd.Stdin = strings.NewReader(rabbitMQDockerfile)
+		cmd.Stdin = strings.NewReader(rabbitMQDockerfile())
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("build pinned RabbitMQ image: %v\n%s", err, output)
 		}

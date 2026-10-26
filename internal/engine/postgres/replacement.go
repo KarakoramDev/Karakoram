@@ -5,9 +5,11 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
@@ -187,7 +189,7 @@ func replacementResult(cp *replacementState) engine.OpResult {
 // started, completing that same cutover is safer than trying to undo stop holds
 // or an etcd removal whose response may have been lost.
 func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
-	return op.Kind == domain.OperationReplaceMember
+	return op.Kind == domain.OperationReplaceMember || restoreOperation(op)
 }
 
 func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
@@ -198,6 +200,9 @@ func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
 }
 
 func (p *Core) CancelOperation(_ context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if restoreOperation(op) {
+		return handoffRestoreRecovery(rc, op)
+	}
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
@@ -272,15 +277,52 @@ func (p *Core) rollbackReplacement(ctx context.Context, rc *engine.Context, s *s
 	return engine.OpResult{Done: done, RequeueAfter: 2 * time.Second}, err
 }
 
-// switchAway chooses a healthy streaming voter, never the member being retired.
+// switchAway reobserves both ends of a handoff on every reconciliation. A
+// missing safe candidate is a convergence wait, not an operation failure.
 func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) error {
+	return switchAwayConfigured(ctx, rc, s, old, false)
+}
+
+func switchAwayConfigured(ctx context.Context, rc *engine.Context, s *state, old string, currentConfig bool) error {
+	writer, err := live(ctx, rc, old)
+	if err != nil {
+		return err
+	}
+	if writer.Role != "primary" || !writer.Running || writer.Leader != old && (writer.Leader != "" || writer.HealthCapabilities != nil) {
+		return nil // Never ask a demoted member to switch the new writer.
+	}
+	// Legacy agents omit local DCS observations. Patroni still validates the
+	// handoff; only an advertised probe can authoritatively block it here.
+	if writer.HealthCapabilities != nil && writer.HealthCapabilities.LocalEtcd && !writer.EtcdHealthy {
+		return nil
+	}
+	// Previous-release status also omits Leader. A legacy primary role may
+	// request a Patroni-validated handoff, but an explicit mismatched leader
+	// (or missing leader from an agent with modern observations) never may.
+	if writer.Paused {
+		return blockedSwitchover(s, "PostgreSQL switchover is blocked: resume Patroni before rolling this primary")
+	}
+	// PostgreSQL flavours share this field but may have additional options.
+	// Full schema validation belongs to the provider's flavour-aware parser.
+	var options struct {
+		SynchronousMode string `json:"synchronousMode"`
+	}
+	if len(rc.Cluster.Spec.EngineOptions) > 0 {
+		err = json.Unmarshal(rc.Cluster.Spec.EngineOptions, &options)
+	}
+	if err != nil {
+		return engine.Invalid("invalid synchronous replication options")
+	}
 	candidate := ""
 	for _, m := range s.data() {
-		if m.Name == old || m.Removing || m.Retirement != "" || m.EtcdLearner || m.Stage != "joined" {
+		if m.Name == old || m.Removing || m.Retirement != "" || m.EtcdLearner || m.DeployOp != nil || m.Stage != "joined" || currentConfig && m.ConfigVersion != s.ConfigVersion {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
-		if err != nil || !st.Running || st.Role != "replica" || !st.Streaming || st.FailoverFenced {
+		if err != nil || !st.Running || st.Role != "replica" || !st.Streaming || st.FailoverFenced || st.Paused || st.Leader != old && (st.Leader != "" || st.HealthCapabilities != nil) {
+			continue
+		}
+		if options.SynchronousMode != "" && options.SynchronousMode != "off" && st.SyncState != "sync" {
 			continue
 		}
 		if candidate == "" || st.SyncState == "sync" {
@@ -291,11 +333,42 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 		}
 	}
 	if candidate == "" {
-		return engine.ErrUnavailable
+		return nil
 	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), old)
 	if err != nil {
 		return err
 	}
-	return a.Engine(ctx, "postgres", "switchover", pgspec.SwitchoverRequest{Candidate: candidate}, nil)
+	defer a.Close()
+	err = a.Engine(ctx, "postgres", "switchover", pgspec.SwitchoverRequest{Candidate: candidate}, nil)
+	var rejection *agentapi.HTTPError
+	if !errors.As(err, &rejection) || rejection.StatusCode != 409 {
+		return err
+	}
+	// A concurrent graceful stop/failover can win between discovery and POST.
+	// Success here only means reobserve; callers still prove demotion before
+	// fencing, stopping, or resizing the former writer.
+	current, observeErr := live(ctx, rc, old)
+	if observeErr == nil && current.Running && current.Role == "replica" && current.Streaming && current.Leader != "" && current.Leader != old {
+		return nil
+	}
+	switch rejection.Message {
+	case "switchover_leader_changed", "switchover_candidate_changed", "switchover_in_progress":
+		return nil // Re-derive topology rather than spend the operation retry budget.
+	case "switchover_unavailable":
+		return err
+	case "switchover_paused":
+		return blockedSwitchover(s, "PostgreSQL switchover is blocked: resume Patroni before rolling this primary")
+	case "switchover_rejected":
+		return blockedSwitchover(s, "PostgreSQL switchover was rejected; inspect Patroni candidate health, synchronous membership and DCS state before retrying")
+	default:
+		// Older agents return plaintext 409 for transient failures too. An
+		// absent or unknown classification cannot prove a permanent rejection.
+		return err
+	}
+}
+
+func blockedSwitchover(s *state, message string) error {
+	s.SwitchoverBlocked = message
+	return engine.Invalid("%s", message)
 }

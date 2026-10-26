@@ -10,12 +10,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	_ "modernc.org/sqlite"
 )
@@ -48,10 +52,41 @@ type Store struct {
 }
 
 // Open opens and migrates a SQLite database with encrypted secret persistence.
-func Open(path string, sealer *secrets.Sealer) (*Store, error) {
+func Open(path string, sealer *secrets.Sealer) (_ *Store, openErr error) {
+	defer func() {
+		if openErr != nil {
+			openErr = fmt.Errorf("control-plane state unavailable: %w; preserve the database, WAL and master key; restore free space and write access, or restore verified control-plane state if corrupt; never recreate the database to bypass this error", openErr)
+		}
+	}()
 	if sealer == nil {
 		return nil, errors.New("secret sealer is required")
 	}
+	if path != ":memory:" {
+		// Check an existing file before SQLite opens it: its read-only fallback
+		// can otherwise create equally read-only WAL sidecars which remain
+		// unwritable even after the database permissions are repaired.
+		file, err := os.OpenFile(path, os.O_RDWR, 0)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		if os.IsNotExist(err) {
+			return initializeStore(path, sealer)
+		}
+		if file != nil {
+			info, statErr := file.Stat()
+			closeErr := file.Close()
+			if err := errors.Join(statErr, closeErr); err != nil {
+				return nil, err
+			}
+			if info.Size() == 0 {
+				return nil, errors.New("existing control-plane database is empty; refusing to initialize over potentially truncated authoritative state")
+			}
+		}
+	}
+	return openSQLite(path, sealer)
+}
+
+func openSQLite(path string, sealer *secrets.Sealer) (*Store, error) {
 	dsn := "file:" + url.PathEscape(path) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
 	if path == ":memory:" {
 		token, err := secrets.RandomString(16)
@@ -75,6 +110,13 @@ func Open(path string, sealer *secrets.Sealer) (*Store, error) {
 		w.Close()
 		return nil, err
 	}
+	// SQLite can silently fall back to a read-only connection for an existing
+	// database. Reject that at startup so retrying Open after permissions or a
+	// read-only mount are repaired creates a genuinely writable connection.
+	if _, err = w.Exec("UPDATE schema_migrations SET name=name WHERE 0"); err != nil {
+		w.Close()
+		return nil, err
+	}
 	r, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		w.Close()
@@ -86,8 +128,84 @@ func Open(path string, sealer *secrets.Sealer) (*Store, error) {
 	return s, nil
 }
 
+// initializeStore publishes only a completely migrated, checkpointed database.
+// A crash before publication leaves an untrusted staging file, never an empty
+// authoritative path. Retrying starts a new isolated stage; old stages contain
+// no accepted control-plane work and are never adopted as authoritative state.
+func initializeStore(path string, sealer *secrets.Sealer) (*Store, error) {
+	dir := filepath.Dir(path)
+	file, err := os.CreateTemp(dir, "."+filepath.Base(path)+".init-*")
+	if err != nil {
+		return nil, err
+	}
+	stage := file.Name()
+	defer func() {
+		_ = os.Remove(stage)
+		_ = os.Remove(stage + "-wal")
+		_ = os.Remove(stage + "-shm")
+	}()
+	if err = file.Close(); err != nil {
+		return nil, err
+	}
+	staged, err := openSQLite(stage, sealer)
+	if err != nil {
+		return nil, err
+	}
+	// A published main file must not depend on stage-named WAL sidecars.
+	_, checkpointErr := staged.writer.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	if checkpointErr == nil {
+		_, checkpointErr = staged.writer.Exec("PRAGMA journal_mode=DELETE")
+	}
+	if err = errors.Join(checkpointErr, staged.Close()); err != nil {
+		return nil, err
+	}
+	file, err = os.OpenFile(stage, os.O_RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+	if err = errors.Join(file.Sync(), file.Close()); err != nil {
+		return nil, err
+	}
+	// Link is an atomic no-replace publication. Concurrent initializers may
+	// open the winner, but must never overwrite it or an independently
+	// created authoritative file.
+	if err = os.Link(stage, path); err != nil {
+		if os.IsExist(err) {
+			return Open(path, sealer)
+		}
+		return nil, err
+	}
+	directory, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err = errors.Join(directory.Sync(), directory.Close()); err != nil {
+		return nil, err
+	}
+	return openSQLite(path, sealer)
+}
+
 // Close releases pooled SQLite connections.
 func (s *Store) Close() error { return errors.Join(s.reader.Close(), s.writer.Close()) }
+
+// execWriter identifies pool admission separately from SQLite execution for the
+// background metadata/retention paths that can otherwise stall inspection.
+func (s *Store) execWriter(ctx context.Context, operation, query string, args ...any) (sql.Result, error) {
+	started := time.Now()
+	conn, err := s.writer.Conn(ctx)
+	logWriterWait(slog.Default(), operation, time.Since(started))
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return conn.ExecContext(ctx, query, args...)
+}
+
+func logWriterWait(logger *slog.Logger, operation string, elapsed time.Duration) {
+	if elapsed > 2*time.Second {
+		logger.Warn("SQLite writer wait", "operation", operation, "duration", elapsed)
+	}
+}
 func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.writer.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY)"); err != nil {
 		return err
@@ -105,6 +223,11 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 		if n != 0 {
 			continue
+		}
+		if entry.Name() == "012_sanitize_diagnostics.sql" {
+			if err := s.sanitizeLegacyDiagnostics(ctx); err != nil {
+				return fmt.Errorf("migration %s: %w", entry.Name(), err)
+			}
 		}
 		script, err := migrations.ReadFile("migrations/" + entry.Name())
 		if err != nil {
@@ -170,6 +293,17 @@ func put(ctx context.Context, db executor, kind, scope, key string, value any, s
 		q += " ON CONFLICT(kind,scope,key) DO UPDATE SET data=excluded.data,secret=excluded.secret,hash=excluded.hash,phase=excluded.phase,updated=excluded.updated"
 	}
 	_, err = db.ExecContext(ctx, q, kind, scope, key, data, secret, hash, phase, now, now)
+	if err == nil && create && kind == "operation" {
+		if commit, ok := ctx.Value(idempotentOperationKey{}).(idempotentOperationCommit); ok {
+			op, ok := value.(*domain.Operation)
+			if !ok {
+				return ErrInvalid
+			}
+			if err = commit(ctx, db, op); err != nil {
+				return err
+			}
+		}
+	}
 	return resourceError(kind, key, typed(err))
 }
 func (s *Store) get(ctx context.Context, kind, scope, key string, out any) (string, string, error) {
@@ -179,7 +313,7 @@ func (s *Store) get(ctx context.Context, kind, scope, key string, out any) (stri
 	if err != nil {
 		return "", "", resourceError(kind, key, typed(err))
 	}
-	return secret, hash, json.Unmarshal(data, out)
+	return secret, hash, json.Unmarshal(redact.DiagnosticsJSON(data), out)
 }
 func list[T any](ctx context.Context, s *Store, kind, scope string) ([]T, error) {
 	q := "SELECT data FROM records WHERE kind=?"
@@ -204,7 +338,7 @@ func listQuery[T any](ctx context.Context, s *Store, q string, args ...any) ([]T
 		if err = rows.Scan(&data); err != nil {
 			return nil, err
 		}
-		if err = json.Unmarshal(data, &v); err != nil {
+		if err = json.Unmarshal(redact.DiagnosticsJSON(data), &v); err != nil {
 			return nil, err
 		}
 		out = append(out, v)

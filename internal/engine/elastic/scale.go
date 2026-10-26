@@ -293,7 +293,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			m.Stage = "removed"
 			return nil
 		}
-		volume, err := rc.Backend.GetService(ctx, m.Volume)
+		volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return err
 		}
@@ -329,6 +329,7 @@ func (p *Provider) removeStep(ctx context.Context, rc *engine.Context, s *state,
 			return err
 		}
 		removeRecord(s, m.Name)
+		delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 		p.bumpConfig(s)
 		if err = save(rc.Cluster, s); err != nil {
 			return err
@@ -359,6 +360,7 @@ func (p *Provider) deleteComponent(ctx context.Context, rc *engine.Context, s *s
 		return err
 	}
 	removeRecord(s, m.Name)
+	delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 	p.bumpConfig(s)
 	return nil
 }

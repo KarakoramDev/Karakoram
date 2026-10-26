@@ -30,7 +30,10 @@ type Process struct {
 	ServiceStackID string          `json:"serviceStackId"`
 	Status         string          `json:"status"`
 	ActionName     string          `json:"actionName"`
+	Created        time.Time       `json:"created,omitempty"`
+	Started        time.Time       `json:"started,omitempty"`
 	Error          json.RawMessage `json:"error"`
+	AppVersion     *AppVersion     `json:"appVersion,omitempty"`
 }
 
 // ImportResult includes every process for every imported service.
@@ -85,7 +88,10 @@ type Project struct {
 
 // AppVersion intentionally excludes credential-bearing upload URLs.
 type AppVersion struct {
-	ID string `json:"id"`
+	ID             string `json:"id"`
+	Status         string `json:"status,omitempty"`
+	ServiceStackID string `json:"serviceStackId,omitempty"`
+	ProjectID      string `json:"projectId,omitempty"`
 }
 
 // EnvItem is a user or system environment entry. Content may be sensitive.

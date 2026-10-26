@@ -5,6 +5,7 @@ package elastic
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -33,6 +34,15 @@ func (p *Provider) reconcileComponent(ctx context.Context, rc *engine.Context, s
 	current := engine.ComponentRuntime{HorizontalScaling: rc.Backend.Capabilities().HorizontalScaling}
 	if len(ms) > 0 {
 		m = ms[0]
+		if rc.Cluster.Spec.Components.Extra[def.Name].Replicas > 0 && len(rc.Cluster.Status.DeploymentFailures) > 0 {
+			spec, err := p.deploymentSpec(rc, m, rc.Cluster.Spec.Version)
+			if err != nil {
+				return false, err
+			}
+			if engine.DeploymentBlocked(rc, m.Name, spec) {
+				return false, nil
+			}
+		}
 		// A disabled component may be re-enabled after its runtime was deleted.
 		// Finish removing the old identity before allocating a replacement.
 		if m.Stage == "delete-volume" || m.Stage == "removed" {
@@ -56,6 +66,14 @@ func (p *Provider) reconcileComponent(ctx context.Context, rc *engine.Context, s
 		},
 		Deploy: func(ctx context.Context) error { return p.deploy(ctx, rc, s, m, "deploy", rc.Cluster.Spec.Version) },
 		AwaitReady: func(ctx context.Context) error {
+			// Initial application readiness must not block a corrective resize.
+			// Apply the runtime limit before publishing a heap derived from it.
+			resources := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
+			if !reflect.DeepEqual(m.Resources, resources) {
+				return p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
+			}
+			// This member has not joined: desiredSpec derives its corrective
+			// heap from desired RAM without changing the activated fields.
 			desired, err := p.desiredSpec(ctx, rc, s, m, m.Version)
 			if err != nil {
 				return err

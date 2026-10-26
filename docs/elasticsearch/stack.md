@@ -16,6 +16,16 @@ Set custom settings under `spec.engineOptions.kibana.settings`. If using `server
 
 A route can exist before application initialization finishes. Wait for [component readiness](operations.md); a suspended component must be resumed rather than treated as starting.
 
+Kibana, Logstash and APM readiness is checked on every live runtime instance using
+backend-provided individual addresses, not one service-DNS sample. Each instance
+must acknowledge the current configuration and pass its native application probe,
+and the live count must meet the configured replica count. Extra live instances
+during a rollout must pass as well; stopped/disappeared instances are excluded
+from application probes. Missing inventory, unusable addresses and a failing
+sibling keep the component and cluster non-Ready, with the instance identity and
+available native reason in the component member's status. The same check gates
+initial join and rolling completion.
+
 ## Logstash pipelines and queues
 
 Enable `spec.components.extra.logstash.replicas` and size RAM/runtime disk for throughput and buffering. With no user pipelines, Karakoram supplies dual-stack Beats and HTTP inputs and a CA-verified Elasticsearch data-stream output. Inputs bind `::`; input exposure and ports are in [Access and security](access-and-security.md). Custom listeners do not automatically provision additional routing or secure inputs.

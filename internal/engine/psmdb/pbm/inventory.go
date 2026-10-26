@@ -12,12 +12,14 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 type snapshot struct {
 	Name          string     `json:"name"`
 	Status        string     `json:"status"`
 	Type          string     `json:"type"`
+	Namespaces    []string   `json:"namespaces"`
 	Size          int64      `json:"size"`
 	RestoreTo     int64      `json:"restoreTo"`
 	LastWriteTS   int64      `json:"last_write_ts"`
@@ -53,7 +55,7 @@ type statusData struct {
 }
 
 func inventory(ctx context.Context, env Env) (inventoryData, error) {
-	out, err := command(ctx, env, "", "", "list", nil, "--out=json")
+	out, err := inventoryCommand(ctx, env, "list")
 	if err != nil {
 		return inventoryData{}, err
 	}
@@ -108,7 +110,7 @@ func SyncInventory(ctx context.Context, env Env) (domain.BackupStatus, []domain.
 	if err != nil {
 		return summary, nil, err
 	}
-	data, err := command(ctx, env, "", "", "status", nil, "--out=json")
+	data, err := inventoryCommand(ctx, env, "status")
 	if err != nil {
 		return summary, nil, err
 	}
@@ -177,8 +179,19 @@ func SyncInventory(ctx context.Context, env Env) (domain.BackupStatus, []domain.
 	return summary, ranges, nil
 }
 
+// setSnapshotLocation exposes the data directory, not the PBM namespace shared
+// by other snapshots and PITR slices. Keep deletion keyed by PBMPrefix/PBMName.
+func setSnapshotLocation(b *domain.Backup) {
+	if b.Location == "" && b.PBMName != "" {
+		if prefix := domain.BackupStoragePrefix(b.PBMPrefix); prefix != "" {
+			b.Location = prefix + "/" + b.PBMName + "/"
+		}
+	}
+}
+
 func applySnapshot(b *domain.Backup, s snapshot, stamp time.Time) {
 	b.PBMName, b.Size = s.Name, s.Size
+	setSnapshotLocation(b)
 	if s.Type != "" {
 		b.Type = s.Type
 	}
@@ -208,7 +221,7 @@ func applySnapshot(b *domain.Backup, s snapshot, stamp time.Time) {
 		}
 	case "error", "cancelled", "canceled":
 		b.Phase = domain.PhaseFailed
-		b.Error = s.Error
+		b.Error = redact.NativeError(s.Error)
 		if b.Error == "" {
 			b.Error = "PBM backup ended with status " + s.Status
 		}

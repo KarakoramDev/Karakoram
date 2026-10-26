@@ -144,6 +144,20 @@ func (n *Node) Configure(name string, spec ProcessSpec) error {
 	return nil
 }
 
+// Signal targets only the supervisor's current owned child, never a discovered PID.
+func (n *Node) Signal(name string, signal syscall.Signal) error {
+	if !n.a.allowedProcess(name) {
+		return errors.New("unknown process")
+	}
+	n.a.sup.mu.Lock()
+	defer n.a.sup.mu.Unlock()
+	p := n.a.sup.children[name]
+	if p == nil || p.cmd == nil {
+		return fmt.Errorf("process %s is not running", name)
+	}
+	return p.cmd.Process.Signal(signal)
+}
+
 // Action applies engine intent without releasing durable operator holds.
 // Explicit API start/restart actions, unlike configuration pulls, release stop holds.
 func (n *Node) Action(ctx context.Context, name, action string) error {
@@ -221,6 +235,9 @@ func (n *Node) actionLocked(ctx context.Context, name, action string) error {
 			return err
 		}
 	}
+	if n.a.controlsErr != nil {
+		return n.a.controlsErr
+	}
 	return n.a.sup.action(ctx, name, action)
 }
 
@@ -269,6 +286,7 @@ func (a *nodeAgent) allowedProcess(name string) bool {
 func (a *nodeAgent) applyEngine(ctx context.Context, c agentapi.MemberConfig) ([]string, error) {
 	cert, err := tls.X509KeyPair([]byte(c.AgentTLS.CertPEM), []byte(c.AgentTLS.KeyPEM))
 	if err != nil {
+		a.setStartupError(err)
 		return nil, fmt.Errorf("agent TLS: %w", err)
 	}
 	c.Maintenance = c.Maintenance || a.controls.Maintenance
@@ -277,7 +295,11 @@ func (a *nodeAgent) applyEngine(ctx context.Context, c agentapi.MemberConfig) ([
 	if err != nil {
 		return nil, err
 	}
+	// A certificate-only request is transient. On agent restart, the cached
+	// applied configuration must still bootstrap its ordinary supervision.
+	c.CertificateReloadOnly = false
 	if err = cacheConfig(c, a.o.DataDir); err != nil {
+		a.setStartupError(err)
 		return nil, err
 	}
 	versionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

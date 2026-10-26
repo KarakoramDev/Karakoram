@@ -84,6 +84,12 @@ func TestAbsenceLiteralLegacyCleanupHandles(t *testing.T) {
 			op := roundTripOp(t, infra.Op{ID: id})
 			for range 2 {
 				state, err := b.OpStatus(t.Context(), op)
+				if id == legacyWipeHandle {
+					if !errors.Is(err, infra.ErrUnavailable) || state.Done {
+						t.Fatalf("legacy wipe without a node identity must not acknowledge physical cleanup: %+v %v", state, err)
+					}
+					continue
+				}
 				if err != nil || !state.Done || state.Failed || state.Expired {
 					t.Fatalf("legacy cleanup with missing application and tasks: %+v %v", state, err)
 				}
@@ -105,7 +111,10 @@ func TestAbsenceCleanupRacesApplicationDisappearance(t *testing.T) {
 			id := imported.Services["runtime"]
 			f.mu.Lock()
 			f.failureOnce[procedure] = fakeResponse{404, "NOT_FOUND", "application already deleted"}
-			f.failureEffect[procedure] = func() { delete(f.apps, id) }
+			f.failureEffect[procedure] = func() {
+				delete(f.services, fakeString(f.apps[id].row, "appName"))
+				delete(f.apps, id)
+			}
 			f.mu.Unlock()
 			op, err := b.DeleteService(t.Context(), "runtime")
 			if err != nil {

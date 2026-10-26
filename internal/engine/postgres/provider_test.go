@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -36,6 +37,8 @@ type fakeBackend struct {
 	etcd                map[string]pgspec.EtcdMember
 	actions             []string
 	statusOverrides     map[string]pgspec.StatusResponse
+	statusWireOverrides map[string]json.RawMessage
+	genericOverrides    map[string]agentapi.Status
 	appliedVersions     map[string]int64
 	reloadFailures      int
 	statusFailures      map[string]int
@@ -46,6 +49,8 @@ type fakeBackend struct {
 	upgradePaused       bool
 	upgradePausePending map[string]bool
 	sharedMemory        map[string]map[string]int64
+	beforeSwitchover    func(string, string) string
+	plaintextSwitchover bool
 }
 
 func (*fakeBackend) Name() string { return "fake" }
@@ -75,6 +80,9 @@ func (b *fakeBackend) ImportServices(_ context.Context, specs []infra.ServiceSpe
 			ownership[k] = v
 		}
 		b.services[spec.Hostname] = &infra.Service{ID: spec.Hostname + "-id", Hostname: spec.Hostname, Kind: spec.Kind, Ownership: ownership, Resources: spec.Resources}
+		if spec.Kind == infra.KindVolume {
+			b.services[spec.Hostname].Status = infra.StatusActive
+		}
 		ids[spec.Hostname] = spec.Hostname + "-id"
 		b.imports = append(b.imports, spec)
 	}
@@ -149,11 +157,15 @@ func (a fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, member string) 
 }
 func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend) {
 	t.Helper()
+	return setupWithStatePath(t, topology, filepath.Join(t.TempDir(), "state.db"))
+}
+func setupWithStatePath(t *testing.T, topology, statePath string) (*Core, *engine.Context, *fakeBackend) {
+	t.Helper()
 	sealer, err := secrets.New(strings.Repeat("x", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "state.db"), sealer)
+	st, err := store.Open(statePath, sealer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,25 +173,43 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 	p := New(Options{})
 	c := &domain.Cluster{Name: "demo", Namespace: "default", Generation: 1, Spec: domain.ClusterSpec{Topology: domain.Topology{Type: topology}}}
 	p.ApplyDefaults(&c.Spec)
+	if err := st.CreateCluster(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
 	b := &fakeBackend{services: map[string]*infra.Service{}, deployed: map[string]bool{}}
 	rc := &engine.Context{Cluster: c, Store: st, Secrets: st, Backend: b, Artifact: fakeArtifact{}}
+	var agentMu sync.Mutex
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Parallel observation requests share this fake process's maps.
+		agentMu.Lock()
+		defer agentMu.Unlock()
 		s, _ := load(c)
 		name := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		config := int64(0)
 		if m := s.find(name); m != nil {
 			config = m.ConfigVersion
+			if m.TLSReloadPending {
+				config = m.TLSReloadVersion
+			}
 		}
 		switch r.URL.Path {
 		case "/v1/status":
 			if applied, ok := b.appliedVersions[name]; ok {
 				config = applied
 			}
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: config})
+			status := agentapi.Status{ConfigVersion: config}
+			if override, ok := b.genericOverrides[name]; ok {
+				status = override
+			}
+			json.NewEncoder(w).Encode(status)
 		case "/v1/postgres/status":
 			if b.statusFailures[name] > 0 {
 				b.statusFailures[name]--
 				http.Error(w, "PostgreSQL observation temporarily unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			if wire, ok := b.statusWireOverrides[name]; ok {
+				json.NewEncoder(w).Encode(wire)
 				return
 			}
 			role := "standalone"
@@ -204,9 +234,22 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 				running = !m.Offline
 			}
 			status := pgspec.StatusResponse{
-				Role: role, Running: running, Version: version, Locale: "C", Timeline: 1,
+				HealthCapabilities: &pgspec.HealthCapabilities{
+					LocalEtcd: true, ReplicationSlots: true, WALArchive: true,
+					ReplicationDistance: true, PatroniPause: true,
+				},
+				CredentialReceipts: true,
+				Role:               role, Running: running, Version: version, Locale: "C", Timeline: 1, SystemID: "123456789",
 				Streaming: role == "replica", EtcdHealthy: true,
-				EtcdMemberID: name + "-etcd",
+				EtcdMemberID:   name + "-etcd",
+				WALStatusKnown: true, SlotStatusKnown: true, ArchiveStatusKnown: true,
+			}
+			if role == "proxy" {
+				primary := b.leader
+				if primary == "" {
+					primary = "demop0"
+				}
+				status.ProxyBackends = []pgspec.ProxyBackend{{Host: primary, Hostgroup: 10, Status: "ONLINE"}}
 			}
 			if override, ok := b.statusOverrides[name]; ok {
 				status = override
@@ -298,6 +341,17 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 			var request pgspec.SwitchoverRequest
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				t.Error(err)
+			}
+			if b.beforeSwitchover != nil {
+				if diagnostic := b.beforeSwitchover(name, request.Candidate); diagnostic != "" {
+					if b.plaintextSwitchover {
+						http.Error(w, diagnostic, http.StatusConflict)
+					} else {
+						w.WriteHeader(http.StatusConflict)
+						json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: diagnostic})
+					}
+					return
+				}
 			}
 			b.leader = request.Candidate
 			if b.leader == "" {
@@ -395,7 +449,14 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 				b.sharedMemory[name] = fakeSharedMemory(options.Parameters)
 			}
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
-		case "/v1/postgres/dcs-reset", "/v1/postgres/reinit", "/v1/postgres/stanza-create", "/v1/postgres/stanza-upgrade":
+		case "/v1/postgres/dcs-reset":
+			// The real reset atomically deletes the entire owned DCS scope,
+			// including config/pause. Keep the fixture's cluster-wide pause in
+			// sync with that native contract, not a later unowned resume action.
+			b.upgradePaused = false
+			b.actions = append(b.actions, r.URL.Path+":"+name)
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/reinit", "/v1/postgres/stanza-create", "/v1/postgres/stanza-upgrade":
 			b.actions = append(b.actions, r.URL.Path+":"+name)
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		default:
@@ -408,14 +469,23 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 }
 func converge(t *testing.T, p *Core, rc *engine.Context) *state {
 	t.Helper()
+	var lastStatus domain.ClusterStatus
 	for range 100 {
 		if _, err := p.Sync(context.Background(), rc); err != nil {
 			t.Fatal(err)
+		}
+		if rc.Cluster.Status.ObservedGeneration < rc.Cluster.Generation && rc.SyncWait == "" {
+			t.Fatal("pending generation has no convergence barrier diagnostic")
 		}
 		status, err := p.Status(context.Background(), rc)
 		if err != nil {
 			t.Fatal(err)
 		}
+		lastStatus = status
+		if status.ObservedGeneration < rc.Cluster.Status.ObservedGeneration {
+			status.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
+		}
+		rc.Cluster.Status = status
 		if status.Phase == domain.PhaseReady {
 			s, err := load(rc.Cluster)
 			if err != nil {
@@ -424,7 +494,7 @@ func converge(t *testing.T, p *Core, rc *engine.Context) *state {
 			return s
 		}
 	}
-	t.Fatal("did not converge")
+	t.Fatalf("did not converge: %+v", lastStatus)
 	return nil
 }
 func TestCreateSingleAndHA(t *testing.T) {

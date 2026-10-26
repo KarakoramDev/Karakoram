@@ -20,12 +20,57 @@
     "checksumURL": "https://registry.npmjs.org/@turbo/linux-64/2.9.14",
     "size": 15655079
   },
-  "hex-2.5.3": {
+  "hex-2.5.3-elixir-1.19-otp-28": {
     "file": "hex-2.5.3.ez",
-    "url": "https://builds.hex.pm/installs/1.16.0/hex-2.5.3.ez",
-    "sha256": "7d765166e168fa002d8a30bfd287e01c68dd374c02b6e847b02b626ab33e78d7",
-    "checksumURL": "https://builds.hex.pm/installs/hex-1.x.csv",
-    "size": 1178898
+    "url": "https://builds.hex.pm/installs/1.19.0/hex-2.5.3-otp-28.ez",
+    "sha256": "42844c76de6a6f7aa7c33b12d9a4cdc4ddacf6f14ea2c774dc21fc5dee9b659b",
+    "checksumURL": "https://builds.hex.pm/installs/hex.csv",
+    "size": 1225183
+  },
+  "hex-2.5.3-elixir-1.19-otp-27": {
+    "file": "hex-2.5.3.ez",
+    "url": "https://builds.hex.pm/installs/1.19.0/hex-2.5.3-otp-27.ez",
+    "sha256": "3403ab647cd9118d58fac77eb86b5ad44b8f6769033e6a9d8ab3411979bbc018",
+    "checksumURL": "https://builds.hex.pm/installs/hex.csv",
+    "size": 1229461
+  },
+  "hex-2.5.3-elixir-1.18-otp-27": {
+    "file": "hex-2.5.3.ez",
+    "url": "https://builds.hex.pm/installs/1.18.0/hex-2.5.3-otp-27.ez",
+    "sha256": "66157d348390ea6269f5f9abd4ff9cda6b98e2c766f3514fb513fa9caa97c214",
+    "checksumURL": "https://builds.hex.pm/installs/hex.csv",
+    "size": 1218659
+  },
+  "tailwindcss-3.3.2-linux-x64": {
+    "file": "tailwindcss-3.3.2-linux-x64",
+    "url": "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.3.2/tailwindcss-linux-x64",
+    "sha256": "5bd251041e090d38a0843af2db5ba46859b51f588aca0ec7546f512479889f64",
+    "checksumURL": "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.3.2/sha256sums.txt",
+    "size": 42094864
+  },
+  "rusty-v8-130.0.7-x86_64-unknown-linux-gnu": {
+    "file": "librusty_v8_release_x86_64-unknown-linux-gnu.a.gz",
+    "url": "https://github.com/supabase/rusty_v8/releases/download/v130.0.7/librusty_v8_release_x86_64-unknown-linux-gnu.a.gz",
+    "sha256": "f09bd214205a24402cfa16a07641fa5aa3e834cfe94bf0002a9c7fc53e72b39d",
+    "checksumURL": "https://api.github.com/repos/supabase/rusty_v8/releases/assets/600756819",
+    "checksumSource": "GitHub release asset digest; second-path download matched; no third-party pin for 130.0.7",
+    "size": 28948026
+  },
+  "rusty-v8-130.0.7-src-binding-x86_64-unknown-linux-gnu": {
+    "file": "src_binding_release_x86_64-unknown-linux-gnu.rs",
+    "url": "https://github.com/supabase/rusty_v8/releases/download/v130.0.7/src_binding_release_x86_64-unknown-linux-gnu.rs",
+    "sha256": "a51f3c9be5d7a52532c474224680cf83103739d2c97e672f25fcbc91dbd26afc",
+    "checksumURL": "https://api.github.com/repos/supabase/rusty_v8/releases/assets/600756957",
+    "checksumSource": "GitHub release asset digest; second-path download matched",
+    "size": 22989
+  },
+  "edge-main-worker-bc27d2661edd": {
+    "file": "edge-main-worker.ts",
+    "url": "https://raw.githubusercontent.com/supabase/supabase/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/docker/volumes/functions/main/index.ts",
+    "sha256": "ed402c31abf346198d71cc7bab3b7eead03b91d6b9d638b30fc5e5fada25802b",
+    "checksumURL": "https://github.com/supabase/supabase/blob/bc27d2661edd09a5d0b8d76ce33da6d4071a756e/docker/volumes/functions/main/index.ts",
+    "gitBlob": "7a2b16f8482b33143690a4522f1e4a569eaa37a1",
+    "size": 12494
   },
   "rebar3-3.24.0": {
     "file": "rebar3-3.24.0",

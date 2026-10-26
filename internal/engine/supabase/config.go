@@ -21,6 +21,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
 )
 
 func digest(b []byte) string {
@@ -176,9 +177,13 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 		if o.Storage.Bucket != "" {
 			bucket = o.Storage.Bucket
 		}
+		endpoint, err := s3endpoint.Parse(storage.EndpointURL)
+		if err != nil {
+			return out, err
+		}
 		out.Storage = sbspec.Storage{
 			Endpoint: storage.EndpointURL, Bucket: bucket, Region: storage.Region,
-			PathStyle: storage.ForcePathStyle, TLS: strings.HasPrefix(storage.EndpointURL, "https://"),
+			PathStyle: s3endpoint.PathStyle(endpoint, bucket, storage.ForcePathStyle), TLS: endpoint.Scheme == "https",
 			AccessKey: storage.Credentials.AccessKeyID, SecretKey: storage.Credentials.SecretAccessKey,
 			TenantID:      rc.Cluster.Ref().Namespace + "-" + rc.Cluster.Name,
 			FileSizeLimit: o.Storage.FileSizeLimit, ImageTransformation: o.Storage.ImageTransformation,
@@ -294,47 +299,103 @@ func componentCertificateExpiry(rc *engine.Context, cert agentapi.Certificate) (
 	return pki.NeedsRenewal([]byte(cert.CertPEM), 30*24*time.Hour, clockNow(rc))
 }
 
-func (p *Provider) publishConfig(ctx context.Context, rc *engine.Context, m *componentMember, sp sbspec.Spec) error {
+func componentAgentCertificate(ctx context.Context, rc *engine.Context, m *componentMember) (agentapi.Certificate, error) {
 	raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/agent-cert/"+m.Name)
 	renew := missing(err)
 	var cert agentapi.Certificate
 	if err != nil && !renew {
-		return err
+		return cert, err
 	}
 	if !renew {
 		if err = json.Unmarshal(raw, &cert); err != nil {
-			return err
+			return cert, err
 		}
 		renew, err = componentCertificateExpiry(rc, cert)
 		if err != nil {
-			return err
+			return cert, err
 		}
 	}
 	if renew {
 		caCert, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/ca.crt")
 		if err != nil {
-			return err
+			return cert, err
 		}
 		key, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "tls/ca.key")
 		if err != nil {
-			return err
+			return cert, err
 		}
 		ca, err := pki.LoadCA(caCert, key)
 		if err != nil {
-			return err
+			return cert, err
 		}
 		crt, k, err := ca.Issue(pki.CertRequest{CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}, Server: true})
 		if err != nil {
-			return err
+			return cert, err
 		}
 		cert = agentapi.Certificate{CertPEM: string(crt), KeyPEM: string(k)}
 		raw, err = json.Marshal(cert)
 		if err != nil {
-			return err
+			return cert, err
 		}
 		if err = rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/agent-cert/"+m.Name, raw); err != nil {
+			return cert, err
+		}
+	}
+	return cert, nil
+}
+
+// renewPublishedCertificates changes transport only, even when core health or
+// component lifecycle gates are blocked. Preserve the already-published process,
+// maintenance and application settings rather than rendering new desired state.
+func (p *Provider) renewPublishedCertificates(ctx context.Context, rc *engine.Context) error {
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		return err
+	}
+	for _, m := range s.Members {
+		raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/config/"+m.Name)
+		if missing(err) {
+			continue
+		}
+		if err != nil {
 			return err
 		}
+		var config agentapi.MemberConfig
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return err
+		}
+		renew, err := componentCertificateExpiry(rc, config.AgentTLS)
+		if err != nil {
+			return err
+		}
+		if !renew {
+			continue
+		}
+		cert, err := componentAgentCertificate(ctx, rc, m)
+		if err != nil {
+			return err
+		}
+		config.AgentTLS = cert
+		config.ConfigVersion = max(config.ConfigVersion, m.ConfigVersion) + 1
+		raw, err = json.Marshal(config)
+		if err != nil {
+			return err
+		}
+		if err := rc.Secrets.SetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/config/"+m.Name, raw); err != nil {
+			return err
+		}
+		m.ConfigVersion = config.ConfigVersion
+		if err := saveState(rc.Cluster, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Provider) publishConfig(ctx context.Context, rc *engine.Context, m *componentMember, sp sbspec.Spec) error {
+	cert, err := componentAgentCertificate(ctx, rc, m)
+	if err != nil {
+		return err
 	}
 	payload, err := json.Marshal(sp)
 	if err != nil {
@@ -346,7 +407,7 @@ func (p *Provider) publishConfig(ctx context.Context, rc *engine.Context, m *com
 		Role: m.Component, Port: ports[m.Component], EngineVersion: sp.Version,
 		ConfigVersion: version, DesiredProcesses: []string{m.Component}, AgentTLS: cert,
 	}
-	raw, err = json.Marshal(config)
+	raw, err := json.Marshal(config)
 	if err != nil {
 		return err
 	}
@@ -395,9 +456,7 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *componentMember) (infra.Ru
 		Cluster: rc.Cluster.Name, Member: m.Name, Engine: "supabase",
 		AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM,
 		Ports: exposed, Prepare: prepare,
-		ReadinessArgs: []string{
-			"--engine=supabase", "--data-dir=" + rc.Backend.Layout().DataDir(""), m.Component,
-		},
+		ReadinessArgs: engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=supabase", "--data-dir="+rc.Backend.Layout().DataDir(""), m.Component),
 	}
 	return runtime.Spec(rc.Backend.Layout()), nil
 }

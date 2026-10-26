@@ -10,39 +10,56 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 // checkpoint contains no credentials or YAML. Steps are committed before non-idempotent starts.
 type checkpoint struct {
-	Step                    string       `json:"step"`
-	Cancelling              bool         `json:"cancelling,omitempty"`
-	CancelIssued            bool         `json:"cancelIssued,omitempty"`
-	Member                  string       `json:"member,omitempty"`
-	PBMName                 string       `json:"pbmName,omitempty"`
-	Snapshot                string       `json:"snapshot,omitempty"`
-	Physical                bool         `json:"physical,omitempty"`
-	Source                  string       `json:"source,omitempty"`
-	SourceNamespace         string       `json:"sourceNamespace,omitempty"`
-	TargetTime              *time.Time   `json:"targetTime,omitempty"`
-	Index                   int          `json:"index,omitempty"`
-	Failure                 string       `json:"failure,omitempty"`
-	FreshBase               bool         `json:"freshBaseBackupRequired,omitempty"`
-	Destination             string       `json:"destination,omitempty"`
-	Storage                 string       `json:"storage,omitempty"`
-	Prefix                  string       `json:"prefix,omitempty"`
-	RecoveryIdentity        string       `json:"recoveryIdentity,omitempty"`
-	RouterOp                *infra.Op    `json:"routerOp,omitempty"`
-	RouterRetry             *routerRetry `json:"routerRetry,omitempty"`
-	RestoreMetadataDeadline *time.Time   `json:"restoreMetadataDeadline,omitempty"`
+	Step                        string                           `json:"step"`
+	Cancelling                  bool                             `json:"cancelling,omitempty"`
+	CancelIssued                bool                             `json:"cancelIssued,omitempty"`
+	Member                      string                           `json:"member,omitempty"`
+	PBMName                     string                           `json:"pbmName,omitempty"`
+	BackupReadyStartedElapsed   *time.Duration                   `json:"backupReadyStartedElapsed,omitempty"`
+	BackupCleanupStartedElapsed *time.Duration                   `json:"backupCleanupStartedElapsed,omitempty"`
+	BackupCleanupCandidates     []string                         `json:"backupCleanupCandidates,omitempty"`
+	Snapshot                    string                           `json:"snapshot,omitempty"`
+	Physical                    bool                             `json:"physical,omitempty"`
+	Source                      string                           `json:"source,omitempty"`
+	SourceNamespace             string                           `json:"sourceNamespace,omitempty"`
+	TargetTime                  *time.Time                       `json:"targetTime,omitempty"`
+	Index                       int                              `json:"index,omitempty"`
+	Failure                     string                           `json:"failure,omitempty"`
+	FreshBase                   bool                             `json:"freshBaseBackupRequired,omitempty"`
+	Storage                     string                           `json:"storage,omitempty"`
+	Prefix                      string                           `json:"prefix,omitempty"`
+	RecoveryIdentity            string                           `json:"recoveryIdentity,omitempty"`
+	RouterOp                    *infra.Op                        `json:"routerOp,omitempty"`
+	RouterRetry                 *routerRetry                     `json:"routerRetry,omitempty"`
+	RestoreMetadataDeadline     *time.Time                       `json:"restoreMetadataDeadline,omitempty"`
+	RestoreAbsentSince          *time.Time                       `json:"restoreAbsentSince,omitempty"`
+	RestoreCommandTS            int64                            `json:"restoreCommandTS,omitempty"`
+	RestoreFenceUnknown         bool                             `json:"restoreFenceUnknown,omitempty"`
+	RestoreConsistencyUncertain bool                             `json:"restoreConsistencyUncertain,omitempty"`
+	RestoreNativeSucceeded      bool                             `json:"restoreNativeSucceeded,omitempty"`
+	RestoreCleanupDeadline      *time.Time                       `json:"restoreCleanupDeadline,omitempty"`
+	RestoreWorkers              map[string]RestoreWorkerIdentity `json:"restoreWorkers,omitempty"`
+	RestoreWorkerUnconfirmed    bool                             `json:"restoreWorkerUnconfirmed,omitempty"`
+	PBMGoMemoryBudgetObserved   bool                             `json:"pbmGoMemoryBudgetObserved,omitempty"`
+	PBMGoMemoryBudgetUnknown    bool                             `json:"pbmGoMemoryBudgetUnknown,omitempty"`
+	PITRIdentityPrepared        bool                             `json:"pitrIdentityPrepared,omitempty"`
+	BalancerWasEnabled          *bool                            `json:"balancerWasEnabled,omitempty"`
 }
 
 type routerRetry struct {
+	engine.RetrySchedule
 	Failures   int       `json:"failures"`
 	RetryAfter time.Time `json:"retryAfter"`
 	Message    string    `json:"message"`
@@ -55,7 +72,79 @@ func loadCheckpoint(op *domain.Operation) (checkpoint, error) {
 			return cp, fmt.Errorf("decode PBM checkpoint: %w", err)
 		}
 	}
+	cp.Failure = redact.NativeError(cp.Failure)
 	return cp, nil
+}
+
+// RestoreOutcome exposes only the durable consistency evidence needed by the
+// provider. Success means native success followed by completed target recovery.
+type RestoreOutcome struct {
+	NativeName            string
+	Failure               string
+	ConsistencyUncertain  bool
+	RecoveredSuccessfully bool
+	WorkerUnconfirmed     bool
+	MemoryBudgetUnknown   bool
+}
+
+func ReadRestoreOutcome(raw json.RawMessage) (RestoreOutcome, error) {
+	cp, err := loadCheckpoint(&domain.Operation{Checkpoint: raw})
+	if err != nil {
+		return RestoreOutcome{}, err
+	}
+	return RestoreOutcome{
+		NativeName:            cp.PBMName,
+		Failure:               cp.Failure,
+		ConsistencyUncertain:  cp.RestoreConsistencyUncertain,
+		WorkerUnconfirmed:     cp.RestoreWorkerUnconfirmed,
+		MemoryBudgetUnknown:   cp.PBMGoMemoryBudgetUnknown,
+		RecoveredSuccessfully: cp.Step == "done" && cp.PBMName != "" && cp.RestoreNativeSucceeded && cp.Failure == "" && !cp.RestoreConsistencyUncertain && !cp.Cancelling,
+	}, nil
+}
+
+// MigrateRestoreCheckpoint recognizes the old state machine's durable native
+// success receipt: a nonempty native name and a recovery checkpoint reachable
+// only after native terminal observation, with no failure/cancellation evidence.
+// A completed legacy receipt additionally needs the matching successful Restore.
+// It never infers success from process health or from an operation phase alone.
+func MigrateRestoreCheckpoint(op *domain.Operation, r *domain.Restore) (json.RawMessage, error) {
+	cp, err := loadCheckpoint(op)
+	if err != nil {
+		return nil, err
+	}
+	if cp.RestoreNativeSucceeded || cp.PBMName == "" || cp.Failure != "" ||
+		cp.RestoreConsistencyUncertain || cp.Cancelling || op.CancelRequested ||
+		op.Step == "failure-cleanup" || op.Kind != domain.OperationRestore ||
+		(op.Phase != domain.PhaseRunning && op.Phase != domain.PhaseSucceeded) ||
+		r.OperationID != op.ID || r.Cluster != op.Cluster || domain.NormalizedNamespace(r.Namespace) != domain.NormalizedNamespace(op.Namespace) ||
+		(r.Phase == domain.PhaseSucceeded && r.Error != "") || (r.Phase != domain.PhaseRunning && r.Phase != domain.PhaseSucceeded) {
+		return nil, nil
+	}
+	// Running Restore.Error may contain a retry diagnostic. Only the native
+	// checkpoint above proves outcome; a completed receipt must still be clean.
+	name, err := payloadName(op, "restore")
+	if err != nil {
+		return nil, err
+	}
+	if name != r.Name {
+		return nil, nil
+	}
+	switch cp.Step {
+	case "done":
+		if r.Phase != domain.PhaseSucceeded || r.CompletedAt == nil {
+			return nil, nil
+		}
+	case "mongod-start", "pbm-start", "maintenance-off", "reset-users",
+		"release-pitr-identity", "configure-target", "target-resync",
+		"target-inventory", "routers-on", "balancer-on", "complete":
+		if op.Phase != domain.PhaseRunning {
+			return nil, nil
+		}
+	default:
+		return nil, nil
+	}
+	cp.RestoreNativeSucceeded = true
+	return json.Marshal(cp)
 }
 
 // PrepareCancellation switches restore to compensating recovery and backup
@@ -84,10 +173,10 @@ func PrepareCancellation(op *domain.Operation) (bool, error) {
 			if cp.RouterOp == nil {
 				cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
 			}
-		case "balancer-off", "maintenance-on":
+		case "balancer-off", "maintenance-on", "prepare-pitr-identity":
 			cp.Failure = failure
 			cp.Step, cp.Index, cp.RouterRetry = "mongod-start", 0, nil
-		case "start", "poll":
+		case "start", "poll", "fence-pbm", "verify-fence":
 			// The start receipt may already represent an active physical
 			// restore. Replay it and observe PBM before restarting processes.
 			// Only PBM's terminal outcome determines restored data success.
@@ -103,6 +192,9 @@ func result(cp checkpoint, done bool) engine.OpResult {
 	message := cp.Step
 	if cp.FreshBase {
 		message = "restore completed; enqueue a fresh base backup before resuming PITR"
+	}
+	if !done && cp.PBMGoMemoryBudgetUnknown {
+		message = MemoryBudgetUnknownMessage + "; " + message
 	}
 	return engine.OpResult{Done: done, Step: cp.Step, Message: message, Checkpoint: raw, RequeueAfter: 2 * time.Second}
 }
@@ -136,7 +228,7 @@ func healthyMember(ctx context.Context, env Env) (string, error) {
 			last = err
 			continue
 		}
-		s, err := c.Status(ctx)
+		s, err := engine.ObserveAgentStatus(ctx, c, "PSMDB", n.Member)
 		c.Close()
 		if err != nil {
 			last = err
@@ -162,6 +254,30 @@ type commandFailure struct {
 func (e *commandFailure) Error() string { return e.message }
 
 func command(ctx context.Context, env Env, member, requestID, name string, cfg []byte, args ...string) ([]byte, error) {
+	// Only starts/cancellation have member-local receipts. Observations and
+	// idempotent configuration must survive that member's loss, including
+	// physical restore while mongod and pbm-agent are intentionally stopped.
+	if requestID == "" {
+		var last error
+		for _, node := range env.Nodes {
+			if env.Sharded && node.ReplSet != "cfg" {
+				continue
+			}
+			out, err := commandMember(ctx, env, node.Member, requestID, name, cfg, args...)
+			if err == nil {
+				return out, nil
+			}
+			last = err
+		}
+		if last != nil {
+			return nil, fmt.Errorf("PBM %s unavailable through eligible members: %w", name, last)
+		}
+		return nil, errors.New("no eligible PBM command member")
+	}
+	return commandMember(ctx, env, member, requestID, name, cfg, args...)
+}
+
+func commandMember(ctx context.Context, env Env, member, requestID, name string, cfg []byte, args ...string) ([]byte, error) {
 	if member == "" {
 		var err error
 		member, err = healthyMember(ctx, env)
@@ -183,6 +299,12 @@ func command(ctx context.Context, env Env, member, requestID, name string, cfg [
 	}
 	out, err := c.PBM(ctx, req)
 	if err != nil {
+		if safe := redact.NativeError(err.Error()); safe != err.Error() {
+			err = errors.New(safe)
+		}
+		if requestID != "" && strings.Contains(err.Error(), "PBM initiation outcome unknown after interrupted execution") {
+			return nil, fmt.Errorf("PBMReceiptUnknown: %s initiation receipt %s on member %s has no attributable native operation name; preserve receipts and restore holds, inspect PBM list/logs/storage through surviving members, and recover into a new cluster from a verified backup if attribution cannot be established; do not retry with another request ID or member: %w", name, requestID, member, err)
+		}
 		return nil, err
 	}
 	data := []byte(out.Output)
@@ -192,8 +314,8 @@ func command(ctx context.Context, env Env, member, requestID, name string, cfg [
 	}
 	if out.ExitCode != 0 {
 		return nil, &commandFailure{
-			command: name, exitCode: out.ExitCode, stderr: out.Stderr,
-			message: fmt.Sprintf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, out.Stderr, data),
+			command: name, exitCode: out.ExitCode, stderr: redact.NativeError(out.Stderr),
+			message: fmt.Sprintf("pbm %s failed (exit %d): %s %s", name, out.ExitCode, redact.NativeError(out.Stderr), redact.NativeError(string(data))),
 		}
 	}
 	return data, nil

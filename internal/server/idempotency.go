@@ -19,6 +19,17 @@ import (
 
 type idempotencyBodyKey struct{}
 
+type idempotencyRecoveryKey struct{}
+type idempotencyRecovery struct {
+	build func(*domain.Operation) response
+}
+
+func setIdempotencyRecovery(ctx context.Context, build func(*domain.Operation) response) {
+	if recovery, ok := ctx.Value(idempotencyRecoveryKey{}).(*idempotencyRecovery); ok {
+		recovery.build = build
+	}
+}
+
 // captureIdempotencyBody retains the original JSON before strict decoding. It
 // runs after the normal body-size limit and does not change header-free requests.
 func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
@@ -50,7 +61,7 @@ func idempotencyCovered(id string) bool {
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
-		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
+		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		return true
 	}
 	return false
@@ -115,7 +126,7 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
 		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
 		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
-		"restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
+		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	}
 	// A JSON tuple avoids delimiter collisions. The actual path adds every path
@@ -156,6 +167,15 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	// Lease loss or expiry cancels the handler; transient errors do not. Do not
 	// release an ambiguous mutation once lease ownership is no longer certain.
 	handlerCtx, cancelHandler := context.WithCancelCause(ctx)
+	recoveryResponse := &idempotencyRecovery{build: func(op *domain.Operation) response {
+		return response{status: 202, body: operationAPI(*op), operationID: op.ID}
+	}}
+	handlerCtx = context.WithValue(handlerCtx, idempotencyRecoveryKey{}, recoveryResponse)
+	handlerCtx = s.Store.WithIdempotentOperation(handlerCtx, identity, record.Owner, func(op *domain.Operation) (store.IdempotentResponse, error) {
+		recovery := &idempotencyWriter{header: make(http.Header)}
+		err := recoveryResponse.build(op).write(recovery)
+		return store.IdempotentResponse{Status: recovery.status, Body: recovery.body.Bytes(), Header: recovery.header}, err
+	})
 	leaseCtx, cancelLease := context.WithCancel(context.WithoutCancel(ctx))
 	leaseDone := make(chan struct{})
 	var leaseErr error

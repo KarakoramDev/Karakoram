@@ -86,7 +86,7 @@ func (a *app) addCommands(root *cobra.Command) {
 				c.Flags().String(q.name, "", "API "+q.key+" parameter")
 			}
 		}
-		mutable := strings.HasPrefix(s.path, "clusters ") && (s.body || strings.HasPrefix(s.operation, "delete") || strings.HasPrefix(s.operation, "resume") || strings.HasPrefix(s.operation, "restart") || strings.HasPrefix(s.operation, "replace") || strings.HasPrefix(s.operation, "rotate"))
+		mutable := strings.HasPrefix(s.path, "clusters ") && (s.body || strings.HasPrefix(s.operation, "delete") || strings.HasPrefix(s.operation, "resume") || strings.HasPrefix(s.operation, "restart") || strings.HasPrefix(s.operation, "retry") || strings.HasPrefix(s.operation, "replace") || strings.HasPrefix(s.operation, "rotate"))
 		if mutable {
 			c.Flags().Bool("wait", false, "Wait for operation completion and observed cluster generation")
 			c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")

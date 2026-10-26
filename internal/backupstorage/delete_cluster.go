@@ -21,16 +21,10 @@ func ClusterDirectory(s domain.BackupStorage, cluster, uid string) (string, erro
 			return "", errors.New("cluster lacks a safe recorded PBM namespace identity")
 		}
 	}
-	prefix := strings.TrimRight(s.Prefix, "/")
-	if prefix != "" {
-		for _, part := range strings.Split(prefix, "/") {
-			if part == "" || part == "." || part == ".." || strings.Contains(part, "\\") {
-				return "", errors.New("storage prefix is not a safe object namespace")
-			}
-		}
-		prefix += "/"
+	if err := domain.ValidateBackupStoragePrefix(s.Prefix); err != nil {
+		return "", err
 	}
-	return prefix + "karakoram/" + cluster + "-" + uid + "/", nil
+	return domain.BackupObjectPrefix(s.Prefix, "karakoram/"+cluster+"-"+uid) + "/", nil
 }
 
 // ErrDeletionInProgress means a bounded cleanup pass deleted objects but needs

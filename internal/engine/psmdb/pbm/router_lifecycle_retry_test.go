@@ -168,8 +168,9 @@ func TestRestoreRouterFailedProcessRetryCrashResume(t *testing.T) {
 						}
 					}
 					r, err := st.GetRestore(ctx, domain.ClusterRef{Name: "target"}, "restore")
-					if err != nil || !retried || !done || r.Phase != domain.PhaseSucceeded || backend.state != infra.StatusActive || agent.starts != 1 {
-						t.Fatalf("restore did not recover: restore=%+v done=%t retried=%t starts=%d error=%v", r, done, retried, agent.starts, err)
+					starts := agent.startCount()
+					if err != nil || !retried || !done || r.Phase != domain.PhaseSucceeded || backend.state != infra.StatusActive || starts != 1 {
+						t.Fatalf("restore did not recover: restore=%+v done=%t retried=%t starts=%d error=%v", r, done, retried, starts, err)
 					}
 				})
 			}

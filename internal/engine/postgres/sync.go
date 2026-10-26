@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"reflect"
@@ -20,6 +21,26 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
+
+// desiredConfigHash binds runtime acknowledgements to the current access revision.
+func desiredConfigHash(rc *engine.Context, revision string) (string, error) {
+	// Optional applications own their bounds independently of the database.
+	// Keep the proxy's bounds in this revision, but never reload PostgreSQL
+	// or ProxySQL just because a composed application's resources changed.
+	coreSpec := rc.Cluster.Spec
+	coreSpec.Components.Extra = nil
+	raw, err := json.Marshal(struct {
+		Spec               domain.ClusterSpec
+		Proxy              domain.ComponentSpec
+		AccessRevision     string
+		ProxyBudgetVersion int
+	}{coreSpec, rc.Cluster.Spec.Components.Extra["proxy"], revision, 1})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
+}
 
 func desiredComponent(rc *engine.Context, m *member) domain.ComponentSpec {
 	if m.Role == "proxy" {
@@ -52,7 +73,10 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 	for _, item := range services {
 		service, err := rc.Backend.GetService(ctx, item.name)
 		if err != nil {
-			return err
+			if !engine.ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
+				return err
+			}
+			m.RuntimeRecovery.VolumeLost = true
 		}
 		if service == nil {
 			continue
@@ -64,6 +88,11 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 		}
 		*item.id = service.ID
 		observed = append(observed, service)
+	}
+	if m.RuntimeRecovery.VolumeLost {
+		// Preserve identity and still check returned services above. A missing
+		// physical volume cannot safely accept owner-marker backfill.
+		return nil
 	}
 	for _, service := range observed {
 		if err := engine.EnsureOwnerMarker(ctx, rc.Backend, service, tokenValue, rc.Cluster.Name, m.Name); err != nil {
@@ -77,9 +106,45 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if q == nil {
 		return false, nil
 	}
+	// A stateless scale operation must not make an obsolete larger count a
+	// prerequisite for a newer, smaller count. Nomad may be waiting for the
+	// very host-port/canary slot that the reduction releases. Keep the already
+	// published surge budget until the superseding operation completes; an
+	// increase still takes the normal all-instance configuration barrier below.
+	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
+		replicas := desiredComponent(rc, m).Replicas
+		if replicas > 0 && replicas < q.Replicas {
+			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
+			if err != nil {
+				return true, err
+			}
+			q.Op, q.Replicas = op, replicas
+			return true, nil
+		}
+	}
+	if q.Action == "import" {
+		m := s.find(q.Member)
+		if m == nil {
+			return true, engine.ErrNotFound
+		}
+		op, err := resumePlannedImport(ctx, rc, m)
+		if err != nil {
+			return true, err
+		}
+		if op != nil {
+			q.Op = *op
+			return true, nil
+		}
+	}
 	st, err := rc.Backend.OpStatus(ctx, q.Op)
 	if err != nil {
 		return true, err
+	}
+	if rc.Cluster.Deleting {
+		rc.Cluster.Status.Message = fmt.Sprintf("Waiting for PostgreSQL member %s %s process %s: %s", q.Member, q.Action, q.Op.ID, st.Status)
+		if st.Message != "" {
+			rc.Cluster.Status.Message += "; " + st.Message
+		}
 	}
 	if !st.Done && !st.Failed {
 		return true, nil
@@ -129,6 +194,9 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			if e != nil {
 				return true, e
 			}
+			if service != nil && service.Importing {
+				return true, engine.ErrUnavailable
+			}
 			if id := engine.ImportedServiceID(q.Op, st, service); id != "" {
 				*entry.id = id
 			}
@@ -137,6 +205,7 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 			return true, err
 		}
 		m.Stage = "imported"
+		m.ImportBatch = nil
 		if rc.Store != nil {
 			if e := rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); e != nil && !missing(e) {
 				return true, e
@@ -163,6 +232,10 @@ func (p *Core) track(s *state, m *member, action string, op infra.Op) {
 	s.Pending = &c
 }
 func live(ctx context.Context, rc *engine.Context, name string) (pgspec.StatusResponse, error) {
+	// Role discovery is a read, not a long-running engine action. In
+	// particular, do not inherit the engine client's mutation timeout.
+	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
 	var out pgspec.StatusResponse
 	if rc.Agents == nil {
 		return out, engine.ErrUnavailable
@@ -180,23 +253,39 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 	}
 	st, err := live(ctx, rc, m.Name)
 	if err != nil {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s native status read", m.Name)
 		return false, nil
 	}
 	if !st.Running {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s native process to run", m.Name)
 		return false, nil
 	}
 	if m.Role == "data" && m.Topology == "ha" && st.Role != "primary" && (st.Role != "replica" || !st.Streaming) {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s primary or streaming replica role", m.Name)
 		return false, nil
 	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 	if err != nil {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s agent connection", m.Name)
 		return false, nil
 	}
-	agent, err := a.Status(ctx)
+	// Keep the generic observation separate from native role discovery and
+	// subsequent reload/restart mutations, which retain the parent context.
+	agent, err := engine.ObserveAgentStatus(ctx, a, "PostgreSQL", m.Name)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return false, err
+	}
 	if err != nil {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s agent status read", m.Name)
+		return false, nil
+	}
+	diagnostic := domain.MemberStatus{Name: m.Name, Health: true}
+	if agent.Error != "" || len(engine.ApplyProcessDiagnostics(&diagnostic, agent.Processes, "", now(rc))) > 0 {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s healthy supervised processes", m.Name)
 		return false, nil
 	}
 	if agent.ConfigVersion < m.ConfigVersion {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s configuration %d (observed %d)", m.Name, m.ConfigVersion, agent.ConfigVersion)
 		// A failed reload request must remain retryable after its publication
 		// checkpoint; the agent's applied version is the acknowledgement.
 		if err := a.Reload(ctx); err != nil {
@@ -205,9 +294,11 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 		return false, nil
 	}
 	if st.PendingRestart && m.Role == "data" && m.Topology == "single" {
-		return false, a.Process(ctx, agentapi.ProcessAction{Process: "postgres", Action: "restart"})
+		rc.SyncWait = fmt.Sprintf("waiting for member %s pending PostgreSQL restart", m.Name)
+		return false, a.Process(ctx, agentapi.ProcessAction{Process: "postgres", Action: "restart", RequestID: fmt.Sprintf("config/%s/%d/postgres", m.Name, m.ConfigVersion)})
 	}
 	if st.PendingRestart && m.Role == "data" && m.Topology == "ha" {
+		rc.SyncWait = fmt.Sprintf("waiting for member %s pending PostgreSQL restart or switchover", m.Name)
 		if st.Role == "primary" {
 			s, err := load(rc.Cluster)
 			if err != nil {
@@ -228,6 +319,7 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 // Sync advances durable infrastructure work and rolls one ready member at a time.
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
 	result.RequeueAfter = 2 * time.Second
+	rc.SyncWait = "loading PostgreSQL convergence state"
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return result, err
@@ -237,6 +329,18 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	if rc.Cluster.Spec.DataSource != nil && s.RestoreRecovery != nil {
+		rc.SyncWait = "draining initial restore recovery"
+		// A retired initial restore still owns its exact receipt namespace.
+		// Drain that journal before ordinary deployment/health convergence.
+		_, err = p.reconcileRestoreRecovery(ctx, rc, s)
+		return result, err
+	}
+	s.SwitchoverBlocked = ""
+	rc.SyncWait = "retiring unplaced scale-down members"
+	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	if s.UID == "" {
 		s.UID, err = secrets.RandomString(16)
 		if err != nil {
@@ -250,12 +354,16 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, err
 	}
 	if s.Topology != rc.Cluster.Spec.Topology.Type {
+		rc.SyncWait = "converting PostgreSQL topology"
+		if s.RestoreRecovery != nil {
+			return result, engine.Invalid("restore recovery owns the cluster; topology changes must wait")
+		}
 		return p.convertTopology(ctx, rc, s, result)
 	}
 	// A durable shared-memory journal owns its current membership. Allocate
 	// scale-up identities only after it finishes, never before agent probes
 	// that would otherwise preempt provisioning those identities.
-	if s.Rolling == nil {
+	if s.Rolling == nil && s.RestoreRecovery == nil {
 		s.allocate(rc.Cluster)
 	}
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
@@ -264,16 +372,31 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if e := save(rc.Cluster, s); e != nil {
 		return result, e
 	}
+	// A pending stateless proxy deployment must not hold the initial DATA
+	// recovery hostage: native bootstrap has already claimed the source, so
+	// finishing it is what reopens safe placement correction admission.
+	if rc.Cluster.Spec.DataSource != nil && s.Pending != nil {
+		if member := s.find(s.Pending.Member); member != nil && member.Role == "proxy" {
+			if _, e := p.syncBackups(ctx, rc, s); e != nil {
+				return result, e
+			}
+		}
+	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
+		rc.SyncWait = "observing pending infrastructure operation"
 		return result, e
 	}
 	if s.Suspended {
+		rc.SyncWait = "resetting suspended member deployment stages"
 		for _, m := range s.Members {
 			m.Stage = "planned"
 			m.DeployOp = nil
 			m.ServiceID = ""
 		}
 		s.Suspended = false
+		s.BackupCleanupStarted = nil
+		s.CleanedBackupRepositories = nil
+		s.RetainedBackupStorages = nil
 		return result, nil
 	}
 	for _, m := range s.Members {
@@ -281,89 +404,136 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, err
 		}
 	}
+	if handled, e := p.reconcileRecoveryResources(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling recovery resources"
+		return result, e
+	}
+	if handled, e := p.reconcileRestoreRecovery(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling restore recovery"
+		return result, e
+	}
+	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
+		rc.SyncWait = "recovering member runtimes"
+		return result, e
+	}
+	if handled, e := p.recoverNativeCertificates(ctx, rc, s); handled || e != nil {
+		if rc.SyncWait == "" {
+			rc.SyncWait = "recovering native certificates"
+		}
+		return result, e
+	}
+	if handled, e := p.recoverProxyClock(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "recovering proxy monitor clock state"
+		return result, e
+	}
+	if handled, e := p.reconcileAccessIntent(ctx, rc); handled || e != nil {
+		rc.SyncWait = "reconciling managed access journal"
+		return result, e
+	}
 	if s.Replacement != nil && s.Replacement.Recovery != "" {
 		_, err = p.advanceReplacement(ctx, rc, s)
+		rc.SyncWait = "advancing replacement recovery"
 		return result, err
 	}
 	if handled, e := p.reconcileUpgrade(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling PostgreSQL upgrade"
 		return result, e
 	}
 	if handled, e := p.syncBackups(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling backup configuration"
 		return result, e
 	}
 	if handled, e := p.reconcileSharedMemory(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling shared-memory rollout"
 		return result, e
 	}
 	revision, e := p.accessRevision(ctx, rc)
 	if e != nil {
 		return result, e
 	}
-	raw, e := json.Marshal(struct {
-		Spec           domain.ClusterSpec
-		AccessRevision string
-	}{rc.Cluster.Spec, revision})
+	hash, e := desiredConfigHash(rc, revision)
 	if e != nil {
 		return result, e
 	}
-	digest := sha256.Sum256(raw)
-	hash := hex.EncodeToString(digest[:])
 	if s.ConfigHash != hash {
 		s.ConfigHash = hash
 		s.ConfigVersion++
 	}
 	if s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
+		rc.SyncWait = "scaling down data members"
 		return p.scaleDown(ctx, rc, s, result)
 	}
 	for _, m := range s.data() {
 		if m.EtcdState == "pending" {
+			rc.SyncWait = fmt.Sprintf("adding etcd learner %s", m.Name)
 			return result, p.addLearner(ctx, rc, s, m)
 		}
 		if m.EtcdLearner && m.Stage == "joined" && s.Replacement == nil {
+			rc.SyncWait = fmt.Sprintf("promoting etcd learner %s", m.Name)
 			return result, p.promoteLearner(ctx, rc, s, m)
 		}
 	}
 	// Provision all identities before waiting on deployments: etcd needs a quorum.
 	for _, m := range s.Members {
 		desired := desiredComponent(rc, m)
-		if desired.Replicas == 0 {
+		if desired.Replicas == 0 && m.ImportBatch == nil {
 			continue
 		}
 		if m.Stage == "planned" {
+			rc.SyncWait = fmt.Sprintf("planning or importing runtime %s", m.Name)
 			tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {
 				return result, e
 			}
-			specs := []infra.ServiceSpec{}
-			if m.Volume != "" {
-				v, e := rc.Backend.GetService(ctx, m.Volume)
+			if tok == nil {
+				return result, engine.ErrNotFound
+			}
+			if m.ImportBatch == nil {
+				var specs []infra.ServiceSpec
+				if m.Volume != "" {
+					v, e := rc.Backend.GetService(ctx, m.Volume)
+					if e != nil {
+						return result, e
+					}
+					if v != nil && v.Importing {
+						return result, engine.Invalid("incomplete import for %s has no frozen batch; recover the original import intent before continuing", m.Name)
+					}
+					if v == nil {
+						specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
+					}
+				}
+				runtime, e := rc.Backend.GetService(ctx, m.Name)
 				if e != nil {
 					return result, e
 				}
-				if v == nil {
-					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
+				if runtime != nil && runtime.Importing {
+					return result, engine.Invalid("incomplete import for %s has no frozen batch; recover the original import intent before continuing", m.Name)
 				}
-			}
-			runtime, e := rc.Backend.GetService(ctx, m.Name)
-			if e != nil {
-				return result, e
-			}
-			if runtime == nil {
-				specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: desired.Resources, Containers: desired.Replicas}))
-			}
-			m.Resources = desired.Resources
-			if m.Volume != "" {
-				m.Disk = domain.Resources{MinDisk: desired.Resources.MinDisk, MaxDisk: desired.Resources.MaxDisk}
-			}
-			m.Replicas = desired.Replicas
-			m.Version = rc.Cluster.Spec.Version
-			m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
-			m.Topology = s.Topology
-			m.ConfigVersion = s.ConfigVersion
-			if len(specs) == 0 {
-				m.Stage = "imported"
+				if runtime == nil {
+					specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: desired.Resources, Containers: desired.Replicas}))
+				}
+				m.Resources = desired.Resources
+				if m.Volume != "" {
+					m.Disk = domain.Resources{MinDisk: desired.Resources.MinDisk, MaxDisk: desired.Resources.MaxDisk}
+				}
+				m.Replicas = desired.Replicas
+				m.Version = rc.Cluster.Spec.Version
+				m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
+				m.Topology = s.Topology
+				m.ConfigVersion = s.ConfigVersion
+				if len(specs) == 0 {
+					m.Stage = "imported"
+				} else {
+					m.ImportBatch = engine.NewImportPlan(specs)
+				}
+				// End this pass so the outer reconciler persists the exact
+				// batch and inputs before the first infrastructure submission.
 				return result, nil
 			}
-			op, e := rc.Backend.ImportServices(ctx, specs)
+			if len(m.ImportBatch.Specs) == 0 {
+				return result, engine.Invalid("invalid frozen import batch for %s", m.Name)
+			}
+			op, e := m.ImportBatch.Submit(ctx, rc, m.Name, tok.Token)
 			if e != nil {
 				return result, e
 			}
@@ -376,8 +546,20 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			continue
 		}
 		if m.Stage == "imported" {
+			rc.SyncWait = fmt.Sprintf("deploying imported runtime %s", m.Name)
 			spec, e := p.runtimeSpec(rc, m)
 			if e != nil {
+				return result, e
+			}
+			if engine.DeploymentBlocked(rc, m.Name, spec) {
+				continue
+			}
+			desired := desiredComponent(rc, m).Resources
+			if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, spec, desired, m.Resources); changed || e != nil {
+				if e == nil {
+					p.track(s, m, "resize", op)
+					s.Pending.Resources = desired
+				}
 				return result, e
 			}
 			op, e := engine.Deploy(ctx, rc, m.Name, spec)
@@ -396,7 +578,34 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			continue
 		}
 		if m.Stage == "deploying" {
-			st, e := rc.Backend.OpStatus(ctx, *m.DeployOp)
+			rc.SyncWait = fmt.Sprintf("observing runtime deployment %s", m.Name)
+			var st infra.OpState
+			var e error
+			if !m.RuntimeRecovery.Initialized {
+				var changed bool
+				changed, e = engine.ResizeUnplacedDeployment(ctx, rc, m.Name, desiredComponent(rc, m).Resources, &m.Resources, m.DeployOp)
+				if changed {
+					return result, nil
+				}
+			}
+			if e == nil {
+				st, e = rc.Backend.OpStatus(ctx, *m.DeployOp)
+			}
+			if st.Status == "DeploymentRetriesExhausted" && e == nil {
+				e = &infra.DeploymentExhaustedError{Service: m.Name, LastError: st.Message}
+			}
+			if errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
+				engine.ApplyDeploymentResourceRollback(e, &m.Resources)
+				spec, specErr := p.runtimeSpec(rc, m)
+				if specErr != nil {
+					return result, specErr
+				}
+				m.Stage, m.DeployOp = "imported", nil
+				if e = engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, e); e != nil {
+					err = errors.Join(err, e)
+				}
+				continue
+			}
 			if e != nil {
 				return result, e
 			}
@@ -413,40 +622,66 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			m.DeployOp = nil
 		}
 	}
-	if deploymentsBusy {
-		return result, nil
-	}
-	for _, m := range s.Members {
-		if desiredComponent(rc, m).Replicas == 0 {
-			continue
-		}
-		if m.Stage == "deployed" {
-			ok, e := ready(ctx, rc, m)
-			if e != nil {
-				return result, e
+	// Publish ready DATA before testing proxy writer health. Allocation order
+	// can retain a proxy between data members after single-to-HA conversion;
+	// waiting on it first can hide the healthy primary it needs published.
+	for _, role := range [...]string{"data", "proxy"} {
+		for _, m := range s.Members {
+			if m.Role != role {
+				continue
 			}
-			if !ok {
-				return result, nil
+			// DATA readiness must advance while a stateless proxy is still waiting
+			// for placement. Initial recovery queues only after DATA has joined;
+			// a global deployment barrier here would deadlock its mutation fence.
+			if deploymentsBusy && m.Role == "proxy" {
+				continue
 			}
-			m.Stage = "joined"
-			if m.Role == "data" && !m.ProxyReady {
-				m.ProxyReady = true
-				// Joining is the publication barrier for proxy backends.
-				// Publish a new version even during replacement operations,
-				// which may not reach the ordinary configuration rollout.
-				s.ConfigVersion++
-				for _, proxy := range s.Members {
-					if proxy.Role == "proxy" {
-						proxy.ConfigVersion = s.ConfigVersion
+			if desiredComponent(rc, m).Replicas == 0 {
+				continue
+			}
+			if m.Stage == "deployed" {
+				rc.SyncWait = fmt.Sprintf("waiting for deployed member %s readiness", m.Name)
+				ok, e := ready(ctx, rc, m)
+				if e != nil {
+					return result, e
+				}
+				if !ok {
+					return result, nil
+				}
+				// Runtime-only recovery can bypass the ordinary import journal.
+				// Retained inventory is released only after the member rejoins.
+				if m.Volume != "" && rc.Store != nil {
+					if e := rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); e != nil && !missing(e) {
+						return result, e
 					}
 				}
+				m.Stage = "joined"
+				m.NativeReadiness = nil
+				if m.Role == "data" && !m.ProxyReady {
+					m.ProxyReady = true
+					// Joining is the publication barrier for proxy backends.
+					// Publish a new version even during replacement operations,
+					// which may not reach the ordinary configuration rollout.
+					s.ConfigVersion++
+					for _, proxy := range s.Members {
+						if proxy.Role == "proxy" {
+							proxy.ConfigVersion = s.ConfigVersion
+						}
+					}
+				}
+				rc.SyncWait = fmt.Sprintf("persisting joined member %s", m.Name)
+				return result, nil
 			}
-			return result, nil
 		}
+	}
+	if deploymentsBusy {
+		rc.SyncWait = "waiting for infrastructure deployments to complete"
+		return result, nil
 	}
 	// Disable proxies only after the direct data endpoint is ready.
 	for i, m := range s.Members {
 		if m.Role == "proxy" && desiredComponent(rc, m).Replicas == 0 {
+			rc.SyncWait = fmt.Sprintf("removing disabled proxy %s", m.Name)
 			if m.ServiceID != "" {
 				if e := rc.Backend.DeletePublicPorts(ctx, m.Name); e != nil {
 					return result, e
@@ -459,18 +694,50 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				return result, nil
 			}
 			s.Members = append(s.Members[:i], s.Members[i+1:]...)
+			delete(rc.Cluster.Status.DeploymentFailures, m.Name)
 			return result, nil
 		}
 	}
 	if s.Replacement == nil && len(s.data()) > rc.Cluster.Spec.Components.Engine.Replicas {
+		rc.SyncWait = "scaling down excess data members"
 		return p.scaleDown(ctx, rc, s, result)
 	}
 	// Replicas precede the writer; observe leadership afresh before each disruption.
 	order := append([]*member(nil), s.Members...)
 	roles := map[string]string{}
-	for _, m := range order {
-		st, e := live(ctx, rc, m.Name)
+	observed := observeLiveMembers(ctx, rc, order)
+	for i, m := range order {
+		st, e := observed[i].status, observed[i].err
+		if m.Role == "proxy" && m.Public {
+			if repairer, ok := rc.Backend.(interface {
+				RepairPublishedEndpoint(context.Context, string, bool) (bool, error)
+			}); ok {
+				if e == nil && st.Running {
+					if _, err := repairer.RepairPublishedEndpoint(ctx, m.Name, true); err != nil {
+						return result, err
+					}
+				} else {
+					probeCtx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+					sample := observeProxyStatus(probeCtx, rc, m)
+					cancel()
+					healthy := sample.err == nil && sample.proxyCount == max(1, m.Replicas) && len(sample.proxyInstances) == sample.proxyCount
+					for _, instance := range sample.proxyInstances {
+						healthy = healthy && instance.err == nil && instance.agentHealthy && instance.status.Running
+					}
+					if healthy && sample.proxyEndpointErr != nil {
+						rc.SyncWait = fmt.Sprintf("waiting for published proxy %s logical endpoint repair", m.Name)
+						if _, err := repairer.RepairPublishedEndpoint(ctx, m.Name, false); err != nil {
+							return result, err
+						}
+						// A completed platform update is not a recovery receipt.
+						// Keep generation/readiness fenced until the next logical probe succeeds.
+						return result, nil
+					}
+				}
+			}
+		}
 		if e != nil || !st.Running {
+			rc.SyncWait = nativeObservationWait(m.Name, e)
 			service, err := rc.Backend.GetService(ctx, m.Name)
 			if err != nil {
 				return result, err
@@ -489,14 +756,76 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				s.Pending.Resources = desired.Resources
 				return result, nil
 			}
+			if m.Role == "proxy" && service != nil && service.Status == infra.StatusFailed {
+				return result, p.recoverFailedRuntime(ctx, rc, s, m)
+			}
 			return result, nil
 		}
-		roles[m.Name] = st.Role
+		if m.Role == "data" {
+			roles[m.Name] = st.Role
+		}
 	}
-	sort.SliceStable(order, func(i, j int) bool { return roles[order[i].Name] != "primary" && roles[order[j].Name] == "primary" })
+	// Publish reduced proxy budgets before scaling proxies or restarting a
+	// smaller PostgreSQL writer. Data replicas still precede the writer.
+	rank := func(m *member) int {
+		if m.Role == "proxy" {
+			return 0
+		}
+		if roles[m.Name] == "primary" || roles[m.Name] == "standalone" {
+			return 2
+		}
+		return 1
+	}
+	sort.SliceStable(order, func(i, j int) bool { return rank(order[i]) < rank(order[j]) })
 	for _, m := range order {
+		if _, failed := rc.Cluster.Status.DeploymentFailures[m.Name]; failed {
+			if spec, specErr := p.runtimeSpec(rc, m); specErr == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
+				continue
+			}
+		}
 		desired := desiredComponent(rc, m)
-		if m.Role == "proxy" && m.Replicas != desired.Replicas {
+		if m.Role == "proxy" {
+			runtime, err := rc.Backend.GetService(ctx, m.Name)
+			if err != nil {
+				return result, err
+			}
+			if runtime != nil && runtime.Status == infra.StatusFailed &&
+				m.ConfigVersion == s.ConfigVersion && m.Version == rc.Cluster.Spec.Version && reflect.DeepEqual(m.Resources, desired.Resources) &&
+				(m.Replicas == desired.Replicas || runtime.MaxContainers == desired.Replicas) {
+				rc.SyncWait = fmt.Sprintf("recovering failed proxy %s", m.Name)
+				return result, p.recoverFailedRuntime(ctx, rc, s, m)
+			}
+			// Publish the surge-safe pool before infrastructure can start a canary.
+			if m.ConfigVersion != s.ConfigVersion {
+				rc.SyncWait = fmt.Sprintf("publishing proxy %s configuration %d", m.Name, s.ConfigVersion)
+				m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
+				m.Version = rc.Cluster.Spec.Version
+				m.ConfigVersion = s.ConfigVersion
+				m.Stage = "deployed"
+				if e := activateCertificates(ctx, rc, m); e != nil {
+					return result, e
+				}
+				if e := save(rc.Cluster, s); e != nil {
+					return result, e
+				}
+				a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+				if e != nil {
+					return result, e
+				}
+				defer a.Close()
+				return result, a.Reload(ctx)
+			}
+			if m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources) {
+				rc.SyncWait = fmt.Sprintf("waiting for proxy %s configuration before resize", m.Name)
+				applied, e := proxyApplied(ctx, rc, m, s.ConfigVersion, false)
+				if e != nil || !applied {
+					return result, e
+				}
+			}
+		}
+		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
+		if m.Role == "proxy" && m.Replicas != desired.Replicas && !changed {
+			rc.SyncWait = fmt.Sprintf("scaling proxy %s", m.Name)
 			op, e := rc.Backend.SetContainerCount(ctx, m.Name, desired.Replicas, desired.Replicas)
 			if e != nil {
 				return result, e
@@ -506,6 +835,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			return result, nil
 		}
 		if m.Volume != "" && (m.Disk.MinDisk != desired.Resources.MinDisk || m.Disk.MaxDisk != desired.Resources.MaxDisk) {
+			rc.SyncWait = fmt.Sprintf("growing member %s volume", m.Name)
 			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
 				return result, err
 			}
@@ -518,31 +848,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			s.Pending.Resources = disk
 			return result, nil
 		}
-		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
 		if !changed {
 			continue
 		}
 		if roles[m.Name] == "primary" && s.Topology == "ha" && needsDisruption(p, rc, m, desired) {
-			candidate := ""
-			for _, peer := range order {
-				if peer.Role == "data" && roles[peer.Name] == "replica" && peer.ConfigVersion == s.ConfigVersion {
-					candidate = peer.Name
-					break
-				}
-			}
-			if candidate == "" {
-				return result, nil
-			}
-			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if e != nil {
-				return result, e
-			}
-			if e = a.Engine(ctx, "postgres", "switchover", pgspec.SwitchoverRequest{Candidate: candidate}, nil); e != nil {
-				return result, e
-			}
-			return result, nil
+			rc.SyncWait = fmt.Sprintf("switching leadership away from %s", m.Name)
+			return result, switchAwayConfigured(ctx, rc, s, m.Name, true)
 		}
 		if !reflect.DeepEqual(m.Resources, desired.Resources) {
+			rc.SyncWait = fmt.Sprintf("resizing member %s", m.Name)
 			op, e := rc.Backend.SetResources(ctx, m.Name, desired.Resources)
 			if e != nil {
 				return result, e
@@ -561,6 +875,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		// ProxySQL packages and process configuration are independent of the
 		// PostgreSQL release. Publish proxy metadata through reload instead.
 		if versionChanged && m.Role == "data" {
+			rc.SyncWait = fmt.Sprintf("redeploying member %s version", m.Name)
 			m.Stage = "imported"
 			return result, nil
 		}
@@ -573,6 +888,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			m.ProxyReady = true
 		}
 		m.Stage = "deployed"
+		rc.SyncWait = fmt.Sprintf("publishing member %s configuration %d", m.Name, s.ConfigVersion)
 		// Publish before requesting the pull, so a failed reload is retried by observation.
 		if e := save(rc.Cluster, s); e != nil {
 			return result, e
@@ -588,22 +904,63 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, nil
 	}
 	if s.Replacement != nil {
+		rc.SyncWait = "waiting for member replacement completion"
 		return result, nil
 	}
 	if handled, e := p.syncBackups(ctx, rc, s); handled || e != nil {
+		rc.SyncWait = "reconciling final backup configuration"
 		return result, e
 	}
 	if err = p.reconcileExposure(ctx, rc, s); err != nil {
+		rc.SyncWait = "reconciling public exposure"
 		return result, err
+	}
+	// Exposure changes can start an asynchronous runtime rollout after the
+	// earlier readiness pass. This also covers the direct data endpoint when
+	// proxies are disabled. Require infrastructure completion before fresh
+	// native/configuration observations; proxy checks visit every live instance.
+	target := connectionMember(rc, s)
+	for _, m := range s.Members {
+		if m.Role == "proxy" || m.Name == target {
+			runtime, e := rc.Backend.GetService(ctx, m.Name)
+			if e != nil {
+				return result, e
+			}
+			if runtime != nil && runtime.Status == infra.StatusFailed {
+				rc.SyncWait = fmt.Sprintf("recovering post-exposure runtime %s", m.Name)
+				return result, p.recoverFailedRuntime(ctx, rc, s, m)
+			}
+			if runtime == nil || runtime.Status != infra.StatusRunning && runtime.Status != infra.StatusActive {
+				rc.SyncWait = fmt.Sprintf("waiting for post-exposure runtime %s to be Running/Active", m.Name)
+				return result, nil
+			}
+			rc.SyncWait = fmt.Sprintf("waiting for post-exposure member %s readiness", m.Name)
+			ok, e := ready(ctx, rc, m)
+			if e != nil || !ok {
+				return result, e
+			}
+		}
+	}
+	if rc.Cluster.Spec.DataSource != nil && !engine.InitialDataSourceUnproven(rc.Cluster) {
+		applied, e := p.InitialDataSourceApplied(rc.Cluster)
+		if e != nil || !applied {
+			rc.SyncWait = "waiting for initial data source application receipt"
+			return result, e
+		}
 	}
 	if p.options.Flavour != nil {
 		if err = p.options.Flavour.PostReady(ctx, rc); err != nil {
 			return result, err
 		}
 	}
-	s.Formed = true
+	if !s.Formed {
+		s.Formed = true
+		// Revoke first-initialization authorization in durable member configs.
+		s.ConfigVersion++
+	}
 	s.ConversionSeed = ""
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+	rc.SyncWait = ""
 	result.RequeueAfter = 10 * time.Second
 	return result, nil
 }
@@ -718,4 +1075,22 @@ func intersectAllowlists(current, desired []string) ([]string, error) {
 	}
 	sort.Strings(result)
 	return result, nil
+}
+
+// A terminal runtime failure must not turn into a successful readiness wait.
+// Recovery is a new operation and only a backend proof may admit it without placement.
+func (p *Core) recoverFailedRuntime(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if recoverer, ok := rc.Backend.(infra.FailedScaleRecoverer); ok && m.Role == "proxy" {
+		desired := desiredComponent(rc, m)
+		op, recovering, err := recoverer.RecoverFailedScale(ctx, m.Name, desired.Replicas, desired.Replicas)
+		if err != nil {
+			return err
+		}
+		if recovering {
+			p.track(s, m, "scale", op)
+			s.Pending.Replicas = desired.Replicas
+			return nil
+		}
+	}
+	return fmt.Errorf("infrastructure runtime failed for %s; inspect the terminal backend operation and deployment, restore placement capacity or application health, then explicitly reapply the desired runtime", m.Name)
 }

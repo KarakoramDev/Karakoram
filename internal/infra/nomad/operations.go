@@ -6,11 +6,12 @@ package nomad
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -54,19 +55,31 @@ func operationMutation(ctx context.Context, request func() error) error {
 }
 
 type operation struct {
-	Action         string            `json:"action"`
-	Hostname       string            `json:"hostname,omitempty"`
-	RecordID       string            `json:"recordId,omitempty"`
-	JobID          string            `json:"jobId,omitempty"`
-	EvalID         string            `json:"evalId,omitempty"`
-	Phase          string            `json:"phase,omitempty"`
-	Issued         time.Time         `json:"issued"`
-	Started        time.Time         `json:"started"`
-	Services       map[string]string `json:"services,omitempty"`
-	JobVersion     uint64            `json:"jobVersion,omitempty"`
-	JobModifyIndex uint64            `json:"jobModifyIndex,omitempty"`
-	Message        string            `json:"message,omitempty"`
-	Lease          *operationLease   `json:"lease,omitempty"`
+	Action           string            `json:"action"`
+	Hostname         string            `json:"hostname,omitempty"`
+	RecordID         string            `json:"recordId,omitempty"`
+	JobID            string            `json:"jobId,omitempty"`
+	EvalID           string            `json:"evalId,omitempty"`
+	Phase            string            `json:"phase,omitempty"`
+	Issued           time.Time         `json:"issued"`
+	Started          time.Time         `json:"started"`
+	Services         map[string]string `json:"services,omitempty"`
+	JobVersion       uint64            `json:"jobVersion,omitempty"`
+	JobModifyIndex   uint64            `json:"jobModifyIndex,omitempty"`
+	Message          string            `json:"message,omitempty"`
+	RetainOnly       bool              `json:"retainOnly,omitempty"`
+	UnplacedPrevious *infra.Resources  `json:"unplacedPrevious,omitempty"`
+	RetainedHash     string            `json:"retainedHash,omitempty"`
+	Lease            *operationLease   `json:"lease,omitempty"`
+
+	ResourceCorrection *resourceCorrection `json:"resourceCorrection,omitempty"`
+}
+
+// Conditional resource corrections retain their exact predecessor and accepted
+// target so a lost provider checkpoint recovers the receipt, not another rollout.
+type resourceCorrection struct {
+	Predecessor time.Time       `json:"predecessor"`
+	Resources   infra.Resources `json:"resources"`
 }
 
 func encodeOp(o operation) infra.Op {
@@ -120,6 +133,22 @@ func decodeOp(op infra.Op) (operation, error) {
 	return o, nil
 }
 func (b *Backend) begin(ctx context.Context, r *record, action string) (infra.Op, error) {
+	return b.beginOperation(ctx, r, action, false, nil)
+}
+
+func (b *Backend) beginOperation(ctx context.Context, r *record, action string, retainOnly bool, unplacedPrevious *infra.Resources) (infra.Op, error) {
+	if r.Importing {
+		return infra.Op{}, &APIError{Status: 409, Op: "lifecycle", Message: "import is incomplete; retry the original import before changing this runtime"}
+	}
+	if r.Volume != "" && action != "stop" && action != "delete" {
+		ok, err := b.restorableVolume(ctx, r)
+		if err != nil {
+			return infra.Op{}, err
+		}
+		if !ok {
+			return infra.Op{}, &APIError{Status: 409, Op: "lifecycle", Message: "original host volume is missing, changed or not ready; restore original storage or explicitly replace the member; refusing runtime mutation"}
+		}
+	}
 	work, cancel := operationContext(ctx)
 	defer cancel()
 	if b.operationLeaseBlocked(r) {
@@ -133,15 +162,32 @@ func (b *Backend) begin(ctx context.Context, r *record, action string) (infra.Op
 	if err != nil {
 		return infra.Op{}, err
 	}
-	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease}
-	// Claim exclusion and persist the pending specification before stopping.
+	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease, RetainOnly: retainOnly, UnplacedPrevious: unplacedPrevious}
+	if unplacedPrevious != nil && r.Pending != nil {
+		o.ResourceCorrection = &resourceCorrection{Predecessor: r.Pending.Issued, Resources: r.Resources}
+	}
+	// Stateless changes need no single-writer shutdown fence. Register the
+	// new version over the owned job and let its serving-gated canary update
+	// retain the old allocations. Explicit lifecycle actions, singleton relays
+	// and volume members still fence; only application specification updates roll.
+	relay := r.Deployment != nil && len(r.Deployment.Runtime.Args) != 0 && r.Deployment.Runtime.Args[0] == "relay"
+	if r.Volume == "" && !relay && (action == "deploy" || action == "resources" || action == "scale" || action == "ports") {
+		o.Phase = "registering"
+		o.UnplacedPrevious = nil
+	}
+	// Claim exclusion and persist the pending specification before mutation.
 	r.Pending = &o
 	if err = b.save(work, r); err != nil {
 		return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
 	}
-	if job != nil {
+	if job != nil && o.Phase == "stopping" {
 		if err = b.stopOperationJob(work, r, job, observed); err != nil {
 			return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
+		}
+		if unplacedPrevious != nil && r.Volume != "" {
+			if err = b.checkUnplacedResize(work, r); err != nil {
+				return infra.Op{}, b.releaseFailedOperation(work, r, lease, err)
+			}
 		}
 	}
 	if err = b.releaseOperationLease(work, r); err != nil {
@@ -277,6 +323,7 @@ func operationIDs(o operation) []string {
 	return ids
 }
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	ctx = infra.WithoutObservation(ctx)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.opStatus(ctx, op)
@@ -298,6 +345,10 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 			}
 			if r == nil || r.ID != id {
 				return expired(o), nil
+			}
+			if r.Importing {
+				state.Message = "import is incomplete; retry the original import with the same specification to resume its reserved identities"
+				return state, nil
 			}
 			if r.Pending != nil && r.Pending.Action == "ports" {
 				if _, e = b.opStatus(ctx, encodeOp(*r.Pending)); e != nil {
@@ -340,6 +391,10 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	}
 	if r.ID != o.RecordID {
 		return expired(o), nil
+	}
+	if r.Pending != nil && r.Pending.Phase == "failed" && r.Pending.UnplacedPrevious != nil {
+		state.Failed, state.Status, state.Message = true, "DeploymentRetriesExhausted", r.Pending.Message
+		return state, unplacedResizeFailure(r)
 	}
 	if r.Pending == nil || !r.Pending.Issued.Equal(o.Issued) {
 		if r.Pending != nil && r.Pending.Action == "ports" {
@@ -396,6 +451,11 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 		return state, err
 	}
 	if current.Phase == "stopping" {
+		if current.UnplacedPrevious != nil && r.Volume != "" {
+			if err := b.checkUnplacedResize(ctx, r); err != nil {
+				return state, err
+			}
+		}
 		// The CAS-saved restoration claim survives process reconstruction and
 		// every superseding save. Absence is not final while its POST can land.
 		if b.restorationFenced(r) {
@@ -424,6 +484,18 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 		for _, a := range as {
 			if !allocationTerminal(a) {
 				state.Message = "waiting for previous allocations to stop"
+				failures, err := b.stalledStops(ctx, r, as)
+				if err != nil {
+					return state, err
+				}
+				if len(failures) > 0 {
+					state.Status = "BackendStopStalled"
+					messages := make([]string, len(failures))
+					for i, failure := range failures {
+						messages[i] = failure.Message
+					}
+					state.Message = strings.Join(messages, "; ")
+				}
 				return state, nil
 			}
 		}
@@ -455,22 +527,33 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 			return state, b.save(ctx, r)
 		}
 		current.Phase = "registering"
+		current.UnplacedPrevious = nil
 		state.Status = current.Phase
 		return state, b.save(ctx, r)
 	}
 	if current.Phase == "registering" {
-		var registered struct {
-			Version, JobModifyIndex uint64
-			Meta                    map[string]string
-		}
-		_, err = b.c.get(ctx, "/v1/job/"+r.Hostname, nil, &registered)
-		if err != nil && !errors.Is(err, infra.ErrNotFound) {
-			return state, err
-		}
-		if err == nil {
-			if registered.Meta["karakoram.operation"] != current.Issued.Format(time.RFC3339Nano) {
-				return state, infra.ErrConflict
+		existing, observed, jobErr := b.operationJob(ctx, r)
+		if jobErr != nil && !errors.Is(jobErr, infra.ErrNotFound) {
+			if (current.RetainOnly || current.RetainedHash != "") && errors.Is(jobErr, infra.ErrConflict) {
+				return b.failOperation(ctx, r, state, "count-only recovery lost job ownership before registration; refusing to mutate the foreign runtime")
 			}
+			return state, jobErr
+		}
+		registered := observed
+		existingHash := retainedJobHash(existing)
+		matches := jobErr == nil && observed.Meta["karakoram.operation"] == current.Issued.Format(time.RFC3339Nano) &&
+			(current.JobModifyIndex == 0 || observed.JobModifyIndex != current.JobModifyIndex)
+		if current.RetainedHash != "" {
+			matches = jobErr == nil && !observed.Stop && observed.Version == current.JobVersion &&
+				observed.JobModifyIndex >= current.JobModifyIndex && retainedJobHash(existing) == current.RetainedHash
+			if !matches && (jobErr != nil || observed.JobModifyIndex != current.JobModifyIndex) {
+				return b.failOperation(ctx, r, state, "count-only registration was superseded or automatically reverted")
+			}
+		}
+		if jobErr == nil && !matches && r.Volume != "" {
+			return state, infra.ErrConflict
+		}
+		if matches {
 			var evaluations []struct {
 				ID             string
 				JobModifyIndex uint64
@@ -492,9 +575,51 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 			if e != nil {
 				return state, e
 			}
-			// A second poller cannot replace the job registered by the first.
+			retaining := false
+			if current.Action == "scale" && r.Volume == "" && jobErr == nil && !observed.Stop {
+				// A pure count change must not replace the serving tasks or
+				// require start-first canary capacity.
+				if retained, e := b.retainedScaleJob(ctx, r, existing, false, current.RetainOnly); e != nil {
+					return state, e
+				} else if retained != nil {
+					job["Job"] = retained
+					retaining = true
+				}
+			}
+			if retaining {
+				retained := job["Job"].(map[string]json.RawMessage)
+				hash := retainedJobHash(retained)
+				if current.RetainedHash != "" && hash != current.RetainedHash {
+					return b.failOperation(ctx, r, state, "count-only registration content changed before acknowledgement")
+				}
+				// Job/group/task Meta is part of Nomad's task specification.
+				// Keep the serving Meta unchanged; a fresh operation marker
+				// would restart every retained allocation. Before POST, persist
+				// the exact normalized content digest, expected next version and
+				// CAS base index. A lost response may adopt only that next version
+				// with identical content, never a later revert/superseding write.
+				// Once acknowledged, version AND JobModifyIndex are the receipt.
+				current.RetainedHash = hash
+				current.JobVersion = observed.Version + 1
+				current.JobModifyIndex = observed.JobModifyIndex
+				if hash == existingHash {
+					// Nomad does not increment the version for an identical
+					// registration. Adopt the exact existing version/index
+					// instead of issuing an unnecessary, unidentifiable POST.
+					current.JobVersion = observed.Version
+					return state, b.save(ctx, r)
+				}
+				if err = b.save(ctx, r); err != nil {
+					return state, err
+				}
+			}
+			if (current.RetainOnly || current.RetainedHash != "") && !retaining {
+				return b.failOperation(ctx, r, state, "count-only recovery no longer has enough healthy allocations of the exact desired specification; inspect placement and retry after restoring capacity or health")
+			}
+			// Replace only the exact owned job observed above. A stale poller
+			// cannot overwrite a successor or a foreign registration.
 			job["EnforceIndex"] = true
-			job["JobModifyIndex"] = uint64(0)
+			job["JobModifyIndex"] = observed.JobModifyIndex
 			var response struct {
 				EvalID         string
 				JobModifyIndex uint64
@@ -510,8 +635,19 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 			if response.EvalID == "" {
 				return state, silentFailure("job registration omitted evaluation identity")
 			}
-			if _, err = b.c.get(ctx, "/v1/job/"+r.Hostname, nil, &registered); err != nil {
-				return state, err
+			acknowledged, checked, checkErr := b.operationJob(ctx, r)
+			if checkErr != nil {
+				if retaining && errors.Is(checkErr, infra.ErrConflict) {
+					return b.failOperation(ctx, r, state, "count-only recovery lost job ownership before acknowledgement")
+				}
+				return state, checkErr
+			}
+			registered = checked
+			if retaining {
+				if registered.Stop || registered.Version != current.JobVersion ||
+					registered.JobModifyIndex != response.JobModifyIndex || retainedJobHash(acknowledged) != current.RetainedHash {
+					return b.failOperation(ctx, r, state, "count-only registration was superseded or automatically reverted before acknowledgement")
+				}
 			}
 			current.EvalID = response.EvalID
 		}
@@ -522,19 +658,10 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 		state.Status = current.Phase
 		return state, b.save(ctx, r)
 	}
-	// Shutdown can legitimately outlast this window on a disconnected node.
-	// Only a registered replacement's startup is bounded.
-	if !current.Started.IsZero() && time.Since(current.Started) > startupWindow {
-		return b.failOperation(ctx, r, state, "runtime did not start within the 15 minute startup window")
-	}
-	var eval struct {
-		Status, StatusDescription, BlockedEval string
-		FailedTGAllocs                         map[string]struct {
-			NodesEvaluated, NodesFiltered, NodesExhausted         int
-			ConstraintFiltered, ClassFiltered, DimensionExhausted map[string]int
-		}
-	}
-	_, err = b.c.get(ctx, "/v1/evaluation/"+current.EvalID, nil, &eval)
+	// A scheduler rejection is not a failed deployment attempt. Keep the same
+	// registration/evaluation alive and give the runtime a fresh startup window
+	// once placement becomes possible, rather than spending deploy retries.
+	eval, err := b.currentEvaluation(ctx, r, current.JobModifyIndex)
 	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return state, err
 	}
@@ -552,37 +679,52 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 	}
 	// The original evaluation can retain historical placement failures even
 	// after its blocked evaluation has successfully placed the current job.
-	if running >= r.Max {
+	if r.Volume != "" && running >= r.Max {
 		current.Phase = "done"
 		state.Done = true
 		state.Status = "done"
 		return state, b.save(ctx, r)
 	}
-	missing := errors.Is(err, infra.ErrNotFound)
-	if !missing && (eval.Status == "failed" || eval.Status == "canceled" || eval.Status == "cancelled" || eval.Status == "blocked" || len(eval.FailedTGAllocs) > 0 || eval.BlockedEval != "") {
-		groups := make([]string, 0, len(eval.FailedTGAllocs))
-		for group, f := range eval.FailedTGAllocs {
-			groups = append(groups, fmt.Sprintf("%s: evaluated=%d filtered=%d exhausted=%d", group, f.NodesEvaluated, f.NodesFiltered, f.NodesExhausted))
+	// Placement rejection cannot revive a rollout that Nomad abandoned.
+	// Check exact job identity and native terminal deployment outcomes before
+	// suspending only the startup deadline for genuinely pending scheduling.
+	statelessState := state
+	if r.Volume == "" {
+		observed, observeErr := b.statelessOperationStatus(ctx, r, state, as, eval.Status, err)
+		if observeErr != nil || observed.Done || observed.Failed {
+			return observed, observeErr
 		}
-		sort.Strings(groups)
-		message := "Nomad evaluation " + eval.Status
-		if len(groups) > 0 {
-			message += "; FailedTGAllocs: " + strings.Join(groups, "; ")
-		}
-		placementBlocked := eval.Status == "blocked" || len(eval.FailedTGAllocs) > 0 || eval.BlockedEval != ""
-		if placementBlocked {
-			message += "; placement blocked"
-			state.Message = message
-			// Let Nomad's blocked evaluation wait for node/capacity recovery.
-			// The normal startup deadline still bounds this operation.
-			if current.Message != message {
-				current.Message = message
-				return state, b.save(ctx, r)
-			}
-			return state, nil
-		}
-		return b.failOperation(ctx, r, state, message)
+		statelessState = observed
 	}
+	if err == nil && (eval.Status == "failed" || eval.Status == "canceled" || eval.Status == "cancelled") {
+		return b.failOperation(ctx, r, state, "Nomad evaluation "+eval.Status)
+	}
+	if message := b.placementMessage(r, eval); err == nil && message != "" && !currentAllocationsPlaced(as, current.JobVersion, current.JobModifyIndex, r.Max) {
+		state.Status = "BackendPlacementFailed"
+		state.Message = message
+		if r.Volume == "" {
+			state.Message += "; provide spare CPU, memory and a free published host-port slot for the canary"
+		}
+		current.Message = state.Message
+		current.Started = b.now().UTC()
+		return state, nil
+	}
+	if current.Message != "" {
+		current.Message = ""
+		current.Started = b.now().UTC()
+	}
+	// Shutdown can legitimately outlast this window on a disconnected node.
+	// Only a registered replacement's unblocked startup is bounded.
+	if !current.Started.IsZero() && b.now().Sub(current.Started) > startupWindow {
+		if r.Volume == "" {
+			return b.failOperation(ctx, r, state, "stateless runtime did not start within the 15 minute startup window; inspect Nomad deployment health and placement, provide spare CPU, memory and published host-port capacity, then retry")
+		}
+		return b.failOperation(ctx, r, state, "runtime did not start within the 15 minute startup window")
+	}
+	if r.Volume == "" {
+		return statelessState, nil
+	}
+	missing := errors.Is(err, infra.ErrNotFound)
 	if failed != "" {
 		return b.failOperation(ctx, r, state, "allocation "+failed)
 	}
@@ -590,6 +732,344 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 		return expired(o), nil
 	}
 	return state, nil
+}
+
+// Stateless count-only updates can retain allocations from older job versions.
+// A deployment, when present for this version, is the health authority; a
+// running task alone must not prematurely complete a canary rollout.
+func (b *Backend) statelessOperationStatus(ctx context.Context, r *record, state infra.OpState, as []allocation, evalStatus string, evalErr error) (infra.OpState, error) {
+	current := r.Pending
+	raw, job, err := b.operationJob(ctx, r)
+	if err != nil {
+		if (current.RetainOnly || current.RetainedHash != "") && errors.Is(err, infra.ErrConflict) {
+			return b.failOperation(ctx, r, state, "count-only recovery lost job ownership; refusing to adopt the foreign runtime")
+		}
+		return state, err
+	}
+	if !operationMatchesJob(current, job) {
+		return b.failOperation(ctx, r, state, "stateless job was superseded or automatically reverted; inspect the failed Nomad deployment and correct resources, host-port capacity or application readiness before retrying")
+	}
+	var deployment *struct {
+		JobVersion uint64
+		Status     string
+	}
+	_, err = b.c.get(ctx, "/v1/job/"+r.Hostname+"/deployment", nil, &deployment)
+	if err != nil && !errors.Is(err, infra.ErrNotFound) {
+		return state, err
+	}
+	if deployment != nil && deployment.JobVersion == current.JobVersion {
+		switch deployment.Status {
+		case "failed", "cancelled", "canceled":
+			return b.failOperation(ctx, r, state, "stateless allocation deployment "+deployment.Status+"; previous stable job may have been restored; inspect Nomad deployment and correct resources, host-port capacity or application readiness before retrying")
+		case "successful":
+			// Also wait for scale-down's surplus allocations to terminate.
+		default:
+			if current.Action == "scale" {
+				retained, err := b.retainedScaleJob(ctx, r, raw, true, current.RetainOnly)
+				if err != nil {
+					return state, err
+				}
+				if retained != nil {
+					// Persist the retry boundary before preparing the exact
+					// count-only registration receipt.
+					current.Phase = "registering"
+					return state, b.save(ctx, r)
+				}
+			}
+			if state.Message == "" {
+				state.Message = "waiting for stateless deployment health; ensure spare CPU, memory and a free published host-port slot for the canary"
+			}
+			return state, nil
+		}
+	}
+	running, active, healthy := 0, 0, 0
+	for _, a := range as {
+		if allocationTerminal(a) {
+			continue
+		}
+		active++
+		if a.ClientStatus == "running" {
+			running++
+		}
+		if a.ClientStatus == "running" && a.DesiredStatus == "run" && a.DeploymentStatus != nil &&
+			a.DeploymentStatus.Healthy != nil && *a.DeploymentStatus.Healthy {
+			healthy++
+		}
+	}
+	if evalErr == nil && evalStatus == "complete" && running == r.Max && active == r.Max &&
+		(current.Action != "scale" || healthy == r.Max) {
+		current.Phase = "done"
+		state.Done = true
+		state.Status = "done"
+		return state, b.save(ctx, r)
+	}
+	if evalErr != nil && !errors.Is(evalErr, infra.ErrNotFound) {
+		return state, evalErr
+	}
+	if evalStatus == "failed" || evalStatus == "canceled" || evalStatus == "cancelled" {
+		return b.failOperation(ctx, r, state, "stateless evaluation "+evalStatus)
+	}
+	if state.Message == "" {
+		state.Message = "waiting for stateless allocations; check Nomad placement, spare resources and published host-port capacity"
+	}
+	return state, nil
+}
+
+// Scale only the serving specification, never an unready image/configuration.
+// Compare server-normalized jobs from allocations and the current owned job,
+// rather than comparing a renderer's sparse fields with Nomad's defaults.
+func (b *Backend) retainedScaleJob(ctx context.Context, r *record, job map[string]json.RawMessage, requireCanary, requireDesiredHealthy bool) (map[string]json.RawMessage, error) {
+	var groups []map[string]any
+	if err := json.Unmarshal(job["TaskGroups"], &groups); err != nil {
+		return nil, err
+	}
+	if len(groups) != 1 {
+		return nil, nil
+	}
+	count, _ := groups[0]["Count"].(float64)
+	// Increases need the existing count healthy, not the not-yet-created
+	// desired count. Reductions still need the entire retained count healthy.
+	requiredHealthy := min(int(count), r.Max)
+	// Automatic failed-scale recovery is placement-free: admission and every
+	// subsequent registration must already have the whole desired count healthy.
+	if requireDesiredHealthy {
+		requiredHealthy = r.Max
+	}
+	update, ok := groups[0]["Update"].(map[string]any)
+	if !ok || requireCanary && update["Canary"] == float64(0) {
+		return nil, nil
+	}
+	rendered, err := b.renderJob(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	desiredJSON, err := json.Marshal(rendered["Job"])
+	if err != nil {
+		return nil, err
+	}
+	currentJSON, err := json.Marshal(job)
+	if err != nil {
+		return nil, err
+	}
+	var desired, existing any
+	if err := json.Unmarshal(desiredJSON, &desired); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(currentJSON, &existing); err != nil {
+		return nil, err
+	}
+	if !matchesRenderedScale(desired, existing) {
+		// A superseded registering operation may have saved a new spec
+		// (for example, revoked ports) without registering it yet.
+		return nil, nil
+	}
+	as, err := b.allocations(ctx, r.Hostname)
+	if err != nil {
+		return nil, err
+	}
+	healthy := 0
+	var servingMeta json.RawMessage
+	for _, a := range as {
+		if a.ClientStatus != "running" || a.DesiredStatus != "run" {
+			continue
+		}
+		var detail struct {
+			Job              map[string]json.RawMessage
+			DeploymentStatus *struct {
+				Healthy *bool
+			}
+		}
+		if _, err := b.c.get(ctx, "/v1/allocation/"+a.ID, nil, &detail); err != nil {
+			if errors.Is(err, infra.ErrNotFound) {
+				continue
+			}
+			return nil, err
+		}
+		if detail.DeploymentStatus == nil || detail.DeploymentStatus.Healthy == nil || !*detail.DeploymentStatus.Healthy {
+			continue
+		}
+		if sameScaleSpecification(job, detail.Job) {
+			if servingMeta == nil {
+				servingMeta = detail.Job["Meta"]
+			} else if !equalJobMeta(servingMeta, detail.Job["Meta"]) {
+				continue
+			}
+			healthy++
+		}
+	}
+	if healthy < requiredHealthy {
+		return nil, nil
+	}
+	// A blocked rollout may carry a newer operation marker than its serving
+	// predecessors. Preserve the predecessors' Meta, not that unplaced job's.
+	job["Meta"] = servingMeta
+	groups[0]["Count"] = r.Max
+	// Keep every other health/deadline setting unchanged. Nomad rejects
+	// AutoPromote without canaries, so promotion is disabled with them.
+	update["Canary"] = 0
+	update["AutoPromote"] = false
+	job["TaskGroups"], err = json.Marshal(groups)
+	return job, err
+}
+
+// Nomad adds defaults to sparse rendered jobs. Compare every desired field and
+// also the optional fields whose removal changes the application specification.
+func matchesRenderedScale(desired, existing any) bool {
+	switch desired := desired.(type) {
+	case map[string]any:
+		existing, ok := existing.(map[string]any)
+		if !ok {
+			return false
+		}
+		for key, value := range desired {
+			if key == "Count" || key == "Update" || key == "karakoram.operation" {
+				continue
+			}
+			if !matchesRenderedScale(value, existing[key]) {
+				return false
+			}
+		}
+		// Only Nomad's exact implicit signal/discovery constraints may be
+		// absent from a sparse render. User placement constraints are not defaults.
+		for _, key := range []string{"ReservedPorts", "Checks", "Cores", "Constraints", "Spreads", "Volumes", "VolumeMounts", "EphemeralDisk"} {
+			if _, present := desired[key]; present {
+				continue
+			}
+			switch value := existing[key].(type) {
+			case nil:
+			case float64:
+				if value != 0 {
+					return false
+				}
+			case []any:
+				if key == "Constraints" && implicitNomadConstraints(value) {
+					continue
+				}
+				if len(value) != 0 {
+					return false
+				}
+			case map[string]any:
+				if key == "EphemeralDisk" && value["SizeMB"] == float64(300) && value["Sticky"] == false && value["Migrate"] == false {
+					continue // Nomad's default for an omitted ephemeral disk.
+				}
+				if len(value) != 0 {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+		return true
+	case []any:
+		existing, ok := existing.([]any)
+		if !ok || len(desired) != len(existing) {
+			return false
+		}
+		for i := range desired {
+			if !matchesRenderedScale(desired[i], existing[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(desired, existing)
+	}
+}
+
+func implicitNomadConstraints(constraints []any) bool {
+	for _, value := range constraints {
+		constraint, ok := value.(map[string]any)
+		if !ok || len(constraint) != 3 {
+			return false
+		}
+		switch {
+		case constraint["LTarget"] == "${attr.os.signals}" && constraint["Operand"] == "set_contains" && constraint["RTarget"] == "SIGTERM":
+		case constraint["LTarget"] == "${attr.nomad.service_discovery}" && constraint["Operand"] == "=" && constraint["RTarget"] == "true":
+		case constraint["LTarget"] == "${attr.nomad.version}" && constraint["Operand"] == "semver" && constraint["RTarget"] == ">= 1.4.0":
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func sameScaleSpecification(a, b map[string]json.RawMessage) bool {
+	var leftMeta, rightMeta map[string]string
+	if json.Unmarshal(a["Meta"], &leftMeta) != nil || json.Unmarshal(b["Meta"], &rightMeta) != nil {
+		return false
+	}
+	delete(leftMeta, "karakoram.operation")
+	delete(rightMeta, "karakoram.operation")
+	if !reflect.DeepEqual(leftMeta, rightMeta) {
+		return false
+	}
+	for _, key := range []string{"ID", "Namespace", "Type", "Datacenters", "NodePool", "Constraints", "Affinities", "Spreads", "TaskGroups"} {
+		var left, right any
+		if json.Unmarshal(a[key], &left) != nil && len(a[key]) > 0 {
+			return false
+		}
+		if json.Unmarshal(b[key], &right) != nil && len(b[key]) > 0 {
+			return false
+		}
+		if key == "TaskGroups" {
+			for _, value := range []any{left, right} {
+				groups, ok := value.([]any)
+				if !ok {
+					return false
+				}
+				for _, value := range groups {
+					group, ok := value.(map[string]any)
+					if !ok {
+						return false
+					}
+					delete(group, "Count")
+					delete(group, "Update")
+				}
+			}
+		}
+		if !reflect.DeepEqual(left, right) {
+			return false
+		}
+	}
+	return true
+}
+
+func equalJobMeta(a, b json.RawMessage) bool {
+	var left, right map[string]string
+	return json.Unmarshal(a, &left) == nil && json.Unmarshal(b, &right) == nil && reflect.DeepEqual(left, right)
+}
+
+// Only server-maintained identity/status fields are excluded, matching Nomad's
+// Job.SpecChanged normalization (NomadTokenID is the registering token's
+// accessor, overwritten on every registration). All submitted specification
+// fields (including every level of Meta, Count and Update) remain in the
+// digest. The source is an already server-normalized retained job.
+func retainedJobHash(job map[string]json.RawMessage) string {
+	spec := make(map[string]json.RawMessage, len(job))
+	for key, value := range job {
+		switch key {
+		case "Version", "CreateIndex", "ModifyIndex", "JobModifyIndex", "SubmitTime", "Status", "StatusDescription", "Stable", "NomadTokenID":
+			continue
+		}
+		spec[key] = value
+	}
+	// Decode before hashing so JSON whitespace and object ordering are irrelevant.
+	data, _ := json.Marshal(spec)
+	var normalized any
+	_ = json.Unmarshal(data, &normalized)
+	data, _ = json.Marshal(normalized)
+	sum := sha256.Sum256(data)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func operationMatchesJob(current *operation, job observedJob) bool {
+	if job.Stop || job.Version != current.JobVersion {
+		return false
+	}
+	if current.RetainedHash != "" {
+		return job.JobModifyIndex == current.JobModifyIndex
+	}
+	return job.Meta["karakoram.operation"] == current.Issued.Format(time.RFC3339Nano)
 }
 func (b *Backend) failOperation(ctx context.Context, r *record, state infra.OpState, message string) (infra.OpState, error) {
 	// Operation failure is not desired-state cancellation. Keep the job and

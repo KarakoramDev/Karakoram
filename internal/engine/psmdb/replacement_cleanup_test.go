@@ -17,12 +17,13 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb/mongoadmin"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/xdg-go/scram"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestReplacementCleanupRemovesBeforePromotingSevenMemberSet(t *testing.T) {
-	p, rc, _, _ := setup(t)
+	p, rc, backend, _ := setup(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	rc.Cluster.Spec.Components.Engine.Replicas = 7
@@ -46,6 +47,11 @@ func TestReplacementCleanupRemovesBeforePromotingSevenMemberSet(t *testing.T) {
 	s.ReplaceActive = true
 	if err := p.ensureSecrets(ctx, rc, s); err != nil {
 		t.Fatal(err)
+	}
+	for _, m := range s.Members {
+		m.ServiceID, m.VolumeID = m.Name, m.Volume
+		backend.services[m.Name] = &infra.Service{ID: m.ServiceID, Hostname: m.Name, Kind: infra.KindRuntime, Status: infra.StatusActive}
+		backend.services[m.Volume] = &infra.Service{ID: m.VolumeID, Hostname: m.Volume, Kind: infra.KindVolume, Status: infra.StatusActive}
 	}
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
@@ -140,11 +146,16 @@ func TestReplacementCleanupRemovesBeforePromotingSevenMemberSet(t *testing.T) {
 // replacementMongo serves the real driver's handshake/authentication and the
 // membership commands used by Sync. It enforces MongoDB's seven-voter ceiling.
 type replacementMongo struct {
-	t       *testing.T
-	mu      sync.Mutex
-	auth    *scram.Server
-	config  mongoadmin.Config
-	changes []int
+	t             *testing.T
+	mu            sync.Mutex
+	auth          *scram.Server
+	config        mongoadmin.Config
+	changes       []int
+	command       func(bson.Raw) bson.M
+	observed      *mongoadmin.Status
+	handshake     bson.M
+	hello         bson.M
+	beforeCommand func(bson.Raw)
 }
 
 func (s *replacementMongo) DialContext(_ context.Context, _, _ string) (net.Conn, error) {
@@ -183,10 +194,21 @@ func (s *replacementMongo) serve(conn net.Conn) {
 			return
 		}
 		name := elements[0].Key()
+		if s.beforeCommand != nil {
+			s.beforeCommand(command)
+		}
 		response := bson.M{"ok": 1}
 		switch name {
 		case "isMaster", "ismaster", "hello":
 			response = bson.M{"ok": 1, "ismaster": true, "isWritablePrimary": true, "setName": "rs0", "hosts": bson.A{"demom1:27017"}, "primary": "demom1:27017", "minWireVersion": 0, "maxWireVersion": 25, "maxBsonObjectSize": 16777216, "maxMessageSizeBytes": 48000000, "maxWriteBatchSize": 100000, "saslSupportedMechs": bson.A{"SCRAM-SHA-256"}}
+			if s.handshake != nil {
+				response = s.handshake
+			}
+			// Explicit writable-primary checks are distinct from discovery:
+			// keep handshake authentication/capability negotiation intact.
+			if name == "hello" && s.hello != nil {
+				response = s.hello
+			}
 		case "saslStart", "saslContinue":
 			_, payload := command.Lookup("payload").Binary()
 			answer, err := conversation.Step(string(payload))
@@ -210,6 +232,9 @@ func (s *replacementMongo) serve(conn net.Conn) {
 					members = append(members, mongoadmin.Member{ID: m.ID, Name: m.Host, State: state, Health: 1, OptimeDate: time.Now()})
 				}
 				response["set"], response["members"] = "rs0", members
+				if s.observed != nil {
+					response["set"], response["members"] = s.observed.Set, s.observed.Members
+				}
 			case "replSetReconfig":
 				var config mongoadmin.Config
 				if err := bson.Unmarshal(command.Lookup(name).Document(), &config); err != nil {
@@ -238,8 +263,11 @@ func (s *replacementMongo) serve(conn net.Conn) {
 			continue
 		case "ping", "endSessions":
 		default:
-			s.t.Errorf("unexpected MongoDB command %q", name)
-			return
+			if s.command == nil {
+				s.t.Errorf("unexpected MongoDB command %q", name)
+				return
+			}
+			response = s.command(command)
 		}
 		encoded, err := bson.Marshal(response)
 		if err != nil {

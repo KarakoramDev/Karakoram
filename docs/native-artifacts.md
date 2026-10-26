@@ -16,6 +16,38 @@ Preparation uses one privileged shell and a fresh root-owned mode-0700 staging d
 
 On a fresh host, preparation creates missing application parent directories with mode 0755 and creates the installation leaf before dropping privileges. Only a newly created leaf receives a nonrecursive, no-follow ownership handoff to the configured runtime user; pre-existing directories and symlinks are never chowned. Application content publication remains unprivileged even when the parent hierarchy was initially root-owned.
 
+### Preparation memory and small allocations
+
+Native `.deb` installation sets `DPKG_DEB_THREADS_MAX=1` **inside the privileged
+installer shell**, so apt and its dpkg-deb children inherit it even when sudo
+clears the caller's environment. Dependencies, maintainer scripts and package
+registration still run through apt; installation is not replaced by copying
+files out of a package. Failures retain apt's original status and diagnostics
+and add the artifact name and a reminder to inspect allocation memory limits.
+
+Size preparation as well as the running service. In particular, the pinned
+ProxySQL 3.0.11 package expands approximately 36.2 MiB into 151.3 MiB of tar
+content. Its XZ stream has seven blocks with 8 MiB dictionaries and 24 MiB
+expanded full blocks. Automatic dpkg-deb parallel decoding can buffer several
+blocks based on host memory/CPU rather than the task's available cgroup budget:
+it has caused an OOM during preparation of a 256 MiB Nomad proxy.
+Single-threaded dpkg-deb avoids that host-sized parallelism without increasing
+the configured service memory or requiring Nomad memory oversubscription.
+Allow additional memory for apt/dpkg, package scripts, and reclaimable filesystem
+cache; archive size or dictionary size alone is not a whole-preparation budget.
+
+This policy applies to every catalog `.deb` on all backends, including PostgreSQL
+and Supabase proxies. Nomad runs preparation within the task's configured memory
+limit before the agent starts. Dokploy prepares the image during its build, not
+inside the eventual service task; its builder needs its own capacity. Zerops
+receives the same preparation commands and controls their execution resources.
+The policy does not change runtime sizing defaults/minima or make arbitrarily
+small positive RAM values safe. Non-catalog repository packages and tarballs
+retain their own compression requirements: gzip uses a 32 KiB history window;
+the pinned Supabase Auth XZ archive requires a 64 MiB dictionary (REST: 8 MiB),
+in addition to installer and application overhead. Increase an undersized
+explicit configuration rather than relying on retries to get lucky.
+
 ## Native rebuild
 
 Prerequisites on the build host: Python 3.11+, Incus with Ubuntu 24.04 images and an egress-capable network, and sufficient disk space. No application-container runtime is used.

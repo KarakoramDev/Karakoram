@@ -66,3 +66,29 @@ func TestRenderYAMLOptionalFields(t *testing.T) {
 		t.Fatalf("incorrect HTTP flags:\n%s", got)
 	}
 }
+
+func TestRenderShutdownOnlyForVolumeWriters(t *testing.T) {
+	for _, volume := range []string{"", "memberv"} {
+		t.Run("volume="+volume, func(t *testing.T) {
+			spec := infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Args: []string{"agent"}, Volume: volume, StopBeforeStart: true, Readiness: &infra.Readiness{Args: []string{"agent", "readiness"}}}
+			got, err := RenderYAML("member", zeropsLayout, "karakoram", spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "temporaryShutdown: false"
+			if volume != "" {
+				want = "temporaryShutdown: true"
+			}
+			if !strings.Contains(got, want) || !strings.Contains(got, "readinessCheck:") {
+				t.Fatalf("unsafe shutdown/readiness policy:\n%s", got)
+			}
+		})
+	}
+}
+
+func TestRenderRelayRemainsSingleton(t *testing.T) {
+	got, err := RenderYAML("relay", zeropsLayout, "karakoram", infra.RuntimeSpec{Base: infra.BaseUbuntu2404, Args: []string{"relay"}, StopBeforeStart: true})
+	if err != nil || !strings.Contains(got, "temporaryShutdown: true") {
+		t.Fatalf("overlapping relay sessions permitted:\n%s\n%v", got, err)
+	}
+}

@@ -19,6 +19,9 @@ func (f factory) Info() infra.BackendInfo {
 }
 
 func (f factory) TargetFromEnv(getenv func(string) string) (infra.Target, error) {
+	if _, err := deploymentLimit(f.base.MaxInflightDeploys, getenv("KARAKORAM_ZEROPS_MAX_INFLIGHT_DEPLOYS")); err != nil {
+		return infra.Target{}, err
+	}
 	id := getenv("KARAKORAM_ZEROPS_PROJECT_ID")
 	if id == "" {
 		id = getenv("projectId")

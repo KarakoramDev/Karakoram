@@ -121,15 +121,17 @@ func (s *Sealer) OpenFor(identity, value string) ([]byte, error) {
 // IdempotencyBodyHash prevents offline guessing of password-bearing JSON bodies
 // from a database copy without the installation's master key.
 func (s *Sealer) IdempotencyBodyHash(body []byte) string {
-	return keyedHash(s.idempotencyBodyKey[:], body)
+	return KeyedHash(s.idempotencyBodyKey[:], body)
 }
 
 // IdempotencyIdentityHash hides caller-provided retry keys using a separate key.
 func (s *Sealer) IdempotencyIdentityHash(scope []byte) string {
-	return keyedHash(s.idempotencyIdentityKey[:], scope)
+	return KeyedHash(s.idempotencyIdentityKey[:], scope)
 }
 
-func keyedHash(key, value []byte) string {
+// KeyedHash returns a versioned HMAC-SHA256 receipt. Callers must use a secret
+// high-entropy key and domain-separate values when sharing a credential key.
+func KeyedHash(key, value []byte) string {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write(value)
 	return "hmac-sha256:v1:" + hex.EncodeToString(mac.Sum(nil))

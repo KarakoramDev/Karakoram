@@ -5,6 +5,7 @@ package nomad
 
 import (
 	"context"
+	"errors"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
@@ -62,14 +63,20 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if d.Runtime.Volume != r.Volume {
 		return infra.Op{}, reject("deployment volume must match imported runtime")
 	}
+	// Reject admission before changing the import-owned environment. Otherwise
+	// replaying the original import can no longer match its reservation.
+	if r.Importing || b.operationLeaseBlocked(r) {
+		return infra.Op{}, infra.ErrConflict
+	}
 	// Engine runtime descriptions repeat identity values imported as secrets.
 	// Preserve their sensitivity instead of promoting them to readable metadata.
 	if err = b.mergeEnv(ctx, r, d.Runtime.Env, false, true); err != nil {
 		return infra.Op{}, err
 	}
+	diskMB := b.allocationDiskMB(d.Runtime)
 	// Environment is held only in its dedicated Variable; the saved spec is safe metadata.
 	d.Runtime.Env = nil
-	r.Deployment = &storedDeployment{Runtime: d.Runtime, Source: source, Checksum: checksum, Binary: d.Artifact.Binary}
+	r.Deployment = &storedDeployment{Runtime: d.Runtime, Source: source, Checksum: checksum, Binary: d.Artifact.Binary, EphemeralDiskMB: diskMB}
 	r.Desired = "running"
 	return b.begin(ctx, r, "deploy")
 }
@@ -148,8 +155,8 @@ func (b *Backend) Restart(ctx context.Context, hostname string) (infra.Op, error
 	}
 	if !running && r.Desired == "running" && r.Deployment != nil {
 		// A failed/lost allocation (or a purged job) cannot be restarted via
-		// the allocation endpoint. Recreate the saved job through the same
-		// stop/terminal/register fence as other destructive lifecycle changes.
+		// the allocation endpoint. Recreate the saved job through its normal
+		// rollout policy, retaining the single-writer fence for volume members.
 		current, err := b.require(ctx, hostname)
 		if err != nil {
 			return infra.Op{}, err
@@ -158,6 +165,10 @@ func (b *Backend) Restart(ctx context.Context, hostname string) (infra.Op, error
 	}
 	return infra.Op{}, nil
 }
+
+// ResourceUpdatesDeployRuntime reports SetResources' stored-deployment restart.
+func (*Backend) ResourceUpdatesDeployRuntime() bool { return true }
+
 func (b *Backend) SetResources(ctx context.Context, hostname string, change infra.Resources) (infra.Op, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -190,12 +201,75 @@ func (b *Backend) SetContainerCount(ctx context.Context, hostname string, min, m
 	if r.Kind != infra.KindRuntime || r.Volume != "" && max != 1 {
 		return infra.Op{}, reject("volume services and volume runtimes require one replica")
 	}
+	if op, retained, err := b.retainedScaleReceipt(ctx, r, min, max); err != nil || retained {
+		return op, err
+	}
 	r.Min = min
 	r.Max = max
 	if r.Deployment != nil && r.Desired == "running" {
 		return b.begin(ctx, r, "scale")
 	}
 	return infra.Op{}, b.save(ctx, r)
+}
+
+// RecoverFailedScale starts a new operation only for a placement-free recovery.
+// The failed handle remains terminal; a failed automatic recovery is not retried.
+func (b *Backend) RecoverFailedScale(ctx context.Context, hostname string, min, max int) (infra.Op, bool, error) {
+	if min < 1 || max < min {
+		return infra.Op{}, false, reject("invalid container bounds")
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	r, err := b.require(ctx, hostname)
+	if err != nil {
+		return infra.Op{}, false, err
+	}
+	if op, retained, err := b.retainedScaleReceipt(ctx, r, min, max); err != nil || retained {
+		return op, retained, err
+	}
+	if r.Kind != infra.KindRuntime || r.Volume != "" || r.Desired != "running" || r.Deployment == nil ||
+		r.Pending == nil || r.Pending.Phase != "failed" || r.Pending.RetainOnly ||
+		len(r.Deployment.Runtime.Args) > 0 && r.Deployment.Runtime.Args[0] == "relay" {
+		return infra.Op{}, false, nil
+	}
+	job, observed, err := b.operationJob(ctx, r)
+	if errors.Is(err, infra.ErrNotFound) {
+		return infra.Op{}, false, nil
+	}
+	if err != nil {
+		return infra.Op{}, false, err
+	}
+	if observed.Stop {
+		return infra.Op{}, false, nil
+	}
+	candidate := *r
+	candidate.Min, candidate.Max = min, max
+	retained, err := b.retainedScaleJob(ctx, &candidate, job, false, true)
+	if err != nil || retained == nil {
+		return infra.Op{}, false, err
+	}
+	op, err := b.beginOperation(ctx, &candidate, "scale", true, nil)
+	return op, err == nil, err
+}
+
+// Admission or completion can become durable before its caller saves a receipt.
+// A same-target retry must adopt that outcome, never relax its retain-only policy.
+func (b *Backend) retainedScaleReceipt(ctx context.Context, r *record, min, max int) (infra.Op, bool, error) {
+	current := r.Pending
+	if current == nil || !current.RetainOnly || current.Phase == "failed" ||
+		r.Desired != "running" || r.Min != min || r.Max != max {
+		return infra.Op{}, false, nil
+	}
+	if current.Phase == "done" {
+		_, job, err := b.operationJob(ctx, r)
+		if err != nil {
+			return infra.Op{}, false, err
+		}
+		if !operationMatchesJob(current, job) {
+			return infra.Op{}, false, nil
+		}
+	}
+	return encodeOp(*current), true, nil
 }
 func (b *Backend) DeleteService(ctx context.Context, hostname string) (infra.Op, error) {
 	return b.deleteService(ctx, hostname, "", false)
@@ -212,6 +286,9 @@ func (b *Backend) deleteService(ctx context.Context, hostname, id string, fenced
 	}
 	if fenced && r.ID != id {
 		return infra.Op{}, infra.ErrConflict
+	}
+	if r.Importing {
+		return infra.Op{}, &APIError{Status: 409, Op: "delete", Message: "import outcome is unresolved; retry the original import before deleting its reserved resources"}
 	}
 	if r.Kind == infra.KindVolume {
 		rs, incomplete, e := b.records(ctx, "")

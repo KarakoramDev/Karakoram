@@ -27,9 +27,11 @@ const DefaultBaseURL = "https://api.app-prg1.zerops.io/api/rest/public"
 // Options configures authentication, bounded retries and synchronous backend waits.
 // MaxRetries zero selects three retries; a negative value disables retries.
 type Options struct {
-	BaseURL, Token, ProjectID            string
-	HTTPClient                           *http.Client
-	MaxRetries                           int
+	BaseURL, Token, ProjectID string
+	HTTPClient                *http.Client
+	MaxRetries                int
+	// MaxInflightDeploys defaults to two; the control-plane environment can override it.
+	MaxInflightDeploys                   int
 	RetryBase, PollInterval, WaitTimeout time.Duration
 }
 
@@ -59,6 +61,9 @@ func NewClient(o Options) (*Client, error) {
 	}
 	// Do not allow credentials to follow redirects, including custom transports.
 	h := *o.HTTPClient
+	if h.Timeout <= 0 {
+		h.Timeout = 2 * time.Minute
+	}
 	h.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	if o.MaxRetries == 0 {
 		o.MaxRetries = 3
@@ -180,6 +185,11 @@ func (c *Client) request(ctx context.Context, method, target string, body func()
 				}
 			}
 			resp.Body.Close()
+			if err != nil && retryAfter > 0 {
+				// Leave long waits to reconciliation rather than sleeping while
+				// holding an operation worker, or retrying before the reset.
+				return &infra.RetryAfterError{Cause: err, At: time.Now().Add(retryAfter)}
+			}
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -324,9 +334,9 @@ func (c *Client) Env(ctx context.Context, id string) ([]EnvItem, error) {
 // SetUserData creates or updates a user entry (existingID empty means create).
 // Sensitive entries are masked for tokens without sudo mode.
 func (c *Client) SetUserData(ctx context.Context, serviceID, existingID, key, value string, sensitive bool) (Process, error) {
-	method, path, retry := "POST", "/service-stack/"+escape(serviceID)+"/user-data", false
+	method, path := "POST", "/service-stack/"+escape(serviceID)+"/user-data"
 	if existingID != "" {
-		method, path, retry = "PUT", "/user-data/"+escape(existingID), true
+		method, path = "PUT", "/user-data/"+escape(existingID)
 	}
 	body := struct {
 		Key       string `json:"key"`
@@ -334,7 +344,7 @@ func (c *Client) SetUserData(ctx context.Context, serviceID, existingID, key, va
 		Sensitive bool   `json:"sensitive"`
 	}{key, value, sensitive}
 	var v Process
-	err := c.json(ctx, method, path, body, &v, retry)
+	err := c.json(ctx, method, path, body, &v, false)
 	return v, err
 }
 
@@ -352,7 +362,7 @@ func (c *Client) Autoscaling(ctx context.Context, id string, config map[string]j
 	var v struct {
 		Process *Process `json:"process"`
 	}
-	err := c.json(ctx, "PUT", "/service-stack/"+escape(id)+"/autoscaling", map[string]any{"customAutoscaling": config}, &v, true)
+	err := c.json(ctx, "PUT", "/service-stack/"+escape(id)+"/autoscaling", map[string]any{"customAutoscaling": config}, &v, false)
 	return v.Process, err
 }
 

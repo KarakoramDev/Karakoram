@@ -199,7 +199,10 @@ func dynamicConfig(s pgspec.Spec, p paths) map[string]any {
 	for _, name := range localParameters {
 		delete(params, name)
 	}
-	return map[string]any{"ttl": 20, "loop_wait": 2, "retry_timeout": 5, "synchronous_mode": s.Postgres.Synchronous == pgspec.SyncOn || s.Postgres.Synchronous == pgspec.SyncStrict, "synchronous_mode_strict": s.Postgres.Synchronous == pgspec.SyncStrict, "synchronous_node_count": 1, "postgresql": map[string]any{"use_pg_rewind": true, "use_slots": true, "parameters": params}}
+	// A planned handoff should not spend two seconds awaiting each HA cycle.
+	// Keep the DCS lease and retry budget: 1 + 2*5 <= 20, without weakening
+	// fencing or synchronous commit when the platform kills a runtime abruptly.
+	return map[string]any{"ttl": 20, "loop_wait": 1, "retry_timeout": 5, "synchronous_mode": s.Postgres.Synchronous == pgspec.SyncOn || s.Postgres.Synchronous == pgspec.SyncStrict, "synchronous_mode_strict": s.Postgres.Synchronous == pgspec.SyncStrict, "synchronous_node_count": 1, "postgresql": map[string]any{"use_pg_rewind": true, "use_slots": true, "parameters": params}}
 }
 func localHost(s pgspec.Spec) string {
 	for _, p := range s.Peers {
@@ -227,6 +230,9 @@ func renderPatroni(s pgspec.Spec, p paths) (string, error) {
 	}
 	bootstrap := map[string]any{"dcs": dynamicConfig(s, p), "initdb": []any{"data-checksums", map[string]string{"encoding": "UTF8"}, map[string]string{"locale": "C.UTF-8"}, map[string]string{"auth-host": "scram-sha-256"}, map[string]string{"auth-local": "scram-sha-256"}}, "post_bootstrap": filepath.Join(p.root, "bootstrap-roles.sh")}
 	pg := map[string]any{"listen": net.JoinHostPort(listenHost(s.ListenHost), "5432"), "connect_address": net.JoinHostPort(localHost(s), "5432"), "data_dir": p.pgdata, "bin_dir": s.BinDir, "pgpass": filepath.Join(p.root, "patroni.pgpass"), "authentication": map[string]any{"superuser": auth(s.Superuser), "replication": auth(s.Replication), "rewind": auth(s.Rewind)}, "pg_hba": hba(s), "parameters": parameters(s, p), "remove_data_directory_on_rewind_failure": true, "remove_data_directory_on_diverged_timelines": true, "create_replica_methods": []string{"basebackup"}}
+	// Keep Patroni's native initdb/password/bootstrap lifecycle, but consume
+	// first-initialization authorization before the real binary can run.
+	pg["bin_name"] = map[string]string{"initdb": filepath.Join(p.root, "bootstrap-initdb.sh")}
 	// Local management and replication probes use the private socket. A wildcard
 	// TCP listen address is not a certificate identity; remote replication still
 	// uses the advertised member hostname with verify-full authentication.
@@ -248,7 +254,7 @@ func renderPatroni(s pgspec.Spec, p paths) (string, error) {
 	if s.Retiring {
 		m["tags"] = map[string]bool{"nofailover": true, "noloadbalance": true, "clonefrom": false}
 	}
-	if s.Bootstrap != nil && s.Bootstrap.SeedMember != "" && s.Bootstrap.SeedMember != s.Member {
+	if s.Bootstrap == nil || s.Bootstrap.Method != "restore" && !s.Bootstrap.AllowInitDB || s.Bootstrap.SeedMember != "" && s.Bootstrap.SeedMember != s.Member {
 		delete(m, "bootstrap")
 	}
 	data, err := yaml.Marshal(m)
@@ -264,16 +270,23 @@ func etcdProcess(s pgspec.Spec, p paths) agent.ProcessSpec {
 	return agent.ProcessSpec{Binary: "/usr/bin/etcd", Dir: p.root, Args: []string{"--name=" + s.Member, "--data-dir=" + p.etcd, "--listen-client-urls=https://" + net.JoinHostPort(listenHost(s.ListenHost), "2379"), "--advertise-client-urls=https://" + net.JoinHostPort(localHost(s), "2379"), "--listen-peer-urls=https://" + net.JoinHostPort(listenHost(s.ListenHost), "2380"), "--initial-advertise-peer-urls=https://" + net.JoinHostPort(localHost(s), "2380"), "--initial-cluster=" + s.Etcd.InitialCluster, "--initial-cluster-state=" + s.Etcd.State, "--initial-cluster-token=" + s.Etcd.Token, "--client-cert-auth=true", "--trusted-ca-file=" + ca, "--cert-file=" + cert, "--key-file=" + key, "--peer-client-cert-auth=true", "--peer-trusted-ca-file=" + ca, "--peer-cert-file=" + cert, "--peer-key-file=" + key}}
 }
 func renderProxy(p *pgspec.Proxy, paths paths, host string) string {
-	interfaces := proxyInterfaces(host, p.ReaderPort)
-	threads := p.Threads
-	if threads == 0 {
-		threads = 2
+	var config strings.Builder
+	fmt.Fprintf(&config, "datadir=%s\nadmin_variables={\n admin_credentials=%s;\n mysql_ifaces=\"127.0.0.1:6032\";\n pgsql_ifaces=\"127.0.0.1:6132\";\n}\nmysql_variables={\n monitor_ping_interval=1000;\n}\npgsql_variables={\n",
+		strconv.Quote(paths.proxy), strconv.Quote(p.Admin.Username+":"+p.Admin.Password))
+	settings := proxyRuntimeSettings(p, filepath.Join(paths.root, "ca.pem"))
+	for name, value := range proxyStartupSettings(p, host) {
+		settings[name] = value
 	}
-	tlsSettings := ""
-	if p.BackendTLS {
-		tlsSettings = " ssl_p2s_ca=" + strconv.Quote(filepath.Join(paths.root, "ca.pem")) + ";\n"
+	for _, key := range sortedKeys(settings) {
+		value := settings[key]
+		switch key {
+		case "pgsql-interfaces", "pgsql-monitor_username", "pgsql-monitor_password", "pgsql-monitor_dbname", "pgsql-ssl_p2s_ca":
+			value = strconv.Quote(value)
+		}
+		fmt.Fprintf(&config, " %s=%s;\n", strings.TrimPrefix(key, "pgsql-"), value)
 	}
-	return fmt.Sprintf("datadir=%s\nadmin_variables={\n admin_credentials=%s;\n mysql_ifaces=\"127.0.0.1:6032\";\n pgsql_ifaces=\"127.0.0.1:6132\";\n}\npgsql_variables={\n threads=%d;\n interfaces=%s;\n%s authentication_method=3;\n monitor_username=%s;\n monitor_password=%s;\n monitor_dbname=\"postgres\";\n monitor_read_only_interval=500;\n monitor_ping_interval=1000;\n monitor_ping_timeout=500;\n monitor_ping_max_failures=2;\n monitor_connect_interval=2000;\n monitor_writer_is_also_reader=false;\n monitor_local_dns_cache_ttl=%s;\n monitor_local_dns_cache_refresh_interval=%s;\n monitor_local_dns_resolver_queue_maxsize=%s;\n}\n", strconv.Quote(paths.proxy), strconv.Quote(p.Admin.Username+":"+p.Admin.Password), threads, strconv.Quote(interfaces), tlsSettings, strconv.Quote(p.Monitor.Username), strconv.Quote(p.Monitor.Password), proxyDNSCacheTTL, proxyDNSRefreshInterval, proxyDNSResolverQueue)
+	config.WriteString("}\n")
+	return config.String()
 }
 func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error) {
 	files := []renderedFile{}
@@ -350,9 +363,11 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 			return nil, err
 		}
 		files = append(files, renderedFile{"patroni.yml", y, false})
+		files = append(files, renderedFile{"bootstrap-initdb.sh", renderInitDBGuard(s, p), true})
 		pass := strings.NewReplacer(`\`, `\\`, ":", `\:`).Replace(s.Superuser.Password)
 		files = append(files, renderedFile{"bootstrap.pgpass", "*:5432:*:" + s.Superuser.Username + ":" + pass + "\n", false})
-		script := "#!/bin/sh\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d postgres -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
+		marker := filepath.Join(p.root, "initialized.json")
+		script := "#!/bin/sh\nset -eu\numask 077\nprintf 'true\\n' > " + shellQuote(marker+".tmp") + "\nsync " + shellQuote(marker+".tmp") + "\nmv " + shellQuote(marker+".tmp") + " " + shellQuote(marker) + "\nsync " + shellQuote(p.root) + "\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d postgres -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
 		files = append(files, renderedFile{"bootstrap-roles.sh", script, true})
 	}
 	return files, nil

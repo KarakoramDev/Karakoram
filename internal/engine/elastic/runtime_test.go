@@ -40,7 +40,7 @@ func TestRuntimeSpec(t *testing.T) {
 			if !reflect.DeepEqual(spec.Env, wantEnv) {
 				t.Fatal("environment", spec.Env)
 			}
-			wantArgs := []string{"agent", "readiness", "--engine=elasticsearch", "--data-dir=" + layout.DataDir(tt.volume), tt.component}
+			wantArgs := []string{"agent", "readiness", "--startup", "--data-dir=" + layout.DataDir(tt.volume)}
 			if spec.Readiness == nil || !reflect.DeepEqual(spec.Readiness.Args, wantArgs) || spec.Readiness.FailureTimeout != tt.timeout || spec.Readiness.RetryPeriod != 10*time.Second {
 				t.Fatal("readiness", spec.Readiness)
 			}

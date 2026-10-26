@@ -38,6 +38,9 @@ Backup: configure -> start -> poll -> target-configure/resync/inventory -> done.
 An initial call commits the selected member, immutable destination/topology/version
 provenance, and a reference to encrypted snapshot-time userAdmin credentials.
 Start stores PBMName; poll maps size, last-write, start/finish and terminal phase.
+For nonterminal describe metadata, poll also checks the exact snapshot in PBM's
+heartbeat-aware status inventory. An orphaned owner's persisted running metadata
+does not hide a native stale-heartbeat failure or cause a second backup initiation.
 Inventory entries can omit finish timestamps; subsequent polls preserve the
 recorded completion time instead of replacing it with the current poll time.
 

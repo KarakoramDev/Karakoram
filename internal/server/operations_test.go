@@ -169,6 +169,39 @@ func TestRepeatedClusterDeleteWithDifferentOptionsSupersedes(t *testing.T) {
 	}
 }
 
+func TestRepeatedClusterDeleteRejectsRetentionAfterCleanupStarts(t *testing.T) {
+	for _, options := range []string{"keepVolumes=true", "keepBackups=true"} {
+		t.Run(options, func(t *testing.T) {
+			s, _, token := testServer(t)
+			ctx := context.Background()
+			first := call(s, "DELETE", "/api/v1/clusters/prod", "", token)
+			id := first.Header().Get("Karakoram-Operation-Id")
+			if first.Code != 202 || id == "" {
+				t.Fatal(first.Code, first.Body.String())
+			}
+			c, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = s.Store.StartClusterCleanup(ctx, c); err != nil {
+				t.Fatal(err)
+			}
+			repeat := call(s, "DELETE", "/api/v1/clusters/prod?"+options, "", token)
+			if repeat.Code != 409 || !strings.Contains(repeat.Body.String(), "retention cannot be promised") {
+				t.Fatal(repeat.Code, repeat.Body.String())
+			}
+			current, err := s.Store.GetCluster(ctx, c.Ref())
+			if err != nil || current.Generation != c.Generation || current.DeleteOptions != c.DeleteOptions || !current.Status.CleanupStarted {
+				t.Fatal("rejected retention changed cleanup intent", current, err)
+			}
+			op, err := s.Store.GetOperation(ctx, id)
+			if err != nil || op.Phase != domain.PhasePending {
+				t.Fatal("rejected retention retired accepted deletion", op, err)
+			}
+		})
+	}
+}
+
 func TestBackupRestoreTrackingAndNotReadyRejection(t *testing.T) {
 	s, _, token := testServer(t)
 	ctx := context.Background()
@@ -268,6 +301,10 @@ func TestCancellationAuthorizesPersistedClusterAndRejectsUnsafeRunning(t *testin
 func TestRetainedNeverStartedBackupRemovalDoesNotRequireStorage(t *testing.T) {
 	s, _, token := testServer(t)
 	ctx := context.Background()
+	cluster := &domain.Cluster{Name: "gone", Spec: domain.ClusterSpec{Provider: "fake"}}
+	if err := s.Store.CreateCluster(ctx, cluster); err != nil {
+		t.Fatal(err)
+	}
 	backup := &domain.Backup{Cluster: "gone", Name: "never", Storage: "missing-storage", Type: "logical", RecoveryIdentity: "snapshot-recovery"}
 	op := &domain.Operation{Cluster: backup.Cluster, Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"never"}`)}
 	if err := s.Store.EnqueueBackup(ctx, backup, op); err != nil {
@@ -281,6 +318,11 @@ func TestRetainedNeverStartedBackupRemovalDoesNotRequireStorage(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	if _, err := s.Store.RequestOperationCancellation(ctx, op.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Retained inventory outlives the cluster, but admission of new backup
+	// work must still start from a persisted live cluster.
+	if err := s.Store.DeleteCluster(ctx, cluster.Ref()); err != nil {
 		t.Fatal(err)
 	}
 	w = call(s, "DELETE", "/api/v1/clusters/gone/backups/never", "", token)

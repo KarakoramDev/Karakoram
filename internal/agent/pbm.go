@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 func backupURI(c agentapi.MemberConfig, dataDir string) (string, error) {
@@ -25,7 +26,11 @@ func backupURI(c agentapi.MemberConfig, dataDir string) (string, error) {
 	if !ok || cred.Password == "" {
 		return "", errors.New("backup credentials unavailable")
 	}
-	u := url.URL{Scheme: "mongodb", Host: fmt.Sprintf("127.0.0.1:%d", memberPort(c)), Path: "/", User: url.UserPassword("backup", cred.Password), RawQuery: "authSource=admin"}
+	username := cred.Username
+	if username == "" {
+		username = "backup"
+	}
+	u := url.URL{Scheme: "mongodb", Host: fmt.Sprintf("127.0.0.1:%d", memberPort(c)), Path: "/", User: url.UserPassword(username, cred.Password), RawQuery: "authSource=admin"}
 	if c.TLS.Mode != "" && c.TLS.Mode != "disabled" {
 		query := u.Query()
 		query.Set("tls", "true")
@@ -175,6 +180,17 @@ func (a *nodeAgent) pbm(ctx context.Context, r agentapi.PBMRequest) (agentapi.PB
 			if receipt.Response == nil {
 				return agentapi.PBMResponse{}, errors.New("PBM initiation outcome unknown after interrupted execution; reconcile before issuing another request")
 			}
+			oldStderr, oldOutput := receipt.Response.Stderr, receipt.Response.Output
+			sanitizePBMResponse(receipt.Response)
+			if oldStderr != receipt.Response.Stderr || !bytes.Equal(oldOutput, receipt.Response.Output) {
+				data, err := json.Marshal(receipt)
+				if err != nil {
+					return agentapi.PBMResponse{}, err
+				}
+				if err := atomicWrite(receiptPath, data, 0600); err != nil {
+					return agentapi.PBMResponse{}, err
+				}
+			}
 			return *receipt.Response, nil
 		}
 		if !os.IsNotExist(err) {
@@ -223,6 +239,7 @@ func (a *nodeAgent) pbm(ctx context.Context, r agentapi.PBMRequest) (agentapi.PB
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	response := agentapi.PBMResponse{Output: lastJSONObject(stdout.Bytes()), Stderr: stderr.String()}
+	sanitizePBMResponse(&response)
 	if err != nil {
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
@@ -238,4 +255,11 @@ func (a *nodeAgent) pbm(ctx context.Context, r agentapi.PBMRequest) (agentapi.PB
 		}
 	}
 	return response, nil
+}
+
+// Sanitize both new and replayed receipts before persistence or API exposure.
+// JSON-aware redaction preserves successful describe/status response schemas.
+func sanitizePBMResponse(response *agentapi.PBMResponse) {
+	response.Stderr = redact.NativeError(response.Stderr)
+	response.Output = redact.JSON(response.Output)
 }

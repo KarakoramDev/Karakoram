@@ -30,6 +30,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"github.com/KarakoramDev/Karakoram/internal/ui"
 )
@@ -58,6 +59,8 @@ type Server struct {
 }
 
 // New assembles HTTP handlers over initialized dependencies.
+// Context.ObservationEpoch must be shared with the observer for availability
+// projections. It is not generated here: an independent value could never match.
 func New(o Options) (*Server, error) {
 	if o.Store == nil || o.Auth == nil || o.RBAC == nil || o.Registry == nil || o.Hub == nil {
 		return nil, errors.New("store, auth, RBAC, registry and events hub are required")
@@ -161,7 +164,7 @@ func (s *Server) failure(err error) response {
 	}
 	switch {
 	case errors.Is(err, engine.ErrUnavailable):
-		return fail(503, "unavailable", "Database agent or relay is temporarily unavailable; retry the request after connectivity recovers")
+		return fail(503, "unavailable", "Database, agent or relay is temporarily unavailable; retry the request after connectivity recovers")
 	case errors.Is(err, store.ErrNotFound), errors.Is(err, engine.ErrNotFound):
 		return fail(404, "not_found", "Resource not found")
 	case errors.Is(err, store.ErrConflict), errors.Is(err, engine.ErrConflict), errors.Is(err, engine.ErrNotSupported):
@@ -186,7 +189,8 @@ func (s *Server) failure(err error) response {
 	case errors.Is(err, auth.ErrPasswordChangeRequired):
 		return fail(403, "password_change_required", "Change your password before continuing")
 	default:
-		s.Logger.Error("API operation failed")
+		// Native errors may contain credential documents or MongoDB URI userinfo.
+		s.Logger.Error("API operation failed", "error", redact.Diagnostic(err.Error()))
 		return fail(500, "internal_error", "Internal server error")
 	}
 }
@@ -447,8 +451,7 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		r.Header.Set("X-Request-ID", id)
 		defer func() {
-			// Route patterns contain no names, credentials or query values.
-			s.Logger.Info("HTTP request", "request_id", id, "method", r.Method, "route", r.Pattern, "duration", time.Since(started))
+			s.logRequest(id, r.Method, r.Pattern, time.Since(started))
 		}()
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -475,6 +478,15 @@ func (s *Server) Handler() http.Handler {
 		}
 		validated.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) logRequest(id, method, route string, elapsed time.Duration) {
+	// Route patterns contain no object names, credentials or query values.
+	if elapsed > 2*time.Second {
+		s.Logger.Warn("Slow HTTP request", "request_id", id, "method", method, "route", route, "duration", elapsed)
+		return
+	}
+	s.Logger.Info("HTTP request", "request_id", id, "method", method, "route", route, "duration", elapsed)
 }
 
 type page[T any] struct {
@@ -595,6 +607,10 @@ func (s *Server) usableNamespace(namespace string) *response {
 	return nil
 }
 func (s *Server) handle(ctx context.Context, name string, in input) response {
+	// Bind correlation fields on a request-local copy, never the shared server.
+	local := *s
+	local.Logger = s.Logger.With("request_id", request(ctx).Header.Get("X-Request-ID"), "operation", name)
+	s = &local
 	var pending domain.ClusterRef
 	ctx = context.WithValue(ctx, triggerKey{}, &pending)
 	if p := principal(ctx); p != nil {
@@ -611,6 +627,13 @@ func (s *Server) handle(ctx context.Context, name string, in input) response {
 }
 
 func (s *Server) dispatch(ctx context.Context, name string, in input) response {
+	if in.Cluster != "" && initialRestoreMutation(name) {
+		// This shared fence precedes provider capability/health prechecks,
+		// so the actual restore owner is not hidden by a generic conflict.
+		if err := s.Store.CheckInitialDataSourceMutation(ctx, clusterRef(ctx, in.Cluster)); err != nil {
+			return s.failure(err)
+		}
+	}
 	switch name {
 	case "ListElasticUsers", "GetElasticUser", "CreateElasticUser", "UpdateElasticUser", "DeleteElasticUser", "ListElasticRoles", "GetElasticRole", "CreateElasticRole", "UpdateElasticRole", "DeleteElasticRole", "ListElasticAPIKeys", "CreateElasticAPIKey", "InvalidateElasticAPIKey":
 		return s.elasticAccess(ctx, name, in)

@@ -103,6 +103,9 @@ func TestManagedRolesSCRAMAndProxyLifecycle(t *testing.T) {
 			t.Error(err)
 		}
 		switch request.Operation {
+		case "capabilities":
+			// Exact legacy contract: unknown operations are rejected pre-SQL.
+			w.WriteHeader(http.StatusBadRequest)
 		case "list":
 			out := []Role{}
 			for _, role := range roles {

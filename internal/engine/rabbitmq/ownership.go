@@ -71,6 +71,24 @@ func verifyMemberServices(ctx context.Context, rc *engine.Context, m *member) er
 		}
 		service, err := rc.Backend.GetService(ctx, name)
 		if err != nil {
+			if m.RuntimeRecovery.VolumeLost && engine.ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
+				// An already-classified lost incarnation must not block its
+				// safe replacement/removal workflow. Keep the original IDs:
+				// this is not evidence for adopting or creating new storage.
+				if service != nil {
+					expectedID := m.ServiceID
+					if volume {
+						expectedID = m.VolumeID
+					}
+					if expectedID != "" && service.ID != expectedID {
+						return engine.UnverifiedOwnership(service)
+					}
+					if ownershipErr := verifyServiceOwnership(ctx, rc, m, service, volume); ownershipErr != nil {
+						return ownershipErr
+					}
+				}
+				continue
+			}
 			return err
 		}
 		if service == nil {
@@ -128,7 +146,7 @@ func adoptImported(ctx context.Context, rc *engine.Context, m *member, op infra.
 		if err != nil {
 			return false, err
 		}
-		if service == nil {
+		if service == nil || service.Importing {
 			complete = false
 			continue
 		}

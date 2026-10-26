@@ -120,7 +120,7 @@ func (s *Server) postgresRoleAllowed(ctx context.Context, name string, rc *engin
 func (s *Server) postgres(ctx context.Context, name string, in input, rc *engine.Context, provider engine.Provider) response {
 	access, supported := provider.(postgres.Access)
 	if !supported {
-		return s.failure(engine.ErrNotSupported)
+		return s.unsupportedClusterAction(name, provider)
 	}
 	changed := func(status int, body any, noStore bool) response {
 		s.trigger(ctx, rc.Cluster.Ref())
@@ -253,7 +253,7 @@ func (s *Server) postgres(ctx context.Context, name string, in input, rc *engine
 		}
 		return changed(204, nil, false)
 	}
-	return s.failure(engine.ErrNotSupported)
+	return s.unsupportedClusterAction(name, provider)
 }
 
 func (s *Server) ListPostgresRoles(ctx context.Context, r api.ListPostgresRolesRequestObject) (api.ListPostgresRolesResponseObject, error) {

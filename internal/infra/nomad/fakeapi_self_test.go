@@ -143,6 +143,20 @@ func TestFakeNomadTokenScoping(t *testing.T) {
 	fakeCall(t, f, "PUT", "/v1/jobs", fakeNomadToken, job, 400)
 }
 
+func TestFakeNomadRejectsAutoPromoteWithoutCanary(t *testing.T) {
+	f := newFakeNomad(t)
+	job := fakeJobBody("promote", "", 1)
+	group := fakeRows(fakeMap(job["Job"])["TaskGroups"])[0]
+	group["Update"] = fakeRow{"MaxParallel": 1, "Canary": 0, "AutoPromote": true}
+	rejected := fakeCall(t, f, "PUT", "/v1/jobs", fakeNomadToken, job, 500)
+	if !strings.Contains(string(rejected), "Auto Promote requires a Canary count greater than zero") {
+		t.Fatalf("wrong validation failure: %s", rejected)
+	}
+	fakeCall(t, f, "GET", "/v1/job/promote", fakeNomadToken, nil, 404)
+	group["Update"] = fakeRow{"MaxParallel": 1, "Canary": 0, "AutoPromote": false}
+	fakeRegister(t, f, job)
+}
+
 func TestFakeNomadRegisterConverges(t *testing.T) {
 	f := newFakeNomad(t)
 	f.setAutoTick(false)
@@ -200,11 +214,11 @@ func TestFakeNomadRegisterConverges(t *testing.T) {
 	if deployment["Status"] != "successful" {
 		t.Fatalf("deployment: %#v", deployment)
 	}
-	// A metadata-only update preserves allocations while bumping the job version.
+	// Nomad's CombinedTaskMeta makes job metadata a destructive task update.
 	fakeMap(fakeMap(body["Job"])["Meta"])["label"] = "updated"
 	fakeRegister(t, f, body)
-	if len(fakeAllocs(t, f, "member")) != 3 {
-		t.Fatal("metadata update replaced allocations")
+	if len(fakeAllocs(t, f, "member")) != 6 {
+		t.Fatal("metadata update did not replace allocations")
 	}
 	job = fakeObject(t, fakeCall(t, f, "GET", "/v1/job/member", fakeNomadToken, nil, 200))
 	if fakeInt(job, "Version") != 1 {

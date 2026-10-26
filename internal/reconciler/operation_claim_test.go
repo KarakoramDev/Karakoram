@@ -9,6 +9,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 )
 
 type maintenanceClaimProvider struct{ *operationProvider }
@@ -82,6 +83,9 @@ func TestOperationClaimPolicyIsOptional(t *testing.T) {
 				created = created.Add(-48 * time.Hour)
 			}
 			op := &domain.Operation{ID: "restart", Cluster: "demo", Kind: domain.OperationRestart, CreatedAt: created}
+			if old {
+				op.Elapsed = 48 * time.Hour
+			}
 			if err := s.EnqueueOperation(t.Context(), op); err != nil {
 				t.Fatal(err)
 			}
@@ -128,5 +132,41 @@ func TestRunningOperationStillPrecedesMaintenanceClaimPolicy(t *testing.T) {
 	got, err := s.GetOperation(t.Context(), "running")
 	if err != nil || got.Phase != domain.PhaseSucceeded {
 		t.Fatal(got, err)
+	}
+}
+
+type runtimeRecoveryClaimProvider struct{ *operationProvider }
+
+func (*runtimeRecoveryClaimProvider) CanClaimOperation(c *domain.Cluster) (bool, error) {
+	return (&psmdb.Provider{}).CanClaimOperation(c)
+}
+
+func TestAcceptedRuntimeRecoveryDefersQueuedActions(t *testing.T) {
+	for _, kind := range []string{domain.OperationRestart, domain.OperationRestore} {
+		t.Run(kind, func(t *testing.T) {
+			p := &runtimeRecoveryClaimProvider{&operationProvider{fakeProvider: &fakeProvider{}}}
+			p.runFn = func(*engine.Context, *domain.Operation) (engine.OpResult, error) {
+				t.Fatal("queued action overtook accepted runtime recovery")
+				return engine.OpResult{}, nil
+			}
+			m, st := newTestManager(t, p)
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}, Internal: json.RawMessage(`{"uid":"owned","members":[{"name":"demom0","stage":"active","runtimeRecovery":{"action":"import","op":{"ID":"accepted-import"}}}]}`)}
+			if err := st.CreateCluster(t.Context(), c); err != nil {
+				t.Fatal(err)
+			}
+			op := &domain.Operation{Cluster: c.Name, Kind: kind, CreatedAt: time.Now().Add(-48 * time.Hour)}
+			if err := st.EnqueueOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			queued, err := st.GetOperation(t.Context(), op.ID)
+			if err != nil || queued.Phase != domain.PhasePending || queued.Attempts != 0 || queued.Elapsed != 0 || queued.StartedAt != nil {
+				t.Fatal("runtime recovery did not retain claim priority", queued, err)
+			}
+		})
 	}
 }

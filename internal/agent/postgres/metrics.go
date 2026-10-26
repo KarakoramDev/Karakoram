@@ -49,13 +49,38 @@ func databaseMetrics(ctx context.Context, c *pgx.Conn) []agent.Metric {
 	var recovery bool
 	if c.QueryRow(ctx, "SELECT pg_catalog.pg_is_in_recovery()").Scan(&recovery) == nil {
 		var lag float64
+		name := "replication_lag_bytes"
 		sql := "SELECT COALESCE(pg_catalog.max(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_current_wal_lsn(),replay_lsn)),0)::double precision FROM pg_catalog.pg_stat_replication"
 		if recovery {
+			name = "replay_backlog_bytes"
 			sql = "SELECT COALESCE(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_last_wal_receive_lsn(),pg_catalog.pg_last_wal_replay_lsn()),0)::double precision"
 		}
 		if c.QueryRow(ctx, sql).Scan(&lag) == nil {
-			result = append(result, metric("replication_lag_bytes", "WAL replay lag in bytes.", lag, false, nil))
+			result = append(result, metric(name, "WAL replay distance in bytes; replica-local backlog excludes transport lag.", lag, false, nil))
 		}
+		if !recovery {
+			var slots []pgspec.ReplicationSlot
+			if c.QueryRow(ctx, slotRetentionSQL).Scan(&slots) == nil {
+				for _, slot := range slots {
+					labels := map[string]string{"slot": slot.Name, "type": slot.Type}
+					active, lost := 0.0, 0.0
+					if slot.Active {
+						active = 1
+					}
+					if slot.WALStatus == "lost" || slot.WALStatus == "unreserved" {
+						lost = 1
+					}
+					result = append(result,
+						metric("slot_retained_wal_bytes", "WAL retained by a replication slot.", float64(slot.RetainedBytes), false, labels),
+						metric("slot_active", "Replication slot currently has an active consumer.", active, false, labels),
+						metric("slot_wal_unavailable", "Required slot WAL is lost or unreserved.", lost, false, labels))
+				}
+			}
+		}
+	}
+	var walBytes, pending int64
+	if c.QueryRow(ctx, `SELECT COALESCE((SELECT pg_catalog.sum(size) FROM pg_catalog.pg_ls_waldir()),0)::bigint, (SELECT pg_catalog.count(*) FROM pg_catalog.pg_ls_archive_statusdir() WHERE name LIKE '%.ready')`).Scan(&walBytes, &pending) == nil {
+		result = append(result, metric("wal_size_bytes", "Size of the PostgreSQL WAL directory.", float64(walBytes), false, nil), metric("archive_pending_segments", "WAL segments awaiting successful archiving.", float64(pending), false, nil))
 	}
 	return result
 }

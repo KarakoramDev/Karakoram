@@ -75,6 +75,7 @@ type Collector struct {
 	latest      map[Target]map[string]*dto.MetricFamily
 	latestUsage map[Target]memberSample
 	vocabulary  map[string]vocabulary
+	retention   chan struct{}
 }
 
 // New creates a collector with a 30-second interval and 24-hour retention by default.
@@ -95,7 +96,7 @@ func New(o Options) *Collector {
 	for _, v := range o.Vocabulary {
 		vocab[v.Exposition] = vocabulary{name: v.Name, unit: v.Unit, scale: v.Scale}
 	}
-	return &Collector{o: o, vocabulary: vocab, latest: map[Target]map[string]*dto.MetricFamily{}, latestUsage: map[Target]memberSample{}}
+	return &Collector{o: o, vocabulary: vocab, latest: map[Target]map[string]*dto.MetricFamily{}, latestUsage: map[Target]memberSample{}, retention: make(chan struct{}, 1)}
 }
 
 type vocabulary struct {
@@ -163,16 +164,7 @@ func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFa
 	if families == nil {
 		families = make(map[string]*dto.MetricFamily, 1)
 	}
-	name, help := "karakoram_member_scrape_success", "Whether the latest member exporter scrape succeeded."
-	kind := dto.MetricType_GAUGE
-	value := float64(0)
-	if success {
-		value = 1
-	}
-	families[name] = &dto.MetricFamily{
-		Name: &name, Help: &help, Type: &kind,
-		Metric: []*dto.Metric{{Gauge: &dto.Gauge{Value: &value}}},
-	}
+	families["karakoram_member_scrape_success"] = scrapeSuccessFamily(success)
 	c.mu.Lock()
 	latest := memberSample{at: now}
 	previous := c.latestUsage[target]
@@ -213,6 +205,20 @@ func (c *Collector) cacheScrape(target Target, families map[string]*dto.MetricFa
 	c.mu.Unlock()
 }
 
+func scrapeSuccessFamily(success bool) *dto.MetricFamily {
+	name, help := "karakoram_member_scrape_success", "Whether the latest member exporter scrape succeeded and is fresh."
+	kind := dto.MetricType_GAUGE
+	value := float64(0)
+	if success {
+		value = 1
+	}
+	return &dto.MetricFamily{Name: &name, Help: &help, Type: &kind, Metric: []*dto.Metric{{Gauge: &dto.Gauge{Value: &value}}}}
+}
+
+func (c *Collector) sampleFresh(at, now time.Time) bool {
+	return !at.IsZero() && !at.After(now) && now.Sub(at) <= 2*c.o.Interval
+}
+
 // MemberUsage returns values only from a successful scrape within two scrape
 // intervals. CPU uses the same reset-aware, 0–100% counter rate as Series and
 // requires a preceding fresh sample; failed scrapes discard that baseline.
@@ -223,47 +229,66 @@ func (c *Collector) MemberUsage(cluster domain.ClusterRef, member string) Member
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	latest := c.latestUsage[Target{Namespace: domain.NormalizedNamespace(cluster.Namespace), Cluster: cluster.Name, Member: member}]
-	if time.Since(latest.at) > 2*c.o.Interval {
+	if !c.sampleFresh(latest.at, time.Now()) {
 		return MemberUsage{}
 	}
 	return latest.usage
 }
 
 func (c *Collector) scrape(ctx context.Context) error {
+	// Retention must still run when discovery or new ingestion fails, especially
+	// when the database has no room for additional metric samples.
+	pruneErr := c.pruneRetention(ctx)
 	targets, err := c.o.Targets(ctx)
 	if err != nil {
-		return err
+		// Discovery did not establish which targets are still current. Do not
+		// republish cached successes with the next consumer's scrape time.
+		c.mu.Lock()
+		for target := range c.latest {
+			c.latest[target] = nil
+			delete(c.latestUsage, target)
+		}
+		c.mu.Unlock()
+		return errors.Join(pruneErr, err)
 	}
-	live := map[Target]bool{}
+	live := make(map[Target]bool, len(targets))
+	for i := range targets {
+		targets[i].Namespace = domain.NormalizedNamespace(targets[i].Namespace)
+		live[targets[i]] = true
+	}
+	// Bound both fan-out and each target's observation budget. Failed exporters
+	// cannot consume a whole interval per member before healthy ones are visited.
+	// Divide the interval across worker waves as inventory grows, so a large
+	// set of failed exporters cannot make every subsequent sweep stale.
+	budget := min(30*time.Second, c.o.Interval/time.Duration(max(1, (len(targets)+7)/8)))
+	jobs := make(chan Target)
+	var workers sync.WaitGroup
+	var errorMu sync.Mutex
+	collectionErr := pruneErr
+	for range min(8, len(targets)) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for target := range jobs {
+				if err := c.scrapeTarget(ctx, target, budget); err != nil {
+					errorMu.Lock()
+					collectionErr = errors.Join(collectionErr, err)
+					errorMu.Unlock()
+				}
+			}
+		}()
+	}
 	for _, target := range targets {
-		target.Namespace = domain.NormalizedNamespace(target.Namespace)
-		live[target] = true
-		client, err := c.o.Dialer.Dial(ctx, domain.ClusterRef{Namespace: target.Namespace, Name: target.Cluster}, target.Member)
-		if err != nil {
-			c.o.Logger.Warn("metrics dial failed", "cluster", target.Cluster, "member", target.Member, "error", err)
-			c.cacheScrape(target, nil, nil, time.Now().UTC())
-			continue
+		select {
+		case jobs <- target:
+		case <-ctx.Done():
+			close(jobs)
+			workers.Wait()
+			return errors.Join(collectionErr, ctx.Err())
 		}
-		data, err := client.Metrics(ctx)
-		client.Close()
-		if err != nil {
-			c.o.Logger.Warn("metrics scrape failed", "cluster", target.Cluster, "member", target.Member, "error", err)
-			c.cacheScrape(target, nil, nil, time.Now().UTC())
-			continue
-		}
-		now := time.Now().UTC()
-		families, samples, err := parseMetricsWithVocabulary(data, target, now, c.vocabulary)
-		if err != nil {
-			c.o.Logger.Warn("invalid member metrics", "member", target.Member, "error", err)
-			c.cacheScrape(target, nil, nil, now)
-			continue
-		}
-		if err = c.o.Store.InsertMetricSamples(ctx, samples); err != nil {
-			c.cacheScrape(target, nil, nil, now)
-			return err
-		}
-		c.cacheScrape(target, families, samples, now)
 	}
+	close(jobs)
+	workers.Wait()
 	c.mu.Lock()
 	for target := range c.latest {
 		if !live[target] {
@@ -272,8 +297,72 @@ func (c *Collector) scrape(ctx context.Context) error {
 		}
 	}
 	c.mu.Unlock()
-	_, err = c.o.Store.PruneMetricSamples(ctx, time.Now().Add(-c.o.Retention))
+	return collectionErr
+}
+
+func (c *Collector) scrapeTarget(ctx context.Context, target Target, budget time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	client, err := c.o.Dialer.Dial(ctx, domain.ClusterRef{Namespace: target.Namespace, Name: target.Cluster}, target.Member)
+	if err != nil {
+		c.o.Logger.Warn("metrics dial failed", "cluster", target.Cluster, "member", target.Member, "error", err)
+		c.cacheScrape(target, nil, nil, time.Now().UTC())
+		return nil
+	}
+	data, err := client.Metrics(ctx)
+	client.Close()
+	if err != nil {
+		c.o.Logger.Warn("metrics scrape failed", "cluster", target.Cluster, "member", target.Member, "error", err)
+		c.cacheScrape(target, nil, nil, time.Now().UTC())
+		return nil
+	}
+	now := time.Now().UTC()
+	families, samples, err := parseMetricsWithVocabulary(data, target, now, c.vocabulary)
+	if err != nil {
+		c.o.Logger.Warn("invalid member metrics", "member", target.Member, "error", err)
+		c.cacheScrape(target, nil, nil, now)
+		return nil
+	}
+	// Persistence failure does not invalidate an independently fresh observation.
+	c.cacheScrape(target, families, samples, now)
+	if err := c.o.Store.InsertMetricSamples(ctx, samples); err != nil {
+		return fmt.Errorf("persist metrics for %s/%s/%s: %w", target.Namespace, target.Cluster, target.Member, err)
+	}
+	return nil
+}
+
+// A saturated sweep schedules another bounded sweep instead of imposing a
+// 4096-row-per-scrape ceiling. One worker coalesces wakeups and yields between
+// sweeps; discovery/exporter failures cannot stop an existing backlog draining.
+func (c *Collector) pruneRetention(ctx context.Context) error {
+	n, err := c.o.Store.PruneMetricSamples(ctx, time.Now().Add(-c.o.Retention))
+	if ctx.Err() == nil && (n == store.MetricPruneMaxRows || errors.Is(err, context.DeadlineExceeded)) {
+		select {
+		case c.retention <- struct{}{}:
+		default:
+		}
+	}
 	return err
+}
+
+func (c *Collector) continueRetention(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.retention:
+		}
+		timer := time.NewTimer(25 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		if err := c.pruneRetention(ctx); err != nil && ctx.Err() == nil {
+			c.o.Logger.Error("monitoring retention failed", "error", err)
+		}
+	}
 }
 
 // Run scrapes discovered members until cancellation, retaining samples transactionally.
@@ -281,6 +370,13 @@ func (c *Collector) Run(ctx context.Context) error {
 	if c.o.Store == nil || c.o.Dialer == nil || c.o.Targets == nil {
 		return errors.New("monitoring store, dialer and targets are required")
 	}
+	child, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.continueRetention(child)
+	}()
+	defer func() { cancel(); <-done }()
 	ticker := time.NewTicker(c.o.Interval)
 	defer ticker.Stop()
 	for {
@@ -424,19 +520,27 @@ func (c *Collector) Series(ctx context.Context, cluster domain.ClusterRef, metri
 	return result, nil
 }
 
-// WritePrometheus federates latest exposition with authoritative cluster/member
-// labels. Failed scrapes expose only karakoram_member_scrape_success=0, not
-// cached database health values.
+// WritePrometheus federates exposition with authoritative cluster/member labels.
+// Failed discovery/scrapes and samples older than two collection intervals expose
+// only karakoram_member_scrape_success=0, never cached database health values.
 func (c *Collector) WritePrometheus(ctx context.Context, w io.Writer, allow func(domain.ClusterRef) bool) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	families := map[string]*dto.MetricFamily{}
+	var staleScrape map[string]*dto.MetricFamily
+	now := time.Now()
 	for target, scrape := range c.latest {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if allow != nil && !allow(domain.ClusterRef{Namespace: domain.NormalizedNamespace(target.Namespace), Name: target.Cluster}) {
 			continue
+		}
+		if !c.sampleFresh(c.latestUsage[target].at, now) {
+			if staleScrape == nil {
+				staleScrape = map[string]*dto.MetricFamily{"karakoram_member_scrape_success": scrapeSuccessFamily(false)}
+			}
+			scrape = staleScrape
 		}
 		for name, family := range scrape {
 			dest := families[name]

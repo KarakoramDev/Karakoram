@@ -10,6 +10,8 @@ import (
 	"errors"
 	"slices"
 	"strings"
+
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
 // RestartToken hashes a canonical JSON array of ordered restart-relevant parts.
@@ -91,8 +93,7 @@ func S3SecureSettings(name, accessKey, secret string) map[string]string {
 func RepositoryName(storage string) string { return "kk-" + storage }
 
 // RepositoryBasePath scopes a snapshot repository to one cluster lifetime.
-// Empty segments and repeated slashes are removed without interpreting dot
-// segments: S3 keys are not filesystem paths.
+// Persisted bindings retain their historical empty-component normalization.
 func RepositoryBasePath(storagePrefix, namespace, cluster, uid string) string {
-	return strings.Join(strings.FieldsFunc(strings.Join([]string{storagePrefix, namespace, cluster, uid}, "/"), func(r rune) bool { return r == '/' }), "/")
+	return domain.ElasticsearchObjectPrefix(storagePrefix, strings.Join([]string{namespace, cluster, uid}, "/"))
 }

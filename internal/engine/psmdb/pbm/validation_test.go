@@ -49,7 +49,9 @@ func TestInvalidPITRRestoreFailsTerminally(t *testing.T) {
 			}
 			op := &domain.Operation{ID: "recovery", Payload: json.RawMessage(`{"restore":"recovery"}`)}
 			if mode == "lost-coverage" {
+				fake.mu.Lock()
 				fake.pitrDeleted = true
+				fake.mu.Unlock()
 				cp := checkpoint{Step: "disable-pitr", Member: "m0", TargetTime: &target, Snapshot: "base"}
 				op.Checkpoint, _ = json.Marshal(cp)
 			}
@@ -75,7 +77,7 @@ func TestInvalidPITRRestoreFailsTerminally(t *testing.T) {
 			if err != nil || stored.Phase != domain.PhaseFailed || stored.Error == "" || stored.CompletedAt == nil {
 				t.Fatal(stored, err)
 			}
-			if fake.starts != 0 {
+			if fake.startCount() != 0 {
 				t.Fatal("invalid PITR started restore")
 			}
 			res, err := RunRestore(context.Background(), env, op)

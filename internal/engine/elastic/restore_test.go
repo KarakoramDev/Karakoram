@@ -52,7 +52,7 @@ func TestRestoreCheckpointStageOrdering(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Indices != "*" || !req.IncludeGlobalState || !req.IncludeAliases {
 				t.Errorf("restore request: %+v %v", req, err)
 			}
-			opsJSON(w, map[string]any{"accepted": true})
+			opsJSON(w, map[string]any{"snapshot": map[string]any{"shards": map[string]int{"total": 4, "successful": 4, "failed": 0}}})
 		case strings.HasSuffix(path, "/snapshot-one"):
 			opsJSON(w, map[string]any{"snapshots": []esapi.SnapshotInfo{{Snapshot: "snapshot-one", State: "SUCCESS", Version: "9.5.5", Indices: []string{"logs-test", ".tenant-cache", "hidden-user", ".security-7"}}}})
 		case path == "/_cat/indices":

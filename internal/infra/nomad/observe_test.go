@@ -63,7 +63,11 @@ func TestLogsSkipUnreadableInactiveAllocations(t *testing.T) {
 					old = id
 				}
 				f.mu.Unlock()
-				deployFake(t, b, "runtime", "")
+				op, err := b.Start(t.Context(), "runtime")
+				if err != nil {
+					t.Fatal(err)
+				}
+				awaitFake(t, b, op)
 				f.setAutoTick(false)
 				f.mu.Lock()
 				f.allocs[old].row["ClientStatus"] = status
