@@ -741,6 +741,12 @@ func (b *Backend) statelessOperationStatus(ctx context.Context, r *record, state
 	current := r.Pending
 	raw, job, err := b.operationJob(ctx, r)
 	if err != nil {
+		if errors.Is(err, infra.ErrNotFound) {
+			// The durable service still exists, but this rollout no longer has
+			// a job to observe. Match stateful polling's expired receipt so
+			// callers can reconcile or delete the owned logical service.
+			return expired(*current), nil
+		}
 		if (current.RetainOnly || current.RetainedHash != "") && errors.Is(err, infra.ErrConflict) {
 			return b.failOperation(ctx, r, state, "count-only recovery lost job ownership; refusing to adopt the foreign runtime")
 		}

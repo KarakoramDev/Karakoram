@@ -175,6 +175,8 @@ Companion resources default to shared CPU and 0.25–0.5 GiB RAM. `spec.dataMcp.
 
 The companion supervises `mcp-ro` and, with cluster write opt-in, `mcp-rw`. Each upstream binds only to loopback and requires a process-local bearer. MongoDB receives connection/authentication through environment variables; pgEdge uses protected configuration and SHA-256 token files. Secrets are not command arguments. The authenticated agent routes `/v1/datamcp/ro` and `/v1/datamcp/rw` over private HTTPS port **9443**, using the existing dialer/relay; never publish that port. Credentials, desired spec and certificate changes advance config version and trigger reload. Disabling/deleting waits for ownership-checked companion cleanup, including volume-preserving cluster suspension.
 
+On Nomad, an externally purged companion job does not block disabling Data MCP: reconciliation expires the missing job's rollout receipt, deletes the retained logical service and clears its sealed companion identity and configuration. Database identity removal still follows the normal disable reconciliation.
+
 Inspect `status.dataMcp` independently of database member readiness:
 
 | Field | Meaning |
