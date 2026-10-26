@@ -43,6 +43,49 @@ func (s *Server) weaviateAdminAllowed(ctx context.Context, name string, rc *engi
 	rule, exists := api.OperationAdditionalRBAC[operationID(name)]
 	return exists && !rule.Public && rule.ObjectParam == "cluster" && s.allowed(ctx, rule.Resource, rule.Action, clusterObject(rc.Cluster.Namespace, rc.Cluster.Name))
 }
+
+// authorizeWeaviateReplay repeats conditional credential authorization before
+// consulting the idempotency cache. Rotation uses current native roles rather
+// than trusting permissions from the original request.
+func (s *Server) authorizeWeaviateReplay(ctx context.Context, id string, v any) *response {
+	var cluster, user string
+	var roles []string
+	switch q := v.(type) {
+	case api.CreateWeaviateUserRequestObject:
+		cluster = q.Cluster
+		if q.Body != nil {
+			roles = q.Body.Roles
+		}
+	case api.RotateWeaviateUserKeyRequestObject:
+		cluster, user = q.Cluster, q.User
+	default:
+		return nil
+	}
+	rc, provider, err := s.context(ctx, clusterRef(ctx, cluster))
+	if err != nil {
+		failure := s.failure(err)
+		return &failure
+	}
+	if id == "rotateWeaviateUserKey" {
+		access, ok := provider.(weaviate.Access)
+		if !ok {
+			failure := s.failure(engine.ErrNotSupported)
+			return &failure
+		}
+		current, err := access.GetUser(ctx, rc, user)
+		if err != nil {
+			failure := s.failure(err)
+			return &failure
+		}
+		roles = current.Roles
+	}
+	if !s.weaviateRolesAllowed(ctx, id, rc, roles) {
+		failure := fail(403, "forbidden", "Weaviate privileged credentials require clusters/update permission")
+		return &failure
+	}
+	return nil
+}
+
 func (s *Server) weaviate(ctx context.Context, name string, in input, rc *engine.Context, p engine.Provider) response {
 	a, yes := p.(weaviate.Access)
 	if !yes {

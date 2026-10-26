@@ -15,6 +15,10 @@ before execution or idempotency replay. PostgreSQL binding rotation therefore
 requires both `database-users:update` and `clusters:update`. Conditional grants
 (privileged database roles/tags and cross-cluster OpenBao targets) are resolved
 against the request body or current engine state by their owning handlers.
+Weaviate user creation and API-key rotation recheck privileged-role access before
+returning cached keys; rotation resolves the user's current native roles. Revoking
+`clusters:update` prevents privileged secret replay even while the principal
+retains its ordinary database-user permissions.
 
 ## Connected OAuth applications
 

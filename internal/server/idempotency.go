@@ -140,6 +140,11 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	if p == nil {
 		return fail(401, "unauthorized", "Authentication required"), nil
 	}
+	if id == "createWeaviateUser" || id == "rotateWeaviateUserKey" {
+		if failure := s.authorizeWeaviateReplay(ctx, id, v); failure != nil {
+			return *failure, nil
+		}
+	}
 	body, _ := ctx.Value(idempotencyBodyKey{}).([]byte)
 	canonical, err := canonicalIdempotencyBody(body)
 	if err != nil {

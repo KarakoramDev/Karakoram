@@ -248,6 +248,54 @@ func TestWeaviateAdditionalRBACInventory(t *testing.T) {
 	}
 }
 
+func TestWeaviateSecretReplayRechecksPrivilegedPermission(t *testing.T) {
+	for _, tc := range []struct {
+		name, path, body string
+		status           int
+	}{
+		{"create", "/api/v1/clusters/prod/weaviate/users", `{"name":"app","roles":["admin"]}`, 201},
+		{"rotate", "/api/v1/clusters/prod/weaviate/users/app/rotate-key", "", 200},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, _ := testServer(t)
+			ctx := t.Context()
+			f := &fakeWeaviateAccess{roles: []string{"admin"}}
+			s.Registry, _ = engine.NewRegistry(f)
+			if _, err := s.Auth.CreateAccount(ctx, domain.Account{Name: "wv-retry"}, "integration-account-password"); err != nil {
+				t.Fatal(err)
+			}
+			policy := s.RBAC.Policy() + "\np, user:wv-retry, database-users, create, default/prod, allow\np, user:wv-retry, database-users, update, default/prod, allow\n"
+			admin := policy + "p, user:wv-retry, clusters, update, default/prod, allow\n"
+			if err := s.RBAC.ReplacePolicy(ctx, admin); err != nil {
+				t.Fatal(err)
+			}
+			token, _, err := s.Auth.CreateToken(ctx, "wv-retry", "test", nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			first := idempotentCall(s, "POST", tc.path, tc.body, token, "wv-secret")
+			second := idempotentCall(s, "POST", tc.path, tc.body, token, "wv-secret")
+			assertReplay(t, first, second, tc.status)
+			if err := s.RBAC.ReplacePolicy(ctx, policy); err != nil {
+				t.Fatal(err)
+			}
+			f.last = ""
+			denied := idempotentCall(s, "POST", tc.path, tc.body, token, "wv-secret")
+			if denied.Code != 403 || strings.Contains(denied.Body.String(), "one-time") || denied.Header().Get("Idempotent-Replayed") != "" {
+				t.Fatalf("revoked extra permission exposed cached secret: %d %s", denied.Code, denied.Body.String())
+			}
+			if f.last == "CreateUser" || f.last == "RotateUserKey" {
+				t.Fatal("revoked replay performed mutation", f.last)
+			}
+			// Regranting access permits the original replay, not another mutation.
+			if err := s.RBAC.ReplacePolicy(ctx, admin); err != nil {
+				t.Fatal(err)
+			}
+			assertReplay(t, first, idempotentCall(s, "POST", tc.path, tc.body, token, "wv-secret"), tc.status)
+		})
+	}
+}
+
 func TestWeaviateIdempotency(t *testing.T) {
 	for _, tc := range []struct {
 		method, path, body string
@@ -269,8 +317,12 @@ func TestWeaviateIdempotency(t *testing.T) {
 			f.last = ""
 			replayed := idempotentCall(s, tc.method, path+"?namespace=default", tc.body, token, "wv-access")
 			assertReplay(t, first, replayed, tc.status)
-			if f.last != "" {
-				t.Fatal("replay reached provider", f.last)
+			want := ""
+			if tc.path == "users/app/rotate-key" {
+				want = "GetUser" // Current roles are reauthorized before cached secrets.
+			}
+			if f.last != want {
+				t.Fatalf("replay provider call = %q, want %q", f.last, want)
 			}
 			if tc.secret && replayed.Header().Get("Cache-Control") != "no-store" {
 				t.Fatal("replayed secret is cacheable")
