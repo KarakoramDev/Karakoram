@@ -137,6 +137,14 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 		}
 	}
 	st, err := rc.Backend.OpStatus(ctx, q.Op)
+	var resourceRejected *infra.ResourceUpdateRejectedError
+	if errors.As(err, &resourceRejected) {
+		// The backend refused replacement before stopping the serving
+		// allocation. Release this terminal receipt without applying its
+		// target bounds, so newer desired resources can converge.
+		s.Pending = nil
+		return true, err
+	}
 	if err != nil {
 		return true, err
 	}
@@ -398,11 +406,13 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	// newer desire. Once its receipt settles, growth is checked before deploy.
 	for _, m := range s.Members {
 		r := desiredComponent(rc, m).Resources
-		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
-			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Disk, r)
+			if e != nil {
 				rc.SyncWait = ""
 				return result, e
 			}
+			m.Disk.MinDisk, m.Disk.MaxDisk = disk.MinDisk, disk.MaxDisk
 		}
 	}
 	if s.UID == "" {
