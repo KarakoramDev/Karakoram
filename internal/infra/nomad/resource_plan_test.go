@@ -141,6 +141,10 @@ func TestResourcePlanRechecksBeforeRetryingStop(t *testing.T) {
 	if err != nil || len(before) != 1 {
 		t.Fatalf("initial containers: %+v %v", before, err)
 	}
+	applied, err := b.require(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
 	f.mu.Lock()
 	f.requestHook = func(w http.ResponseWriter, r *http.Request) (bool, func()) {
 		if r.Method == http.MethodPost && r.URL.Path == "/v1/jobs" {
@@ -182,6 +186,17 @@ func TestResourcePlanRechecksBeforeRetryingStop(t *testing.T) {
 		if !errors.As(err, &rejected) || !state.Failed {
 			t.Fatalf("terminal retry fence lost: %+v %v", state, err)
 		}
+	}
+	// Reconstruct the backend: both the terminal typed outcome and the old
+	// applied bounds must survive, not only the serving allocation identity.
+	b = fakeBackend(t, f, nil)
+	stored, err := b.require(t.Context(), "runtime")
+	if err != nil || !reflect.DeepEqual(stored.Resources, applied.Resources) {
+		t.Fatalf("rejection did not restore durable applied bounds: %+v %v", stored, err)
+	}
+	state, err = b.OpStatus(t.Context(), encodeOp(*r.Pending))
+	if !errors.As(err, &rejected) || !state.Failed {
+		t.Fatalf("terminal typed rejection lost on backend reconstruction: %+v %v", state, err)
 	}
 	after, err := b.Containers(t.Context(), "runtime")
 	if err != nil || len(after) != 1 || before[0].ID != after[0].ID {

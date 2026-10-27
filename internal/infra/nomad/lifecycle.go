@@ -179,12 +179,13 @@ func (b *Backend) SetResources(ctx context.Context, hostname string, change infr
 	if r.Kind == infra.KindVolume && (change.MinDisk != 0 && change.MinDisk != r.Resources.MinDisk || change.MaxDisk != 0 && change.MaxDisk != r.Resources.MaxDisk) {
 		return infra.Op{}, infra.ErrUnsupported
 	}
+	previous := r.Resources
 	r.Resources = mergeResources(r.Resources, change)
 	if err = resourceValidation(r.Resources); err != nil {
 		return infra.Op{}, err
 	}
 	if r.Kind == infra.KindRuntime && r.Deployment != nil && r.Desired == "running" {
-		return b.begin(ctx, r, "resources")
+		return b.beginOperation(ctx, r, "resources", false, nil, &previous)
 	}
 	return infra.Op{}, b.save(ctx, r)
 }
@@ -248,7 +249,7 @@ func (b *Backend) RecoverFailedScale(ctx context.Context, hostname string, min, 
 	if err != nil || retained == nil {
 		return infra.Op{}, false, err
 	}
-	op, err := b.beginOperation(ctx, &candidate, "scale", true, nil)
+	op, err := b.beginOperation(ctx, &candidate, "scale", true, nil, nil)
 	return op, err == nil, err
 }
 

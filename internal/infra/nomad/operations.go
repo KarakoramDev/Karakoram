@@ -74,6 +74,7 @@ type operation struct {
 
 	ResourceCorrection *resourceCorrection `json:"resourceCorrection,omitempty"`
 	ResourceRejected   bool                `json:"resourceRejected,omitempty"`
+	PreviousResources  *infra.Resources    `json:"previousResources,omitempty"`
 }
 
 // Conditional resource corrections retain their exact predecessor and accepted
@@ -134,10 +135,10 @@ func decodeOp(op infra.Op) (operation, error) {
 	return o, nil
 }
 func (b *Backend) begin(ctx context.Context, r *record, action string) (infra.Op, error) {
-	return b.beginOperation(ctx, r, action, false, nil)
+	return b.beginOperation(ctx, r, action, false, nil, nil)
 }
 
-func (b *Backend) beginOperation(ctx context.Context, r *record, action string, retainOnly bool, unplacedPrevious *infra.Resources) (infra.Op, error) {
+func (b *Backend) beginOperation(ctx context.Context, r *record, action string, retainOnly bool, unplacedPrevious, previousResources *infra.Resources) (infra.Op, error) {
 	if r.Importing {
 		return infra.Op{}, &APIError{Status: 409, Op: "lifecycle", Message: "import is incomplete; retry the original import before changing this runtime"}
 	}
@@ -163,7 +164,7 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	if err != nil {
 		return infra.Op{}, err
 	}
-	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease, RetainOnly: retainOnly, UnplacedPrevious: unplacedPrevious}
+	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease, RetainOnly: retainOnly, UnplacedPrevious: unplacedPrevious, PreviousResources: previousResources}
 	if unplacedPrevious != nil && r.Pending != nil {
 		o.ResourceCorrection = &resourceCorrection{Predecessor: r.Pending.Issued, Resources: r.Resources}
 	}
@@ -501,6 +502,9 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 						if errors.Is(err, infra.ErrRejected) {
 							var rejected *infra.ResourceUpdateRejectedError
 							current.ResourceRejected = errors.As(err, &rejected)
+							if current.ResourceRejected && current.PreviousResources != nil {
+								r.Resources = *current.PreviousResources
+							}
 							failed, saveErr := b.failOperation(ctx, r, state, err.Error())
 							return failed, errors.Join(err, saveErr)
 						}
