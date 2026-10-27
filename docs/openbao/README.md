@@ -20,6 +20,8 @@ Karakoram operates native [OpenBao](https://openbao.org/) servers on member runt
 
 Each member has its own runtime and volume. Replica count and the `prod` preset do not guarantee independent failure domains; see [placement limitations](../limitations.md). A singleton has no quorum redundancy. Runtime disk is separate from persistent Raft data; replacement temporarily needs another runtime and volume.
 
+Runtime preparation installs CA certificates, curl and Python 3 before downloading OpenBao and its plugins. Python validates archive members before extraction; a minimal Ubuntu runtime must not rely on a preinstalled interpreter. Dokploy performs these steps during the member image build, while Nomad performs them during runtime preparation.
+
 ## Create
 
 Save `openbao.json`:

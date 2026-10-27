@@ -161,6 +161,17 @@ func TestEdgeRuntimeVerifiedArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(v.Prepare) < 3 {
+		t.Fatalf("expected dependencies, OpenBao, and plugin preparation: %v", v.Prepare)
+	}
+	if v.Prepare[0] != "sudo apt-get update && sudo apt-get install -y ca-certificates curl python3" {
+		t.Fatalf("archive validation dependencies must be installed first: %s", v.Prepare[0])
+	}
+	for _, command := range v.Prepare[1:] {
+		if !strings.Contains(command, "python3 -c") {
+			t.Fatal("expected verified archive preparation after dependency installation")
+		}
+	}
 	prepare := strings.Join(v.Prepare, "\n")
 	for _, want := range []string{a.SHA256, "sha256sum -c -", "/opt/karakoram/openbao-2.7.1"} {
 		if !strings.Contains(prepare, want) {

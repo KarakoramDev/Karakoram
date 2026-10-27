@@ -39,7 +39,8 @@ func (p *Provider) runtimeSpec(rc *engine.Context, m *member, version string) (i
 	if err != nil {
 		return infra.RuntimeSpec{}, err
 	}
-	prepare := nativeartifacts.PrepareCommands(a, url, "/opt/karakoram/openbao-"+version, layout.User)
+	prepare := []string{"sudo apt-get update && sudo apt-get install -y ca-certificates curl python3"}
+	prepare = append(prepare, nativeartifacts.PrepareCommands(a, url, "/opt/karakoram/openbao-"+version, layout.User)...)
 	plugins, err := pluginPrepare(options, layout.User)
 	if err != nil {
 		return infra.RuntimeSpec{}, err
