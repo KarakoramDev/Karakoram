@@ -61,6 +61,17 @@ func (e *RejectedError) Error() string {
 // Is matches ErrRejected.
 func (e *RejectedError) Is(target error) bool { return target == ErrRejected }
 
+// ResourceUpdateRejectedError is a definitive placement refusal made before
+// stopping the serving runtime. Retrying convergence may recheck capacity but
+// must not mutate the runtime without a successful placement check.
+type ResourceUpdateRejectedError struct {
+	Message string
+}
+
+func (e *ResourceUpdateRejectedError) Error() string        { return e.Message }
+func (e *ResourceUpdateRejectedError) Is(target error) bool { return target == ErrRejected }
+func (e *ResourceUpdateRejectedError) SafeDetail() string   { return e.Message }
+
 // PublicPortConflictError reports a refused publication, not an uncertain
 // delivery. The backend has preserved the previously applied service.
 type PublicPortConflictError struct {

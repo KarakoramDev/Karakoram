@@ -175,6 +175,14 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 		o.Phase = "registering"
 		o.UnplacedPrevious = nil
 	}
+	// Plan before saving the new resources or issuing the single-writer stop.
+	// An infeasible replacement must leave both the serving job and its durable
+	// specification untouched, including when convergence retries this request.
+	if action == "resources" && o.Phase == "stopping" {
+		if err := b.planResourceUpdate(work, r); err != nil {
+			return infra.Op{}, err
+		}
+	}
 	// Claim exclusion and persist the pending specification before mutation.
 	r.Pending = &o
 	if err = b.save(work, r); err != nil {
@@ -477,6 +485,17 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 				return state, err
 			}
 			if !observed.Stop {
+				// A lost/failed initial stop may be retried after capacity
+				// changed. Replan before that retry, not after stopping.
+				if current.Action == "resources" {
+					if err := b.planResourceUpdate(ctx, r); err != nil {
+						if errors.Is(err, infra.ErrRejected) {
+							failed, saveErr := b.failOperation(ctx, r, state, err.Error())
+							return failed, errors.Join(err, saveErr)
+						}
+						return state, err
+					}
+				}
 				state.Message = "waiting for previous job to stop"
 				return state, b.stopOperationJob(ctx, r, job, observed)
 			}

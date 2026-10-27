@@ -582,6 +582,21 @@ func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if strings.HasPrefix(path, "/v1/job/") && strings.HasSuffix(path, "/plan") && r.Method == http.MethodPost {
+		body := fakeDecode(w, r)
+		if body == nil {
+			return
+		}
+		job := fakeMap(body["Job"])
+		if fakeString(job, "ID") != strings.TrimSuffix(strings.TrimPrefix(path, "/v1/job/"), "/plan") || fakeString(job, "Namespace") != ns {
+			http.Error(w, "Invalid plan job", 400)
+			return
+		}
+		// The default fixture has unlimited CPU/RAM. Admission failure tests
+		// supply scheduler metrics through requestHook without mutating jobs.
+		fakeJSON(w, 200, fakeRow{"FailedTGAllocs": nil})
+		return
+	}
 	if path == "/v1/jobs" {
 		switch r.Method {
 		case http.MethodPut, http.MethodPost:
