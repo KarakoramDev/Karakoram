@@ -371,15 +371,6 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
-	for _, m := range s.Members {
-		r := desiredComponent(rc, m).Resources
-		if m.VolumeID != "" && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
-			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
-				rc.SyncWait = ""
-				return result, e
-			}
-		}
-	}
 	if rc.Cluster.Spec.DataSource != nil && s.RestoreRecovery != nil {
 		rc.SyncWait = "draining initial restore recovery"
 		// A retired initial restore still owns its exact receipt namespace.
@@ -402,6 +393,17 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
 		return result, e
+	}
+	// A frozen import must first replay/observe its original sizing, not the
+	// newer desire. Once its receipt settles, growth is checked before deploy.
+	for _, m := range s.Members {
+		r := desiredComponent(rc, m).Resources
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+				rc.SyncWait = ""
+				return result, e
+			}
+		}
 	}
 	if s.UID == "" {
 		s.UID, err = secrets.RandomString(16)

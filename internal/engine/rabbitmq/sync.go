@@ -257,7 +257,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	}
 	for _, m := range s.Members {
 		r := rc.Cluster.Spec.Components.Engine.Resources
-		if m.VolumeID != "" && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
 			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
 				return result, e
 			}
