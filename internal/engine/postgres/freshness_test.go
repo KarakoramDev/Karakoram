@@ -44,6 +44,123 @@ func TestMemberVersionUsesOnlyLiveObservation(t *testing.T) {
 	}
 }
 
+func TestVersionDriftIsVisibleAndCannotPrepareDowngrade(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "17.10.1"
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	observed, err := live(t.Context(), rc, m.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed.Version = "17.11.1"
+	b.statusOverrides = map[string]pgspec.StatusResponse{m.Name: observed}
+	status, err := p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, condition := range status.Conditions {
+		if condition.Type == "VersionDrift" && condition.Status == "True" {
+			found = strings.Contains(condition.Message, "observed 17.11.1, desired 17.10.1") &&
+				strings.Contains(condition.Message, "backup") && strings.Contains(condition.Message, "automatic downgrades are blocked")
+		}
+	}
+	if !found || status.Phase != domain.PhaseDegraded || rc.Cluster.Spec.Version != "17.10.1" {
+		t.Fatalf("drift must be visible without rewriting intent: %+v", status)
+	}
+	rc.Cluster.Status = status
+	if _, err := p.runtimeSpec(rc, m); err == nil || !strings.Contains(err.Error(), "automatic downgrade is blocked") {
+		t.Fatalf("runtime preparation accepted an observed downgrade: %v", err)
+	}
+	if _, err := p.agentUpgradeRuntimeSpec(rc, m); err == nil || !strings.Contains(err.Error(), "automatic downgrade is blocked") {
+		t.Fatalf("agent-only preparation accepted an observed downgrade: %v", err)
+	}
+	rc.Cluster.Spec.Version = observed.Version
+	if _, err := p.runtimeSpec(rc, m); err != nil {
+		t.Fatalf("explicit alignment with the running release is blocked: %v", err)
+	}
+	status, err = p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, condition := range status.Conditions {
+		if condition.Type == "VersionDrift" {
+			t.Fatal("resolved drift remained reported")
+		}
+	}
+}
+
+func TestMajorUpgradeRequiresExplicitDriftResolution(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "17.10.1"
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	observed, err := live(t.Context(), rc, m.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed.Version = "17.11.1"
+	b.statusOverrides = map[string]pgspec.StatusResponse{m.Name: observed}
+	rc.Cluster.Spec.Backup.Storage = "archive"
+	if err := rc.Store.CreateBackup(t.Context(), &domain.Backup{
+		Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: "observed-release",
+		Provider: "postgres", Storage: "archive", Type: "full", Phase: domain.PhaseSucceeded,
+		SourceVersion: observed.Version, Postgres: &domain.PostgresBackup{Label: "20261027-100000F"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rc.Cluster.Spec.Version = "18.6.1"
+	handled, err := p.reconcileUpgrade(t.Context(), rc, s)
+	if !handled || err == nil || !strings.Contains(err.Error(), "before a major upgrade") || !strings.Contains(err.Error(), "explicitly align") || s.Upgrade != nil {
+		t.Fatalf("drift was obscured as a missing-backup error or upgrade began: handled=%t err=%v upgrade=%+v", handled, err, s.Upgrade)
+	}
+	// Simulate the completed, explicit same-major alignment, preserving the
+	// actual-release backup rather than relabeling it as the old assignment.
+	m.Version = observed.Version
+	handled, err = p.reconcileUpgrade(t.Context(), rc, s)
+	if !handled || err != nil || s.Upgrade == nil || s.Upgrade.From != observed.Version {
+		t.Fatalf("aligned release could not use its actual-release backup: handled=%t err=%v upgrade=%+v", handled, err, s.Upgrade)
+	}
+}
+
+func TestLegacyAgentBinaryObservationBlocksDowngrade(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "17.10.1"
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	b.genericOverrides = map[string]agentapi.Status{m.Name: {
+		ConfigVersion: m.ConfigVersion, EngineVersion: "17.11.1",
+		Agent: agentapi.AgentBuild{Build: "old-build"},
+	}}
+	// The old native endpoint still echoes 17.10.1. Its generic status
+	// reports the installed binary and must protect the first agent refresh.
+	if _, err := readyDesired(t.Context(), rc, m); err == nil || !strings.Contains(err.Error(), "automatic downgrade is blocked") {
+		t.Fatalf("legacy native assignment hid an installed newer server: %v", err)
+	}
+	b.actions = nil
+	op := rolloutOperation(false)
+	result, err := p.upgradeAgents(t.Context(), rc, op, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op.Checkpoint = result.Checkpoint
+	if _, err := p.upgradeAgents(t.Context(), rc, op, false); err == nil || !strings.Contains(err.Error(), "automatic downgrade is blocked") {
+		t.Fatalf("first legacy agent refresh did not fail closed: %v", err)
+	}
+	if len(b.actions) != 0 {
+		t.Fatalf("legacy drift guard performed infrastructure actions: %v", b.actions)
+	}
+	rc.Cluster.Spec.Version = "18.6.1"
+	if _, err := p.reconcileUpgrade(t.Context(), rc, s); err == nil || !strings.Contains(err.Error(), "binary version drift") {
+		t.Fatalf("legacy major-upgrade admission ignored binary drift: %v", err)
+	}
+	rc.Cluster.Spec.Version = "17.11.1"
+	if _, err := readyDesired(t.Context(), rc, m); err != nil {
+		t.Fatalf("explicit alignment remains blocked: %v", err)
+	}
+}
+
 func TestFreshnessHungFormerPrimaryDoesNotHideNewWriter(t *testing.T) {
 	p, rc, _ := setup(t, "ha")
 	s := converge(t, p, rc)

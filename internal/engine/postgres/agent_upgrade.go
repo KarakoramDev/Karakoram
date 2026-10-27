@@ -173,6 +173,11 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	if e != nil {
 		return result, e
 	}
+	if m.Role == "data" {
+		if err := guardServerDowngrade(m.Name, status.EngineVersion, m.Version); err != nil {
+			return result, err
+		}
+	}
 	if !engine.MemberNeedsAgentUpgrade(domain.MemberStatus{Agent: domain.AgentStatus{Healthy: true, Build: status.Agent.Build}}, cp.Target) {
 		cp.Index++
 		return agentUpgradeResult(&cp)

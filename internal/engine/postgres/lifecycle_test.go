@@ -77,6 +77,36 @@ func TestPreparationRetainsExactServerCandidate(t *testing.T) {
 	}
 }
 
+func TestProfileAndCitusPreparationRetainsExactServerCandidate(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
+	for version := range packagePins {
+		p, rc, _ := setup(t, "single")
+		rc.Cluster.Spec.Version = version
+		rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["postgis","pgvector","timescaledb"]}`)
+		s := converge(t, p, rc)
+		for _, topology := range []string{"single", "distributed"} {
+			rc.Cluster.Spec.Topology.Type = topology
+			runtime, err := p.runtimeSpec(rc, s.data()[0])
+			if err != nil {
+				t.Fatal(version, topology, err)
+			}
+			base := PrepareCommands(version)
+			if len(runtime.Prepare) <= len(base) || !slices.Equal(runtime.Prepare[:len(base)], base) {
+				t.Fatalf("%s %s profiles bypass the exact server preference", version, topology)
+			}
+			extras := strings.Join(runtime.Prepare[len(base):], "\n")
+			for _, name := range []string{"postgis-3=", "pgvector=", "timescaledb-pg" + strconv.Itoa(major(version))} {
+				if !strings.Contains(extras, name) {
+					t.Fatalf("%s %s does not exercise %s preparation", version, topology, name)
+				}
+			}
+			if topology == "distributed" && !strings.Contains(extras, "citus-pg"+strconv.Itoa(major(version))) {
+				t.Fatal("distributed preparation omitted the Citus artifact")
+			}
+		}
+	}
+}
+
 func TestPerconaBootstrapUsesRootPrivateVerifiedStaging(t *testing.T) {
 	command := PrepareCommands("17.11.1")[1]
 	const prefix = "sudo sh -c '"

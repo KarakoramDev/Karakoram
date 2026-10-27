@@ -117,6 +117,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	var paused, etcdIssues, archiveIssues []string
 	var dataIssues, capacityIssues, slotIssues, slotUnknown, archiveUnknown []string
 	var proxyIssues []string
+	var versionDrift []string
 	var proxyDetails []string
 	var proxyPlacementIssues, proxyRolloutIssues, proxyRolloutFailures []string
 	var processConditions []domain.Condition
@@ -242,6 +243,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				}
 				if st.Version != "" && m.Role == "data" {
 					member.Version = st.Version
+					if st.Version != rc.Cluster.Spec.Version {
+						versionDrift = append(versionDrift, fmt.Sprintf("%s: observed %s, desired %s", m.Name, st.Version, rc.Cluster.Spec.Version))
+					}
 				}
 				writer = writer || st.Running && (st.Role == "primary" || st.Role == "standalone")
 				if st.DataRecoveryRequired {
@@ -511,6 +515,16 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		out.Phase, out.Message = domain.PhaseUpdating, s.SwitchoverBlocked
 	}
 	out.Conditions = []domain.Condition{{Type: "Ready", Status: condition, Reason: reason, LastTransitionTime: now(rc)}}
+	if len(versionDrift) > 0 {
+		message := "PostgreSQL version drift: " + strings.Join(versionDrift, "; ") + ". Verify each running server with SQL, take a backup, and explicitly select the observed or a newer supported catalog release before redeploying members. The specification is unchanged; automatic downgrades are blocked."
+		out.Conditions = append(out.Conditions, domain.Condition{
+			Type: "VersionDrift", Status: "True", Reason: "ObservedVersionMismatch",
+			Message: message, LastTransitionTime: now(rc),
+		})
+		out.Phase, out.Message = domain.PhaseDegraded, message
+		out.Conditions[0].Status, out.Conditions[0].Reason = "False", "VersionDrift"
+		out.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
+	}
 	if len(observationIssues) > 0 {
 		message := strings.Join(observationIssues, "; ")
 		out.Conditions[0].Message = message

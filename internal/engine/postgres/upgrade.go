@@ -41,6 +41,28 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 		if from == "" {
 			return false, nil
 		}
+		// Backups record the running release. Do not prepare an assigned older
+		// source or obscure that mismatch with a misleading missing-backup error.
+		for _, m := range s.data() {
+			st, err := live(ctx, rc, m.Name)
+			if err != nil {
+				return true, err
+			}
+			if st.Version != "" && st.Version != m.Version {
+				return true, engine.Invalid("PostgreSQL member %s version drift: observed %s, assigned %s; before a major upgrade, verify SQL versions, explicitly align the current catalog release, and take a new backup", m.Name, st.Version, m.Version)
+			}
+			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+			if err != nil {
+				return true, err
+			}
+			agent, err := engine.ObserveAgentStatus(ctx, a, "PostgreSQL", m.Name)
+			if err != nil {
+				return true, err
+			}
+			if agent.EngineVersion != "" && agent.EngineVersion != m.Version {
+				return true, engine.Invalid("PostgreSQL member %s binary version drift: observed %s, assigned %s; before a major upgrade, verify SQL versions, explicitly align the current catalog release, and take a new backup", m.Name, agent.EngineVersion, m.Version)
+			}
+		}
 		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 			return true, nil
 		}

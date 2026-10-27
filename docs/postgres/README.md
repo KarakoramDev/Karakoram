@@ -34,6 +34,32 @@ and installed in one privileged shell inside a fresh root-owned private staging
 directory. Cleanup removes that directory on exit; installation never consumes a
 package from a fixed pathname writable by the runtime user.
 
+## Existing version drift
+
+v0.4.0 profile installation could upgrade the actual PostgreSQL server without
+changing the desired release; old agents also reported the assigned release.
+Before refreshing an old agent or redeploying an existing runtime, inspect
+`SELECT version()` on **every data member** using verified TLS. Status from an
+old agent cannot establish that the server matches the specification.
+
+Updated agents report the SQL-observed Percona product release. If it differs
+from `spec.version`, `VersionDrift=True` lists the affected members, observed and
+desired versions, and operator guidance; the cluster is Degraded rather than
+Ready. No observation is substituted with the desired release, and the control
+plane never rewrites `spec.version` or automatically downgrades an observed newer
+server. Runtime preparation below an observed release is blocked, including an
+agent-only rollout.
+
+Take a backup and explicitly select the observed catalog release or a supported
+newer release through the cluster API. For example, if the specification says
+17.10.1 but SQL reports Percona 17.11.1, select 17.11.1, complete the same-major
+reconciliation/agent refresh, and verify all members agree. Take a new backup of
+that aligned release before requesting a major upgrade. Unresolved assigned/
+observed drift blocks major-upgrade preparation with a specific diagnostic,
+not a misleading missing-backup error. Never attempt to resolve drift by
+installing older binaries over a newer running data directory. See the
+[v0.4.1 upgrade notes](../upgrade.md#upgrading-from-v040-to-v041).
+
 ## Create
 
 Save `postgres.yaml`, choose a [namespace](../namespaces.md), then create:

@@ -283,6 +283,14 @@ func memberReady(ctx context.Context, rc *engine.Context, m *member, gateRestart
 		rc.SyncWait = fmt.Sprintf("waiting for member %s agent status read", m.Name)
 		return false, nil
 	}
+	if m.Role == "data" {
+		// Legacy native status echoed assignment, but generic engineVersion
+		// already identifies the installed binary. Use it only as a safety
+		// guard, never as a substitute for SQL-observed public member status.
+		if err := guardServerDowngrade(m.Name, agent.EngineVersion, rc.Cluster.Spec.Version); err != nil {
+			return false, err
+		}
+	}
 	diagnostic := domain.MemberStatus{Name: m.Name, Health: true}
 	if agent.Error != "" || len(engine.ApplyProcessDiagnostics(&diagnostic, agent.Processes, "", now(rc))) > 0 {
 		rc.SyncWait = fmt.Sprintf("waiting for member %s healthy supervised processes", m.Name)

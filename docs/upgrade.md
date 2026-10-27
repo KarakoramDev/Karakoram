@@ -4,6 +4,46 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading from v0.4.0 to v0.4.1
+
+Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY`
+before replacing the control plane. Engine packages and member agents are separate
+from the control-plane executable; follow [member-agent rollout](#rolling-out-member-agents).
+
+### PostgreSQL exact versions and existing version drift
+
+In v0.4.0, installing PostgreSQL profiles could upgrade a previously exact-pinned
+server as an APT dependency. For example, a cluster assigned Percona PostgreSQL
+17.10.1 with PostGIS could actually run 17.11.1 while member status still reported
+17.10.1. This affects the shared PostgreSQL/Supabase core on all backends.
+Native-artifact mirrors do not freeze the separate APT repositories.
+
+**Before refreshing existing member agents, changing profiles/resources, or
+replacing a data runtime, inventory every member with `SELECT version()` over a
+verified connection.** Old agents echo assigned versions, so v0.4.0 status is not
+proof of the installed release. Record SQL results and take a backup. If a
+member runs a newer catalog release than requested, explicitly update the
+cluster's desired release to that observed release (or a supported newer one)
+before any runtime preparation. Do not install older packages over the existing
+data directory to make the binary match the old specification.
+
+v0.4.1 keeps the requested server package as the APT candidate throughout profile
+installation. Updated member agents report the running Percona product release,
+not configuration intent. An unavailable SQL version observation is empty.
+When an observed data-member release differs from the desired release, the
+control plane reports `VersionDrift=True` with the member, observed release,
+desired release and recovery guidance, and the cluster is not Ready. The
+specification is never rewritten automatically. Preparing a runtime below its
+observed server release is rejected, including agent-only redeployment.
+
+For an affected 17.10.1-assigned/17.11.1-running cluster, explicitly select
+17.11.1, complete the same-major reconciliation and agent refresh, verify SQL and
+member status agree on every member, then take a new backup. Only then request an
+adjacent major upgrade. Major-upgrade admission reports unresolved assignment/
+observation drift explicitly rather than rejecting an actual-release backup as
+though no current backup existed. Review [PostgreSQL version-drift recovery](postgres/README.md#existing-version-drift)
+before proceeding. This upgrade neither downgrades engines nor recreates clusters.
+
 ## Upgrading from v0.3.0 to v0.4.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.4.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup); retain the old binary and state together for recovery. Existing namespaces, clusters, credentials and policies are retained; upgrading does not migrate their provider or opt them into new engine topologies.

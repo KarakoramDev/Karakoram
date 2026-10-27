@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
+	"strings"
 	"testing"
 )
 
@@ -58,6 +59,37 @@ func TestCatalogAndDefaults(t *testing.T) {
 	c.Spec.Components.Extra["proxy"] = proxy
 	if err := p.Validate(context.Background(), nil, c); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNativePreparationDoesNotResolveServerPackages(t *testing.T) {
+	for _, provider := range []string{"mysql", "pxc"} {
+		p := New(Options{Provider: provider})
+		for _, version := range p.versions() {
+			commands, err := p.prepareCommands(version.Version, "runtime")
+			if err != nil {
+				t.Fatal(provider, version.Version, err)
+			}
+			for _, command := range commands {
+				if strings.Contains(command, "percona-release") || strings.Contains(command, "percona-toolkit") ||
+					strings.Contains(command, "apt-get install") && (strings.Contains(command, "percona-") || strings.Contains(command, "mysql-")) {
+					t.Fatalf("%s %s resolves a server/tool package through APT: %s", provider, version.Version, command)
+				}
+			}
+			server, backup, err := p.artifactPins(version.Version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{server, backup} {
+				artifact, err := nativeartifacts.Get(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(strings.Join(commands, "\n"), artifact.SHA256+"  "+artifact.File) {
+					t.Fatalf("%s %s omits the locked artifact %s", provider, version.Version, name)
+				}
+			}
+		}
 	}
 }
 func TestAdmissionRejects(t *testing.T) {

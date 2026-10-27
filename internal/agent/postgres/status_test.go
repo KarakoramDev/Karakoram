@@ -24,6 +24,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func TestObservedServerVersion(t *testing.T) {
+	for _, tc := range []struct {
+		serverVersion, description, want string
+	}{
+		{"17.11", "17.11 - Percona Server for PostgreSQL 17.11.1 - Percona Distribution", "17.11.1"},
+		{"16.14", "16.14 - Percona Server for PostgreSQL 16.14.1 - Percona Distribution", "16.14.1"},
+		{"18.6", "PostgreSQL 18.6 on x86_64-pc-linux-gnu", "18.6"},
+		{"17.11", "Percona Server for PostgreSQL ", "17.11"},
+	} {
+		if got := observedServerVersion(tc.serverVersion, tc.description); got != tc.want {
+			t.Fatalf("observedServerVersion(%q, %q)=%q, want %q", tc.serverVersion, tc.description, got, tc.want)
+		}
+	}
+}
+
 func TestStatusPendingRestartAuthority(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -143,7 +158,7 @@ func statusSQLFixture(t *testing.T, pending bool) (paths, *atomic.Int32) {
 			var values []any
 			switch {
 			case strings.Contains(query, "pg_catalog.version()"):
-				oids, values = []uint32{pgtype.TextOID}, []any{"17.11.1"}
+				oids, values = []uint32{pgtype.TextOID, pgtype.TextOID}, []any{"17.11", "17.11 - Percona Server for PostgreSQL 17.11.1 - Percona Distribution"}
 			case strings.Contains(query, "FROM pg_catalog.pg_settings"):
 				nativeQueries.Add(1)
 				oids, values = []uint32{pgtype.BoolOID}, []any{pending}

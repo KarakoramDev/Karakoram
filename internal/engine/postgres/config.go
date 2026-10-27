@@ -33,7 +33,25 @@ func PrepareCommands(version string) []string {
 		fmt.Sprintf("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-%d='%s' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2", m, packagePins[version]),
 	}
 }
+
+func guardServerDowngrade(member, observed, requested string) error {
+	if observed != "" && observed != requested && !upgradeAllowed(observed, requested) {
+		return engine.Invalid("PostgreSQL member %s version drift: observed %s, requested %s; automatic downgrade is blocked; verify SQL versions, take a backup, and explicitly select the observed or a newer supported catalog release", member, observed, requested)
+	}
+	return nil
+}
 func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, error) {
+	// A prepared runtime must never replace an observed newer server with the
+	// older assigned release, including during an otherwise agent-only rollout.
+	if m.Role == "data" {
+		for _, observed := range rc.Cluster.Status.Members {
+			if observed.Name == m.Name {
+				if err := guardServerDowngrade(m.Name, observed.Version, rc.Cluster.Spec.Version); err != nil {
+					return infra.RuntimeSpec{}, err
+				}
+			}
+		}
+	}
 	prepare := PrepareCommands(rc.Cluster.Spec.Version)
 	s, err := load(rc.Cluster)
 	if err != nil {
