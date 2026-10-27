@@ -146,6 +146,8 @@ type serviceProcessInventory struct {
 	rebuiltAt time.Time
 }
 
+var unfinishedProcessFilter = "statuses=" + strings.Join(unfinishedProcessStatuses[:], "&statuses=")
+
 type processEvidenceError string
 
 func (e processEvidenceError) Error() string      { return string(e) }
@@ -281,17 +283,28 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 	for i, p := range all {
 		resultIndex[p.ID] = i
 	}
+	filteredTotal := 0
+	filteredIDs := make(map[string]struct{})
 	for offset := 0; ; {
 		var page page[Process]
-		path := fmt.Sprintf("/service-stack/%s/process?limit=100&offset=%d&statuses=RUNNING&statuses=PENDING", escape(service), offset)
+		path := fmt.Sprintf("/service-stack/%s/process?limit=100&offset=%d&%s", escape(service), offset, unfinishedProcessFilter)
 		if err := b.client.json(ctx, "GET", path, nil, &page, false); err != nil {
 			return nil, err
+		}
+		if offset == 0 {
+			filteredTotal = page.Total
+		} else if page.Total != filteredTotal {
+			return nil, processEvidenceError("zerops: unfinished process inventory changed during observation; retry required")
 		}
 		for _, raw := range page.List {
 			p, err := validate(raw)
 			if err != nil {
 				return nil, err
 			}
+			if _, duplicate := filteredIDs[p.ID]; duplicate {
+				return nil, processEvidenceError("zerops: duplicate unfinished process identity during pagination")
+			}
+			filteredIDs[p.ID] = struct{}{}
 			if !terminalProcess(p) {
 				active[p.ID] = p
 			}
@@ -305,7 +318,7 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 			}
 		}
 		offset += len(page.List)
-		if offset >= page.Total {
+		if offset >= filteredTotal {
 			break
 		}
 		if len(page.List) == 0 {

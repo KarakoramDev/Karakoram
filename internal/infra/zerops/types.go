@@ -23,6 +23,20 @@ func (e *APIError) Error() string {
 	return boundedDiagnostic(fmt.Sprintf("zerops HTTP %d: %s", e.StatusCode, detail))
 }
 
+const (
+	processPending     = "PENDING"
+	processWaiting     = "WAITING"
+	processRunning     = "RUNNING"
+	processRollbacking = "ROLLBACKING"
+	processCanceling   = "CANCELING"
+)
+
+// Known unfinished platform states. Unknown states are still non-terminal;
+// this list determines the authoritative server-side admission filter.
+var unfinishedProcessStatuses = [...]string{
+	processPending, processWaiting, processRunning, processRollbacking, processCanceling,
+}
+
 // Process is a Zerops asynchronous operation, not a service readiness assertion.
 type Process struct {
 	ID             string          `json:"id"`

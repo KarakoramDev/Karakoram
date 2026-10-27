@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,15 +21,17 @@ import (
 )
 
 type admissionFixture struct {
-	mu               sync.Mutex
-	processes        []Process
-	versions         []AppVersion
-	listCode         int
-	evidenceCode     int
-	processReads     int
-	mutations        int
-	activeReads      int
-	afterHistoryPage func(*admissionFixture, *http.Request)
+	mu                sync.Mutex
+	processes         []Process
+	versions          []AppVersion
+	listCode          int
+	evidenceCode      int
+	processReads      int
+	mutations         int
+	activeReads       int
+	afterHistoryPage  func(*admissionFixture, *http.Request)
+	filterCode        int
+	afterFilteredPage func(*admissionFixture, *http.Request)
 }
 
 func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
@@ -69,6 +72,10 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			filtered := r.URL.Query().Has("statuses")
 			if filtered {
 				f.activeReads++
+				if f.filterCode != 0 {
+					w.WriteHeader(f.filterCode)
+					return
+				}
 			} else {
 				f.processReads++
 			}
@@ -83,7 +90,7 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			}
 			list := []Process{}
 			for _, p := range f.processes {
-				if filtered && p.Status != "RUNNING" && p.Status != "PENDING" {
+				if filtered && !slices.Contains(r.URL.Query()["statuses"], p.Status) {
 					continue
 				}
 				if "/service-stack/"+p.ServiceStackID+"/process" == r.URL.Path {
@@ -93,6 +100,9 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			fakePage(w, r, list)
 			if !filtered && f.afterHistoryPage != nil {
 				f.afterHistoryPage(f, r)
+			}
+			if filtered && f.afterFilteredPage != nil {
+				f.afterFilteredPage(f, r)
 			}
 		case strings.HasSuffix(r.URL.Path, "/app-version"):
 			fakePage(w, r, f.versions)
@@ -685,48 +695,50 @@ func TestAdmissionInventoryEvictedOnlyAfterSuccessfulObservation(t *testing.T) {
 
 func TestAdmissionFilteredWorkSurvivesHistoryVisibilityGaps(t *testing.T) {
 	for _, mode := range []string{"older-group", "balanced-page-shift"} {
-		t.Run(mode, func(t *testing.T) {
-			b, f := admissionBackend(t)
-			at := time.Now().Add(-time.Hour)
-			for i := range 201 {
-				p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
-				p.Created = at.Add(-time.Duration(i) * time.Minute)
-				f.processes = append(f.processes, p)
-			}
-			state := b.deploymentAdmission()
-			if _, err := b.serviceProcesses(t.Context(), state, "a"); err != nil {
-				t.Fatal(err)
-			}
-			x := admissionProcess("late", "a", "RUNNING")
-			x.Created = f.processes[1].Created
-			insert := func() {
-				f.processes = append(f.processes[:2], append([]Process{x}, f.processes[2:len(f.processes)-1]...)...)
-			}
-			if mode == "older-group" {
-				insert()
-			} else {
-				// Force a multi-page history rebuild, then balance an insertion
-				// behind the cursor against deletion after the first page.
-				state.inventories["a"].rebuiltAt = time.Now().Add(-11 * time.Minute)
-				f.afterHistoryPage = func(f *admissionFixture, r *http.Request) {
-					if r.URL.Query().Get("offset") == "0" {
-						f.processes = append([]Process{x}, f.processes[1:]...)
-						f.afterHistoryPage = nil
+		for _, status := range unfinishedProcessStatuses {
+			t.Run(mode+"/"+status, func(t *testing.T) {
+				b, f := admissionBackend(t)
+				at := time.Now().Add(-time.Hour)
+				for i := range 201 {
+					p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
+					p.Created = at.Add(-time.Duration(i) * time.Minute)
+					f.processes = append(f.processes, p)
+				}
+				state := b.deploymentAdmission()
+				if _, err := b.serviceProcesses(t.Context(), state, "a"); err != nil {
+					t.Fatal(err)
+				}
+				x := admissionProcess("late", "a", status)
+				x.Created = f.processes[1].Created
+				insert := func() {
+					f.processes = append(f.processes[:2], append([]Process{x}, f.processes[2:len(f.processes)-1]...)...)
+				}
+				if mode == "older-group" {
+					insert()
+				} else {
+					// Force a multi-page history rebuild, then balance an insertion
+					// behind the cursor against deletion after the first page.
+					state.inventories["a"].rebuiltAt = time.Now().Add(-11 * time.Minute)
+					f.afterHistoryPage = func(f *admissionFixture, r *http.Request) {
+						if r.URL.Query().Get("offset") == "0" {
+							f.processes = append([]Process{x}, f.processes[1:]...)
+							f.afterHistoryPage = nil
+						}
 					}
 				}
-			}
-			got, err := b.serviceProcesses(t.Context(), state, "a")
-			if err != nil {
-				t.Fatal(err)
-			}
-			found := false
-			for _, p := range got {
-				found = found || p.ID == "late" && p.Status == "RUNNING"
-			}
-			if !found || f.activeReads != 2 {
-				t.Fatalf("filtered work missed: processes=%v filteredReads=%d", got, f.activeReads)
-			}
-		})
+				got, err := b.serviceProcesses(t.Context(), state, "a")
+				if err != nil {
+					t.Fatal(err)
+				}
+				found := false
+				for _, p := range got {
+					found = found || p.ID == "late" && p.Status == status
+				}
+				if !found || f.activeReads != 2 {
+					t.Fatalf("filtered work missed: processes=%v filteredReads=%d", got, f.activeReads)
+				}
+			})
+		}
 	}
 }
 
@@ -749,5 +761,50 @@ func TestAdmissionPeriodicRebuildFindsLateUnknownStatus(t *testing.T) {
 	got, err := b.serviceProcesses(t.Context(), state, "a")
 	if err != nil || len(got) != 3 || got[2].ID != p.ID {
 		t.Fatalf("periodic rebuild missed unknown status: processes=%v err=%v", got, err)
+	}
+}
+
+func TestAdmissionFilteredEvidenceFailsClosed(t *testing.T) {
+	for _, mode := range []string{"total-change", "duplicate", "filtered-only-failure"} {
+		t.Run(mode, func(t *testing.T) {
+			b, f := admissionBackend(t)
+			for i := range 101 {
+				p := admissionProcess(fmt.Sprintf("p%d", i), "a", processRunning)
+				p.ActionName = "stack.updateAutoscaling"
+				p.Created = time.Now().Add(-time.Duration(i) * time.Minute)
+				f.processes = append(f.processes, p)
+			}
+			switch mode {
+			case "total-change":
+				f.afterFilteredPage = func(f *admissionFixture, r *http.Request) {
+					if r.URL.Query().Get("offset") == "0" {
+						// Unrelated first-page work finishes; a shrinking
+						// second page must not certify a complete inventory.
+						f.processes[0].Status = "FINISHED"
+					}
+				}
+			case "duplicate":
+				f.afterFilteredPage = func(f *admissionFixture, r *http.Request) {
+					if r.URL.Query().Get("offset") == "0" {
+						f.processes[100] = f.processes[0]
+					}
+				}
+			case "filtered-only-failure":
+				f.filterCode = http.StatusForbidden
+			}
+			_, err := b.admitDeployment(t.Context(), &ServiceStack{ID: "b"})
+			var wait *infra.DeploymentWaitError
+			if !errors.As(err, &wait) || wait.Reason != "DeploymentEvidenceUnavailable" {
+				t.Fatalf("incomplete filtered evidence admitted: %v", err)
+			}
+			detail := map[string]string{
+				"total-change":          "unfinished process inventory changed",
+				"duplicate":             "duplicate unfinished process identity",
+				"filtered-only-failure": "403",
+			}[mode]
+			if !strings.Contains(wait.Detail, detail) || f.processReads < 2 || f.activeReads < 1 || f.mutations != 0 {
+				t.Fatalf("filtered evidence diagnosis lost: detail=%q history=%d filtered=%d mutations=%d", wait.Detail, f.processReads, f.activeReads, f.mutations)
+			}
+		})
 	}
 }

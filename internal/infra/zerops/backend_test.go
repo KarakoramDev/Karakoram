@@ -109,7 +109,7 @@ func TestOpAggregateTerminalStates(t *testing.T) {
 	if err != nil || state.Done {
 		t.Fatalf("premature completion %+v %v", state, err)
 	}
-	for _, status := range []string{"PENDING", "ROLLBACKING", "CANCELING", "UNKNOWN"} {
+	for _, status := range append(unfinishedProcessStatuses[:], "UNKNOWN") {
 		statuses["b"] = status
 		state, err = b.OpStatus(context.Background(), op)
 		if err != nil || state.Done {
