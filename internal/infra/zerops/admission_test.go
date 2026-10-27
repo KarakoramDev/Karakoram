@@ -20,13 +20,15 @@ import (
 )
 
 type admissionFixture struct {
-	mu           sync.Mutex
-	processes    []Process
-	versions     []AppVersion
-	listCode     int
-	evidenceCode int
-	processReads int
-	mutations    int
+	mu               sync.Mutex
+	processes        []Process
+	versions         []AppVersion
+	listCode         int
+	evidenceCode     int
+	processReads     int
+	mutations        int
+	activeReads      int
+	afterHistoryPage func(*admissionFixture, *http.Request)
 }
 
 func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
@@ -64,7 +66,12 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": []EnvItem{{Key: "KARAKORAM_OWNER", Content: owner, Type: "USER"}}})
 		case strings.HasSuffix(r.URL.Path, "/process"):
-			f.processReads++
+			filtered := r.URL.Query().Has("statuses")
+			if filtered {
+				f.activeReads++
+			} else {
+				f.processReads++
+			}
 			if f.listCode != 0 {
 				w.Header().Set("Retry-After", "120")
 				w.WriteHeader(f.listCode)
@@ -76,11 +83,17 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			}
 			list := []Process{}
 			for _, p := range f.processes {
+				if filtered && p.Status != "RUNNING" && p.Status != "PENDING" {
+					continue
+				}
 				if "/service-stack/"+p.ServiceStackID+"/process" == r.URL.Path {
 					list = append(list, p)
 				}
 			}
 			fakePage(w, r, list)
+			if !filtered && f.afterHistoryPage != nil {
+				f.afterHistoryPage(f, r)
+			}
 		case strings.HasSuffix(r.URL.Path, "/app-version"):
 			fakePage(w, r, f.versions)
 		default:
@@ -667,5 +680,74 @@ func TestAdmissionInventoryEvictedOnlyAfterSuccessfulObservation(t *testing.T) {
 	}
 	if _, retained := state.inventories["deleted"]; retained {
 		t.Fatal("successful complete observation retained deleted service")
+	}
+}
+
+func TestAdmissionFilteredWorkSurvivesHistoryVisibilityGaps(t *testing.T) {
+	for _, mode := range []string{"older-group", "balanced-page-shift"} {
+		t.Run(mode, func(t *testing.T) {
+			b, f := admissionBackend(t)
+			at := time.Now().Add(-time.Hour)
+			for i := range 201 {
+				p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
+				p.Created = at.Add(-time.Duration(i) * time.Minute)
+				f.processes = append(f.processes, p)
+			}
+			state := b.deploymentAdmission()
+			if _, err := b.serviceProcesses(t.Context(), state, "a"); err != nil {
+				t.Fatal(err)
+			}
+			x := admissionProcess("late", "a", "RUNNING")
+			x.Created = f.processes[1].Created
+			insert := func() {
+				f.processes = append(f.processes[:2], append([]Process{x}, f.processes[2:len(f.processes)-1]...)...)
+			}
+			if mode == "older-group" {
+				insert()
+			} else {
+				// Force a multi-page history rebuild, then balance an insertion
+				// behind the cursor against deletion after the first page.
+				state.inventories["a"].rebuiltAt = time.Now().Add(-11 * time.Minute)
+				f.afterHistoryPage = func(f *admissionFixture, r *http.Request) {
+					if r.URL.Query().Get("offset") == "0" {
+						f.processes = append([]Process{x}, f.processes[1:]...)
+						f.afterHistoryPage = nil
+					}
+				}
+			}
+			got, err := b.serviceProcesses(t.Context(), state, "a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, p := range got {
+				found = found || p.ID == "late" && p.Status == "RUNNING"
+			}
+			if !found || f.activeReads != 2 {
+				t.Fatalf("filtered work missed: processes=%v filteredReads=%d", got, f.activeReads)
+			}
+		})
+	}
+}
+
+func TestAdmissionPeriodicRebuildFindsLateUnknownStatus(t *testing.T) {
+	b, f := admissionBackend(t)
+	at := time.Now().Add(-time.Hour)
+	for i := range 3 {
+		p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
+		p.Created = at.Add(-time.Duration(i) * time.Minute)
+		f.processes = append(f.processes, p)
+	}
+	state := b.deploymentAdmission()
+	if _, err := b.serviceProcesses(t.Context(), state, "a"); err != nil {
+		t.Fatal(err)
+	}
+	p := admissionProcess("late-unknown", "a", "FUTURE_STATUS")
+	p.Created = f.processes[1].Created
+	f.processes = []Process{f.processes[0], f.processes[1], p}
+	state.inventories["a"].rebuiltAt = time.Now().Add(-11 * time.Minute)
+	got, err := b.serviceProcesses(t.Context(), state, "a")
+	if err != nil || len(got) != 3 || got[2].ID != p.ID {
+		t.Fatalf("periodic rebuild missed unknown status: processes=%v err=%v", got, err)
 	}
 }
