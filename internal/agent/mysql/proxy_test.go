@@ -110,4 +110,3 @@ func TestProxyTLSReloadStatements(t *testing.T) {
 		t.Fatalf("TLS reload order: %v", statements)
 	}
 }
-

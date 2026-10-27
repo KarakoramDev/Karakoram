@@ -89,4 +89,3 @@ func TestSQLCannotReadRuntimeFiles(t *testing.T) {
 		t.Fatal("connection administrator retained FILE authority")
 	}
 }
-
