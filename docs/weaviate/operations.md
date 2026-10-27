@@ -32,7 +32,7 @@ Supported versions are `1.39.12` and `1.40.1` (default). Only same-minor patch-f
 
 ## Scaling
 
-Change `spec.components.engine.replicas` or use `clusters scale --replicas`. `single` stays at one; `cluster` allows 3–9 with exactly three fixed voters. CPU/RAM resource changes are supported; disk only grows and depends on backend capability. See [resources](README.md#resources-and-runtime).
+Change `spec.components.engine.replicas` or use `clusters scale --replicas`. `single` stays at one; `cluster` allows 3–9 with exactly three fixed voters. CPU/RAM resource changes are supported; disk only grows and depends on provider capability. See [resources](README.md#resources-and-runtime).
 
 Scale-out allocates new monotonically named non-voters; it does **not** redistribute existing shards. Collection creation/replication settings and deliberate native shard movement determine data distribution. Increasing member count is not proof of increased redundancy for existing collections.
 
@@ -77,9 +77,9 @@ Application database users use `weaviate users rotate-key`, not system-user rota
 
 ## Exhausted platform deployments
 
-Platform retry exhaustion is durable and blocks further deployment submissions without advancing the active provisioning, rolling or rotation step. Fix the backend failure, then run `karactl -n default clusters retry-deployments vectors` (requires `clusters/update`). This increments `spec.retryEpoch` to re-arm the pending deployment; it does not bypass readiness/quorum gates. See [shared retry semantics](../clusters.md#retry-exhausted-platform-deployments).
+Platform retry exhaustion is durable and blocks further deployment submissions without advancing the active provisioning, rolling or rotation step. Fix the provider failure, then run `karactl -n default clusters retry-deployments vectors` (requires `clusters/update`). This increments `spec.retryEpoch` to re-arm the pending deployment; it does not bypass readiness/quorum gates. See [shared retry semantics](../clusters.md#retry-exhausted-platform-deployments).
 
-Public REST/gRPC port allocation reconciles backend routes and durable member assignments, not stale in-memory reservations. Retired members' released ports can be reused; live routes and retained assignments remain reserved.
+Public REST/gRPC port allocation reconciles provider routes and durable member assignments, not stale in-memory reservations. Retired members' released ports can be reused; live routes and retained assignments remain reserved.
 
 ## Metrics
 

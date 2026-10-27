@@ -2,24 +2,24 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MySQL and Percona XtraDB Cluster
 
-Karakoram offers two native [MySQL](https://www.mysql.com/)-compatible providers. Choose the replication model before creating a cluster; switching providers is not a topology change.
+Karakoram offers two native [MySQL](https://www.mysql.com/)-compatible engine drivers. Choose the replication model before creating a cluster; switching engine drivers is not a topology change.
 
 | | Percona Server for MySQL | Percona XtraDB Cluster (PXC) |
 | --- | --- | --- |
-| Provider | `mysql` | `pxc` |
+| Engine driver | `mysql` | `pxc` |
 | Server majors | 8.4 LTS default; 8.0 for existing workloads | 8.4 LTS default; 8.0 for existing workloads |
 | Topology | `single`: 1 member; `group`: 3 or 5 | `cluster`: 3 or 5 members only |
 | Replication | Group Replication, single-primary, `MYSQL` communication stack | Galera certification, encrypted IST/SST |
 | Application writer | Group-elected primary | One ProxySQL-routed writer, despite Galera's multi-writer capability |
 | ProxySQL | 1–5 replicas; zero permitted only for `single` | 1–5 replicas required |
-| Backup types | XtraBackup `full`, `incremental`; optional binary-log PITR | Same lifecycle, separate provider provenance and repository |
+| Backup types | XtraBackup `full`, `incremental`; optional binary-log PITR | Same lifecycle, separate engine driver provenance and repository |
 | Native access | MySQL users, databases and database-level grants | Same MySQL access interface |
 
-Use `karactl providers get mysql -o json` or `karactl providers get pxc -o json` for exact available versions, presets, resources and upgrade paths. Version strings are provider-specific; do not substitute a [Percona Server](https://docs.percona.com/percona-server/) version for a [PXC](https://docs.percona.com/percona-xtradb-cluster/) version. Catalog defaults currently select Percona Server **8.4.11-11** and PXC **8.4.11-11.1**. A compatible, checksum-locked [XtraBackup](https://docs.percona.com/percona-xtrabackup/) release is selected with the server; its own compatibility check is not bypassed. Native artifacts target [Linux](https://www.kernel.org/) amd64 with the declared [Ubuntu](https://ubuntu.com/) 24.04 runtime dependencies; see [native artifacts](../native-artifacts.md).
+Use `karactl providers get mysql -o json` or `karactl providers get pxc -o json` for exact available versions, presets, resources and upgrade paths. Version strings are engine driver-specific; do not substitute a [Percona Server](https://docs.percona.com/percona-server/) version for a [PXC](https://docs.percona.com/percona-xtradb-cluster/) version. Catalog defaults currently select Percona Server **8.4.11-11** and PXC **8.4.11-11.1**. A compatible, checksum-locked [XtraBackup](https://docs.percona.com/percona-xtrabackup/) release is selected with the server; its own compatibility check is not bypassed. Native artifacts target [Linux](https://www.kernel.org/) amd64 with the declared [Ubuntu](https://ubuntu.com/) 24.04 runtime dependencies; see [native artifacts](../native-artifacts.md).
 
 ## Create
 
-The UI's **New cluster** wizard lists both providers. Choose a catalog preset, inspect topology and resources, then review TLS, exposure, backups and engine options. **MySQL access** is available on both providers when authorized. A successful create response accepts asynchronous work; wait for the observed generation, member health and application connectivity.
+The UI's **New cluster** wizard lists both engine drivers. Choose a catalog preset, inspect topology and resources, then review TLS, exposure, backups and engine options. **MySQL access** is available on both engine drivers when authorized. A successful create response accepts asynchronous work; wait for the observed generation, member health and application connectivity.
 
 A minimal API-shaped creation file for MySQL:
 
@@ -46,7 +46,7 @@ karactl -n NS clusters status appdb -o json
 karactl -n NS clusters members appdb -o json
 ```
 
-For Group Replication, change topology to `group` and data replicas to 3 or 5. For PXC, set provider `pxc`, topology `cluster` and replicas 3 or 5. Omitting `version` selects that provider's default. The provider supplies resource defaults; inspect the catalog before production sizing. A singleton is **not highly available**. More members do not guarantee independent failure domains; see [placement limitations](../limitations.md).
+For Group Replication, change topology to `group` and data replicas to 3 or 5. For PXC, set engine driver `pxc`, topology `cluster` and replicas 3 or 5. Omitting `version` selects that engine driver's default. The engine driver supplies resource defaults; inspect the catalog before production sizing. A singleton is **not highly available**. More members do not guarantee independent failure domains; see [placement limitations](../limitations.md).
 
 ## Choose with the failure model in mind
 
@@ -69,4 +69,4 @@ PXC shared replication-certificate rotation fences backup, restore, and backup-d
 - [Operations and recovery](operations.md): status, maintenance, scaling, upgrades and safe bootstrap boundaries.
 - [Verification](verification.md): environment-selected native suites and recovery acceptance checklist.
 
-Architecture decisions remain in [ADR 0052](../adr/0052-mysql-engine.md) and [ADR 0053](../adr/0053-pxc-engine.md). See [release status and backend availability](../backends.md#engine-availability).
+Architecture decisions remain in [ADR 0052](../adr/0052-mysql-engine.md) and [ADR 0053](../adr/0053-pxc-engine.md). See [release status and provider availability](../providers.md#engine-availability).

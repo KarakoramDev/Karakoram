@@ -17,7 +17,7 @@ karactl -n NS events list --cluster CLUSTER -o json
 
 For [MySQL](https://www.mysql.com/) groups, require `ONLINE` membership, one primary, read-only secondaries and the expected member count. The default `BEFORE_ON_PRIMARY_FAILOVER` policy waits for the new primary's backlog before it serves traffic. For [PXC](https://docs.percona.com/percona-xtradb-cluster/), require `Primary`, `Synced` and `wsrep_ready=ON`; `Primary` is [Galera](https://galeracluster.com/) component membership, **not** a promise that every node is the application writer. [ProxySQL](https://proxysql.com/) selects one routed writer. Donor/joining states and SST can temporarily reduce eligibility.
 
-Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy backend state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
+Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 
 ### PXC GTID history safety
 
@@ -72,7 +72,7 @@ history with quorum. See [backup continuity boundaries](backups.md#pxc-gtid-cont
 - Dynamic allowlisted parameters can apply live. Startup-only parameters and resource changes use managed rolling maintenance. Keep configuration in the specification, not `SET PERSIST`.
 - MySQL `single` restarts cause downtime. Groups maintain secondaries first, then move the primary and finish its maintenance. Require a majority throughout; applications reconnect after writer movement.
 - PXC maintenance preserves a Primary component, waits for healthy Synced members and avoids intentionally removing a majority. Rejoining members use IST when available, SST otherwise. Do not continue a rolling change while state transfer or quorum health is unresolved. A member whose previous launch never reached Synced (an interrupted IST/SST) waits 130 seconds before relaunching so the previous donor's retries expire; see [hostile cluster traffic](access-and-tls.md#hostile-cluster-traffic). A member evicted by Galera for an inconsistency is not rejoined automatically; replace it.
-- MySQL allows `single`→`group`, adopting the existing data as the seed; `group`→`single` is rejected. Groups scale 3↔5. PXC remains `cluster`, 3↔5 only. Cross-provider conversion is unsupported.
+- MySQL allows `single`→`group`, adopting the existing data as the seed; `group`→`single` is rejected. Groups scale 3↔5. PXC remains `cluster`, 3↔5 only. Cross-engine driver conversion is unsupported.
 - Replacement introduces a new member identity before retiring the old one. Use the managed replace action; do not copy data identity or a stale bootstrap flag into another member. Disk shrink is not supported.
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
 
@@ -86,11 +86,11 @@ Pending-receipt replay treats a failed SQL probe as unavailable evidence, not pr
 
 ## Upgrade
 
-The **Upgrades** tab selects the current provider's offered paths; MySQL and PXC have separate version/artifact catalogs. Minor upgrades use the managed rolling order. The supported 8.0→8.4 major path requires a recent successful **current-version** backup validated by the backend. Test that backup and review schema/application compatibility before starting. An arbitrary old successful backup shown in the UI is not proof of eligibility.
+The **Upgrades** tab selects the current engine driver's offered paths; MySQL and PXC have separate version/artifact catalogs. Minor upgrades use the managed rolling order. The supported 8.0→8.4 major path requires a recent successful **current-version** backup validated by the provider. Test that backup and review schema/application compatibility before starting. An arbitrary old successful backup shown in the UI is not proof of eligibility.
 
 Group Replication upgrades secondaries before moving the primary. A newer member can remain read-only during mixed-version membership; do not force lower-version joins or use cross-major clone as an upgrade technique. PXC uses its own Galera-compatible path and waits for eligible members before advancing. Follow per-member versions and the operation, not only the desired version.
 
-Downgrades and provider conversion are rejected. Rollback requires a tested compatible pre-upgrade backup and independent recovery plan, not starting old binaries against an upgraded dataset. Keep backup objects and sealed account provenance until the upgraded workload is accepted.
+Downgrades and engine driver conversion are rejected. Rollback requires a tested compatible pre-upgrade backup and independent recovery plan, not starting old binaries against an upgraded dataset. Keep backup objects and sealed account provenance until the upgraded workload is accepted.
 
 ## Writer loss and quorum loss
 
@@ -102,7 +102,7 @@ Do **not** force `pc.bootstrap=YES` merely to clear a health condition. It can c
 
 ### Explicit PXC minority recovery
 
-The PXC-only **Recovery** tab requires cluster update permission and an advertised `recover-quorum` operation. In Degraded/Error state, open **Recover quorum**, read the danger warning and type `all-absent-members-fenced` before submitting. The confirmation authorizes fencing; it does not replace the backend's own fencing or position checks.
+The PXC-only **Recovery** tab requires cluster update permission and an advertised `recover-quorum` operation. In Degraded/Error state, open **Recover quorum**, read the danger warning and type `all-absent-members-fenced` before submitting. The confirmation authorizes fencing; it does not replace the provider's own fencing or position checks.
 
 The corresponding REST action is `POST /api/v1/clusters/{cluster}/mysql/recover-quorum` with the exact body:
 

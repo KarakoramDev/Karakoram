@@ -6,7 +6,7 @@
 
 ## Supported shape
 
-`engineConfig` is not supported. Use string-valued, backend-allowlisted `engineOptions.parameters`; unknown settings are rejected. The backend remains authoritative even when a UI field validates locally. TLS must be `requireTLS`. Network listeners, data identity, replication, archiving and system accounts are managed settings, not raw configuration overrides.
+`engineConfig` is not supported. Use string-valued, provider-allowlisted `engineOptions.parameters`; unknown settings are rejected. The provider remains authoritative even when a UI field validates locally. TLS must be `requireTLS`. Network listeners, data identity, replication, archiving and system accounts are managed settings, not raw configuration overrides.
 
 Example shared by `mysql` and `pxc`:
 

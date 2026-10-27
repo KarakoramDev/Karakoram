@@ -93,6 +93,6 @@ object location and bucket when available; its inventory is preserved. This mean
 Restore the original storage binding, verify the recorded object's exact ownership,
 remove only that object with object-store tooling, then remove its retained backup
 record. Never guess a missing or ambiguous location or delete a shared prefix.
-Runtime ownership, backend deletion and control-plane persistence failures still
+Runtime ownership, provider deletion and control-plane persistence failures still
 block unsafe cleanup. Active restore/clone dependency fences still reject
 destructive source deletion with HTTP 409 before any cleanup begins.

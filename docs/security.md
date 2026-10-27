@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Security
 
-Karakoram holds infrastructure and engine-management authority across enrolled backend targets; this page defines its trust boundaries and operator responsibilities. [Zerops](https://zerops.io/) is the reference backend; [Dokploy](dokploy.md) and [Nomad](nomad.md) have additional infrastructure trust requirements.
+Karakoram holds infrastructure and engine-management authority across enrolled provider targets; this page defines its trust boundaries and operator responsibilities. [Zerops](https://zerops.io/) is the reference provider; [Dokploy](dokploy.md) and [Nomad](nomad.md) have additional infrastructure trust requirements.
 
 ## Threat model and trust boundaries
 
@@ -16,10 +16,10 @@ The model protects normal API reads from accidental secret disclosure, applies o
 | Agent → control plane | Private TLS 9443, pinned installation CA, assigned-member token |
 | Control plane → agent | Pinned cluster CA/hostname, member token; authenticated commands, not remote shell |
 | Engine clients/members | Engine-native authentication and TLS, separate from agent transport |
-| Control plane → infrastructure backend | Server-held infrastructure credential per namespace; never returned to UI/CLI |
+| Control plane → infrastructure provider | Server-held infrastructure credential per namespace; never returned to UI/CLI |
 | Backup path → object storage | Engine-specific credentials/transport; [backup guides](backups.md) define recovery and transfer paths |
 
-On the **[Zerops](https://zerops.io/) backend**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. [Dokploy](https://dokploy.com/) uses its configured public ingress; [Nomad](https://developer.hashicorp.com/nomad) needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every backend.
+On the **[Zerops](https://zerops.io/) provider**, public UI/API HTTPS terminates at Zerops L7 and forwards to HTTP 8080. The project-private hop is **not end-to-end browser TLS**; trust the platform/private network and never expose the plaintext listener directly to an untrusted network. [Dokploy](https://dokploy.com/) uses its configured public ingress; [Nomad](https://developer.hashicorp.com/nomad) needs an operator-managed HTTPS proxy. Agent transport has independent end-to-end TLS on every provider.
 
 ## Agent access (MCP) security model
 
@@ -78,7 +78,7 @@ Additional projects connect outbound to `/relay/v1/connect` over verified HTTPS 
 | Threat | Control and operator consequence |
 | --- | --- |
 | Impersonated/stale relay | Enrolled identity/serial checks; new session replaces old; deletion revokes active sessions and pending admissions |
-| General-purpose cross-project proxy | Complete provider-defined target/port policy, bare hostnames, reserved-host exclusion, all-address DNS checks and checked numeric dialing; never broaden policy to repair connectivity |
+| General-purpose cross-project proxy | Complete engine driver-defined target/port policy, bare hostnames, reserved-host exclusion, all-address DNS checks and checked numeric dialing; never broaden policy to repair connectivity |
 | Passive inspection of agent configuration | End-to-end agent TLS, pinned CA/hostname and member token remain inside the tunnel |
 | State/enrollment leakage | Namespace tokens/client keys and installation relay keys are sealed; enrollment delivered through service secrets, not pipeline variables |
 | Foreign relay adoption/deletion | Recorded service ID or nonsecret ownership marker required |
@@ -131,7 +131,7 @@ Verified runtime-to-volume bindings can establish ownership; conflicting/unverif
 
 [Weaviate](https://weaviate.io/) defaults to `requireTLS` for HTTPS-only REST and client gRPC; `disabled` is private-only and `preferTLS` is unsupported. Internal gossip, data and Raft transports remain plaintext upstream; require an isolated private/encrypted network. Native metrics port 2112 is wildcard-bound and must remain private. Certificate changes require rolling restarts, not hot PEM replacement.
 
-Weaviate namespace relay/control paths allow exact member targets on REST 8080, authenticated internal Raft-removal HTTP 7947 and agent HTTPS 9443 only, not client gRPC. Native REST/gossip bind `0.0.0.0` on IPv4 backends and `::` otherwise; wildcard binding is not isolation. Rolling recovery observations alone may verify the exact pinned active expired leaf at an in-validity time, retaining CA/hostname/server-auth checks; native administrative mutations keep current-time verification.
+Weaviate namespace relay/control paths allow exact member targets on REST 8080, authenticated internal Raft-removal HTTP 7947 and agent HTTPS 9443 only, not client gRPC. Native REST/gossip bind `0.0.0.0` on IPv4 providers and `::` otherwise; wildcard binding is not isolation. Rolling recovery observations alone may verify the exact pinned active expired leaf at an in-validity time, retaining CA/hostname/server-auth checks; native administrative mutations keep current-time verification.
 
 | Surface | Default | Network restriction | Authentication |
 | --- | --- | --- | --- |
@@ -142,7 +142,7 @@ Weaviate namespace relay/control paths allow exact member targets on REST 8080, 
 | RabbitMQ management HTTPS subdomain | Off; default private management HTTPS | **No CIDR allowlist** on public subdomain; only accepted with `preferTLS`/`disabled`, forwarding private HTTP | RabbitMQ accounts, not Karakoram RBAC |
 | Elasticsearch HTTPS TCP | Private; `requireTLS` only | Opt-in public TCP requires CIDR allowlist; transport remains private | Elasticsearch users/API keys |
 | MySQL / PXC application TCP | Private; `requireTLS` only | Opt-in public 3306 requires CIDR allowlist; private reader/replication channels remain separate | Scoped TLS-only MySQL users |
-| PXC Galera/IST and SST (4567, 4568, 4444) | Explicit channel TLS and peer verification | Never published; member-only reachability is **not enforced** by any registered backend—use a dedicated network/project ([per backend](mysql/access-and-tls.md#replication-ports-and-network-restriction)) | Shared cluster-traffic certificate/key, separate from per-member SQL leaves |
+| PXC Galera/IST and SST (4567, 4568, 4444) | Explicit channel TLS and peer verification | Never published; member-only reachability is **not enforced** by any registered provider—use a dedicated network/project ([per provider](mysql/access-and-tls.md#replication-ports-and-network-restriction)) | Shared cluster-traffic certificate/key, separate from per-member SQL leaves |
 | Neo4j Bolt | Private; TLS required | Opt-in public TCP requires allowlist policy; HTTPS remains private | Native users; all administrators in Community |
 | Weaviate REST/gRPC | Private; `requireTLS` default | Opt-in public TLS TCP requires CIDR allowlist; internal transports remain private/plaintext | API keys and native RBAC; anonymous off |
 | Kibana HTTPS subdomain | Off; private HTTP | Public opt-in has **no source-IP restriction**; L7 forwards HTTP | Elasticsearch/Kibana authentication |
@@ -170,7 +170,7 @@ Acknowledgement must be fresh in that request, never inherited from PATCH state.
 
 ## RBAC and credential reveal
 
-Credential reveal requires **`cluster-credentials/read`** on `<namespace>/<cluster>`, separately from cluster read. Ordinary connection data omits passwords. Explicit reveal returns the provider-defined credential set and CA with `Cache-Control: no-store`: [MongoDB](https://www.mongodb.com/) `databaseAdmin`, [RabbitMQ](https://www.rabbitmq.com/) `admin`, [Elasticsearch](https://www.elastic.co/elasticsearch) `elastic` and `apm-secret-token`. These are powerful management/intake credentials, not automatically suitable application identities; use engine-specific least-privilege access.
+Credential reveal requires **`cluster-credentials/read`** on `<namespace>/<cluster>`, separately from cluster read. Ordinary connection data omits passwords. Explicit reveal returns the engine driver-defined credential set and CA with `Cache-Control: no-store`: [MongoDB](https://www.mongodb.com/) `databaseAdmin`, [RabbitMQ](https://www.rabbitmq.com/) `admin`, [Elasticsearch](https://www.elastic.co/elasticsearch) `elastic` and `apm-secret-token`. These are powerful management/intake credentials, not automatically suitable application identities; use engine-specific least-privilege access.
 
 [Weaviate](https://weaviate.io/) reveal returns the protected `karakoram-admin` root API key. Use [dynamic database users and roles](weaviate/access-and-tls.md) for applications; extra `clusters/update` is required for non-read-only role assignments, key rotation when current roles exceed `viewer`/`read-only`, and every role mutation. User deletion requires only `database-users/delete`, even for privileged users; protected identities remain excluded. Official binaries are mixed-license, with enterprise features forcibly disabled and no license key supplied; see the [license boundary](weaviate/README.md#licensing).
 

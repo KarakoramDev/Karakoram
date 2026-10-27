@@ -147,7 +147,7 @@ read-only `/sys` sysfs mount without any cgroup2 submount: host cgroup files the
 exist but are invisible to the member agent. The product does not bypass that
 isolation, add mount privileges, or expose host-wide cgroups automatically.
 [Dokploy](https://dokploy.com/) and Zerops likewise require scoped cgroup visibility for a positive native
-diagnosis; no backend-specific host visibility is assumed. Older agents retain
+diagnosis; no provider-specific host visibility is assumed. Older agents retain
 ordinary native readiness messages. Pressure is diagnostic, not a
 terminal configuration error or evidence of an OOM kill. Successful native
 readiness takes precedence; the condition disappears on the next fresh healthy

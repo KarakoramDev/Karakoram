@@ -91,7 +91,7 @@ unrecoverable target from an obsolete group layout.
 
 ## Restore and clone
 
-Physical recovery requires matching providers and [PostgreSQL](https://www.postgresql.org/) majors, plus a target
+Physical recovery requires matching engine drivers and [PostgreSQL](https://www.postgresql.org/) majors, plus a target
 `engineOptions.profiles` set containing every profile recorded in the backup's
 `postgres.profiles`. Ordering and duplicates do not matter; additional target
 profiles are allowed. The snapshot is retained independently of source deletion
@@ -100,7 +100,7 @@ base's requirements; coordinated scheduled PITR points retain requirements for
 their bases and point-time selection. Missing legacy metadata means no required
 profiles, not an instruction to inspect today's source selection. These checks
 precede clone provisioning and destructive restore work. [Supabase](https://supabase.com/) retains its
-existing provider-specific runtime contract.
+existing engine driver-specific runtime contract.
 
 For distributed PostgreSQL, `source.restorePoint` resolves to a specific coordinated
 backup inventory record. The restore internally records both that backup name and
@@ -186,7 +186,7 @@ queue checkpoint response cannot discard an already-started recovery.
 
 For a new cluster, `spec.dataSource` names a source backup or PITR target, optionally in another namespace. Use the shared [clone commands and permission rules](../backups.md#cross-namespace-recovery). Requirements:
 
-- Provider matches exactly: postgres→postgres or supabase→supabase, never across providers.
+- Engine driver matches exactly: postgres→postgres or supabase→supabase, never across engine drivers.
 - PostgreSQL major matches; source/target topology may differ.
 - Configure target-local backup storage to establish an independent history.
 - Source bootstrap is read-only with archiving disabled; target stanza creation and a fresh full establish its own repository afterward.

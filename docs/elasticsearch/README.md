@@ -44,7 +44,7 @@ If a restart is waiting for an optional component to become ready, setting that 
 
 ## Sizing and heap
 
-API RAM/disk values use GiB; CPU values use cores. Provider starting resources are:
+API RAM/disk values use GiB; CPU values use cores. Engine driver starting resources are:
 
 | Component | RAM bounds | Disk bounds |
 |---|---|---|
@@ -54,7 +54,7 @@ API RAM/disk values use GiB; CPU values use cores. Provider starting resources a
 | Logstash | 1.5–1.5 GiB | 1–5 GiB ephemeral |
 | APM | 0.5–0.5 GiB | 1–5 GiB ephemeral |
 
-The `dev` preset caps Kibana at 1.5 GiB. All components start with shared CPU bounds 1–2. CPU bounds are whole cores, at least one; maximum bounds cannot be below minima. Omitted resource bounds use provider defaults. Size for replicas, rebalance/recovery, disk watermarks and queues, not just current data size. More nodes cannot drain shards onto disks without headroom. See [resource changes](../clusters.md) for platform growth constraints.
+The `dev` preset caps Kibana at 1.5 GiB. All components start with shared CPU bounds 1–2. CPU bounds are whole cores, at least one; maximum bounds cannot be below minima. Omitted resource bounds use engine driver defaults. Size for replicas, rebalance/recovery, disk watermarks and queues, not just current data size. More nodes cannot drain shards onto disks without headroom. See [resource changes](../clusters.md) for platform growth constraints.
 
 Enabled Kibana 9.x requires at least **1.5 GiB minimum RAM** for creation, enablement, replica increases, intentional RAM changes and every version change (including patch upgrades). Kibana 8.x retains its 1-GiB admission floor; neither floor is a startup-time or workload-capacity guarantee. Disabled Kibana retains structural resource checks.
 
@@ -142,6 +142,6 @@ No ML provisioning, arbitrary role pools, hot/warm/cold pools, version skew or d
 
 ## Licensing
 
-Karakoram is Apache-2.0, but contains no Elastic code and downloads rather than redistributes official default builds on user infrastructure. Elasticsearch/Kibana binaries use ELv2; AGPLv3/SSPL source options do not license those binaries. Logstash/APM offer OSS builds, but this provider uses default builds. Provisioning uses Basic-tier security, TLS, API keys, service accounts, snapshots and monitoring without bypassing paid-feature controls.
+Karakoram is Apache-2.0, but contains no Elastic code and downloads rather than redistributes official default builds on user infrastructure. Elasticsearch/Kibana binaries use ELv2; AGPLv3/SSPL source options do not license those binaries. Logstash/APM offer OSS builds, but this engine driver uses default builds. Provisioning uses Basic-tier security, TLS, API keys, service accounts, snapshots and monitoring without bypassing paid-feature controls.
 
-**Warning:** ELv2 restricts hosted/managed resale exposing substantial Elasticsearch/Kibana functionality. User-owned infrastructure and non-redistribution are not blanket exemptions; obtain appropriate Elastic rights and legal review before offering such services. OpenSearch is not this provider. See [ADR 0029](../adr/0029-elastic-licensing.md), [Elastic's FAQ](https://www.elastic.co/pricing/faq/licensing) and [ELv2 examples](https://www.elastic.co/licensing/elastic-license/faq); this is not legal advice.
+**Warning:** ELv2 restricts hosted/managed resale exposing substantial Elasticsearch/Kibana functionality. User-owned infrastructure and non-redistribution are not blanket exemptions; obtain appropriate Elastic rights and legal review before offering such services. OpenSearch is not this engine driver. See [ADR 0029](../adr/0029-elastic-licensing.md), [Elastic's FAQ](https://www.elastic.co/pricing/faq/licensing) and [ELv2 examples](https://www.elastic.co/licensing/elastic-license/faq); this is not legal advice.

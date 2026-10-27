@@ -11,7 +11,7 @@ Ordinary cluster status contains password-free endpoints. In Overview, expand **
 | Field | Meaning |
 |---|---|
 | Credential `elastic` | Human administrative superuser password, not an application identity |
-| Credential `apm-secret-token` | APM intake token; not the backend writer password |
+| Credential `apm-secret-token` | APM intake token; not the provider writer password |
 | `caCertificate` | Public cluster CA PEM |
 
 Credential URIs describe the cluster; use returned [component endpoints](stack.md), not those URIs, for Kibana/APM. Do not reveal into CI/shared logs or terminal recordings.
@@ -155,9 +155,9 @@ Native user/role writes and API-key creation support [safe HTTP retries](../api.
 
 ## Managed credentials and secret locations
 
-Every node has file-realm `karakoram` (superuser control/recovery) and `karakoram-monitor` (cluster/index monitoring). The control identity remains usable when restoring native security state; it is not an app identity or a revealed credential. Kibana uses an `elastic/kibana` service-account token; Logstash/APM have separate scoped backend writers.
+Every node has file-realm `karakoram` (superuser control/recovery) and `karakoram-monitor` (cluster/index monitoring). The control identity remains usable when restoring native security state; it is not an app identity or a revealed credential. Kibana uses an `elastic/kibana` service-account token; Logstash/APM have separate scoped provider writers.
 
-Regular reconciliation reasserts the provider-owned Logstash/APM writer roles, native users, enabled state and sealed passwords even when desired secrets have not changed. Native edits/deletion of these managed objects are repaired; customer-owned users and roles are not modified. Kibana's service token is separately authenticated and replaced if revoked.
+Regular reconciliation reasserts the engine driver-owned Logstash/APM writer roles, native users, enabled state and sealed passwords even when desired secrets have not changed. Native edits/deletion of these managed objects are repaired; customer-owned users and roles are not modified. Kibana's service token is separately authenticated and replaced if revoked.
 
 Node [S3](https://aws.amazon.com/s3/) keys reside in `elasticsearch.keystore`; rendered configuration, TLS keys, file-realm files and component secrets are owner-only (0600 files, 0700 directories). Kibana's token/encryption keys and APM's intake token/writer password are in component configuration; Logstash's writer credential is injected into its process environment. These are accessible to privileged runtime administrators: see [trust boundaries and encryption at rest](../security.md).
 

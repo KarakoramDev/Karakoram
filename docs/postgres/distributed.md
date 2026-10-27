@@ -68,7 +68,7 @@ karactl -n NS postgres rebalance distdb --wait
 karactl -n NS postgres rebalance distdb --strategy by_shard_count --wait
 ```
 
-The optional strategy must exist in the installed Citus catalog. Omit it to use Citus's default. The API is `POST /api/v1/clusters/{cluster}/actions/rebalance?namespace=NS` with `{}` or `{"strategy":"by_shard_count"}`. It requires `clusters:update`, standard CSRF for browser sessions, and supports `Idempotency-Key`. It returns **202** with an Operation of type `rebalance`. Non-PostgreSQL providers are rejected with 400; non-distributed PostgreSQL clusters with 409. The UI action requires confirmation.
+The optional strategy must exist in the installed Citus catalog. Omit it to use Citus's default. The API is `POST /api/v1/clusters/{cluster}/actions/rebalance?namespace=NS` with `{}` or `{"strategy":"by_shard_count"}`. It requires `clusters:update`, standard CSRF for browser sessions, and supports `Idempotency-Key`. It returns **202** with an Operation of type `rebalance`. Non-PostgreSQL engine drivers are rejected with 400; non-distributed PostgreSQL clusters with 409. The UI action requires confirmation.
 
 Shard movement adds database load. Track the returned operation rather than resubmitting after a timeout. Rebalance has durable receipts to avoid duplicate work after a lost response or coordinator promotion; cancellation is cooperative and does not undo placements already moved.
 

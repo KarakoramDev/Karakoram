@@ -16,7 +16,7 @@ Install exact [PSMDB](https://www.percona.com/mongodb/software/percona-server-fo
 
 ## Consequences
 
-Every member can be independently resized, upgraded or replaced without sharing writable data. Service/volume count and deployment cost grow with topology size. Clean shutdown and preserved volumes are mandatory; a rolling deploy is ordered by the provider, not the platform. Distinct volumes/services do not guarantee host separation (ADR 0016). Runtime deletion and volume/backup retention remain separate decisions.
+Every member can be independently resized, upgraded or replaced without sharing writable data. Service/volume count and deployment cost grow with topology size. Clean shutdown and preserved volumes are mandatory; a rolling deploy is ordered by the engine driver, not the platform. Distinct volumes/services do not guarantee host separation (ADR 0016). Runtime deletion and volume/backup retention remain separate decisions.
 
 ## Alternatives considered
 

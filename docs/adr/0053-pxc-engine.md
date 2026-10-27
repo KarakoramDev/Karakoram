@@ -1,4 +1,4 @@
-# 0053 — Percona XtraDB Cluster as a separate provider over the MySQL core
+# 0053 — Percona XtraDB Cluster as a separate engine driver over the MySQL core
 
 Status: Accepted
 
@@ -8,11 +8,11 @@ Some [MySQL](https://www.mysql.com) users want synchronous multi-node replicatio
 
 ## Decision
 
-`pxc` is a separate provider that composes the [MySQL core](0052-mysql-engine.md): it reuses the member, proxy, TLS, account, access API (`/clusters/{cluster}/mysql/...`), backup storage layout and maintenance machinery, and replaces the replication layer. It is not a `mysql` topology, because its version catalog, artifacts, consensus, recovery procedure and backup provenance differ; backups of `mysql` and `pxc` clusters are not interchangeable providers for restore.
+`pxc` is a separate engine driver that composes the [MySQL core](0052-mysql-engine.md): it reuses the member, proxy, TLS, account, access API (`/clusters/{cluster}/mysql/...`), backup storage layout and maintenance machinery, and replaces the replication layer. It is not a `mysql` topology, because its version catalog, artifacts, consensus, recovery procedure and backup provenance differ; backups of `mysql` and `pxc` clusters are not interchangeable engine drivers for restore.
 
 ### Artifacts and topology
 
-The provider runs the official PXC `glibc2.35` minimal tarball (majors 8.4 default and 8.0) as a locked native artifact. The tarball bundles the matching XtraBackup builds used for SST; bundled tools take precedence for upstream SST scripts. One topology, `cluster`, has three or five data members; one- and two-member clusters are not offered because they cannot tolerate a failure. `pxc_strict_mode=ENFORCING` stays on: applications must use compatible InnoDB tables with primary keys and avoid `LOCK TABLES`. Incompatible non-transactional DDL can succeed while subsequent writes fail; creation alone is not a compatibility test.
+The engine driver runs the official PXC `glibc2.35` minimal tarball (majors 8.4 default and 8.0) as a locked native artifact. The tarball bundles the matching XtraBackup builds used for SST; bundled tools take precedence for upstream SST scripts. One topology, `cluster`, has three or five data members; one- and two-member clusters are not offered because they cannot tolerate a failure. `pxc_strict_mode=ENFORCING` stays on: applications must use compatible InnoDB tables with primary keys and avoid `LOCK TABLES`. Incompatible non-transactional DDL can succeed while subsequent writes fail; creation alone is not a compatibility test.
 
 Every member requires encrypted client SQL, Galera, IST and SST traffic, explicit channel ports, and `wsrep_sst_method=xtrabackup-v2`. State transfer prefers IST from the Galera cache and falls back to SST. Replication encryption uses explicit `wsrep_provider_options` (`socket.ssl=yes` and mandatory traffic certificate, key and CA paths) and `[sst] encrypt=4` with the same traffic credentials. The `pxc_encrypt_cluster_traffic` **automatic configuration switch is OFF**, not the encryption: pinned upstream code appends its automatic SSL options after manually supplied options and obtains them from the MySQL client-facing leaf. Automatic configuration therefore cannot preserve distinct member SQL identities while supplying the identical replication credentials required by PXC. Manual channel configuration keeps SQL and agent leaves member-specific and fails closed when any replication trust material is absent.
 
@@ -40,18 +40,18 @@ After a full-cluster stop or crash, stored sequence numbers alone are not suffic
 
 Backups and binary-log archiving follow ADR 0052 (XtraBackup through `xbcloud`, GTID-keyed binary logs from the routed writer). Restore always creates a new Galera history: the seed restores the prepared backup, starts as a new one-member cluster without the predecessor's peer list, and the remaining members join by SST. A backup's Galera coordinates are not trusted for recovery positions (prepared backups can carry a zero coordinate).
 
-User-facing configuration, access, backup provenance and maintenance procedures are in the [MySQL and PXC guide](../mysql/README.md), especially [operations and recovery](../mysql/operations.md) and [portable native verification](../mysql/verification.md). PXC repositories retain the shared subtree shape under a separate `pxc` provider prefix.
+User-facing configuration, access, backup provenance and maintenance procedures are in the [MySQL and PXC guide](../mysql/README.md), especially [operations and recovery](../mysql/operations.md) and [portable native verification](../mysql/verification.md). PXC repositories retain the shared subtree shape under a separate `pxc` engine driver prefix.
 
 ## Consequences
 
-PXC gives every committed transaction a certified copy on all Primary members at the cost of higher commit latency, flow control under slow members and strict schema rules. Full-outage recovery is deterministic only when every member's recovered position can be observed. Two engine providers share most code but keep separate catalogs, backup provenance and replication logic.
+PXC gives every committed transaction a certified copy on all Primary members at the cost of higher commit latency, flow control under slow members and strict schema rules. Full-outage recovery is deterministic only when every member's recovered position can be observed. Two engine drivers share most code but keep separate catalogs, backup provenance and replication logic.
 
 Compromise of any member's shared traffic private key compromises cluster-wide replication/SST authentication and confidentiality: that credential is not a per-member authorization boundary. Replacing only its leaf under the same CA does not revoke an exfiltrated credential. The coordinated rotation therefore replaces the dedicated traffic trust root as well, so reformed members reject the old credential. The traffic CA signing key remains sealed in the control plane and is not distributed to members; compromise of it has the same cluster-wide revocation scope. Trust rollover does not repair data already exposed or modified before fencing. SQL/agent trust and client identities remain separate from this traffic revocation domain.
 
 
 ## Alternatives considered
 
-- **PXC as a topology of `mysql`:** would mix two binaries, catalogs and backup identities behind one provider name and complicate version and restore validation.
+- **PXC as a topology of `mysql`:** would mix two binaries, catalogs and backup identities behind one engine driver name and complicate version and restore validation.
 - **Galera arbitrator (`garbd`) for two-member clusters:** adds a third process without data and a separate failure domain obligation; three data members are simpler and safer.
 - **Multi-writer routing:** certification conflicts surface as deadlock errors on commit; a single routed writer avoids them.
 - **Automatic `pc.bootstrap` on quorum loss:** can create a second Primary component during a network partition.
@@ -61,4 +61,4 @@ Compromise of any member's shared traffic private key compromises cluster-wide r
 
 [PXC 8.4](https://docs.percona.com/percona-xtradb-cluster/8.4/), [crash recovery](https://docs.percona.com/percona-xtradb-cluster/8.4/crash-recovery.html), [encrypted traffic](https://docs.percona.com/percona-xtradb-cluster/8.4/encrypt-traffic.html), [strict mode](https://docs.percona.com/percona-xtradb-cluster/8.4/strict-mode.html), [ProxySQL Galera](https://proxysql.com/documentation/galera-configuration/).
 
-Pinned implementation evidence: [`wsrep_mysqld.cc`, auto-generated SSL options appended after provider options](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/wsrep_mysqld.cc#L1208-L1236) and [`ssl_init_callback.cc`, options copied from MySQL SSL certificate paths](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/ssl_init_callback.cc#L559-L564). The [upstream encryption guide](https://docs.percona.com/percona-xtradb-cluster/8.4/encrypt-traffic.html#ssl-manual-configuration) documents explicit Galera/IST and SST channel encryption and identical inter-node credentials.
+Pinned implementation evidence: [`wsrep_mysqld.cc`, auto-generated SSL options appended after engine driver options](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/wsrep_mysqld.cc#L1208-L1236) and [`ssl_init_callback.cc`, options copied from MySQL SSL certificate paths](https://github.com/percona/percona-xtradb-cluster/blob/33f7510189c5719c852837d7ad9ba5e7d6431f4d/sql/ssl_init_callback.cc#L559-L564). The [upstream encryption guide](https://docs.percona.com/percona-xtradb-cluster/8.4/encrypt-traffic.html#ssl-manual-configuration) documents explicit Galera/IST and SST channel encryption and identical inter-node credentials.

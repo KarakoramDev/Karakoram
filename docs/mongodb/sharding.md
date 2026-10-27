@@ -28,7 +28,7 @@ karactl -n default clusters create analytics --provider psmdb \
 karactl -n default clusters members analytics
 ```
 
-Use `-f` with a complete API-shaped create request for distinct `engine`, `configServer` and `router` resource blocks; see [OpenAPI Components](../../api/openapi.yaml). Explicit zero, including `--shards 0`, is invalid. Provider defaults above differ from CLI convenience defaults, notably its two routers.
+Use `-f` with a complete API-shaped create request for distinct `engine`, `configServer` and `router` resource blocks; see [OpenAPI Components](../../api/openapi.yaml). Explicit zero, including `--shards 0`, is invalid. Engine driver defaults above differ from CLI convenience defaults, notably its two routers.
 
 ## Connect and shard collections
 

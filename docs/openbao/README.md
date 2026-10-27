@@ -54,14 +54,14 @@ A wait timeout does not cancel creation. Continue observing with `clusters wait 
 
 ## Options and limits
 
-`engineOptions` is a typed object; unknown fields and `null` are rejected. Raw `engineConfig` overrides are not supported. Inspect the running provider catalog for its schema.
+`engineOptions` is a typed object; unknown fields and `null` are rejected. Raw `engineConfig` overrides are not supported. Inspect the running engine driver catalog for its schema.
 
 - `unseal.shares` and `unseal.threshold` are immutable. Bounds: `1 <= threshold <= shares <= 10`; multiple shares require threshold at least 2. Set both explicitly for a nondefault split.
 - Seal configuration and storage selection are immutable. Write-only seal credentials can be rotated; changing the seal type is not supported.
 - `logLevel`: `trace`, `debug`, `info` (default), `warn`, `error`.
 - Version changes are forward-only and catalog-bound. The current catalog contains only 2.7.1, so no newer-version upgrade is currently available.
 - No PITR, seal migration, performance/DR replication, OpenBao namespaces or HSM seals. Lost-quorum recovery is manual.
-- [PostgreSQL](https://www.postgresql.org/) storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, [Keycloak](https://www.keycloak.org/), OpenBao and [Temporal](https://temporal.io/). Provider metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
+- [PostgreSQL](https://www.postgresql.org/) storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, [Keycloak](https://www.keycloak.org/), OpenBao and [Temporal](https://temporal.io/). Engine driver metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
 - [RabbitMQ](https://www.rabbitmq.com/) credential connections require one shared default/maximum TTL pair per connection. Native TLS credential issuance, permissions and revocation are covered by development proofs (see [verification](../verification.md#openbao-coverage)).
 
 ## Guides

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Supabase
 
-The `supabase` provider combines the [PostgreSQL core](../postgres/README.md) with modular native [Supabase](https://supabase.com/) services. This brief guide describes interfaces and limits, not deployment acceptance or complete parity with every upstream hosting feature.
+The `supabase` engine driver combines the [PostgreSQL core](../postgres/README.md) with modular native [Supabase](https://supabase.com/) services. This brief guide describes interfaces and limits, not deployment acceptance or complete parity with every upstream hosting feature.
 
 Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL [pgEdge](https://www.pgedge.com/) companion and dedicated non-BYPASSRLS roles, not Supabase service credentials. Database/schema scope and PostgreSQL PUBLIC-grant limitations apply; access is disabled by default.
 
@@ -14,13 +14,13 @@ Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL [pgEdge](https://w
 | Data topology | `single` (1), `ha` (3 or 5); core ProxySQL client endpoint |
 | Default preset | `minimal`: gateway, Auth, PostgREST, plus database and proxy |
 | Components | Separate stateless services with replicas/resources in `components.extra` |
-| API entrypoint | Envoy, private HTTP 8000; optional backend-managed public HTTPS |
+| API entrypoint | Envoy, private HTTP 8000; optional provider-managed public HTTPS |
 | Database access | [PostgreSQL native access API](../postgres/access-and-tls.md); internal services use a local raw TCP leader forwarder, not ProxySQL |
 | Recovery | [pgBackRest/PITR](../postgres/backups.md) for database data, not separate S3 objects or control-plane secrets |
 
 Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror for source-built services and the extension bundle. See [components and artifact availability](components.md).
 
-The internal leader forwarder uses the backend's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
+The internal leader forwarder uses the provider's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
 
 ## Create
 
@@ -55,7 +55,7 @@ karactl -n NS clusters status appapi -o json
 karactl -n NS supabase credentials appapi
 ```
 
-Omitted extra components receive the minimal defaults, including one proxy. TLS defaults to `requireTLS`. Public gateway HTTPS requires backend `publicHttps`; with it disabled, API URL is private `http://<cluster>gw:8000`. The management relay is not external application routing. Studio, when enabled, shares the gateway URL and requires dashboard basic authentication.
+Omitted extra components receive the minimal defaults, including one proxy. TLS defaults to `requireTLS`. Public gateway HTTPS requires provider `publicHttps`; with it disabled, API URL is private `http://<cluster>gw:8000`. The management relay is not external application routing. Studio, when enabled, shares the gateway URL and requires dashboard basic authentication.
 
 `supabase credentials` masks sensitive fields; `--show-secrets` explicitly reveals them and requires `cluster-credentials:read`. Browser credential reveal has the same boundary. Do not put the service-role/secret key, dashboard password or JWT secret into browser application code. Anon/publishable keys still require correctly configured database grants and row-level security.
 

@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Operations and troubleshooting
 
-Operate the control plane, managed engines and backend infrastructure as separate systems; each has its own health and recovery signals. Backend-specific procedures below are labelled [Zerops](https://zerops.io/); [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
+Operate the control plane, managed engines and provider infrastructure as separate systems; each has its own health and recovery signals. Provider-specific procedures below are labelled [Zerops](https://zerops.io/); [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
 
-The fleet Ops features below are **verified offline** (tests without a live backend). See also [notifications](notifications.md), [control-plane backup/recovery](control-plane-backup.md) and [backup drills](backup-drills.md).
+The fleet Ops features below are **verified offline** (tests without a live provider). See also [notifications](notifications.md), [control-plane backup/recovery](control-plane-backup.md) and [backup drills](backup-drills.md).
 
 ## Maintenance windows
 
@@ -31,7 +31,7 @@ Overlapping or touching windows merge. Omitting the policy or using `windows: []
 permits disruption at any time.
 
 The disruption gate covers restart, TLS rotation, agent upgrades, FCV changes,
-and user-requested member replacement or move. Providers consult the same gate
+and user-requested member replacement or move. Engine drivers consult the same gate
 before starting each new engine upgrade, rolling resource/configuration change
 or scale-in disruption. Automatic database leaf-certificate renewal is gated only
 while more than seven days remain. A window is permission to **start**, not a
@@ -44,7 +44,7 @@ certificate renewal, and certificates with at most seven days remaining are
 exempt. A queued disruptive operation does not block exempt queued work behind
 it. Closed-window operations remain Pending without attempts or execution-budget
 consumption, with a durable `MaintenanceWindowWait` event and next-start message.
-Provider waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
+Engine driver waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
 imperative operation pauses its execution budget only when that invocation
 actually waits at its own next-disruption gate; a stale cluster-wide condition
 cannot pause unrelated backup/restore work. Recovery after a member disruption,
@@ -60,7 +60,7 @@ merged window.
 Use `ignoreMaintenanceWindow=true` on a gated action or cluster PUT/PATCH for an
 explicit override. Imperative overrides belong to that operation; desired-state
 overrides apply only to the accepted generation, not future spec changes. They
-never bypass provider quorum, health, placement or deployment-admission checks:
+never bypass engine driver quorum, health, placement or deployment-admission checks:
 
 ```sh
 karactl clusters restart demo --ignore-maintenance-window
@@ -99,14 +99,14 @@ The API is `POST /clusters/{cluster}/members/{member}/move`; it returns a durabl
 It shares replacement admission, authorization and maintenance-window rules.
 Use the returned operation ID rather than repeating a request after a timeout.
 
-| Backend | Placement and move guarantee |
+| Provider | Placement and move guarantee |
 | --- | --- |
 | Zerops | Best-effort runtime/volume replacement only: there is **no host placement guarantee**. Re-observe fingerprints afterwards; do not repeatedly recreate members to chase a different fingerprint. |
 | Nomad / Dokploy | Authoritative node placement. Move excludes the predecessor's node; it fails with “no other eligible node” before retiring the old member if capacity is unavailable. An unknown current group returns HTTP 409. |
 
 `placement.source` is `backend` for authoritative node evidence, `best-effort`
 for agent fingerprints only, or `unavailable` when no usable evidence exists.
-`guaranteedAntiAffinity` is true only when the backend supports Placement,
+`guaranteedAntiAffinity` is true only when the provider supports Placement,
 **every** member has an authoritative group, and those groups are all distinct.
 [Nomad](https://developer.hashicorp.com/nomad)/[Dokploy](https://dokploy.com/) can therefore guarantee distinct hosts when eligible capacity and
 observed separation allow it; neither this flag nor fingerprints certify rack
@@ -144,7 +144,7 @@ observation through the advertised private service's logical agent endpoint.
 When that endpoint is unavailable, readiness is false even if pinned tasks are
 healthy; inspect the private DNS alias/VIP, overlay network and member agent.
 
-Cluster restart is a provider-owned application-process operation, not a member
+Cluster restart is a engine driver-owned application-process operation, not a member
 agent/artifact upgrade. Upgrading only the control plane leaves existing member
 executables in place. [Supabase](https://supabase.com/) restart includes PostgreSQL/[ProxySQL](https://proxysql.com/) and every
 enabled application component, with per-instance restart evidence and readiness;
@@ -169,7 +169,7 @@ operation-owned native backup inventory. Unavailable namespace dependencies
 withdraw freshness without falling back to the default project's resources.
 Their polling delay
 is capped at the normal readiness interval; restore and other lifecycle phases
-remain authoritative even when a health probe succeeds. A blocking provider call
+remain authoritative even when a health probe succeeds. A blocking engine driver call
 can still expire the readiness lease: an in-flight mutation is not evidence of
 health. [MongoDB](https://www.mongodb.com/) backup polling uses [PBM](https://docs.percona.com/percona-backup-mongodb/latest/)'s heartbeat-aware snapshot status as well
 as `describe-backup`, so an owner's death cannot leave raw `running` metadata
@@ -179,7 +179,7 @@ availability-only samples at the normal readiness interval. These samples do not
 retry the failed operation, run ordinary convergence, consume native receipts,
 or shorten platform retry deadlines. Thus a fenced backup can remain Running
 without making reachable member agents appear disconnected solely because its
-mutation retry delay exceeds the readiness lease. In-flight provider calls can
+mutation retry delay exceeds the readiness lease. In-flight engine driver calls can
 still expire that lease; stale observations never certify availability.
 An accepted cancellation remains cooperative: active PBM backups receive the
 durable native cancel request and remain nonterminal until PBM confirms a terminal
@@ -197,7 +197,7 @@ Use two log sources:
   karactl clusters logs demo <member> --process <process> --lines 100
   ```
 
-  `GET /api/v1/clusters/{cluster}/members/{member}/logs` accepts `process` and `lines` (default 100; accepted range 1–10000). The default process is the provider's first declared process. Each process retains at most **1000 in-memory lines and 1 MiB of message bytes**, lost on restart; individual lines are truncated to 16 KiB while the stream continues draining. External collector output is best effort through a bounded queue: a stalled collector can drop output, but cannot block process control. **`cursor` and `since` are currently ignored; no `nextCursor` is returned.** Requesting more lines cannot recover older history.
+  `GET /api/v1/clusters/{cluster}/members/{member}/logs` accepts `process` and `lines` (default 100; accepted range 1–10000). The default process is the engine driver's first declared process. Each process retains at most **1000 in-memory lines and 1 MiB of message bytes**, lost on restart; individual lines are truncated to 16 KiB while the stream continues draining. External collector output is best effort through a bounded queue: a stalled collector can drop output, but cannot block process control. **`cursor` and `since` are currently ignored; no `nextCursor` is returned.** Requesting more lines cannot recover older history.
 
 The agent drains engine stdout and stderr through agent-owned pipes. If the whole
 agent process is frozen (for example, by SIGSTOP), an engine's logging writes
@@ -237,11 +237,11 @@ Zerops honors future `Retry-After` timestamps for reconciliation retries, includ
 
 Zerops records non-secret operation receipts in the service variable `KARAKORAM_PLATFORM_OPERATION` before creating an app version or submitting a start, stop or restart. An accepted upload/deployment with a lost reply resumes using the original app-version identity; an already completed start/stop is recovered from the service state. Retrying after control-plane restart does not allocate another artifact or blindly restart the runtime. Deployment submission returns the durable app-version handle without waiting for a post-deployment environment update: Zerops queues those updates behind deployment, and waiting would prevent quorum peers from being deployed. Completion is observed separately, not inferred from submission.
 
-Receipt consumption and new submissions share **service-scoped, context-cancelable exclusion** across backend instances within the single control-plane process. A slow upload or receipt operation on one member does not block another member's deployment or lifecycle observation; canceled callers stop waiting without interrupting the active mutation. Completion clears only the exact observed receipt; a delayed terminal observer cannot consume a successor's uncertain deployment/restart receipt. Receipt-write process polling does not consume lifecycle receipts.
+Receipt consumption and new submissions share **service-scoped, context-cancelable exclusion** across provider instances within the single control-plane process. A slow upload or receipt operation on one member does not block another member's deployment or lifecycle observation; canceled callers stop waiting without interrupting the active mutation. Completion clears only the exact observed receipt; a delayed terminal observer cannot consume a successor's uncertain deployment/restart receipt. Receipt-write process polling does not consume lifecycle receipts.
 
 After a lost app-version allocation response, Zerops recovery compares complete, service-scoped app-version and process listings against the exact immutable version IDs saved **before** allocation. With exclusive mutation ownership of the managed service, one new `UPLOADING` version is adopted and uploaded/deployed using that same ID; pre-existing versions are never selected by name, recency or status. The allocation API accepts a display name, but its documented version-list/detail response does not return that name as a request identity.
 
-If no new version exists, recovery requires all service processes terminal and two successful complete observations separated by at least the backend polling interval. Before each allocation, receipt persistence and the allocation request share one HTTP-client timeout budget; the durable settle deadline adds one more timeout budget for delivery/visibility (four minutes total with the default two-minute client timeout). The wait diagnostic includes its UTC deadline and carries a retry timestamp. A control-plane restart retains the inventory, deadline and first negative observation. Legacy uncertain allocation receipts without an inventory can start this observation window only with an empty version list; existing unattributed versions remain fenced.
+If no new version exists, recovery requires all service processes terminal and two successful complete observations separated by at least the provider polling interval. Before each allocation, receipt persistence and the allocation request share one HTTP-client timeout budget; the durable settle deadline adds one more timeout budget for delivery/visibility (four minutes total with the default two-minute client timeout). The wait diagnostic includes its UTC deadline and carries a retry timestamp. A control-plane restart retains the inventory, deadline and first negative observation. Legacy uncertain allocation receipts without an inventory can start this observation window only with an empty version list; existing unattributed versions remain fenced.
 
 The same pre-send crash boundary exists for artifact upload and deployment submission. Each phase stores its own request/settle bound and first negative observation while retaining the selected version ID. An unchanged `UPLOADING` version with terminal service processes and no attributable version process can retry the same upload after two observations and the settle margin. A matching deployment process is observed instead of resubmitted, including when version status temporarily lags its process.
 
@@ -292,7 +292,7 @@ Diagnostics are sanitized and bounded to 1024 bytes.
 Platform admission and previous-deployment waits are backpressure, not failed
 deployment attempts. `PlatformDeploymentWaiting` retains the current diagnostic
 (including process ages), while events repeat only when the stable blocking
-state changes. Backend retry deadlines survive reconciliation and concurrent
+state changes. Provider retry deadlines survive reconciliation and concurrent
 member failures; the latest applicable deadline wins, and discovery or user
 triggers do not shorten it. These waits do not consume operation failure budgets.
 
@@ -369,7 +369,7 @@ not advance to another rolling target while recovery is outstanding.
 The retry cadence uses persisted wall-clock UTC deadlines, not the monotonic
 CP-observed elapsed budgets used to expire operations. A forward clock
 step can make a retry due early; this never bypasses exact-version/process proof.
-On backend re-entry, a deadline more than sixty seconds plus a five-second margin
+On provider re-entry, a deadline more than sixty seconds plus a five-second margin
 in the future is treated as due, bounding a single backward-step delay at that
 gate. Ordinary deadlines within that bound remain unchanged across restart.
 Engine-owned platform retries, CPU-mode cooldowns, import batches, runtime
@@ -414,7 +414,7 @@ These upload/deploy retries depend on the documented bounded normal-delivery ass
 
 **Timing and ownership boundary:** an HTTP deadline does not cancel work already queued by an upstream proxy/server, and Zerops documents no hard maximum late-delivery or listing-staleness bound. The settle margin is a conservative operational assumption, not proof of exactly-once allocation. Only the durably selected version is ever uploaded/deployed. A late original allocation therefore stays non-serving; an additional unselected version is reported during operation observation without replacing or blocking the selected deployment. No unattributed version is automatically deleted. Multiple new candidates with no acknowledged selected ID, missing baseline entries, non-terminal/unknown processes, inconsistent exact-ID reads, or failed evidence listings keep **automatic replay refused**, with the evidence needed for the next attempt; HTTP 429/5xx evidence failures retain their original retry information. Do not mutate managed app versions concurrently with the control plane.
 
-Other `OUTCOME_UNKNOWN` or **automatic replay refused** outcomes mean the backend cannot independently establish the original outcome. A restart without a process ID, for example, is still not safely attributable from an `ACTIVE` status. Inspect that service's processes/app versions in the Zerops dashboard, preserve identifiers and timestamps, and wait for all pending requests/processes to settle. Only after confirming the outcome, an operator with platform permissions can clear `KARAKORAM_PLATFORM_OPERATION` to permit another submission. Do not clear receipts just to dismiss an error, delete data volumes, or repeatedly resubmit deployments while the outcome is unknown.
+Other `OUTCOME_UNKNOWN` or **automatic replay refused** outcomes mean the provider cannot independently establish the original outcome. A restart without a process ID, for example, is still not safely attributable from an `ACTIVE` status. Inspect that service's processes/app versions in the Zerops dashboard, preserve identifiers and timestamps, and wait for all pending requests/processes to settle. Only after confirming the outcome, an operator with platform permissions can clear `KARAKORAM_PLATFORM_OPERATION` to permit another submission. Do not clear receipts just to dismiss an error, delete data volumes, or repeatedly resubmit deployments while the outcome is unknown.
 
 Owned service imports carry a readable `KARAKORAM_IMPORT_REQUEST` receipt alongside their ownership variables. A lost import response can recover the original service IDs; a same-name foreign, masked or FAILED volume is never adopted automatically.
 
@@ -469,7 +469,7 @@ The authenticated member status includes an `error` diagnosis when local storage
 - Review health, current allocations/disk headroom, failed Operations/events and generation convergence.
 - Verify successful backups and storage capacity/access; rehearse data recovery, not just backup creation. See [backups](backups.md) and engine recovery guides.
 - Preserve consistent state backups and the original master key; monitor credential/certificate expiry.
-- Drain disruptive work before [upgrading Karakoram](upgrade.md). Existing member executables roll out on later provider-driven deployments, not control-plane restart alone.
+- Drain disruptive work before [upgrading Karakoram](upgrade.md). Existing member executables roll out on later engine driver-driven deployments, not control-plane restart alone.
 - For project-token, relay or cross-namespace incidents, use [namespace operations](namespaces.md) and [relay health](namespaces.md#relay-health) before restarting members.
 
 ## Orphaned platform volumes
@@ -487,10 +487,10 @@ The control-plane janitor retries after **two minutes**, doubling delays to **on
 
 An in-flight delete retains its service-ID and process-ID fence. After 15 minutes
 without completion, `lastError` and `OrphanedVolumeDeleteStuck` identify the
-process to inspect or cancel in the namespace backend. A polling failure also
+process to inspect or cancel in the namespace provider. A polling failure also
 retains that fence. Neither elapsed time nor a disconnected control plane
 authorizes another destructive request; confirmed service absence/replacement or
-a terminal backend outcome permits normal reconciliation to continue.
+a terminal provider outcome permits normal reconciliation to continue.
 
 The inventory has **no force-delete action**. With separate [Zerops](https://zerops.io/) project permissions, delete in the original namespace's Zerops GUI or use authenticated `zcli service delete <hostname>`. Persistent refusals need Zerops support: provide `serviceId` and failing `lastProcessId`, not secrets. The janitor drops manually removed volumes on its next attempt; do not edit state.
 
@@ -601,13 +601,13 @@ Use its terminal prompt or protected `KARAKORAM_RESET_PASSWORD` environment, nev
 | API 403 or missing UI controls | Account/RBAC, required password change or cookie CSRF | Reauthenticate and check effective permissions; credential reveal has a separate grant. |
 | Metrics denied/stale or charts empty | Authorization, disabled collection or failed scrape | Use [monitoring troubleshooting](monitoring.md). |
 | Live events arrive in batches | Proxy buffering | Preserve cursors; read durable status/events before retrying work. See [event transport](api.md#pagination-and-events). |
-| Engine health/recovery/placement warning | Provider-specific condition or platform constraint | Use the engine operations guides and [limitations](limitations.md); preserve evidence rather than clearing safety holds. |
+| Engine health/recovery/placement warning | Engine driver-specific condition or platform constraint | Use the engine operations guides and [limitations](limitations.md); preserve evidence rather than clearing safety holds. |
 
 ## Externally stopped or deleted member services
 
 Karakoram reconciles deployed member services against the cluster's running intent. An externally stopped runtime is started again. A confirmed-deleted logical runtime is imported with the same hostname and member identity, then deployed through the normal engine workflow, **without creating a new data volume**. Its original retained volume must still have the recorded identity. This applies to [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/elasticsearch), [PostgreSQL](https://www.postgresql.org/) and the stateless Elastic Stack/[Supabase](https://supabase.com/) components; Supabase's database storage follows PostgreSQL rules.
 
-Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later backend `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete backend reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
+Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later provider `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete provider reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
 
 [Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com/) may restore an absent derived job/[Docker](https://www.docker.com/) service from their durable logical record before the engine acts. The engine helper leaves those transitional observations alone. [Zerops](https://zerops.io/) runtime recreation imports the runtime service only, then deploys it with the existing volume-service mount. An API error or unavailable storage/node is not treated as absence.
 

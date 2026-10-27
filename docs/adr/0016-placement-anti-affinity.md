@@ -16,7 +16,7 @@ Display warnings in creation/topology guidance and the cluster detail UI, and do
 
 ## Consequences
 
-Users can distinguish database replication from infrastructure resilience. Co-location can remove multiple voters during one host failure; [PBM](https://docs.percona.com/percona-backup-mongodb/) recovery limits data-loss exposure but does not supply availability. Heuristics can have false matches, missing signals or stale groups, so placement status must show uncertainty rather than certify HA. Guaranteed anti-affinity would require a new platform capability and a revised backend/acceptance contract.
+Users can distinguish database replication from infrastructure resilience. Co-location can remove multiple voters during one host failure; [PBM](https://docs.percona.com/percona-backup-mongodb/) recovery limits data-loss exposure but does not supply availability. Heuristics can have false matches, missing signals or stale groups, so placement status must show uncertainty rather than certify HA. Guaranteed anti-affinity would require a new platform capability and a revised provider/acceptance contract.
 
 ## Alternatives considered
 

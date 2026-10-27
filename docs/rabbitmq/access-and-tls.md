@@ -30,11 +30,11 @@ Operators requiring non-member network isolation must use a dedicated target net
 
 `spec.exposure.public` requires project IPv6 or dedicated IPv4 and the shared [public exposure allowlist and acknowledgement rules](../security.md#public-exposure-allowlists). Each broker receives a distinct public TCP port targeting AMQPS, or AMQP when TLS is disabled. Use returned hosts/ports, not assumed external ports or private service URIs. Test allowed **and denied** source access and certificate coverage externally.
 
-`engineOptions.managementUI.public: true` separately exposes the native **UI and HTTP API** on public HTTPS subdomains. It accepts connections without the AMQP CIDR restriction and authenticates RabbitMQ users, not Karakoram sessions/RBAC. Zerops terminates HTTPS and forwards plaintext HTTP privately to 15672. Only `preferTLS`/`disabled` permit this; `requireTLS` rejects it because certificate-verified HTTPS backend routing is unavailable. Keep management private unless that network surface and private plaintext hop are acceptable. Native administrators/project-platform access are trusted infrastructure authority; never publish the internal-only ports in the [ports table](README.md).
+`engineOptions.managementUI.public: true` separately exposes the native **UI and HTTP API** on public HTTPS subdomains. It accepts connections without the AMQP CIDR restriction and authenticates RabbitMQ users, not Karakoram sessions/RBAC. Zerops terminates HTTPS and forwards plaintext HTTP privately to 15672. Only `preferTLS`/`disabled` permit this; `requireTLS` rejects it because certificate-verified HTTPS provider routing is unavailable. Keep management private unless that network surface and private plaintext hop are acceptable. Native administrators/project-platform access are trusted infrastructure authority; never publish the internal-only ports in the [ports table](README.md).
 
 ## Access API, CLI and UI
 
-**Cluster → Access** manages six collections. They apply directly through the Management API, not durable declarative topology resources. [MongoDB](https://www.mongodb.com/) database-user/role endpoints do not apply; other providers return HTTP 409.
+**Cluster → Access** manages six collections. They apply directly through the Management API, not durable declarative topology resources. [MongoDB](https://www.mongodb.com/) database-user/role endpoints do not apply; other engine drivers return HTTP 409.
 
 All collections live under `/api/v1/clusters/{cluster}/rabbitmq/`, with `?namespace=NS`:
 

@@ -10,7 +10,7 @@ The [PostgreSQL core](0034-postgres-engine.md) installs one fixed [Percona](http
 
 ### Profile model
 
-A **profile** is a declarative, immutable descriptor in one registry (`internal/engine/postgres/pgprofile`) consumed by the PostgreSQL core, the Supabase provider and the member agent. A descriptor declares:
+A **profile** is a declarative, immutable descriptor in one registry (`internal/engine/postgres/pgprofile`) consumed by the PostgreSQL core, the Supabase engine driver and the member agent. A descriptor declares:
 
 - identity and the PostgreSQL majors it supports;
 - per-major Percona apt packages with exact version pins, and per-major [native artifacts](0036-native-artifacts.md) from the embedded lock;
@@ -26,12 +26,12 @@ Admission is the availability authority: a profile is selectable only for a majo
 
 | Profile | Extensions | Source | Preload | Notes |
 |---|---|---|---|---|
-| `supabase` | Supabase baseline (ADR 0035) | Percona packages + `supabase-pg17-extensions` | `pg_stat_statements`, qualified selections | Implied by the `supabase` provider; not selectable on `postgres` |
+| `supabase` | Supabase baseline (ADR 0035) | Percona packages + `supabase-pg17-extensions` | `pg_stat_statements`, qualified selections | Implied by the `supabase` engine driver; not selectable on `postgres` |
 | `postgis` | `postgis`, `postgis_topology`, `postgis_raster` | Percona `percona-postgis` packages | none | majors 16–18 |
 | `pgvector` | `vector` | Percona `percona-pgvector` packages | none | majors 16–18 |
 | `timescaledb` | `timescaledb` | Karakoram-built `timescaledb-pg<major>` artifact, Apache-2 edition | `timescaledb` | telemetry off; TSL features absent |
 
-The `supabase` provider becomes PostgreSQL core + the `supabase` profile + its application components. The cutover is byte-identical: persisted specs, the bootstrap digest and its plan, member engine specs, runtime preparation commands and native-artifact sets do not change, so existing clusters neither redeploy nor re-run migrations. The provider identity, wire flavour `supabase`, `_karakoram.supabase_migrations` ledger and advisory lock remain.
+The `supabase` engine driver becomes PostgreSQL core + the `supabase` profile + its application components. The cutover is byte-identical: persisted specs, the bootstrap digest and its plan, member engine specs, runtime preparation commands and native-artifact sets do not change, so existing clusters neither redeploy nor re-run migrations. The engine driver identity, wire flavour `supabase`, `_karakoram.supabase_migrations` ledger and advisory lock remain.
 
 Plain PostgreSQL selects profiles with `engineOptions.profiles` (a set; absent means none, preserving existing specs). Profiles compose when their preloads and parameters do not conflict; preload order is the registry's declaration order. Profiles are additive: adding one installs packages/artifacts, applies parameters through the existing reload or rolling-restart rules and runs its SQL plan; removing one is rejected because extension objects may already exist in user databases.
 

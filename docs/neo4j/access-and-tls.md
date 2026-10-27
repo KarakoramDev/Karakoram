@@ -12,7 +12,7 @@
 | HTTPS Query API / browser | 7473 | Private, cluster-CA TLS |
 | Member control | 9443 | Private authenticated management |
 
-Plain HTTP is disabled. Public exposure publishes **Bolt only**, not the Query API or browser. Configure address-family-appropriate CIDR allowlists and check backend enforcement in [public exposure](../security.md#public-exposure-allowlists); backends without CIDR enforcement need the documented explicit all-address acknowledgement and an external firewall. Avoid exposing an administrative graph database directly to the Internet.
+Plain HTTP is disabled. Public exposure publishes **Bolt only**, not the Query API or browser. Configure address-family-appropriate CIDR allowlists and check provider enforcement in [public exposure](../security.md#public-exposure-allowlists); providers without CIDR enforcement need the documented explicit all-address acknowledgement and an external firewall. Avoid exposing an administrative graph database directly to the Internet.
 
 Connection summaries are password-free. Download the CA and explicitly reveal the managed credential only when needed:
 

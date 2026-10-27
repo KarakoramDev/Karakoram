@@ -86,7 +86,7 @@ Historical JSON is distinct from installation-root `/metrics` Prometheus text. A
 
 Scrape **`GET /metrics` at the installation root**, not `/api/v1/metrics`. Metrics carry authoritative `namespace`, `cluster` and `member` labels; include namespace in queries/alert grouping. `set`/`role` are not guaranteed metric labels.
 
-Use a **Karakoram API token**, not a backend infrastructure credential. Its owner needs `monitoring, read, <namespace>/<cluster>`; individual objects are filtered by policy. Without `namespace`, all authorized namespaces are included; `?namespace=<name>` restricts the scrape. A signed-in browser's access cookie also works, but unattended scrapers should use bearer tokens, not expiring browser cookies.
+Use a **Karakoram API token**, not a provider infrastructure credential. Its owner needs `monitoring, read, <namespace>/<cluster>`; individual objects are filtered by policy. Without `namespace`, all authorized namespaces are included; `?namespace=<name>` restricts the scrape. A signed-in browser's access cookie also works, but unattended scrapers should use bearer tokens, not expiring browser cookies.
 
 ```yaml
 scrape_configs:
@@ -203,7 +203,7 @@ For a degraded cluster, inspect conditions and recent operations before
 restarting members. For backup/drill alerts, inspect completed reports,
 verification checks, cleanup inventory and storage access; backup process
 availability alone does not establish recoverability. For deployment retry
-exhaustion, correct the backend error before explicitly retrying. Certificate
+exhaustion, correct the provider error before explicitly retrying. Certificate
 alerts require reviewing certificate identity and renewal conditions, not
 disabling TLS verification.
 
@@ -233,18 +233,18 @@ than reporting a healthy zero.
 | `transactions_committed_total`, `transactions_rolled_back_total` | Counter | Database transactions committed or rolled back. |
 | `blocks_read_total`, `blocks_hit_total` | Counter | Database disk blocks read or found in the buffer cache. |
 | `tuples_returned_total`, `tuples_fetched_total`, `tuples_inserted_total`, `tuples_updated_total`, `tuples_deleted_total` | Counter | Database tuple activity from `pg_stat_database`. |
-| `connections`, `max_connections` | Gauge | Current database backends and the server connection limit. |
+| `connections`, `max_connections` | Gauge | Current database providers and the server connection limit. |
 | `database_size_bytes` | Gauge | Total size of each database. |
 | `replication_lag_bytes`, `replay_backlog_bytes` | Gauge | Primary-observed transport-plus-replay lag and replica-local received-but-not-replayed WAL respectively. Replica backlog excludes WAL that has not arrived. |
 | `archiver_failed_total` | Counter | Failed WAL archive attempts. |
 | `last_archived_age_seconds` | Gauge | Age of the last successful WAL archive; zero before the first archive. Correlate with archive status and backup configuration. |
 | `patroni_primary`, `patroni_timeline` | Gauge | Patroni's local primary role (1/0) and PostgreSQL timeline on HA members. |
-| `proxysql_connections_used`, `proxysql_connections_free` | Gauge | Used and idle backend pool connections. |
-| `proxysql_queries_total` | Counter | Queries sent through each backend pool. |
+| `proxysql_connections_used`, `proxysql_connections_free` | Gauge | Used and idle provider pool connections. |
+| `proxysql_queries_total` | Counter | Queries sent through each provider pool. |
 
 PostgreSQL readiness means that local SQL accepts connections; proxy readiness
 means that its frontend listener is open and its runtime writer hostgroup has an
-ONLINE backend at observation time. Neither is a quorum guarantee, and a ready
+ONLINE provider at observation time. Neither is a quorum guarantee, and a ready
 proxy does not make the next connection infallible: clients keep reconnect and
 retry logic after member failures. ProxySQL defaults to writer-only routing.
 Optional read/write split rules are deliberately simple and do not guarantee

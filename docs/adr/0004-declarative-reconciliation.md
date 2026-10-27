@@ -8,7 +8,7 @@ Status: Accepted
 
 ## Decision
 
-Persist desired cluster specifications separately from observed status and provider-owned internal state. Reconcile on changes and timed requeues. Provider `Sync` is level-triggered and idempotent, performs at most one disruptive step per call, and returns a requeue hint; `Status` reports observation rather than desired success.
+Persist desired cluster specifications separately from observed status and engine driver-owned internal state. Reconcile on changes and timed requeues. Engine driver `Sync` is level-triggered and idempotent, performs at most one disruptive step per call, and returns a requeue hint; `Status` reports observation rather than desired success.
 
 Represent imperative backup, deletion of backups, restore, FCV raise, rolling restart, replacement and secret/certificate rotation as durable `Operation` records. `RunOperation` is re-entrant and resumes from a persisted checkpoint. Specification-driven creation, scaling, resources, version, exposure, PITR and schedules remain `Sync` work. Serialize `Sync`, cleanup and operations with per-cluster locks; different clusters can make independent progress.
 

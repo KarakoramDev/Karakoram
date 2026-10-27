@@ -25,7 +25,7 @@ The app-shell switcher offers **All namespaces** and readable namespaces with to
 | Step | What to choose or inspect |
 | --- | --- |
 | Basics | Namespace, unique name, engine, exact catalog version, topology and optional preset |
-| Topology | Provider-supported members, components and configuration |
+| Topology | Engine driver-supported members, components and configuration |
 | Resources | Per-component CPU mode and CPU/RAM/disk bounds |
 | Backups | Namespace-local storage, supported schedules and optional recovery source |
 | Access & TLS | Supported TLS/certificate options, private/public exposure, allowlist and monitoring |
@@ -39,8 +39,8 @@ Engine-specific fields, presets, minimum resources and connection procedures bel
 
 [OpenBao](https://openbao.org/) adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or [AWS KMS](https://aws.amazon.com/kms/) auto-unseal, with the transit token and [AWS](https://aws.amazon.com/) keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
 
-PostgreSQL storage is selectable only when the OpenBao provider advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
-[MySQL and PXC](mysql/README.md) are separate provider choices. MySQL offers single or Group Replication (3/5); PXC offers only [Galera](https://galeracluster.com/) `cluster` (3/5), requires [ProxySQL](https://proxysql.com/) and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and provider-specific maintenance review.
+PostgreSQL storage is selectable only when the OpenBao engine driver advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
+[MySQL and PXC](mysql/README.md) are separate engine driver choices. MySQL offers single or Group Replication (3/5); PXC offers only [Galera](https://galeracluster.com/) `cluster` (3/5), requires [ProxySQL](https://proxysql.com/) and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and engine driver-specific maintenance review.
 
 [Weaviate](weaviate/README.md) adds single/3–9-member topology with three fixed voters, typed modules/inference and full [S3](https://aws.amazon.com/s3/) backups. Review private-network requirements and topology-preserving [restore limits](weaviate/backups.md).
 
@@ -76,7 +76,7 @@ In **Topology → Review & apply**, inspect **What will change** and expand **Me
 
 PostgreSQL major upgrades (16→17 and 17→18) require **offline maintenance**, not a rolling restart: all data members stop for `pg_upgrade --link`, and database access remains unavailable through replica rebuild. Both the topology change review and upgrade confirmation describe this outage and require a recent successful backup. The in-progress warning retains the offline guidance while data members report mixed source/target majors during replica rebuild. Minor upgrades retain replica-first rolling maintenance (or downtime for a single member).
 
-MySQL/PXC upgrades use their separate catalog paths and block downgrades/provider conversion. The 8.0→8.4 path requires a recent successful current-version backup. PXC's Recovery tab is not a generic force-bootstrap switch: the backend refuses an existing Primary component, compares same-history committed positions and completes fencing before recovering one survivor. Full-outage recovery and backup restore use different evidence rules; see [MySQL/PXC operations](mysql/operations.md).
+MySQL/PXC upgrades use their separate catalog paths and block downgrades/engine driver conversion. The 8.0→8.4 path requires a recent successful current-version backup. PXC's Recovery tab is not a generic force-bootstrap switch: the provider refuses an existing Primary component, compares same-history committed positions and completes fencing before recovering one survivor. Full-outage recovery and backup restore use different evidence rules; see [MySQL/PXC operations](mysql/operations.md).
 
 **Reveal credentials** requires `cluster-credentials:read` and is audited. Revealed credentials are the engine's administrative identity, **not an application identity**. Use scoped application access: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). The response is not retained in the query cache. Keep copied passwords/URIs out of logs. Reveal also provides the public CA with copy/download controls; if clipboard access fails, use manual copy or download without losing PEM line breaks.
 
@@ -94,7 +94,7 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 
 ## Data MCP
 
-Supported clusters show a **Data [MCP](https://modelcontextprotocol.io/)** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
+Supported clusters show a **Data [MCP](https://modelcontextprotocol.io/)** card on **Overview**, separate from database connection credentials. Inspect the phase, provider/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
 
 Users with cluster update permission can enable/disable data MCP, select read-only/read-write access, set engine-specific scope, deny tools, require write confirmations and opt into recording query text in audit. Save applies `spec.dataMcp` as a cluster merge patch; disabling asks for confirmation. Other users see settings read-only. Enabling data access and requesting writes are security decisions: review the [data MCP guide](data-mcp.md), particularly [all four write switches](data-mcp.md#four-switches-for-writes), before sharing a client configuration.
 ### Fleet operations and restore verification
@@ -103,7 +103,7 @@ Member agent identity is distinct from the database version. **Upgrade agents** 
 
 Configure maintenance time zone, cron starts and durations in the **Topology** maintenance policy editor; the current window badge shows whether disruption can begin. Configured windows gate the start of a new disruption. A pending operation can wait without consuming an execution attempt; an explicit maintenance override bypasses that policy for the requested action, not the engine's quorum or readiness checks. Windows never stop a member halfway through an already-started disruptive step.
 
-Placement evidence is backend-dependent. **Move member** replaces and synchronizes the selected member; it is not a direct disk move. Backends with authoritative placement exclude the predecessor's group, while best-effort backends cannot promise a different host. Review the placement source and warning before confirming.
+Placement evidence is provider-dependent. **Move member** replaces and synchronizes the selected member; it is not a direct disk move. Providers with authoritative placement exclude the predecessor's group, while best-effort providers cannot promise a different host. Review the placement source and warning before confirming.
 
 **Backups → Drills** lists retained reports with pagination and links to individual report details; **Run drill** restores an eligible successful backup into a server-managed throwaway target in the same namespace. The policy editor controls scheduled runs. Reports retain verification checks, data age, restore duration and cleanup outcome. Managed targets are labeled and protected while active. RabbitMQ verification restores definitions only, not messages. See [backup drills](backup-drills.md).
 
@@ -120,7 +120,7 @@ Placement evidence is backend-dependent. **Move member** replaces and synchroniz
 | Control-plane backup | Configure S3 snapshot policy, run a snapshot and inspect retained reports; rebuild remains an offline administrative action |
 | Notifications | Configure write-only webhook, Slack or TLS email destinations, filters and test delivery; inspect delivery failures |
 
-The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored backend infrastructure credentials or the operator master key.
+The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored provider infrastructure credentials or the operator master key.
 
 The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running [OpenAPI](https://www.openapis.org/) link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
 

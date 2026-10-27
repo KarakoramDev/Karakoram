@@ -4,11 +4,11 @@
 
 [Overview](README.md) · [Access](access-and-tls.md) · [Operations](operations.md)
 
-Replication is not a backup. Register and verify an [S3](https://aws.amazon.com/s3/) backup storage, select it on the cluster, schedule full backups and test recovery into an independent cluster. Use the shared [backup storage and retention guide](../backups.md) for permissions and storage registration; [MySQL](https://www.mysql.com/)/[PXC](https://docs.percona.com/percona-xtradb-cluster/) use the provider-specific rules below.
+Replication is not a backup. Register and verify an [S3](https://aws.amazon.com/s3/) backup storage, select it on the cluster, schedule full backups and test recovery into an independent cluster. Use the shared [backup storage and retention guide](../backups.md) for permissions and storage registration; [MySQL](https://www.mysql.com/)/[PXC](https://docs.percona.com/percona-xtradb-cluster/) use the engine driver-specific rules below.
 
 ## Physical backup chains
 
-Both providers stream [XtraBackup](https://docs.percona.com/percona-xtrabackup/) through `xbcloud` to S3 without staging the full archive locally. Types are `full` and LSN-based `incremental`, not `logical`, `physical`, `diff` or `incr`. Each incremental depends on a successful parent in the same repository incarnation and server major. Preserve the full root and every intervening incremental. The pinned compatible XtraBackup release performs its normal server-version check; numerical patch values across the two products are not directly comparable.
+Both engine drivers stream [XtraBackup](https://docs.percona.com/percona-xtrabackup/) through `xbcloud` to S3 without staging the full archive locally. Types are `full` and LSN-based `incremental`, not `logical`, `physical`, `diff` or `incr`. Each incremental depends on a successful parent in the same repository incarnation and server major. Preserve the full root and every intervening incremental. The pinned compatible XtraBackup release performs its normal server-version check; numerical patch values across the two products are not directly comparable.
 
 ```sh
 karactl -n NS backups create CLUSTER baseline --type full --storage ARCHIVE
@@ -18,7 +18,7 @@ karactl -n NS backups get CLUSTER baseline -o json
 
 Creation returns an operation; observe that existing operation and terminal backup inventory rather than submitting again after a timeout. A streaming backup is not complete merely because one side of the upload finished. Interrupted backups are reported as failed, not silently repeated. Backups use DDL locking; schedule with DDL contention, donor load and available capacity in mind. Group Replication normally prefers an online secondary; when binary-log PITR is enabled, the backup must anchor the current archive writer instead.
 
-Provenance includes provider, source version/topology, cluster incarnation, repository, tool/server versions, GTID set, LSN range, chain dependencies and completion time. MySQL repositories use `<storage-prefix>/mysql/<namespace>/<cluster>-<uid>`; PXC uses the corresponding **`pxc`** prefix. They share a subtree structure, not an interchangeable backup identity:
+Provenance includes engine driver, source version/topology, cluster incarnation, repository, tool/server versions, GTID set, LSN range, chain dependencies and completion time. MySQL repositories use `<storage-prefix>/mysql/<namespace>/<cluster>-<uid>`; PXC uses the corresponding **`pxc`** prefix. They share a subtree structure, not an interchangeable backup identity:
 
 - `base/<label>`: streamed physical backup.
 - `base/<label>.meta/`: readable checkpoints, binlog coordinates and backup metadata.
@@ -152,7 +152,7 @@ as a partial history. Do not reset GTID history as a routine restore step.
 
 A restored server gets a **new `server_uuid`** while keeping recovered GTID history. Restored Group Replication uses a **new group UUID**, and other members clone from the restored seed. PXC starts a **new Galera history**, with no predecessor peer list, and the other members join by SST. Prepared `xtrabackup_galera_info` can contain a zero UUID and sequence `-1`; file presence is not a trustworthy bootstrap position. Do not use backup coordinates to rank crashed live members.
 
-The UI offers **Restore in place** and **Restore into new cluster**. New-cluster recovery keeps the source unchanged but still requires matching provider and major. Target system credentials are re-keyed; source endpoints, writer identity and replication history must not be reused. Target archiving stays inactive until its own repository is active. Follow the target operation, member state, observed generation, recovered data and application authentication before reopening traffic. Never make a restored copy a member of the still-running predecessor cluster.
+The UI offers **Restore in place** and **Restore into new cluster**. New-cluster recovery keeps the source unchanged but still requires matching engine driver and major. Target system credentials are re-keyed; source endpoints, writer identity and replication history must not be reused. Target archiving stays inactive until its own repository is active. Follow the target operation, member state, observed generation, recovered data and application authentication before reopening traffic. Never make a restored copy a member of the still-running predecessor cluster.
 
 ## Accounts after recovery
 

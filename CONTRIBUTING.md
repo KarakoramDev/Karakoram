@@ -40,7 +40,7 @@ Binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds UI asset
 
 `make build` is for development. Publish artifacts with `make release`, not by copying `bin/`; see [Releasing](#releasing).
 
-For frontend development, run `npm run dev` in `ui/`: [Vite](https://vite.dev) listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another backend; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real backend settings. Do not commit populated environment files or substitute fake production credentials.
+For frontend development, run `npm run dev` in `ui/`: [Vite](https://vite.dev) listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another provider; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real provider settings. Do not commit populated environment files or substitute fake production credentials.
 
 ## Releasing
 
@@ -103,7 +103,7 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | `internal/server`, `internal/api` | Runtime wiring, strict HTTP contract, handlers and authorization |
 | `internal/domain`, `internal/store` | Models, [SQLite](https://sqlite.org) migrations, durable intent/checkpoints/events/secrets |
 | `internal/reconciler` | Serialized lifecycle/operations, observation and cleanup |
-| `internal/engine` | In-process provider registry and reconciliation/data-plane interfaces |
+| `internal/engine` | In-process engine driver registry and reconciliation/data-plane interfaces |
 | `internal/engine/psmdb`, `internal/engine/psmdb/pbm` | MongoDB topology/access/TLS and PBM backup/PITR/restore |
 | `internal/engine/rabbitmq` | Broker lifecycle, Management API access and definitions recovery |
 | `internal/engine/elastic` | Elasticsearch/Stack lifecycle, native security and snapshot recovery |
@@ -113,8 +113,8 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | `internal/scheduler`, `internal/events`, `internal/monitoring` | Schedules/retention, durable activity/SSE and metrics |
 | `internal/cli`, `ui/`, `internal/ui` | CLI, typed [React](https://react.dev) application and embedded assets |
 
-- Keep generic durability in reconciler/store; engine mechanisms stay within their provider; Zerops wire formats stay in the backend adapter.
-- Provider metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Providers are compiled in, not dynamically installable plugins.
+- Keep generic durability in reconciler/store; engine mechanisms stay within their engine driver; Zerops wire formats stay in the provider adapter.
+- Engine driver metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Engine drivers are compiled in, not dynamically installable plugins.
 - Perform at most one disruptive action per reconciliation step. Persist intent/checkpoints and remote identifiers before progressing, then observe completion. SQLite and remote services are not one transaction.
 - Preserve agent config/control/receipt compatibility through rolling deployments. Maintenance/process holds survive restarts and pulls; ambiguous initiation is not permission to repeat destructive work.
 - Ordinary status/log/event reads must remain credential-free. Preserve separate `cluster-credentials:read`, per-object filtering and deny-overrides policies.

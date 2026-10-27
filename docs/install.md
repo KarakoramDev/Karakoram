@@ -2,15 +2,15 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Install Karakoram
 
-Choose an infrastructure backend before installing. Karakoram is multi-platform; backend capabilities and operator responsibilities differ. See [Backends](backends.md) and [Operating costs](operating-costs.md).
+Choose an infrastructure provider before installing. Karakoram is multi-platform; provider capabilities and operator responsibilities differ. See [Providers](providers.md) and [Operating costs](operating-costs.md).
 
-| Backend | Installation path |
+| Provider | Installation path |
 | --- | --- |
-| Zerops — reference backend | [Zerops backend guide](zerops.md); follow this page or the dashboard-only [Quick start](quickstart.md) to install. |
+| Zerops — reference provider | [Zerops provider guide](zerops.md); follow this page or the dashboard-only [Quick start](quickstart.md) to install. |
 | Dokploy | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
 | Nomad | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
 
-The deployment steps below are for the **[Zerops](https://zerops.io/) backend**, in an existing Zerops project. CLI installation is shared across backends.
+The deployment steps below are for the **[Zerops](https://zerops.io/) provider**, in an existing Zerops project. CLI installation is shared across providers.
 
 ## Prerequisites
 

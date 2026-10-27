@@ -28,7 +28,7 @@ karactl -n default operations cluster demo
 
 UI: **Cluster → Backups → Backup now**; storage is required. Follow the operation and inventory to **Succeeded**, not just request acceptance/[PBM](https://docs.percona.com/percona-backup-mongodb/) initiation. Inventory includes PBM name, type/storage, times, size/error where available, and `location`: the snapshot's object prefix `<PBMPrefix>/<PBMName>/` within its recorded storage bucket; `trigger` is `manual`, `schedule` or `restore` (automatic post-restore base). The prefix identifies snapshot data, not sibling `<PBMPrefix>/<PBMName>.pbm.json` metadata or shared PITR slices. It is populated when the native snapshot name is known, including inventory-discovered logical, physical and incremental snapshots and PITR base snapshots. Legacy empty locations are filled when the snapshot is next observed by inventory using its recorded prefix (or the prefix adopted by inventory if none was recorded); unobserved snapshots remain unchanged. Existing nonempty locations are preserved. Deletion continues to use the recorded PBM prefix/name, not `location`.
 
-Manual requests require a formed active cluster with current generation observed. Creating/suspended/deleting/unconverged clusters return **409** with phase/generation context, even if an older Ready phase remains visible. Failed/expired/cancelled/retired operations mark unfinished backup inventory Failed. Never-started or Failed records without a started PBM snapshot can be removed immediately when no matching active operation exists; started snapshots need backend cleanup before name reuse. Missing storage returns **404** (`backupStorage`); duplicate name **409** `already_exists`; unsupported type **400** listing valid types.
+Manual requests require a formed active cluster with current generation observed. Creating/suspended/deleting/unconverged clusters return **409** with phase/generation context, even if an older Ready phase remains visible. Failed/expired/cancelled/retired operations mark unfinished backup inventory Failed. Never-started or Failed records without a started PBM snapshot can be removed immediately when no matching active operation exists; started snapshots need provider cleanup before name reuse. Missing storage returns **404** (`backupStorage`); duplicate name **409** `already_exists`; unsupported type **400** listing valid types.
 
 Both PBM types can be scheduled. Create-time shorthand:
 
@@ -60,7 +60,7 @@ karactl -n default restores create demo recovertime --time 2026-01-15T12:00:00Z 
 karactl -n default restores get demo recoverbase
 ```
 
-Use exactly one `source.backup` / `source.pitrTime`; both/neither return **400**, field `source`, reason `conflict`. Missing backup returns **404** with source context; duplicate restore name **409** `already_exists`, before enqueueing. Source defaults to target; require matching provider/topology/engine major and a successful compatible snapshot, particularly for physical recovery. Missing provider metadata denotes legacy [PSMDB](https://docs.percona.com/percona-server-for-mongodb/), not a provider-neutral backup.
+Use exactly one `source.backup` / `source.pitrTime`; both/neither return **400**, field `source`, reason `conflict`. Missing backup returns **404** with source context; duplicate restore name **409** `already_exists`, before enqueueing. Source defaults to target; require matching engine driver/topology/engine major and a successful compatible snapshot, particularly for physical recovery. Missing engine driver metadata denotes legacy [PSMDB](https://docs.percona.com/percona-server-for-mongodb/), not a engine driver-neutral backup.
 
 Logical restore is **not full rollback**: replica-set restore replaces backed-up namespaces but leaves extra collections/databases untouched. Sharded logical restore drops every database present in the backup, removing later collections within those databases; databases absent from the backup remain. For an exact copy, quiesce/drop extras deliberately, use physical recovery, or restore into a new cluster.
 
@@ -89,7 +89,7 @@ For cross-namespace recovery, global `-n` selects target, `--source-namespace` s
 
 ## PBM recovery and cancellation
 
-[Operation limits](../clusters.md#operations-and-status) apply. Restore compensation has a separate six-hour generic failure-cleanup window (with the shorter fail-closed observation rules below); it is not rollback. Backup polling exhaustion and legacy failed-start cleanup enter **read-only recovery with a two-minute observed-execution budget**, persisted across CP restarts. Legacy cleanup checkpoints receive one fresh observation window on upgrade. Each provider attempt is capped at two minutes; with the default one-minute worker backoff, failure is published within five minutes of entering this recovery window (excluding CP downtime, queue scheduling and unavailable state storage).
+[Operation limits](../clusters.md#operations-and-status) apply. Restore compensation has a separate six-hour generic failure-cleanup window (with the shorter fail-closed observation rules below); it is not rollback. Backup polling exhaustion and legacy failed-start cleanup enter **read-only recovery with a two-minute observed-execution budget**, persisted across CP restarts. Legacy cleanup checkpoints receive one fresh observation window on upgrade. Each engine driver attempt is capped at two minutes; with the default one-minute worker backoff, failure is published within five minutes of entering this recovery window (excluding CP downtime, queue scheduling and unavailable state storage).
 
 Before initiating a backup, Karakoram waits for [PBM](https://docs.percona.com/percona-backup-mongodb/) status to report at least one healthy primary/secondary from each participating replica set, including config servers. A Ready [MongoDB](https://www.mongodb.com/) primary alone does not prove PBM storage readiness: a first configuration/resync can finish before PBM refreshes its health record, causing an empty native nomination. The operation reports `ready` progress while waiting and fails without initiation after a persisted two-minute observed-execution readiness budget. Status outages or malformed/missing readiness data do not authorize initiation.
 
@@ -146,7 +146,7 @@ For each participating mongod, the control plane derives `GOMEMLIMIT` from its
 256 MiB for mongod non-cache memory, 64 MiB for agents/CLI and 64 MiB of
 allocation headroom. A missing active-cache field uses the agent's historical
 0.25 GiB cache default, never a recomputation from pending desired `maxRam`.
-With normally applied provider cache defaults, fixed 1 GiB therefore gets a
+With normally applied engine driver cache defaults, fixed 1 GiB therefore gets a
 384 MiB PBM target; fixed 2/4/8 GiB members get 896/1920/3968 MiB.
 An unapplied desired RAM/cache increase cannot inflate the current target.
 Go's limit controls heap/GC pacing, **not a hard process-RSS ceiling**: live
@@ -155,7 +155,7 @@ buffers, non-Go memory, native engine growth and GC CPU pressure still matter.
 
 Applied sizing travels with every replica/shard/config-server mongod in the
 PBM environment. Legacy members without persisted applied RAM are checked
-against the backend's authoritative current service bounds, not desired spec.
+against the provider's authoritative current service bounds, not desired spec.
 If those bounds are unavailable or unknown, new logical recovery is refused
 with `PBMRestoreMemoryBudgetUnknown`; no 1 GiB allocation is invented.
 Existing native work keeps its nonterminal legacy diagnostic instead of failing
@@ -291,8 +291,8 @@ fenced under the default 20-failure or six-hour restore-execution limit,
 followed by a separate six-hour failure-cleanup bound. Expiry does not prove
 PBM stopped, establish unchanged data, or authorize destructive retry.
 Every unsuccessful attempt invalidates its absence window, including
-dependency resolution/restore validation before provider entry and
-inventory/storage/runtime-recovery failures inside the provider.
+dependency resolution/restore validation before engine driver entry and
+inventory/storage/runtime-recovery failures inside the engine driver.
 
 ## Delete backup data and recover pending deletion
 

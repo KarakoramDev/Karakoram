@@ -91,12 +91,12 @@ Server-side FILE import/export is unavailable by design: `secure_file_priv=NULL`
 
 ### Replication ports and network restriction
 
-PXC data members listen on Galera group communication `4567/tcp` and `4567/udp`, IST `4568/tcp` and SST `4444/tcp`. Karakoram never publishes these ports; only data members of the same cluster need to reach them. TLS peer verification rejects unauthorized peers but cannot stop an untrusted host on the same network from opening connections (see [hostile traffic](#hostile-cluster-traffic)). None of the registered backends offers Karakoram a private per-port or per-cluster network policy, so member-only reachability is **documented, not enforced**:
+PXC data members listen on Galera group communication `4567/tcp` and `4567/udp`, IST `4568/tcp` and SST `4444/tcp`. Karakoram never publishes these ports; only data members of the same cluster need to reach them. TLS peer verification rejects unauthorized peers but cannot stop an untrusted host on the same network from opening connections (see [hostile traffic](#hostile-cluster-traffic)). None of the registered providers offers Karakoram a private per-port or per-cluster network policy, so member-only reachability is **documented, not enforced**:
 
-| Backend | What Karakoram enforces | Operator action for member-only reachability |
+| Provider | What Karakoram enforces | Operator action for member-only reachability |
 | --- | --- | --- |
 | Zerops | Nothing beyond private listeners: every service in a Zerops project shares the project private network; Zerops firewall allowlists apply only to public port routing. | Place the PXC cluster in a dedicated project when other services in the project are not trusted. |
-| Nomad | Nothing beyond private listeners: members join the target's CNI network (`network`, default `karakoram`) shared by every job using it; the backend renders no per-port rules and no Consul service-mesh intentions. | Run PXC in a namespace whose CNI network carries only that cluster, or apply host/CNI firewall rules allowing `4567`, `4568` and `4444` only between its data members. |
+| Nomad | Nothing beyond private listeners: members join the target's CNI network (`network`, default `karakoram`) shared by every job using it; the provider renders no per-port rules and no Consul service-mesh intentions. | Run PXC in a namespace whose CNI network carries only that cluster, or apply host/CNI firewall rules allowing `4567`, `4568` and `4444` only between its data members. |
 | Dokploy (Swarm) | Nothing beyond private listeners: members attach to the target's attachable overlay (`network`, default per Dokploy environment) shared by every cluster in that environment and by the control plane; Swarm overlays have no per-port ACL. | Use a dedicated Dokploy environment or `network` for the PXC cluster and attach no other workloads to it. |
 
 Verify the chosen restriction from a non-member runtime: connections to `4567`, `4568` and `4444` should fail at the network layer, not only at TLS.
@@ -126,6 +126,6 @@ asynchronous and returns a tracked operation. Read-only user, database and grant
 tools never reveal passwords.
 
 Restricted API tokens use the existing cluster-scoped `database-users` permissions
-for access management and `clusters:update` for quorum recovery. These providers
+for access management and `clusters:update` for quorum recovery. These engine drivers
 do not expose a Data MCP gateway.
 

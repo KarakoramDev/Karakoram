@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-[PostgreSQL](https://www.postgresql.org)'s client proxy and modular [Supabase](https://supabase.com) need native executables that are not all available through the selected distribution repositories. Runtime downloads must identify exact bytes, source and licensing rather than trust a floating release. Source-built applications also need a publication path independent of control-plane authentication and the infrastructure backend.
+[PostgreSQL](https://www.postgresql.org)'s client proxy and modular [Supabase](https://supabase.com) need native executables that are not all available through the selected distribution repositories. Runtime downloads must identify exact bytes, source and licensing rather than trust a floating release. Source-built applications also need a publication path independent of control-plane authentication and the infrastructure provider.
 
 ## Decision
 
@@ -34,7 +34,7 @@ Engine creation is bounded by the release's real artifact inventory. A usable so
 
 ## Alternatives considered
 
-- **Control-plane download endpoint:** preparation cannot rely on authenticated control-plane artifact access on every backend; it would also couple provisioning bandwidth/availability to the coordinator.
+- **Control-plane download endpoint:** preparation cannot rely on authenticated control-plane artifact access on every provider; it would also couple provisioning bandwidth/availability to the coordinator.
 - **Floating upstream latest URLs:** lose immutable version identity and cannot establish reproducible deployment inputs.
 - **Extract application images:** adds an application-container supply chain and does not prove native runtime dependencies on Ubuntu 24.04.
 - **Compile applications on each database/service member:** expands privileged prepare work, toolchain/resource requirements and deployment variance.
@@ -42,4 +42,4 @@ Engine creation is bounded by the release's real artifact inventory. A usable so
 
 ## References
 
-[Artifact operations and provenance](../native-artifacts.md), [PostgreSQL decision](0034-postgres-engine.md), [Supabase decision](0035-supabase-engine.md), [backend-neutral deployment contract](0030-backend-neutral-infrastructure-contract.md).
+[Artifact operations and provenance](../native-artifacts.md), [PostgreSQL decision](0034-postgres-engine.md), [Supabase decision](0035-supabase-engine.md), [provider-neutral deployment contract](0030-backend-neutral-infrastructure-contract.md).

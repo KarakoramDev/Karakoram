@@ -8,7 +8,7 @@ Deploy official native [Weaviate](https://weaviate.io/) on private member runtim
 
 | Area | Supported configuration |
 | --- | --- |
-| Provider | `weaviate` |
+| Engine driver | `weaviate` |
 | Versions | `1.40.1` (default), `1.39.12`; inspect the installation catalog |
 | Topologies | `single`: one member; `cluster`: 3–9 members, three fixed Raft voters |
 | Presets | `dev`: single; `prod`: three-member cluster |
@@ -131,7 +131,7 @@ The `inference` keys and their process endpoint mappings are:
 | `sum-transformers` | `SUM_INFERENCE_API` |
 | `text-spellcheck` | `SPELLCHECK_INFERENCE_API` |
 
-These are typed URL settings, not arbitrary environment passthrough. Ollama's collection/request `apiEndpoint` is not a process environment option; Ollama modules are not part of this provider's process module allowlist.
+These are typed URL settings, not arbitrary environment passthrough. Ollama's collection/request `apiEndpoint` is not a process environment option; Ollama modules are not part of this engine driver's process module allowlist.
 
 ## Resources and runtime
 
@@ -152,9 +152,9 @@ Karakoram disables upstream automatic resource limiting (`LIMIT_RESOURCES=false`
 | 2112/TCP | Native Prometheus metrics | Private only; upstream wildcard-bound |
 | 9443/TCP | Karakoram agent HTTPS | Private authenticated management |
 
-Native REST and gossip bind according to the backend's private address family: `0.0.0.0` for IPv4, `::` otherwise. These wildcard binds are not access controls. Namespace relay/control access is limited to exact member targets on 8080, 7947 and 9443; client gRPC is not relayed.
+Native REST and gossip bind according to the provider's private address family: `0.0.0.0` for IPv4, `::` otherwise. These wildcard binds are not access controls. Namespace relay/control access is limited to exact member targets on 8080, 7947 and 9443; client gRPC is not relayed.
 
-Internal gossip, data and Raft transports are plaintext upstream. Shared internal basic authentication protects data/replication calls and internal Raft removal, but does not encrypt them or authenticate gossip/Raft consensus. The gRPC listener also hosts internal replication services. Omitting public port mappings is **not a firewall**: use an isolated private/encrypted backend network with policy restricting untrusted peers; native metrics bind wildcard and are scraped locally.
+Internal gossip, data and Raft transports are plaintext upstream. Shared internal basic authentication protects data/replication calls and internal Raft removal, but does not encrypt them or authenticate gossip/Raft consensus. The gRPC listener also hosts internal replication services. Omitting public port mappings is **not a firewall**: use an isolated private/encrypted provider network with policy restricting untrusted peers; native metrics bind wildcard and are scraped locally.
 
 ## Limits
 

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL consumer bindings
 
-A binding is a durable dependency from a managed consumer to a `postgres` source cluster in the same control plane. Consumer providers create and release bindings during reconciliation; operators inspect them on the source's **Bindings** tab. [Keycloak](https://www.keycloak.org/) is the sample consumer. [Temporal](https://temporal.io/) and [OpenBao](https://openbao.org/) can use the same in-process binding contract; a binding is not an external-database import or an assertion that those providers are installed.
+A binding is a durable dependency from a managed consumer to a `postgres` source cluster in the same control plane. Consumer engine drivers create and release bindings during reconciliation; operators inspect them on the source's **Bindings** tab. [Keycloak](https://www.keycloak.org/) is the sample consumer. [Temporal](https://temporal.io/) and [OpenBao](https://openbao.org/) can use the same in-process binding contract; a binding is not an external-database import or an assertion that those engine drivers are installed.
 
 `pgbinding.BindingID(request)` is deterministic before provisioning: `pgb-` followed by the first 16 bytes of SHA-256 in lowercase hexadecimal, hashing consumer kind/namespace/name and source namespace/cluster separated by NUL bytes. Empty namespaces normalize to `default`. Database, extension and version-range changes do not change this URL-safe ID. Consumers must call `Release(ctx, pgbinding.BindingID(request), keepData)` after removing runtimes even when `Ensure` never succeeded. Releasing an unknown ID is a successful no-op; partial provisioning does not strand a source deletion guard.
 

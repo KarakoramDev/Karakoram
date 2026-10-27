@@ -62,7 +62,7 @@ Old clients may authenticate during the overlap but cease to work after pruning.
 
 The optional `ui` component listens on private HTTP 8080 and connects to the frontend using a client certificate. It is **private by default**, with UI authentication disabled. Anyone able to reach that private UI has its frontend authority.
 
-Public access is backend-managed HTTPS only, with OIDC required. OIDC is supported **only together with public HTTPS**, not on the private HTTP origin. First seal the secret on the existing private cluster:
+Public access is provider-managed HTTPS only, with OIDC required. OIDC is supported **only together with public HTTPS**, not on the private HTTP origin. First seal the secret on the existing private cluster:
 
 ```sh
 karactl -n NS temporal ui-oidc-secret set workflows --from-file oidc-secret
@@ -87,4 +87,4 @@ Then patch options while keeping the existing persistence settings:
 }
 ```
 
-Keep at least one UI replica enabled. Backend public HTTPS/subdomain support and the sealed secret are required before the UI can be published. Read the public `ui` endpoint from cluster status and register `<ui-origin>/auth/sso/callback` with the identity provider. Never put `clientSecret` inside `engineOptions`; strict option parsing rejects it. The secret is sealed in control-plane storage and projected into private UI configuration, not status. OIDC gates UI login; it does not add Temporal namespace-level authorization.
+Keep at least one UI replica enabled. Provider public HTTPS/subdomain support and the sealed secret are required before the UI can be published. Read the public `ui` endpoint from cluster status and register `<ui-origin>/auth/sso/callback` with the identity provider. Never put `clientSecret` inside `engineOptions`; strict option parsing rejects it. The secret is sealed in control-plane storage and projected into private UI configuration, not status. OIDC gates UI login; it does not add Temporal namespace-level authorization.

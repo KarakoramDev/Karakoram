@@ -22,7 +22,7 @@ Anonymous access is disabled. API-key authentication, native RBAC and dynamic da
 
 | `spec.tls.mode` | REST | Client gRPC | Public exposure |
 | --- | --- | --- | --- |
-| `requireTLS` (default) | HTTPS-only on 8080; no parallel plaintext REST listener | TLS on 50051 | Optional, subject to backend capability and CIDR allowlist |
+| `requireTLS` (default) | HTTPS-only on 8080; no parallel plaintext REST listener | TLS on 50051 | Optional, subject to provider capability and CIDR allowlist |
 | `disabled` | HTTP on 8080 | Plaintext | Rejected; private-only |
 
 `preferTLS` is unsupported. CA source is `selfSigned` (default) or `userProvided`; the CA-source selection is immutable. Trust the returned public CA and use endpoint names/IPs covered by the member certificate. Generated leaf SANs cover member name, localhost, loopbacks and applicable published addresses.

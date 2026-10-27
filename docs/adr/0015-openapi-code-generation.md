@@ -18,7 +18,7 @@ Require deterministic regeneration and an `openapi-check` regenerate/diff check 
 
 ## Consequences
 
-Endpoint shape, CLI/UI types and coarse authorization share one reviewable source. Provider-specific semantic validation still belongs in the engine; an OpenAPI-valid request need not be a safe [MongoDB](https://www.mongodb.com) transition. Generation adds pinned tooling/build steps, and codegen output is not evidence that handlers or per-object checks work. API changes require deliberate compatibility handling across shipped clients.
+Endpoint shape, CLI/UI types and coarse authorization share one reviewable source. Engine driver-specific semantic validation still belongs in the engine; an OpenAPI-valid request need not be a safe [MongoDB](https://www.mongodb.com) transition. Generation adds pinned tooling/build steps, and codegen output is not evidence that handlers or per-object checks work. API changes require deliberate compatibility handling across shipped clients.
 
 ## Alternatives considered
 

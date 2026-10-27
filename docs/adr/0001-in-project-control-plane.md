@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Karakoram is self-hosted orchestration software, not a managed database service. [Zerops](https://zerops.io) is its infrastructure backend for replica sets, sharding, backups, upgrades, access management and monitoring. [OpenEverest](https://openeverest.io) v2 supplies useful product concepts, but its control plane and providers depend on [Kubernetes](https://kubernetes.io). Zerops API credentials alone do not provide private database connectivity.
+Karakoram is self-hosted orchestration software, not a managed database service. [Zerops](https://zerops.io) is its infrastructure provider for replica sets, sharding, backups, upgrades, access management and monitoring. [OpenEverest](https://openeverest.io) v2 supplies useful product concepts, but its control plane and providers depend on [Kubernetes](https://kubernetes.io). Zerops API credentials alone do not provide private database connectivity.
 
 ## Decision
 

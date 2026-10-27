@@ -79,7 +79,7 @@ Use validated `engineConfig` YAML only for non-managed settings; see the [overvi
 
 ## Processes, files and readiness
 
-`mongod` serves data/config members; `mongos` serves routers; PBM placement is described in [sharding](sharding.md). Platform `karakoram agent readiness` probes **TCP 127.0.0.1:27017 only**, without credentials/environment; it does not validate users, replication or PBM. Authenticated provider observations determine [cluster health](replica-sets.md).
+`mongod` serves data/config members; `mongos` serves routers; PBM placement is described in [sharding](sharding.md). Platform `karakoram agent readiness` probes **TCP 127.0.0.1:27017 only**, without credentials/environment; it does not validate users, replication or PBM. Authenticated engine driver observations determine [cluster health](replica-sets.md).
 
 Ready requires an observed, writable primary in every replica set (including config servers and each shard), with data members in PRIMARY/SECONDARY state and within the managed replication-lag gate. Reachable secondary processes alone are not healthy write service. `Replication/<set>` reports `NoWritablePrimary` when election/quorum cannot provide a verified primary. Restore retained voters, disk capacity, DNS and connectivity; Karakoram does not force replica-set reconfiguration or reinitialize a previously formed set. A missing last data copy requires recovery from a verified backup, not an empty replacement. A lost secondary may be safely reseeded only from a verified retained writable primary.
 

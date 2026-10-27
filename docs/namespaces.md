@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Namespaces and relays
 
-A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` ([Zerops](https://zerops.io/) projects, see [Zerops backend](zerops.md)), `dokploy` ([Dokploy](https://dokploy.com/) environments on a [Docker Swarm](https://docs.docker.com/engine/swarm/), see [Dokploy backend](dokploy.md)), or `nomad` ([Nomad](https://developer.hashicorp.com/nomad) namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
+A namespace maps one provider target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable provider kind: `zerops` ([Zerops](https://zerops.io/) projects, see [Zerops provider](zerops.md)), `dokploy` ([Dokploy](https://dokploy.com/) environments on a [Docker Swarm](https://docs.docker.com/engine/swarm/), see [Dokploy provider](dokploy.md)), or `nomad` ([Nomad](https://developer.hashicorp.com/nomad) namespaces, see [Nomad provider](nomad.md)). Existing records and omitted create kinds default to `zerops`.
 
-`default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`; `nomad` reads `KARAKORAM_NOMAD_*`, including `KARAKORAM_NOMAD_NAMESPACE`, `KARAKORAM_NOMAD_ADDR` and `KARAKORAM_NOMAD_TOKEN`) and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); all three current backends require it. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
+`default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`; `nomad` reads `KARAKORAM_NOMAD_*`, including `KARAKORAM_NOMAD_NAMESPACE`, `KARAKORAM_NOMAD_ADDR` and `KARAKORAM_NOMAD_TOKEN`) and networking is direct. Additional namespaces use an outbound management relay when their provider requires one (`BackendInfo.Relay`); all three current providers require it. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
 
 ## Names and selection
 
-Names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters/digits/hyphens, starting with a letter and ending with a letter/digit. `default` is reserved. A target belongs to only one namespace within its backend kind. Name/backend/target identity are immutable; description is editable. Cluster/storage names are namespace-local.
+Names match `^[a-z][a-z0-9-]{0,30}[a-z0-9]$`: 2–32 lowercase letters/digits/hyphens, starting with a letter and ending with a letter/digit. `default` is reserved. A target belongs to only one namespace within its provider kind. Name/provider/target identity are immutable; description is editable. Cluster/storage names are namespace-local.
 
 | Interface | Selection |
 | --- | --- |
@@ -25,19 +25,19 @@ Responses carry `namespace`; unfiltered tables identify it. CLI/UI namespace lis
 
 An explicit nonexistent `?namespace=NAME` returns **404 `not_found` only if the caller holds a permission in that namespace**; otherwise collections remain empty and object requests return their normal **403**. The 404 identifies `details.resource: namespace` and `details.name`. Omit the parameter for all namespaces; empty/malformed values return **400**.
 
-## Backend discovery
+## Provider discovery
 
-`GET /api/v1/backends` and `karactl backends list` require `namespaces/read` on global `*` and list registered backend kinds, display names, status, enabled capabilities, relay requirements and accepted non-secret config keys. Namespace responses include `backend`, `capabilities` and non-secret `config`; use `karactl namespaces get NAME -o yaml` to inspect them. Capabilities describe optional infrastructure features, not engine-provider features or availability guarantees.
+`GET /api/v1/backends` and `karactl backends list` require `namespaces/read` on global `*` and list registered provider kinds, display names, status, enabled capabilities, relay requirements and accepted non-secret config keys. Namespace responses include `backend`, `capabilities` and non-secret `config`; use `karactl namespaces get NAME -o yaml` to inspect them. Capabilities describe optional infrastructure features, not engine-engine driver features or availability guarantees.
 
-In **Settings → Namespaces**, the table and detail identify the backend; the detail's **Capabilities** section marks each known feature **Supported** or **Not supported**.
+In **Settings → Namespaces**, the table and detail identify the provider; the detail's **Capabilities** section marks each known feature **Supported** or **Not supported**.
 
-Namespace creation accepts `backend` (default `zerops`) and a string-to-string `config` object. CLI flags are `--backend zerops|dokploy|nomad` and repeatable `--config key=value`; Zerops accepts no config keys, while [Dokploy](dokploy.md#target-settings) and [Nomad](nomad.md#target-settings) list their settings in their guides. Zerops's API URL is operator-only, set with `KARAKORAM_ZEROPS_API_URL` for all namespaces, including legacy records; namespace callers cannot override it. Credentials belong in the write-only token input, never config. Unknown backend kinds/config keys are rejected with **400**.
+Namespace creation accepts `backend` (default `zerops`) and a string-to-string `config` object. CLI flags are `--backend zerops|dokploy|nomad` and repeatable `--config key=value`; Zerops accepts no config keys, while [Dokploy](dokploy.md#target-settings) and [Nomad](nomad.md#target-settings) list their settings in their guides. Zerops's API URL is operator-only, set with `KARAKORAM_ZEROPS_API_URL` for all namespaces, including legacy records; namespace callers cannot override it. Credentials belong in the write-only token input, never config. Unknown provider kinds/config keys are rejected with **400**.
 
-Cluster create, replace and patch requests check the namespace backend's advertised capabilities after engine defaults and validation. Specs requiring unavailable features (such as public TCP exposure or dedicated CPU) return **400 `invalid_request`** before any cluster change is saved; capability admission uses static backend metadata, not a platform API request.
+Cluster create, replace and patch requests check the namespace provider's advertised capabilities after engine defaults and validation. Specs requiring unavailable features (such as public TCP exposure or dedicated CPU) return **400 `invalid_request`** before any cluster change is saved; capability admission uses static provider metadata, not a platform API request.
 
 ## Add, validate and rotate
 
-The example below registers an additional target on the **Zerops backend**. [Dokploy](dokploy.md#managing-dokploy-from-another-control-plane) and [Nomad](nomad.md#target-settings) require their own target settings and credentials; see their guides before registration.
+The example below registers an additional target on the **Zerops provider**. [Dokploy](dokploy.md#managing-dokploy-from-another-control-plane) and [Nomad](nomad.md#target-settings) require their own target settings and credentials; see their guides before registration.
 
 1. Create a token for the additional project using the [required Zerops token scope](security.md). Allow capacity for one relay runtime and an available hostname, normally `karakoramrelay`.
 2. Ensure `KARAKORAM_PUBLIC_URL` is an HTTPS origin reachable from that project. Proxies must forward WebSocket Upgrade at root `/relay/v1/connect`, without browser-login interception; admission uses inner mTLS.
@@ -57,11 +57,11 @@ karactl namespaces rotate-token dev --token-file replacement-token.txt --yes
 
 Tokens are write-only. Never put them in argument values, committed files or shell traces. Registration validates synchronously and returns **201**; deployment follows asynchronously. Missing required fields/invalid names return **400**; existing/reserved names **409**; invalid credentials/project scope, duplicate projects or occupied relay hostnames **422**.
 
-Validation checks project identity/service-list access, not every mutation grant: insufficient read-capable tokens can pass and fail deployment. For Zerops, wait for `token.valid: true`, namespace/relay `Ready` and `relay.connected: true`. A backend that does not require a relay reports `relay.phase: NotRequired` and uses direct management connectivity.
+Validation checks project identity/service-list access, not every mutation grant: insufficient read-capable tokens can pass and fail deployment. For Zerops, wait for `token.valid: true`, namespace/relay `Ready` and `relay.connected: true`. A provider that does not require a relay reports `relay.phase: NotRequired` and uses direct management connectivity.
 
-Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. A manual validation request returns a stored-token read error to the caller without changing token health. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials; rejected or unsupported backend requests return **400**.
+Re-validation reports invalid stored credentials through `token.valid: false`/`lastError`, not necessarily an HTTP error. A manual validation request returns a stored-token read error to the caller without changing token health. Checks run about every five minutes. Explicit **401/403** or authentication errors invalidate tokens; **429/5xx**, timeouts and connection failures retain last-known validity with `Zerops API temporarily unavailable: <safe detail>; retrying`. First validation must succeed before validity is known. Transient create/rotation failures return **500 `internal_error`**, not 422, and do not save submitted credentials; rejected or unsupported provider requests return **400**.
 
-Rotation validates the **same backend target**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
+Rotation validates the **same provider target**, seals the replacement and updates live infrastructure access without restarting the relay/session. Revoke the old token only after success. `default` API rotation returns **409**: update its service secret and restart instead.
 
 ## Relay health
 
@@ -96,7 +96,7 @@ The relay's destination policy authorizes exact logical member/port pairs, not
 arbitrary IPs or dotted hostnames. [PostgreSQL](https://www.postgresql.org/) proxy readiness and retirement
 add an instance selector while retaining the logical member's TLS identity.
 The hub checks each selector against fresh live-container inventory from that
-namespace's own backend and member before sending it over authenticated mTLS.
+namespace's own provider and member before sending it over authenticated mTLS.
 Only the agent port (9443) supports instance selection. The relay still rejects
 loopback, link-local, unspecified and multicast destinations, including DNS
 answers; inventory failure or an absent/stopped/unowned instance fails closed.
@@ -108,7 +108,7 @@ Every running proxy must acknowledge the applied drain version separately.
 | `token.source`, `valid` | `env` for default or `stored`; last validation result |
 | `token.lastValidatedAt`, `lastError`, `rotatedAt` | Validation/rotation timestamps and diagnostic; no token/fingerprint |
 | `relay.hostname`, `serviceId` | Private service identity |
-| `relay.phase` | `NotRequired` for default or a non-relay backend; otherwise `Pending`, `Deploying`, `Ready`, `Error` |
+| `relay.phase` | `NotRequired` for default or a non-relay provider; otherwise `Pending`, `Deploying`, `Ready`, `Error` |
 | `relay.connected`, `connectedSince`, `lastSeenAt` | Authenticated session/activity |
 | `relay.version`, `desiredVersion` | Reported/desired executable; digest mismatch triggers redeployment |
 | `relay.certNotAfter` | Certificate expiry; renewal starts within thirty days |
@@ -129,15 +129,15 @@ karactl -n prod orphaned-volumes list
 
 Invalid credentials/unavailable routing degrade that namespace's management; other namespaces continue reconciling. Existing engine processes may continue, but observations, new configuration pulls and backup control/scheduling can fail or pause. Cached configuration can preserve startup; uncached bootstrap requires connectivity. Do not clear maintenance holds or repeat restores solely because management disconnected.
 
-Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and the backend's deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
+Relays reconnect automatically with backoff/jitter capped at thirty seconds. Inspect `RelayConnected`, `RelayDisconnected` and `RelayTargetRefused` events and the provider's deployment/runtime logs without exporting secrets. Certificate renewal replaces env secrets and restarts the relay; upgrades redeploy on executable-digest mismatch. Check connection and desired/reported versions after [upgrading](upgrade.md).
 
 Observed owned relays that are stopped or failed are restarted even when their
 deployed executable digest is current; a runtime awaiting its executable is
 redeployed. Recovery has a persisted one-minute cooldown and does not restart a
-connected healthy relay. An accepted backend operation remains a safety fence:
+connected healthy relay. An accepted provider operation remains a safety fence:
 Karakoram never treats an elapsed timeout as permission for a duplicate mutation.
-`lastError` identifies a pending operation and, after 15 minutes, asks for backend
-inspection or cancellation. Let the backend expose its terminal outcome; never
+`lastError` identifies a pending operation and, after 15 minutes, asks for provider
+inspection or cancellation. Let the provider expose its terminal outcome; never
 erase the control-plane operation checkpoint to unblock deletion or deployment.
 Cancelled namespace mutation requests stop waiting for an occupied lifecycle
 lock without cancelling or duplicating the operation that already owns it.

@@ -126,7 +126,7 @@ fresh native evidence; instance deadlines no longer accumulate serially.
 Data-member and proxy-instance HTTP observations start together; only evaluation
 of proxy routes waits for the current primary identified by that same sweep.
 
-Proxy health requires an `ONLINE` writer in runtime hostgroup 10 once backends
+Proxy health requires an `ONLINE` writer in runtime hostgroup 10 once providers
 are published. A listening proxy with only `SHUNNED` writers or online readers
 is unhealthy, and the cluster is `Degraded` with `ProxyWriter=False` even if PostgreSQL itself is healthy.
 
@@ -150,17 +150,17 @@ configuration-only proxy drain acknowledgements do not wait for rollout health.
 When a listening proxy has no `ONLINE` writer, the agent also makes a bounded,
 authenticated read-only request through that proxy's writer route
 (`SHOW transaction_read_only`). This exercises native demand-driven recovery
-of automatically shunned backends on an otherwise idle proxy. TLS-enabled
+of automatically shunned providers on an otherwise idle proxy. TLS-enabled
 frontends still require the cluster CA and proxy hostname to verify. A failed
-request, a read-only backend, or a runtime read-back without an `ONLINE` writer
+request, a read-only provider, or a runtime read-back without an `ONLINE` writer
 remains unhealthy; the probe never forces a server online or promotes a replica.
 
-Each runtime backend optionally reports `diagnostics` in the private PostgreSQL
+Each runtime provider optionally reports `diagnostics` in the private PostgreSQL
 agent status: the last failed native connect, ping and read-only check as an
 allowlisted error class and Unix-microsecond timestamp, plus summed connection
 pool `ConnERR` and whether that counter was observed. Native messages, SQL,
 credentials and connection strings are never returned. Collection is read-only,
-limited to 32 backend identities and a shared 250 ms deadline; missing native
+limited to 32 provider identities and a shared 250 ms deadline; missing native
 tables do not change readiness. `ProxyWriter=False` includes a bounded summary
 from failing directly observed proxy instances. Older agents omit diagnostics.
 The timestamps may precede the outage: compare them and counter deltas across
@@ -168,14 +168,14 @@ samples rather than treating an old monitor error as the current root cause.
 
 **Proxy reconnect capacity.**
 
-Each proxy's per-server backend pool is derived from the smallest old/desired
+Each proxy's per-server provider pool is derived from the smallest old/desired
 PostgreSQL `max_connections` during a rolling change, not from the frontend
 connection limit. With `N` proxy instances, the limit is
 `floor((max_connections - 8) / N) - 3`: three PostgreSQL superuser-reserved slots,
 five management/backup slots and three monitor connections per proxy are kept
 outside application pools. `N` reserves the maximum simultaneously serving set:
 Nomad and [Dokploy](https://dokploy.com/) reserve `max(old replicas, desired replicas) + 1`, including
-ordinary resource/configuration rollouts; an unknown backend surge bound
+ordinary resource/configuration rollouts; an unknown provider surge bound
 (including Zerops) reserves both complete old and desired sets. Thus a default
 100-connection PostgreSQL server permits 43 application connections per proxy
 during a singleton replacement, not 89. An insufficient budget is rejected
@@ -188,9 +188,9 @@ configuration before infrastructure may introduce overlap. Writer/reader hostgro
 (`monitor_writer_is_also_reader=false`) so one writer does not receive two pools.
 
 Reconnects use two retries with 100 ms spacing, a one-second per-attempt timeout
-and a three-second total acquisition timeout. New backend connections are
+and a three-second total acquisition timeout. New provider connections are
 throttled to 20 per second per hostgroup. Three connection failures can shun a
-backend, but automatic recovery eligibility is one second (the pinned version's
+provider, but automatic recovery eligibility is one second (the pinned version's
 integer-time comparison can add a second). This bounds retry amplification
 without disabling native failure detection or replaying failed transactions.
 The idle pool retains at most ten percent of its bounded capacity; connection
@@ -201,8 +201,8 @@ checks every 500 ms, with 500 ms timeouts and two consecutive ping/role-timeout
 failures before fencing.
 
 Independently of client traffic and CP readiness polling, the proxy agent probes
-each backend's `pg_postmaster_start_time()` with monitor credentials and the
-configured backend TLS trust, on a one-second maintenance cadence. A changed
+each provider's `pg_postmaster_start_time()` with monitor credentials and the
+configured provider TLS trust, on a one-second maintenance cadence. A changed
 previously observed epoch fences that server `OFFLINE_HARD`, loads runtime,
 waits up to three seconds for both free and used pools to empty, then restores
 its original `ONLINE` status and loads runtime again. Restoration is attempted
@@ -218,15 +218,15 @@ their configured status is restored without another runtime load. Failed resets
 retain durable ownership and are repaired before any later load or epoch probe,
 including after an agent restart.
 First observations and unreachable
-backends do not trigger a flush, and native `SHUNNED`/offline states are left to
+providers do not trigger a flush, and native `SHUNNED`/offline states are left to
 native recovery rather than forced online. Unchanged postmaster epochs during
 Patroni failover do not trigger flushing. The flush serializes with configuration
 and lifecycle changes and emits one structured event with server, old/new epoch,
 duration, connection count and error.
 
 This prevents connections from a dead postmaster epoch persisting indefinitely
-in an apparently healthy idle pool after a fast restart. A single-backend proxy
-briefly has no backend during the flush; clients must retain the documented
+in an apparently healthy idle pool after a fast restart. A single-provider proxy
+briefly has no provider during the flush; clients must retain the documented
 connection/transaction retry contract, including requests racing restart detection.
 
 These settings are reconciled in admin memory, runtime and disk, not merely
@@ -348,11 +348,11 @@ During single-to-HA conversion, only the original member may initialize the
 [Patroni](https://patroni.readthedocs.io/) scope. Empty new replicas wait for that member instead of racing to
 bootstrap an unrelated database while its runtime is preparing.
 
-HA requires at least one proxy; only single permits zero. Multiple stateless proxy replicas require backend horizontal scaling. Resource changes use replica-first ordering. Persistent disks only grow, and growth needs backend `diskGrowth`; requested size is not a quota on backends without quota enforcement.
+HA requires at least one proxy; only single permits zero. Multiple stateless proxy replicas require provider horizontal scaling. Resource changes use replica-first ordering. Persistent disks only grow, and growth needs provider `diskGrowth`; requested size is not a quota on providers without quota enforcement.
 
 If resource bounds prevent a runtime from starting, correct the bounds through
 the cluster spec. Reconciliation supersedes a failed obsolete resize and applies
-the latest requested resources to a runtime the backend reports as failed,
+the latest requested resources to a runtime the provider reports as failed,
 without requiring its unavailable agent to become healthy first. A disconnected
 but still-running member does not bypass normal role and switchover safety.
 
@@ -360,28 +360,28 @@ An initial placement-blocked runtime, including [ProxySQL](https://proxysql.com/
 bounds before its original deployment completes. Volume-member admission requires
 proof of never acquiring an allocation; stateless ProxySQL can also use an exact
 retained blocked-evaluation chain after the original evaluation is collected,
-because its correction registers a canary-first update without a backend-issued
+because its correction registers a canary-first update without a provider-issued
 predecessor stop; [Nomad](https://developer.hashicorp.com/nomad) replaces remaining predecessors destructively after
 promotion.
 Reconciliation persists the replacement deployment receipt
 and keeps Ready false until placement, configuration and application health
 converge. A spec correction does not re-run a completed initial restore.
-The admission and exact receipt are checked by the backend. Previously initialized
+The admission and exact receipt are checked by the provider. Previously initialized
 members retain normal role/switchover ordering. For a never-ready volume member,
-the backend stops the old job to fence placement, then rechecks allocation
+the provider stops the old job to fence placement, then rechecks allocation
 history: if placement raced admission, replacement is refused with
 `UnplacedResizeDeferred` rather than blindly restarting the new allocation.
 That narrow initial-bootstrap window can stop a newly placed task; it is not an
 atomic scheduler check-and-stop. The stale receipt is retired and the failure
 blocks ordinary redeployment until explicit `clusters retry-deployments` re-arm.
-Provider/backend applied bounds are restored together; re-arm synchronizes current
+Engine driver/provider applied bounds are restored together; re-arm synchronizes current
 desired capacity before deploying. Inspect its diagnostic before re-arming.
 
 Safe owned-volume growth runs before database health and maintenance gates.
 After disk exhaustion stops [PostgreSQL](https://www.postgresql.org/), increase the desired disk bounds on a
-backend with `diskGrowth`; reconciliation does not require working SQL to
+provider with `diskGrowth`; reconciliation does not require working SQL to
 request that growth. The same capacity path remains available during a
-shared-memory rollout, major upgrade or restore recovery. Backend-confirmed
+shared-memory rollout, major upgrade or restore recovery. Provider-confirmed
 failed runtimes can receive corrected resource bounds without clearing those
 journals or their stop holds. This does not permit shrinking volumes, resizing
 an unreachable running writer outside switchover rules, or bypassing a
@@ -430,14 +430,14 @@ waits for a streaming replica; a failed PostgreSQL action alone does not select
 the unreachable-runtime fencing path. A responding agent preserves the original
 reload/action/status error for retry diagnostics without advancing its retirement
 checkpoint. Application errors from the generic status probe are reported
-together with that original cause. Backend fencing is also permitted when fresh
+together with that original cause. Provider fencing is also permitted when fresh
 generic status explicitly reports a stopped or failed Patroni supervisor with no
-owned PID; it still requires the surviving primary and terminal backend-stop
+owned PID; it still requires the surviving primary and terminal provider-stop
 evidence below. A transient demotion or failed engine action alone is insufficient.
 
 If the old agent is unreachable, retirement instead requires a surviving
 member's `/cluster` view to identify a different primary with DCS quorum access.
-The backend then durably stops the old runtime, suppressing automatic
+The provider then durably stops the old runtime, suppressing automatic
 rescheduling, and the control plane waits for terminal stop completion before
 removing etcd membership or deleting infrastructure. A disconnected runtime
 whose stop cannot yet be confirmed remains pending; loss of agent connectivity
@@ -452,17 +452,17 @@ Membership changes use a responding joined voter, exclude the replacement's
 predecessor and learners, and try another voter if agent dialing or the membership
 query fails. An unreachable predecessor does not prevent a replacement from joining.
 
-A data backend is published to ProxySQL only after it has joined successfully
+A data provider is published to ProxySQL only after it has joined successfully
 and its runtime has an operational `ACTIVE` or `RUNNING` status. Planned,
 placement-blocked and deploying identities
 are not monitored by the proxy. Each successful data-member join publishes a new
 proxy configuration version. During initial bootstrap or single-to-HA conversion,
-the proxy may temporarily run with no published backend until a data member joins.
+the proxy may temporarily run with no published provider until a data member joins.
 
-ProxySQL places newly discovered backends in its reader hostgroup until the
+ProxySQL places newly discovered providers in its reader hostgroup until the
 native role monitor identifies the writer. Server-list reloads preserve existing
 runtime hostgroup decisions rather than temporarily routing writes to replicas.
-Before a data runtime is stopped or retired, its backend is removed from the
+Before a data runtime is stopped or retired, its provider is removed from the
 proxy configuration at a durable configuration version. The control plane
 enumerates the logical proxy service's live instances and waits for **every**
 `ACTIVE`/`RUNNING` instance to report that applied version. A successful reload
@@ -476,7 +476,7 @@ and [Dokploy](https://dokploy.com/)'s individual Swarm task DNS names. They keep
 pinned CA, TLS hostname and authentication, including namespace relay transport.
 For relayed namespaces the tunnel keeps the policy-allowed logical member and
 agent port, with a separate instance selector. Before opening each instance
-tunnel the hub verifies the selected address against that namespace backend's
+tunnel the hub verifies the selected address against that namespace provider's
 fresh live-container inventory for that member. The relay permits IP/task-DNS
 destinations only on this authenticated instance path, still rejects prohibited
 addresses, and never substitutes a load-balanced logical acknowledgement.
@@ -501,7 +501,7 @@ Each ProxySQL Apply compares desired stable settings with admin memory, runtime
 and disk independently. Runtime-only loss and a failed SAVE are retried even when
 memory already matches the intent. Native monitor hostgroup decisions are
 preserved, and unknown servers enter the reader group until classified. Readiness
-requires an online writer when backends are published and all configured users
+requires an online writer when providers are published and all configured users
 to be active in runtime; a frontend TCP handshake alone is not sufficient.
 
 After upgrading an existing proxy, an already cached address can retain its old
@@ -509,18 +509,18 @@ expiry (roughly the previous 5-minute TTL, plus jitter and resolver scheduling)
 until the next resolution. Allow that
 transition before testing address changes, or restart the proxy during a planned
 connection interruption. Once the new policy is active, DNS propagation,
-resolution time, backend readiness, role monitoring and connection retry/shunning
+resolution time, provider readiness, role monitoring and connection retry/shunning
 can still add recovery delay; the 5-second TTL is not an end-to-end outage bound.
 
-On the current Nomad backend, proxy replicas share one runtime job. Port/exposure,
+On the current Nomad provider, proxy replicas share one runtime job. Port/exposure,
 resource and replica-count mutations use the durable stop-before-start operation:
-the backend stops **all** allocations, waits for them to become terminal, then
+the provider stops **all** allocations, waits for them to become terminal, then
 registers the replacement job. The job's `MaxParallel=1` update setting does not
 make this path rolling. Two proxy replicas therefore do not guarantee private
 endpoint continuity during these changes. A native lab exposure enable/disable
 with two replicas measured maximum acknowledged-write gaps of 27.521/24.784
 seconds (90/79 failed reconnect attempts); these are observations, not bounds.
-Schedule an interruption for these mutations until the backend provides
+Schedule an interruption for these mutations until the provider provides
 serving-gated serial replacement. Normal availability also requires clients to
 reconnect to another healthy proxy rather than pinning one allocation address.
 
@@ -536,14 +536,14 @@ Repeated `ALTER EXTENSION ... UPDATE` calls are idempotent.
 
 [PostgreSQL](https://www.postgresql.org/)-version-only changes, minor or major, do not redeploy [ProxySQL](https://proxysql.com/).
 Its pinned package and advertised protocol version are independent of the
-PostgreSQL package release; the proxy does not emulate the backend's version.
+PostgreSQL package release; the proxy does not emulate the provider's version.
 Proxy member version metadata converges through the normal configuration
-hot-reload path, which continues to reconcile backends, users and TLS settings.
+hot-reload path, which continues to reconcile providers, users and TLS settings.
 Major upgrades still interrupt database availability during their offline window,
 even though the proxy allocation remains in place.
 
 Use at least two proxy replicas when zero downtime is required for proxy resource,
-listener/port, exposure or package changes, together with a backend that rolls
+listener/port, exposure or package changes, together with a provider that rolls
 allocations one at a time and waits for the replacement to serve before proceeding.
 A sole proxy necessarily interrupts clients when it must restart or be replaced;
 existing sessions on a replaced proxy can also be interrupted with multiple
@@ -596,7 +596,7 @@ action. Do not delete the leader lock or force a second writer to bypass it.
 
 Retained-volume suspension removes runtimes, including the stateless proxy, while preserving [PostgreSQL](https://www.postgresql.org/) and etcd data/identity. Resume recreates those identities from retained volumes. `keepBackups` is independent of volume retention. See [delete/suspend](../clusters.md#delete-or-suspend), [recovery](backups.md) and [orphan cleanup](../operations.md#orphaned-platform-volumes). Do not erase state or manually reset DCS to bypass a pending maintenance/deletion operation.
 
-Data members pass readiness and publish their backend identities before proxy
+Data members pass readiness and publish their provider identities before proxy
 writer readiness is required, regardless of their original allocation order.
 This also applies when resume elects a different primary. A running proxy process
 alone does not mean it can serve writes: the actual current writer route and
@@ -608,12 +608,12 @@ the recreated member passes readiness and rejoins; a failed or unready reattach
 remains retained and never authorizes empty-volume creation.
 
 New provisioning records the exact import batch before submitting it. If setup
-is interrupted after the backend reserves a service, reconciliation replays that
+is interrupted after the provider reserves a service, reconciliation replays that
 original batch, including completed siblings, with its original resources and
 replica count before applying newer desired changes. A runtime-only import never
 adds its existing volume to that batch. A service reservation is not proof of
 completed setup and cannot advance to deployment. Preserve both control-plane
-and backend import state; an incomplete reservation without its original import
+and provider import state; an incomplete reservation without its original import
 intent requires recovery of that intent, not adoption or empty-volume creation.
 Deletion and retained-volume suspension also complete an incomplete reserved
 batch before removing services, without deploying the imported member. An accepted

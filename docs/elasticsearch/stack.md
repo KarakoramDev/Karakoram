@@ -10,14 +10,14 @@ Use returned endpoints, not guessed platform addresses. The endpoint names are `
 
 ## Kibana
 
-Open the returned [Kibana](https://www.elastic.co/kibana) URL. Initial administration can use `elastic`; use a regular native user with appropriate roles for routine work. Karakoram's UI login is not a Kibana identity. The automatically installed service-account token authenticates Kibana's backend, not browser users.
+Open the returned [Kibana](https://www.elastic.co/kibana) URL. Initial administration can use `elastic`; use a regular native user with appropriate roles for routine work. Karakoram's UI login is not a Kibana identity. The automatically installed service-account token authenticates Kibana's provider, not browser users.
 
 Set custom settings under `spec.engineOptions.kibana.settings`. If using `server.basePath`, the reverse proxy must strip the prefix. `server.rewriteBasePath` is managed as `false`: omit it from new requests; previously stored values are ignored. Shared, cluster-lifetime session/saved-object/reporting encryption keys support multiple replicas. [Public routing](access-and-security.md) is a separate opt-in.
 
 A route can exist before application initialization finishes. Wait for [component readiness](operations.md); a suspended component must be resumed rather than treated as starting.
 
 Kibana, [Logstash](https://www.elastic.co/logstash) and APM readiness is checked on every live runtime instance using
-backend-provided individual addresses, not one service-DNS sample. Each instance
+provider-provided individual addresses, not one service-DNS sample. Each instance
 must acknowledge the current configuration and pass its native application probe,
 and the live count must meet the configured replica count. Extra live instances
 during a rollout must pass as well; stopped/disappeared instances are excluded

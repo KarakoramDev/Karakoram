@@ -132,7 +132,7 @@ retry/compensation behavior; do not delete restore holds or receipts manually.
 
 ## Schedules and count retention
 
-Configure **Backups** policy or patch `spec.backup`: `storage` selects the primary destination; `schedules` entries contain `name`, `cron`, provider-supported `type`, optional override `storage`, `retainCount` (at least 1), and `enabled`.
+Configure **Backups** policy or patch `spec.backup`: `storage` selects the primary destination; `schedules` entries contain `name`, `cron`, engine driver-supported `type`, optional override `storage`, `retainCount` (at least 1), and `enabled`.
 
 ```sh
 karactl -n <namespace> clusters patch <cluster> -f backup-settings.yaml --wait
@@ -169,7 +169,7 @@ restore completion. A terminal restore operation leaves `Ready=False` with reaso
 before publishing `phase=Ready` and `Ready=True`. A successful operation alone is
 not an application-availability guarantee.
 
-1. Select a successful compatible backup, or a provider-supported observed recovery time. Provider must match; topology/version/identity checks are engine-specific. Providerless legacy records are not engine-neutral artifacts; see the engine table.
+1. Select a successful compatible backup, or a engine driver-supported observed recovery time. Engine driver must match; topology/version/identity checks are engine-specific. Providerless legacy records are not engine-neutral artifacts; see the engine table.
 2. Restore into an existing target, or clone into an independent new cluster without stopping the source:
 
    ```sh
@@ -270,7 +270,7 @@ New-cluster requests use `spec.dataSource.namespace`; in-place REST requests use
 
 ### PostgreSQL and Supabase recovery
 
-See the focused [PostgreSQL recovery guide](postgres/backups.md) and [Supabase recovery boundaries](supabase/operations.md#recovery-boundaries). The shared rules below apply to both providers.
+See the focused [PostgreSQL recovery guide](postgres/backups.md) and [Supabase recovery boundaries](supabase/operations.md#recovery-boundaries). The shared rules below apply to both engine drivers.
 
 Use an explicit `--type full`, `--type diff` or `--type incr`; the generic CLI
 default `logical` belongs to MongoDB. A differential requires an existing full;
@@ -324,7 +324,7 @@ same-cluster backups taken before a system-password rotation; reveal connection
 credentials again after recovery rather than reusing an earlier password.
 
 A clone's `dataSource` may name a backup or a PITR time in the same or another
-namespace. Source and target providers must match **exactly**:
+namespace. Source and target engine drivers must match **exactly**:
 `postgres` cannot consume a `supabase` backup or vice versa. PostgreSQL major
 versions must match; source and destination topologies may differ. Bootstrap
 reads the source repository with archiving disabled, then switches to the
@@ -348,20 +348,20 @@ by its separate Storage service.
 
 ## Delete or preserve recovery objects
 
-Backup deletion is destructive; live-cluster cleanup is asynchronous and provider-specific. Active matching work can block deletion until cancelled/terminal. Use `backups delete <cluster> <backup> --yes` and follow its outcome. See engine guides for shared-object and continuity rules, especially [MongoDB backup-data cleanup](mongodb/backups.md).
+Backup deletion is destructive; live-cluster cleanup is asynchronous and engine driver-specific. Active matching work can block deletion until cancelled/terminal. Use `backups delete <cluster> <backup> --yes` and follow its outcome. See engine guides for shared-object and continuity rules, especially [MongoDB backup-data cleanup](mongodb/backups.md).
 
 If a backup-deletion operation fails, expires, or is cancelled before completion, its inventory leaves `Deleting` for `Failed` with the cleanup error and its original remote identity preserved. It is not a usable restore base. Repair the reported dependency and submit deletion again; the new operation safely retries cleanup of the same target instead of leaving an unretryable `Deleting` record. Startup also repairs historical inventory stranded by terminal deletion operations.
 
-Suspended clusters still process backup-deletion operations without resuming ordinary runtime reconciliation. Object-store cleanup can therefore finish while runtimes remain absent. A provider whose native cleanup requires a running member can report that dependency failure; preserve the recorded target, resume/repair the dependency where needed, and retry deletion rather than removing inventory by hand.
+Suspended clusters still process backup-deletion operations without resuming ordinary runtime reconciliation. Object-store cleanup can therefore finish while runtimes remain absent. A engine driver whose native cleanup requires a running member can report that dependency failure; preserve the recorded target, resume/repair the dependency where needed, and retry deletion rather than removing inventory by hand.
 
-Namespace/backend failures during suspended cleanup are reported in conditions
+Namespace/provider failures during suspended cleanup are reported in conditions
 and messages without clearing `Suspended`; only an explicit resume or deletion
 changes that lifecycle intent. After source-cluster deletion, failed backups
 with a recorded remote location or [PostgreSQL](https://www.postgresql.org/) repository metadata retry through
 direct retained-object cleanup, never through an operation stranded on the
 absent cluster. Inventory is removed only after remote cleanup succeeds.
 
-[Cluster deletion](clusters.md#delete-or-suspend) intentionally preserves backups with `--keep-backups`, independently of volumes. MongoDB, [Elasticsearch](https://www.elastic.co/elasticsearch), [RabbitMQ](https://www.rabbitmq.com/) and PostgreSQL/[Supabase](https://supabase.com/) retire runtime writers and delete (or intentionally retain) volumes before control-plane artifact cleanup. Elasticsearch, RabbitMQ and PostgreSQL/Supabase retry artifact access failures within a durable two-minute cleanup window; restarts do not reset that window. If exact owned cleanup cannot finish safely, cluster removal completes with affected inventory retained and a `BackupArtifactsRetained` warning (`SnapshotsRetained` for Elasticsearch). Successful destinations are checkpointed and are not deleted again after restart. Read-only source repositories and other incarnations remain untouched. Dependency admission still returns `409` before destructive intent when another operation needs the backups. Inspect retained-artifact warnings and exact-prefix removal guidance rather than treating terminal cluster success as proof of empty storage. Retained `backups list/get/delete` use the original name/namespace and source `backups/read`/`delete`. Recovery after source deletion is provider-specific: use an explicit create file where supported, or restore into an existing target following the engine guide. `--into-new` needs a live source spec.
+[Cluster deletion](clusters.md#delete-or-suspend) intentionally preserves backups with `--keep-backups`, independently of volumes. MongoDB, [Elasticsearch](https://www.elastic.co/elasticsearch), [RabbitMQ](https://www.rabbitmq.com/) and PostgreSQL/[Supabase](https://supabase.com/) retire runtime writers and delete (or intentionally retain) volumes before control-plane artifact cleanup. Elasticsearch, RabbitMQ and PostgreSQL/Supabase retry artifact access failures within a durable two-minute cleanup window; restarts do not reset that window. If exact owned cleanup cannot finish safely, cluster removal completes with affected inventory retained and a `BackupArtifactsRetained` warning (`SnapshotsRetained` for Elasticsearch). Successful destinations are checkpointed and are not deleted again after restart. Read-only source repositories and other incarnations remain untouched. Dependency admission still returns `409` before destructive intent when another operation needs the backups. Inspect retained-artifact warnings and exact-prefix removal guidance rather than treating terminal cluster success as proof of empty storage. Retained `backups list/get/delete` use the original name/namespace and source `backups/read`/`delete`. Recovery after source deletion is engine driver-specific: use an explicit create file where supported, or restore into an existing target following the engine guide. `--into-new` needs a live source spec.
 Retained listing returns `404` after the deleted source's final backup record is removed.
 
 Preserve the state database, master key, storage configuration and credentials: [S3](https://aws.amazon.com/s3/) objects alone do not reconstruct lost control-plane state. Retained inventory recreates neither the source resource nor its volumes. Storage removal returns `409` while referenced by clusters, schedules or backup records; deleting its registration does not empty the bucket.

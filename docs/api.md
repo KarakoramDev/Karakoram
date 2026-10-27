@@ -10,7 +10,7 @@ Agents can use the embedded [MCP server](mcp.md) at `/mcp`, with the same REST e
 
 ## Authentication
 
-Scripts use a Karakoram API token, **not a backend infrastructure credential** (such as a [Zerops](https://zerops.io/) integration token):
+Scripts use a Karakoram API token, **not a provider infrastructure credential** (such as a [Zerops](https://zerops.io/) integration token):
 
 ```http
 Authorization: Bearer <karakoram-token>
@@ -79,7 +79,7 @@ Save the one-time `KARAKORAM_TOKEN` securely before closing the shell. `TOKEN_ID
 
 [OpenAPI](https://www.openapis.org/)'s `x-karakoram-rbac` declares each operation's resource/action/object. Lists, streams and metrics filter individual authorized objects; collection access does not reveal all resources. See [access control](access-control.md).
 
-`GET /clusters/{cluster}/connection` is an explicit, audited reveal requiring `cluster-credentials:read`, with `Cache-Control: no-store`. It returns **provider-defined administrative credentials** and public CA, not an application identity. Ordinary cluster/status reads are password-free. Follow engine access procedures: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). Storage keys/private PEM inputs are write-only; generated application passwords and API-token secrets are creation responses, not later GET results.
+`GET /clusters/{cluster}/connection` is an explicit, audited reveal requiring `cluster-credentials:read`, with `Cache-Control: no-store`. It returns **engine driver-defined administrative credentials** and public CA, not an application identity. Ordinary cluster/status reads are password-free. Follow engine access procedures: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). Storage keys/private PEM inputs are write-only; generated application passwords and API-token secrets are creation responses, not later GET results.
 
 [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use [native PostgreSQL access](postgres/access-and-tls.md), not `/database-users` or `/database-roles`. Supabase's separate GET `/clusters/{cluster}/supabase/credentials` requires `cluster-credentials:read` and returns API/Studio URLs and sensitive service/dashboard keys with no-store; do not confuse this with a normal cluster read.
 
@@ -123,7 +123,7 @@ password-free summaries and are idempotent reads.
 
 ## Resource families
 
-Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to provider capabilities and RBAC. Use [OpenAPI](https://www.openapis.org/) for exact paths, payloads and permissions.
+Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to engine driver capabilities and RBAC. Use [OpenAPI](https://www.openapis.org/) for exact paths, payloads and permissions.
 
 | Family | Routes or cluster suffixes | Engines |
 | --- | --- | --- |
@@ -131,7 +131,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Discovery/health | `/providers`, `/providers/{provider}`, `/backends`, `/version`; root `/healthz` | All |
 | Namespaces | `/namespaces`, `/namespaces/{namespace}`, `/token`, `/validate` suffixes | All |
 | Cluster state/connections | `/clusters`, `/clusters/{cluster}`; `/status`, `/members`, `/placement`, `/connection` | All |
-| Lifecycle | `/restart`, `/resume`, `/retry-deployments`, `/rotate-tls`, `/members/{member}/replace`, `/system-users`, `/system-users/{user}/rotate` | Provider-supported capabilities |
+| Lifecycle | `/restart`, `/resume`, `/retry-deployments`, `/rotate-tls`, `/members/{member}/replace`, `/system-users`, `/system-users/{user}/rotate` | Engine driver-supported capabilities |
 | Compatibility/balancing | `/raise-fcv`, `/balancer` | MongoDB only |
 | Database identities | `/database-users`, `/database-roles` and identity paths | MongoDB only |
 | Native access | `/rabbitmq/vhosts`, `/rabbitmq/users`, `/rabbitmq/permissions`, `/rabbitmq/topic-permissions`, `/rabbitmq/policies`, `/rabbitmq/operator-policies` | RabbitMQ only |
@@ -139,7 +139,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Native PostgreSQL access | `/postgres/roles`, `/postgres/roles/{role}`, `/postgres/roles/{role}/password`, `/postgres/databases`, `/postgres/databases/{database}`, `/postgres/grants` | PostgreSQL and Supabase |
 | PostgreSQL consumer bindings | `/postgres/bindings`, `/postgres/bindings/{binding}/rotate` | PostgreSQL source; metadata only, never credentials |
 | Native MySQL access | `/mysql/users`, `/mysql/users/{user}`, `/mysql/users/{user}/password`, `/mysql/users/{user}/password/discard-old`, `/mysql/databases`, `/mysql/databases/{database}`, `/mysql/grants` | MySQL and PXC |
-| PXC minority recovery | `/mysql/recover-quorum` | PXC only; explicit confirmation and backend fencing |
+| PXC minority recovery | `/mysql/recover-quorum` | PXC only; explicit confirmation and provider fencing |
 | Native Neo4j access | `/neo4j/users`, `/neo4j/users/{user}`, `/neo4j/users/{user}/password` | Neo4j Community only; all users have administrative privileges |
 | Native Weaviate access | `/weaviate/users`, `/weaviate/users/{user}`, `/weaviate/users/{user}/rotate-key`, `/weaviate/roles`, `/weaviate/roles/{role}` | Weaviate |
 | Supabase services | `/supabase/credentials`, `/supabase/smtp-password`, `/supabase/functions`, `/supabase/functions/{name}`, `/supabase/rotate-jwt-secret` | Supabase |
@@ -151,7 +151,7 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Continuous recovery window | `/pitr` | MongoDB, PostgreSQL, Supabase, MySQL and PXC |
 | Activity/cleanup | `/operations`, `/operations/{operation}`, `/operations/{operation}/cancel`, `/events`, `/events/stream`, `/orphaned-volumes`; cluster `/operations` | All |
 | Observability | Cluster `/metrics`, `/members/{member}/logs`; root `/metrics` | All |
-| Fleet operations | Cluster `/upgrade-agents`, `/members/{member}/move`; `/settings/agent-rollout` | Provider-supported rolling upgrades and relocation |
+| Fleet operations | Cluster `/upgrade-agents`, `/members/{member}/move`; `/settings/agent-rollout` | Engine driver-supported rolling upgrades and relocation |
 | Control-plane recovery | `/control-plane/backup-policy`, `/control-plane/backups` | Installation-wide |
 | Notifications | `/notification-channels`, `/notification-channels/{channel}`, `/notification-channels/{channel}/test` | Installation-wide |
 | Backup verification | Cluster `/backup-drills`, `/backup-drills/{drill}` | Engines with eligible successful backups |
@@ -164,9 +164,9 @@ See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade 
 Distributed PostgreSQL exposes `POST /clusters/{cluster}/actions/rebalance` with `{strategy?: string}` and returns 202 Operation (`type: rebalance`). It uses `clusters:update`, CSRF and idempotency conventions. Members expose a read-only `group` (0 coordinator); `CitusTopology` conditions report metadata drift. See [distributed PostgreSQL](postgres/distributed.md).
 [MySQL](https://www.oracle.com/mysql/) native access uses `database-users` RBAC for application users at the fixed `%` host, databases and bounded database privileges. User PATCH changes only supplied connection-limit and lock fields. Create and password rotation return generated passwords only once, with `Cache-Control: no-store` and sealed replay when an idempotency key is supplied. Rotation accepts `retainCurrent` for dual passwords; discard-old removes the retained password. Database creation defaults to `utf8mb4` / `utf8mb4_0900_ai_ci`; deletion requires `force=true` for a nonempty database. Grant listing requires at least one `user` or `database` filter. Global privileges and `GRANT OPTION` are not exposed.
 
-The topology contract accepts MySQL Group Replication `group` and [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) `cluster` alongside `single`; provider catalogs identify which topologies each engine supports. Backup type enums include `incremental` for MySQL/PXC, separately from PostgreSQL's `incr` spelling.
+The topology contract accepts MySQL Group Replication `group` and [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) `cluster` alongside `single`; engine driver catalogs identify which topologies each engine supports. Backup type enums include `incremental` for MySQL/PXC, separately from PostgreSQL's `incr` spelling.
 
-MySQL and PXC share the native access routes, not provider identity or interchangeable backups. See [access and TLS](mysql/access-and-tls.md), [GTID-based recovery](mysql/backups.md) and [explicit PXC minority recovery](mysql/operations.md#explicit-pxc-minority-recovery). Quorum recovery requires cluster update permission, returns an accepted Operation and is not arbitrary SQL or a fencing bypass.
+MySQL and PXC share the native access routes, not engine driver identity or interchangeable backups. See [access and TLS](mysql/access-and-tls.md), [GTID-based recovery](mysql/backups.md) and [explicit PXC minority recovery](mysql/operations.md#explicit-pxc-minority-recovery). Quorum recovery requires cluster update permission, returns an accepted Operation and is not arbitrary SQL or a fencing bypass.
 
 [Weaviate](https://weaviate.io/) uses [native users/roles](weaviate/access-and-tls.md), not [MongoDB](https://www.mongodb.com/) identity routes. List/get requires `database-users/read`; user create/update/delete uses the corresponding action. Assigning any role other than `viewer` or `read-only` additionally requires `clusters/update`, including roles already present on user update. Key rotation requires `database-users/update` and, if the user's current roles include any role beyond `viewer` or `read-only`, `clusters/update`. User deletion requires only `database-users/delete`, even for privileged users. Every role create/replace/delete requires both `database-users/update` and `clusters/update`. System/environment identities and built-in roles remain protected. Creation/key rotation returns no-store generated API keys; GET cannot retrieve them, while matching idempotency retries replay sealed results for 24 hours. Administrative reveal separately requires `cluster-credentials:read`.
 
@@ -184,15 +184,15 @@ Object routes and creation default to **`default`**. Omitting `namespace` on cro
 
 For an explicit nonexistent namespace, authorized callers receive **404** `not_found` with `details.resource: namespace` and `details.name`. Without a permission there, collections remain empty and object requests retain their normal **403**, regardless of existence. Public/authentication routes do not resolve this parameter.
 
-**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation accepts required `name`, `projectId` (backend target ID) and write-only `token`, plus optional `description`, `backend` (default `zerops`) and `config` (non-secret string settings). `GET /backends` requires `namespaces/read` on global `*` and lists registered kinds, capabilities, relay requirements and config keys; namespace responses include `backend` and enabled `capabilities`. Registered backends are `zerops`, `dokploy`, and `nomad`; unknown config keys return **400**. [Zerops](https://zerops.io/) accepts no config keys; its API URL is operator-only (`KARAKORAM_ZEROPS_API_URL`) and applies equally to legacy and new namespaces. [Dokploy](https://dokploy.com/)'s `url` and [Nomad](https://developer.hashicorp.com/nomad)'s `address` settings are restricted to operator-approved origins ([Dokploy target settings](dokploy.md#target-settings), [Nomad target settings](nomad.md#target-settings)).
+**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation accepts required `name`, `projectId` (provider target ID) and write-only `token`, plus optional `description`, `backend` (default `zerops`) and `config` (non-secret string settings). `GET /backends` requires `namespaces/read` on global `*` and lists registered kinds, capabilities, relay requirements and config keys; namespace responses include `backend` and enabled `capabilities`. Registered providers are `zerops`, `dokploy`, and `nomad`; unknown config keys return **400**. [Zerops](https://zerops.io/) accepts no config keys; its API URL is operator-only (`KARAKORAM_ZEROPS_API_URL`) and applies equally to legacy and new namespaces. [Dokploy](https://dokploy.com/)'s `url` and [Nomad](https://developer.hashicorp.com/nomad)'s `address` settings are restricted to operator-approved origins ([Dokploy target settings](dokploy.md#target-settings), [Nomad target settings](nomad.md#target-settings)).
 
-Creation returns **201** after synchronous validation, then deploys a relay asynchronously only if the backend requires one (as Zerops does). **`DELETE /namespaces/{namespace}` returns 202 without a body or `Karakoram-Operation-Id`**: poll namespace lifecycle/health and events until removal, not `/operations`. Registration, token validation/rotation and guarded deletion belong in [namespaces](namespaces.md). Recovery source namespace fields and source-export permissions belong in [backups](backups.md).
+Creation returns **201** after synchronous validation, then deploys a relay asynchronously only if the provider requires one (as Zerops does). **`DELETE /namespaces/{namespace}` returns 202 without a body or `Karakoram-Operation-Id`**: poll namespace lifecycle/health and events until removal, not `/operations`. Registration, token validation/rotation and guarded deletion belong in [namespaces](namespaces.md). Recovery source namespace fields and source-export permissions belong in [backups](backups.md).
 
 ## Requests and asynchronous work
 
 Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero is not a request for defaults: resources and required member counts must satisfy their bounds, while optional component `replicas: 0` explicitly disables that component where the engine permits it. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. [Go](https://go.dev/) input fields use pointers: nil requests defaults, a pointer to zero does not.
 
-Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace backend's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the backend and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
+Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace provider's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the provider and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
 
 `spec.dataMcp` opts into per-cluster [data MCP](data-mcp.md#enable-and-scope-access): `enabled`, `access`, engine-specific `scope`, `tools`, `auditQueryText` and companion `resources`; observed fields live in `status.dataMcp`. The MCP transport is **outside `/api/v1`**, at `/mcp/clusters/{namespace}/{cluster}`, with restricted bearer-token authentication and its own [request, result and rate limits](data-mcp.md#confirmation-results-and-limits), including a 1 MiB request-body cap. REST session cookies and unrestricted API tokens do not authorize data MCP.
 
@@ -213,7 +213,7 @@ patches with `PUT` / `PATCH /dry-run/clusters/{cluster}`, and restores with
 `POST /dry-run/clusters/{cluster}/restores` (all relative to `/api/v1`).
 Use the corresponding mutation's body, content type and `namespace` query.
 The same authentication, cookie CSRF, RBAC (including recovery-source
-permissions), defaults, provider validation and read-only admission checks apply.
+permissions), defaults, engine driver validation and read-only admission checks apply.
 
 A successful preview returns **200 DryRunResult**: `operation` is `create`,
 `replace`, `patch` or `restore`; `cluster` contains the normalized candidate
@@ -240,14 +240,14 @@ These API groups implement fleet operations and installation resilience:
 | --- | --- | --- |
 | Agent rollout | `POST /clusters/{cluster}/upgrade-agents` | Optional `{includeCurrent}`; **202 Operation**, `clusters:update` on the cluster; **409** when agents are already current. |
 | Agent rollout settings | `GET/PUT /settings/agent-rollout` | `AgentRolloutSettings` with `automatic`, `maxConcurrentClusters` (1–5) and read-only `currentBuild`; installation `settings:read/update`. |
-| Member move | `POST /clusters/{cluster}/members/{member}/move` | **202 Operation**, `clusters:update`; placement guarantees depend on backend capabilities. |
+| Member move | `POST /clusters/{cluster}/members/{member}/move` | **202 Operation**, `clusters:update`; placement guarantees depend on provider capabilities. |
 | Control-plane backups | `GET/PUT /control-plane/backup-policy`, `GET/POST /control-plane/backups` | Installation `settings:read/update`; POST returns **202 ControlPlaneBackup**, not a cluster Operation. |
 | Notifications | `GET/POST /notification-channels`, `GET/PUT/DELETE /notification-channels/{channel}`, `POST /notification-channels/{channel}/test` | Installation `settings:read/update`; test returns **200 NotificationTestResult**. |
 | Backup drills | `GET/POST /clusters/{cluster}/backup-drills`, `GET /clusters/{cluster}/backup-drills/{drill}` | `restores:read/create` on the source cluster; POST accepts optional `{backup}` and returns **202 BackupDrill**. |
 
 Lists use `items` and optional `nextCursor`. New mutations declare CSRF and optional `Idempotency-Key` headers. Notification destination URLs, signing secrets and SMTP passwords are **write-only**; responses expose only configured flags and secret-free status.
 
-Cluster desired state adds `spec.maintenance{timeZone, windows[{schedule, duration}]}` and `spec.backup.drill{enabled, schedule, backupSchedule, timeout}`. Agent build identity is exposed alongside existing member agent connectivity as `agent.version`, `agent.commit` and `agent.build`; `status.agents` summarizes outdated/unknown members. `status.maintenance` reports the computed open window. `managedBy` is server-owned. Placement exposes backend-neutral `source` and `guaranteedAntiAffinity`.
+Cluster desired state adds `spec.maintenance{timeZone, windows[{schedule, duration}]}` and `spec.backup.drill{enabled, schedule, backupSchedule, timeout}`. Agent build identity is exposed alongside existing member agent connectivity as `agent.version`, `agent.commit` and `agent.build`; `status.agents` summarizes outdated/unknown members. `status.maintenance` reports the computed open window. `managedBy` is server-owned. Placement exposes provider-neutral `source` and `guaranteedAntiAffinity`.
 
 The boolean query `ignoreMaintenanceWindow` is declared on cluster PUT/PATCH, restart, TLS rotation, member replacement/move, agent upgrade and FCV raise. It is an explicit per-request override, not a persisted desired-state policy.
 
@@ -305,7 +305,7 @@ The stream sends an immediately flushed connected comment and **15-second heartb
 
 Errors are `{code, message, details?}`. Branch on code/field/reason, not English messages. An HTTP-successful poll can describe a failed Operation.
 
-Cluster create, PUT and PATCH return `400 invalid_request` when fresh backend information positively establishes that public `spec.exposure.ipType` is unavailable. [Zerops](https://zerops.io/) checks current project IPv4/IPv6 addresses, not cached namespace identity. Select a provisioned family, provision the requested public address, or disable public exposure. A failed lookup or backend without authoritative family information does not reject the request: reconciliation reports `ExposureSupported=Unknown/PublicIPSupportUnknown` while attempting routing normally. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) accept both family selections for native published ports; configured public addresses advertise endpoints, not an authoritative inventory of host ingress families.
+Cluster create, PUT and PATCH return `400 invalid_request` when fresh provider information positively establishes that public `spec.exposure.ipType` is unavailable. [Zerops](https://zerops.io/) checks current project IPv4/IPv6 addresses, not cached namespace identity. Select a provisioned family, provision the requested public address, or disable public exposure. A failed lookup or provider without authoritative family information does not reject the request: reconciliation reports `ExposureSupported=Unknown/PublicIPSupportUnknown` while attempting routing normally. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) accept both family selections for native published ports; configured public addresses advertise endpoints, not an authoritative inventory of host ingress families.
 
 Updates that preserve public/private mode, IP family and allowlist keep unchanged legacy exposure; an unrelated update is not rejected solely because that existing exposure is unavailable. New exposure choices or routing changes still undergo the availability check.
 

@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without [Kubernetes](https://kubernetes.io/) or a hosted coordinator. A [Go](https://go.dev/) control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. [Zerops](https://zerops.io/) is the reference backend. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without [Kubernetes](https://kubernetes.io/) or a hosted coordinator. A [Go](https://go.dev/) control plane provides a REST API, `karactl` CLI and web UI; providers supply infrastructure, while you operate the installation, credentials, data and recovery procedures. [Zerops](https://zerops.io/) is the reference provider. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available; see [Providers](docs/providers.md) for their status.
 
 ## Engines
 
 Versions below are catalog defaults; each engine section lists supported versions and upgrade paths.
 
-Release status and backend-specific availability are centralized in [engine availability](docs/backends.md#engine-availability).
+Release status and provider-specific availability are centralized in [engine availability](docs/providers.md#engine-availability).
 
 | Engine | Distribution/version | Topologies | Backups | Section |
 | --- | --- | --- | --- | --- |
@@ -22,20 +22,20 @@ Release status and backend-specific availability are centralized in [engine avai
 | OpenBao | OpenBao 2.7.1 | 1/3/5 members; integrated Raft or bound PostgreSQL storage | Raft snapshots to S3; PostgreSQL storage uses source recovery; no PITR for Raft | [OpenBao](docs/openbao/README.md) |
 | Temporal | Temporal 1.32.1 (also 1.31.4); ui-server 2.56.0 | Combined server; split stateless roles on bound PostgreSQL; Dokploy/Nomad only, not Zerops | Source PostgreSQL backup plus cluster-state manifest; requires binding service | [Temporal](docs/temporal/README.md) |
 | MySQL | Percona Server for MySQL 8.4.11-11 default; majors 8.4/8.0 | Single; Group Replication single-primary (3/5); ProxySQL | XtraBackup full/incremental and GTID-based PITR | [MySQL](docs/mysql/README.md) |
-| Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` provider | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
+| Percona XtraDB Cluster | PXC 8.4.11-11.1 default; majors 8.4/8.0; separate `pxc` engine driver | Galera cluster (3/5); one ProxySQL-routed writer | Separate PXC backup provenance; full/incremental and PITR | [PXC](docs/mysql/README.md) |
 | Neo4j Community | Neo4j 2026.09.0 / 2026.10.0 (default); Temurin Java 21 | Single member only | Offline system + graph dumps; full outage; no PITR | [Neo4j](docs/neo4j/README.md) |
 
-## Backends
+## Providers
 
-Karakoram is multi-platform; a namespace selects the infrastructure backend that provisions its members.
+Karakoram is multi-platform; a namespace selects the infrastructure provider that provisions its members.
 
-| Backend | Role / runtime | Infrastructure and guide |
+| Provider | Role / runtime | Infrastructure and guide |
 | --- | --- | --- |
-| Zerops | Reference backend | Managed Ubuntu runtimes, Local Storage and public routing in existing projects; [guide](docs/zerops.md). |
+| Zerops | Reference provider | Managed Ubuntu runtimes, Local Storage and public routing in existing projects; [guide](docs/zerops.md). |
 | Dokploy | Docker Swarm | Applications and node-local volumes on your Dokploy-managed Docker Swarm; [guide](docs/dokploy.md). |
 | Nomad | Native jobs | Native jobs and dynamic host volumes on your operator-managed Nomad cluster; [guide](docs/nomad.md). |
 
-See [Backends](docs/backends.md) for capability differences and [Operating costs](docs/operating-costs.md) for infrastructure costs.
+See [Providers](docs/providers.md) for capability differences and [Operating costs](docs/operating-costs.md) for infrastructure costs.
 
 ## Across engines
 
@@ -50,7 +50,7 @@ See [Backends](docs/backends.md) for capability differences and [Operating costs
 
 ## Quick start
 
-Choose a backend in [Backends](docs/backends.md). For Zerops, use the dashboard-only [Quick start](docs/quickstart.md), or the [installation reference](docs/install.md) for local deployments, custom names and CLI setup. Dokploy and Nomad installation paths are linked there.
+Choose a provider in [Providers](docs/providers.md). For Zerops, use the dashboard-only [Quick start](docs/quickstart.md), or the [installation reference](docs/install.md) for local deployments, custom names and CLI setup. Dokploy and Nomad installation paths are linked there.
 
 ## Build from source
 
@@ -71,11 +71,11 @@ Coding agents: read [AGENTS.md](AGENTS.md) for repository boundaries and contrib
 
 Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative source/reference links resolve.
 
-- **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Backends](docs/backends.md) · [Operating costs](docs/operating-costs.md) · [Upgrade](docs/upgrade.md)
-- **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Zerops backend](docs/zerops.md) · [Dokploy backend](docs/dokploy.md) · [Nomad backend](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
+- **Getting started:** [Overview](README.md) · [Quick start](docs/quickstart.md) · [Install](docs/install.md) · [Providers](docs/providers.md) · [Operating costs](docs/operating-costs.md) · [Upgrade](docs/upgrade.md)
+- **Control plane:** [Architecture](docs/architecture.md) · [Clusters and operations](docs/clusters.md) · [Backups and storage](docs/backups.md) · [Namespaces and relays](docs/namespaces.md) · [Zerops provider](docs/zerops.md) · [Dokploy provider](docs/dokploy.md) · [Nomad provider](docs/nomad.md) · [Monitoring and events](docs/monitoring.md) · [Access control](docs/access-control.md) · [Security](docs/security.md) · [Operations and troubleshooting](docs/operations.md) · [Limitations](docs/limitations.md)
 - **Interfaces:** [Web UI](docs/web-ui.md) · [CLI](docs/cli.md) · [REST API and SDK](docs/api.md) · [MCP quick start](docs/mcp-quickstart.md) · [MCP server](docs/mcp.md) · [Cluster data MCP](docs/data-mcp.md)
 - **Operator agents:** [karakoram-operator skill](skills/karakoram-operator/SKILL.md) · [Skill installation](skills/README.md)
-- **Control-plane recovery:** [State backups and backend rebuild runbooks](docs/control-plane-backup.md)
+- **Control-plane recovery:** [State backups and provider rebuild runbooks](docs/control-plane-backup.md)
 - **Backup verification:** [Scheduled and manual restore drills](docs/backup-drills.md)
 - **Notifications:** [Webhook, Slack and email channels, signatures and delivery guarantees](docs/notifications.md)
 - **MongoDB:** [Overview](docs/mongodb/README.md) · [Replica sets](docs/mongodb/replica-sets.md) · [Sharding](docs/mongodb/sharding.md) · [Users, roles and TLS](docs/mongodb/access-and-tls.md) · [Backups and PITR](docs/mongodb/backups.md) · [Operations](docs/mongodb/operations.md)

@@ -26,9 +26,9 @@ registry's declaration order determines installation, preload and SQL ordering.
 | `postgis` | 16, 17, 18 | `postgis`, `postgis_topology`, `postgis_raster` | Exact-pinned Percona PostGIS library and scripts packages |
 | `pgvector` | 16, 17, 18 | `vector` | Exact-pinned Percona pgvector package |
 | `timescaledb` | 16, 17, 18 | `timescaledb` (Apache-only 2.31.0) | Matching smoke-qualified `timescaledb-pg<major>` locked native artifact |
-| `supabase` | 17 | Existing Supabase curated plan | Implied exclusively by the `supabase` provider; not selectable on plain PostgreSQL |
+| `supabase` | 17 | Existing Supabase curated plan | Implied exclusively by the `supabase` engine driver; not selectable on plain PostgreSQL |
 
-The running provider description is the discovery authority:
+The running engine driver description is the discovery authority:
 
 ```sh
 karactl providers get postgres -o json
@@ -82,7 +82,7 @@ Restore and clone targets must select a superset before provisioning or destruct
 recovery work: a backup containing PostGIS/vector objects also needs their runtime
 libraries. Requirements come from the backup, not the source's current selection,
 and survive source deletion. Legacy backups without this metadata require no
-profiles; existing Supabase provider compatibility remains unchanged.
+profiles; existing Supabase engine driver compatibility remains unchanged.
 
 Profiles make their extension set available to [native database creation and bindings](access-and-tls.md).
 A profile creates its extensions in `postgres`, not in `template1`; other databases
@@ -103,8 +103,8 @@ catalogue, so it also honors fixed schemas for extensions outside the curated pr
 
 ## Supabase compatibility
 
-The `supabase` provider composes the same PostgreSQL core with the registry's
-Supabase profile and its application components. It remains provider `supabase`,
+The `supabase` engine driver composes the same PostgreSQL core with the registry's
+Supabase profile and its application components. It remains engine driver `supabase`,
 wire flavour `supabase`, PostgreSQL major 17, with the same packages, runtime
 preparation commands, selected-preload order, curated SQL bytes, advisory lock and
 `_karakoram.supabase_migrations` ledger. Existing specs gain no explicit profile field.

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Supabase operations
 
-Database maintenance follows [PostgreSQL operations](../postgres/operations.md), [access/TLS](../postgres/access-and-tls.md) and [recovery](../postgres/backups.md). PostgreSQL 17 is the only admitted major. Source/target backup providers must match exactly; postgres↔supabase recovery is rejected.
+Database maintenance follows [PostgreSQL operations](../postgres/operations.md), [access/TLS](../postgres/access-and-tls.md) and [recovery](../postgres/backups.md). PostgreSQL 17 is the only admitted major. Source/target backup engine drivers must match exactly; postgres↔supabase recovery is rejected.
 
 When bootstrap inputs change, PostgreSQL writer-discovery status reads each have
 a four-second budget. A deadline fails convergence closed with the member name
@@ -44,7 +44,7 @@ until the database and remaining components are Ready. Re-enabling waits for cor
 Ready; it cannot deploy a replacement or expose a new public route during a core
 readiness failure.
 
-Database member-agent upgrades require a provider-driven database member
+Database member-agent upgrades require a engine driver-driven database member
 deployment using the PostgreSQL maintenance/recovery procedures; do not disable
 database members or delete their volumes to emulate a component roll.
 
@@ -61,7 +61,7 @@ Expect a brief interruption for single-instance components.
 Already-current agents are skipped unless `--include-current` is supplied.
 Completed members are journaled across control-plane restarts; cancellation
 waits for an in-flight member before stopping. A changed control-plane build
-cannot start another deployment under the previous frozen target. Normal backend
+cannot start another deployment under the previous frozen target. Normal provider
 deploy admission caps and retry budgets apply.
 
 The PostgreSQL maintenance-window rules also apply here. Additionally, component
@@ -95,7 +95,7 @@ A smaller positive count supersedes a still-pending larger scale without first
 waiting for the obsolete count. Terminal scale/resize failures retain their exact
 requested count/resource target across restarts and report
 `ComponentRuntimeFailed`; unchanged targets are not repeatedly submitted.
-When the backend can prove the complete desired runtime already exists as healthy
+When the provider can prove the complete desired runtime already exists as healthy
 owned allocations, reconciliation may adopt or start its placement-free recovery
 receipt. Otherwise convergence keeps returning the terminal error so tracking
 operations exhaust their existing bounded failure budget truthfully. A genuinely
@@ -127,7 +127,7 @@ wait neither submits a new operation nor treats unrelated pending work as recove
 Readiness requires the desired number of live instances for **every enabled
 component** and an application/configuration observation from each live instance,
 including extra instances during a rollout. The control plane pins probes to
-backend-provided instance addresses while retaining the logical member's TLS and
+provider-provided instance addresses while retaining the logical member's TLS and
 bearer identity. A healthy service-DNS response cannot mask an unhealthy sibling.
 Missing instances, inaccessible inventory, unusable instance addresses, stale
 configuration and native health failures keep `ComponentsReady=False`; the
@@ -227,7 +227,7 @@ in status; see [cluster restart and member software](#cluster-restart-and-member
 
 Storage readiness combines the native `/status` endpoint with an authenticated,
 non-mutating [S3](https://aws.amazon.com/s3/) bucket `HEAD` from the Storage member, using its already-projected
-backend registration and optional bucket override. The probe has the shared
+provider registration and optional bucket override. The probe has the shared
 four-second observation timeout; concurrent status/metrics callers share a sample
 for at most the five-second readiness interval. Both successful and failed samples
 expire, and a changed endpoint, bucket or credential invalidates the cache.
@@ -276,7 +276,7 @@ the underlying placement or runtime problem is corrected.
 A confirmed terminal component deployment failure is retained across retries and
 control-plane restarts. `Ready=False` and `ComponentsReady=False` report
 `ComponentDeploymentFailed` with phase `Degraded`, even during initial creation.
-The member message includes the immutable backend service and deployment handle,
+The member message includes the immutable provider service and deployment handle,
 the terminal platform status, and a request to inspect deployment/runtime
 preparation diagnostics. On Zerops, `version:<id>` identifies the exact app
 version; inspect its deployment process and prepare-runtime log, not merely the
@@ -311,7 +311,7 @@ conditions preserve sanitized platform diagnostics. RUNNING/unknown work remains
 fenced regardless of age or elapsed deadlines. A corrected artifact/runtime
 intent can supersede a conclusively terminal receipt under the same
 terminal-process evidence gate.
-The provider exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
+The engine driver exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
 `DeploymentRetriesExhausted` reason and operator command. An exhausted component
 is skipped while other components continue reconciliation; pending deploy
 receipts are retired without marking the failed artifact applied. There is no
@@ -323,15 +323,15 @@ An independent database readiness failure retains its own reason; healthy
 database members do not imply that the complete enabled stack is ready.
 Disabled optional components do not participate in this readiness gate.
 Database recovery continues while the optional deployment is pending or failed.
-Correct a backend placement/runtime problem using the exact failed handles; do
+Correct a provider placement/runtime problem using the exact failed handles; do
 not clear operation receipts, start unverified runtimes, or disable Storage
 merely to make the cluster Ready.
 
 Component imports first persist the original request without bearer credentials.
-After an interrupted setup, an owned backend reservation is replayed with the
+After an interrupted setup, an owned provider reservation is replayed with the
 same resources and replica count before applying subsequent desired edits or
 component removal. Its presence alone does not authorize deployment. Preserve the
-original import intent and backend state if an incomplete reservation is reported
+original import intent and provider state if an incomplete reservation is reported
 without a matching intent; do not adopt or recreate it as a different request.
 Cluster deletion likewise finishes reserved setup before removing its services,
 without deploying the component. Accepted import handles retain the same replay
@@ -369,7 +369,7 @@ See the [frozen PostgreSQL primary boundary](../postgres/operations.md#failover-
 
 Realtime supports one application replica, independently of the database's
 single/HA topology. Create/update admission rejects any enabled count above one
-with `realtime replicas must be 0..1`; provider catalogs advertise the same bound.
+with `realtime replicas must be 0..1`; engine driver catalogs advertise the same bound.
 All presets select zero or one. The CLI submits optional-component file bodies
 to that same server admission path rather than maintaining separate replica rules.
 Realtime always renders an explicit empty `CLUSTER_STRATEGIES`, removing the
@@ -480,7 +480,7 @@ forwarding to Studio. The gateway injects this credential only after dashboard
 Basic authentication succeeds, replacing any caller-supplied value and removing
 dashboard credentials. Private unauthenticated SQL requests are rejected.
 Discovery, runtime ports and readiness all use the authenticated ingress.
-Existing Studio runtimes are redeployed during upgrade so the backend port
+Existing Studio runtimes are redeployed during upgrade so the provider port
 declaration changes as well as the application configuration; a reload alone
 would leave the authenticated ingress unreachable.
 
@@ -510,7 +510,7 @@ it is not a bare database name. Disabling database TLS explicitly selects plaint
 Member configurations are projected before digesting, publishing and local
 caching. Each component receives only its consumed database-role credentials
 and service secrets. Auth alone receives SMTP credentials and private asymmetric
-signing keys; Storage alone receives [S3](https://aws.amazon.com/s3/) backend/frontend credentials; [imgproxy](https://imgproxy.net/), [Vector](https://vector.dev/)
+signing keys; Storage alone receives [S3](https://aws.amazon.com/s3/) provider/frontend credentials; [imgproxy](https://imgproxy.net/), [Vector](https://vector.dev/)
 and the gateway receive no database passwords. Metadata, Studio and Functions
 retain their required privileged database connection; protect their code and
 administrative access accordingly. HA database consumers retain the [Patroni](https://patroni.readthedocs.io/)
@@ -556,7 +556,7 @@ in cluster status and the tracked delete operation.
 
 Only observation is retried while a deletion is accepted: each platform read has
 the client's finite request timeout and bounded transient retries (three retries
-by default). Queue inspection is additionally bounded by the backend wait timeout.
+by default). Queue inspection is additionally bounded by the provider wait timeout.
 An unavailable queue inventory is reported, not treated as permission to replay
 deletion. Inventory failures propagate to reconciliation's failure backoff;
 `429`/`503` responses with `Retry-After` retain that reset and stop the observation

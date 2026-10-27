@@ -2,7 +2,7 @@
 
 Control-plane backups preserve [SQLite](https://sqlite.org/) coordinator state, not database-engine data. Continue using [database backups](backups.md) for application data. The control plane remains a single-replica service.
 
-This Ops feature is **verified offline** (tests without a live backend). A successful state snapshot does not establish engine-data recovery or a backend rebuild recovery-time guarantee.
+This Ops feature is **verified offline** (tests without a live provider). A successful state snapshot does not establish engine-data recovery or a provider rebuild recovery-time guarantee.
 
 ## Policy and runs
 
@@ -47,7 +47,7 @@ also restores its token revocation/expiry state; review and revoke stale tokens
 before reopening access. Export and restore are local administrator commands,
 not remotely exposed MCP tools; offline replacement requires explicit `--replace`.
 
-The backup does **not** include engine volumes/data, binaries, deployment definitions, environment-supplied backend tokens, endpoint/public/advertise configuration or the master key. Independently preserve required environment and backend configuration. A sealed namespace credential stored in SQLite is restored, but that does not replace environment-supplied backend credentials.
+The backup does **not** include engine volumes/data, binaries, deployment definitions, environment-supplied provider tokens, endpoint/public/advertise configuration or the master key. Independently preserve required environment and provider configuration. A sealed namespace credential stored in SQLite is restored, but that does not replace environment-supplied provider credentials.
 
 ## Local export and offline restore
 
@@ -82,15 +82,15 @@ Restore verifies format, compressed size/hash, gzip, SQLite integrity, schema co
 
 A running/open database is refused. An existing database is refused unless `--replace` is given. With replacement, SQLite first checkpoints the old database into a standalone main file and removes its WAL/SHM sidecars; failure to do so refuses replacement. A hard link preserves the old database as `karakoram.db.replaced-YYYYMMDDTHHMMSSZ`, and that backup directory entry is fsynced before publication. The authoritative `karakoram.db` name is never removed: a private, validated and fsynced temporary file atomically replaces it, followed by directory fsync. Interruption before publication leaves the old authoritative database, not an absent path that could initialize empty state. Keep replacement files until recovery is verified. Local archive and manifest are individually atomically published; if export is interrupted, do not use a mismatched pair.
 
-## Backend rebuild runbooks
+## Provider rebuild runbooks
 
-For every backend: isolate the old coordinator, retain engine services/volumes, redeploy only the control plane, restore state **before its first start**, then start exactly one coordinator with the same master key. Avoid having old and restored coordinators reconcile simultaneously. Preserve the original endpoint/advertise configuration and connectivity to members, object storage and backend APIs. Review readiness, events, operations and credentials after startup before enabling routine changes.
+For every provider: isolate the old coordinator, retain engine services/volumes, redeploy only the control plane, restore state **before its first start**, then start exactly one coordinator with the same master key. Avoid having old and restored coordinators reconcile simultaneously. Preserve the original endpoint/advertise configuration and connectivity to members, object storage and provider APIs. Review readiness, events, operations and credentials after startup before enabling routine changes.
 
 ### Zerops
 
 1. Stop or isolate the old control-plane service; do not delete database member services or their storage.
 2. Redeploy the control-plane service with a persistent data mount and a compatible binary. Keep normal startup disabled while preparing recovery.
-3. Restore the original master key, [Zerops](https://zerops.io/) backend token/project configuration and public/advertised endpoints from independent secret/configuration custody. These environment settings are not recovered by restoring SQLite.
+3. Restore the original master key, [Zerops](https://zerops.io/) provider token/project configuration and public/advertised endpoints from independent secret/configuration custody. These environment settings are not recovered by restoring SQLite.
 4. Run offline restore against the mounted data directory, then enable normal startup. Check namespace connectivity and existing member trust before accepting mutations.
 
 ### Nomad
@@ -98,7 +98,7 @@ For every backend: isolate the old coordinator, retain engine services/volumes, 
 1. Stop the old control-plane allocation/job without purging member jobs or CSI volumes.
 2. Redeploy the control-plane job with one allocation, the intended persistent state volume and compatible binary; use a one-shot recovery task or an allocation shell before enabling the server task.
 3. Reinstall the same master key and the independently retained [Nomad](https://developer.hashicorp.com/nomad) endpoint, namespace/region, ACL token, TLS and advertised-address configuration; see [Nomad](nomad.md).
-4. Restore on the mounted volume, remove the recovery override and start one server allocation. Verify backend access and member connectivity before resuming automated work.
+4. Restore on the mounted volume, remove the recovery override and start one server allocation. Verify provider access and member connectivity before resuming automated work.
 
 ### Dokploy
 
@@ -109,4 +109,4 @@ For every backend: isolate the old coordinator, retain engine services/volumes, 
 
 ## Stale snapshots
 
-Restoring old state does not discover resources created after the snapshot: those resources become orphans and need operator inventory/reconciliation. Do not blindly recreate or delete them. In-flight operations can resume from their journals or fail because infrastructure changed since the snapshot. Review pending/running/failed work, backend resources and events before retrying mutations. Restoring state does not roll engine data back to snapshot time; perform engine-specific data recovery separately when required.
+Restoring old state does not discover resources created after the snapshot: those resources become orphans and need operator inventory/reconciliation. Do not blindly recreate or delete them. In-flight operations can resume from their journals or fail because infrastructure changed since the snapshot. Review pending/running/failed work, provider resources and events before retrying mutations. Restoring state does not roll engine data back to snapshot time; perform engine-specific data recovery separately when required.

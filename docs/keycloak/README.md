@@ -2,7 +2,7 @@
 
 Karakoram runs the official **[Keycloak](https://www.keycloak.org/) 26.8.1** native distribution on [Ubuntu](https://ubuntu.com/) 24.04 with `openjdk-21-jre-headless`. The archive URL, SHA-256, byte size, Apache-2.0 license and source revision are pinned in the native artifact lock. [Keycloak's supported configurations](https://www.keycloak.org/server/supported-configurations) include [OpenJDK](https://openjdk.org/) 21 and [PostgreSQL](https://www.postgresql.org/) 14–18.
 
-Keycloak is an independent provider, not a PostgreSQL cluster variant. Create and make ready a `postgres` source first, then select `keycloak`, the `single` topology and one engine replica. The UI's Basics step accepts the source cluster and namespace. Provider-specific options are:
+Keycloak is an independent engine driver, not a PostgreSQL cluster variant. Create and make ready a `postgres` source first, then select `keycloak`, the `single` topology and one engine replica. The UI's Basics step accepts the source cluster and namespace. Engine driver-specific options are:
 
 ```json
 {
@@ -31,17 +31,17 @@ Each reconciliation resolves the binding again. Credential generation, endpoint,
 
 Application HTTP listens on private port **8080** for a trusted TLS-terminating ingress. Management HTTP on **127.0.0.1:9000** is not exposed by the runtime's port declarations. Native readiness calls `/health/ready` and requires HTTP 200 with status `UP`. Agent health is independently protected by cluster-scoped TLS on port 9443.
 
-`hostname` accepts an explicit HTTP(S) origin. Omitting it disables strict hostname checks for private development only. `publicHttps` requires an explicit HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure backend must support public HTTPS subdomain routing. Configure DNS and the ingress so the origin matches that routing. **Only trust an ingress that overwrites the selected headers**; otherwise clients can forge their external address/scheme. A private HTTP endpoint is not an Internet-facing production endpoint.
+`hostname` accepts an explicit HTTP(S) origin. Omitting it disables strict hostname checks for private development only. `publicHttps` requires an explicit HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure provider must support public HTTPS subdomain routing. Configure DNS and the ingress so the origin matches that routing. **Only trust an ingress that overwrites the selected headers**; otherwise clients can forge their external address/scheme. A private HTTP endpoint is not an Internet-facing production endpoint.
 
 Create, replace and patch admission, including dry runs, reject `publicHttps: true`
-when the namespace backend does not advertise `publicHttps`. This includes [Nomad](https://developer.hashicorp.com/nomad)
+when the namespace provider does not advertise `publicHttps`. This includes [Nomad](https://developer.hashicorp.com/nomad)
 and [Dokploy](https://dokploy.com/) namespaces without configured HTTPS routing.
 
-Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this provider; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
+Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this engine driver; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
 
 ## Establishing an administrator and recovery
 
-There is deliberately no new credential-reveal API: existing reveals are provider-specific, and Keycloak does not implement the database-user/role data-plane contract merely to expose a password. Use Keycloak's supported offline recovery command with the rendered database configuration:
+There is deliberately no new credential-reveal API: existing reveals are engine driver-specific, and Keycloak does not implement the database-user/role data-plane contract merely to expose a password. Use Keycloak's supported offline recovery command with the rendered database configuration:
 
 1. Stop the Karakoram member agent/runtime using the infrastructure's maintenance controls. Prevent automatic restart while recovering. All Keycloak nodes must remain stopped.
 2. As the runtime owner, set `JAVA_HOME` to `/usr/lib/jvm/java-21-openjdk-amd64`, then run:

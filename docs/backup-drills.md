@@ -4,11 +4,11 @@
 
 A successful backup is not proof that it can be restored. Backup drills exercise provisioning, native restore and readiness without modifying the source cluster. A successful drill proves the recorded checks, not application correctness or a guaranteed recovery time. Engine backups and [control-plane state backups](control-plane-backup.md) protect different assets.
 
-This Ops feature is **verified offline** (tests without a live backend). Qualify provisioning, native recovery and cleanup against your selected backend before relying on scheduled drills.
+This Ops feature is **verified offline** (tests without a live provider). Qualify provisioning, native recovery and cleanup against your selected provider before relying on scheduled drills.
 
 ## Lifecycle and safety
 
-A manual or scheduled drill selects a successful eligible backup and creates a disposable target in the **source namespace**, named `dr` followed by ten lowercase letters/digits. The target copies the source spec and resource sizes, but strips backup schedules, drill policy and public exposure, and disables monitoring. It uses the normal validated cluster-create path and backend deploy admission, including per-project caps. Server-owned `managedBy` identifies its source and exact drill ID; users cannot supply this marker. Managed targets are excluded from drill scheduling and automatic agent rollout.
+A manual or scheduled drill selects a successful eligible backup and creates a disposable target in the **source namespace**, named `dr` followed by ten lowercase letters/digits. The target copies the source spec and resource sizes, but strips backup schedules, drill policy and public exposure, and disables monitoring. It uses the normal validated cluster-create path and provider deploy admission, including per-project caps. Server-owned `managedBy` identifies its source and exact drill ID; users cannot supply this marker. Managed targets are excluded from drill scheduling and automatic agent rollout.
 
 Reports progress through `Pending`, `Provisioning`, `Restoring`, `Verifying`, `CleaningUp`, then `Succeeded` or `Failed`. Verification requires both cluster Ready and successful native restore inventory ([RabbitMQ](https://www.rabbitmq.com/) confirms definitions import). The report is persisted before cleanup. Cleanup uses ordinary cluster deletion with `keepVolumes=false` and `keepBackups=false`; it never deletes a target without matching drill ownership. Inspect cleanup phase and orphaned-volume inventory even after verification succeeds. The last 50 reports per source are retained after target deletion.
 
@@ -87,7 +87,7 @@ Missing timing fields mean the milestone or measurement is not yet available, no
 | PostgreSQL | Restore the selected pgBackRest backup and confirm inventory/readiness; this is backup restore, not an arbitrary PITR exercise. |
 | Supabase | PostgreSQL backup restore scope; not proof of recovery of every external integration or non-database asset. |
 
-Drills explicitly reject [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/), [Weaviate](https://weaviate.io/) and unknown providers before provisioning. Their isolated clone/restore drill contracts are not implemented. In particular, a drill must not restore a binding-backed service's shared [PostgreSQL](https://www.postgresql.org/) source in place. A persisted unsupported drill records a clear failure without creating a target; ordinary engine backup and restore support does not imply drill support.
+Drills explicitly reject [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/), [Weaviate](https://weaviate.io/) and unknown engine drivers before provisioning. Their isolated clone/restore drill contracts are not implemented. In particular, a drill must not restore a binding-backed service's shared [PostgreSQL](https://www.postgresql.org/) source in place. A persisted unsupported drill records a clear failure without creating a target; ordinary engine backup and restore support does not imply drill support.
 
 See [engine backup capabilities](backups.md#engine-recovery-capabilities) for backup types and recovery boundaries.
 

@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Neo4j Community
 
-Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with one persistent member volume. See [release status and backend availability](../backends.md#engine-availability) and [ADR 0055](../adr/0055-neo4j-community-engine.md).
+Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with one persistent member volume. See [release status and provider availability](../providers.md#engine-availability) and [ADR 0055](../adr/0055-neo4j-community-engine.md).
 
 ## At a glance
 
 | Setting | Value |
 | --- | --- |
-| Provider | `neo4j` (Neo4j Community, GPLv3) |
+| Engine driver | `neo4j` (Neo4j Community, GPLv3) |
 | Versions | 2026.09.0; **2026.10.0** (default) |
 | Topology | `single`, exactly one engine replica; no additional components |
 | Runtime | Official Neo4j Unix tarball and Eclipse Temurin 21 JRE 21.0.12.1+1 |

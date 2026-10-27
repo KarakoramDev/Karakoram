@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Dokploy backend
+# Dokploy provider
 
-The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed [Docker Swarm](https://docs.docker.com/engine/swarm/) that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) on a three-node test Swarm, but it has no production track record. [Zerops](https://zerops.io/) remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
+The `dokploy` provider runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed [Docker Swarm](https://docs.docker.com/engine/swarm/) that you operate. It is **experimental**: it passes the shared provider conformance suite and was exercised with [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) on a three-node test Swarm, but it has no production track record. [Zerops](https://zerops.io/) remains the reference provider. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered [S3](https://aws.amazon.com/s3/) destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same provider-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered [S3](https://aws.amazon.com/s3/) destinations. Public PostgreSQL TCP has no provider CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the provider's domain capability; unavailable component artifacts are still rejected.
 
 ## How it maps
 
@@ -19,7 +19,7 @@ The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com
 |Public TCP|Swarm ingress-published ports (routing mesh); exposed services switch to VIP endpoint mode, returning to DNSRR after port removal|
 |Public HTTPS (Kibana, RabbitMQ management)|Dokploy domains served by Dokploy's Traefik|
 
-[Docker](https://www.docker.com/) is used on this backend only because Dokploy runs Swarm services. Each member image is a pinned [Ubuntu](https://ubuntu.com/) 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
+[Docker](https://www.docker.com/) is used on this provider only because Dokploy runs Swarm services. Each member image is a pinned [Ubuntu](https://ubuntu.com/) 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
 
 Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking [Bash](https://cgit.git.savannah.gnu.org/cgit/bash.git/) with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
@@ -172,7 +172,7 @@ destructive deployment.
 |`placement`|yes|Authoritative node per member (`placementGroup` = Swarm node hostname).|
 |`logs`|yes|Platform logs through Dokploy.|
 |`horizontalScaling`|yes|Stateless components (Kibana, Logstash, APM, mongos) scale by replicas.|
-|`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this backend needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
+|`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this provider needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
 |`exec`, `metrics`, `dedicatedCpu`, `envChangeRestarts`|no|Variable writes apply at the next restart.|
 
 Swarm ownership checks resolve the service ID from `swarm.getNodeApps` before
@@ -193,7 +193,7 @@ back to ambiguous name inspection. Use hostnames outside this reserved prefix.
 - Outbound HTTPS from the manager during builds (Ubuntu, [Percona](https://www.percona.com/), RabbitMQ and Elastic package sources), from every node to [Docker Hub](https://hub.docker.com/) (volume deletion runs a one-shot task from the pinned `ubuntu:24.04` digest on the volume's node), and from members to your S3 storage.
 - Elasticsearch: `vm.max_map_count=262144` on every node (`/etc/sysctl.d`).
 - Enough free disk on every node for volumes and images (each engine image is roughly 0.3–1.7 GB).
-- An overlay network for Karakoram, normally a dedicated attachable one (the backend creates it through Dokploy when it is missing).
+- An overlay network for Karakoram, normally a dedicated attachable one (the provider creates it through Dokploy when it is missing).
 
 Optional node label: if any node carries `karakoram.data=true`, only labelled nodes receive data volumes (`docker node update --label-add karakoram.data=true <node>`).
 
@@ -220,7 +220,7 @@ Optional node label: if any node carries `karakoram.data=true`, only labelled no
 
 The control plane runs as one Dokploy application with a persistent volume; its default namespace manages one Dokploy environment directly over the shared overlay network.
 
-1. In Dokploy create a project (for example `karakoram`) and, for clusters, a project or environment for the default namespace; note its environment ID (Dokploy UI URL or `GET /api/project.all`). Create an admin API key with rate limiting disabled (see [API key rate limit](#target-settings)) and, for multi-node Swarms, a registry. Before deploying the control plane, create its dedicated **attachable overlay** network (for example `karakoram`, via Dokploy's network settings or `POST /api/network.create` with `{"name":"karakoram","driver":"overlay","attachable":true}`); its Swarm service needs the network before the backend can start.
+1. In Dokploy create a project (for example `karakoram`) and, for clusters, a project or environment for the default namespace; note its environment ID (Dokploy UI URL or `GET /api/project.all`). Create an admin API key with rate limiting disabled (see [API key rate limit](#target-settings)) and, for multi-node Swarms, a registry. Before deploying the control plane, create its dedicated **attachable overlay** network (for example `karakoram`, via Dokploy's network settings or `POST /api/network.create` with `{"name":"karakoram","driver":"overlay","attachable":true}`); its Swarm service needs the network before the provider can start.
 2. Create an application `karakoram` with build type **Dockerfile**, Dockerfile path `deploy/dokploy/Dockerfile` and context `.`, from this repository (Git provider) — it downloads and verifies the signed release pinned in `deploy/zerops/RELEASE`. To deploy an unreleased build, upload a zip containing that Dockerfile as **`Dockerfile` at the zip root** and a linux `karakoram` binary alongside it (Drop source); set Dockerfile path **`Dockerfile`**, context `.`, and build argument `KARAKORAM_SOURCE=local`.
 3. Advanced settings:
    - Volume mount: named volume (for example `karakoram-data`) at `/var/lib/karakoram`.
@@ -276,7 +276,7 @@ one rebuild from the retained Drop Dockerfile source. Application identity,
 mounts, node placement, environment and configured replica count are retained.
 
 The application description durably records desired state and the current
-lifecycle operation. A target-wide lock serializes backend instances within the
+lifecycle operation. A target-wide lock serializes provider instances within the
 control-plane process. Restoration submissions have a ten-second request deadline;
 an ambiguous response retains a one-minute delivery fence. Stop/Delete record
 their intent before waiting on that fence. A queued/running build must complete

@@ -10,12 +10,12 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private `mongodb-mcp-server` co
 
 | Setting | Supported value / default |
 | --- | --- |
-| Provider | `psmdb` |
+| Engine driver | `psmdb` |
 | PSMDB catalog | `6.0.29-23` (deprecated); `7.0.40-22`, `7.0.43-23`, `8.0.29-13`; **`8.0.32-14` (default)** |
 | PBM | `2.16.0-1`; Debian package pins append `.noble` |
 | Topologies | `replicaSet`: 1/3/5/7 data-bearing members; `sharded`: config set, shard sets and mongos |
 | Resource floors | Whole CPU cores ≥1; RAM ≥0.5 GiB; disk ≥5 GiB; maxima ≥minima; start CPU within bounds |
-| Provider resource defaults | SHARED CPU, min/max 1 core, 1 GiB RAM, 5 GiB disk; omitted maxima follow effective minima |
+| Engine driver resource defaults | SHARED CPU, min/max 1 core, 1 GiB RAM, 5 GiB disk; omitted maxima follow effective minima |
 | Database TLS | `requireTLS`, generated per-cluster CA |
 | Recovery | PBM `logical` / `physical` snapshots and PITR |
 | Public TCP | Opt-in, CIDR allowlist; project IPv6 or dedicated IPv4 |

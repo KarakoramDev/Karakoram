@@ -11,11 +11,11 @@ karactl -n NS clusters connection appdb
 karactl -n NS clusters ca appdb > cluster-ca.pem
 ```
 
-The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Backend public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
+The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Provider public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
 
 The managed [Data MCP companion](../data-mcp.md) instead connects directly to non-removing [PostgreSQL](https://www.postgresql.org/) members on private port 5432, bypassing [ProxySQL](https://proxysql.com/) and (for [Supabase](https://supabase.com/)) [Supavisor](https://github.com/supabase/supavisor). Its multi-host URI uses `target_session_attrs=prefer-standby` for reads and `read-write` for the primary-only write identity, with hostname-verified TLS and the cluster CA when TLS is enabled. This avoids proxy extended-protocol limitations and does not require the optional proxy reader port.
 
-Public exposure is opt-in. [Zerops](https://zerops.io/) can enforce a CIDR allowlist; backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
+Public exposure is opt-in. [Zerops](https://zerops.io/) can enforce a CIDR allowlist; providers without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
 
 On [Dokploy](https://dokploy.com/), the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
 ports are Swarm-wide, so only one service on that Swarm can publish it. A
@@ -27,7 +27,7 @@ Public endpoint removals and allowlist restrictions are applied independently of
 
 ### Planned proxy drain and external load balancers
 
-On graceful agent termination (including a backend replica-count reduction),
+On graceful agent termination (including a provider replica-count reduction),
 healthy ProxySQL instances execute `PROXYSQL PAUSE` before their native process
 is stopped. This closes the PostgreSQL listeners while leaving established
 sessions running. The agent waits at least **10 seconds** for external TCP
@@ -55,10 +55,10 @@ idle frontend sessions; a transaction COMMIT alone does not close a pooled
 client session. Such sessions may keep the drain open until the bound.
 
 An external LB must detect listener failure within **10 seconds**, retry a
-**failed TCP connect on a different healthy backend**, and preserve established
-sessions when a backend becomes DOWN. TCP checks alone do not prevent errors in
+**failed TCP connect on a different healthy provider**, and preserve established
+sessions when a provider becomes DOWN. TCP checks alone do not prevent errors in
 the check-detection race. Do not replay PostgreSQL queries/transactions at the LB
-or enable `on-marked-down shutdown-sessions`. For example, an HAProxy TCP backend:
+or enable `on-marked-down shutdown-sessions`. For example, an HAProxy TCP provider:
 
 ```haproxy
 backend postgres
@@ -250,9 +250,9 @@ When upgrading an existing installation, audit schema ACLs and objects in these 
 
 The default `requireTLS` requires encrypted client authentication; `preferTLS` allows encrypted and plaintext clients; `disabled` disables proxy frontend TLS but does not disable internal [etcd](https://etcd.io/)/[Patroni](https://patroni.readthedocs.io/)/replication protection. [PostgreSQL](https://www.postgresql.org/) data-member TLS remains available for private/internal use. CA sources are `selfSigned` and `userProvided`; the latter requires the CA certificate/signing key and a suitable server certificate/key through the shared TLS inputs. Supplied certificates must cover required member names, loopback and exposed addresses, and permit server/client authentication. Keep private keys out of options and normal request logs.
 
-Proxy-to-PostgreSQL traffic and [ProxySQL](https://proxysql.com/)'s backend monitor require TLS and use the cluster CA through [`pgsql-ssl_p2s_ca`](https://proxysql.com/documentation/global-variables/pgsql-variables/#pgsql-ssl_p2s_ca). Missing or malformed CA material is rejected before applying a proxy configuration; an unrelated backend certificate is rejected by libpq's CA-chain verification. Proxies restart when adopting this trust setting so previously unverified pooled connections are not retained.
+Proxy-to-PostgreSQL traffic and [ProxySQL](https://proxysql.com/)'s provider monitor require TLS and use the cluster CA through [`pgsql-ssl_p2s_ca`](https://proxysql.com/documentation/global-variables/pgsql-variables/#pgsql-ssl_p2s_ca). Missing or malformed CA material is rejected before applying a proxy configuration; an unrelated provider certificate is rejected by libpq's CA-chain verification. Proxies restart when adopting this trust setting so previously unverified pooled connections are not retained.
 
-**Backend hostname verification limitation:** ProxySQL 3.0.11 uses libpq `sslmode=require` with an explicit root certificate for both [query](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Connection.cpp) and [monitor](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Monitor.cpp) connections. With the CA supplied, this authenticates the certificate chain, but it does **not** compare the certificate's names to the configured backend hostname; it is not `verify-full`. Keep the cluster CA/signing key private, use a dedicated CA per cluster, and restrict private backend network access. Client-to-proxy `sslmode=verify-full` and direct PostgreSQL connections are separate TLS legs.
+**Provider hostname verification limitation:** ProxySQL 3.0.11 uses libpq `sslmode=require` with an explicit root certificate for both [query](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Connection.cpp) and [monitor](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Monitor.cpp) connections. With the CA supplied, this authenticates the certificate chain, but it does **not** compare the certificate's names to the configured provider hostname; it is not `verify-full`. Keep the cluster CA/signing key private, use a dedicated CA per cluster, and restrict private provider network access. Client-to-proxy `sslmode=verify-full` and direct PostgreSQL connections are separate TLS legs.
 
 Generated database certificates are staged for renewal within 30 days of expiry and activated member-by-member. Agent HTTPS identities are published independently through authenticated configuration pulls, including recovery after leaf expiry or clock correction; this transport renewal does not restart the database. If the control plane restarts after staging database certificates but before recording their activation state, reconciliation recovers the pending material and publishes a rolling configuration revision before activation; unusable pending leaves are reissued. Patroni reload is requested through its locally supervised process before verified HTTPS configuration requests, so its old HTTPS identity does not have to authenticate its own reload. Supplied certificates must be rotated by the operator; expiry warnings do not create replacement user certificates. The supplied CA cannot be replaced in place: no trust-overlap CA rollout is implemented. Reloadable HBA/TLS changes preserve existing SQL sessions; postmaster changes or proxy listener/certificate activation can still interrupt connections. See [operations](operations.md) and [certificate lifecycle limits](../limitations.md#certificate-and-member-credential-lifecycle).
 
@@ -309,7 +309,7 @@ restart receipts are retained until a complete instance observation is available
 - LISTEN/NOTIFY forwarding, named portals, Flush semantics, incremental Execute row limits and extended COPY FROM STDIN are unsupported.
 - Mixed result formats per column are unsupported. For pgx, select simple protocol or uniform text results where required.
 - Optional read/write splitting uses SELECT-pattern rules (including a FOR UPDATE exception), not full SQL parsing; read-after-write consistency and every read-with-side-effect pattern are not guaranteed.
-- Failover changes the backend writer; clients must reconnect/retry according to application transaction semantics.
+- Failover changes the provider writer; clients must reconnect/retry according to application transaction semantics.
 
 [Supabase](https://supabase.com/) internal services bypass these limitations using their local raw TCP leader forwarder. This does not change the public application's proxy protocol contract. See [ADR 0034](../adr/0034-postgres-engine.md).
 

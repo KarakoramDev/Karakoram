@@ -10,7 +10,7 @@ Status: Accepted
 
 ### Scope and runtime
 
-The `neo4j` provider offers Neo4j Community only, topology `single`, exactly one engine replica. Requests for more replicas, other topologies or components are rejected. Enterprise features, including bring-your-own-licence Enterprise, are out of scope.
+The `neo4j` engine driver offers Neo4j Community only, topology `single`, exactly one engine replica. Requests for more replicas, other topologies or components are rejected. Enterprise features, including bring-your-own-licence Enterprise, are out of scope.
 
 Members install the official `neo4j-community-<version>-unix.tar.gz` and a pinned [Eclipse Temurin](https://adoptium.net) 21 JRE through the native artifact lock (ADR 0036), each into its own immutable directory under `/opt/karakoram`. Offered versions are 2026.09.0 and 2026.10.0 (default). Neo4j 2025.01 and newer require [Java](https://www.java.com) 21.
 
@@ -18,7 +18,7 @@ The agent supervises the server JVM directly. It derives the exact server comman
 
 ### Memory
 
-The provider derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves [Lucene](https://lucene.apache.org), [Netty](https://netty.io), native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. The minimum is 1 GiB; 2 GiB is the default. Changes take effect through a restart, which is a full outage.
+The engine driver derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves [Lucene](https://lucene.apache.org), [Netty](https://netty.io), native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. The minimum is 1 GiB; 2 GiB is the default. Changes take effect through a restart, which is a full outage.
 
 ### Transport security and hardening
 
@@ -69,7 +69,7 @@ Community has no metrics endpoint. The agent reports availability, heap usage fr
 ## Alternatives considered
 
 - **Neo4j Enterprise or clustering:** commercial licence; current Enterprise source is not published.
-- **Online file copy or filesystem snapshot:** unsupported by Neo4j for a running store and not portable across backends.
+- **Online file copy or filesystem snapshot:** unsupported by Neo4j for a running store and not portable across providers.
 - **Restoring only the `neo4j` database and recreating users:** the control plane does not store application passwords, so users would be lost.
 - **Running the `neo4j console` launcher:** keeps an extra JVM resident for the life of the server.
 - **Control-plane transfer of dump bytes:** would route full database copies through the control plane; the member streams directly to object storage instead.

@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted [MongoDB](https://www.mongodb.com), [RabbitMQ](https://www.rabbitmq.com), [Elasticsearch](https://www.elastic.co/elasticsearch)/[Elastic Stack](https://www.elastic.co/elastic-stack), [PostgreSQL](https://www.postgresql.org), [Neo4j](https://neo4j.com) Community and modular [Supabase](https://supabase.com) orchestration through namespaces, without [Kubernetes](https://kubernetes.io). [Zerops](https://zerops.io) is the reference backend; [Dokploy](https://dokploy.com) and [Nomad](https://developer.hashicorp.com/nomad) are also available. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted [MongoDB](https://www.mongodb.com), [RabbitMQ](https://www.rabbitmq.com), [Elasticsearch](https://www.elastic.co/elasticsearch)/[Elastic Stack](https://www.elastic.co/elastic-stack), [PostgreSQL](https://www.postgresql.org), [Neo4j](https://neo4j.com) Community and modular [Supabase](https://supabase.com) orchestration through namespaces, without [Kubernetes](https://kubernetes.io). [Zerops](https://zerops.io) is the reference provider; [Dokploy](https://dokploy.com) and [Nomad](https://developer.hashicorp.com/nomad) are also available. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 
@@ -13,7 +13,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0003](0003-sqlite-state-store.md) | SQLite on Local Storage; one CP replica, state backups and recovery |
 | [0004](0004-declarative-reconciliation.md) | Level-triggered Sync, durable operations, cluster locks and SSE |
 | [0005](0005-engine-provider-seam.md) | Engine provider seam inspired by OpenEverest v2, not its K8s interface |
-| [0006](0006-zerops-backend-client.md) | Infrastructure Backend and an owned thin Zerops REST client |
+| [0006](0006-zerops-backend-client.md) | Infrastructure provider and an owned thin Zerops REST client |
 | [0007](0007-member-deployment.md) | Runtime + volume per mongod; generated pipelines and executable artifacts |
 | [0008](0008-node-agent-protocol.md) | Pinned-CA config pull, member tokens and bounded node supervision |
 | [0009](0009-resource-naming.md) | Stable compact resource names and platform hostname validation |
@@ -26,7 +26,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0016](0016-placement-anti-affinity.md) | No anti-affinity guarantee; heuristic detection and honest warnings |
 | [0017](0017-public-tcp-exposure.md) | Optional public TCP, IP/allowlist policy and discovery-safe endpoints |
 | [0018](0018-multi-project-namespaces-relay.md) | Multi-project namespaces; outbound WebSocket/inner mTLS/smux relays |
-| [0019](0019-multi-engine-seams.md) | Additive multi-engine seams: provider metadata, optional interfaces, agent runners |
+| [0019](0019-multi-engine-seams.md) | Additive multi-engine seams: engine driver metadata, optional interfaces, agent runners |
 | [0020](0020-rabbitmq-node-persistence.md) | RabbitMQ runtime + Local Storage per node; stable identity and pre-platform shutdown |
 | [0021](0021-rabbitmq-cluster-lifecycle.md) | RabbitMQ Khepri-only 4.3 catalog, observed joins and quorum-gated rolling lifecycle |
 | [0022](0022-rabbitmq-access-tls-backups.md) | RabbitMQ Management API access, system users, TLS and definitions-only backups |
@@ -35,10 +35,10 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0027](0027-elastic-stack-components.md) | Version-locked Kibana, Logstash and APM components owned by the cluster |
 | [0028](0028-elasticsearch-security-and-snapshots.md) | TLS/file-realm recovery identity, isolated S3 repositories and destructive snapshot restore |
 | [0029](0029-elastic-licensing.md) | Default Elastic distributions, Basic-tier provisioning and ELv2 managed-service obligations |
-| [0030](0030-backend-neutral-infrastructure-contract.md) | Backend-neutral services, runtime deployment, capabilities and per-namespace backend registry |
+| [0030](0030-backend-neutral-infrastructure-contract.md) | Provider-neutral services, runtime deployment, capabilities and per-namespace provider registry |
 | [0031](0031-engine-component-model.md) | Ordered component definitions, per-component resources and engine-owned lifecycle callbacks |
-| [0032](0032-dokploy-backend.md) | Dokploy/Swarm backend: alias DNS, built member images, pinned volumes and host anti-affinity |
-| [0033](0033-nomad-backend.md) | Nomad backend: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
+| [0032](0032-dokploy-backend.md) | Dokploy/Swarm provider: alias DNS, built member images, pinned volumes and host anti-affinity |
+| [0033](0033-nomad-backend.md) | Nomad provider: isolated exec rootfs, routed CNI, native service discovery and fenced node-local volumes |
 | [0034](0034-postgres-engine.md) | Percona PostgreSQL, Patroni/etcd HA, ProxySQL, native access and pgBackRest recovery |
 | [0035](0035-supabase-engine.md) | Modular native Supabase over the PostgreSQL core, Envoy gateway and explicit artifact capabilities |
 | [0036](0036-native-artifacts.md) | Embedded native artifact lock, mirror precedence, source provenance and signed-release staging |
@@ -53,7 +53,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0047](0047-openbao-engine.md) | OpenBao: encrypted initialization receipts, control-plane-held unseal material, Raft membership/snapshots and opt-in credential connections |
 | [0056](0056-temporal-service.md) | Temporal application service on bound PostgreSQL with managed TLS and workflow namespaces |
 | [0052](0052-mysql-engine.md) | Percona Server for MySQL, Group Replication single-primary, ProxySQL, XtraBackup and binary-log PITR |
-| [0053](0053-pxc-engine.md) | Percona XtraDB Cluster as a separate provider over the MySQL core |
+| [0053](0053-pxc-engine.md) | Percona XtraDB Cluster as a separate engine driver over the MySQL core |
 | [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
 | [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |

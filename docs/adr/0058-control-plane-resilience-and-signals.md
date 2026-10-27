@@ -26,7 +26,7 @@ Provide `karakoram admin backup-state --out FILE` for local export from a stoppe
 
 Before publication, verify manifest SHA-256, gzip decoding, SQLite integrity, that the snapshot schema is not newer than the binary and that its fingerprint matches `KARAKORAM_MASTER_KEY`. Refuse a running server's locked database. Refuse an existing database unless `--replace`; checkpoint it out of WAL mode, refuse remaining sidecars, and preserve a timestamped hard-link backup with file/directory fsync before replacing the still-populated authoritative path atomically. Publish through a temporary file, file fsync, atomic rename and directory fsync; an interrupted replacement must never present an absent database as a fresh installation.
 
-Rebuild guidance must cover [Zerops](https://zerops.io), [Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com) and distinguish restored SQLite state (including sealed secrets and PKI) from external prerequisites: the master key, environment-supplied backend tokens and endpoint configuration. Restore before normal startup creates new installation identities. Resources created after an old snapshot become orphans; in-flight operations can resume or fail against changed infrastructure and require review.
+Rebuild guidance must cover [Zerops](https://zerops.io), [Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com) and distinguish restored SQLite state (including sealed secrets and PKI) from external prerequisites: the master key, environment-supplied provider tokens and endpoint configuration. Restore before normal startup creates new installation identities. Resources created after an old snapshot become orphans; in-flight operations can resume or fail against changed infrastructure and require review.
 
 ### Durable notifications and outbound safety
 
@@ -74,9 +74,9 @@ Ship overview, [MongoDB](https://www.mongodb.com), RabbitMQ, [Elasticsearch](htt
 
 A state snapshot restores coordinator knowledge, not database data or external configuration. Operators must preserve a strong master key separately; the fingerprint detects a mismatched key but is **not protection for a weak key** and provides a key-guess verification signal. Old snapshots create infrastructure orphans rather than magically discovering post-snapshot ownership.
 
-Drills consume real infrastructure and backup bandwidth. They use normal provider reconciliation, backend admission caps, ownership fences and bounded retries; they do not bypass capacity safeguards. Maintenance-window waits are excluded from execution budgets. A successful drill proves the recorded restore/check scope, not application correctness or a universal recovery-time guarantee.
+Drills consume real infrastructure and backup bandwidth. They use normal engine driver reconciliation, provider admission caps, ownership fences and bounded retries; they do not bypass capacity safeguards. Maintenance-window waits are excluded from execution budgets. A successful drill proves the recorded restore/check scope, not application correctness or a universal recovery-time guarantee.
 
-Notifications can be duplicated, delayed or permanently failed after the retry horizon; recipients must deduplicate by event ID. Outbox and backup/drill journals add durable state. Metrics and dashboards improve visibility without making delivery, placement or recovery guarantees stronger than the underlying backend.
+Notifications can be duplicated, delayed or permanently failed after the retry horizon; recipients must deduplicate by event ID. Outbox and backup/drill journals add durable state. Metrics and dashboards improve visibility without making delivery, placement or recovery guarantees stronger than the underlying provider.
 
 ## Alternatives considered
 
@@ -85,5 +85,5 @@ Notifications can be duplicated, delayed or permanently failed after the retry h
 - **Put the master key in the snapshot:** defeats independent key custody and exposes every sealed secret with one object-store compromise.
 - **Event-type-only notification filtering:** warning/normal severity cannot distinguish actionable categories, successful recovery or operation targets.
 - **Best-effort in-memory delivery or exactly-once claims:** memory loses work on restart; remote acknowledgement races prevent exactly-once guarantees without recipient cooperation.
-- **Gang/parallel drills without admission:** multiply platform load and recovery contention; bounded queued execution through normal admission preserves backend limits.
+- **Gang/parallel drills without admission:** multiply platform load and recovery contention; bounded queued execution through normal admission preserves provider limits.
 - **Treat backup completion as restore proof:** does not exercise provisioning, native restore, readiness or cleanup; definitions-only RabbitMQ recovery must remain explicit.

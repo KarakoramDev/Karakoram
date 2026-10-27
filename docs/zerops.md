@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Zerops backend
+# Zerops provider
 
-[Zerops](https://zerops.io/) is Karakoram's reference infrastructure backend. It supplies [Ubuntu](https://ubuntu.com/) runtimes, Local Storage and public routing in an **existing Zerops project**; Karakoram owns the engine topology, credentials, health and recovery. Karakoram does not create the project or manage its system `core` service.
+[Zerops](https://zerops.io/) is Karakoram's reference infrastructure provider. It supplies [Ubuntu](https://ubuntu.com/) runtimes, Local Storage and public routing in an **existing Zerops project**; Karakoram owns the engine topology, credentials, health and recovery. Karakoram does not create the project or manage its system `core` service.
 
-For a backend comparison, see [Backends](backends.md). For engine configuration and supported topologies, start with [MongoDB](mongodb/README.md), [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md), [RabbitMQ](rabbitmq/README.md) or [Elasticsearch](elasticsearch/README.md).
+For a provider comparison, see [Providers](providers.md). For engine configuration and supported topologies, start with [MongoDB](mongodb/README.md), [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md), [RabbitMQ](rabbitmq/README.md) or [Elasticsearch](elasticsearch/README.md).
 
 ## How it maps
 
@@ -13,7 +13,7 @@ For a backend comparison, see [Backends](backends.md). For engine configuration 
 | Namespace target | Existing project, with its own project-scoped token |
 | Control plane | One Ubuntu 24.04 runtime, normally `karakoram`, and a separate `karakoramdata` Local Storage volume |
 | Data-bearing member | Singleton Ubuntu 24.04 runtime and independently identified Local Storage volume |
-| Stateless component | Provider-supported runtime without a durable data volume; replicas share a service identity |
+| Stateless component | Engine driver-supported runtime without a durable data volume; replicas share a service identity |
 | Engine and agent deployment | Prebuilt artifact upload and a rendered `zerops.yaml`, including preparation commands, ports, readiness and volume mount |
 | Private connectivity | Project-private service hostnames; protected agent API on TLS 9443 |
 | Public TCP | Routes on project IPv6 or dedicated IPv4, with CIDR allowlists |
@@ -29,14 +29,14 @@ Importing infrastructure and deploying code are separate steps. Runtimes are ini
 | --- | --- |
 | Placement | Best-effort observations only; no host anti-affinity guarantee |
 | Persistent storage | Node-local Local Storage with enforced capacity and supported growth; no shrink |
-| Public TCP | Project public addresses and backend-enforced CIDR allowlists |
-| Managed public HTTPS | Supported for provider-approved HTTP components |
+| Public TCP | Project public addresses and provider-enforced CIDR allowlists |
+| Managed public HTTPS | Supported for engine driver-approved HTTP components |
 | CPU and RAM | Platform autoscaling bounds; shared or dedicated CPU |
-| Stateless replicas | Supported where the engine provider permits them; not database replication |
+| Stateless replicas | Supported where the engine driver permits them; not database replication |
 | Credential scope | Full access to one project, without sudo mode |
 | Additional namespaces | Outbound authenticated management relay required |
 
-Backend capabilities do not establish engine availability or independent failure domains. Engine catalogs and validation determine which components, topologies and exposure settings are accepted. See [capability differences](backends.md#capability-differences) before choosing a backend.
+Provider capabilities do not establish engine availability or independent failure domains. Engine catalogs and validation determine which components, topologies and exposure settings are accepted. See [capability differences](providers.md#capability-differences) before choosing a provider.
 
 ## Requirements
 
@@ -53,11 +53,11 @@ Full access without sudo mode cannot read sensitive environment values, but it r
 
 Use the dashboard-only [Quick start](quickstart.md) to import the release without a local checkout. Use [Install](install.md) for local deployment, prebuilt versus source setups, custom service names, custom domains and CLI installation. These are the authoritative installation steps; do not re-import new-install templates over an existing installation. Use [Upgrade](upgrade.md) instead.
 
-The default backend is `zerops`. The control plane reads these target settings:
+The default provider is `zerops`. The control plane reads these target settings:
 
 | Environment variable | Purpose |
 | --- | --- |
-| `KARAKORAM_BACKEND` | Backend kind; defaults to `zerops` |
+| `KARAKORAM_BACKEND` | Provider kind; defaults to `zerops` |
 | `KARAKORAM_ZEROPS_TOKEN` | Project-scoped infrastructure credential, supplied as a service secret |
 | `KARAKORAM_ZEROPS_PROJECT_ID` | Existing project ID; the installation pipeline uses injected `projectId` |
 | `KARAKORAM_ZEROPS_API_URL` | Optional non-default API endpoint, configured by the installation operator for all Zerops namespaces |
@@ -85,7 +85,7 @@ Registration validates project identity and service-list access synchronously; r
 
 The relay dials `KARAKORAM_PUBLIC_URL` over outbound HTTPS/WebSocket and carries an inner mutually authenticated TLS tunnel. The origin must be reachable from the target project, with WebSocket Upgrade forwarded at `/relay/v1/connect` and no browser-login interception. It carries approved management and agent traffic, not application connections or bulk backup transfers. Applications still need their own private or public connectivity to the engine.
 
-Rotate an additional namespace's token with `karactl namespaces rotate-token dev --token-file replacement-token.txt --yes`, then revoke the old token after success. For `default`, change the control-plane service secret and restart; API rotation is rejected. Backend kind and target identity are immutable, so switching the default backend is not an in-place cluster migration. See [Namespaces and relays](namespaces.md) for validation, relay health and removal.
+Rotate an additional namespace's token with `karactl namespaces rotate-token dev --token-file replacement-token.txt --yes`, then revoke the old token after success. For `default`, change the control-plane service secret and restart; API rotation is rejected. Provider kind and target identity are immutable, so switching the default provider is not an in-place cluster migration. See [Namespaces and relays](namespaces.md) for validation, relay health and removal.
 
 ## Placement and persistent storage
 
@@ -101,21 +101,21 @@ Use [engine-native backups](backups.md), not live Local Storage archives, for co
 
 Engines are private by default. Explicit public TCP exposure uses a project public address, allocated public ports and the requested CIDR allowlist. Dedicated IPv4 is a separate project capability and cost; shared HTTP/IPv4 routing cannot substitute for it. CIDR rules complement, rather than replace, engine authentication and TLS.
 
-Route synchronization is project-wide. The backend accounts for other services' routes, including staged/deleting routes, when allocating ports, and waits for the synchronization Process and observable route state. `Ready` or `isSynced` is not proof of external reachability: test allowed and denied clients independently, including address-family connectivity.
+Route synchronization is project-wide. The provider accounts for other services' routes, including staged/deleting routes, when allocating ports, and waits for the synchronization Process and observable route state. `Ready` or `isSynced` is not proof of external reachability: test allowed and denied clients independently, including address-family connectivity.
 
 Discovery-based clients may need more than one reachable seed endpoint. For [MongoDB](https://www.mongodb.com/), external discovery must reach the required members with matching advertised addresses, DNS and certificate SANs. Follow the engine's access guide rather than exposing only the primary or substituting one load-balanced seed. See [MongoDB access and TLS](mongodb/access-and-tls.md) and [ADR 0017](adr/0017-public-tcp-exposure.md).
 
-Managed public HTTPS is separate from public TCP. For supported HTTP components, the backend enables Zerops subdomain access and reports HTTPS URLs for HTTP-enabled runtime ports. Zerops terminates TLS at its shared L7 balancer and forwards HTTP to the runtime. This is not end-to-end engine TLS or a TCP database endpoint. The control-plane UI/API uses public HTTPS to port 8080; keep the private agent listener on TLS 9443 unexposed. Custom control-plane domains are covered in [Install](install.md).
+Managed public HTTPS is separate from public TCP. For supported HTTP components, the provider enables Zerops subdomain access and reports HTTPS URLs for HTTP-enabled runtime ports. Zerops terminates TLS at its shared L7 balancer and forwards HTTP to the runtime. This is not end-to-end engine TLS or a TCP database endpoint. The control-plane UI/API uses public HTTPS to port 8080; keep the private agent listener on TLS 9443 unexposed. Custom control-plane domains are covered in [Install](install.md).
 
 ## Resources and autoscaling
 
-CPU/RAM bounds are translated to platform autoscaling settings, with `SHARED` or `DEDICATED` CPU. CPU bounds are whole cores, at least 1; optional `startCpu` must be whole and within the bounds. RAM/disk bounds use GiB in the API, with provider-specific floors and maximums at least their minimums. Catalog floors are not workload sizing advice.
+CPU/RAM bounds are translated to platform autoscaling settings, with `SHARED` or `DEDICATED` CPU. CPU bounds are whole cores, at least 1; optional `startCpu` must be whole and within the bounds. RAM/disk bounds use GiB in the API, with engine driver-specific floors and maximums at least their minimums. Catalog floors are not workload sizing advice.
 
 ```sh
 karactl -n dev clusters scale '<cluster>' --min-cpu 1 --max-cpu 2 --wait
 ```
 
-Use engine-supported component and membership controls for topology changes. Increasing a runtime's container count is not database replication; persistent members remain singleton runtimes, while provider-supported stateless components may have replicas.
+Use engine-supported component and membership controls for topology changes. Increasing a runtime's container count is not database replication; persistent members remain singleton runtimes, while engine driver-supported stateless components may have replicas.
 
 Resource updates preserve the complete platform autoscaling configuration, including unspecified bounds. Persistent capacity changes target the volume rather than ephemeral root disk. Even CPU-only changes can restart a runtime, so let Karakoram apply member-aware disruption precautions instead of changing platform settings independently during reconciliation.
 
@@ -128,7 +128,7 @@ CPU-mode rate limits surface `PlatformCooldown` with a persisted retry deadline;
 - **One control-plane replica:** SQLite requires a single writer. Keep `maxContainers: 1` and `temporaryShutdown`; upgrades interrupt management. Lost state cannot be reconstructed by automatically adopting existing services.
 - **Asynchronous platform work:** Zerops Processes are polled, not watched. Accepted work and terminal Process success do not establish engine health.
 - **Deployment admission:** the default cap is two in-flight owned deploy/build processes per API endpoint/project in this process, shared across namespaces. New version allocation/upload also waits for prior deployment/build work on that service. Unreadable or incomplete platform evidence waits rather than authorizing more mutations.
-- **Environment snapshots:** writing service secrets does not restart members. Providers own safe rolling restarts to apply changes.
+- **Environment snapshots:** writing service secrets does not restart members. Engine drivers own safe rolling restarts to apply changes.
 - **Deletion and retained costs:** platform refusals can leave verified owned volumes in orphan inventory. Cluster deletion completion does not prove all charged storage is gone.
 - **No arbitrary container exec:** node work uses the bounded authenticated agent, not a remote shell API.
 

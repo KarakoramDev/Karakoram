@@ -8,7 +8,7 @@ Karakoram uses [Percona Server for MongoDB](https://www.percona.com/mongodb/soft
 
 ## Decision
 
-Implement the `psmdb` engine with PSMDB and PBM packages. Maintain a provider-owned catalog of exact supported package versions, default/deprecated status, compatible PBM versions and allowed upgrade paths, backed by package and integration evidence. Resolve/persist the chosen version at creation; changing the catalog default must not silently upgrade existing clusters. Do not offer unavailable majors or infer support from a package name. Advertise logical/physical backup support only for compatible catalog combinations.
+Implement the `psmdb` engine with PSMDB and PBM packages. Maintain a engine driver-owned catalog of exact supported package versions, default/deprecated status, compatible PBM versions and allowed upgrade paths, backed by package and integration evidence. Resolve/persist the chosen version at creation; changing the catalog default must not silently upgrade existing clusters. Do not offer unavailable majors or infer support from a package name. Advertise logical/physical backup support only for compatible catalog combinations.
 
 Treat desired engine-version changes as reconciliation. Validate an allowed path, health/quorum and backup readiness before disruptive work. Upgrade one member at a time: healthy secondaries first, wait for version/readiness/replication convergence, then step down the primary and upgrade the former primary. For sharding, apply the target version's supported config-server/shard/router order as well as per-set sequencing. Major transitions are one supported major at a time; do not auto-upgrade or promise arbitrary downgrade.
 
