@@ -47,6 +47,16 @@ func admissionBackend(t *testing.T) (*Backend, *admissionFixture) {
 			w.WriteHeader(http.StatusBadRequest)
 		case r.URL.Path == "/project/project/service-stack":
 			fakePage(w, r, []ServiceStack{{ID: "a", Name: "membera"}, {ID: "b", Name: "memberb"}, {ID: "foreign", Name: "foreign"}, {ID: "core", Name: "core", IsSystem: true}})
+		case strings.HasPrefix(r.URL.Path, "/process/"):
+			f.processReads++
+			id := strings.TrimPrefix(r.URL.Path, "/process/")
+			for _, p := range f.processes {
+				if p.ID == id {
+					_ = json.NewEncoder(w).Encode(p)
+					return
+				}
+			}
+			w.WriteHeader(http.StatusNotFound)
 		case strings.HasSuffix(r.URL.Path, "/env"):
 			owner := "owner"
 			if strings.Contains(r.URL.Path, "foreign") {
@@ -246,6 +256,13 @@ func TestPreviousDeploymentEvidenceGate(t *testing.T) {
 			if (err != nil) != wantWait {
 				t.Fatalf("gate err=%v", err)
 			}
+			if mode == "unreadable" {
+				var wait *infra.DeploymentWaitError
+				if !errors.As(err, &wait) || wait.Reason != "DeploymentEvidenceUnavailable" || !strings.Contains(wait.Detail, "403") {
+					t.Fatalf("missing specific evidence failure: %v", err)
+				}
+				return
+			}
 			if err != nil && !strings.Contains(err.Error(), "waiting for previous platform deployment to finish") {
 				t.Fatal(err)
 			}
@@ -328,28 +345,45 @@ func TestAdmissionSharedObservationCache(t *testing.T) {
 	}
 }
 
-func TestAdmissionLongRunningPagedEvidenceAndBound(t *testing.T) {
-	for _, total := range []int{101, 501} {
-		t.Run(fmt.Sprint(total), func(t *testing.T) {
-			b, f := admissionBackend(t)
-			b.maxInflightDeploys = 1
-			for i := range total {
-				p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
-				p.Created = time.Now().Add(-2 * time.Hour)
-				f.processes = append(f.processes, p)
-			}
-			f.processes[total-1].Status = "RUNNING"
-			_, err := b.admitDeployment(t.Context(), &ServiceStack{ID: "b", Name: "memberb"})
-			if err == nil {
-				t.Fatal("old running process or incomplete inventory admitted mutation")
-			}
-			if total == 101 && !strings.Contains(err.Error(), "membera:RUNNING") {
-				t.Fatal(err)
-			}
-			if total == 501 && (f.processReads != 5 || !strings.Contains(err.Error(), "owned service/process evidence unavailable")) {
-				t.Fatalf("bound did not fail closed after five reads: reads=%d err=%v", f.processReads, err)
-			}
-		})
+func TestAdmissionLongRunningPagedEvidence(t *testing.T) {
+	for _, total := range []int{101, 501, 807} {
+		for _, status := range []string{"FINISHED", "RUNNING", "PENDING", "UNKNOWN"} {
+			t.Run(fmt.Sprintf("%d/%s", total, status), func(t *testing.T) {
+				b, f := admissionBackend(t)
+				b.maxInflightDeploys = 1
+				for i := range total {
+					p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
+					p.Created = time.Now().Add(-2 * time.Hour)
+					f.processes = append(f.processes, p)
+				}
+				f.processes[total-1].Status = status
+				release, err := b.admitDeployment(t.Context(), &ServiceStack{ID: "b", Name: "memberb"})
+				if status == "FINISHED" {
+					if err != nil {
+						t.Fatal(err)
+					}
+					release()
+				} else if err == nil || !strings.Contains(err.Error(), "membera:"+status) {
+					t.Fatalf("old unfinished process not observed: %v", err)
+				}
+				reads := f.processReads
+				b.deploymentAdmission().observedAt = time.Time{}
+				release, err = b.admitDeployment(t.Context(), &ServiceStack{ID: "b", Name: "memberb"})
+				if release != nil {
+					release()
+				}
+				wantReads := 2 // one newest page per owned service
+				if status != "FINISHED" {
+					wantReads++
+				}
+				if f.processReads-reads != wantReads {
+					t.Fatalf("warm inventory rescanned history: reads=%d want=%d", f.processReads-reads, wantReads)
+				}
+				if (err == nil) != (status == "FINISHED") {
+					t.Fatalf("warm inventory changed admission: %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -428,29 +462,19 @@ func TestDeployOtherServiceUnknownProcessFailsClosed(t *testing.T) {
 	}
 }
 
-func TestDeployPreviousProcessScanBound(t *testing.T) {
-	server := newFakeAPI(t)
-	plain := hardeningBackend(t, server, nil)
-	id := importHardeningRuntime(t, plain)
-	var reads, mutations atomic.Int32
-	b := hardeningBackend(t, server, receiptTransport(func(r *http.Request) (*http.Response, error) {
-		if r.Method != http.MethodGet {
-			mutations.Add(1)
-		}
-		if r.Method == http.MethodGet && r.URL.Path == "/service-stack/"+id+"/process" {
-			reads.Add(1)
-			list := make([]Process, 100)
-			for i := range list {
-				list[i] = admissionProcess(fmt.Sprintf("%s-%d", r.URL.Query().Get("offset"), i), id, "FINISHED")
-			}
-			data, _ := json.Marshal(page[Process]{List: list, Total: 10000})
+func TestAdmissionIncompleteProcessEvidence(t *testing.T) {
+	b, _ := admissionBackend(t)
+	b.client.http = &http.Client{Transport: receiptTransport(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/process") {
+			data, _ := json.Marshal(page[Process]{Total: 807})
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(data))), Request: r}, nil
 		}
 		return http.DefaultTransport.RoundTrip(r)
-	}))
-	_, err := b.Deploy(t.Context(), "member", hardeningDeployment())
-	if err == nil || reads.Load() != 5 || mutations.Load() != 0 {
-		t.Fatalf("unbounded previous-deployment scan: reads=%d mutations=%d err=%v", reads.Load(), mutations.Load(), err)
+	})}
+	_, err := b.admitDeployment(t.Context(), &ServiceStack{ID: "b"})
+	var wait *infra.DeploymentWaitError
+	if !errors.As(err, &wait) || wait.Reason != "DeploymentEvidenceUnavailable" || !strings.Contains(wait.Detail, "incomplete service process inventory") {
+		t.Fatalf("missing specific fail-closed evidence diagnostic: %v", err)
 	}
 }
 
@@ -554,4 +578,48 @@ func TestRefusedReservationRecoveryPreservesVisibilityExpiry(t *testing.T) {
 		t.Fatalf("refused recovery stranded reservation beyond expiry: %v", err)
 	}
 	release()
+}
+
+func TestAdmissionIncrementalInventoryContinuity(t *testing.T) {
+	b, f := admissionBackend(t)
+	state := b.deploymentAdmission()
+	for i := range 807 {
+		p := admissionProcess(fmt.Sprintf("old%d", i), "a", "FINISHED")
+		p.ActionName = "stack.updateAutoscaling"
+		f.processes = append(f.processes, p)
+	}
+	observe := func() []Process {
+		t.Helper()
+		processes, err := b.serviceProcesses(t.Context(), state, "a")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return processes
+	}
+	if got := observe(); len(got) != 0 || f.processReads != 9 {
+		t.Fatalf("cold inventory: relevant=%d reads=%d", len(got), f.processReads)
+	}
+	f.processes = append([]Process{admissionProcess("new", "a", "PENDING")}, f.processes...)
+	if got := observe(); len(got) != 1 || got[0].Status != "PENDING" || f.processReads != 10 {
+		t.Fatalf("new prefix: processes=%v reads=%d", got, f.processReads)
+	}
+	f.processes[0].Status = "FINISHED"
+	if got := observe(); len(got) != 1 || got[0].Status != "FINISHED" || f.processReads != 12 {
+		t.Fatalf("active refresh: processes=%v reads=%d", got, f.processReads)
+	}
+	if got := observe(); len(got) != 0 || f.processReads != 13 {
+		t.Fatalf("terminal process refreshed again: processes=%v reads=%d", got, f.processReads)
+	}
+	// Retention shrank the inventory: cold-scan again, including old unfinished work.
+	f.processes = f.processes[1:]
+	f.processes[len(f.processes)-1].Status = "UNKNOWN"
+	f.processes[len(f.processes)-1].ActionName = "appVersion.deploy"
+	if got := observe(); len(got) != 1 || got[0].Status != "UNKNOWN" || f.processReads != 22 {
+		t.Fatalf("shrunken history skipped: processes=%v reads=%d", got, f.processReads)
+	}
+	// A new ID without a total increase cannot prove continuity.
+	f.processes[0] = admissionProcess("replacement", "a", "RUNNING")
+	if got := observe(); len(got) != 2 || f.processReads != 31 {
+		t.Fatalf("ID gap skipped: processes=%v reads=%d", got, f.processReads)
+	}
 }
