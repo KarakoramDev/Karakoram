@@ -101,7 +101,7 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 			kind := ""
 			if m.DesiredVersion != rc.Cluster.Spec.Version {
 				kind = "deploy"
-			} else if !reflect.DeepEqual(m.Resources, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)) || !reflect.DeepEqual(m.Disk, rc.Cluster.Spec.Components.Engine.Resources) {
+			} else if !reflect.DeepEqual(m.Resources, runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)) || m.Disk.MinDisk != rc.Cluster.Spec.Components.Engine.Resources.MinDisk || m.Disk.MaxDisk != rc.Cluster.Spec.Components.Engine.Resources.MaxDisk {
 				kind = "resources"
 			} else if m.RestartFingerprint != fp {
 				kind = "restart"
@@ -201,7 +201,9 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 		c.Started = true
 		return p.submit(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: c.Resources})
 	case "disk":
-		if reflect.DeepEqual(m.Disk, c.Disk) {
+		// Legacy disk checkpoints also contain CPU/RAM fields. Only persistent
+		// disk bounds decide whether this step needs a volume operation.
+		if m.Disk.MinDisk == c.Disk.MinDisk && m.Disk.MaxDisk == c.Disk.MaxDisk {
 			c.Step = "resource-config"
 			return nil
 		}

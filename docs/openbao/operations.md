@@ -101,6 +101,19 @@ karactl -n NS clusters rotate-tls secrets --yes --wait
 
 Restart and binary upgrade process standbys first, one at a time, re-unsealing and waiting for healthy-voter/autopilot gates. The active member steps down before its turn. Resource/process-trust changes also use serialized convergence. **TLS rotation is a serial certificate reload via SIGHUP**, not a process restart, and does not require re-unseal.
 
+CPU-only and RAM-only changes leave the persistent volume unchanged: only
+`minDisk` and `maxDisk` determine whether a volume resize is required. Nomad and
+Dokploy accept runtime resource changes subject to backend admission, but reject
+persistent disk growth before queuing disruptive work. Runtime disk bounds in
+member status are not the capacity of the separately managed data volume.
+
+If an older control plane failed a runtime-only update with `does not provide
+diskGrowth` after replacing a runtime, upgrading the control plane resumes its
+persisted disk checkpoint without growing the volume. No member-agent upgrade,
+corrective PATCH, suspension or recreation is required when the desired persistent
+disk bounds already match the existing volumes. The old failed operation remains
+historical; watch cluster health and `observedGeneration` for convergence.
+
 Upgrades are forward-only to catalog-listed versions; inspect `providers get openbao -o json`. Only 2.7.1 is currently listed, so a newer-version upgrade cannot yet be exercised. Never install an uncataloged binary or downgrade data in place. Retain a successful [snapshot](backups.md) before maintenance and follow operation status separately from cluster health.
 
 ## PostgreSQL storage opt-in

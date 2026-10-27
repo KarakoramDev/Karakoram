@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
@@ -71,5 +73,129 @@ func TestResourcePlacementRejectionDuringReceiptReleasesChange(t *testing.T) {
 	rc.Backend = &resourceRejectedReceiptBackend{Backend: rc.Backend, cause: cause}
 	if _, err := p.observePending(t.Context(), rc, s); !errors.Is(err, cause) || s.Pending != nil || s.Retry != nil || m.Change != nil {
 		t.Fatalf("terminal receipt retained rejected change: %v %+v", err, s)
+	}
+}
+
+type resizeBackend struct {
+	infra.Backend
+	name string
+}
+
+func (b resizeBackend) Name() string { return b.name }
+
+func TestRuntimeOnlyResizeWithoutDiskGrowth(t *testing.T) {
+	for _, backend := range []string{"nomad", "dokploy"} {
+		for _, dimension := range []string{"cpu", "ram"} {
+			t.Run(backend+"/"+dimension, func(t *testing.T) {
+				p, rc, f, _ := setup(t)
+				ready(t, p, rc)
+				caps := f.Capabilities()
+				caps.DiskGrowth = false
+				f.capabilities = &caps
+				rc.Backend = resizeBackend{Backend: f, name: backend}
+				target := &rc.Cluster.Spec.Components.Engine.Resources
+				if dimension == "cpu" {
+					target.MaxCPU++
+				} else {
+					target.MaxRAM += 0.5
+				}
+				rc.Cluster.Generation++
+				f.log.clear()
+				ready(t, p, rc)
+				for _, m := range state(t, rc).Members {
+					if m.Change != nil || m.Resources != runtimeResources(*target) || m.ProcessGeneration != 2 {
+						t.Fatalf("runtime resize did not converge once: %+v", m)
+					}
+					volumeCall := "infra:" + m.Volume + ":resources"
+					for _, call := range f.log.snapshot() {
+						if call == volumeCall {
+							t.Fatal("runtime-only resize invoked volume growth")
+						}
+					}
+				}
+				// Disk caches still have the original CPU/RAM. Another sync must
+				// not start a second resource roll because of those legacy fields.
+				mutations := f.mutations
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				if f.mutations != mutations {
+					t.Fatal("converged runtime resize repeated platform work")
+				}
+				for _, m := range state(t, rc).Members {
+					if m.Change != nil {
+						t.Fatal("legacy CPU/RAM in disk checkpoint triggered another roll")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRuntimeResizeResumesLegacyDiskCheckpoint(t *testing.T) {
+	p, rc, f, _ := setup(t)
+	ready(t, p, rc)
+	caps := f.Capabilities()
+	caps.DiskGrowth = false
+	f.capabilities = &caps
+	s := state(t, rc)
+	m := s.find("demom1")
+	rc.Cluster.Spec.Components.Engine.Resources.MaxRAM += 0.5
+	rc.Cluster.Generation++
+	target := rc.Cluster.Spec.Components.Engine.Resources
+	fp, err := p.restartFingerprint(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reproduce the durable boundary left by the failed pre-fix operation:
+	// runtime resize acknowledged, disk step not submitted.
+	m.Resources = runtimeResources(target)
+	f.services[m.Name].Resources = m.Resources
+	m.Change = &memberChange{Kind: "resources", Step: "disk", Started: true, Version: rc.Cluster.Spec.Version, Fingerprint: fp, Resources: m.Resources, Disk: target}
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	f.log.clear()
+	p = New(p.options)
+	ready(t, p, rc)
+	for _, call := range f.log.snapshot() {
+		if strings.Contains(call, "v:resources") {
+			t.Fatalf("resuming legacy disk step invoked volume growth: %s", call)
+		}
+	}
+}
+
+func TestUnsupportedDiskGrowthPrecedesDisruption(t *testing.T) {
+	for _, backend := range []string{"nomad", "dokploy"} {
+		t.Run(backend, func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			caps := f.Capabilities()
+			caps.DiskGrowth = false
+			f.capabilities = &caps
+			rc.Backend = resizeBackend{Backend: f, name: backend}
+			before := state(t, rc)
+			rc.Cluster.Spec.Components.Engine.Resources.MaxDisk++
+			rc.Cluster.Generation++
+			mutations := f.mutations
+			f.log.clear()
+			if _, err := p.Sync(t.Context(), rc); !errors.Is(err, engine.ErrNotSupported) {
+				t.Fatalf("unsupported growth accepted: %v", err)
+			}
+			if f.mutations != mutations || len(f.log.snapshot()) != 0 {
+				t.Fatal("growth rejection happened after disruption")
+			}
+			after := state(t, rc)
+			for _, m := range after.Members {
+				if m.Change != nil || m.ProcessGeneration != before.find(m.Name).ProcessGeneration || a.member(m.Name).sealed {
+					t.Fatal("growth rejection changed serving member")
+				}
+			}
+			// Admission uses the same backend volume identity and sizes.
+			target := rc.Cluster.Spec
+			if _, err := engine.VolumeAdmissionBaseline(t.Context(), p, rc.Cluster, target, rc.Backend); !errors.Is(err, engine.ErrNotSupported) {
+				t.Fatalf("admission accepted actual growth: %v", err)
+			}
+		})
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 )
@@ -65,5 +66,57 @@ func TestDiskGrowthLegacyRevertAndResume(t *testing.T) {
 	w = call(s, "POST", "/api/v1/clusters/legacy/resume", "", token)
 	if w.Code != 202 {
 		t.Fatal("corrected retained volume could not resume", w.Code, w.Body.String())
+	}
+}
+
+func TestOpenBaoDiskGrowthAdmissionBeforeResize(t *testing.T) {
+	for _, kind := range []string{"nomad", "dokploy"} {
+		for _, method := range []string{"PATCH", "PUT"} {
+			t.Run(kind+"/"+method, func(t *testing.T) {
+				s, _, token := testServer(t)
+				p := openbao.New(openbao.ProviderOptions{})
+				var err error
+				s.Registry, err = engine.NewRegistry(p)
+				if err != nil {
+					t.Fatal(err)
+				}
+				b := fake.New(fake.Options{Name: kind, Capabilities: infra.Capabilities{Logs: true}})
+				s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+				op, err := b.ImportServices(t.Context(), []infra.ServiceSpec{engine.VolumeServiceSpec("bao", "baom0", "baom0v", "token", domain.Resources{MinDisk: 5, MaxDisk: 5})})
+				if err != nil {
+					t.Fatal(err)
+				}
+				c := &domain.Cluster{Name: "bao", Generation: 1}
+				p.ApplyDefaults(&c.Spec)
+				c.Status = domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1}
+				c.Internal = []byte(`{"members":[{"name":"baom0","volume":"baom0v","volumeId":"` + op.Services["baom0v"] + `","stage":"ready","disk":{"minDisk":5,"maxDisk":5}}]}`)
+				if err := s.Store.CreateCluster(t.Context(), c); err != nil {
+					t.Fatal(err)
+				}
+				before, err := s.Store.GetCluster(t.Context(), c.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				ops, err := s.Store.ListOperations(t.Context(), c.Ref())
+				if err != nil {
+					t.Fatal(err)
+				}
+				body := `{"spec":{"provider":"openbao","components":{"engine":{"replicas":3,"resources":{"cpuMode":"SHARED","minCpu":1,"maxCpu":1,"minRam":1,"maxRam":1.5,"minDisk":5,"maxDisk":6}}}}}`
+				for _, prefix := range []string{"/api/v1/dry-run/clusters/", "/api/v1/clusters/"} {
+					w := call(s, method, prefix+"bao", body, token)
+					if w.Code != 400 || !strings.Contains(w.Body.String(), "backend "+kind+" does not provide diskGrowth") {
+						t.Fatal("growth not rejected at admission", w.Code, w.Body.String())
+					}
+				}
+				after, err := s.Store.GetCluster(t.Context(), c.Ref())
+				if err != nil || !reflect.DeepEqual(before, after) {
+					t.Fatalf("rejected growth changed cluster: %v", err)
+				}
+				afterOps, err := s.Store.ListOperations(t.Context(), c.Ref())
+				if err != nil || !reflect.DeepEqual(ops, afterOps) {
+					t.Fatalf("rejected growth queued disruptive work: %v", err)
+				}
+			})
+		}
 	}
 }
