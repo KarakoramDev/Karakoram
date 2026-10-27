@@ -23,6 +23,16 @@ for the first eligible writer. Such members are not a failed infrastructure
 lookup; the cluster stays non-Ready until their runtime and native health are
 observed. This applies to both MySQL and PXC.
 
+Before a runtime is imported and deployed, observation does not dial its agent
+or query Galera: its planned DNS name may not exist yet. PXC keeps these members
+in the quorum comparison as unavailable, without advancing the GTID safe
+watermark. Galera status probes use the bounded native observation timeout
+(currently four seconds), not the entire reconciliation deadline.
+Initial imports still advance through durable per-member plan, submit and
+completion checkpoints over successive reconciliations. Upgrading only the
+control plane resumes a create stalled at these checkpoints; do not recreate the
+cluster or edit its internal state to bypass observation.
+
 Proxy provisioning waits for a native-online writer to complete its data-member
 join checkpoint, so its first configuration contains an eligible backend.
 A pending proxy deployment does not block that initial data join, including

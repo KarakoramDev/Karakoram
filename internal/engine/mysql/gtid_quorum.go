@@ -88,7 +88,9 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	observations := make(map[string]myspec.GaleraStatusResponse, len(members))
 	sampleAt := now(rc)
 	for _, m := range members {
-		if rc.Agents == nil {
+		// Keep unavailable identities in the quorum denominator, but never
+		// resolve a name before its runtime has been deployed.
+		if rc.Agents == nil || m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
 			observations[m.Name] = myspec.GaleraStatusResponse{}
 			continue
 		}

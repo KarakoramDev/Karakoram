@@ -12,6 +12,8 @@ import (
 )
 
 func galeraStatus(ctx context.Context, rc *engine.Context, name string) (myspec.GaleraStatusResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	defer cancel()
 	var st myspec.GaleraStatusResponse
 	err := mysqlAction(ctx, rc, name, myspec.ActionGaleraStatus, struct{}{}, &st)
 	return st, err

@@ -41,6 +41,12 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 	var wg sync.WaitGroup
 	limit := make(chan struct{}, 8)
 	for i, m := range members {
+		// Import/deployment is infrastructure work, not an agent health probe.
+		// Planned names need not resolve, and imported runtimes may not run yet.
+		if m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
+			out[i].err = engine.ErrUnavailable
+			continue
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
