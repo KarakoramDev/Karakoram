@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -286,23 +287,21 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 		if patroniTopology(sp.Topology) {
 			entries := []string{}
 			for _, peer := range s.group(0).data() {
-				entries = append(entries, peer.Name+"=https://"+peer.Name+":2380")
+				entries = append(entries, peer.Name+"=https://"+net.JoinHostPort(peer.Name, "2380"))
 			}
 			sp.Etcd = &pgspec.Etcd{InitialCluster: strings.Join(entries, ","), State: m.EtcdState, Token: s.UID}
 			if m.InitialCluster != "" {
 				sp.Etcd.InitialCluster = m.InitialCluster
 			}
 			desired = []string{"etcd", "patroni"}
-			if sp.Citus != nil {
+			if sp.Citus != nil && m.Group != 0 {
 				for _, peer := range s.group(0).data() {
 					if !peer.Removing && !peer.EtcdLearner {
-						sp.Etcd.Endpoints = append(sp.Etcd.Endpoints, "https://"+peer.Name+":2379")
+						sp.Etcd.Endpoints = append(sp.Etcd.Endpoints, net.JoinHostPort(peer.Name, "2379"))
 					}
 				}
-				if m.Group != 0 {
-					sp.Etcd.InitialCluster, sp.Etcd.State = "", ""
-					desired = []string{"patroni"}
-				}
+				sp.Etcd.InitialCluster, sp.Etcd.State = "", ""
+				desired = []string{"patroni"}
 			}
 		}
 		if storageName := rc.Cluster.Spec.Backup.Storage; storageName != "" {

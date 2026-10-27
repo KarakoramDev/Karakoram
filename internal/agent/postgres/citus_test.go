@@ -182,12 +182,17 @@ func TestDistributedSpecValidation(t *testing.T) {
 	s.Peers = []pgspec.Peer{{Name: s.Member, Host: "localhost"}}
 	s.Etcd = &pgspec.Etcd{Endpoints: []string{"localhost:2379"}}
 	s.CAPEM, s.ServerCert = testTLS(t)
-	if err := validate(s); err != nil {
-		t.Fatal(err)
+	for _, endpoint := range []string{"localhost:2379", "192.0.2.1:2379", "[2001:db8::1]:2379"} {
+		s.Etcd.Endpoints = []string{endpoint}
+		if err := validate(s); err != nil {
+			t.Fatalf("rejected endpoint %q: %v", endpoint, err)
+		}
 	}
-	s.Etcd.Endpoints = []string{"https://localhost:2379"}
-	if validate(s) == nil {
-		t.Fatal("accepted malformed client endpoint")
+	for _, endpoint := range []string{"https://localhost:2379", "https://[2001:db8::1]:2379", "2001:db8::1:2379"} {
+		s.Etcd.Endpoints = []string{endpoint}
+		if validate(s) == nil {
+			t.Fatalf("accepted malformed client endpoint %q", endpoint)
+		}
 	}
 	s.Etcd.Endpoints = []string{"localhost:2379"}
 	s.Citus = nil

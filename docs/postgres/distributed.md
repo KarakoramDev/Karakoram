@@ -84,7 +84,7 @@ Completed marker creation has a durable name receipt and replays its original re
 
 ## Failover and limits
 
-Worker agents receive client-only etcd endpoints (`host:2379`); they do not add etcd voters. Internal DCS reset is group-scoped by default (`/karakoram/<scope>/<group>/`) and atomically requires an absent leader. Whole-formation reset must be explicitly requested with `Formation: true`, requires no observed leader in any group and uses a revision-fenced atomic delete; it is not a shortcut around restore fencing.
+Coordinator agents keep local etcd voter configuration (no client-only endpoint list). Worker agents receive only coordinator voter endpoints as `host:2379` addresses (IPv6 literals use `[address]:2379`), without a URL scheme; they do not add etcd voters. Patroni selects HTTPS and the cluster CA/client certificate separately, so endpoint formatting does not disable mutual TLS. Internal DCS reset is group-scoped by default (`/karakoram/<scope>/<group>/`) and atomically requires an absent leader. Whole-formation reset must be explicitly requested with `Formation: true`, requires no observed leader in any group and uses a revision-fenced atomic delete; it is not a shortcut around restore fencing.
 
 Patroni elects a leader **within each group**. Worker failover changes that group's registered primary, not the coordinator role; coordinator promotion retains the formation metadata. Coordinator-only proxies refresh routing to the coordinator leader. Client transactions may fail during promotion and require application-level handling; Citus does not make a failed in-flight distributed transaction transparently succeed. Metadata drift withdraws healthy topology status until reconciled.
 
