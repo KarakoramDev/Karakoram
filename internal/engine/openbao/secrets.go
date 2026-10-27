@@ -229,6 +229,15 @@ func (p *Provider) ensureSecrets(ctx context.Context, rc *engine.Context, s *int
 			} else if !missing(e) {
 				return e
 			}
+			if kind == "members" && len(existing) > 0 {
+				urgent, e := pki.NeedsRenewal(existing, 7*24*time.Hour, now(rc))
+				if e != nil {
+					return e
+				}
+				if !urgent && rc.WaitForWindow().RequeueAfter > 0 {
+					continue
+				}
+			}
 			cert, key, e := ca.Issue(pki.CertRequest{CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: ips, Validity: 365 * 24 * time.Hour, Server: true, Client: true})
 			if e != nil {
 				return e

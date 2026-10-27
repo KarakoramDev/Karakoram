@@ -94,6 +94,9 @@ func (p *Core) reconcileMembership(ctx context.Context, rc *engine.Context, s *s
 		publishRevision(s)
 		return true, nil
 	}
+	if rc.WaitForWindow().RequeueAfter > 0 {
+		return true, nil
+	}
 	// Highest identity is removed first. No writer is ever removed in place.
 	data := s.data()
 	target := data[len(data)-1]

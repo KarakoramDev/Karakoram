@@ -25,6 +25,9 @@ func checkpoint(cp operationCheckpoint, done bool) engine.OpResult {
 	return engine.OpResult{Done: done, Step: cp.Step, Checkpoint: raw, RequeueAfter: 2 * time.Second}
 }
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
@@ -58,6 +61,11 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		defer a.Close()
 		if cp.Step == "" {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				result := checkpoint(cp, false)
+				result.RequeueAfter = wait.RequeueAfter
+				return result, nil
+			}
 			if e = a.Process(ctx, agentapi.ProcessAction{Process: neo4jspec.Process, Action: "restart", RequestID: op.ID}); e != nil {
 				return checkpoint(cp, false), e
 			}
@@ -71,6 +79,11 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		if cp.Step == "issue" {
 			if s.TLSRotationID != op.ID {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					result := checkpoint(cp, false)
+					result.RequeueAfter = wait.RequeueAfter
+					return result, nil
+				}
 				if err = ensureCertificates(ctx, rc, s, true); err != nil {
 					return checkpoint(cp, false), err
 				}

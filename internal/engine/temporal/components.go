@@ -255,6 +255,9 @@ func syncUIExposure(ctx context.Context, rc *engine.Context, s *componentState, 
 			return false, nil
 		}
 		if m.Stage != engine.ComponentImported {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			op, err := rc.Backend.Stop(ctx, m.Name)
 			if err != nil {
 				return true, err
@@ -284,6 +287,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 
 	// Upgrade admission and settle checkpoints precede role reconciliation.
 	if s.Version != "" && s.Version != rc.Cluster.Spec.Version && s.Upgrade == nil {
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		// No schema migration starts until every current component is healthy.
 		for _, name := range tspec.RollOrder {
 			m := s.Members[name]
@@ -359,6 +365,13 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return true, e
 			}
 			if sp.RestartToken != m.ConfigHash {
+				needsWindow, e := p.configurationNeedsWindow(ctx, rc, m, sp)
+				if e != nil {
+					return true, e
+				}
+				if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				if s.Upgrade != nil {
 					s.Upgrade.Component = m.Component
 				}
@@ -460,6 +473,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return nil
 			},
 			Scale: func(ctx context.Context, n int) error {
+				if n < m.Replicas && rc.WaitForWindow().RequeueAfter > 0 {
+					return nil
+				}
 				op, e := rc.Backend.SetContainerCount(ctx, m.Name, n, n)
 				if e == nil {
 					s.Pending = &componentPending{Component: m.Component, Action: "scale", Op: op, Replicas: n}
@@ -467,13 +483,21 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return e
 			},
 			Resize: func(ctx context.Context, r domain.Resources) error {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return nil
+				}
 				op, e := rc.Backend.SetResources(ctx, m.Name, r)
 				if e == nil {
 					s.Pending = &componentPending{Component: m.Component, Action: "resize", Op: op, Resources: r}
 				}
 				return e
 			},
-			Delete: func(ctx context.Context) error { return deleteComponent(ctx, rc, s, m) },
+			Delete: func(ctx context.Context) error {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return nil
+				}
+				return deleteComponent(ctx, rc, s, m)
+			},
 		})
 		if handled || e != nil {
 			return handled, e

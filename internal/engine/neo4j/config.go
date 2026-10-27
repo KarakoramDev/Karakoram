@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j/neo4jspec"
@@ -59,11 +60,25 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 	if m == nil || m.Name != name {
 		return agentapi.MemberConfig{}, engine.ErrNotFound
 	}
-	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
-	if err != nil {
-		return agentapi.MemberConfig{}, err
+	o := s.ConfigOptions
+	if o == nil {
+		// Older persisted states have no accepted options snapshot. Do not
+		// expose a pending configuration through an autonomous agent pull.
+		hash := digest(struct {
+			Version   string
+			Resources domain.Resources
+			Options   any
+		}{rc.Cluster.Spec.Version, rc.Cluster.Spec.Components.Engine.Resources, rc.Cluster.Spec.EngineOptions})
+		if allowed, _ := rc.DisruptionAllowed(); !allowed && s.ConfigHash != "" && s.ConfigHash != hash {
+			return agentapi.MemberConfig{}, engine.ErrUnavailable
+		}
+		parsed, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+		o = &parsed
 	}
-	h, pc, err := memory(rc.Cluster.Spec.Components.Engine.Resources.MinRAM, o)
+	h, pc, err := memory(m.Resources.MinRAM, *o)
 	if err != nil {
 		return agentapi.MemberConfig{}, err
 	}

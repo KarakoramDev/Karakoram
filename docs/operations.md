@@ -70,6 +70,14 @@ karactl clusters create demo --maintenance-time-zone UTC \
   --maintenance-window '0 2 * * 0;2h'
 ```
 
+The same desired-state gate applies to Keycloak, Neo4j, MySQL/PXC, Temporal,
+OpenBao and Weaviate, including auxiliary-component scale-in and restart-required
+configuration. PostgreSQL profile preparation/restarts and Citus worker-group
+drain/retirement follow it too. A binding credential-generation roll in Keycloak
+or Temporal is credential rotation and remains exempt, even when applying those
+credentials restarts the consumer. An unrelated desired application change in
+the same reconciliation still needs its own maintenance permission.
+
 ## Moving a member
 
 ```sh

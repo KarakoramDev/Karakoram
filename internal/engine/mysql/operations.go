@@ -36,6 +36,9 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 
 // RunOperation's closed dispatch prevents unsupported maintenance from mutating data.
 func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
 	if err := p.finishPendingAccess(ctx, rc); err != nil {
@@ -117,6 +120,10 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 			cp.Waiting = false
 		}
 	} else {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			raw, err := json.Marshal(cp)
+			return engine.OpResult{Checkpoint: raw, Step: "restart", Message: "Waiting for maintenance window", RequeueAfter: wait.RequeueAfter}, err
+		}
 		a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 		if e != nil {
 			return engine.OpResult{}, e

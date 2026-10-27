@@ -67,6 +67,9 @@ func (p *Provider) advanceScaleDown(ctx context.Context, rc *engine.Context, s *
 				return true, nil
 			}
 		}
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		s.ScaleDown = &scaleDown{Member: m.Name, Stage: "feasibility", Target: target}
 		s.Phase = "scaling"
 		rc.Cluster.Status.Phase = domain.PhaseScaling
@@ -187,6 +190,9 @@ func (p *Provider) advanceScaleDown(ctx context.Context, rc *engine.Context, s *
 			}
 		}
 		if q.Stage == "feasibility" {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			m.Removing = true
 			q.Stage = "drain"
 			return true, nil

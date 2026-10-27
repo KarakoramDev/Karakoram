@@ -8,18 +8,53 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"reflect"
 	"slices"
 	"sort"
+	"time"
 )
 
 type rollingTarget struct {
 	Config    agentapi.MemberConfig `json:"config"`
 	Resources domain.Resources      `json:"resources"`
+}
+
+// Automatic transport renewal never needs a window. Database leaf renewal
+// may bypass it only when the active leaf has at most seven days remaining.
+func rollingNeedsWindow(ctx context.Context, rc *engine.Context, m *member, target rollingTarget, reason string) (bool, error) {
+	if reason == "rotate-root-add" || reason == "rotate-root-remove" {
+		return false, nil
+	}
+	if reason != "config" || !reflect.DeepEqual(m.Resources, target.Resources) {
+		return true, nil
+	}
+	raw, err := secret(ctx, rc, "config/"+m.Name)
+	if err != nil {
+		return false, err
+	}
+	var active agentapi.MemberConfig
+	if err = json.Unmarshal(raw, &active); err != nil {
+		return false, err
+	}
+	desired := target.Config
+	desired.AgentTLS = active.AgentTLS
+	if desired.TLS.CertPEM != active.TLS.CertPEM && active.TLS.CertPEM != "" {
+		urgent, err := pki.NeedsRenewal([]byte(active.TLS.CertPEM), 7*24*time.Hour, now(rc))
+		if err != nil {
+			return false, err
+		}
+		if urgent {
+			desired.TLS.CertPEM, desired.TLS.KeyPEM = active.TLS.CertPEM, active.TLS.KeyPEM
+		}
+	}
+	return configHash(desired) != configHash(active), nil
 }
 
 func (p *Provider) startRolling(ctx context.Context, rc *engine.Context, s *state, reason, operationID, only string) error {
@@ -42,7 +77,25 @@ func (p *Provider) startRolling(ctx context.Context, rc *engine.Context, s *stat
 		if reason == "config" && configHash(cfg) == m.ConfigHash && reflect.DeepEqual(m.Resources, rc.Cluster.Spec.Components.Engine.Resources) {
 			continue
 		}
-		raw, e := json.Marshal(rollingTarget{Config: cfg, Resources: rc.Cluster.Spec.Components.Engine.Resources})
+		target := rollingTarget{Config: cfg, Resources: rc.Cluster.Spec.Components.Engine.Resources}
+		needsWindow, e := rollingNeedsWindow(ctx, rc, m, target, reason)
+		if e != nil {
+			return e
+		}
+		if operationID == "" && needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
+		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
+			if e = engine.RequireDiskGrowth(rc.Backend); e != nil {
+				return e
+			}
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if e = planner.PlanResources(ctx, m.Name, runtimeResources(target.Resources)); e != nil {
+				return e
+			}
+		}
+		raw, e := json.Marshal(target)
 		if e != nil {
 			return e
 		}
@@ -124,8 +177,15 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	if e = json.Unmarshal(raw, &target); e != nil {
 		return e
 	}
+	needsWindow, e := rollingNeedsWindow(ctx, rc, m, target, r.Reason)
+	if e != nil {
+		return e
+	}
 	switch r.Step {
 	case "gate":
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
 		ready, e := p.rollingClusterReady(ctx, rc, s)
 		if e != nil || !ready {
 			return e
@@ -133,6 +193,23 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		r.Step = "activate"
 		return nil
 	case "activate":
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
+		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
+			if e = engine.RequireDiskGrowth(rc.Backend); e != nil {
+				s.Rolling = nil
+				return e
+			}
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if e = planner.PlanResources(ctx, m.Name, runtimeResources(target.Resources)); e != nil {
+				if errors.Is(e, infra.ErrRejected) {
+					s.Rolling = nil
+				}
+				return e
+			}
+		}
 		ready, e := p.rollingClusterReady(ctx, rc, s)
 		if e != nil || !ready {
 			return e

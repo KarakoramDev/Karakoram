@@ -87,6 +87,9 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 	}
 	switch m.Retirement {
 	case "handoff":
+		if s.Replacement == nil && rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
 			return false, err

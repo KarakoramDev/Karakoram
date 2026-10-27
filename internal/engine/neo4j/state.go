@@ -15,6 +15,7 @@ type state struct {
 	UID                string            `json:"uid"`
 	ConfigVersion      int64             `json:"configVersion"`
 	ConfigHash         string            `json:"configHash,omitempty"`
+	ConfigOptions      *EngineOptions    `json:"configOptions,omitempty"`
 	Member             *member           `json:"member,omitempty"`
 	Maintenance        string            `json:"maintenance,omitempty"`
 	RestoreRecovery    *domain.Operation `json:"restoreRecovery,omitempty"`

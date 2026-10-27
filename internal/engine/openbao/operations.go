@@ -24,6 +24,9 @@ func operationResult(cp operationState, done bool) (engine.OpResult, error) {
 }
 
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	if r, handled, e := p.runBackupOperation(ctx, rc, op); handled {
 		return r, e
 	}
@@ -84,6 +87,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 				return result, engine.ErrNotFound
 			}
 			if m.Healthy && (m.Voter || p.postgresStorage(rc.Cluster)) && m.Stage == "ready" {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return operationResult(cp, false)
+				}
 				if old != nil {
 					old.Removing = true
 				}
@@ -126,6 +132,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			kind := "restart"
 			if op.Kind == domain.OperationRotateTLS {
 				kind = "tls"
+			}
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return operationResult(cp, false)
 			}
 			m.Change = &memberChange{Kind: kind, Version: m.DesiredVersion, Fingerprint: fp}
 			cp.Waiting = m.Name

@@ -53,6 +53,9 @@ func (*Provider) CanClaimOperation(c *domain.Cluster) (bool, error) {
 
 // RunOperation advances checkpointed restart, CA rotation, backup and restore work.
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	s, err := loadState(rc.Cluster)
 	if err != nil {
 		return result, err
@@ -206,6 +209,9 @@ func (p *Provider) rollOperation(ctx context.Context, rc *engine.Context, s *com
 		if m.Component == tspec.History || m.Component == tspec.Server {
 			cp.SettleUntil = clockNow(rc).Add(time.Minute)
 		}
+		return false, nil
+	}
+	if rc.WaitForWindow().RequeueAfter > 0 {
 		return false, nil
 	}
 	if busy, e := syncUIExposure(ctx, rc, s, m); busy || e != nil {

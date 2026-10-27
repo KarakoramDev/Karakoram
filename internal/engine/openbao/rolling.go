@@ -17,6 +17,7 @@ type memberChange struct {
 	Fingerprint string           `json:"fingerprint"`
 	Resources   domain.Resources `json:"resources"`
 	Disk        domain.Resources `json:"disk"`
+	Started     bool             `json:"started,omitempty"`
 }
 
 func (p *Provider) restartFingerprint(ctx context.Context, rc *engine.Context) (string, error) {
@@ -119,6 +120,15 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 
 func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *internalState, m *member, healthy bool) error {
 	c := m.Change
+	needsWindow := c.Kind != "tls" || rc.Operation != nil && rc.Operation.Kind == domain.OperationRotateTLS
+	if !c.Started && needsWindow {
+		switch c.Step {
+		case "", "apply", "runtime-resources", "deploy":
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return nil
+			}
+		}
+	}
 	// Every durable boundary can be separated by a controller restart or a
 	// leadership/quorum change. Check again where disruption actually occurs.
 	switch c.Step {
@@ -147,6 +157,7 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 			if err = client.StepDown(ctx); err != nil {
 				return err
 			}
+			c.Started = true
 			c.Step = "stepped-down"
 			return nil
 		}
@@ -170,6 +181,7 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 			c.Step = "runtime-resources"
 			return nil
 		}
+		c.Started = true
 		s.ConfigVersion++
 		activateConfig(rc.Cluster, s, m)
 		if c.Kind == "deploy" {
@@ -186,6 +198,7 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 		c.Step = "reload"
 		return nil
 	case "runtime-resources":
+		c.Started = true
 		return p.submit(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: c.Resources})
 	case "disk":
 		if reflect.DeepEqual(m.Disk, c.Disk) {

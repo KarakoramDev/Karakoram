@@ -14,10 +14,11 @@ import (
 // even if a later spec increases workerGroups again; new identities never reuse
 // the retired indexes. SQL removal is observed before retrying an ambiguous RPC.
 type citusScaleState struct {
-	Group int    `json:"group"`
-	Stage string `json:"stage"`
-	Host  string `json:"host,omitempty"`
-	Port  int    `json:"port,omitempty"`
+	Group   int    `json:"group"`
+	Stage   string `json:"stage"`
+	Host    string `json:"host,omitempty"`
+	Port    int    `json:"port,omitempty"`
+	Started bool   `json:"started,omitempty"`
 }
 
 func coordinatorCatalog(ctx context.Context, rc *engine.Context, s *state) (*member, pgspec.CitusStatusResponse, error) {
@@ -61,12 +62,18 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 		if s.Suspended || !coordinatorReady {
 			return false, nil // Let initial creation/resume provision the coordinator.
 		}
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		s.CitusScale = &citusScaleState{Group: highest, Stage: "drain"}
 		return true, nil // Checkpoint intent before the first native mutation.
 	}
 	cp := s.CitusScale
 	switch cp.Stage {
 	case "drain":
+		if !cp.Started && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		coordinator, catalog, err := coordinatorCatalog(ctx, rc, s)
 		if err != nil {
 			return true, err
@@ -92,9 +99,16 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 		if err := pgAction(ctx, rc, coordinator.Name, pgspec.ActionCitusDrainNode, pgspec.CitusNodeRequest{Host: cp.Host, Port: cp.Port}, nil); err != nil {
 			return true, err
 		}
+		cp.Started = true
 		cp.Stage = "fence"
 		return true, nil
 	case "fence":
+		if !cp.Started {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
+			cp.Started = true
+		}
 		// Reobserve after draining: failover during the RPC may have moved the
 		// registration. Drain that new target before fencing the group.
 		_, catalog, err := coordinatorCatalog(ctx, rc, s)

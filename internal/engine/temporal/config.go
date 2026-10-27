@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -233,6 +234,46 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 		RestartNonce  string
 	}{out, conn.CredentialGeneration, rc.Cluster.Spec.Version, m.RestartNonce})
 	return out, out.Validate()
+}
+
+// configurationNeedsWindow distinguishes desired application changes from
+// credential/transport renewal, emergency leaf renewal and scale-out.
+func (p *Provider) configurationNeedsWindow(ctx context.Context, rc *engine.Context, m *componentMember, desired tspec.Spec) (bool, error) {
+	config, err := p.MemberConfig(ctx, rc, m.Name)
+	if err != nil {
+		return false, err
+	}
+	var active tspec.Spec
+	if err = json.Unmarshal(config.EngineSpec, &active); err != nil {
+		return false, err
+	}
+	active.RestartToken, desired.RestartToken = "", ""
+	if active.Persistence != nil && desired.Persistence != nil {
+		// A binding's rotated credentials/trust and writer endpoint must
+		// converge without waiting for unrelated application maintenance.
+		active.Persistence.Host, active.Persistence.Port = desired.Persistence.Host, desired.Persistence.Port
+		active.Persistence.Username, active.Persistence.Password = desired.Persistence.Username, desired.Persistence.Password
+		active.Persistence.CAPEM = desired.Persistence.CAPEM
+		if rc.Cluster.Spec.Components.Extra[m.Component].Replicas > m.Replicas {
+			active.Persistence.MaxConns, active.Persistence.VisibilityMaxConns = desired.Persistence.MaxConns, desired.Persistence.VisibilityMaxConns
+		}
+	}
+	for _, pair := range []struct{ oldCert, oldKey, newCert, newKey *string }{
+		{&active.TLS.InternodeCertPEM, &active.TLS.InternodeKeyPEM, &desired.TLS.InternodeCertPEM, &desired.TLS.InternodeKeyPEM},
+		{&active.TLS.FrontendCertPEM, &active.TLS.FrontendKeyPEM, &desired.TLS.FrontendCertPEM, &desired.TLS.FrontendKeyPEM},
+	} {
+		if *pair.oldCert == "" || *pair.oldCert == *pair.newCert {
+			continue
+		}
+		urgent, err := pki.NeedsRenewal([]byte(*pair.oldCert), 7*24*time.Hour, clockNow(rc))
+		if err != nil {
+			return false, err
+		}
+		if urgent {
+			*pair.newCert, *pair.newKey = *pair.oldCert, *pair.oldKey
+		}
+	}
+	return !reflect.DeepEqual(active, desired), nil
 }
 
 // MemberConfig returns a sealed, secret-bearing envelope for a known member.

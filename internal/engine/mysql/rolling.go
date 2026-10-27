@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"context"
+	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -52,6 +53,11 @@ func rollingOrder(ctx context.Context, rc *engine.Context, s *state) ([]string, 
 	}
 	return append(order, primary), nil
 }
+func rollingNeedsWindow(m *member, version string, target domain.ComponentSpec, parameters map[string]string) bool {
+	return m.Version != version || target.Replicas < m.Replicas ||
+		!reflect.DeepEqual(m.Resources, target.Resources) ||
+		m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
+}
 
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	options, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
@@ -64,6 +70,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			return false, nil
 		}
 		changed := false
+		needsWindow := false
 		from := ""
 		for _, m := range s.Members {
 			if m.Stage != "joined" {
@@ -72,12 +79,29 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			desired := desiredComponent(rc, m)
 			changed = changed || m.Version != rc.Cluster.Spec.Version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
 			changed = changed || m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
+			needsWindow = needsWindow || rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters)
 			if m.Role == "data" {
 				from = m.Version
 			}
 		}
 		if !changed {
 			return false, nil
+		}
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
+		for _, m := range s.Members {
+			target := desiredComponent(rc, m).Resources
+			if m.Resources.MinDisk != target.MinDisk || m.Resources.MaxDisk != target.MaxDisk {
+				if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+					return true, err
+				}
+			}
+			if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target) {
+				if err := planner.PlanResources(ctx, m.Name, target); err != nil {
+					return true, err
+				}
+			}
 		}
 		if err := maintenanceAllowed(ctx, rc, s); err != nil {
 			return true, err
@@ -125,12 +149,44 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			u.Index++
 			return true, nil
 		}
+		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
+		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
+			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
+				s.Rolling = nil
+				return true, err
+			}
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if err := planner.PlanResources(ctx, m.Name, target.Resources); err != nil {
+				// No disruption has started; discard the frozen target so a
+				// subsequent desired generation can supersede this rejection.
+				if errors.Is(err, infra.ErrRejected) {
+					s.Rolling = nil
+				}
+				return true, err
+			}
+		}
 		if u.Major && m.Role == "data" {
 			m.SlowShutdown = true
 			publishRevision(s)
 		}
 		u.Stage = "handoff"
 	case "handoff":
+		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if err := planner.PlanResources(ctx, m.Name, target.Resources); err != nil {
+				if errors.Is(err, infra.ErrRejected) {
+					m.SlowShutdown = false
+					publishRevision(s)
+					s.Rolling = nil
+				}
+				return true, err
+			}
+		}
 		if u.Major && m.Role == "data" {
 			ok, err := configApplied(ctx, rc, m)
 			if err != nil || !ok {

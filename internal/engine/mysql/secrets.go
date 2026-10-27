@@ -118,6 +118,15 @@ func (*Core) ensureSecrets(ctx context.Context, rc *engine.Context, s *state) er
 			if !renew {
 				continue
 			}
+			if kind == "servers" && len(active) > 0 {
+				urgent, e := pki.NeedsRenewal(active, 7*24*time.Hour, now(rc))
+				if e != nil {
+					return e
+				}
+				if !urgent && rc.WaitForWindow().RequeueAfter > 0 {
+					continue
+				}
+			}
 			cert, key, e := ca.Issue(pki.CertRequest{CommonName: m.Name, DNSNames: []string{m.Name, "localhost"}, IPs: ips, Server: true, Client: kind == "servers"})
 			if e != nil {
 				return e

@@ -113,6 +113,11 @@ func (p *Core) rotateTLS(ctx context.Context, rc *engine.Context, op *domain.Ope
 			cp.Index = 0
 			break
 		}
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			result := tlsRotationResult(cp)
+			result.RequeueAfter = wait.RequeueAfter
+			return result, nil
+		}
 		name := cp.Members[cp.Index]
 		for _, kind := range []string{"agents", "servers"} {
 			for _, suffix := range []string{".key", ".crt"} {

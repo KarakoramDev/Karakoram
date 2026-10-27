@@ -21,6 +21,9 @@ func operationResult(cp operationState, done bool) (engine.OpResult, error) {
 	return engine.OpResult{Done: done, Step: cp.Stage, Checkpoint: raw, RequeueAfter: time.Second}, e
 }
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	s, e := load(rc.Cluster)
 	if e != nil {
 		return result, e
@@ -120,6 +123,13 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		switch cp.Stage {
 		case "stop":
+			if op.Actor != "system" {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					result, err := operationResult(cp, false)
+					result.RequeueAfter = wait.RequeueAfter
+					return result, err
+				}
+			}
 			if e = verifyMemberServices(ctx, rc, m); e != nil && !m.RuntimeRecovery.VolumeLost {
 				return result, e
 			}

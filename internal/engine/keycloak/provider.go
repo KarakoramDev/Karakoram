@@ -411,6 +411,23 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "import"}
 		return result, nil
 	}
+	if s.Deployed {
+		config, e := p.MemberConfig(ctx, rc, s.Member)
+		if e != nil {
+			return result, e
+		}
+		var previous kcspec.Spec
+		if e = json.Unmarshal(config.EngineSpec, &previous); e != nil {
+			return result, e
+		}
+		// Binding credential-generation rolls and agent TLS renewal are
+		// exempt, but user-requested application configuration is not.
+		if previous.Hostname != o.Hostname || previous.ProxyHeaders != o.ProxyHeaders {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return wait, nil
+			}
+		}
+	}
 	if err = p.publish(ctx, rc, s, conn, o); err != nil {
 		return result, err
 	}
@@ -442,6 +459,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 	}
 	if s.Resources != rc.Cluster.Spec.Components.Engine.Resources {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return wait, nil
+		}
 		r := rc.Cluster.Spec.Components.Engine.Resources
 		op, e := rc.Backend.SetResources(ctx, s.Member, r)
 		if e != nil {

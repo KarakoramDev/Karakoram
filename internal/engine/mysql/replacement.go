@@ -126,6 +126,13 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 			return replacementResult(cp), err
 		}
 		if st.MemberState == "ONLINE" {
+			if rc.Operation != nil && rc.Operation.Actor != "system" {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					result := replacementResult(cp)
+					result.RequeueAfter = wait.RequeueAfter
+					return result, nil
+				}
+			}
 			cp.Stage = "retire"
 		}
 	case "retire":

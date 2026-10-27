@@ -172,6 +172,13 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Member = &member{Name: rc.Cluster.Name + "n0", Volume: rc.Cluster.Name + "n0v", Stage: "planned", Resources: rc.Cluster.Spec.Components.Engine.Resources, Disk: rc.Cluster.Spec.Components.Engine.Resources}
 	}
 	m := s.Member
+	// Runtime resource changes may restart the member. Refuse unsupported
+	// volume growth before submitting those changes or publishing new config.
+	if r := rc.Cluster.Spec.Components.Engine.Resources; m.VolumeID != "" && m.ImportBatch == nil && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+		if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+			return result, e
+		}
+	}
 	s.Suspended = false
 	if err = restrictExposure(ctx, rc, m); err != nil {
 		return result, err
@@ -246,11 +253,19 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, err
 	}
 	r := rc.Cluster.Spec.Components.Engine.Resources
+	options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if e != nil {
+		return result, e
+	}
 	if !reflect.DeepEqual(m.Resources, r) {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return wait, nil
+		}
 		op, e := rc.Backend.SetResources(ctx, m.Name, r)
 		if e != nil {
 			return result, e
 		}
+		s.ConfigOptions = &options
 		track(m, "resize", op)
 		m.PendingResources = r
 		return result, nil
@@ -268,6 +283,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	if m.Version != "" && m.Version != rc.Cluster.Spec.Version {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return wait, nil
+		}
 		m.PreviousVersion = m.Version
 		m.Stage = "imported"
 	}
@@ -277,6 +295,18 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		Options   any
 	}{rc.Cluster.Spec.Version, r, rc.Cluster.Spec.EngineOptions})
 	if s.ConfigHash != hash {
+		needsWindow := s.ConfigOptions == nil
+		if s.ConfigOptions != nil {
+			previous := *s.ConfigOptions
+			previous.AcceptBackupDowntime = options.AcceptBackupDowntime
+			needsWindow = !reflect.DeepEqual(previous, options)
+		}
+		if needsWindow && s.ConfigHash != "" && m.Stage != "imported" {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return wait, nil
+			}
+		}
+		s.ConfigOptions = &options
 		s.ConfigHash = hash
 		s.ConfigVersion++
 		if err = save(rc.Cluster, s); err != nil {
