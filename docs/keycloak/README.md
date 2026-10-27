@@ -58,8 +58,10 @@ Each reconciliation resolves the binding again. Credential generation, endpoint,
 The desired generation is acknowledged after the sole live agent accepts its
 configuration and runtime resources/routing have converged. Periodic health polls
 continue without keeping that generation pending. Missing agents, stale applied
-configuration and agent-reported configuration errors do not acknowledge it;
-native management health still independently controls Ready.
+configuration, agent-reported configuration errors and application changes deferred
+by a maintenance window do not acknowledge it. Credential and transport refreshes
+remain exempt from that window, but accepting those refreshes does not acknowledge
+a deferred application change. Native management health independently controls Ready.
 
 ## Routing and health
 

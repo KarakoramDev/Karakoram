@@ -426,6 +426,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "import"}
 		return result, nil
 	}
+	configurationDeferred := false
 	if s.ConfigHash != "" {
 		config, e := p.MemberConfig(ctx, rc, s.Member)
 		if e != nil {
@@ -442,6 +443,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 				// Defer only the application change. Rotated binding credentials
 				// and renewed agent transport material must still be published.
 				o.Hostname, o.ProxyHeaders = previous.Hostname, previous.ProxyHeaders
+				configurationDeferred = true
 			}
 		}
 	}
@@ -502,7 +504,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "public", Public: o.PublicHTTPS}
 		return result, nil
 	}
-	if configApplied {
+	if configApplied && !configurationDeferred {
 		// Periodic health requeues do not mean the desired generation is still
 		// pending. Only acknowledge after the live agent accepted configuration
 		// and every provider mutation above has completed.
