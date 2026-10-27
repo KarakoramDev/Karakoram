@@ -324,6 +324,12 @@ mutation still retains its exact receipt: deletion waits for terminal delivery
 without submitting another build, then removes the owned application even when
 that deployment failed or was cancelled. An uncertain/stalled delivery remains
 fenced and requires the operator inspection described above.
+This observation mode is installed by shared cluster teardown for every engine,
+including suspension; it is not limited to PostgreSQL. Providers still verify
+resource ownership before removal. PostgreSQL's stronger exact-ID intent remains
+required for its escalated-removal path. Public-route withdrawal records deletion
+intent before waiting on an active build, so that wait does not consume the
+ordinary consecutive-failure budget.
 
 The ordinary operation failure budget is distinct from the exact-version
 `DeploymentRetriesExhausted` budget. A failed Dokploy build or an exhausted

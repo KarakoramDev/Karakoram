@@ -292,7 +292,7 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	// DeleteService retains the durable receipt and waits for terminal delivery
 	// before replacing it with the deletion operation.
 	if intent, ok := infra.CleanupIntentFromContext(ctx); ok {
-		if intent.Services[m.Hostname] != a.ID {
+		if intent.Services != nil && intent.Services[m.Hostname] != a.ID {
 			return s, restoreConflict("cleanup application identity changed; refusing runtime observation")
 		}
 		if m.Pending != nil && m.Pending.Failed {

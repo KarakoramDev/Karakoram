@@ -497,6 +497,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	// Convergence records bound observation, not the platform calls needed to
 	// finish applying desired state or cleaning up after a failed record.
 	if c.Deleting {
+		// All providers must be able to observe owned runtime identity during
+		// teardown without restoring a failed initial deployment first. This
+		// does not grant exact-ID authorization for escalated removal; providers
+		// may add their stronger persisted cleanup intent below.
+		ctx = infra.WithCleanupIntent(ctx, infra.CleanupIntent{})
 		if c.Spec.DataSource != nil {
 			_ = m.observeInitialDataSourceLifecycle(ctx, p, c, nil)
 			applied := false
