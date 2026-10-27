@@ -684,6 +684,55 @@ func TestProxyCapacityDecreaseWaitsForEveryProxyAck(t *testing.T) {
 	}
 }
 
+func TestProxyAgentBuildInventory(t *testing.T) {
+	current := engine.CurrentAgentBuild()
+	old := agentapi.AgentBuild{Version: "previous", Commit: "old-commit", Build: "old-build"}
+	latest := agentapi.AgentBuild{Version: current.Version, Commit: current.Commit, Build: current.Build}
+	for _, tc := range []struct {
+		name string
+		a, b agentapi.AgentBuild
+		want agentapi.AgentBuild
+	}{
+		{"current", latest, latest, latest},
+		{"old-first", old, latest, old},
+		{"old-last", latest, old, old},
+		{"legacy-first", agentapi.AgentBuild{}, latest, agentapi.AgentBuild{}},
+		{"legacy-last", latest, agentapi.AgentBuild{}, agentapi.AgentBuild{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc, _, _, a, b := replicatedProxyFixture(t)
+			a.mu.Lock()
+			a.agent = tc.a
+			a.mu.Unlock()
+			b.mu.Lock()
+			b.agent = tc.b
+			b.mu.Unlock()
+			status, err := p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, member := range status.Members {
+				if member.Name != "demopx" {
+					continue
+				}
+				if !member.Agent.Healthy || member.Agent.Version != tc.want.Version ||
+					member.Agent.Commit != tc.want.Commit || member.Agent.Build != tc.want.Build {
+					t.Fatalf("proxy build identity lost or masked: %+v, want %+v", member.Agent, tc.want)
+				}
+				engine.ObserveAgentVersions(&status, current, time.Now())
+				if tc.want.Build == "" && !slices.Contains(status.Agents.Unknown, member.Name) {
+					t.Fatal("legacy proxy was not classified unknown")
+				}
+				if tc.want.Build != "" && tc.want.Build != current.Build && !slices.Contains(status.Agents.Outdated, member.Name) {
+					t.Fatal("older proxy instance was not classified outdated")
+				}
+				return
+			}
+			t.Fatal("proxy member missing")
+		})
+	}
+}
+
 type proxyPlacementStatusBackend struct {
 	*proxyInventoryBackend
 }

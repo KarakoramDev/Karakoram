@@ -43,6 +43,7 @@ type proxyInstanceFixture struct {
 	running     bool
 	backends    []pgspec.ProxyBackend
 	processes   map[string]agentapi.ProcessStatus
+	agent       agentapi.AgentBuild
 	nativeError bool
 	server      *httptest.Server
 }
@@ -70,7 +71,7 @@ func newProxyInstanceFixtureTLS(t *testing.T, version int64, tlsConfig *tls.Conf
 		}
 		switch r.URL.Path {
 		case "/v1/status":
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: f.version, Processes: f.processes})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: f.agent, ConfigVersion: f.version, Processes: f.processes})
 		case "/v1/postgres/status":
 			if f.nativeError {
 				http.Error(w, "native observation unavailable", http.StatusServiceUnavailable)

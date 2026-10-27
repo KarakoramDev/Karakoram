@@ -326,6 +326,12 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				}
 				status := sample.agent
 				responded++
+				// Prefer a deterministic non-current identity when instances
+				// disagree, so a current replica cannot hide an older one.
+				if first || (member.Agent.Build == engine.CurrentAgentBuild().Build && status.Agent.Build != member.Agent.Build) ||
+					(member.Agent.Build != engine.CurrentAgentBuild().Build && status.Agent.Build != engine.CurrentAgentBuild().Build && status.Agent.Build < member.Agent.Build) {
+					member.Agent.Version, member.Agent.Commit, member.Agent.Build = status.Agent.Version, status.Agent.Commit, status.Agent.Build
+				}
 				proxyProcesses = append(proxyProcesses, struct {
 					instance  string
 					processes map[string]agentapi.ProcessStatus

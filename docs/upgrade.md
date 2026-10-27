@@ -427,6 +427,15 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
+PostgreSQL proxy members report the identities observed on their live instances,
+independently of native proxy health. If instances disagree, member inventory
+selects a non-current build (or an unknown identity for a legacy instance), so
+one current replica cannot hide an incomplete rollout. Older control planes can
+omit proxy build metadata even when the agent reports it; upgrading the control
+plane corrects this inventory without redeploying the proxy. Missing inventory
+metadata alone does not explain a Running rollout: completion reads the agent's
+reported executable build directly, after platform deployment and health gates.
+
 ```sh
 karactl clusters upgrade-agents NAME --wait --timeout 30m
 # Include agents already reporting the current build:
