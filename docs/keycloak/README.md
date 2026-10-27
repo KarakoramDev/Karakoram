@@ -67,6 +67,17 @@ and [Dokploy](https://dokploy.com/) namespaces without configured HTTPS routing.
 
 Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this engine driver; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
 
+Resource reconciliation compares values, including an explicit `startCpu`, not
+the identity of the decoded optional value. An unchanged resource specification
+does not submit another deployment. After upgrading the control plane, a failed
+redundant resize from an older build is retired only when its target equals the
+previously accepted resources and the owned runtime still reports those resources.
+The control plane then resumes agent/configuration and native readiness observation;
+retiring the receipt alone does not mark the cluster Ready. Real failed resource
+changes remain failures. This repair requires only a control-plane upgrade, not
+replacement of an already serving Keycloak agent. Historical failed create
+operations remain historical failures even if background convergence later recovers.
+
 ## Establishing an administrator and recovery
 
 There is deliberately no new credential-reveal API: existing reveals are engine driver-specific, and Keycloak does not implement the database-user/role data-plane contract merely to expose a password. Use Keycloak's supported offline recovery command with the rendered database configuration:

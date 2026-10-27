@@ -112,6 +112,7 @@ type backendFake struct {
 	infra.Backend
 	service *infra.Service
 	deploys int
+	resizes int
 	public  bool
 	pending bool
 	fail    bool
@@ -123,6 +124,9 @@ func (*backendFake) Layout() infra.Layout             { return infra.Layout{AppD
 func (*backendFake) Capabilities() infra.Capabilities { return infra.Capabilities{PublicHTTPS: true} }
 func (b *backendFake) GetService(context.Context, string) (*infra.Service, error) {
 	return b.service, nil
+}
+func (*backendFake) Containers(context.Context, string) ([]infra.Container, error) {
+	return nil, nil
 }
 func (b *backendFake) SetEnvVars(_ context.Context, _ string, vars map[string]string) error {
 	for k, v := range vars {
@@ -151,6 +155,7 @@ func (b *backendFake) DeleteServiceByID(_ context.Context, _ string, id string) 
 	return infra.Op{}, nil
 }
 func (b *backendFake) SetResources(_ context.Context, _ string, r domain.Resources) (infra.Op, error) {
+	b.resizes++
 	b.service.Resources = r
 	return infra.Op{}, nil
 }

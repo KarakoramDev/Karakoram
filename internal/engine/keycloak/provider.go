@@ -291,6 +291,21 @@ func observe(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 		return true, nil
 	}
 	if status.Failed {
+		// Older control planes compared StartCPU pointers rather than values,
+		// submitting a resize of the already accepted resources after every
+		// state reload. A failed redundant rollout must not permanently hide
+		// the serving predecessor. Keep real resource-change failures terminal;
+		// native readiness still gates Ready after this receipt is retired.
+		if q.Action == "resize" && s.Deployed && reflect.DeepEqual(s.Resources, q.Resources) {
+			v, err := verify(ctx, rc, s)
+			if err != nil {
+				return true, err
+			}
+			if v != nil && !v.Importing && reflect.DeepEqual(v.Resources, s.Resources) {
+				s.Pending = nil
+				return true, nil
+			}
+		}
 		return true, fmt.Errorf("keycloak %s failed (%s): %s", q.Action, status.Status, status.Message)
 	}
 	switch q.Action {
@@ -460,7 +475,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, err
 		}
 	}
-	if s.Resources != rc.Cluster.Spec.Components.Engine.Resources {
+	if !reflect.DeepEqual(s.Resources, rc.Cluster.Spec.Components.Engine.Resources) {
 		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 			return wait, nil
 		}
