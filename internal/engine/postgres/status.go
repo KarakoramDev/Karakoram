@@ -158,12 +158,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	// infrastructure barrier before collecting fresh native/config status.
 	direct := s.find(connectionMember(rc, s))
 	directReady := true
+	var directRuntime *infra.Service
 	if direct != nil && direct.Role == "data" && direct.Stage != "planned" && direct.Stage != "imported" {
 		runtime, err := rc.Backend.GetService(ctx, direct.Name)
 		if err != nil {
 			return out, err
 		}
 		directReady = runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
+		directRuntime = runtime
 	}
 	liveMembers := observeStatusMembers(ctx, rc, s.Members)
 	// Bind every proxy's fresh runtime rows to the writer observed in this
@@ -206,6 +208,18 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			continue
 		}
 		observation := liveMembers[i]
+		runtime := directRuntime
+		if m != direct || m.Role != "data" {
+			runtime, err = rc.Backend.GetService(ctx, m.Name)
+			if err != nil {
+				return out, err
+			}
+		}
+		if runtime != nil {
+			resources := runtime.Resources
+			member.Autoscaling = &resources
+		}
+		member.Resources = engine.MemberResources(nil, member.Autoscaling)
 		var proxyProcesses []struct {
 			instance  string
 			processes map[string]agentapi.ProcessStatus
@@ -217,7 +231,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 			member.Agent = domain.AgentStatus{Version: st.Agent.Version, Commit: st.Agent.Commit, Build: st.Agent.Build, Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			member.Uptime = st.UptimeSeconds
-			member.Resources = engine.MemberResources(st.Resources, &m.Resources)
+			member.Resources = engine.MemberResources(st.Resources, member.Autoscaling)
 			if st.Disk.TotalBytes > 0 && st.Disk.FreeBytes < st.Disk.TotalBytes/10 {
 				capacityIssues = append(capacityIssues, m.Name)
 				healthy = false
@@ -316,10 +330,6 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			observationIssues = append(observationIssues, message)
 		}
 		if m.Role == "proxy" {
-			runtime, err := rc.Backend.GetService(ctx, m.Name)
-			if err != nil {
-				return out, err
-			}
 			runtimeReady := runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
 			first := true
 			responded := 0
@@ -340,7 +350,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				if first {
 					member.Agent.LastSeen = now(rc)
 					member.Uptime = status.UptimeSeconds
-					member.Resources = engine.MemberResources(status.Resources, &m.Resources)
+					member.Resources = engine.MemberResources(status.Resources, member.Autoscaling)
 					if !rc.Backend.Capabilities().Placement {
 						member.PlacementGroup = status.HostFingerprint
 					}
