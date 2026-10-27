@@ -4,10 +4,12 @@ package neo4j
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/neo4j/neo4jspec"
 )
 
@@ -34,8 +36,9 @@ func TestFailedRestoreReleasesMaintenanceAfterReadiness(t *testing.T) {
 	if s.Maintenance != op.ID || s.RestoreRecovery == nil {
 		t.Fatal("failed job released maintenance before readiness")
 	}
-	if _, err = p.RunOperation(t.Context(), rc, op); err == nil || err.Error() != "Neo4j offline restore failed" {
-		t.Fatal(err)
+	result, err := p.RunOperation(t.Context(), rc, op)
+	if err == nil || !errors.Is(err, engine.ErrInvalid) || !result.Done {
+		t.Fatalf("failed restore must terminate after readiness: %+v %v", result, err)
 	}
 	s, _ = load(rc.Cluster)
 	if s.Maintenance != "" || s.RestoreRecovery != nil {
@@ -45,8 +48,9 @@ func TestFailedRestoreReleasesMaintenanceAfterReadiness(t *testing.T) {
 	if err != nil || got.Phase != domain.PhaseFailed || got.Error != "Neo4j offline restore failed" {
 		t.Fatal(got, err)
 	}
-	if _, err = p.RunOperation(t.Context(), rc, op); err == nil {
-		t.Fatal("failed restore replay succeeded")
+	result, err = p.RunOperation(t.Context(), rc, op)
+	if err == nil || !errors.Is(err, engine.ErrInvalid) || !result.Done {
+		t.Fatalf("failed restore replay must remain terminal: %+v %v", result, err)
 	}
 	s, _ = load(rc.Cluster)
 	if s.Maintenance != "" {

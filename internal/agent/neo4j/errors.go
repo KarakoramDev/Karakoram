@@ -21,8 +21,9 @@ const (
 // queryFailure keeps only a recognized status code and a closed classification.
 // Native messages can contain query inputs and must never escape the decoder.
 type queryFailure struct {
-	code string
-	kind queryFailureKind
+	code              string
+	kind              queryFailureKind
+	passwordUnchanged bool
 }
 
 func (*queryFailure) Error() string { return "Neo4j query failed" }
@@ -33,6 +34,11 @@ func classifyQueryError(code, message string) error {
 	case "Neo.ClientError.General.InvalidArguments", "Neo.ClientError.Statement.ArgumentError":
 		failure.code = code
 		failure.kind = queryFailureInvalid
+		// Neo4j rejects setting an administrator password to its current value.
+		// Only this exact native diagnostic proves the recovery postcondition;
+		// other argument errors must still fail closed.
+		failure.passwordUnchanged = code == "Neo.ClientError.Statement.ArgumentError" &&
+			message == "Failed to alter the specified user 'neo4j': Old password and new password cannot be the same."
 		lower := strings.ToLower(message)
 		if strings.Contains(lower, "already exists") {
 			failure.kind = queryFailureExists

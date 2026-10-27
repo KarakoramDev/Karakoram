@@ -87,8 +87,8 @@ func (e *Engine) recoverAdmin(ctx context.Context, n *agent.Node, s neo4jspec.Sp
 			ready = err == nil
 		}
 	}
-	if _, err := query(ctx, s, h, "", "system", "ALTER USER neo4j SET PASSWORD $p CHANGE NOT REQUIRED", map[string]any{"p": password}); err != nil {
-		return errors.New("Neo4j credential recovery failed")
+	if err := recoverAdminPassword(ctx, s, h, password); err != nil {
+		return err
 	}
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	stop := time.NewTimer(45 * time.Second)
@@ -108,4 +108,19 @@ func (e *Engine) recoverAdmin(ctx context.Context, n *agent.Node, s neo4jspec.Sp
 		return errors.New("Neo4j recovery shutdown interrupted")
 	}
 	return nil
+}
+
+// In-place restores can already contain the target's managed password. Treat
+// Neo4j's exact unchanged-password rejection as the satisfied postcondition, not
+// as a failed restore that rolls the successfully loaded store back.
+func recoverAdminPassword(ctx context.Context, s neo4jspec.Spec, port int, password string) error {
+	_, err := query(ctx, s, port, "", "system", "ALTER USER neo4j SET PASSWORD $p CHANGE NOT REQUIRED", map[string]any{"p": password})
+	if err == nil {
+		return nil
+	}
+	var failure *queryFailure
+	if errors.As(err, &failure) && failure.passwordUnchanged {
+		return nil
+	}
+	return errors.New("Neo4j credential recovery failed")
 }

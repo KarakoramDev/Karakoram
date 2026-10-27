@@ -527,6 +527,13 @@ func TestNativeNeo4j(t *testing.T) {
 			if r.StatusCode != 409 {
 				t.Fatalf("mismatch HTTP %d", r.StatusCode)
 			}
+			// The source's managed password is already present in its system dump.
+			// Restoring it in place must not mistake that postcondition for failure.
+			h.cypher(t, "neo4j", "MATCH (n:NativeProof) SET n.value = 'after-backup'", nil)
+			h.job(t, neo4jspec.ActionRestore, neo4jspec.RestoreRequest{Receipt: "native-in-place-restore", Source: target, Manifest: *backup.Manifest, AdminPassword: h.spec.AdminPassword})
+			if rows := h.cypher(t, "neo4j", "MATCH (n:NativeProof) RETURN n.value AS value", nil).rows(); len(rows) != 1 || rows[0]["value"] != "preserved" {
+				t.Fatalf("in-place restore did not replace graph data: %#v", rows)
+			}
 			s := nativeSpec(t)
 			s.AdminPassword = "target-different-admin-password"
 			restored := startNativeNeoAgent(t, s, "")

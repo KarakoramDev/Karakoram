@@ -155,7 +155,7 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, op *domai
 			return checkpoint(cp, true), nil
 		}
 		if r.Phase == domain.PhaseFailed {
-			return checkpoint(cp, false), errors.New("Neo4j offline restore failed")
+			return checkpoint(cp, true), engine.Invalid("Neo4j offline restore failed; inspect the failure and submit a new restore")
 		}
 	}
 	sourceRef := restoreRef(r, rc.Cluster)
@@ -270,7 +270,7 @@ func (p *Provider) runRestore(ctx context.Context, rc *engine.Context, op *domai
 		return checkpoint(cp, false), err
 	}
 	if failed {
-		return checkpoint(cp, false), errors.New(r.Error)
+		return checkpoint(cp, true), engine.Invalid("Neo4j offline restore failed; inspect the failure and submit a new restore")
 	}
 	cp.Step = "done"
 	return checkpoint(cp, true), nil

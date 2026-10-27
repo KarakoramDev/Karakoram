@@ -58,6 +58,8 @@ The loader fetches each dump while checking its size and SHA-256, loads both int
 
 The `system` dump preserves source application users and their passwords. The managed `neo4j` password is reset to the **target's** managed credential, not the source's, through an authentication-disabled recovery start bound only to loopback on separate ports. The recovery child is stopped before normal authenticated listeners start. Reveal target credentials after recovery; do not expect the source administrator password to authenticate to a clone.
 
+For an in-place restore, the dump may already contain the target's managed password. Credential recovery accepts Neo4j's explicit confirmation that the old and new passwords are identical; it does not roll the restored store back merely because no password change is needed.
+
 Backup scope does not include the control-plane database, secret encryption key, namespace registrations or storage credentials. Protect those separately with [control-plane state backups](../operations.md#control-plane-state-backup-and-recovery).
 
 ## Capacity and failures
@@ -65,3 +67,5 @@ Backup scope does not include the control-plane database, secret encryption key,
 Backup streams do not require a full local `.dump` file, but native tools, multipart buffers and temporary files still consume resources. Restore requires room for the current store **and** the fully loaded replacement at the same time, plus transaction logs and temporary overhead. Size disk from observed store size and free space rather than compressed object size; grow it before recovery and never assume a fixed compression ratio. The JVM and offline tools also need memory headroom.
 
 An interrupted background backup is not blindly resumed. Receipt recovery starts the server again and marks the interrupted job failed; submit a new operation after investigating the failure. If safe restart or rollback fails, recovery remains blocked rather than reporting success. A missing manifest or checksum/size mismatch is a failed recovery input, not an empty database. Observe operation status and cluster readiness independently before allowing application traffic.
+
+A failed restore remains **Failed** even if the original store is successfully restarted: member readiness does not prove that the backup was restored. After rollback and authenticated readiness are verified, the restore operation terminates without retrying the same failed receipt. Inspect the restore and cluster status, correct the recovery input, storage access or capacity problem, and submit a restore with a **new name**. Do not remove receipt files or stop holds to force a replay. If rollback or restart is still pending, keep application traffic stopped and resolve the member's recovery failure before trying another restore.
