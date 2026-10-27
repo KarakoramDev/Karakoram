@@ -294,3 +294,52 @@ func TestResourcePlanRejectsIneligiblePinnedNode(t *testing.T) {
 		t.Fatalf("ineligible pinned node admitted: %v", err)
 	}
 }
+
+func TestResourcePlanExternalStopFirstIncludesStatelessRuntime(t *testing.T) {
+	f := newFakeNomad(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("runtime", ""))
+	deployFake(t, b, "runtime", "")
+	before, err := b.require(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans := 0
+	f.mu.Lock()
+	f.requestHook = func(w http.ResponseWriter, r *http.Request) (bool, func()) {
+		if r.URL.Path != "/v1/job/runtime/plan" {
+			return false, nil
+		}
+		plans++
+		body := fakeDecode(w, r)
+		job := fakeMap(body["Job"])
+		group := fakeRows(job["TaskGroups"])[0]
+		task := fakeRows(group["Tasks"])[0]
+		if fakeInt(fakeMap(group["Update"]), "Canary") != 0 || fakeString(fakeMap(task["Meta"]), "karakoram.operation") == "" {
+			t.Error("external stop-first preflight did not plan cold replacement")
+		}
+		fakeJSON(w, 200, fakeRow{"FailedTGAllocs": fakeRow{"member": fakeRow{"DimensionExhausted": fakeRow{"cpu": 1}}}})
+		return true, nil
+	}
+	f.mu.Unlock()
+	if err := b.PlanResources(t.Context(), "runtime", infra.Resources{MaxCPU: 8}); !errors.Is(err, infra.ErrRejected) {
+		t.Fatalf("explicit volume-less preflight skipped rejection: %v", err)
+	}
+	if plans != 1 {
+		t.Fatalf("explicit stop-first preflight planned %d times", plans)
+	}
+	after, err := b.require(t.Context(), "runtime")
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("read-only preflight changed runtime record: %+v %v", after, err)
+	}
+	// Normal stateless resource updates still bypass this destructive-boundary
+	// check and use the existing start-first canary path.
+	op, err := b.SetResources(t.Context(), "runtime", infra.Resources{MaxCPU: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitFake(t, b, op)
+	if plans != 1 {
+		t.Fatal("normal stateless resource rollout unexpectedly used cold preflight")
+	}
+}

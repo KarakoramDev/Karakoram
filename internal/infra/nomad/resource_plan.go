@@ -10,8 +10,9 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-// PlanResources checks the same replacement specification used by SetResources,
+// PlanResources checks replacement placement before an engine-owned stop,
 // without saving bounds, claiming an operation, or stopping the current job.
+// Explicit callers may stop even an ordinarily stateless application runtime.
 func (b *Backend) PlanResources(ctx context.Context, hostname string, desired infra.Resources) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -24,8 +25,7 @@ func (b *Backend) PlanResources(ctx context.Context, hostname string, desired in
 	if err := resourceValidation(proposed.Resources); err != nil {
 		return err
 	}
-	relay := r.Deployment != nil && len(r.Deployment.Runtime.Args) != 0 && r.Deployment.Runtime.Args[0] == "relay"
-	if r.Kind != infra.KindRuntime || r.Deployment == nil || r.Desired != "running" || r.Volume == "" && !relay {
+	if r.Kind != infra.KindRuntime || r.Deployment == nil || r.Desired != "running" {
 		return nil
 	}
 	proposed.Pending = &operation{Action: "resources", Issued: time.Now().UTC()}
@@ -42,6 +42,18 @@ func (b *Backend) planResourceUpdate(ctx context.Context, r *record) error {
 	body, err := b.renderJob(ctx, r)
 	if err != nil {
 		return err
+	}
+	if r.Volume == "" {
+		// This helper is only used at stop-first boundaries. An explicit
+		// engine preflight can target a volume-less runtime that the engine
+		// will stop itself (for example a MySQL proxy). Model cold replacement,
+		// not its normal start-first canary, and require a task-spec change
+		// even when only an unrendered bound changed.
+		job := body["Job"].(map[string]any)
+		group := job["TaskGroups"].([]any)[0].(map[string]any)
+		group["Update"].(map[string]any)["Canary"] = 0
+		task := group["Tasks"].([]any)[0].(map[string]any)
+		task["Meta"] = map[string]string{"karakoram.operation": r.Pending.Issued.Format(time.RFC3339Nano)}
 	}
 	placement := *r
 	if r.Volume != "" {
