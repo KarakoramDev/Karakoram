@@ -630,25 +630,30 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
-	if syncErr != nil {
-		return 0, syncErr
-	}
 	if policy, ok := p.(engine.OperationClaimPolicy); ok {
 		allowed, err := policy.CanClaimOperation(c)
 		if err != nil {
 			return 0, err
 		}
 		if !allowed {
-			return result.RequeueAfter, nil
+			return result.RequeueAfter, syncErr
 		}
 	}
-	op, err = m.opts.Store.ClaimOperation(store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now()), ref)
+	claimCtx := store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now())
+	if syncErr != nil {
+		// An old agent can make Sync fail while its replacement is the remedy.
+		// Only agent rollout may bypass failed convergence; Running ownership
+		// was checked above and provider/native safety gates still apply.
+		op, err = m.opts.Store.ClaimAgentUpgrade(claimCtx, ref)
+	} else {
+		op, err = m.opts.Store.ClaimOperation(claimCtx, ref)
+	}
 	var windowWait *store.MaintenanceWindowWait
 	if errors.As(err, &windowWait) {
 		return maintenance.Delay(rc.Clock.Now(), windowWait.NextStart), nil
 	}
 	if errors.Is(err, store.ErrNotFound) {
-		return result.RequeueAfter, nil
+		return result.RequeueAfter, syncErr
 	}
 	if err != nil {
 		return 0, err

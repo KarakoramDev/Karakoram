@@ -265,6 +265,16 @@ func (s *Store) ClaimRunningOperation(ctx context.Context, ref domain.ClusterRef
 	return s.claimOperation(ctx, ref.Key(), false, "")
 }
 
+// ClaimAgentUpgrade permits remediation after ordinary synchronization fails.
+// The reconciler must resume any Running operation before using this claim.
+// Maintenance admission and execution accounting remain identical to normal work.
+func (s *Store) ClaimAgentUpgrade(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	return s.claimOperation(ctx, ref.Key(), true, domain.OperationUpgradeAgents)
+}
+
 // ClaimBackupDeletion permits retained-object cleanup without starting unrelated
 // runtime work while a cluster is suspended.
 func (s *Store) ClaimBackupDeletion(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {

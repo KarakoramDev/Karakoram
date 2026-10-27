@@ -432,6 +432,21 @@ The durable `upgrade-agents` operation redeploys the current executable at the *
 
 Rollouts respect [maintenance windows](operations.md#maintenance-windows). Use `--ignore-maintenance-window` for an explicit override; this does not bypass engine safety gates. Timing out or interrupting `--wait` does not cancel the rollout; retain the operation ID and use `operations wait ID`.
 
+An agent rollout can be claimed even if ordinary desired-state synchronization
+fails (for example, because the old agent contains the bug the rollout repairs).
+This exception applies only to `upgrade-agents`: it does not start unrelated
+queued actions or displace an already Running operation. Provider claim policy,
+maintenance windows, native health checks and bounded operation retries still
+apply. Delete and keep-volumes suspend already use a separate cleanup path and
+do not require successful ordinary synchronization.
+
+The enqueue-frozen rollout target is not silently retargeted after another
+control-plane upgrade. A Pending PostgreSQL rollout targeting a previous
+control-plane build is claimed and fails explicitly before deployment, with a
+message to re-run `upgrade-agents`. Keep that receipt for evidence and submit a
+new rollout targeting the current control plane. An already Running rollout
+retains its provider-specific recovery/checkpoint safeguards.
+
 Agent rollout requires an advertised engine driver operation backed by a one-member disruption journal. [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/) do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
 
 Automatic rollout is **off by default**:

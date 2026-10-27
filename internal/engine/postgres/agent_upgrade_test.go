@@ -98,7 +98,7 @@ func TestAgentRolloutBuildFenceAndCancellation(t *testing.T) {
 	b.actions = nil
 	bad := rolloutOperation(true)
 	bad.Payload = json.RawMessage(`{"targetBuild":"different"}`)
-	if _, e := p.RunOperation(t.Context(), rc, bad); e == nil || !strings.Contains(e.Error(), "differs from running") {
+	if _, e := p.RunOperation(t.Context(), rc, bad); e == nil || !strings.Contains(e.Error(), "differs from running") || !strings.Contains(e.Error(), "re-run upgrade-agents") {
 		t.Fatal("missing build fence", e)
 	}
 	if len(b.actions) != 0 {

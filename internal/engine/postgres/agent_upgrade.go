@@ -58,7 +58,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		return engine.OpResult{Done: true}, nil
 	}
 	if !cp.Waiting && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
-		return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
+		return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q; re-run upgrade-agents", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
 	}
 	if cp.Order == nil {
 		cp.Order = []string{}

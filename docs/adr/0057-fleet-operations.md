@@ -31,6 +31,15 @@ If the control plane changes builds after an Elasticsearch member has already be
 
 Installation setting `agentRollout` is managed through `GET/PUT /settings/agent-rollout`, with `settings:read/update`, an `automatic` flag defaulting to false and `maxConcurrentClusters` in 1–5, default 1. Responses include the current version, commit and build. Every 60 seconds, automatic scheduling considers outdated clusters except deleting, suspended and managed drill targets. It enqueues at most the installation-wide concurrency limit, without duplicating pending/running rollouts. Use a deterministic operation ID derived from namespace, cluster, incarnation and target build. A failed automatic rollout is not re-enqueued for that build; an operator may retry manually. Queued rollouts respect maintenance windows.
 
+Failed ordinary desired-state synchronization must not prevent claiming an
+agent rollout that can repair the old agent. After a failed synchronization,
+the serialized reconciler may claim only `upgrade-agents`, retaining provider
+claim policy and transactional maintenance admission. Running work still takes
+precedence, and the rollout retains its native health gates and failure budget.
+Other Pending actions continue to require successful synchronization. Frozen
+targets are never silently changed to match a newer control-plane executable.
+
+
 ### Maintenance policy and disruption boundaries
 
 `spec.maintenance` contains an IANA `timeZone` (default UTC) and at most 16 windows. Each window pairs a five-field cron **start schedule** with an explicit [Go](https://go.dev) duration of 15 minutes to 168 hours. Validate both with the scheduler's cron parser and timezone loader. No windows means always open. A shared evaluator returns whether the policy is open, the current end and the next start; cluster responses expose these under `status.maintenance`.
