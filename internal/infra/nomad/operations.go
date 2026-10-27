@@ -160,6 +160,16 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return infra.Op{}, err
 	}
+	if action == "resources" && previousResources != nil && r.Pending != nil && r.Pending.Action == "resources" &&
+		r.Pending.Phase != "done" && r.Pending.PreviousResources != nil &&
+		(job == nil || observed.Meta["karakoram.operation"] != r.Pending.Issued.Format(time.RFC3339Nano)) {
+		// A failed/unacknowledged stop can cause SetResources to be submitted
+		// again before the first replacement was registered. The saved
+		// Resources are then only that attempt's target, not applied bounds.
+		// Retain its original predecessor until the exact operation marker
+		// proves the replacement job was registered.
+		previousResources = r.Pending.PreviousResources
+	}
 	lease, err := b.newOperationLease()
 	if err != nil {
 		return infra.Op{}, err

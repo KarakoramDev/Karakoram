@@ -358,3 +358,113 @@ func TestResourcePlanExternalStopFirstIncludesStatelessRuntime(t *testing.T) {
 		t.Fatal("normal stateless resource rollout unexpectedly used cold preflight")
 	}
 }
+
+func TestResourcePlanResubmissionPreservesAppliedBounds(t *testing.T) {
+	for _, published := range []bool{false, true} {
+		name := "original-predecessor"
+		if published {
+			name = "registered-replacement"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newFakeNomad(t)
+			b := fakeBackend(t, f, nil)
+			spec := runtimeSpec("runtime", "volume")
+			spec.Resources = infra.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1}
+			importFake(t, b, volumeSpec("volume"), spec)
+			deployFake(t, b, "runtime", "volume")
+			if published {
+				op, err := b.SetResources(t.Context(), "runtime", infra.Resources{MaxCPU: 2, MaxRAM: 2})
+				if err != nil {
+					t.Fatal(err)
+				}
+				awaitFake(t, b, op)
+			}
+			containers, err := b.Containers(t.Context(), "runtime")
+			if err != nil || len(containers) != 1 {
+				t.Fatalf("serving predecessor: %+v %v", containers, err)
+			}
+			applied, err := b.require(t.Context(), "runtime")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if published {
+				// Registration is already acknowledged, but model a lost
+				// completion checkpoint. Its exact job marker, not merely
+				// Pending.Phase, proves these target bounds were applied.
+				applied.Pending.Phase = "starting"
+				if err := b.save(t.Context(), applied); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.mu.Lock()
+			f.requestHook = func(w http.ResponseWriter, req *http.Request) (bool, func()) {
+				if req.Method == http.MethodPost && req.URL.Path == "/v1/jobs" {
+					http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+					return true, nil
+				}
+				return false, nil
+			}
+			f.mu.Unlock()
+			target := infra.Resources{MaxCPU: 3, MaxRAM: 3}
+			if _, err := b.SetResources(t.Context(), "runtime", target); !errors.Is(err, infra.ErrUnavailable) {
+				t.Fatalf("initial failed stop: %v", err)
+			}
+			first, err := b.require(t.Context(), "runtime")
+			if err != nil || first.Pending == nil || first.Pending.Lease == nil ||
+				!reflect.DeepEqual(first.Pending.PreviousResources, &applied.Resources) {
+				t.Fatalf("initial rollback baseline: %+v %v", first, err)
+			}
+			// The provider received no receipt and retries SetResources once
+			// its uncertain-delivery quarantine expires.
+			first.Pending.Lease.Until = first.Pending.Issued.Add(-operationLeaseDuration - restoreFence)
+			if err := b.save(t.Context(), first); err != nil {
+				t.Fatal(err)
+			}
+			f.mu.Lock()
+			f.requestHook = func(w http.ResponseWriter, req *http.Request) (bool, func()) {
+				if req.Method == http.MethodPost && req.URL.Path == "/v1/jobs" {
+					http.Error(w, "Enforcing job modify index 1: job exists with conflicting job modify index: 2", http.StatusInternalServerError)
+					return true, nil
+				}
+				return false, nil
+			}
+			f.mu.Unlock()
+			op, err := b.SetResources(t.Context(), "runtime", target)
+			if err != nil || op.ID == "" {
+				t.Fatalf("resubmitted resource receipt: %+v %v", op, err)
+			}
+			second, err := b.require(t.Context(), "runtime")
+			if err != nil || second.Pending == nil || second.Pending.Issued.Equal(first.Pending.Issued) ||
+				!reflect.DeepEqual(second.Pending.PreviousResources, &applied.Resources) {
+				t.Fatalf("resubmission captured unapplied target instead of predecessor: %+v %v", second, err)
+			}
+			f.mu.Lock()
+			f.requestHook = func(w http.ResponseWriter, req *http.Request) (bool, func()) {
+				if req.URL.Path == "/v1/job/runtime/plan" {
+					fakeJSON(w, 200, fakeRow{"FailedTGAllocs": fakeRow{"member": fakeRow{"DimensionExhausted": fakeRow{"cpu": 1}}}})
+					return true, nil
+				}
+				return false, nil
+			}
+			f.mu.Unlock()
+			state, err := b.OpStatus(t.Context(), op)
+			var rejected *infra.ResourceUpdateRejectedError
+			if !errors.As(err, &rejected) || !state.Failed {
+				t.Fatalf("polling rejection: %+v %v", state, err)
+			}
+			b = fakeBackend(t, f, nil)
+			restored, err := b.require(t.Context(), "runtime")
+			if err != nil || !reflect.DeepEqual(restored.Resources, applied.Resources) {
+				t.Fatalf("reconstructed backend restored rejected target: %+v %v; want %+v", restored, err, applied.Resources)
+			}
+			state, err = b.OpStatus(t.Context(), op)
+			if !errors.As(err, &rejected) || !state.Failed {
+				t.Fatalf("terminal receipt lost on reconstruction: %+v %v", state, err)
+			}
+			remaining, err := b.Containers(t.Context(), "runtime")
+			if err != nil || len(remaining) != 1 || remaining[0].ID != containers[0].ID {
+				t.Fatalf("rejection stopped serving predecessor: %+v %v", remaining, err)
+			}
+		})
+	}
+}
