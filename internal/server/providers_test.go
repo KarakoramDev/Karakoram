@@ -7,9 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -17,6 +21,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -511,6 +516,65 @@ func TestMemberAgentLogsRedactRuntimeOutput(t *testing.T) {
 	}
 	if len(logs.Lines) > 2 || strings.Contains(w.Body.String(), "trailing-value") {
 		t.Fatal("redaction expanded past the requested limit or leaked a continuation")
+	}
+}
+
+func TestMemberAgentLogsRedactDescendingZeropsTail(t *testing.T) {
+	s, _, token := testServer(t)
+	at := time.Date(2026, 10, 27, 13, 0, 0, 0, time.UTC)
+	records := []zerops.RuntimeLog{
+		{Timestamp: at.Add(4 * time.Second), Content: "safe first"},
+		{Timestamp: at.Add(4 * time.Second), Content: "safe second"},
+		{Timestamp: at.Add(3 * time.Second), Content: `closing-value"`},
+		{Timestamp: at.Add(2 * time.Second), Content: "private-value"},
+		{Timestamp: at.Add(time.Second), Content: `password: "`},
+		{Timestamp: at, Content: "older unselected diagnostic"},
+	}
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/project/project/service-stack":
+			_, _ = w.Write([]byte(`{"list":[{"id":"member-id","name":"prodm0","projectId":"project"}],"total":1}`))
+		case "/service-stack/member-id":
+			_, _ = w.Write([]byte(`{"id":"member-id","name":"prodm0","projectId":"project"}`))
+		case "/project/project/log":
+			_ = json.NewEncoder(w).Encode(map[string]string{"url": "http://" + r.Host + "/signed"})
+		case "/signed":
+			n, err := strconv.Atoi(r.URL.Query().Get("limit"))
+			if err != nil || n < 1 || n > len(records) || r.URL.Query().Get("desc") != "1" {
+				t.Error("incorrect newest-tail query")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": records[:n]})
+		default:
+			t.Errorf("unexpected platform path %q", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer platform.Close()
+	b, err := zerops.New(zerops.Options{BaseURL: platform.URL, ProjectID: "project", Token: "synthetic-token", MaxRetries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	for _, limit := range []int{5, 2} {
+		w := call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines="+strconv.Itoa(limit), "", token)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		for _, secret := range []string{"private-value", "closing-value", "older unselected diagnostic"} {
+			if strings.Contains(w.Body.String(), secret) {
+				t.Fatalf("descending tail leaked %q", secret)
+			}
+		}
+		var logs api.MemberLogs
+		if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+			t.Fatal(err)
+		}
+		n := len(logs.Lines)
+		if n < 2 || n > limit || logs.Lines[n-2].Message != "safe first" || logs.Lines[n-1].Message != "safe second" {
+			t.Fatalf("newest selection or equal-timestamp source order lost: %+v", logs)
+		}
 	}
 }
 

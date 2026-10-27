@@ -1037,6 +1037,10 @@ func (b *Backend) Logs(ctx context.Context, name string, q infra.LogQuery) ([]in
 		}
 		out = append(out, infra.LogLine{Timestamp: v.Timestamp, Container: v.Hostname, Stream: v.FacilityLabel, Message: message})
 	}
+	// The log service selects the newest N records with desc=1. Consumers
+	// (including stateful credential redaction) need that tail oldest-first.
+	// Keep source order for records whose timestamps cannot distinguish them.
+	slices.SortStableFunc(out, func(a, b infra.LogLine) int { return a.Timestamp.Compare(b.Timestamp) })
 	return out, nil
 }
 
