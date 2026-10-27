@@ -156,7 +156,7 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 		return nil
 	}
 	st, err := e.status(ctx)
-	if err != nil || st.MemberState != "ONLINE" || st.MemberRole != "PRIMARY" {
+	if err != nil || !st.WriterEligible(s.Galera != nil) {
 		return nil
 	}
 	db, err := e.LocalAccessDB(ctx)
@@ -217,7 +217,7 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	}
 	if len(decoded.Transactions) > 0 {
 		latest, err := e.status(ctx)
-		if err != nil || latest.MemberRole != "PRIMARY" || latest.MemberState != "ONLINE" {
+		if err != nil || !latest.WriterEligible(s.Galera != nil) {
 			return nil
 		}
 		if _, err = db.ExecContext(ctx, "FLUSH BINARY LOGS"); err != nil {

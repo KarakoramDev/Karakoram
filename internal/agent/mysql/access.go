@@ -24,6 +24,12 @@ import (
 // in which native access cannot safely run. The caller retains pool ownership.
 type AccessDependencies interface {
 	LocalAccessDB(context.Context) (*sql.DB, error)
+	GaleraAccess() bool
+}
+
+func (e *Runner) GaleraAccess() bool {
+	s, _ := e.state()
+	return s.Galera != nil
 }
 
 type accessError struct {
@@ -62,6 +68,10 @@ func accessFailure(err error) *accessError {
 // RegisterAccessRoutes mounts bounded, authenticated-transport administration
 // actions. The outer member server is responsible for transport authentication.
 func RegisterAccessRoutes(mux *http.ServeMux, deps AccessDependencies) {
+	// GET_LOCK is forbidden by PXC strict mode. Serialize the same node-local
+	// administration boundary in the agent instead; CP writer routing and sealed
+	// operation receipts remain authoritative across writer changes.
+	galeraLock := make(chan struct{}, 1)
 	for _, action := range []string{myspec.ActionAccessUsers, myspec.ActionAccessDatabases, myspec.ActionAccessGrants, myspec.ActionAccessCapabilities} {
 		mux.HandleFunc("POST /v1/mysql/"+action, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-store")
@@ -89,7 +99,11 @@ func RegisterAccessRoutes(mux *http.ServeMux, deps AccessDependencies) {
 					err = errors.New("missing local database")
 				}
 				if err == nil {
-					result, err = executeAccess(ctx, db, action, req)
+					var lock chan struct{}
+					if deps.GaleraAccess() {
+						lock = galeraLock
+					}
+					result, err = executeAccess(ctx, db, action, req, lock)
 				}
 			}
 			if err != nil {
@@ -103,7 +117,17 @@ func RegisterAccessRoutes(mux *http.ServeMux, deps AccessDependencies) {
 	}
 }
 
-func executeAccess(ctx context.Context, db *sql.DB, action string, req myspec.AccessRequest) (any, error) {
+func executeAccess(ctx context.Context, db *sql.DB, action string, req myspec.AccessRequest, galeraLock chan struct{}) (any, error) {
+	if galeraLock != nil {
+		lockCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		select {
+		case galeraLock <- struct{}{}:
+			defer func() { <-galeraLock }()
+		case <-lockCtx.Done():
+			return nil, &accessError{503, "MySQL access operation unavailable"}
+		}
+	}
 	c, err := db.Conn(ctx)
 	if err != nil {
 		return nil, err
@@ -126,12 +150,14 @@ func executeAccess(ctx context.Context, db *sql.DB, action string, req myspec.Ac
 	if _, err = c.ExecContext(ctx, "SET SESSION sql_mode = 'STRICT_ALL_TABLES'"); err != nil {
 		return nil, err
 	}
-	var acquired sql.NullInt64
-	if err = c.QueryRowContext(ctx, "SELECT GET_LOCK('karakoram.access', 5)").Scan(&acquired); err != nil {
-		return nil, err
-	}
-	if !acquired.Valid || acquired.Int64 != 1 {
-		return nil, &accessError{503, "MySQL access operation unavailable"}
+	if galeraLock == nil {
+		var acquired sql.NullInt64
+		if err = c.QueryRowContext(ctx, "SELECT GET_LOCK('karakoram.access', 5)").Scan(&acquired); err != nil {
+			return nil, err
+		}
+		if !acquired.Valid || acquired.Int64 != 1 {
+			return nil, &accessError{503, "MySQL access operation unavailable"}
+		}
 	}
 	switch action {
 	case myspec.ActionAccessUsers:

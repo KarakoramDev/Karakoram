@@ -34,7 +34,7 @@ func live(ctx context.Context, rc *engine.Context, name string) (myspec.StatusRe
 	return out, err
 }
 func onlinePrimary(st myspec.StatusResponse) bool {
-	return st.MemberState == "ONLINE" && st.MemberRole == "PRIMARY" && !st.SuperReadOnly && !st.ReadOnly
+	return st.WriterEligible(false)
 }
 func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*member) []memberObservation {
 	out := make([]memberObservation, len(members))

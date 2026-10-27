@@ -133,6 +133,8 @@ func TestAccessErrorsClosedVocabulary(t *testing.T) {
 
 type failingAccessDeps struct{}
 
+func (failingAccessDeps) GaleraAccess() bool { return false }
+
 func (failingAccessDeps) LocalAccessDB(context.Context) (*sql.DB, error) {
 	return nil, errors.New("private failure")
 }

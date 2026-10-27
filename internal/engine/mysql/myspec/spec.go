@@ -189,6 +189,19 @@ type StatusResponse struct {
 	DataIdentity     DataIdentity `json:"dataIdentity"`
 	PhysicalIdentity string       `json:"physicalIdentity,omitempty"`
 }
+
+// Online accepts raw Galera status only when the agent has established a
+// Primary, Synced, ready and connected member (reported with PRIMARY role).
+// Control-plane Galera observations are already normalized to ONLINE and use
+// the proxy-selected role instead of Galera's multi-primary role.
+func (s StatusResponse) Online(galera bool) bool {
+	return s.MemberState == "ONLINE" || galera && s.MemberState == "Synced" && s.MemberRole == "PRIMARY"
+}
+
+func (s StatusResponse) WriterEligible(galera bool) bool {
+	return s.Online(galera) && s.MemberRole == "PRIMARY" && !s.ReadOnly && !s.SuperReadOnly
+}
+
 type OfflineGTIDResponse struct {
 	// Stopped confirms this observation was obtained without a running server.
 	Stopped      bool         `json:"stopped"`

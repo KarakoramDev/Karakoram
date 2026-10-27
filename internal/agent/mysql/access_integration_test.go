@@ -26,6 +26,8 @@ import (
 
 type nativeAccessDeps struct{ db *sql.DB }
 
+func (nativeAccessDeps) GaleraAccess() bool { return false }
+
 func (d nativeAccessDeps) LocalAccessDB(context.Context) (*sql.DB, error) { return d.db, nil }
 
 func TestNativeMySQLAccess(t *testing.T) {

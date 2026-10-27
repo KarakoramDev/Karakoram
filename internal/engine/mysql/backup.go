@@ -173,13 +173,13 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	primary := ""
 	for _, m := range s.data() {
 		st, err := live(ctx, rc, m.Name)
-		if err != nil || st.MemberState != "ONLINE" && !(rc.Cluster.Spec.Provider == "pxc" && st.MemberState == "Synced" && st.MemberRole == "PRIMARY") || identity != "" && st.PhysicalIdentity != identity {
+		if err != nil || !st.Online(false) || identity != "" && st.PhysicalIdentity != identity {
 			continue
 		}
 		if st.MemberRole == "SECONDARY" {
 			return m.Name, nil
 		}
-		if onlinePrimary(st) || rc.Cluster.Spec.Provider == "pxc" && st.MemberRole == "PRIMARY" {
+		if onlinePrimary(st) {
 			primary = m.Name
 		}
 	}

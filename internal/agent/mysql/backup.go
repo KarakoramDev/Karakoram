@@ -210,7 +210,7 @@ func (e *Runner) backup(ctx context.Context, s myspec.Spec, p paths, r myspec.Ba
 		return previous.Response, err
 	}
 	st, err := e.status(ctx)
-	if err != nil || st.MemberState != "ONLINE" && !(s.Galera != nil && st.MemberState == "Synced" && st.MemberRole == "PRIMARY") {
+	if err != nil || !st.Online(s.Galera != nil) {
 		return myspec.BackupResponse{}, errors.New("member_unavailable")
 	}
 	if r.PhysicalIdentity != "" && r.PhysicalIdentity != st.PhysicalIdentity || r.Type == "incremental" && r.PhysicalIdentity == "" {

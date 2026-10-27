@@ -54,6 +54,14 @@ Creation and rotation return server-generated passwords once. Rotation may retai
 
 Native mutations resolve the current writer and synchronize managed credentials to the proxies. If an outcome is unknown, inspect the account/operation state before another mutation; transport failure does not prove that account DDL failed. MySQL account DDL implicitly commits, and password changes are not a transactional rollback mechanism. Recovery also has [account-snapshot caveats](backups.md#accounts-after-recovery).
 
+PXC administration follows the writer designated by ProxySQL, and only a
+Primary-component, Synced, ready and connected member is eligible. Joining and
+Donor/Desynced members are never selected. PXC agents serialize managed access
+locally without SQL advisory locks: `GET_LOCK()` is unsupported by PXC strict
+mode. MySQL single-node and Group Replication retain their SQL advisory lock.
+After upgrading a control plane carrying this fix, roll out the matching agents
+before re-proving managed PXC access or binary-log archiving.
+
 Access requests and new-member initialization remain fenced during active recovery; a completed reformation receipt does not keep those fences active. Delete and suspend reject new access mutations, but first resolve any previously sealed account intent before removing runtimes. An applied SQL receipt finishes credential publication and proxy acknowledgement without repeating SQL. An ambiguous result replays the same request identity against the native journal; only a definitive rejection restores the previous sealed indexes. Unavailable connectivity keeps the intent and runtimes intact until resolution, rather than discarding potentially committed account changes.
 
 Restored Group Replication followers receive destructive clone permission only for their own outstanding restore receipt. Seed formation does not revoke that permission prematurely: each follower keeps it until its clone completes, then a new configuration revision revokes it before joining. Ordinary fresh-member initialization and retained completed clone receipts do not grant permission to overwrite an existing identity.
