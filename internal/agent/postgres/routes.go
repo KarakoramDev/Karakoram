@@ -127,7 +127,7 @@ func patchDynamic(ctx context.Context, s pgspec.Spec, p paths) error {
 }
 func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.StatusResponse {
 	out := pgspec.StatusResponse{
-		Role: "starting", Version: s.Version, CredentialReceipts: true,
+		Role: "starting", CredentialReceipts: true,
 		HealthCapabilities: &pgspec.HealthCapabilities{
 			LocalEtcd: true, ReplicationSlots: true, WALArchive: true,
 			ReplicationDistance: true, PatroniPause: true,
@@ -176,6 +176,9 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 	if err == nil {
 		defer c.Close(ctx)
 		out.Running = true
+		// Read the running server, not the assigned catalog version. Percona's
+		// product release includes a third component absent from server_version.
+		_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.substring(pg_catalog.version(), 'Percona Server for PostgreSQL ([0-9]+[.][0-9]+[.][0-9]+)'), pg_catalog.current_setting('server_version'))").Scan(&out.Version)
 		_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.row_to_json(ROW(d))->'f1'->>'datlocale',pg_catalog.row_to_json(ROW(d))->'f1'->>'daticulocale',d.datcollate) FROM pg_catalog.pg_database d WHERE d.datname='template1'").Scan(&out.Locale)
 		if s.Topology == pgspec.TopologySingle {
 			_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.bool_or(pending_restart),false) FROM pg_catalog.pg_settings").Scan(&out.PendingRestart)

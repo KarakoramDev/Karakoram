@@ -64,6 +64,19 @@ func TestPreparationSuppressesDistroCluster(t *testing.T) {
 	}
 }
 
+func TestPreparationRetainsExactServerCandidate(t *testing.T) {
+	for version, pin := range packagePins {
+		commands := strings.Join(PrepareCommands(version), "\n")
+		m := strconv.Itoa(major(version))
+		preference := "Package: percona-postgresql-" + m + "\\nPin: version " + pin + "\\nPin-Priority: 1001\\n"
+		pinned := strings.Index(commands, preference)
+		install := strings.Index(commands, "apt-get install -y percona-postgresql-"+m+"=")
+		if pinned < 0 || install < pinned || !strings.Contains(commands, "/etc/apt/preferences.d/karakoram-postgresql-"+m) {
+			t.Fatalf("%s must persist its server candidate before apt resolves dependencies", version)
+		}
+	}
+}
+
 func TestPerconaBootstrapUsesRootPrivateVerifiedStaging(t *testing.T) {
 	command := PrepareCommands("17.11.1")[1]
 	const prefix = "sudo sh -c '"

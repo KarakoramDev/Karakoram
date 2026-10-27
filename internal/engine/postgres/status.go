@@ -163,6 +163,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	for i, m := range s.Members {
 		member := domain.MemberStatus{Name: m.Name, Set: "postgres", Role: "unknown", State: "starting", Version: m.Version}
+		if m.Role == "data" {
+			member.Version = ""
+		}
 		if s.Topology == "distributed" && m.Role == "data" {
 			group := m.Group
 			member.Group = &group

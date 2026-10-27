@@ -21,6 +21,29 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
+func TestMemberVersionUsesOnlyLiveObservation(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	s := converge(t, p, rc)
+	name := s.data()[0].Name
+	for _, version := range []string{"17.10.1", ""} {
+		st, err := live(t.Context(), rc, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.Version = version
+		b.statusOverrides = map[string]pgspec.StatusResponse{name: st}
+		status, err := p.Status(t.Context(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, member := range status.Members {
+			if member.Name == name && member.Version != version {
+				t.Fatalf("member version=%q, want observed %q (assigned %q)", member.Version, version, rc.Cluster.Spec.Version)
+			}
+		}
+	}
+}
+
 func TestFreshnessHungFormerPrimaryDoesNotHideNewWriter(t *testing.T) {
 	p, rc, _ := setup(t, "ha")
 	s := converge(t, p, rc)

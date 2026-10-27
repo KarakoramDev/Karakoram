@@ -46,6 +46,7 @@ func TestStatusPendingRestartAuthority(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := testSpec()
 			s.Topology = tc.topology
+			s.Version = "17.10.1"
 			p, nativeQueries := statusSQLFixture(t, tc.nativePending)
 			if s.Topology == pgspec.TopologyHA {
 				s.CAPEM, s.ServerCert = testTLS(t)
@@ -84,6 +85,9 @@ func TestStatusPendingRestartAuthority(t *testing.T) {
 			st := New().status(ctx, s, p)
 			if !st.Running || st.PendingRestart != tc.want {
 				t.Fatalf("status running=%t pending_restart=%t, want true/%t", st.Running, st.PendingRestart, tc.want)
+			}
+			if st.Version != "17.11.1" {
+				t.Fatalf("status version=%q, want running release, not assigned %q", st.Version, s.Version)
 			}
 			wantQueries := int32(0)
 			if s.Topology == pgspec.TopologySingle {
@@ -138,6 +142,8 @@ func statusSQLFixture(t *testing.T, pending bool) (paths, *atomic.Int32) {
 			var oids []uint32
 			var values []any
 			switch {
+			case strings.Contains(query, "pg_catalog.version()"):
+				oids, values = []uint32{pgtype.TextOID}, []any{"17.11.1"}
 			case strings.Contains(query, "FROM pg_catalog.pg_settings"):
 				nativeQueries.Add(1)
 				oids, values = []uint32{pgtype.BoolOID}, []any{pending}

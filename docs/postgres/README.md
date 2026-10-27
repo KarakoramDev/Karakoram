@@ -22,6 +22,12 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private [pgEdge](https://www.pg
 
 Inspect the running catalog with `karactl providers get postgres -o json`; versions are pinned to exact Percona packages. A Percona product version such as 17.11.1 differs from PostgreSQL's reported 17.11 patch version. Each HA data member has its own volume containing PostgreSQL, [etcd](https://etcd.io/) and runtime state. Member names use `<cluster>p<index>`; the proxy service is `<cluster>px`. Indexes are monotonic. Separate members do not guarantee separate hosts; see [failure domains](../limitations.md).
 
+The exact server package remains the APT candidate throughout subsequent profile
+and dependency installation, with a separate preference per PostgreSQL major.
+Adding a profile must not silently upgrade the server. Member status reads the
+running server's Percona product release through SQL, rather than echoing the
+assigned version; an unavailable version observation is empty.
+
 The member agent supervises PostgreSQL and [ProxySQL](https://proxysql.com/). Preparation suppresses distribution-managed daemons; on [systemd](https://systemd.io/) runtimes it also stops and masks the packaged ProxySQL unit so it cannot compete for the agent's listeners. Runtimes without systemd skip that unit-management step.
 The pinned Percona repository-bootstrap package is downloaded, SHA-256 verified
 and installed in one privileged shell inside a fresh root-owned private staging

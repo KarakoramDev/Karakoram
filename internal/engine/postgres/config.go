@@ -26,6 +26,9 @@ func PrepareCommands(version string) []string {
 		"sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg lsb-release",
 		nativeartifacts.PrepareCommands(bootstrap, "https://repo.percona.com/apt/percona-release_latest.noble_all.deb", "", "")[0],
 		fmt.Sprintf("sudo percona-release setup -y ppg-%d", m),
+		// Later profile/dependency installs must not select a newer server.
+		// Keep each major separate so offline upgrades can install both releases.
+		fmt.Sprintf("printf 'Package: percona-postgresql-%d\\nPin: version %s\\nPin-Priority: 1001\\n' | sudo tee /etc/apt/preferences.d/karakoram-postgresql-%d >/dev/null", m, packagePins[version], m),
 		"printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null && sudo chmod 0755 /usr/sbin/policy-rc.d && sudo apt-get install -y postgresql-common && printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf >/dev/null",
 		fmt.Sprintf("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-%d='%s' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2", m, packagePins[version]),
 	}
