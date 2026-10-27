@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL consumer bindings
 
-A binding is a durable dependency from a managed consumer to a `postgres` source cluster in the same control plane. Consumer providers create and release bindings during reconciliation; operators inspect them on the source's **Bindings** tab. Keycloak is the sample consumer. Temporal and OpenBao can use the same in-process binding contract; a binding is not an external-database import or an assertion that those providers are installed.
+A binding is a durable dependency from a managed consumer to a `postgres` source cluster in the same control plane. Consumer providers create and release bindings during reconciliation; operators inspect them on the source's **Bindings** tab. [Keycloak](https://www.keycloak.org/) is the sample consumer. [Temporal](https://temporal.io/) and [OpenBao](https://openbao.org/) can use the same in-process binding contract; a binding is not an external-database import or an assertion that those providers are installed.
 
 `pgbinding.BindingID(request)` is deterministic before provisioning: `pgb-` followed by the first 16 bytes of SHA-256 in lowercase hexadecimal, hashing consumer kind/namespace/name and source namespace/cluster separated by NUL bytes. Empty namespaces normalize to `default`. Database, extension and version-range changes do not change this URL-safe ID. Consumers must call `Release(ctx, pgbinding.BindingID(request), keepData)` after removing runtimes even when `Ensure` never succeeded. Releasing an unknown ID is a successful no-op; partial provisioning does not strand a source deletion guard.
 
@@ -10,7 +10,7 @@ A binding is a durable dependency from a managed consumer to a `postgres` source
 
 Each binding owns one login role and one to eight databases. Its reserved `kb_` role has no superuser, database-creation, role-creation, replication or bypass-RLS privileges or memberships. Requested extensions must be available on the source. The role owns the application databases and their public schemas; unrelated consumers should use separate bindings.
 
-Binding databases do not retain PostgreSQL's default `PUBLIC CONNECT` and
+Binding databases do not retain [PostgreSQL](https://www.postgresql.org/)'s default `PUBLIC CONNECT` and
 `TEMPORARY` privileges. Karakoram revokes both from `PUBLIC` and explicitly grants
 them to the owning binding role, so another consumer's `kb_` role cannot connect
 or create temporary tables there. Explicit product grants, such as `CONNECT` for

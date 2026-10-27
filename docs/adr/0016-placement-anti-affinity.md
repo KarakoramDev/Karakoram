@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Zerops exposes no member anti-affinity/zone-spread guarantee or authoritative physical-host identifier through the container API. Separate Local Storage volumes do not force distinct hosts. Three healthy processes therefore do not prove three independent failure domains.
+[Zerops](https://zerops.io) exposes no member anti-affinity/zone-spread guarantee or authoritative physical-host identifier through the container API. Separate Local Storage volumes do not force distinct hosts. Three healthy processes therefore do not prove three independent failure domains.
 
 ## Decision
 
@@ -16,7 +16,7 @@ Display warnings in creation/topology guidance and the cluster detail UI, and do
 
 ## Consequences
 
-Users can distinguish database replication from infrastructure resilience. Co-location can remove multiple voters during one host failure; PBM recovery limits data-loss exposure but does not supply availability. Heuristics can have false matches, missing signals or stale groups, so placement status must show uncertainty rather than certify HA. Guaranteed anti-affinity would require a new platform capability and a revised backend/acceptance contract.
+Users can distinguish database replication from infrastructure resilience. Co-location can remove multiple voters during one host failure; [PBM](https://docs.percona.com/percona-backup-mongodb/) recovery limits data-loss exposure but does not supply availability. Heuristics can have false matches, missing signals or stale groups, so placement status must show uncertainty rather than certify HA. Guaranteed anti-affinity would require a new platform capability and a revised backend/acceptance contract.
 
 ## Alternatives considered
 

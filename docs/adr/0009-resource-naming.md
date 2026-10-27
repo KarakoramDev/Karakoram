@@ -26,7 +26,7 @@ Validate every complete generated runtime/volume hostname against the confirmed 
 
 Connection hosts and volume links are inspectable, compact and deterministic. Membership count is not a contiguous ordinal range after replacement. Hostname length/collision checks are an API/provider responsibility, and existing unrelated project services can block a requested name. A naming change would require an explicit migration because replica-set configuration contains these addresses.
 
-Index allocation also skips indices whose runtime or volume hostname is still held by an orphaned volume record or an existing Zerops service, so re-creating a same-named cluster never collides.
+Index allocation also skips indices whose runtime or volume hostname is still held by an orphaned volume record or an existing [Zerops](https://zerops.io) service, so re-creating a same-named cluster never collides.
 
 ## Alternatives considered
 

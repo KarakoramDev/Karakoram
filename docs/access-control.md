@@ -5,17 +5,17 @@
 Karakoram accounts, roles and tokens authorize control-plane actions, independently of backend infrastructure credentials and engine-native users.
 
 The server enforces policy; hidden UI controls are not an authorization boundary. Engine identities belong in [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md) and [Elasticsearch](elasticsearch/access-and-security.md).
-Neo4j native users are described in [Neo4j access](neo4j/access-and-tls.md). Every Community user has full administrative privileges; control-plane RBAC does not add native database roles.
+[Neo4j](https://neo4j.com/) native users are described in [Neo4j access](neo4j/access-and-tls.md). Every Community user has full administrative privileges; control-plane RBAC does not add native database roles.
 
 Idempotency replay is scoped to the authenticated identity, operation, resource
 path and namespace (including namespace query parameters). A retry in another
 namespace cannot receive a cached secret from the original namespace.
 Generated unconditional additional RBAC grants are checked on the same resource
-before execution or idempotency replay. PostgreSQL binding rotation therefore
+before execution or idempotency replay. [PostgreSQL](https://www.postgresql.org/) binding rotation therefore
 requires both `database-users:update` and `clusters:update`. Conditional grants
-(privileged database roles/tags and cross-cluster OpenBao targets) are resolved
+(privileged database roles/tags and cross-cluster [OpenBao](https://openbao.org/) targets) are resolved
 against the request body or current engine state by their owning handlers.
-Weaviate user creation and API-key rotation recheck privileged-role access before
+[Weaviate](https://weaviate.io/) user creation and API-key rotation recheck privileged-role access before
 returning cached keys; rotation resolves the user's current native roles. Revoking
 `clusters:update` prevents privileged secret replay even while the principal
 retains its ordinary database-user permissions.
@@ -24,7 +24,7 @@ retains its ordinary database-user permissions.
 
 When [OAuth for MCP](mcp.md#connect-with-oauth) is enabled, every connection requires
 interactive consent. Grants intersect the account's current RBAC with approved
-scopes and optional namespace limits; they do not inherit browser OIDC group
+scopes and optional namespace limits; they do not inherit browser [OIDC](https://openid.net/developers/how-connect-works/) group
 bindings. **Settings → Connected apps** lists and revokes your grants.
 `listOAuthGrants` and `deleteOAuthGrant` provide the same self-service API;
 `api-tokens:read` / `api-tokens:delete` allow administrators to manage others'

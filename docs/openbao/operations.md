@@ -6,7 +6,7 @@
 
 Karakoram persists one initialization owner before calling `sys/init`. Only that member initializes; others join its Raft cluster. The member encrypts the initialization response to an ephemeral control-plane recipient key and durably retains only an encrypted receipt until the control plane stores shares and management access and acknowledges it. Retrying recovers that receipt rather than initializing a second seed.
 
-The owner is unsealed and becomes active first. Further members join one at a time; each must become a healthy Raft voter in autopilot before the next. Runtime deployment or an agent configuration acknowledgement alone is not readiness. OpenBao active members report role `primary`; unsealed standbys report `secondary`.
+The owner is unsealed and becomes active first. Further members join one at a time; each must become a healthy Raft voter in autopilot before the next. Runtime deployment or an agent configuration acknowledgement alone is not readiness. [OpenBao](https://openbao.org/) active members report role `primary`; unsealed standbys report `secondary`.
 
 ```sh
 karactl -n NS clusters status secrets -o json
@@ -43,7 +43,7 @@ Transit `engineOptions` example (replace the example token through a protected r
 
 The external key must already exist, and its token must permit encrypt/decrypt for that key. `address` is HTTPS; optional `caPEM` and `tlsServerName` configure trust. Empty CA uses system roots. Keep this service independent from the cluster it seals.
 
-AWS KMS alternative:
+[AWS KMS](https://aws.amazon.com/kms/) alternative:
 
 ```json
 {
@@ -100,11 +100,11 @@ Upgrades are forward-only to catalog-listed versions; inspect `providers get ope
 
 ## PostgreSQL storage opt-in
 
-The provider implements `engineOptions.storage: {"type":"postgresql","postgresql":{"cluster":"appdb"}}` through a PostgreSQL binding service: same-namespace PostgreSQL 13+, a dedicated owned database/role, verified TLS, and native OpenBao HA tables. Members are stateless HA peers, not Raft voters. Binding credential changes roll members; deletion releases the binding after runtimes terminate, with data retention following `keepVolumes`.
+The provider implements `engineOptions.storage: {"type":"postgresql","postgresql":{"cluster":"appdb"}}` through a [PostgreSQL](https://www.postgresql.org/) binding service: same-namespace PostgreSQL 13+, a dedicated owned database/role, verified TLS, and native OpenBao HA tables. Members are stateless HA peers, not Raft voters. Binding credential changes roll members; deletion releases the binding after runtimes terminate, with data retention following `keepVolumes`.
 
 PostgreSQL peers retain cluster/member/volume identity fencing, but their local volume is not marked as initialized durable native storage: replacing an empty peer disk must not trigger the Raft data-loss guard when all durable state remains in PostgreSQL. Raft peers retain that guard unchanged. An already-initialized external database without recoverable control-plane initialization material or an encrypted initialization receipt still fails closed with `InitializationOutcomeLost`; stateless disk replacement never authorizes reinitialization.
 
-The standard server constructs one PostgreSQL binding service and passes the same instance through `internal/server.engineOptions.Bindings` to `openbao.ProviderOptions.Bindings` (and to Keycloak, Temporal and the bindings API). Provider metadata advertises `postgresql-storage` only when that dependency is present, and the UI gates the choice from that capability; a composition without the service rejects PostgreSQL storage at admission. The native integration scenario `TestNativeControlPlanePostgresStorage` creates a real PostgreSQL role/database and exercises native HA initialization, unseal, persistence across replacement of all local member volumes, and both release retention modes. There are no OpenBao snapshots/PITR in this mode: recovery belongs to the bound PostgreSQL cluster plus retained seal material. Ordinary [PostgreSQL credential connections](access-and-tls.md#managed-database-connections) do not depend on this service.
+The standard server constructs one PostgreSQL binding service and passes the same instance through `internal/server.engineOptions.Bindings` to `openbao.ProviderOptions.Bindings` (and to [Keycloak](https://www.keycloak.org/), [Temporal](https://temporal.io/) and the bindings API). Provider metadata advertises `postgresql-storage` only when that dependency is present, and the UI gates the choice from that capability; a composition without the service rejects PostgreSQL storage at admission. The native integration scenario `TestNativeControlPlanePostgresStorage` creates a real PostgreSQL role/database and exercises native HA initialization, unseal, persistence across replacement of all local member volumes, and both release retention modes. There are no OpenBao snapshots/PITR in this mode: recovery belongs to the bound PostgreSQL cluster plus retained seal material. Ordinary [PostgreSQL credential connections](access-and-tls.md#managed-database-connections) do not depend on this service.
 
 ## Lost-quorum manual recovery
 

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without [Kubernetes](https://kubernetes.io/) or a hosted coordinator. A [Go](https://go.dev/) control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. [Zerops](https://zerops.io/) is the reference backend. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available; see [Backends](docs/backends.md) for their status.
 
 ## Engines
 
@@ -40,10 +40,10 @@ See [Backends](docs/backends.md) for capability differences and [Operating costs
 ## Across engines
 
 - Catalog-driven creation, resource configuration, disk growth and capability-gated [cluster operations](docs/clusters.md).
-- S3-compatible [storage, schedules and recovery](docs/backups.md).
+- [S3](https://aws.amazon.com/s3/)-compatible [storage, schedules and recovery](docs/backups.md).
 - Multi-project [namespaces and authenticated relays](docs/namespaces.md).
 - [Monitoring](docs/monitoring.md), logs and actor-attributed [audit activity](docs/operations.md#reviewing-audit-activity).
-- Local accounts, OIDC, namespace-aware RBAC and owner-scoped API tokens: [access control](docs/access-control.md).
+- Local accounts, [OIDC](https://openid.net/developers/how-connect-works/), namespace-aware RBAC and owner-scoped API tokens: [access control](docs/access-control.md).
 - [Safe fleet operations](docs/operations.md), [control-plane backup/recovery](docs/control-plane-backup.md), [notifications](docs/notifications.md) and [backup drills](docs/backup-drills.md), verified offline.
 
 **Warning:** Review [critical limits](docs/limitations.md) before production use: replica count does not guarantee independent hosts, Local Storage is single-host, and the control plane has one replica.
@@ -54,7 +54,7 @@ Choose a backend in [Backends](docs/backends.md). For Zerops, use the dashboard-
 
 ## Build from source
 
-Requires Go **1.26+**, Node **22.6+**, npm and Make:
+Requires Go **1.26+**, [Node](https://nodejs.org/) **22.6+**, [npm](https://docs.npmjs.com/) and [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/):
 
 ```sh
 make build-all             # web UI and both Go executables
@@ -95,7 +95,7 @@ Keep `docs/` beside the repository's `api/`, `ui/` and root README so relative s
 
 Thank you to [Zerops](https://zerops.io) for providing free-of-charge infrastructure for developing and testing Karakoram.
 
-Karakoram installs [Percona Server for MongoDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) and [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/latest/) from [Percona's official repositories](https://repo.percona.com/). It independently implements orchestration; no OpenEverest code or UI is copied into this repository.
+Karakoram installs [Percona Server for MongoDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) and [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/latest/) from [Percona's official repositories](https://repo.percona.com/). It independently implements orchestration; no [OpenEverest](https://openeverest.io/) code or UI is copied into this repository.
 
 ## License and trademarks
 

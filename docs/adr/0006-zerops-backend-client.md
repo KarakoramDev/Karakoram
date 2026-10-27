@@ -4,7 +4,7 @@ Status: Accepted; infrastructure contract and factory construction generalized b
 
 ## Context
 
-Zerops exposes projects, service stacks, Local Storage services, environment secrets, app versions, public routes and asynchronous Processes. Its API is not a database controller. The broad `zerops-go` SDK is useful endpoint/DTO research, but exposing platform DTOs throughout the engine would tightly couple lifecycle code to that API.
+[Zerops](https://zerops.io) exposes projects, service stacks, Local Storage services, environment secrets, app versions, public routes and asynchronous Processes. Its API is not a database controller. The broad `zerops-go` SDK is useful endpoint/DTO research, but exposing platform DTOs throughout the engine would tightly couple lifecycle code to that API.
 
 ## Decision
 

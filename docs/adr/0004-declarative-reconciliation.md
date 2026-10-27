@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Zerops lifecycle actions are asynchronous Processes without a generic watch/webhook interface. A request can succeed externally before Karakoram crashes or stores its response. Database changes must preserve quorum and never rely on an HTTP request handler staying alive.
+[Zerops](https://zerops.io) lifecycle actions are asynchronous Processes without a generic watch/webhook interface. A request can succeed externally before Karakoram crashes or stores its response. Database changes must preserve quorum and never rely on an HTTP request handler staying alive.
 
 ## Decision
 
@@ -12,7 +12,7 @@ Persist desired cluster specifications separately from observed status and provi
 
 Represent imperative backup, deletion of backups, restore, FCV raise, rolling restart, replacement and secret/certificate rotation as durable `Operation` records. `RunOperation` is re-entrant and resumes from a persisted checkpoint. Specification-driven creation, scaling, resources, version, exposure, PITR and schedules remain `Sync` work. Serialize `Sync`, cleanup and operations with per-cluster locks; different clusters can make independent progress.
 
-Persist step intent and known platform/PBM identifiers, poll completion without blocking a worker indefinitely, and checkpoint observed results. After a crash or uncertain submission, inspect stable service identities and engine/PBM state before resubmitting. No exactly-once claim is made across SQLite and external systems. Preserve deletion intent until cleanup or explicit retention is complete.
+Persist step intent and known platform/[PBM](https://docs.percona.com/percona-backup-mongodb/) identifiers, poll completion without blocking a worker indefinitely, and checkpoint observed results. After a crash or uncertain submission, inspect stable service identities and engine/PBM state before resubmitting. No exactly-once claim is made across [SQLite](https://sqlite.org) and external systems. Preserve deletion intent until cleanup or explicit retention is complete.
 
 Record durable events and publish them through `/events/stream` SSE. Reconnects replay authorized events using event IDs; in-process delivery is an acceleration, not the source of truth.
 

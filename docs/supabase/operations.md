@@ -12,8 +12,8 @@ their existing, independent administration budget.
 
 ## Cluster restart and member software
 
-`karactl clusters restart NAME --wait` first performs the PostgreSQL/ProxySQL
-rolling restart, then restarts every live instance of each enabled Supabase
+`karactl clusters restart NAME --wait` first performs the [PostgreSQL](https://www.postgresql.org/)/[ProxySQL](https://proxysql.com/)
+rolling restart, then restarts every live instance of each enabled [Supabase](https://supabase.com/)
 component, one instance at a time. Disabled components are skipped. Each component
 instance must show a changed supervised child PID, launch identity, restart count
 or start time, acknowledge its configuration, and regain native readiness before
@@ -50,7 +50,7 @@ database members or delete their volumes to emulate a component roll.
 
 ## Agent rollout and maintenance windows
 
-`karactl -n NS clusters upgrade-agents NAME` first performs the PostgreSQL
+`karactl -n NS clusters upgrade-agents NAME` first performs the [PostgreSQL](https://www.postgresql.org/)
 replica-first/primary-switchover rollout, then redeploys enabled optional
 component runtimes one at a time. Each component retains its runtime identity,
 applied application version and published configuration, and must pass native
@@ -75,11 +75,11 @@ for database leaf renewal's seven-day emergency exception and policy overrides.
 ## Components and health
 
 Change desired replicas/resources under `spec.components.extra` and follow operation/generation convergence. Explicit zero disables a service, subject to dependency validation. Component application readiness is separate from database readiness. In member status, application releases use `componentVersion`; their database `version` is intentionally empty. Aggregate resource requirements include every enabled service, proxy and data member.
-Enabling or disabling a component changes the shared upstream map in application configuration hashes, so the remaining Supabase applications can restart in place as their configurations converge sequentially; this can take multiple passes and temporarily outlive the [15-second availability observation lease](../clusters.md), without restarting the PostgreSQL core.
+Enabling or disabling a component changes the shared upstream map in application configuration hashes, so the remaining [Supabase](https://supabase.com/) applications can restart in place as their configurations converge sequentially; this can take multiple passes and temporarily outlive the [15-second availability observation lease](../clusters.md), without restarting the [PostgreSQL](https://www.postgresql.org/) core.
 
 Changing only an application's replica count or resource bounds (for example,
 `components.extra.rest.resources.maxCpu`) does not publish a new PostgreSQL or
-ProxySQL configuration or redeploy their runtimes. The database core tracks only
+[ProxySQL](https://proxysql.com/) configuration or redeploy their runtimes. The database core tracks only
 the engine and proxy component bounds. Database/proxy settings, managed access
 revisions, and Supabase engine options still participate in database configuration
 convergence, including extension preload changes.
@@ -218,15 +218,15 @@ Direct component probes do not traverse the gateway's network path; use
 authenticated end-to-end route/application checks. A REST or Auth instance
 failing native/serving readiness withdraws `ComponentsReady` and stack readiness
 with an instance-scoped message, but remains in the gateway's resolved pool.
-There are no application-level active health checks: Nomad service checks test
-only the listener, and Zerops deploy readiness checks do not feed gateway
-membership. An instance that accepts connections but returns PostgREST HTTP 503
+There are no application-level active health checks: [Nomad](https://developer.hashicorp.com/nomad) service checks test
+only the listener, and [Zerops](https://zerops.io/) deploy readiness checks do not feed gateway
+membership. An instance that accepts connections but returns [PostgREST](https://postgrest.org/) HTTP 503
 is neither retried nor ejected for that response, so extra REST/Auth replicas do
 not mask one instance's database-path loss. Restore or replace the instance named
 in status; see [cluster restart and member software](#cluster-restart-and-member-software).
 
 Storage readiness combines the native `/status` endpoint with an authenticated,
-non-mutating S3 bucket `HEAD` from the Storage member, using its already-projected
+non-mutating [S3](https://aws.amazon.com/s3/) bucket `HEAD` from the Storage member, using its already-projected
 backend registration and optional bucket override. The probe has the shared
 four-second observation timeout; concurrent status/metrics callers share a sample
 for at most the five-second readiness interval. Both successful and failed samples
@@ -353,7 +353,7 @@ re-enable and new public exposure wait for core Ready. Dependency validation sti
 requires dependents to be disabled first.
 
 Internal database connections use a local raw TCP forwarder on loopback 5432
-(15432 for Supavisor). HA probes authenticated TLS Patroni `/primary` every second.
+(15432 for [Supavisor](https://github.com/supabase/supavisor)). HA probes authenticated TLS [Patroni](https://patroni.readthedocs.io/) `/primary` every second.
 A negative response/error from the known writer revokes it immediately, without
 waiting for other peers' probes. Leadership loss/change closes existing sessions;
 services must reconnect. New sessions wait up to ten seconds for exactly one
@@ -373,7 +373,7 @@ with `realtime replicas must be 0..1`; provider catalogs advertise the same boun
 All presets select zero or one. The CLI submits optional-component file bodies
 to that same server admission path rather than maintaining separate replica rules.
 Realtime always renders an explicit empty `CLUSTER_STRATEGIES`, removing the
-pinned default `POSTGRES` discovery topology. Its linked Postgrex notifications
+pinned default `POSTGRES` discovery topology. Its linked [Postgrex](https://github.com/elixir-ecto/postgrex) notifications
 process could exhaust supervision on database loss and exit Realtime even though
 a singleton has no peers to discover. Ordinary database pools and logical
 replication still reconnect through the forwarder; the member supervisor still
@@ -421,7 +421,7 @@ hostname, `APP_NAME` node basename, five-second polling) and `EPMD` (explicit
 platform returns all instance IPs, but changing those two variables alone is not
 equivalent clustering. It additionally requires unique routable `<APP_NAME>@<IP>`
 identities (`POD_IP` is honored by this pinned release), compatible private address
-families, a sealed per-cluster cookie, declared/reachable EPMD and fixed Erlang
+families, a sealed per-cluster cookie, declared/reachable EPMD and fixed [Erlang](https://www.erlang.org/)
 distribution ports, gen_rpc connectivity, and multi-node broadcast/presence tests.
 Those networking changes are not part of the singleton failover correction.
 
@@ -431,7 +431,7 @@ only. Karakoram does not manage a pgsodium server root key and never adds
 transparent column encryption are not enabled.
 
 Realtime's logical decoding uses the packaged `wal2json` output plugin. Supabase
-data members explicitly trust it through Percona's `output_plugin_libraries`,
+data members explicitly trust it through [Percona](https://www.percona.com/)'s `output_plugin_libraries`,
 alongside the default `pgoutput` and `test_decoding` plugins.
 
 Native services and their migration commands use the member's protected data
@@ -465,7 +465,7 @@ JWT rotation replaces signing/API-key material and rolls dependent service confi
 
 ## Security boundaries
 
-Postgres-meta runs with the PostgreSQL superuser credential. Its API binds
+[Postgres-meta](https://github.com/supabase/postgres-meta) runs with the [PostgreSQL](https://www.postgresql.org/) superuser credential. Its API binds
 `127.0.0.1:8081`; its adjacent admin listener also remains on loopback at
 `127.0.0.1:8082`. Private port `8080` is an authenticated metadata proxy:
 requests need the cluster service-role API key in `apikey`, or the internal
@@ -510,10 +510,10 @@ it is not a bare database name. Disabling database TLS explicitly selects plaint
 Member configurations are projected before digesting, publishing and local
 caching. Each component receives only its consumed database-role credentials
 and service secrets. Auth alone receives SMTP credentials and private asymmetric
-signing keys; Storage alone receives S3 backend/frontend credentials; imgproxy, Vector
+signing keys; Storage alone receives [S3](https://aws.amazon.com/s3/) backend/frontend credentials; [imgproxy](https://imgproxy.net/), [Vector](https://vector.dev/)
 and the gateway receive no database passwords. Metadata, Studio and Functions
 retain their required privileged database connection; protect their code and
-administrative access accordingly. HA database consumers retain the Patroni
+administrative access accordingly. HA database consumers retain the [Patroni](https://patroni.readthedocs.io/)
 probe credential; enabled log shipping receives its ingestion credential.
 
 The projection changes configuration digests, so existing components redeploy
@@ -540,14 +540,14 @@ Use explicit `npm:` or `jsr:` imports rather than relying on undeclared aliases.
 
 ## Recovery boundaries
 
-Database backups restore database data/roles, not Storage S3 objects or the whole control-plane secret/function store. Protect S3 objects separately and keep consistent control-plane state plus its original master key. A database clone has its own service configuration/keys/object tenant; it is not a complete copy of an application's external objects or deployment. Plan coordinated object/database recovery and re-check application access after restore, especially credentials restored from an older snapshot.
+Database backups restore database data/roles, not Storage [S3](https://aws.amazon.com/s3/) objects or the whole control-plane secret/function store. Protect S3 objects separately and keep consistent control-plane state plus its original master key. A database clone has its own service configuration/keys/object tenant; it is not a complete copy of an application's external objects or deployment. Plan coordinated object/database recovery and re-check application access after restore, especially credentials restored from an older snapshot.
 
-Suspension/removal follows shared cluster retention choices and PostgreSQL volume rules; optional services are stateless runtimes, not independently retained application disks. Preserve external S3 data according to your own policy. See [shared recovery](../backups.md) and [control-plane recovery](../operations.md#control-plane-state-backup-and-recovery).
+Suspension/removal follows shared cluster retention choices and [PostgreSQL](https://www.postgresql.org/) volume rules; optional services are stateless runtimes, not independently retained application disks. Preserve external S3 data according to your own policy. See [shared recovery](../backups.md) and [control-plane recovery](../operations.md#control-plane-state-backup-and-recovery).
 
 Cluster deletion supersedes a component's deployment/readiness wait. The owned
 service's immutable-ID and ownership checks still apply; an in-flight deployment
 receipt is not a prerequisite for submitting deletion. This does not override
-Zerops's own per-service process queue: an accepted `stack.delete` may remain
+[Zerops](https://zerops.io/)'s own per-service process queue: an accepted `stack.delete` may remain
 `PENDING` behind that service's `RUNNING stack.deploy`, including runtime
 preparation. Deleting reports the exact delete process/service, platform status
 and age derived from platform timestamps; when available, it also names the

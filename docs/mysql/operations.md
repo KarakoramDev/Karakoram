@@ -15,7 +15,7 @@ karactl -n NS operations cluster CLUSTER -o json
 karactl -n NS events list --cluster CLUSTER -o json
 ```
 
-For MySQL groups, require `ONLINE` membership, one primary, read-only secondaries and the expected member count. The default `BEFORE_ON_PRIMARY_FAILOVER` policy waits for the new primary's backlog before it serves traffic. For PXC, require `Primary`, `Synced` and `wsrep_ready=ON`; `Primary` is Galera component membership, **not** a promise that every node is the application writer. ProxySQL selects one routed writer. Donor/joining states and SST can temporarily reduce eligibility.
+For [MySQL](https://www.mysql.com/) groups, require `ONLINE` membership, one primary, read-only secondaries and the expected member count. The default `BEFORE_ON_PRIMARY_FAILOVER` policy waits for the new primary's backlog before it serves traffic. For [PXC](https://docs.percona.com/percona-xtradb-cluster/), require `Primary`, `Synced` and `wsrep_ready=ON`; `Primary` is [Galera](https://galeracluster.com/) component membership, **not** a promise that every node is the application writer. [ProxySQL](https://proxysql.com/) selects one routed writer. Donor/joining states and SST can temporarily reduce eligibility.
 
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy backend state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 

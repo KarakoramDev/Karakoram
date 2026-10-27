@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-PostgreSQL's client proxy and modular Supabase need native executables that are not all available through the selected distribution repositories. Runtime downloads must identify exact bytes, source and licensing rather than trust a floating release. Source-built applications also need a publication path independent of control-plane authentication and the infrastructure backend.
+[PostgreSQL](https://www.postgresql.org)'s client proxy and modular [Supabase](https://supabase.com) need native executables that are not all available through the selected distribution repositories. Runtime downloads must identify exact bytes, source and licensing rather than trust a floating release. Source-built applications also need a publication path independent of control-plane authentication and the infrastructure backend.
 
 ## Decision
 
@@ -20,7 +20,7 @@ A development build without a mirror cannot resolve a Karakoram-built entry and 
 
 Preparation uses the existing executable/runtime deployment model. It downloads and checks SHA-256 before installation, resolves Debian dependencies with apt, and preserves application archives under `/opt/karakoram/<name>-<version>` with runtime ownership. Raw executables receive executable permissions. PostgreSQL extension archives instead validate the declared major, fail closed on missing/invalid majors, and accept only regular files/directories within that major's `usr/lib/postgresql/<pgMajor>` and `usr/share/postgresql/<pgMajor>` trees and their directory ancestors. Root extracts into private staging and copies only those two trees without changing destination ownership; archives never extract directly into the system root. Package autostart prevention remains the engine's responsibility. Lock size is also checked during build/publication; member preparation's integrity check is SHA-256.
 
-Native tooling in `scripts/native-artifacts/` uses disposable Ubuntu 24.04 Incus builder and clean-runner system containers, not application images or image extraction. Recipes pin application source commits, toolchain versions and archive hashes. Node bundles retain their pinned Node runtime; BEAM bundles retain ERTS/NIFs; extensions use Percona headers. Declared compatibility patches and their checksums accompany the affected source-built bundles. Normalized archive timestamps/order improve deterministic packaging without claiming byte-reproducible compiler, npm or Next.js output.
+Native tooling in `scripts/native-artifacts/` uses disposable [Ubuntu](https://ubuntu.com) 24.04 [Incus](https://linuxcontainers.org/incus/) builder and clean-runner system containers, not application images or image extraction. Recipes pin application source commits, toolchain versions and archive hashes. [Node](https://nodejs.org) bundles retain their pinned Node runtime; BEAM bundles retain ERTS/NIFs; extensions use [Percona](https://www.percona.com) headers. Declared compatibility patches and their checksums accompany the affected source-built bundles. Normalized archive timestamps/order improve deterministic packaging without claiming byte-reproducible compiler, [npm](https://docs.npmjs.com/) or [Next.js](https://nextjs.org) output.
 
 Keep outputs and provenance under ignored `dist/native-artifacts/`. An unfinished candidate remains outside the lock. Only successful native runtime qualification permits a source-built lock update; extension capabilities require successful native creation for each advertised extension. Qualification includes documented runtime packages and appropriate application/database checks, not merely source compilation. See the [tooling guide](../native-artifacts.md) for commands, prerequisites and build resource safeguards.
 
@@ -30,7 +30,7 @@ Provenance distinguishes official binaries from Karakoram source builds. Record 
 
 ## Consequences
 
-Engine creation is bounded by the release's real artifact inventory. A usable source-built component in a development deployment requires both a lock entry and a configured mirror. Release preparation must produce all locked Karakoram-built bytes before staging. Mirrors can support private/offline supply chains without changing the engine specification, but operators must preserve the locked files and their provenance. The current artifact baseline is Linux amd64/Ubuntu 24.04; this is not cross-architecture availability.
+Engine creation is bounded by the release's real artifact inventory. A usable source-built component in a development deployment requires both a lock entry and a configured mirror. Release preparation must produce all locked Karakoram-built bytes before staging. Mirrors can support private/offline supply chains without changing the engine specification, but operators must preserve the locked files and their provenance. The current artifact baseline is [Linux](https://kernel.org) amd64/Ubuntu 24.04; this is not cross-architecture availability.
 
 ## Alternatives considered
 

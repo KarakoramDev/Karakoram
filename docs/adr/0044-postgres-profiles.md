@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-The [PostgreSQL core](0034-postgres-engine.md) installs one fixed Percona package set. Supabase ([ADR 0035](0035-supabase-engine.md)) extends it through a flavour hook that hard-codes extra packages, a native extension bundle, forced settings, preload rules and curated SQL. Common database workloads — geospatial, vector search and time series — need the same kind of extension bundle on plain PostgreSQL, and a second hard-coded flavour per workload would duplicate availability, preload and upgrade rules.
+The [PostgreSQL core](0034-postgres-engine.md) installs one fixed [Percona](https://www.percona.com) package set. [Supabase](https://supabase.com) ([ADR 0035](0035-supabase-engine.md)) extends it through a flavour hook that hard-codes extra packages, a native extension bundle, forced settings, preload rules and curated SQL. Common database workloads — geospatial, vector search and time series — need the same kind of extension bundle on plain PostgreSQL, and a second hard-coded flavour per workload would duplicate availability, preload and upgrade rules.
 
 ## Decision
 
@@ -41,7 +41,7 @@ A profile creates its extensions in the `postgres` database. Databases created t
 
 ### TimescaleDB edition
 
-Karakoram builds TimescaleDB from unmodified upstream source with the Apache-only build option against the matching Percona server headers, one artifact per major. Only Apache-2.0 functionality ships; compression policies, continuous-aggregate refresh policies and other TSL features are unavailable and documented as such. Telemetry defaults to off.
+Karakoram builds [TimescaleDB](https://www.timescale.com) from unmodified upstream source with the Apache-only build option against the matching Percona server headers, one artifact per major. Only Apache-2.0 functionality ships; compression policies, continuous-aggregate refresh policies and other TSL features are unavailable and documented as such. Telemetry defaults to off.
 
 ## Consequences
 

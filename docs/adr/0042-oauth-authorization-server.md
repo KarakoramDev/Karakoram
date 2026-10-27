@@ -4,7 +4,7 @@ Status: accepted
 
 ## Context and ranked drivers
 
-Remote MCP connectors (claude.ai, ChatGPT, VS Code and others) discover authorization through the MCP OAuth profile instead of asking for a pasted token. Karakoram already authenticates people (local accounts and OIDC) and has restricted API tokens ([ADR 0041](0041-restricted-api-tokens.md)), but issues no OAuth tokens.
+Remote [MCP](https://modelcontextprotocol.io) connectors ([claude.ai](https://www.anthropic.com/claude), [ChatGPT](https://developers.openai.com/apps-sdk/), [VS Code](https://code.visualstudio.com) and others) discover authorization through the MCP [OAuth](https://oauth.net) profile instead of asking for a pasted token. Karakoram already authenticates people (local accounts and [OIDC](https://openid.net/developers/how-connect-works/)) and has restricted API tokens ([ADR 0041](0041-restricted-api-tokens.md)), but issues no OAuth tokens.
 
 Priorities, in order:
 

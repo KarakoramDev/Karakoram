@@ -7,8 +7,8 @@ Use the shared [operation/generation model](../clusters.md#operations-and-status
 ## Agent rollout and maintenance windows
 
 `karactl -n NS clusters upgrade-agents appdb` redeploys the current Karakoram
-executable to the existing runtimes and volumes without changing PostgreSQL's
-applied version or data/etcd identities. Unlike a process restart, this updates
+executable to the existing runtimes and volumes without changing [PostgreSQL](https://www.postgresql.org/)'s
+applied version or data/[etcd](https://etcd.io/) identities. Unlike a process restart, this updates
 the member agent. HA replicas precede the primary; the primary must pass the
 normal local-etcd and safe-candidate switchover checks before redeployment.
 Each deployment waits for readiness, streaming catch-up and the frozen target
@@ -42,7 +42,7 @@ karactl -n NS clusters members appdb -o json
 karactl -n NS operations list
 ```
 
-Inspect the current primary, replica streaming/replay distance, etcd quorum and **each local voter**, member conditions and archive state. Status flags stopped/non-streaming replicas, replay distance above 16 MiB and loss of linearizable etcd access; those thresholds are not application-specific SLOs. Replica distance compares the primary's current LSN with the replica's replay LSN only on matching system IDs and timelines. Missing/incompatible samples are unknown, not zero. The replica-local `replay_backlog_bytes` metric measures received-but-not-replayed WAL and deliberately does not claim to measure transport lag. The primary's `replication_lag_bytes` measures its maximum downstream replay distance.
+Inspect the current primary, replica streaming/replay distance, [etcd](https://etcd.io/) quorum and **each local voter**, member conditions and archive state. Status flags stopped/non-streaming replicas, replay distance above 16 MiB and loss of linearizable etcd access; those thresholds are not application-specific SLOs. Replica distance compares the primary's current LSN with the replica's replay LSN only on matching system IDs and timelines. Missing/incompatible samples are unknown, not zero. The replica-local `replay_backlog_bytes` metric measures received-but-not-replayed WAL and deliberately does not claim to measure transport lag. The primary's `replication_lag_bytes` measures its maximum downstream replay distance.
 
 Members advertise each implemented health observation independently of whether
 its latest sample succeeded. Older member binaries that omit those capabilities
@@ -67,7 +67,7 @@ primary does not serialize healthy peers behind the engine action timeout.
 Publication still follows the reconcile interval and infrastructure/API latency;
 this is not a failover SLA.
 
-On graceful **agent runtime termination**, an HA leader first requests Patroni
+On graceful **agent runtime termination**, an HA leader first requests [Patroni](https://patroni.readthedocs.io/)
 `/switchover` while Patroni and the local etcd voter are still alive, before
 draining the agent HTTP server. The handoff has at most four seconds, including
 waiting for local configuration/action serialization. It selects the streaming,
@@ -83,9 +83,9 @@ The runtime-stop path does not remove/re-add etcd membership.
 
 The Patroni HA loop is one second; the 20-second DCS lease and five-second retry
 timeout remain unchanged (`loop_wait + 2 * retry_timeout <= ttl`). Strict
-synchronous commit is not relaxed. Nomad delivers SIGTERM through the same
+synchronous commit is not relaxed. [Nomad](https://developer.hashicorp.com/nomad) delivers SIGTERM through the same
 agent path and renders a 120-second kill timeout; its client
-`max_kill_timeout` must allow that value. Zerops does not expose a stop-grace
+`max_kill_timeout` must allow that value. [Zerops](https://zerops.io/) does not expose a stop-grace
 setting in Karakoram's renderer, and its public deployment lifecycle docs do
 not specify SIGTERM-to-kill timing. A platform stop request includes platform
 queueing before signal delivery: neither this bounded handoff nor the HA loop
@@ -98,7 +98,7 @@ A concurrent graceful stop or Patroni failover does not pin the old leader or
 candidate: reconciliation waits for a safe candidate and resumes from the new
 topology without consuming the operation's failure-retry allowance for native
 leader/candidate changes. Retirement and shared-memory rolling changes use the
-same handoff checks, including for Supabase's PostgreSQL members.
+same handoff checks, including for [Supabase](https://supabase.com/)'s [PostgreSQL](https://www.postgresql.org/) members.
 An advertised local-DCS health failure blocks a handoff. Older agents that omit
 that capability or leader observation retain role-based, Patroni-validated
 handoffs; an unsupported probe is not treated as failed quorum. An explicit
@@ -174,7 +174,7 @@ connection limit. With `N` proxy instances, the limit is
 `floor((max_connections - 8) / N) - 3`: three PostgreSQL superuser-reserved slots,
 five management/backup slots and three monitor connections per proxy are kept
 outside application pools. `N` reserves the maximum simultaneously serving set:
-Nomad and Dokploy reserve `max(old replicas, desired replicas) + 1`, including
+Nomad and [Dokploy](https://dokploy.com/) reserve `max(old replicas, desired replicas) + 1`, including
 ordinary resource/configuration rollouts; an unknown backend surge bound
 (including Zerops) reserves both complete old and desired sets. Thus a default
 100-connection PostgreSQL server permits 43 application connections per proxy
@@ -195,7 +195,7 @@ integer-time comparison can add a second). This bounds retry amplification
 without disabling native failure detection or replaying failed transactions.
 The idle pool retains at most ten percent of its bounded capacity; connection
 warming stays disabled. Although the idle-ping interval is configured to one
-second, ProxySQL 3.0.11's PostgreSQL idle ping performs no socket I/O and cannot
+second, [ProxySQL](https://proxysql.com/) 3.0.11's PostgreSQL idle ping performs no socket I/O and cannot
 detect dead pooled connections. Connect/ping monitors run every second, role
 checks every 500 ms, with 500 ms timeouts and two consecutive ping/role-timeout
 failures before fencing.
@@ -231,7 +231,7 @@ connection/transaction retry contract, including requests racing restart detecti
 
 These settings are reconciled in admin memory, runtime and disk, not merely
 written to the first-boot configuration. ProxySQL 3.0.11's PostgreSQL
-`shun_and_killall` also reads the **MySQL** monitor ping interval when setting its
+`shun_and_killall` also reads the **[MySQL](https://www.mysql.com/)** monitor ping interval when setting its
 recovery timestamp; Karakoram sets that interval to one second to prevent the
 unrelated default from extending PostgreSQL recovery. See the
 [PostgreSQL variables](https://proxysql.com/documentation/global-variables/pgsql-variables/),
@@ -303,7 +303,7 @@ Built-in metrics also include connections/limits, database activity/size, archiv
 failures/age, Patroni role/timeline and proxy pools. Monitoring depends on
 control-plane collection; unavailable archive/slot samples are explicit unknowns.
 
-Prometheus exposition uses `karakoram_postgres_*`; cluster metrics use canonical
+[Prometheus](https://prometheus.io/) exposition uses `karakoram_postgres_*`; cluster metrics use canonical
 `postgres_*` names. Historical counter series are reset-aware rates in
 operations/second, including committed/rolled-back transactions (TPS), rather
 than cumulative counts.
@@ -345,7 +345,7 @@ Change `spec.topology.type`, `spec.components.engine.replicas`, resources and `s
 | ha | single | Rejected |
 
 During single-to-HA conversion, only the original member may initialize the
-Patroni scope. Empty new replicas wait for that member instead of racing to
+[Patroni](https://patroni.readthedocs.io/) scope. Empty new replicas wait for that member instead of racing to
 bootstrap an unrelated database while its runtime is preparing.
 
 HA requires at least one proxy; only single permits zero. Multiple stateless proxy replicas require backend horizontal scaling. Resource changes use replica-first ordering. Persistent disks only grow, and growth needs backend `diskGrowth`; requested size is not a quota on backends without quota enforcement.
@@ -356,12 +356,12 @@ the latest requested resources to a runtime the backend reports as failed,
 without requiring its unavailable agent to become healthy first. A disconnected
 but still-running member does not bypass normal role and switchover safety.
 
-An initial placement-blocked runtime, including ProxySQL, can also accept corrected
+An initial placement-blocked runtime, including [ProxySQL](https://proxysql.com/), can also accept corrected
 bounds before its original deployment completes. Volume-member admission requires
 proof of never acquiring an allocation; stateless ProxySQL can also use an exact
 retained blocked-evaluation chain after the original evaluation is collected,
 because its correction registers a canary-first update without a backend-issued
-predecessor stop; Nomad replaces remaining predecessors destructively after
+predecessor stop; [Nomad](https://developer.hashicorp.com/nomad) replaces remaining predecessors destructively after
 promotion.
 Reconciliation persists the replacement deployment receipt
 and keeps Ready false until placement, configuration and application health
@@ -378,7 +378,7 @@ Provider/backend applied bounds are restored together; re-arm synchronizes curre
 desired capacity before deploying. Inspect its diagnostic before re-arming.
 
 Safe owned-volume growth runs before database health and maintenance gates.
-After disk exhaustion stops PostgreSQL, increase the desired disk bounds on a
+After disk exhaustion stops [PostgreSQL](https://www.postgresql.org/), increase the desired disk bounds on a
 backend with `diskGrowth`; reconciliation does not require working SQL to
 request that growth. The same capacity path remains available during a
 shared-memory rollout, major upgrade or restore recovery. Backend-confirmed
@@ -393,7 +393,7 @@ An unavailable probe by itself is not evidence that resizing a writer is safe.
 
 Failed infrastructure receipts are handled independently of their completion
 flag. Retryable failures release the member or upgrade deployment for another
-attempt. Zerops exact-version deployment retries have a hard budget: exhaustion
+attempt. [Zerops](https://zerops.io/) exact-version deployment retries have a hard budget: exhaustion
 records `DeploymentRetriesExhausted`, clears the pending handle without declaring
 the requested version applied, and stops further submissions for that target.
 Other members and the proxy remain observable and independently provisionable;
@@ -401,7 +401,7 @@ quorum and maintenance fences still prevent unsafe rolling progress. After
 correcting the platform/runtime failure, run
 `karactl --namespace NS clusters retry-deployments NAME` to grant a new budget.
 
-The shared `replace-member` operation adds a new monotonically named replica, waits for streaming/DCS catch-up, removes the old etcd member, promotes the learner and retires the old runtime/volume. Maintain quorum and spare resource/disk capacity. Failed volume deletion is tracked by the orphan-volume janitor. The internal `reinit-member` operation rebuilds a non-primary replica; it is not a force-promote or arbitrary command endpoint.
+The shared `replace-member` operation adds a new monotonically named replica, waits for streaming/DCS catch-up, removes the old [etcd](https://etcd.io/) member, promotes the learner and retires the old runtime/volume. Maintain quorum and spare resource/disk capacity. Failed volume deletion is tracked by the orphan-volume janitor. The internal `reinit-member` operation rebuilds a non-primary replica; it is not a force-promote or arbitrary command endpoint.
 
 Terminal replacement failure transfers its existing journal to ordinary
 reconciliation instead of releasing an abandoned operation owner. Before any
@@ -472,7 +472,7 @@ checks also observe all live instances; the reported applied version is their
 minimum, not that of an arbitrary answering replica.
 
 Instance probes use Zerops container addresses, Nomad allocation CNI addresses,
-and Dokploy's individual Swarm task DNS names. They keep the logical member's
+and [Dokploy](https://dokploy.com/)'s individual Swarm task DNS names. They keep the logical member's
 pinned CA, TLS hostname and authentication, including namespace relay transport.
 For relayed namespaces the tunnel keeps the policy-allowed logical member and
 agent port, with a separate instance selector. Before opening each instance
@@ -534,7 +534,7 @@ Only installed names are altered; absent extensions are not created. Extension
 update failure keeps completion pending and surfaces an error for retry.
 Repeated `ALTER EXTENSION ... UPDATE` calls are idempotent.
 
-PostgreSQL-version-only changes, minor or major, do not redeploy ProxySQL.
+[PostgreSQL](https://www.postgresql.org/)-version-only changes, minor or major, do not redeploy [ProxySQL](https://proxysql.com/).
 Its pinned package and advertised protocol version are independent of the
 PostgreSQL package release; the proxy does not emulate the backend's version.
 Proxy member version metadata converges through the normal configuration
@@ -551,11 +551,11 @@ replicas, so clients must reconnect. PostgreSQL version changes are not an agent
 binary refresh mechanism: updating the control-plane binary alone does not replace
 agents already running in member allocations.
 
-Adjacent major upgrades (16→17, 17→18) require a completed backup of the current version and an offline maintenance window. The checkpointed workflow installs old/new packages, durably pauses Patroni elections in DCS and waits for every data member to acknowledge maintenance mode before publishing shutdown intent. It then records the paused writer and timeline, stops and confirms all replicas first, verifies the recorded writer is still authoritative on the same timeline, and stops that writer last. Writes may continue on that writer until its fast shutdown; no replica may promote during the handoff. Single topology stops its sole writer without Patroni.
+Adjacent major upgrades (16→17, 17→18) require a completed backup of the current version and an offline maintenance window. The checkpointed workflow installs old/new packages, durably pauses [Patroni](https://patroni.readthedocs.io/) elections in DCS and waits for every data member to acknowledge maintenance mode before publishing shutdown intent. It then records the paused writer and timeline, stops and confirms all replicas first, verifies the recorded writer is still authoritative on the same timeline, and stops that writer last. Writes may continue on that writer until its fast shutdown; no replica may promote during the handoff. Single topology stops its sole writer without Patroni.
 
 Every member must acknowledge durable stopped process intent and be freshly observed stopped before either `pg_upgrade --check` or `--link` can run on the final writer. Paused Patroni can leave PostgreSQL running with inherited log pipes, so applying stopped intent first fast-stops the postmaster and only then waits for Patroni to stop. This lets the member acknowledge the offline configuration without hanging on those pipes. The journal and DCS pause survive control-plane restarts; an unexpected writer/timeline change fails closed for recovery rather than upgrading a stale seed. Cached member configuration preserves an intentionally absent PGDATA between activation renames.
 
-The workflow then resets the Patroni scope (including its maintenance pause), starts the upgraded writer, rebuilds replicas, upgrades the pgBackRest stanza and queues a full backup. Final redeployment removes old-major packages. Pending imperative work, including scheduled/manual backups, restores, replacement and restarts, remains queued until major maintenance releases ownership; queued wait does not consume execution attempts or the execution deadline. Upgrade progress therefore cannot be preempted by backup retries against stopped databases. Backup source metadata uses the observed source version and native pgBackRest inventory, never the desired upgrade target. Supabase allows only PostgreSQL 17 minor paths.
+The workflow then resets the Patroni scope (including its maintenance pause), starts the upgraded writer, rebuilds replicas, upgrades the [pgBackRest](https://pgbackrest.org/) stanza and queues a full backup. Final redeployment removes old-major packages. Pending imperative work, including scheduled/manual backups, restores, replacement and restarts, remains queued until major maintenance releases ownership; queued wait does not consume execution attempts or the execution deadline. Upgrade progress therefore cannot be preempted by backup retries against stopped databases. Backup source metadata uses the observed source version and native pgBackRest inventory, never the desired upgrade target. [Supabase](https://supabase.com/) allows only PostgreSQL 17 minor paths.
 
 Upgraded replicas rebuild from the new primary with basebackup. Backups of the
 previous major are not eligible replica seeds; pgBackRest replica creation is
@@ -583,7 +583,7 @@ validated backup into a separate cluster.
 
 ## Failover, suspension and deletion
 
-Patroni and etcd, not the control plane, establish HA writer authority. A majority outage can intentionally make the database unavailable. Strict synchronous mode can block writes without an eligible standby. Rewind and automatic divergent-directory rebuild help replicas rejoin; neither replaces backups nor guarantees data survival under every durability override. Proxy endpoints stay stable, but sessions/transactions can be interrupted.
+[Patroni](https://patroni.readthedocs.io/) and [etcd](https://etcd.io/), not the control plane, establish HA writer authority. A majority outage can intentionally make the database unavailable. Strict synchronous mode can block writes without an eligible standby. Rewind and automatic divergent-directory rebuild help replicas rejoin; neither replaces backups nor guarantees data survival under every durability override. Proxy endpoints stay stable, but sessions/transactions can be interrupted.
 
 A **frozen primary postmaster** (for example, suspended with `SIGSTOP`) while
 Patroni remains healthy is a failover boundary: Patroni keeps renewing the leader
@@ -594,7 +594,7 @@ postmaster to resume; recovery occurs when it becomes responsive again. This is
 not retained-volume suspension: `karactl clusters resume` is not a process-thaw
 action. Do not delete the leader lock or force a second writer to bypass it.
 
-Retained-volume suspension removes runtimes, including the stateless proxy, while preserving PostgreSQL and etcd data/identity. Resume recreates those identities from retained volumes. `keepBackups` is independent of volume retention. See [delete/suspend](../clusters.md#delete-or-suspend), [recovery](backups.md) and [orphan cleanup](../operations.md#orphaned-platform-volumes). Do not erase state or manually reset DCS to bypass a pending maintenance/deletion operation.
+Retained-volume suspension removes runtimes, including the stateless proxy, while preserving [PostgreSQL](https://www.postgresql.org/) and etcd data/identity. Resume recreates those identities from retained volumes. `keepBackups` is independent of volume retention. See [delete/suspend](../clusters.md#delete-or-suspend), [recovery](backups.md) and [orphan cleanup](../operations.md#orphaned-platform-volumes). Do not erase state or manually reset DCS to bypass a pending maintenance/deletion operation.
 
 Data members pass readiness and publish their backend identities before proxy
 writer readiness is required, regardless of their original allocation order.

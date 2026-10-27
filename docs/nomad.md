@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Nomad backend
 
-The `nomad` backend runs Karakoram clusters on a [HashiCorp Nomad](https://developer.hashicorp.com/nomad) cluster that you operate. It is **experimental**, with no production track record. Zerops remains the reference backend. The runtime and scheduling behavior described here was exercised on Nomad **2.0.7**; do not assume that an untested Nomad upgrade preserves it. Design rationale: [ADR 0033](adr/0033-nomad-backend.md).
+The `nomad` backend runs Karakoram clusters on a [HashiCorp Nomad](https://developer.hashicorp.com/nomad) cluster that you operate. It is **experimental**, with no production track record. [Zerops](https://zerops.io/) remains the reference backend. The runtime and scheduling behavior described here was exercised on Nomad **2.0.7**; do not assume that an untested Nomad upgrade preserves it. Design rationale: [ADR 0033](adr/0033-nomad-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use native preparation/supervision under this backend and have not been accepted here. Allow egress to Percona repositories, locked native artifacts/operator mirror and registered S3 storage. `native_artifact_mirror` configures the shipped control-plane job's artifact mirror. Supabase `gateway.publicHttps` is rejected because this backend has no managed HTTPS capability; keep the private gateway and supply application ingress outside that option. Public PostgreSQL TCP needs the existing operator load balancer/firewall arrangement and allow-all acknowledgement.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use native preparation/supervision under this backend and have not been accepted here. Allow egress to [Percona](https://www.percona.com/) repositories, locked native artifacts/operator mirror and registered [S3](https://aws.amazon.com/s3/) storage. `native_artifact_mirror` configures the shipped control-plane job's artifact mirror. Supabase `gateway.publicHttps` is rejected because this backend has no managed HTTPS capability; keep the private gateway and supply application ingress outside that option. Public PostgreSQL TCP needs the existing operator load balancer/firewall arrangement and allow-all acknowledgement.
 
 ## How it maps
 
@@ -41,10 +41,10 @@ upgrading the control plane alone does not rewrite running jobs or their templat
 
 ### Platform-care policy
 
-Nomad job registration submits desired scheduler state, producing evaluations and
+[Nomad](https://developer.hashicorp.com/nomad) job registration submits desired scheduler state, producing evaluations and
 deployments; it does **not** enqueue a server-side image-build pipeline. Artifact
 download and native engine preparation run on the selected allocation clients under
-Nomad placement/resource policies. A Dokploy-style global build-slot semaphore would
+Nomad placement/resource policies. A [Dokploy](https://dokploy.com)-style global build-slot semaphore would
 therefore throttle scheduling rather than protect a shared build server, and is not
 added here.
 
@@ -58,8 +58,8 @@ retry loop. Nomad's own task restart/reschedule and deployment-revert policies r
 scheduler responsibilities, not new Karakoram job submissions.
 
 Corrected resource bounds can supersede an initial placement-blocked deployment.
-PostgreSQL (including Supabase), MongoDB, RabbitMQ,
-Elasticsearch and Supabase component reconciliation submit the latest bounds
+[PostgreSQL](https://www.postgresql.org/) (including [Supabase](https://supabase.com/)), [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/),
+[Elasticsearch](https://www.elastic.co/elasticsearch) and Supabase component reconciliation submit the latest bounds
 before waiting for the obsolete rollout. The replacement keeps the backend's
 ordinary registration, ownership, single-writer and deployment-health fences.
 The backend conditionally supersedes the exact initial receipt, not an unrelated
@@ -167,7 +167,7 @@ instances. An unplaced desired instance keeps Ready false with
 is reserved for an actual serving-instance route/probe failure. Every serving
 proxy still needs a fresh ONLINE hostgroup-10 route to the current primary.
 
-Public exposure changes add/remove static host-port reservations and CNI port
+Public exposure changes add/remove static host-port reservations and [CNI](https://www.cni.dev/) port
 mapping, replacing allocations rather than hot-editing a firewall. Concurrent
 public proxies need distinct eligible nodes with the requested port free. A
 canary also needs spare placement capacity; occupied static ports can block it.
@@ -211,7 +211,7 @@ OFF-to-ON writer gap cannot distinguish intentional denial from rollout downtime
 
 ## Requirements
 
-- Linux amd64 clients, Ubuntu **24.04** runtime rootfs, Nomad `exec` driver and cgroups. Nomad **1.10 or newer** is the feature floor for dynamic host volumes; **2.0.7 is the only tested version**, not a promise of compatibility with all versions between 1.10 and 2.0.7 or with later releases. Validate other versions before use.
+- [Linux](https://www.kernel.org/) amd64 clients, [Ubuntu](https://ubuntu.com/) **24.04** runtime rootfs, [Nomad](https://developer.hashicorp.com/nomad) `exec` driver and cgroups. Nomad **1.10 or newer** is the feature floor for dynamic host volumes; **2.0.7 is the only tested version**, not a promise of compatibility with all versions between 1.10 and 2.0.7 or with later releases. Validate other versions before use.
 - Dedicated Nomad clients and a cluster whose **every `submit-job` principal is trusted**, preferably a dedicated cluster. In the tested Nomad 2.0.7 configuration, any root exec job scheduled on these clients gets an unbounded root capability set unless its own entrypoint limits it. A malicious submitter can bypass Karakoram's entrypoint and compromise the host; a node pool and `allow_caps` do **not** prevent this. `chroot_env` and root username policy are client-wide; do not adapt a general-purpose pool to these jobs.
 - Nomad ACLs and native service discovery enabled; one existing Nomad namespace **dedicated exclusively to Karakoram (no other jobs or services)** and a client ACL token per target. Every namespace-native service is trusted for `/etc/hosts`: a foreign registration can hijack a member hostname and redirect engine traffic. Runtime import rejects an existing Nomad job without a Karakoram record, but this is not a replacement for namespace exclusivity. The built-in dynamic host-volume `mkdir` plugin needs no external executable.
 - The read-only rootfs below, mounted on a **different filesystem/device from Nomad's allocation/data directory**. Nomad otherwise hardlinks source files, allowing writes in an allocation to affect the source. A read-only directory on the same filesystem is not sufficient.
@@ -399,7 +399,7 @@ Run `systemctl daemon-reload` and restart the client in a maintenance window aft
 
 ### Routed CNI network
 
-Install the standard CNI `loopback`, `bridge`, `host-local` and `portmap` binaries in `cni_path`. The custom conflist must **invoke `loopback`**, not merely have its binary installed: a fresh allocation needs interface `lo` up for local engine communication. Each node needs a conflist with the **same network name** and a **different subnet**. For example, `/opt/cni/config/karakoram.conflist` on the first client:
+Install the standard [CNI](https://www.cni.dev/) `loopback`, `bridge`, `host-local` and `portmap` binaries in `cni_path`. The custom conflist must **invoke `loopback`**, not merely have its binary installed: a fresh allocation needs interface `lo` up for local engine communication. Each node needs a conflist with the **same network name** and a **different subnet**. For example, `/opt/cni/config/karakoram.conflist` on the first client:
 
 ```json
 {
@@ -433,7 +433,7 @@ Check that `lo` is **UP in a fresh allocation** after installing this configurat
 
 Keep host-local IPAM's `dataDir` on **tmpfs**, such as `/run/cni/networks` above, so allocation bookkeeping is cleared on node reboot. In the live node-loss test, persistent host-local state survived a host OOM/reboot and the restored allocation failed with `duplicate allocation is not allowed`, leaving its job dead. `/run` must actually be tmpfs on the client; ensure the CNI path exists/is writable when allocations start. This is networking bookkeeping, not database storage: persistent engine data remains on its host volume.
 
-Use `10.240.2.0/24`, `10.240.3.0/24`, etc. on other clients, or choose another non-overlapping private range. Replace `192.0.2.53` with a DNS resolver **reachable from allocations**; it is an example address, not a public resolver. Put `dns` on the bridge plugin as shown. The host's loopback resolver (such as `127.0.0.53`) is not reachable inside the allocation network namespace. DNS here resolves package/S3/external names; member discovery uses Nomad native services and `/etc/hosts`, not Consul DNS.
+Use `10.240.2.0/24`, `10.240.3.0/24`, etc. on other clients, or choose another non-overlapping private range. Replace `192.0.2.53` with a DNS resolver **reachable from allocations**; it is an example address, not a public resolver. Put `dns` on the bridge plugin as shown. The host's loopback resolver (such as `127.0.0.53`) is not reachable inside the allocation network namespace. DNS here resolves package/S3/external names; member discovery uses Nomad native services and `/etc/hosts`, not [Consul](https://developer.hashicorp.com/consul) DNS.
 
 On every node, route each remote allocation subnet through the private address of its owning node, for example:
 
@@ -566,7 +566,7 @@ The examples default to the **Nomad namespace `karakoram`**, which backs Karakor
    nomad volume status -namespace=karakoram -type=host
    ```
 
-   Wait until `karakoram-data` is ready. If using another namespace/name, edit the literal volume specification too. Volume and ACL files are **not HCL2 jobspecs**: job `-var`/`-var-file` settings do not substitute their values. The node holding this volume also holds SQLite and sealed internal PKI; never delete/recreate it as part of a binary update.
+   Wait until `karakoram-data` is ready. If using another namespace/name, edit the literal volume specification too. Volume and ACL files are **not HCL2 jobspecs**: job `-var`/`-var-file` settings do not substitute their values. The node holding this volume also holds [SQLite](https://www.sqlite.org/) and sealed internal PKI; never delete/recreate it as part of a binary update.
 
 3. Create a mode-0600, untracked JSON file, for example `private-control-plane.nv.json`, containing the required Nomad Variable items:
 
@@ -653,7 +653,7 @@ SIGTERM alone would leave static TCP checks healthy until the eventual stop.
 See the [PostgreSQL LB contract and HAProxy example](postgres/access-and-tls.md#planned-proxy-drain-and-external-load-balancers).
 
 
-**HTTPS, SSE and WebSocket.** Terminate public HTTPS for the control plane at your reverse proxy and forward to its HTTP listener on port **8080**. UI live updates use **SSE** at `/api/v1/events/stream`; preserve streaming responses without buffering. The relay carrier uses **WebSocket** at `/relay/v1/connect`; preserve its upgrade and bidirectional binary traffic. Both passed through an operator HAProxy in testing. The control-plane private TLS listener on **9443** must be reachable from default-namespace members over the routed network but must not be exposed as the browser/API listener. Set `KARAKORAM_PUBLIC_URL` to the external HTTPS origin and `KARAKORAM_ADVERTISE_URL` to the private member-reachable TLS address. Member public HTTPS remains unsupported by the backend even if you manually operate a separate proxy.
+**HTTPS, SSE and WebSocket.** Terminate public HTTPS for the control plane at your reverse proxy and forward to its HTTP listener on port **8080**. UI live updates use **SSE** at `/api/v1/events/stream`; preserve streaming responses without buffering. The relay carrier uses **WebSocket** at `/relay/v1/connect`; preserve its upgrade and bidirectional binary traffic. Both passed through an operator [HAProxy](https://www.haproxy.org/) in testing. The control-plane private TLS listener on **9443** must be reachable from default-namespace members over the routed network but must not be exposed as the browser/API listener. Set `KARAKORAM_PUBLIC_URL` to the external HTTPS origin and `KARAKORAM_ADVERTISE_URL` to the private member-reachable TLS address. Member public HTTPS remains unsupported by the backend even if you manually operate a separate proxy.
 
 ## Operations and limitations
 
@@ -667,7 +667,7 @@ timeout 60s nomad alloc exec -i=false -t=false -namespace=databases -task=member
 ```
 
 Never leave an administrative `nomad alloc exec` session open. On the tested
-Nomad 2.0.7 / runc 1.5.1 combination, a failed streaming exec start retained the
+[Nomad](https://developer.hashicorp.com/nomad) 2.0.7 / [runc](https://github.com/opencontainers/runc) 1.5.1 combination, a failed streaming exec start retained the
 container mutex while `os/exec.Wait` waited for its stdin-copy goroutine. Task
 shutdown then blocked in `Container.Status` **before** sending its termination
 signal or starting the kill timeout. This is an upstream exec-stream lifecycle
@@ -709,7 +709,7 @@ stopped.
   discovery records when a healthy reachable alternative exists. HTTP 5xx and
   resets after request headers were sent are not replayed; in-flight requests
   on a killed member can still fail and websocket sessions may need reconnecting.
-  The 50% ejection cap retains singleton reachability and avoids Envoy's default
+  The 50% ejection cap retains singleton reachability and avoids [Envoy](https://www.envoyproxy.io/)'s default
   panic threshold; it is not application readiness or a guarantee against retry
   exhaustion. See [gateway rollout limits](supabase/operations.md).
 - **Count-only changes are the canary exception.** With the exact current specification healthy at the existing count (increase) or desired retained count (reduction), registration preserves serving Meta and uses `Canary=0`, `AutoPromote=false`. Increases retain serving allocation identities and schedule only additional instances; reductions wait for surplus termination without new placement. This also repairs an already-running scale-back blocked under the former policy. A different serving image/configuration/resource/port specification never acknowledges an unready replacement.

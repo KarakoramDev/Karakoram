@@ -8,18 +8,18 @@
 
 The only backup type is `dump`: a full offline copy of both `system` (native users/passwords) and `neo4j` (graph data). **The server is unavailable for the whole backup**, including upload and restart. There is no Community online backup, incremental backup or PITR. Storing a copy of live database files is not a supported substitute.
 
-Register and verify an S3-compatible destination using [Backups and storage](../backups.md). Members stream directly to S3; a successful control-plane storage probe does not prove member connectivity. Protect dump objects as credentials as well as data: the system database carries native authentication state.
+Register and verify an [S3](https://aws.amazon.com/s3/)-compatible destination using [Backups and storage](../backups.md). Members stream directly to S3; a successful control-plane storage probe does not prove member connectivity. Protect dump objects as credentials as well as data: the system database carries native authentication state.
 
 ```sh
 karactl -n NS backups create graphdb --type dump --storage archive
 karactl -n NS backups list graphdb
 ```
 
-Use `dump` explicitly; the generic CLI default `logical` is for MongoDB.
+Use `dump` explicitly; the generic CLI default `logical` is for [MongoDB](https://www.mongodb.com/).
 
 ## Offline dump sequence
 
-The member places a durable stop hold, stops Neo4j, then runs `neo4j-admin database dump --to-stdout` for `system` and `neo4j`. Each stream is hashed and multipart-uploaded. The manifest is written **last**, then the server is restarted and the hold released. A prefix without a manifest is incomplete and must not be restored.
+The member places a durable stop hold, stops [Neo4j](https://neo4j.com/), then runs `neo4j-admin database dump --to-stdout` for `system` and `neo4j`. Each stream is hashed and multipart-uploaded. The manifest is written **last**, then the server is restarted and the hold released. A prefix without a manifest is incomplete and must not be restored.
 
 Object layout within the storage bucket:
 

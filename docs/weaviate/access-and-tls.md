@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Weaviate access and TLS
 
-Use separate application database users and least-privilege native roles. Karakoram authentication/RBAC controls management requests; Weaviate API keys/RBAC control database requests. These are separate authorization systems.
+Use separate application database users and least-privilege native roles. Karakoram authentication/RBAC controls management requests; [Weaviate](https://weaviate.io/) API keys/RBAC control database requests. These are separate authorization systems.
 
 ## Connections and administrative credentials
 
@@ -37,7 +37,7 @@ Namespace relay/control paths reach exact member targets on **8080, 7947 and 944
 
 ## Native users and roles
 
-The web UI's **Weaviate access** tab is capability-gated by `weaviateAccess`. The equivalent CLI families are `karactl weaviate users` and `karactl weaviate roles`; generic MongoDB `db-users`/`db-roles` do not apply.
+The web UI's **Weaviate access** tab is capability-gated by `weaviateAccess`. The equivalent CLI families are `karactl weaviate users` and `karactl weaviate roles`; generic [MongoDB](https://www.mongodb.com/) `db-users`/`db-roles` do not apply.
 
 ```sh
 karactl -n default weaviate users list vectors

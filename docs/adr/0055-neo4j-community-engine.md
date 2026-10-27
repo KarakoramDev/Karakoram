@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Neo4j adds a graph database with the Cypher query language. Neo4j Community Edition is GPLv3 and runs as one JVM over a local store. Clustering, online backup, role-based access control and the Prometheus metrics endpoint are Enterprise-only features under a commercial licence. The only Community recovery tool is `neo4j-admin database dump`/`load`, which requires the database to be stopped. A Community engine is therefore useful only if its availability and recovery limits are explicit and the runtime still meets the project's self-hosting, TLS and recovery standards.
+[Neo4j](https://neo4j.com) adds a graph database with the [Cypher](https://neo4j.com/docs/cypher-manual/current/) query language. Neo4j Community Edition is GPLv3 and runs as one JVM over a local store. Clustering, online backup, role-based access control and the [Prometheus](https://prometheus.io) metrics endpoint are Enterprise-only features under a commercial licence. The only Community recovery tool is `neo4j-admin database dump`/`load`, which requires the database to be stopped. A Community engine is therefore useful only if its availability and recovery limits are explicit and the runtime still meets the project's self-hosting, TLS and recovery standards.
 
 ## Decision
 
@@ -12,13 +12,13 @@ Neo4j adds a graph database with the Cypher query language. Neo4j Community Edit
 
 The `neo4j` provider offers Neo4j Community only, topology `single`, exactly one engine replica. Requests for more replicas, other topologies or components are rejected. Enterprise features, including bring-your-own-licence Enterprise, are out of scope.
 
-Members install the official `neo4j-community-<version>-unix.tar.gz` and a pinned Eclipse Temurin 21 JRE through the native artifact lock (ADR 0036), each into its own immutable directory under `/opt/karakoram`. Offered versions are 2026.09.0 and 2026.10.0 (default). Neo4j 2025.01 and newer require Java 21.
+Members install the official `neo4j-community-<version>-unix.tar.gz` and a pinned [Eclipse Temurin](https://adoptium.net) 21 JRE through the native artifact lock (ADR 0036), each into its own immutable directory under `/opt/karakoram`. Offered versions are 2026.09.0 and 2026.10.0 (default). Neo4j 2025.01 and newer require [Java](https://www.java.com) 21.
 
 The agent supervises the server JVM directly. It derives the exact server command from `bin/neo4j console --dry-run` for the rendered configuration and caches it per version, memory and settings; the launcher's bootloader JVM (about 190 MB resident) is not kept running. Data, transaction logs, configuration, certificates, logs and run files live below the member volume's data directory. A graceful stop uses SIGTERM; checkpointing can take tens of seconds.
 
 ### Memory
 
-The provider derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves Lucene, Netty, native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. The minimum is 1 GiB; 2 GiB is the default. Changes take effect through a restart, which is a full outage.
+The provider derives JVM heap and page cache from the engine component's minimum RAM: heap 40 % and page cache 25 % of the minimum, rounded down to 64 MiB, with heap between 256 MiB and 31 GiB (compressed object pointers) and page cache at least 64 MiB. The remainder serves [Lucene](https://lucene.apache.org), [Netty](https://netty.io), native JVM memory, the operating system and the agent. `engineOptions.heapMB` and `engineOptions.pageCacheMB` override the defaults when their sum stays within 80 % of the minimum RAM. The minimum is 1 GiB; 2 GiB is the default. Changes take effect through a restart, which is a full outage.
 
 ### Transport security and hardening
 
@@ -38,7 +38,7 @@ A native API manages application users (list, create, change password, delete). 
 
 ### Backups, restore and clone
 
-The only backup type is `dump`. A backup is offline: the agent places a durable stop hold, stops the server, dumps `system` (users) and `neo4j` with `neo4j-admin database dump --to-stdout`, streams each dump to S3 with a multipart upload while hashing it, writes a manifest last, starts the server and releases the hold. The database is unavailable for the whole backup. A backup prefix without a manifest is incomplete and never restorable. The agent runs the job in the background under a receipt keyed by the operation; the control plane polls the same receipt. An interrupted job is reported failed after the server is started again; it is never resumed blindly.
+The only backup type is `dump`. A backup is offline: the agent places a durable stop hold, stops the server, dumps `system` (users) and `neo4j` with `neo4j-admin database dump --to-stdout`, streams each dump to [S3](https://aws.amazon.com/s3/) with a multipart upload while hashing it, writes a manifest last, starts the server and releases the hold. The database is unavailable for the whole backup. A backup prefix without a manifest is incomplete and never restorable. The agent runs the job in the background under a receipt keyed by the operation; the control plane polls the same receipt. An interrupted job is reported failed after the server is started again; it is never resumed blindly.
 
 Scheduled backups are rejected unless `engineOptions.acceptBackupDowntime` is `true`, because the scheduler has no maintenance-window concept and every scheduled run is an outage.
 

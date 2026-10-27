@@ -4,7 +4,7 @@
 
 ## API access
 
-OpenBao's customer API is HTTPS on **8200**. Use the advertised endpoints and cluster CA; authenticate with OpenBao tokens and policies, not a Karakoram API token. Karakoram's connection response contains endpoints and CA but **no root or management credentials** and no system user. The private cluster/forwarding listener on **8201** uses OpenBao-managed TLS. Never expose it, private recovery port 8202, member control port 9443, or the loopback metrics listener on 8210 publicly.
+[OpenBao](https://openbao.org/)'s customer API is HTTPS on **8200**. Use the advertised endpoints and cluster CA; authenticate with OpenBao tokens and policies, not a Karakoram API token. Karakoram's connection response contains endpoints and CA but **no root or management credentials** and no system user. The private cluster/forwarding listener on **8201** uses OpenBao-managed TLS. Never expose it, private recovery port 8202, member control port 9443, or the loopback metrics listener on 8210 publicly.
 
 ```sh
 karactl -n NS clusters connection secrets -o json
@@ -54,7 +54,7 @@ This requires **`openbao-unseal-keys:reveal`** on `NS/secrets`, not merely clust
 
 ## Managed database connections
 
-Connections are opt-in and target a **Ready**, TLS-enabled Karakoram `postgres`, `psmdb` replica-set, or `rabbitmq` cluster in the **same namespace**. Supabase and sharded MongoDB are not accepted targets. Every OpenBao member must reach the target's private endpoints. PostgreSQL storage bindings are unrelated to this feature.
+Connections are opt-in and target a **Ready**, TLS-enabled Karakoram `postgres`, `psmdb` replica-set, or `rabbitmq` cluster in the **same namespace**. [Supabase](https://supabase.com/) and sharded [MongoDB](https://www.mongodb.com/) are not accepted targets. Every OpenBao member must reach the target's private endpoints. [PostgreSQL](https://www.postgresql.org/) storage bindings are unrelated to this feature.
 
 ```sh
 karactl -n NS openbao database-connections create secrets \
@@ -77,7 +77,7 @@ The corresponding POST `/clusters/secrets/openbao/database-connections?namespace
 }
 ```
 
-Connection and role names match `^[a-z][a-z0-9-]{0,30}$`; there are 1–16 roles per connection. TTL defaults are 3600/86400 seconds; maximum must be at least default and at most 31536000 seconds. `database` is forbidden for PostgreSQL; for MongoDB it selects one database (empty means all databases), and for RabbitMQ it selects a vhost (default `/`). All RabbitMQ roles in one connection **must share the same default and maximum TTL pair**, because OpenBao sets leases per RabbitMQ mount.
+Connection and role names match `^[a-z][a-z0-9-]{0,30}$`; there are 1–16 roles per connection. TTL defaults are 3600/86400 seconds; maximum must be at least default and at most 31536000 seconds. `database` is forbidden for PostgreSQL; for MongoDB it selects one database (empty means all databases), and for [RabbitMQ](https://www.rabbitmq.com/) it selects a vhost (default `/`). All RabbitMQ roles in one connection **must share the same default and maximum TTL pair**, because OpenBao sets leases per RabbitMQ mount.
 
 Creation requires `clusters:update` on OpenBao plus `database-users:create` on the target. Karakoram creates a dedicated target administrative identity and stores its bootstrap credentials sealed. PostgreSQL uses `LOGIN CREATEROLE` and ADMIN OPTION on `pg_read_all_data`/`pg_write_all_data`, without superuser; MongoDB uses `userAdminAnyDatabase` on `admin`; RabbitMQ uses an administrator tag and permissions on requested vhosts. Target CAs trigger a serialized rolling process-trust restart before plugin configuration. A returned record can still be `pending`; wait for `ready` before issuance. Records contain no passwords.
 

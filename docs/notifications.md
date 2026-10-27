@@ -1,6 +1,6 @@
 # Notifications
 
-Notification channels deliver operational events to generic JSON webhooks, Slack incoming webhooks, or email (1–20 recipients). Channels are installation-wide configuration: listing/getting requires `settings:read`; create, replace, delete and test require `settings:update` on `*`. Existing roles are not granted new permissions on upgrade.
+Notification channels deliver operational events to generic JSON webhooks, [Slack](https://slack.com/) incoming webhooks, or email (1–20 recipients). Channels are installation-wide configuration: listing/getting requires `settings:read`; create, replace, delete and test require `settings:update` on `*`. Existing roles are not granted new permissions on upgrade.
 
 This Ops feature is **verified offline** (tests without a live backend); delivery semantics below describe the implemented contract.
 
@@ -71,7 +71,7 @@ Generic webhooks POST JSON with this schema (empty namespace/cluster denote inst
 }
 ```
 
-Every webhook includes `X-Karakoram-Event-Id`; persist this ID to deduplicate accepted events. With a signing secret configured, `X-Karakoram-Signature: t=<unix>,v1=<hex>` carries HMAC-SHA256 over the exact bytes `<t>.<body>`. Verify before JSON decoding; do not reserialize the body. Example Python receiver helper:
+Every webhook includes `X-Karakoram-Event-Id`; persist this ID to deduplicate accepted events. With a signing secret configured, `X-Karakoram-Signature: t=<unix>,v1=<hex>` carries HMAC-SHA256 over the exact bytes `<t>.<body>`. Verify before JSON decoding; do not reserialize the body. Example [Python](https://www.python.org/) receiver helper:
 
 ```python
 import hashlib

@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Temporal
 
-The `temporal` provider runs native Temporal workflow services with persistence and SQL visibility in a bound [Karakoram PostgreSQL cluster](../postgres/README.md). Temporal roles are stateless; database HA and durable recovery belong to the source PostgreSQL cluster.
+The `temporal` provider runs native [Temporal](https://temporal.io/) workflow services with persistence and SQL visibility in a bound [Karakoram PostgreSQL cluster](../postgres/README.md). Temporal roles are stateless; database HA and durable recovery belong to the source PostgreSQL cluster.
 
 ## Prerequisites
 
-- **Backend:** Zerops is not supported in v0.4.0; use Dokploy or Nomad. Temporal membership requires a private IPv4 route to the bound PostgreSQL writer, while Zerops uses private IPv6. Zerops support is pending IPv6 private networking; see [release status and backend availability](../backends.md#engine-availability).
+- **Backend:** [Zerops](https://zerops.io/) is not supported in v0.4.0; use [Dokploy](https://dokploy.com/) or [Nomad](https://developer.hashicorp.com/nomad). Temporal membership requires a private IPv4 route to the bound PostgreSQL writer, while Zerops uses private IPv6. Zerops support is pending IPv6 private networking; see [release status and backend availability](../backends.md#engine-availability).
 - An existing Karakoram PostgreSQL source cluster, major **12 or later**, reachable from the Temporal members. The PostgreSQL provider's own version catalog still applies.
-- The **PostgreSQL binding service** (ADR 0045), which the standard server constructs once and shares with Temporal, OpenBao, Keycloak and the bindings API. A composition without it rejects Temporal clusters with `PostgreSQL bindings are unavailable`.
+- The **PostgreSQL binding service** (ADR 0045), which the standard server constructs once and shares with Temporal, [OpenBao](https://openbao.org/), [Keycloak](https://www.keycloak.org/) and the bindings API. A composition without it rejects Temporal clusters with `PostgreSQL bindings are unavailable`.
 - Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.
 - Backend horizontal scaling for component replicas above one; configured Dokploy HTTPS/subdomain routing for a public Web UI. Nomad supports private UI access only.
 

@@ -4,7 +4,7 @@
 
 ## Raft snapshots
 
-Integrated Raft clusters support **`raft-snapshot`** only; there is no PITR. The control plane streams a native snapshot over CA-verified HTTPS to registered S3-compatible storage, without buffering the complete snapshot. Objects use `<prefix>/<clusterUID>/raft/<backup>.snap`; the recorded location remains authoritative if storage configuration later changes. Snapshot streams are bounded to **4 GiB**. Protect the source unseal/recovery material independently: a snapshot alone is not enough to recover a sealed server.
+Integrated Raft clusters support **`raft-snapshot`** only; there is no PITR. The control plane streams a native snapshot over CA-verified HTTPS to registered [S3](https://aws.amazon.com/s3/)-compatible storage, without buffering the complete snapshot. Objects use `<prefix>/<clusterUID>/raft/<backup>.snap`; the recorded location remains authoritative if storage configuration later changes. Snapshot streams are bounded to **4 GiB**. Protect the source unseal/recovery material independently: a snapshot alone is not enough to recover a sealed server.
 
 [Register storage](../backups.md#register-s3-storage) in the cluster namespace, then:
 
@@ -35,7 +35,7 @@ Use `clusters patch secrets -f backup-settings.json --wait`. Cron is UTC; count 
 
 ## In-place restore
 
-**Restore replaces target OpenBao state.** Quiesce writers, plan service interruption and preserve another recovery copy. Restore requires a successful OpenBao `raft-snapshot`; PITR timestamps are rejected.
+**Restore replaces target [OpenBao](https://openbao.org/) state.** Quiesce writers, plan service interruption and preserve another recovery copy. Restore requires a successful OpenBao `raft-snapshot`; PITR timestamps are rejected.
 
 ```sh
 karactl -n NS restores create secrets recovery --backup beforechange --yes
@@ -93,8 +93,8 @@ POST `/api/v1/clusters/secretscopy/restores?namespace=NS`, or `karactl -n NS res
 }
 ```
 
-For a clone, the same top-level `openbaoUnsealShares` object accompanies the complete `{name, spec}` create request; it is **not** an `engineOptions` or `dataSource` field. Supply 1–10 distinct nonempty shares, at least the threshold (1–10); the browser rejects duplicates and excess shares before submission. For transit/AWS KMS use the corresponding `sealType` and `recovery: true`, with the original external seal key available. Request material is staged only in the encrypted secret store, not spec, operation payload/checkpoint or member configuration, and consumed on success. Do not delete offline recovery material after submitting a request.
+For a clone, the same top-level `openbaoUnsealShares` object accompanies the complete `{name, spec}` create request; it is **not** an `engineOptions` or `dataSource` field. Supply 1–10 distinct nonempty shares, at least the threshold (1–10); the browser rejects duplicates and excess shares before submission. For transit/[AWS KMS](https://aws.amazon.com/kms/) use the corresponding `sealType` and `recovery: true`, with the original external seal key available. Request material is staged only in the encrypted secret store, not spec, operation payload/checkpoint or member configuration, and consumed on success. Do not delete offline recovery material after submitting a request.
 
 ## PostgreSQL-storage caveat
 
-The opt-in PostgreSQL storage path has no Raft snapshots, Raft restore/clone or OpenBao PITR. Protect and recover the **bound PostgreSQL cluster** and retain OpenBao seal material. OpenBao rejects snapshot schedules and `dataSource` with this storage mode. The standard server supplies the shared PostgreSQL binding service for this mode; [details](operations.md#postgresql-storage-opt-in).
+The opt-in [PostgreSQL](https://www.postgresql.org/) storage path has no Raft snapshots, Raft restore/clone or OpenBao PITR. Protect and recover the **bound PostgreSQL cluster** and retain OpenBao seal material. OpenBao rejects snapshot schedules and `dataSource` with this storage mode. The standard server supplies the shared PostgreSQL binding service for this mode; [details](operations.md#postgresql-storage-opt-in).

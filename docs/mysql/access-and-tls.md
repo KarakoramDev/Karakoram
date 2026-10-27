@@ -4,7 +4,7 @@
 
 [Overview](README.md) · [Configuration](configuration.md) · [Backups](backups.md)
 
-Both `mysql` and `pxc` use **MySQL access** in the UI, `karactl mysql` in the CLI and `/api/v1/clusters/{cluster}/mysql/...` in the REST API. These are native MySQL accounts, databases and database-level grants—not MongoDB-shaped `db-users` or arbitrary SQL execution.
+Both `mysql` and `pxc` use **[MySQL](https://www.mysql.com/) access** in the UI, `karactl mysql` in the CLI and `/api/v1/clusters/{cluster}/mysql/...` in the REST API. These are native MySQL accounts, databases and database-level grants—not [MongoDB](https://www.mongodb.com/)-shaped `db-users` or arbitrary SQL execution.
 
 For MySQL Group Replication, both group communication and distributed recovery
 authenticate peers, not just encrypt traffic: `group_replication_ssl_mode` is
@@ -16,7 +16,7 @@ issuance or weaker `VERIFY_CA` mode is needed. These recovery TLS settings also
 govern the `MYSQL` communication stack in both supported server majors
 ([8.4](https://dev.mysql.com/doc/refman/8.4/en/group-replication-configuring-ssl-for-recovery.html),
 [8.0](https://dev.mysql.com/doc/refman/8.0/en/group-replication-configuring-ssl-for-recovery.html)).
-PXC uses its separate Galera traffic credentials and configuration described below.
+[PXC](https://docs.percona.com/percona-xtradb-cluster/) uses its separate [Galera](https://galeracluster.com/) traffic credentials and configuration described below.
 
 ## Application identities
 
@@ -44,7 +44,7 @@ karactl -n NS mysql users list CLUSTER -o json
 karactl -n NS mysql grants list CLUSTER --user app --database appdb -o json
 ```
 
-Capture the generated password once into an approved secret store. Do not log creation/rotation responses or put passwords in command arguments or URIs in shell history. Manage proxy-routable credentials through this interface: accounts created directly in SQL are **not** automatically synchronized into ProxySQL. `routableThroughProxy` reports managed credential ownership, not end-to-end connectivity or a grant to every database.
+Capture the generated password once into an approved secret store. Do not log creation/rotation responses or put passwords in command arguments or URIs in shell history. Manage proxy-routable credentials through this interface: accounts created directly in SQL are **not** automatically synchronized into [ProxySQL](https://proxysql.com/). `routableThroughProxy` reports managed credential ownership, not end-to-end connectivity or a grant to every database.
 
 The UI supports account locking, maximum user connections, database/grant management and permission-gated password actions. All native MySQL access uses the `database-users` RBAC resource; read access does not authorize mutation. See [access control](../access-control.md) for policy syntax. System-account reveal requires the separate `cluster-credentials:read` permission and is not an application credential workflow.
 
@@ -87,7 +87,7 @@ Issuing a new leaf under the same trusted CA would **not by itself revoke** a st
 
 The managed manual TLS mode requires encryption **and peer verification** on Galera/IST and SST. `pxc_encrypt_cluster_traffic=OFF` only disables upstream automatic certificate rewriting; it must never be interpreted as permitting plaintext or accepting a wrong CA. Native acceptance must reject wrong-CA traffic and SST attempts while ordinary CA-verified SQL access remains independently tested.
 
-Server-side FILE import/export is unavailable by design: `secure_file_priv=NULL` and the managed administrative account has no `FILE` privilege, protecting traffic keys and other runtime files from SQL file access. Every actual server startup enforces that privilege policy independently of password receipts, including existing/restored accounts, without re-keying unchanged passwords. Startup restores the Group Replication write fence before admitting clients. This does not disable native XtraBackup backup/recovery.
+Server-side FILE import/export is unavailable by design: `secure_file_priv=NULL` and the managed administrative account has no `FILE` privilege, protecting traffic keys and other runtime files from SQL file access. Every actual server startup enforces that privilege policy independently of password receipts, including existing/restored accounts, without re-keying unchanged passwords. Startup restores the Group Replication write fence before admitting clients. This does not disable native [XtraBackup](https://docs.percona.com/percona-xtrabackup/) backup/recovery.
 
 ### Replication ports and network restriction
 

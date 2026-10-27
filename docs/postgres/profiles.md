@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL profiles
 
-Profiles add a curated extension workload to the existing PostgreSQL lifecycle.
+Profiles add a curated extension workload to the existing [PostgreSQL](https://www.postgresql.org/) lifecycle.
 They do not create a second database engine or change HA, backup or access authority.
 Select any compatible combination on plain `postgres`:
 
@@ -39,7 +39,7 @@ metadata and availability/rejection reason per major. The creation wizard uses t
 metadata and disables unavailable choices. Admission rejects unknown profiles,
 unsupported majors, missing locked artifacts and artifacts without a resolvable URL.
 A source recipe or an artifact mirror cannot make an absent lock entry available.
-The lock includes qualified TimescaleDB artifacts for majors 16–18. Development
+The lock includes qualified [TimescaleDB](https://www.timescale.com/) artifacts for majors 16–18. Development
 deployments still require a mirror serving those exact archived bytes; release
 deployments require the matching release assets. Missing locks or unresolved URLs
 are rejected rather than provisioning a server that cannot load the extension.
@@ -47,15 +47,15 @@ are rejected rather than provisioning a server that cannot load the extension.
 ### Package provenance
 
 The package names and pins are recorded in `internal/engine/postgres/pgprofile`.
-PostGIS uses `percona-postgresql-<major>-postgis-3` and matching
+[PostGIS](https://postgis.net/) uses `percona-postgresql-<major>-postgis-3` and matching
 `percona-postgresql-<major>-postgis-3-scripts`: `2:3.5.7-2.noble` on 16/17,
-`2:3.5.7-3.noble` on 18. pgvector uses
+`2:3.5.7-3.noble` on 18. [pgvector](https://github.com/pgvector/pgvector) uses
 `percona-postgresql-<major>-pgvector='1:0.8.6-1.noble'` on all three majors.
-These were resolved from the Percona Noble amd64 indexes:
+These were resolved from the [Percona](https://www.percona.com/) Noble amd64 indexes:
 [16](https://repo.percona.com/ppg-16/apt/dists/noble/main/binary-amd64/Packages.gz),
 [17](https://repo.percona.com/ppg-17/apt/dists/noble/main/binary-amd64/Packages.gz),
 [18](https://repo.percona.com/ppg-18/apt/dists/noble/main/binary-amd64/Packages.gz).
-Supabase keeps its historical PG17 package pins and command ordering unchanged.
+[Supabase](https://supabase.com/) keeps its historical PG17 package pins and command ordering unchanged.
 Do not substitute PGDG packages for Percona packages.
 
 ## Additive lifecycle

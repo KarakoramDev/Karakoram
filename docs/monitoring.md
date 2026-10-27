@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Monitoring and events
 
-Use built-in charts for short-term inspection, authenticated Prometheus scraping for external retention/alerting, and durable events/status for operational progress.
+Use built-in charts for short-term inspection, authenticated [Prometheus](https://prometheus.io/) scraping for external retention/alerting, and durable events/status for operational progress.
 
 ## Built-in dashboard
 
@@ -37,7 +37,7 @@ goroutine dump when a request never returns.
 
 ### Upgrading an existing metrics database
 
-Migration `011_metrics_retention.sql` creates `(timestamp,id)` in one SQLite
+Migration `011_metrics_retention.sql` creates `(timestamp,id)` in one [SQLite](https://sqlite.org/)
 transaction with its migration marker. Building it scans and sorts existing
 metrics: startup time and temporary/WAL disk headroom depend on retained rows
 and storage speed, not just the current cluster count. The control plane opens
@@ -48,9 +48,9 @@ healthy before migration completes.
 Before a large-table upgrade, preserve a consistent database/WAL backup and
 master key, measure the upgrade against a restored copy on comparable storage
 in an isolated environment with no access to member/platform endpoints, and
-allow sufficient free disk and startup time. Zerops's supplied readiness
+allow sufficient free disk and startup time. [Zerops](https://zerops.io/)'s supplied readiness
 `failureTimeout` is **120 seconds**: increase it before deploying if the measured
-migration plus normal startup can exceed that window. The supplied Nomad job
+migration plus normal startup can exceed that window. The supplied [Nomad](https://developer.hashicorp.com/nomad) job
 uses `health_check = "task_states"`; a running allocation is **not** API readiness.
 Wait explicitly for `/healthz` and `/api/v1/version` after deployment rather than
 treating allocation/deployment status as proof that migration completed.
@@ -78,7 +78,7 @@ Disable collection with a merge patch setting `spec.monitoring.enabled: false`; 
 
 ## Metrics API and SDK
 
-`GET /api/v1/clusters/{cluster}/metrics?namespace=<name>&range=1h&step=30s` returns JSON `series` with member/name/unit/labels and timestamped points. Range/step use Go durations: positive range ≤24h; positive step ≤range. Defaults are 1h and 30s. The [Go client walkthrough](api.md#clientssdk) supplies authentication/client setup.
+`GET /api/v1/clusters/{cluster}/metrics?namespace=<name>&range=1h&step=30s` returns JSON `series` with member/name/unit/labels and timestamped points. Range/step use [Go](https://go.dev/) durations: positive range ≤24h; positive step ≤range. Defaults are 1h and 30s. The [Go client walkthrough](api.md#clientssdk) supplies authentication/client setup.
 
 Historical JSON is distinct from installation-root `/metrics` Prometheus text. A generated SDK client for root endpoints needs the origin, not `/api/v1`, as its base URL. Empty results are not evidence of health.
 
@@ -172,7 +172,7 @@ Import the supplied JSON dashboards from
 `overview.json`, `mongodb.json`, `rabbitmq.json`, `elasticsearch.json`,
 `postgres.json` and `supabase.json`. Select a Prometheus datasource through the
 `datasource` variable; no fixed datasource UID or credentials are embedded.
-For file provisioning, configure a Grafana dashboard provider for the mounted
+For file provisioning, configure a [Grafana](https://grafana.com/) dashboard provider for the mounted
 dashboard directory and provision the datasource separately. Namespace,
 cluster and member selectors are populated from member scrape series: select
 **All** to include state-only clusters that do not have member monitoring.
@@ -180,13 +180,13 @@ cluster and member selectors are populated from member scrape series: select
 The overview covers readiness, conditions, backup/drill freshness, certificate
 lifetime, placement, agent drift, deployment failures and installation signals.
 Engine dashboards use native metric semantics: reset-aware `rate()`/`increase()`
-for counters, `max` rather than sums for Elasticsearch's repeated cluster-wide
-values, and separate PostgreSQL primary-observed replication lag from
+for counters, `max` rather than sums for [Elasticsearch](https://www.elastic.co/elasticsearch)'s repeated cluster-wide
+values, and separate [PostgreSQL](https://www.postgresql.org/) primary-observed replication lag from
 replica-local replay backlog. Missing series are unknown, not healthy zeroes.
 
 Load [`deploy/prometheus/karakoram-rules.yaml`](../deploy/prometheus/karakoram-rules.yaml)
 through Prometheus `rule_files`, reload Prometheus, and route its `severity`
-labels with Alertmanager. Give the scrape token both cluster monitoring and
+labels with [Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/). Give the scrape token both cluster monitoring and
 installation settings read permissions if installation alerts are wanted.
 Alert annotations link to the relevant operational runbooks.
 
@@ -223,9 +223,9 @@ Use `rate()` for counters, not gauges; distinguish process availability from rec
 ### PostgreSQL
 
 PostgreSQL members expose the following `karakoram_postgres_` metrics. Database
-series have a `database` label; ProxySQL pool series have `host` and `hostgroup`
+series have a `database` label; [ProxySQL](https://proxysql.com/) pool series have `host` and `hostgroup`
 labels. Counters reset when their underlying PostgreSQL statistics or ProxySQL
-process resets. An unavailable SQL or Patroni endpoint omits its series rather
+process resets. An unavailable SQL or [Patroni](https://patroni.readthedocs.io/) endpoint omits its series rather
 than reporting a healthy zero.
 
 | Suffix | Type | Meaning |

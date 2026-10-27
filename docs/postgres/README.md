@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL
 
-Karakoram operates native Percona PostgreSQL on backend-managed runtimes and per-member persistent volumes. This brief guide describes the implemented interface, not deployment acceptance or an availability guarantee.
+Karakoram operates native [Percona PostgreSQL](https://www.percona.com/postgresql/software) on backend-managed runtimes and per-member persistent volumes. This brief guide describes the implemented interface, not deployment acceptance or an availability guarantee.
 
-Opt-in [cluster data MCP](../data-mcp.md) uses a private pgEdge companion and dedicated `kk_mcp_ro`/`kk_mcp_rw` roles. Configure database/schema scope; the companion connects to the first selected database (default `postgres`). Review the guide's PUBLIC-grant caveat before treating scope as isolation.
+Opt-in [cluster data MCP](../data-mcp.md) uses a private [pgEdge](https://www.pgedge.com/) companion and dedicated `kk_mcp_ro`/`kk_mcp_rw` roles. Configure database/schema scope; the companion connects to the first selected database (default `postgres`). Review the guide's PUBLIC-grant caveat before treating scope as isolation.
 
 ## At a glance
 
@@ -20,9 +20,9 @@ Opt-in [cluster data MCP](../data-mcp.md) uses a private pgEdge companion and de
 | Recovery | pgBackRest `full` / `diff` / `incr`, opt-in PITR; [backups](backups.md) |
 | Platform features | [PostGIS, pgvector and TimescaleDB profiles](profiles.md); [consumer bindings](bindings.md); [distributed Citus](distributed.md); see [release status/backend availability](../backends.md#engine-availability) |
 
-Inspect the running catalog with `karactl providers get postgres -o json`; versions are pinned to exact Percona packages. A Percona product version such as 17.11.1 differs from PostgreSQL's reported 17.11 patch version. Each HA data member has its own volume containing PostgreSQL, etcd and runtime state. Member names use `<cluster>p<index>`; the proxy service is `<cluster>px`. Indexes are monotonic. Separate members do not guarantee separate hosts; see [failure domains](../limitations.md).
+Inspect the running catalog with `karactl providers get postgres -o json`; versions are pinned to exact Percona packages. A Percona product version such as 17.11.1 differs from PostgreSQL's reported 17.11 patch version. Each HA data member has its own volume containing PostgreSQL, [etcd](https://etcd.io/) and runtime state. Member names use `<cluster>p<index>`; the proxy service is `<cluster>px`. Indexes are monotonic. Separate members do not guarantee separate hosts; see [failure domains](../limitations.md).
 
-The member agent supervises PostgreSQL and ProxySQL. Preparation suppresses distribution-managed daemons; on systemd runtimes it also stops and masks the packaged ProxySQL unit so it cannot compete for the agent's listeners. Runtimes without systemd skip that unit-management step.
+The member agent supervises PostgreSQL and [ProxySQL](https://proxysql.com/). Preparation suppresses distribution-managed daemons; on [systemd](https://systemd.io/) runtimes it also stops and masks the packaged ProxySQL unit so it cannot compete for the agent's listeners. Runtimes without systemd skip that unit-management step.
 The pinned Percona repository-bootstrap package is downloaded, SHA-256 verified
 and installed in one privileged shell inside a fresh root-owned private staging
 directory. Cleanup removes that directory on exit; installation never consumes a
@@ -75,7 +75,7 @@ Quote `"off"` in YAML if your YAML tooling interprets it as a boolean. For HA, s
 - `proxy.readWriteSplit`: default false; SELECT-pattern reader routing is opt-in, not a general SQL classifier or read-after-write guarantee.
 - `proxy.readerPort`: default false; enables the private reader listener on 5433. The managed public endpoint is 5432.
 
-The catalog also describes `distributed` admission for Citus formations (see
+The catalog also describes `distributed` admission for [Citus](https://www.citusdata.com/) formations (see
 [distributed operations guide](distributed.md) and [ADR 0046](../adr/0046-citus-distributed-topology.md)). This topology requires a
 locked, resolvable `citus-pg<major>` native artifact for PostgreSQL 16–18; builds
 without that artifact reject it. `components.engine.replicas` is the per-group
@@ -87,7 +87,7 @@ and distributed major upgrades are rejected.
 
 ## Access and ports
 
-Use [native roles, databases, grants and TLS](access-and-tls.md), not MongoDB-shaped `db-users`/`db-roles`. Ordinary connection summaries contain no password; credential reveal is separately authorized. Managed login passwords are synchronized into ProxySQL; SQL-created roles are not automatically routable through it.
+Use [native roles, databases, grants and TLS](access-and-tls.md), not [MongoDB](https://www.mongodb.com/)-shaped `db-users`/`db-roles`. Ordinary connection summaries contain no password; credential reveal is separately authorized. Managed login passwords are synchronized into ProxySQL; SQL-created roles are not automatically routable through it.
 
 Managed services use [consumer bindings](bindings.md) for owned databases, sealed credentials, rotation and dependency guards.
 
@@ -108,4 +108,4 @@ Managed services use [consumer bindings](bindings.md) for owned databases, seale
 - Only single→HA and HA 3↔5 transitions are supported; no HA→single or disk shrink.
 - Adjacent major upgrades are offline, backup-gated and use `pg_upgrade --link`; no downgrade or skipped major.
 - Restores are destructive/offline and provider/major matched. Replication is not a backup.
-- Native proxy artifacts target Linux amd64/Ubuntu 24.04. See [native artifacts](../native-artifacts.md), [operations](operations.md) and [ADR 0034](../adr/0034-postgres-engine.md).
+- Native proxy artifacts target [Linux](https://www.kernel.org/) amd64/[Ubuntu](https://ubuntu.com/) 24.04. See [native artifacts](../native-artifacts.md), [operations](operations.md) and [ADR 0034](../adr/0034-postgres-engine.md).

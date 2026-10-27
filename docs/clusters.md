@@ -6,7 +6,7 @@ A cluster is a namespace-scoped desired configuration, observed engine topology 
 
 ## Cluster identity and capabilities
 
-Each cluster selects an immutable provider/engine. Data-bearing members are singleton runtimes with independently identified persistent volumes supplied by the namespace's backend (Local Storage on Zerops); auxiliary stateless components depend on the provider. Cluster names are 2–12 lowercase letters/digits, beginning with a letter, and unique within a [namespace](namespaces.md). Use `-n <namespace>` to select one; without a selected namespace, single-object requests default to `default`.
+Each cluster selects an immutable provider/engine. Data-bearing members are singleton runtimes with independently identified persistent volumes supplied by the namespace's backend (Local Storage on [Zerops](https://zerops.io/)); auxiliary stateless components depend on the provider. Cluster names are 2–12 lowercase letters/digits, beginning with a letter, and unique within a [namespace](namespaces.md). Use `-n <namespace>` to select one; without a selected namespace, single-object requests default to `default`.
 
 The provider catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 
@@ -37,7 +37,7 @@ See [Backups and storage](backups.md) for shared recovery mechanics and the engi
 
 ### PostgreSQL and Supabase
 
-[PostgreSQL](postgres/README.md) adds `single` (one member) and `ha` (three/five Patroni + etcd members), a separate ProxySQL component, native roles/databases/grants and pgBackRest full/diff/incr/PITR recovery. It supports cataloged Percona majors 16/17/18, replica-first minor maintenance and offline backup-gated adjacent major upgrades. Single→HA and HA 3↔5 are supported; HA→single is rejected. See [access/TLS](postgres/access-and-tls.md), [operations](postgres/operations.md) and [backups](postgres/backups.md).
+[PostgreSQL](postgres/README.md) adds `single` (one member) and `ha` (three/five [Patroni](https://patroni.readthedocs.io/) + [etcd](https://etcd.io/) members), a separate [ProxySQL](https://proxysql.com/) component, native roles/databases/grants and [pgBackRest](https://pgbackrest.org/) full/diff/incr/PITR recovery. It supports cataloged [Percona](https://www.percona.com/) majors 16/17/18, replica-first minor maintenance and offline backup-gated adjacent major upgrades. Single→HA and HA 3↔5 are supported; HA→single is rejected. See [access/TLS](postgres/access-and-tls.md), [operations](postgres/operations.md) and [backups](postgres/backups.md).
 
 [Supabase](supabase/README.md) wraps that core, limits PostgreSQL to major 17 and adds independently sized stateless components. `spec.version` is the database version; application versions are release-locked. Internal database connections bypass ProxySQL through a leader-aware TCP forwarder. See [components/presets/dependencies and current artifact limits](supabase/components.md) and [credentials, SMTP and function operations](supabase/operations.md). Standard/full preset definitions do not imply their artifacts are currently available.
 
@@ -71,7 +71,7 @@ Group Replication elect an upgraded writer; lower-version join exceptions are
 never enabled. A singleton upgrade is offline. Downgrades are rejected.
 
 TLS rotation stages new member leaves under the existing CA, publishes them,
-and waits for configuration acknowledgement. MySQL reloads client TLS in place;
+and waits for configuration acknowledgement. [MySQL](https://www.oracle.com/mysql/) reloads client TLS in place;
 GR recovery uses the new leaves on its next connection. ProxySQL applies its
 updated TLS configuration. Formation, restore and active physical backups fence
 membership changes. Durable membership, retirement, rolling and TLS journals
@@ -79,7 +79,7 @@ resume after control-plane restart.
 
 ### Percona XtraDB Cluster
 
-The separate `pxc` provider supports only Galera `cluster` topology with three or five data members and at least one ProxySQL replica. It shares MySQL-native access and physical backup lifecycle, but keeps its own artifact/version catalog, `pxc` repository prefix and restore provenance. MySQL↔PXC conversion and cross-provider restore are rejected. Traffic requires Primary/Synced/readiness, with one proxy-routed writer; quorum loss rejects minority reads and writes. Full-outage recovery compares every stopped member's recovered same-UUID Galera position; explicit minority recovery additionally fences missing owned members before bootstrap. See [MySQL/PXC configuration](mysql/configuration.md), [operations and recovery](mysql/operations.md) and [backup/UUID caveats](mysql/backups.md).
+The separate `pxc` provider supports only [Galera](https://galeracluster.com/) `cluster` topology with three or five data members and at least one ProxySQL replica. It shares MySQL-native access and physical backup lifecycle, but keeps its own artifact/version catalog, `pxc` repository prefix and restore provenance. MySQL↔[PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) conversion and cross-provider restore are rejected. Traffic requires Primary/Synced/readiness, with one proxy-routed writer; quorum loss rejects minority reads and writes. Full-outage recovery compares every stopped member's recovered same-UUID Galera position; explicit minority recovery additionally fences missing owned members before bootstrap. See [MySQL/PXC configuration](mysql/configuration.md), [operations and recovery](mysql/operations.md) and [backup/UUID caveats](mysql/backups.md).
 
 ## Create and change desired state
 
@@ -134,7 +134,7 @@ failure tolerance: a single failed probe can be absorbed by a successful retry
 without publishing a degraded intermediate result. Failed/stale samples are never
 reused as ready across cycles.
 
-MongoDB, RabbitMQ and Elasticsearch collect project/service inventory once per
+[MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) collect project/service inventory once per
 sweep and overlap per-member platform reads, with at most eight backend method
 observations in flight per sweep. The same instance inventory is reused for placement and
 instance readiness checks; native replica-set and independent Elasticsearch
@@ -144,7 +144,7 @@ platform responses that cannot complete within it are unknown, not cached
 successes, and additional worker waves still consume the same bounded budget.
 
 Backend inventory also bounds its own read traversal rather than hiding a
-serial per-runtime HTTP chain inside a single platform call. Dokploy overlaps
+serial per-runtime HTTP chain inside a single platform call. [Dokploy](https://dokploy.com/) overlaps
 read-only runtime observations while retaining its target lock; pending
 operation completion, legacy adoption and restoration decisions still execute
 serially under that lock. A real-backend regression with three persistent
@@ -152,10 +152,10 @@ members and 600-millisecond platform HTTP responses completes a fresh sweep
 within five seconds. Concurrent instance diagnostics reduce in inventory order,
 and MongoDB FCV observations use bounded set probes with sorted successful
 fallback instead of depending on map iteration.
-Nomad likewise bounds variable reads, service observations and missing-CNI
+[Nomad](https://developer.hashicorp.com/nomad) likewise bounds variable reads, service observations and missing-CNI
 allocation hydration to eight concurrent reads per traversal; pending-operation
 and missing-job mutation helpers retain their existing mutex/reload fences.
-Zerops uses bulk paginated service/container inventories, not a per-runtime
+[Zerops](https://zerops.io/) uses bulk paginated service/container inventories, not a per-runtime
 service-list traversal.
 
 Dokploy and Nomad additionally enforce a shared ceiling of **eight HTTP
@@ -202,14 +202,14 @@ negative diagnostics are preserved.
 MongoDB additionally requires a current primary `hello` and fresh reachability
 of its replica-set members. A surviving secondary's heartbeat-delayed PRIMARY
 view alone cannot retain `WritablePrimary`. MongoDB, RabbitMQ and Elasticsearch
-probe member agents concurrently. RabbitMQ and PostgreSQL also overlap generic
+probe member agents concurrently. RabbitMQ and [PostgreSQL](https://www.postgresql.org/) also overlap generic
 agent and native status requests because their HTTP transports establish separate
 TLS connections. All use the same shared four-second read-probe limit; the
 five-second sweep, 15-second readiness lease and same-cycle retry policy are unchanged.
 
 MongoDB replication health uses the primary's `replSetGetStatus` view, rather
 than a nearest secondary's possibly partitioned view; unhealthy-member conditions
-name the affected member. PBM inventory `list`/`status` reads race eligible members
+name the affected member. [PBM](https://docs.percona.com/percona-backup-mongodb/latest/) inventory `list`/`status` reads race eligible members
 with independent four-second limits (config-server members only for sharded
 clusters). A blocked local PBM on one secondary cannot starve PITR configuration
 inventory or the reachable members' health probes. Backup inventory runs alongside
@@ -286,7 +286,7 @@ Use provider-supported `--component` and membership options from the engine guid
 
 Consecutive identical `ReconcileError` messages with the same actor and operation are recorded once per cluster worker. A changed message, actor or operation, or successful reconciliation resets suppression; a control-plane restart starts a new worker.
 
-Rejected Zerops resource updates and service imports remain authoritative. The `ReconcileError` event and cluster status message identify the service hostname, platform error code and safe validation details, followed by attempted CPU mode, CPU/start CPU, RAM, disk and container bounds. These values come from the actual platform request, including preserved settings, not only the cluster patch. Diagnostics never include credentials or environment values.
+Rejected [Zerops](https://zerops.io/) resource updates and service imports remain authoritative. The `ReconcileError` event and cluster status message identify the service hostname, platform error code and safe validation details, followed by attempted CPU mode, CPU/start CPU, RAM, disk and container bounds. These values come from the actual platform request, including preserved settings, not only the cluster patch. Diagnostics never include credentials or environment values.
 
 | Diagnostic | Limit / lifecycle |
 | --- | --- |
@@ -302,7 +302,7 @@ When a waiting PATCH does not converge, inspect `karactl clusters get <cluster> 
 karactl -n <namespace> clusters restart <cluster> --wait
 ```
 
-Restart persists per-member progress and uses provider health/quorum gates before advancing. It is not a control-plane redeploy or agent executable upgrade; agents receive a newer executable on a provider-driven member deployment. A singleton is unavailable during its restart; multi-member rolling work is not a zero-disruption guarantee. For engine-specific order, drain and recovery rules, see [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md) and [Supabase](supabase/operations.md#cluster-restart-and-member-software). Supabase includes every enabled application component after the PostgreSQL core, verifying each live instance's process restart and readiness.
+Restart persists per-member progress and uses provider health/quorum gates before advancing. It is not a control-plane redeploy or agent executable upgrade; agents receive a newer executable on a provider-driven member deployment. A singleton is unavailable during its restart; multi-member rolling work is not a zero-disruption guarantee. For engine-specific order, drain and recovery rules, see [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md) and [Supabase](supabase/operations.md#cluster-restart-and-member-software). Supabase includes every enabled application component after the [PostgreSQL](https://www.postgresql.org/) core, verifying each live instance's process restart and readiness.
 
 ## Retry exhausted platform deployments
 

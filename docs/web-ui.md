@@ -37,12 +37,12 @@ Engine-specific fields, presets, minimum resources and connection procedures bel
 
 [PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) add single/HA database topology, proxy resources, synchronous policy and engine-specific options. Supabase component versions are release-locked; the [current artifact inventory](supabase/components.md) can reject a catalog preset or component even when its configuration is otherwise valid.
 
-OpenBao adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or AWS KMS auto-unseal, with the transit token and AWS keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
+[OpenBao](https://openbao.org/) adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or [AWS KMS](https://aws.amazon.com/kms/) auto-unseal, with the transit token and [AWS](https://aws.amazon.com/) keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
 
 PostgreSQL storage is selectable only when the OpenBao provider advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
-[MySQL and PXC](mysql/README.md) are separate provider choices. MySQL offers single or Group Replication (3/5); PXC offers only Galera `cluster` (3/5), requires ProxySQL and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and provider-specific maintenance review.
+[MySQL and PXC](mysql/README.md) are separate provider choices. MySQL offers single or Group Replication (3/5); PXC offers only [Galera](https://galeracluster.com/) `cluster` (3/5), requires [ProxySQL](https://proxysql.com/) and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and provider-specific maintenance review.
 
-[Weaviate](weaviate/README.md) adds single/3–9-member topology with three fixed voters, typed modules/inference and full S3 backups. Review private-network requirements and topology-preserving [restore limits](weaviate/backups.md).
+[Weaviate](weaviate/README.md) adds single/3–9-member topology with three fixed voters, typed modules/inference and full [S3](https://aws.amazon.com/s3/) backups. Review private-network requirements and topology-preserving [restore limits](weaviate/backups.md).
 
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
@@ -94,7 +94,7 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 
 ## Data MCP
 
-Supported clusters show a **Data MCP** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
+Supported clusters show a **Data [MCP](https://modelcontextprotocol.io/)** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
 
 Users with cluster update permission can enable/disable data MCP, select read-only/read-write access, set engine-specific scope, deny tools, require write confirmations and opt into recording query text in audit. Save applies `spec.dataMcp` as a cluster merge patch; disabling asks for confirmation. Other users see settings read-only. Enabling data access and requesting writes are security decisions: review the [data MCP guide](data-mcp.md), particularly [all four write switches](data-mcp.md#four-switches-for-writes), before sharing a client configuration.
 ### Fleet operations and restore verification
@@ -122,7 +122,7 @@ Placement evidence is backend-dependent. **Move member** replaces and synchroniz
 
 The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored backend infrastructure credentials or the operator master key.
 
-The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running OpenAPI link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
+The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running [OpenAPI](https://www.openapis.org/) link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
 
 ## Events history and live rows
 

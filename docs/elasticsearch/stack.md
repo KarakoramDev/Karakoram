@@ -10,13 +10,13 @@ Use returned endpoints, not guessed platform addresses. The endpoint names are `
 
 ## Kibana
 
-Open the returned Kibana URL. Initial administration can use `elastic`; use a regular native user with appropriate roles for routine work. Karakoram's UI login is not a Kibana identity. The automatically installed service-account token authenticates Kibana's backend, not browser users.
+Open the returned [Kibana](https://www.elastic.co/kibana) URL. Initial administration can use `elastic`; use a regular native user with appropriate roles for routine work. Karakoram's UI login is not a Kibana identity. The automatically installed service-account token authenticates Kibana's backend, not browser users.
 
 Set custom settings under `spec.engineOptions.kibana.settings`. If using `server.basePath`, the reverse proxy must strip the prefix. `server.rewriteBasePath` is managed as `false`: omit it from new requests; previously stored values are ignored. Shared, cluster-lifetime session/saved-object/reporting encryption keys support multiple replicas. [Public routing](access-and-security.md) is a separate opt-in.
 
 A route can exist before application initialization finishes. Wait for [component readiness](operations.md); a suspended component must be resumed rather than treated as starting.
 
-Kibana, Logstash and APM readiness is checked on every live runtime instance using
+Kibana, [Logstash](https://www.elastic.co/logstash) and APM readiness is checked on every live runtime instance using
 backend-provided individual addresses, not one service-DNS sample. Each instance
 must acknowledge the current configuration and pass its native application probe,
 and the live count must meet the configured replica count. Extra live instances
@@ -28,7 +28,7 @@ initial join and rolling completion.
 
 ## Logstash pipelines and queues
 
-Enable `spec.components.extra.logstash.replicas` and size RAM/runtime disk for throughput and buffering. With no user pipelines, Karakoram supplies dual-stack Beats and HTTP inputs and a CA-verified Elasticsearch data-stream output. Inputs bind `::`; input exposure and ports are in [Access and security](access-and-security.md). Custom listeners do not automatically provision additional routing or secure inputs.
+Enable `spec.components.extra.logstash.replicas` and size RAM/runtime disk for throughput and buffering. With no user pipelines, Karakoram supplies dual-stack [Beats](https://www.elastic.co/beats) and HTTP inputs and a CA-verified Elasticsearch data-stream output. Inputs bind `::`; input exposure and ports are in [Access and security](access-and-security.md). Custom listeners do not automatically provision additional routing or secure inputs.
 
 `engineOptions.logstash.pipelines` contains `{id, config}` entries, not raw `pipelines.yml` documents.
 

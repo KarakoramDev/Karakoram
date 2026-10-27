@@ -25,7 +25,7 @@ Scores are 1–5; weights emphasize safety over speed of recovery.
 | Separate native engine implementations for every runtime fault | 4 | 4 | 3 | 2 | 42 |
 | Shared engine runtime policy, backend primitives, native replacement workflows | 5 | 4 | 5 | 4 | 55 |
 
-Backend-only restoration remains useful for derived Nomad jobs and Docker services, but it cannot infer cluster suspension, initialized data, or whether surviving replicas can safely replace a member. Independent engine implementations could express those facts, but would duplicate absence, ownership, start, import, backoff and receipt handling across five families.
+Backend-only restoration remains useful for derived [Nomad](https://developer.hashicorp.com/nomad) jobs and [Docker](https://www.docker.com) services, but it cannot infer cluster suspension, initialized data, or whether surviving replicas can safely replace a member. Independent engine implementations could express those facts, but would duplicate absence, ownership, start, import, backoff and receipt handling across five families.
 
 ## Decision
 
@@ -51,9 +51,9 @@ Before applying engine configuration **and before every supervised child start/r
 
 For a newly authorized member, the agent durably writes the sentinel before engine startup. Its cached configuration consumes that one-time fresh authorization by recording `Initialized=true`; a later restart cannot replay a stale fresh-start grant. The running agent also remembers verified provenance before the CP's next receipt is committed. Native readiness and the member's durable engine stage establish the CP receipt; mere platform allocation or ownership is not evidence of successful database initialization.
 
-Existing initialized installations are adopted only when recognizable native durable metadata exists: MongoDB WiredTiger metadata, PostgreSQL `PG_VERSION` plus control data, Elasticsearch Lucene node-state metadata, or RabbitMQ node-bound Khepri/Ra configuration plus a recognized WAL header. A cache file, directory, PID or arbitrary nonempty data directory is insufficient. These are conservative retained-data checks, not database-integrity repair; the native engine must still open and validate its state normally. Unknown layouts fail closed with recovery guidance rather than being treated as empty new clusters.
+Existing initialized installations are adopted only when recognizable native durable metadata exists: [MongoDB](https://www.mongodb.com) [WiredTiger](https://source.wiredtiger.com) metadata, [PostgreSQL](https://www.postgresql.org) `PG_VERSION` plus control data, [Elasticsearch](https://www.elastic.co/elasticsearch) [Lucene](https://lucene.apache.org) node-state metadata, or [RabbitMQ](https://www.rabbitmq.com) node-bound [Khepri](https://github.com/rabbitmq/khepri)/Ra configuration plus a recognized WAL header. A cache file, directory, PID or arbitrary nonempty data directory is insufficient. These are conservative retained-data checks, not database-integrity repair; the native engine must still open and validate its state normally. Unknown layouts fail closed with recovery guidance rather than being treated as empty new clusters.
 
-PostgreSQL's existing initialization receipt and explicit pgBackRest restore ownership remain in force. The generic sentinel identifies whole-volume loss; it does not prevent an authorized HA replica clone or explicit restore on an otherwise matching volume.
+PostgreSQL's existing initialization receipt and explicit [pgBackRest](https://pgbackrest.org) restore ownership remain in force. The generic sentinel identifies whole-volume loss; it does not prevent an authorized HA replica clone or explicit restore on an otherwise matching volume.
 
 ### Native replacement safety
 
@@ -62,7 +62,7 @@ Missing logical storage or an authenticated agent `VolumeLost` observation enter
 - MongoDB requires a distinct surviving writable primary in the affected replica set.
 - RabbitMQ requires healthy surviving brokers and the existing lost-majority/queue safety gates.
 - Elasticsearch requires surviving owned membership and all primary shards available (`green`/`yellow`); missing primary copies require retained-data recovery or snapshot restore.
-- PostgreSQL HA requires a surviving writable primary with healthy etcd quorum. Supabase's database core uses the same policy.
+- PostgreSQL HA requires a surviving writable primary with healthy [etcd](https://etcd.io) quorum. [Supabase](https://supabase.com)'s database core uses the same policy.
 
 Replacement retains the existing join, catch-up, quorum, drain and retirement checks. No forced election, unsafe bootstrap, force-boot, empty primary allocation or destructive same-identity reseed is introduced. Singletons and unverified/no-survivor cases expose `VolumeLost`, refuse fresh initialization and direct the operator to recover original storage or restore into a new cluster.
 

@@ -83,7 +83,7 @@ Public REST/gRPC port allocation reconciles backend routes and durable member as
 
 ## Metrics
 
-Enable `spec.monitoring.enabled`. Native port 2112 is scraped locally with bounded responses; the agent relays only the fixed vocabulary below, without arbitrary native metric labels. Public Prometheus collection uses Karakoram's authenticated `/metrics`, not a public native 2112 listener. See [monitoring](../monitoring.md) for authorization, retention and freshness.
+Enable `spec.monitoring.enabled`. Native port 2112 is scraped locally with bounded responses; the agent relays only the fixed vocabulary below, without arbitrary native metric labels. Public [Prometheus](https://prometheus.io/) collection uses Karakoram's authenticated `/metrics`, not a public native 2112 listener. See [monitoring](../monitoring.md) for authorization, retention and freshness.
 
 | Exposition name | Catalog name | Unit (scale 1) |
 | --- | --- | --- |

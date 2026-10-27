@@ -18,11 +18,11 @@ Expose `POST /clusters/{cluster}/upgrade-agents` as a durable `upgrade-agents` o
 
 Freeze the target build in the checkpoint when the operation is claimed. Redeploy the current executable through `engine.Deploy` to the **same runtime and volume**, at the **unchanged database version**. Skip members already at the target unless explicitly included. Use existing one-member-at-a-time disruption journals, allow cancellation between members, and retain native gates:
 
-- PSMDB checks safe restart, primary step-down and catch-up.
-- RabbitMQ checks quorum, drains and revives through its agent-change action.
-- Elasticsearch uses its rolling allocation, flush and recovery gates.
-- PostgreSQL rolls replicas first, switches away from a primary and waits for streaming replication.
-- Supabase rolls optional component runtimes after the PostgreSQL core.
+- [PSMDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) checks safe restart, primary step-down and catch-up.
+- [RabbitMQ](https://www.rabbitmq.com) checks quorum, drains and revives through its agent-change action.
+- [Elasticsearch](https://www.elastic.co/elasticsearch) uses its rolling allocation, flush and recovery gates.
+- [PostgreSQL](https://www.postgresql.org) rolls replicas first, switches away from a primary and waits for streaming replication.
+- [Supabase](https://supabase.com) rolls optional component runtimes after the PostgreSQL core.
 
 Provider implementations decode the enqueue-frozen `engine.AgentUpgradePayload` (`includeCurrent`, `targetBuild`, `targetVersion`) with `engine.AgentUpgradeTarget(op)` and persist it in their rolling checkpoint at claim. `engine.MemberNeedsAgentUpgrade(member, target)` selects outdated or unreported members, or all initial candidates when `includeCurrent` is set. The checkpoint's completed-member journal takes precedence over selection, so an explicit refresh never repeats completed members. Compare the frozen build with `engine.CurrentAgentBuild().Build` before starting a deployment; if the control plane has changed again, fail before disruption rather than deploying different bytes under the old identity.
 
@@ -33,7 +33,7 @@ Installation setting `agentRollout` is managed through `GET/PUT /settings/agent-
 
 ### Maintenance policy and disruption boundaries
 
-`spec.maintenance` contains an IANA `timeZone` (default UTC) and at most 16 windows. Each window pairs a five-field cron **start schedule** with an explicit Go duration of 15 minutes to 168 hours. Validate both with the scheduler's cron parser and timezone loader. No windows means always open. A shared evaluator returns whether the policy is open, the current end and the next start; cluster responses expose these under `status.maintenance`.
+`spec.maintenance` contains an IANA `timeZone` (default UTC) and at most 16 windows. Each window pairs a five-field cron **start schedule** with an explicit [Go](https://go.dev) duration of 15 minutes to 168 hours. Validate both with the scheduler's cron parser and timezone loader. No windows means always open. A shared evaluator returns whether the policy is open, the current end and the next start; cluster responses expose these under `status.maintenance`.
 
 Gate new disruptions for `restart`, `rotate-tls`, `upgrade-agents`, `raise-fcv`, user-requested replacement or move, engine upgrades, rolling resource changes, restart-required configuration and scale-in. Automatic database leaf-certificate renewal is gated only while more than seven days remain before expiry.
 
@@ -56,7 +56,7 @@ does not re-emit an unchanged set, and unknown groups never count as co-location
 
 Expose `POST /clusters/{cluster}/members/{member}/move`, authorized by `clusters:update`, as `replace-member` with `member`, `relocate:true` and `avoidGroup` equal to the observed current group. It accepts the maintenance override. Supported members are PSMDB, RabbitMQ, Elasticsearch data/master members and PostgreSQL HA data members; unsupported members retain replacement's 409/422 refusal semantics.
 
-Pass the exclusion as `VolumeService.SpreadAvoid`. Nomad and Dokploy exclude those nodes during volume selection. If no eligible node remains, fail with `infra.ErrPlacementUnsatisfiable` **before any destructive step**, explaining that no other eligible node exists. On a backend without Placement, including Zerops, a move is an explicit best-effort runtime-and-volume replacement: state that no placement guarantee exists and re-observe the fingerprint afterwards. Do not introduce automatic relocation loops.
+Pass the exclusion as `VolumeService.SpreadAvoid`. [Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com) exclude those nodes during volume selection. If no eligible node remains, fail with `infra.ErrPlacementUnsatisfiable` **before any destructive step**, explaining that no other eligible node exists. On a backend without Placement, including [Zerops](https://zerops.io), a move is an explicit best-effort runtime-and-volume replacement: state that no placement guarantee exists and re-observe the fingerprint afterwards. Do not introduce automatic relocation loops.
 
 ## Consequences
 

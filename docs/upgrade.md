@@ -24,13 +24,13 @@ Migrations are **forward-only**. Downgrading an upgraded store to v0.3.0 is not 
 
 ### PostgreSQL binding database access
 
-PostgreSQL bindings are new in v0.4.0. Databases Karakoram creates for [PostgreSQL bindings](postgres/bindings.md) do not keep PostgreSQL's default PUBLIC `CONNECT` and `TEMPORARY` privileges: Karakoram revokes both from PUBLIC and grants them only to the binding's owning role; explicit grants Karakoram manages, such as Data MCP readers scoped to that database, are kept. Another binding's role cannot connect to a consumer's database.
+[PostgreSQL](https://www.postgresql.org/) bindings are new in v0.4.0. Databases Karakoram creates for [PostgreSQL bindings](postgres/bindings.md) do not keep PostgreSQL's default PUBLIC `CONNECT` and `TEMPORARY` privileges: Karakoram revokes both from PUBLIC and grants them only to the binding's owning role; explicit grants Karakoram manages, such as Data [MCP](https://modelcontextprotocol.io/) readers scoped to that database, are kept. Another binding's role cannot connect to a consumer's database.
 
-Karakoram re-checks these privileges on reconcile, not through the SQLite migration: if PUBLIC access reappears (for example, granted by hand or restored from older data), it is revoked again and sessions of roles without `CONNECT` are disconnected. Applications must use the owning binding identity or deliberately managed grants. This concerns binding databases only, not a blanket revocation on unrelated PostgreSQL databases.
+Karakoram re-checks these privileges on reconcile, not through the [SQLite](https://sqlite.org/) migration: if PUBLIC access reappears (for example, granted by hand or restored from older data), it is revoked again and sessions of roles without `CONNECT` are disconnected. Applications must use the owning binding identity or deliberately managed grants. This concerns binding databases only, not a blanket revocation on unrelated PostgreSQL databases.
 
 ### Source-build prerequisites
 
-[`go.mod`](../go.mod) now declares **`go 1.26.0`**, with no separate `toolchain` directive. Source builders need Go 1.26 or newer; the [README build prerequisites](../README.md#build-from-source) also require Node 22.6+, npm and Make. `make build-all` builds the UI before both executables; `make build` alone does not build UI assets. Prebuilt installations need no Go or Node toolchain.
+[`go.mod`](../go.mod) now declares **`go 1.26.0`**, with no separate `toolchain` directive. Source builders need [Go](https://go.dev/) 1.26 or newer; the [README build prerequisites](../README.md#build-from-source) also require [Node](https://nodejs.org/) 22.6+, [npm](https://docs.npmjs.com/) and [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/). `make build-all` builds the UI before both executables; `make build` alone does not build UI assets. Prebuilt installations need no Go or Node toolchain.
 
 ### New runtime environment variables
 
@@ -43,7 +43,7 @@ Karakoram re-checks these privileges on reconcile, not through the SQLite migrat
 | `KARAKORAM_RESTORE_S3_ACCESS_KEY_ID` | unset | S3 access key for offline `karakoram admin restore-state` |
 | `KARAKORAM_RESTORE_S3_SECRET_ACCESS_KEY` | unset | S3 secret key for offline `karakoram admin restore-state` |
 
-Restore credentials are needed only for S3 recovery, not ordinary startup. `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` and `KARAKORAM_ARTIFACT_MIRROR` already existed; they are not new settings. Native-test binary paths and development hooks are not installation requirements. See [notifications](notifications.md), [backup drills](backup-drills.md) and [offline state restore](control-plane-backup.md#local-export-and-offline-restore).
+Restore credentials are needed only for [S3](https://aws.amazon.com/s3/) recovery, not ordinary startup. `KARAKORAM_BACKUP_ENDPOINT_ALLOWLIST` and `KARAKORAM_ARTIFACT_MIRROR` already existed; they are not new settings. Native-test binary paths and development hooks are not installation requirements. See [notifications](notifications.md), [backup drills](backup-drills.md) and [offline state restore](control-plane-backup.md#local-export-and-offline-restore).
 
 ### New native artifacts
 
@@ -62,7 +62,7 @@ Installations mirroring native artifacts must add the following exact filenames 
 | Neo4j / Java | `neo4j-community-2026.09.0-unix.tar.gz`, `neo4j-community-2026.10.0-unix.tar.gz`, `OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz` |
 | Weaviate | `weaviate-v1.40.1-linux-amd64.tar.gz`, `weaviate-v1.39.12-linux-amd64.tar.gz` |
 
-TimescaleDB and Citus bundles are Karakoram-built; development builds need a mirror for them. Other additions have official upstream URLs. Weaviate is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
+[TimescaleDB](https://www.timescale.com/) and [Citus](https://www.citusdata.com/) bundles are Karakoram-built; development builds need a mirror for them. Other additions have official upstream URLs. [Weaviate](https://weaviate.io/) is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
 
 ### Deploy on Zerops
 
@@ -77,7 +77,7 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 
 Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-and-readiness) and [member-agent rollout](#rolling-out-member-agents). Review [engine/backend status](backends.md#engine-availability) and the [verified-offline Ops features](operations.md) before enabling new functionality.
 
-Temporal is available on Dokploy and Nomad only in v0.4.0. Zerops support is pending IPv6 private networking: the current Temporal membership runtime requires a private IPv4 route to the bound PostgreSQL writer.
+[Temporal](https://temporal.io/) is available on [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) only in v0.4.0. [Zerops](https://zerops.io/) support is pending IPv6 private networking: the current Temporal membership runtime requires a private IPv4 route to the bound PostgreSQL writer.
 
 ## Upgrading from v0.2.0 to v0.3.0
 
@@ -85,11 +85,11 @@ Temporal is available on Dokploy and Nomad only in v0.4.0. Zerops support is pen
 
 ### Automatic state changes
 
-No SQLite migrations are added after `012_sanitize_diagnostics.sql`. OAuth grants and API-token restrictions use existing tables, and dry-run previews run in read-only transactions. Migrations remain forward-only; keep the pre-upgrade backup for rollback.
+No [SQLite](https://sqlite.org/) migrations are added after `012_sanitize_diagnostics.sql`. [OAuth](https://oauth.net/2/) grants and API-token restrictions use existing tables, and dry-run previews run in read-only transactions. Migrations remain forward-only; keep the pre-upgrade backup for rollback.
 
 ### Agent access is on, read-only
 
-After the upgrade the control plane serves the [MCP server](mcp.md) at `/mcp` because `KARAKORAM_MCP` defaults to `readonly`: holders of valid API tokens, including existing unrestricted ones, can call read-only tools through the same RBAC and audit path as the REST API. Nothing becomes readable that the token could not already read. To disable the endpoint, set `KARAKORAM_MCP=off` in the control plane's service environment (Zerops: the service's environment variables, or `envVariables` in the import YAML) and restart; set `readwrite` only deliberately. New variables, all documented in [Install](install.md#required-secrets-and-generated-settings):
+After the upgrade the control plane serves the [MCP server](mcp.md) at `/mcp` because `KARAKORAM_MCP` defaults to `readonly`: holders of valid API tokens, including existing unrestricted ones, can call read-only tools through the same RBAC and audit path as the REST API. Nothing becomes readable that the token could not already read. To disable the endpoint, set `KARAKORAM_MCP=off` in the control plane's service environment ([Zerops](https://zerops.io/): the service's environment variables, or `envVariables` in the import YAML) and restart; set `readwrite` only deliberately. New variables, all documented in [Install](install.md#required-secrets-and-generated-settings):
 
 | Variable | Default | Effect |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ Existing API tokens stay unrestricted; mint [restricted tokens](access-control.m
 
 ### New native artifacts
 
-Data MCP companions for MongoDB, PostgreSQL and Supabase use two new entries in `lock.json`, downloaded only when a cluster enables data MCP: `mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz` is a Karakoram-built release asset with no upstream URL, and `pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz` comes from the official pgEdge release. Operators running a `KARAKORAM_ARTIFACT_MIRROR` must add both files with their exact locked bytes; development builds need the mirror for the MongoDB bundle. See [data MCP companion artifacts](native-artifacts.md#data-mcp-companion-artifacts).
+Data MCP companions for [MongoDB](https://www.mongodb.com/), [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use two new entries in `lock.json`, downloaded only when a cluster enables data MCP: `mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz` is a Karakoram-built release asset with no upstream URL, and `pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz` comes from the official [pgEdge](https://www.pgedge.com/) release. Operators running a `KARAKORAM_ARTIFACT_MIRROR` must add both files with their exact locked bytes; development builds need the mirror for the MongoDB bundle. See [data MCP companion artifacts](native-artifacts.md#data-mcp-companion-artifacts).
 
 ### Deploy on Zerops
 
@@ -119,9 +119,9 @@ Set `PROJECT_ID` as below, then follow [deployment and readiness](#deployment-an
 
 ## Upgrading from v0.1.x to v0.2.0
 
-**Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.2.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup) below, not a live copy of the SQLite main file. Let engine operations settle and retain the old revision and backup for recovery.
+**Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.2.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup) below, not a live copy of the [SQLite](https://sqlite.org/) main file. Let engine operations settle and retain the old revision and backup for recovery.
 
-Existing Zerops namespaces and clusters retain their backend, resource identities, secrets and desired specifications; no cluster recreation or backend migration is required. Stored namespaces without a backend kind normalize to `zerops`, and omitted namespace-create kinds still default to Zerops. PostgreSQL and Supabase are new engines; upgrading the control plane does not change an existing cluster's provider or engine version.
+Existing [Zerops](https://zerops.io/) namespaces and clusters retain their backend, resource identities, secrets and desired specifications; no cluster recreation or backend migration is required. Stored namespaces without a backend kind normalize to `zerops`, and omitted namespace-create kinds still default to Zerops. [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) are new engines; upgrading the control plane does not change an existing cluster's provider or engine version.
 
 ### Automatic state changes
 
@@ -137,7 +137,7 @@ Migration 011 builds an index over existing metrics; migration 012 rewrites lega
 
 ### API and specification compatibility
 
-The `/api/v1` API and existing Zerops cluster spec shapes remain. The OpenAPI changes are principally additive, but clients must account for these response and admission changes:
+The `/api/v1` API and existing Zerops cluster spec shapes remain. The [OpenAPI](https://www.openapis.org/) changes are principally additive, but clients must account for these response and admission changes:
 
 - Namespace responses now require `backend` and `capabilities` and may include non-secret `config`; namespace creation accepts optional `backend` and `config`. `projectId` remains the field name for the backend target ID. Strict clients that reject new response properties need updated models.
 - `GET /backends` lists compiled-in backend metadata and requires `namespaces/read` on global `*`.
@@ -164,11 +164,11 @@ Set `PROJECT_ID` as below. Preserve the existing volume, master key, secrets, pu
 
 ### New optional backends
 
-Zerops remains the reference backend. Dokploy and Nomad are additional options, not an automatic migration for existing installations. Review [Backends](backends.md), then the [Dokploy installation](dokploy.md#install-the-control-plane-on-dokploy) or [Nomad installation](nomad.md#install-the-control-plane-on-nomad). Keep the existing default namespace on its original target; additional targets use explicit backend selection and credentials through [Namespaces](namespaces.md).
+Zerops remains the reference backend. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are additional options, not an automatic migration for existing installations. Review [Backends](backends.md), then the [Dokploy installation](dokploy.md#install-the-control-plane-on-dokploy) or [Nomad installation](nomad.md#install-the-control-plane-on-nomad). Keep the existing default namespace on its original target; additional targets use explicit backend selection and credentials through [Namespaces](namespaces.md).
 
 ## Prerequisites
 
-For new installations use [Install](install.md). The concrete deployment, maintenance-container and ownership commands below are for the **Zerops backend**. [Dokploy](dokploy.md#install-the-control-plane-on-dokploy) and [Nomad](nomad.md#install-the-control-plane-on-nomad) use their guides' singleton/stop-first deployment paths with the same consistent-state and master-key backup requirements. Zerops upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
+For new installations use [Install](install.md). The concrete deployment, maintenance-container and ownership commands below are for the **[Zerops](https://zerops.io/) backend**. [Dokploy](dokploy.md#install-the-control-plane-on-dokploy) and [Nomad](nomad.md#install-the-control-plane-on-nomad) use their guides' singleton/stop-first deployment paths with the same consistent-state and master-key backup requirements. Zerops upgrades need the target checkout, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access, runtime secrets and Local Storage maintenance-container access. Use `zcli login` with a Zerops token; avoid shared terminals/shell history.
 
 From the checkout root, set:
 
@@ -187,7 +187,7 @@ Commands assume default service names; substitute customized names consistently.
 
 ## Consistent pre-upgrade state backup
 
-**Warning:** A live copy of SQLite's main file or a live volume tarball can omit committed WAL changes. There is no `karakoram admin backup-db` command.
+**Warning:** A live copy of [SQLite](https://sqlite.org/)'s main file or a live volume tarball can omit committed WAL changes. There is no `karakoram admin backup-db` command.
 
 1. Stop the runtime:
 
@@ -228,9 +228,9 @@ zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
 
 Choose your target tag, or update `main`: [`deploy/zerops/RELEASE`](../deploy/zerops/RELEASE) pins the latest published release, not newer source. Tags pin themselves. **Never edit the pin by hand**; only the [release tool](../CONTRIBUTING.md#releasing) changes it.
 
-The default setup verifies the manifest's SSH signature, archive SHA-256 and binary version; allow seconds, with no Go/Node toolchain. `--workspace-state clean` uploads only committed `HEAD`; do not add `--no-git`, which uploads the whole checkout.
+The default setup verifies the manifest's SSH signature, archive SHA-256 and binary version; allow seconds, with no [Go](https://go.dev/)/[Node](https://nodejs.org/) toolchain. `--workspace-state clean` uploads only committed `HEAD`; do not add `--no-git`, which uploads the whole checkout.
 
-For Git-connected services, redeploy the chosen tag or `main` through Zerops controls; its ref determines the pin. Installer `buildFromGit` is a one-time import, not webhook configuration. Never rerun the helper or reimport to upgrade.
+For [Git](https://git-scm.com/)-connected services, redeploy the chosen tag or `main` through [Zerops](https://zerops.io/) controls; its ref determines the pin. Installer `buildFromGit` is a one-time import, not webhook configuration. Never rerun the helper or reimport to upgrade.
 
 Download, signature/checksum or build failure never reaches deployment and leaves the running version untouched. A service left stopped after backup remains stopped until started or successfully deployed.
 
@@ -283,7 +283,7 @@ The durable `upgrade-agents` operation redeploys the current executable at the *
 
 Rollouts respect [maintenance windows](operations.md#maintenance-windows). Use `--ignore-maintenance-window` for an explicit override; this does not bypass engine safety gates. Timing out or interrupting `--wait` does not cancel the rollout; retain the operation ID and use `operations wait ID`.
 
-Agent rollout requires an advertised provider operation backed by a one-member disruption journal. Keycloak, OpenBao, Temporal, MySQL, PXC, Neo4j and Weaviate do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
+Agent rollout requires an advertised provider operation backed by a one-member disruption journal. [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/) do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
 
 Automatic rollout is **off by default**:
 
@@ -304,7 +304,7 @@ When enabled, the controller checks every **60 seconds**, enqueuing rollouts onl
 - Otherwise stop **every writer**, preserve failed-version state, and restore the complete pre-upgrade archive into an **emptied** state directory through the maintenance container. Never merge stale WAL/SHM or identity files. Restore `zerops` ownership, restrictive permissions and the matching master key; deploy the old binary before starting it.
 - State rollback rewinds specifications, operations, tokens, sessions and inventory—not external services or engine data. Review changes and in-flight operations before resuming reconciliation. It does not undo engine-level upgrades or compatibility changes; see [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md) and [Elasticsearch operations](elasticsearch/operations.md), and [Backups and storage](backups.md) for data recovery.
 
-For Weaviate, follow [native upgrade operations](weaviate/operations.md#restart-and-upgrade): only cataloged patch-forward or one-minor-forward changes, never downgrades or skipped minors. Members roll with quorum/health gates; restoring the control-plane archive does not reverse native data changes.
+For [Weaviate](https://weaviate.io/), follow [native upgrade operations](weaviate/operations.md#restart-and-upgrade): only cataloged patch-forward or one-minor-forward changes, never downgrades or skipped minors. Members roll with quorum/health gates; restoring the control-plane archive does not reverse native data changes.
 
 Retain the archive, master key and previous revision until the upgrade and agent transition are accepted.
 
@@ -315,13 +315,13 @@ Retain the archive, master key and previous revision until the upgrade and agent
 - Member build identity and explicit rolling agent upgrades keep executable rollout separate from database-version upgrades. Automatic rollout is opt-in; existing and legacy agents are not redeployed merely because the control plane restarts.
 - Optional cluster maintenance windows defer new disruptive work. Emergency healing and near-expiry certificate recovery remain exempt; explicit overrides never bypass engine safety gates.
 - Placement reports distinguish authoritative anti-affinity from best-effort evidence. Member relocation uses native replacement and synchronization, and cannot promise a new host on backends without placement support.
-- Control-plane backup policy, durable notification deliveries and backup-drill reports add forward-only SQLite migrations. Preserve a consistent pre-upgrade snapshot and the original master key; an older binary must not open newer state.
+- Control-plane backup policy, durable notification deliveries and backup-drill reports add forward-only [SQLite](https://sqlite.org/) migrations. Preserve a consistent pre-upgrade snapshot and the original master key; an older binary must not open newer state.
 - State snapshots do not contain the operator master key or external backend credentials. Rebuild with the original key, endpoint identity and valid credentials; review external changes since the snapshot before resuming reconciliation.
 - Import the [Grafana dashboards and Prometheus rules](monitoring.md) and configure [notification channels](notifications.md) deliberately. Existing installations retain their RBAC policy; installation-wide settings still require explicit settings access.
 
 ### v0.1.2
 
-- Default Zerops deployments use signed prebuilt releases pinned by the checkout, not unreleased source; forks/unreleased fixes require `karakoram-source`. Preserve the state volume, master key and single-writer deployment settings.
+- Default [Zerops](https://zerops.io/) deployments use signed prebuilt releases pinned by the checkout, not unreleased source; forks/unreleased fixes require `karakoram-source`. Preserve the state volume, master key and single-writer deployment settings.
 - Signed CLI checksum manifests start with v0.1.2; [verify the signature and checksum](install.md#install-karactl) and match the deployed server version.
 - Cluster specification changes record `ClusterSpecChangeRequested` audit events with field-level details for `audit:read`; see [Reviewing audit activity](operations.md#reviewing-audit-activity).
 - Platform resource-update rejections expose the hostname, error code and attempted bounds; see [Resources and autoscaling](clusters.md#resources-and-autoscaling).

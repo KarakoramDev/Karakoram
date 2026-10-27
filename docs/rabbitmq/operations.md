@@ -4,7 +4,7 @@
 
 Use cluster specs and durable operations for broker lifecycle changes, not parallel manual platform deployments.
 
-On Zerops, exhausted exact-version deployment retries report
+On [Zerops](https://zerops.io/), exhausted exact-version deployment retries report
 `DeploymentRetriesExhausted` and stop submissions for that broker. Other brokers
 remain observable and can finish provisioning; rolling disruption and quorum
 fences are not bypassed. Inspect the platform/runtime failure, correct it, then
@@ -29,7 +29,7 @@ Live in-service and alarm health checks must return complete, bounded successful
 health responses; HTTP headers or cached node statistics alone cannot establish
 readiness. HTTPS verifies the managed CA and member hostname, and no public
 management listener is required. This avoids launching
-an Erlang CLI VM on every health sweep. Older agents retain their existing
+an [Erlang](https://www.erlang.org/) CLI VM on every health sweep. Older agents retain their existing
 CLI status protocol until upgraded; only an absent observation route enables
 that compatibility path, never an authentication, timeout or broker-health error.
 Bootstrap/join preconditions still use cookie-authenticated CLI status because a
@@ -72,7 +72,7 @@ Live platform RAM changes do not update broker limits until the gated rolling re
 
 ### Agent executable rollout and windows
 
-`karactl -n NS clusters upgrade-agents brokers --wait` redeploys the current control-plane executable to the same runtimes and volumes, preserving the applied RabbitMQ version, resources, TLS, configuration and options. It uses the normal quorum → critical-queue check → drain → stop → deploy → start → wait → revive sequence. A broker must rejoin healthy and report the frozen target build before the next broker changes. Target-build members are skipped unless `--include-current` is set; completed brokers are journaled across control-plane restarts. Cancellation is safe between brokers. If the running control plane no longer matches the frozen build, re-run the failed operation rather than deploying different bytes under the old target.
+`karactl -n NS clusters upgrade-agents brokers --wait` redeploys the current control-plane executable to the same runtimes and volumes, preserving the applied [RabbitMQ](https://www.rabbitmq.com/) version, resources, TLS, configuration and options. It uses the normal quorum → critical-queue check → drain → stop → deploy → start → wait → revive sequence. A broker must rejoin healthy and report the frozen target build before the next broker changes. Target-build members are skipped unless `--include-current` is set; completed brokers are journaled across control-plane restarts. Cancellation is safe between brokers. If the running control plane no longer matches the frozen build, re-run the failed operation rather than deploying different bytes under the old target.
 
 `spec.maintenance` gates new desired-state engine upgrades, rolling resource/configuration changes and scale-in, plus automatic database leaf renewal while more than seven days remain. Already-drained brokers finish rejoining after window closure. Creation/scale-out, healing, agent transport renewal and database leaves within seven days of expiry are exempt. Imperative restarts, TLS rotation, replacements and agent upgrades wait before claim; supported actions accept `--ignore-maintenance-window`. See [maintenance policy](../operations.md).
 
@@ -144,7 +144,7 @@ named even when no native `partitions[]` is reported. A stopped peer can degrade
 aggregate health without marking healthy survivors partitioned.
 
 Member health uses fresh local in-service and local-alarm checks plus a
-matching loopback Prometheus runtime identity, each with a two-second HTTP
+matching loopback [Prometheus](https://prometheus.io/) runtime identity, each with a two-second HTTP
 budget. Peer-dependent `/api/nodes?disable_stats=true` membership has a separate
 one-second budget. If a paused peer blocks that view, healthy surviving members
 remain RUNNING/healthy with fresh samples, but cluster readiness and membership-

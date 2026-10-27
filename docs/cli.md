@@ -6,7 +6,7 @@
 
 ## Install
 
-Follow [install karactl](install.md#install-karactl) for release downloads and checksum verification. Match the CLI release to your server; connecting an older binary does not add commands. From a compatible release checkout with Go 1.26+:
+Follow [install karactl](install.md#install-karactl) for release downloads and checksum verification. Match the CLI release to your server; connecting an older binary does not add commands. From a compatible release checkout with [Go](https://go.dev/) 1.26+:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl
@@ -45,14 +45,14 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `-o table` is the default; detail output uses sections and list output summarizes nested fields. `-o json` and `-o yaml` preserve complete structured responses.
 - `-f FILE` accepts API-shaped YAML/JSON; `-f -` reads stdin. A supplied file defines the body instead of convenience body flags. Use protected files for secrets. Exceptions: `rbac policy set` takes raw CSV; engine-native role/key commands use their documented definitions.
 - Cluster create files contain `{name, spec}`. `edit` replaces the complete `{spec}` and can open the configured editor without a file. `patch`, `scale` and `upgrade` files contain `{spec: {...}}` merge patches; arrays replace the previous array, not append to it.
-- Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags, `--dry-run` and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. Elasticsearch-native role/API-key definition files retain their documented merge/conflict behavior.
+- Complete request files reject explicitly supplied convenience body flags (usage error, exit 2), on every command accepting such a file: creation/source flags, scale resource/replica/topology/component flags, upgrade/FCV version, balancer settings and RBAC permission fields must go in the file rather than silently overriding or being ignored. Put initial cluster provenance in `spec.dataSource` (`cluster`, optional `namespace`, and exactly one of `backup` or `pitrTime`); put restore provenance in `source`/`sourceNamespace`. Defaults do not override file fields. Execution controls such as namespace/output selection, API query flags, `--dry-run` and cluster `--wait`/`--timeout` remain supported; `restores create --file FILE --into-new NAME` still clones using the source recorded in the file. [Elasticsearch](https://www.elastic.co/elasticsearch)-native role/API-key definition files retain their documented merge/conflict behavior.
 - `--dry-run` previews `clusters create`, `edit`, `patch`, `scale`, `upgrade` and `restores create` on the server using the same request body and namespace, without applying changes. `restores create --into-new --dry-run` previews creation of the cloned cluster. Table output has changes (paths and compact JSON before → after), effects and warnings; `-o json`/`-o yaml` preserves the complete plan. A valid plan exits 0; API validation failures keep the normal error exit status. Dry runs never prompt for destructive confirmation (including `-f -`) and cannot be combined with `--wait`.
 - Create convenience flags default to `psmdb`. An omitted/empty `--version` leaves version selection to the selected provider's catalog. For presets/components, inspect `providers get PROVIDER -o json`, customize a preset into a complete `{name, spec}` file, then use `clusters create -f FILE`. There is no `--preset` flag. See [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch creation](elasticsearch/README.md#create).
 - Maintenance convenience flags on cluster spec commands: repeat `--maintenance-window 'CRON;DURATION'` and select `--maintenance-time-zone IANA_NAME` (default UTC). `--maintenance-window ''` clears windows. With `-f`, put `spec: {maintenance: {timeZone: UTC, windows: [{schedule: "0 2 * * 0", duration: 2h}]}}` in the file instead; request files remain authoritative.
 - `--ignore-maintenance-window` on restart, rotate-tls, replace-member, members move, raise-fcv, edit, patch, scale, upgrade and upgrade-agents sends the explicit per-operation/per-generation override. It does not bypass quorum or other safety checks. See [maintenance semantics and exemptions](operations.md#maintenance-windows); `clusters get` and `clusters status` include the computed maintenance status.
-- PostgreSQL/Supabase creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
+- [PostgreSQL](https://www.postgresql.org/)/[Supabase](https://supabase.com/) creation and current artifact restrictions: [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md). Use `full`, `diff` or `incr` explicitly for their backups; generic `logical` is not a PostgreSQL type.
 - [MySQL and PXC](mysql/README.md) are separate providers with a shared `mysql` access command group. Their backups use `full` or `incremental`, and PITR is GTID/binlog based; see [MySQL backups](mysql/backups.md).
-- Neo4j Community creation, native administrative users and offline outages: [Neo4j](neo4j/README.md). Always pass `--type dump` for Neo4j backups; schedules require `engineOptions.acceptBackupDowntime: true`.
+- [Neo4j](https://neo4j.com/) Community creation, native administrative users and offline outages: [Neo4j](neo4j/README.md). Always pass `--type dump` for Neo4j backups; schedules require `engineOptions.acceptBackupDowntime: true`.
 - [Weaviate creation](weaviate/README.md#create) supports `single` and `cluster`; use `--type full` for its backups and its native `weaviate users|roles` groups for application access.
 - `clusters connection NAME` prints a password-free summary. `--reveal` explicitly retrieves sensitive engine-admin credentials and CA; do not use that identity for applications or log its output. `clusters ca NAME` exports only PEM to stdout, regardless of output format, but still requires `cluster-credentials:read`. Follow [MongoDB access](mongodb/access-and-tls.md), [RabbitMQ access](rabbitmq/access-and-tls.md) or [Elasticsearch access](elasticsearch/access-and-security.md).
 - Cluster mutation `--wait` reports acceptance/operation ID on stderr, then phase changes and a fifteen-second heartbeat. The default timeout is **30m**. It waits for the operation and observed cluster generation; an **Error or Degraded cluster fails the wait**. `clusters wait NAME` observes the current desired generation or deletion/suspension without resubmitting.
@@ -63,7 +63,7 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 - `clusters logs` returns a bounded process-log tail: `--lines` defaults to **100**, range **1–10000**; `--process` selects a provider-supported process or `agent`. **`--cursor` currently has no effect**; the server also ignores the API's `since` input and returns no next cursor.
 - `events watch` streams until interrupted; see [pagination and SSE](api.md#pagination-and-events). `openapi` downloads raw server YAML without authentication. `completion` generates scripts without configuration/server access. `version` always reports client metadata; absent/unreachable server metadata does not itself fail the command, and lookup is limited to five seconds.
 
-`karactl` has **no `--idempotency-key` flag and does not send `Idempotency-Key`**. For keyed mutation retries use HTTP or the Go client; see [safe retries](api.md#safe-retries-with-idempotency-key). Do not repeat a mutation merely because waiting or receiving its response failed.
+`karactl` has **no `--idempotency-key` flag and does not send `Idempotency-Key`**. For keyed mutation retries use HTTP or the [Go](https://go.dev/) client; see [safe retries](api.md#safe-retries-with-idempotency-key). Do not repeat a mutation merely because waiting or receiving its response failed.
 
 ## Command groups
 
@@ -119,18 +119,18 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 
 `karactl clusters upgrade-agents NAME [--include-current] [--ignore-maintenance-window] [--wait] [--timeout 30m]` rolls out the current agent build without changing engine versions. `clusters get` shows `status.agents` target/outdated/unknown details; member output includes agent version/build. Current agents return HTTP 409 `AgentsCurrent` unless included explicitly. See [rolling out member agents](upgrade.md#rolling-out-member-agents).
 
-`karactl clusters members move NAME MEMBER [--ignore-maintenance-window] [--wait] [--timeout 30m]` requests native member replacement with the current host excluded on placement-capable backends. It asks for confirmation (`--yes` for automation). Nomad/Dokploy require another eligible node; Zerops is best-effort and provides no host guarantee. Unsupported targets and unknown authoritative placement are refused. Inspect `clusters placement NAME` and the returned operation; see [moving a member](operations.md#moving-a-member).
+`karactl clusters members move NAME MEMBER [--ignore-maintenance-window] [--wait] [--timeout 30m]` requests native member replacement with the current host excluded on placement-capable backends. It asks for confirmation (`--yes` for automation). [Nomad](https://developer.hashicorp.com/nomad)/[Dokploy](https://dokploy.com/) require another eligible node; [Zerops](https://zerops.io/) is best-effort and provides no host guarantee. Unsupported targets and unknown authoritative placement are refused. Inspect `clusters placement NAME` and the returned operation; see [moving a member](operations.md#moving-a-member).
 
 `karactl settings agent-rollout get` shows rollout settings and read-only `currentBuild`. `settings agent-rollout set [--automatic=true|false] [--max-concurrent-clusters N]` replaces settings (defaults: off and 1; range 1–5). Automatic rollout considers outdated, not unknown/legacy agents.
 
-For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). PostgreSQL payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); Supabase credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
-Neo4j user commands, CA trust and direct Bolt connection caveats are in [Neo4j access](neo4j/access-and-tls.md); the managed `neo4j` account uses `system-users rotate`, not native user mutations.
+For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). [PostgreSQL](https://www.postgresql.org/) payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); [Supabase](https://supabase.com/) credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
+[Neo4j](https://neo4j.com/) user commands, CA trust and direct Bolt connection caveats are in [Neo4j access](neo4j/access-and-tls.md); the managed `neo4j` account uses `system-users rotate`, not native user mutations.
 
 ## MCP clients
 
-`karactl --context production mcp` bridges a local stdio MCP client to the control plane's `/mcp` using the same server/token resolution as other commands. Standard output contains MCP messages only; diagnostics go to stderr. Tool lists, calls, progress, cancellation, server instructions and human confirmation remain server-controlled. Narrow discovery with `--toolsets Clusters,Backups,Workflows`; this is not an authorization boundary.
+`karactl --context production mcp` bridges a local stdio [MCP](https://modelcontextprotocol.io/) client to the control plane's `/mcp` using the same server/token resolution as other commands. Standard output contains MCP messages only; diagnostics go to stderr. Tool lists, calls, progress, cancellation, server instructions and human confirmation remain server-controlled. Narrow discovery with `--toolsets Clusters,Backups,Workflows`; this is not an authorization boundary.
 
-`karactl mcp config` mints a dedicated restricted token and prints configuration for your client. Without `--cluster` it configures the management endpoint `/mcp`; with `--cluster NS/NAME` it configures that cluster's [data MCP](data-mcp.md) endpoint `/mcp/clusters/NS/NAME`. Both forms share `--client`, `--write`, `--token-name` and `--expires-in` (90 days by default; whole days such as `30d` or a Go duration such as `720h`), and both print the newly minted secret once: protect the output, heed the stderr warning and revoke the token by ID through `tokens delete` when no longer needed. The server must support restricted API tokens; older servers reject the request.
+`karactl mcp config` mints a dedicated restricted token and prints configuration for your client. Without `--cluster` it configures the management endpoint `/mcp`; with `--cluster NS/NAME` it configures that cluster's [data MCP](data-mcp.md) endpoint `/mcp/clusters/NS/NAME`. Both forms share `--client`, `--write`, `--token-name` and `--expires-in` (90 days by default; whole days such as `30d` or a [Go](https://go.dev/) duration such as `720h`), and both print the newly minted secret once: protect the output, heed the stderr warning and revoke the token by ID through `tokens delete` when no longer needed. The server must support restricted API tokens; older servers reject the request.
 
 ```sh
 karactl --context production mcp config --client cursor --namespace production
@@ -198,7 +198,7 @@ Run `karactl <group> <command> --help` for every flag. Query flags reach the API
 
 Use `karactl weaviate users create CLUSTER NAME --role viewer`, `users update CLUSTER NAME --role viewer --active` (or `--inactive`), and `users rotate-key CLUSTER NAME --yes`. `--role` is repeatable; update replaces the complete role list, and omission clears roles. User list/get/delete and role list/get/delete take the cluster and, for object actions, the name. Role create uses `roles create CLUSTER -f role.yaml`; replacement uses `roles update CLUSTER NAME -f role.yaml`, with `{name, permissions}`.
 
-Generated user API keys are secret-bearing creation/rotation results, not later GET data; protect terminal output. Do not blindly retry after losing a mutation response: the CLI does not send idempotency keys. Protected identities and extra privilege grants follow the [Weaviate access guide](weaviate/access-and-tls.md#management-authorization); MongoDB `db-users`/`db-roles` do not apply.
+Generated user API keys are secret-bearing creation/rotation results, not later GET data; protect terminal output. Do not blindly retry after losing a mutation response: the CLI does not send idempotency keys. Protected identities and extra privilege grants follow the [Weaviate access guide](weaviate/access-and-tls.md#management-authorization); [MongoDB](https://www.mongodb.com/) `db-users`/`db-roles` do not apply.
 
 Key rotation requires `database-users/update` plus `clusters/update` when the target user's current roles include anything beyond `viewer` or `read-only`. User deletion needs only `database-users/delete`, including for privileged users; protected identities remain excluded.
 
@@ -234,7 +234,7 @@ karactl mysql databases delete CLUSTER DATABASE --force --yes
 karactl mysql users delete CLUSTER USER --yes
 ```
 
-Accounts use the fixed `'name'@'%'` identity and require TLS. Creation and password rotation return a server-generated `generatedPassword` once, using the same JSON/YAML/table output conventions as PostgreSQL role creation; save it securely and never log the response. `--retain-current` keeps the previous password valid during a credential rollout; `discard-old-password` removes that retained password.
+Accounts use the fixed `'name'@'%'` identity and require TLS. Creation and password rotation return a server-generated `generatedPassword` once, using the same JSON/YAML/table output conventions as [PostgreSQL](https://www.postgresql.org/) role creation; save it securely and never log the response. `--retain-current` keeps the previous password valid during a credential rollout; `discard-old-password` removes that retained password.
 
 User creation documents contain `name` and optional `locked` and `maxUserConnections`. `users update` sends a partial attribute update: omitted fields stay unchanged, and only `locked` and `maxUserConnections` may be changed. Passwords are managed separately through rotation, not supplied in user documents.
 
@@ -242,7 +242,7 @@ Database documents contain `name` and optional `characterSet` and `collation`. T
 
 ### PostgreSQL native access
 
-The `postgres` command group also works with Supabase clusters, which share the PostgreSQL core:
+The `postgres` command group also works with [Supabase](https://supabase.com/) clusters, which share the PostgreSQL core:
 
 ```sh
 karactl postgres roles list CLUSTER
@@ -264,9 +264,9 @@ A role document contains `name`, `login` (default true), `createdb`, `createrole
 
 A database document contains `name`, `owner`, optional `encoding` (UTF8), `locale` (C.UTF-8), and `allowConnections` (true). Encoding and locale cannot be changed after creation. A grant document contains `role`, `database`, `privileges`, and optional `schema`: database privileges are CONNECT/CREATE/TEMP; schema privileges are USAGE/CREATE. Predefined memberships include pg_read_all_data, pg_write_all_data, pg_monitor, pg_read_all_stats, and pg_signal_backend.
 
-Managed login passwords are sealed and synchronized to every ProxySQL member without restarting PostgreSQL. Roles created directly in SQL are not routable through ProxySQL. Use the proxy hostname, cluster CA, and `sslmode=verify-full` for TLS connections; public endpoints are advertised when enabled and configured by the infrastructure backend. Direct data-member endpoints remain private. Role/database deletion, grant revocation, and password rotation require confirmation (or `--yes`).
+Managed login passwords are sealed and synchronized to every [ProxySQL](https://proxysql.com/) member without restarting PostgreSQL. Roles created directly in SQL are not routable through ProxySQL. Use the proxy hostname, cluster CA, and `sslmode=verify-full` for TLS connections; public endpoints are advertised when enabled and configured by the infrastructure backend. Direct data-member endpoints remain private. Role/database deletion, grant revocation, and password rotation require confirmation (or `--yes`).
 
-Access operations use authenticated internal POST actions on a freshly resolved primary. HA members also require the Patroni leader lock; no writable primary produces HTTP 503. Only a precomputed SCRAM-SHA-256 verifier crosses the role-action protocol, never the plaintext password in SQL. Membership replacement is transactional; schema grants connect to the requested database. `roles patch CLUSTER ROLE -f patch.json` changes only supplied fields; `roles update` replaces role attributes.
+Access operations use authenticated internal POST actions on a freshly resolved primary. HA members also require the [Patroni](https://patroni.readthedocs.io/) leader lock; no writable primary produces HTTP 503. Only a precomputed SCRAM-SHA-256 verifier crosses the role-action protocol, never the plaintext password in SQL. Membership replacement is transactional; schema grants connect to the requested database. `roles patch CLUSTER ROLE -f patch.json` changes only supplied fields; `roles update` replaces role attributes.
 
 ProxySQL does not implement every PostgreSQL protocol feature. In particular, clients requesting different result formats per column must select a uniform format (for pgx, use simple protocol or request text results). Supabase's internal services bypass ProxySQL for features such as LISTEN/NOTIFY and logical replication.
 
@@ -281,14 +281,14 @@ Without `-f`, creation requires `--name`; combining a request file with any toke
 creation flag is a usage error (exit 2). Repeat scope/permission flags to add entries.
 `--scope-namespace` restricts the new token; persistent `--namespace/-n` remains
 the request's REST scope. `--expires` accepts an RFC3339 timestamp or a positive
-Go duration relative to creation.
+[Go](https://go.dev/) duration relative to creation.
 
 Omitting all restriction flags creates an unrestricted token. Supplying any
 restriction flag creates an immutable deny overlay; credential reveal defaults
 to disabled, including on otherwise read-only tokens. List/get/create table output
 summarizes restrictions; JSON/YAML retain the full fields. `karactl login` creates
 an unrestricted token. See [restricted API tokens](access-control.md#restricted-api-tokens)
-for scope, permission, issuance and OIDC rules.
+for scope, permission, issuance and [OIDC](https://openid.net/developers/how-connect-works/) rules.
 Distributed PostgreSQL adds `karactl postgres rebalance CLUSTER [--strategy NAME] [--wait]` (PostgreSQL only, not Supabase). `--wait` follows the returned operation; timeout does not cancel it. Worker groups scale through `clusters patch` using `spec.engineOptions.citus.workerGroups`. See [distributed PostgreSQL](postgres/distributed.md) for artifact availability, coordinated recovery and limits.
 
 ### Temporal native access
@@ -333,4 +333,4 @@ karactl -n NS openbao database-connections delete secrets orders --yes
 karactl -n NS backups create secrets beforechange --type raft-snapshot --storage archive
 ```
 
-Reveal prints real shares and the initial root token in every output format; protect stdout and offline custody. It requires the distinct `openbao-unseal-keys:reveal` grant and exact `--confirm`. Connection creation accepts `-f` or `--name`, `--target` and repeatable `--role name:readonly|readwrite[:database]`; TTL flags require positive whole seconds and fill roles without explicit TTLs. RabbitMQ roles in one connection must share the same TTL pair. The returned paths are read through OpenBao with native tokens, not through `karactl`. Shared restart/replace-member/rotate-tls commands manage lifecycle; only catalog-listed forward versions are allowed. Use protected request files for write-only `openbaoUnsealShares` on deleted-source restores/clones. See [OpenBao access](openbao/access-and-tls.md), [operations](openbao/operations.md) and [snapshots](openbao/backups.md).
+Reveal prints real shares and the initial root token in every output format; protect stdout and offline custody. It requires the distinct `openbao-unseal-keys:reveal` grant and exact `--confirm`. Connection creation accepts `-f` or `--name`, `--target` and repeatable `--role name:readonly|readwrite[:database]`; TTL flags require positive whole seconds and fill roles without explicit TTLs. [RabbitMQ](https://www.rabbitmq.com/) roles in one connection must share the same TTL pair. The returned paths are read through [OpenBao](https://openbao.org/) with native tokens, not through `karactl`. Shared restart/replace-member/rotate-tls commands manage lifecycle; only catalog-listed forward versions are allowed. Use protected request files for write-only `openbaoUnsealShares` on deleted-source restores/clones. See [OpenBao access](openbao/access-and-tls.md), [operations](openbao/operations.md) and [snapshots](openbao/backups.md).

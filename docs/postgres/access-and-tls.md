@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL access and TLS
 
-This interface also applies to Supabase's PostgreSQL core. Use namespace-qualified requests and protect credential-bearing files/output. API paths below are relative to `/api/v1/clusters/{cluster}`.
+This interface also applies to [Supabase](https://supabase.com/)'s [PostgreSQL](https://www.postgresql.org/) core. Use namespace-qualified requests and protect credential-bearing files/output. API paths below are relative to `/api/v1/clusters/{cluster}`.
 
 ## Connections
 
@@ -13,11 +13,11 @@ karactl -n NS clusters ca appdb > cluster-ca.pem
 
 The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Backend public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
 
-The managed [Data MCP companion](../data-mcp.md) instead connects directly to non-removing PostgreSQL members on private port 5432, bypassing ProxySQL and (for Supabase) Supavisor. Its multi-host URI uses `target_session_attrs=prefer-standby` for reads and `read-write` for the primary-only write identity, with hostname-verified TLS and the cluster CA when TLS is enabled. This avoids proxy extended-protocol limitations and does not require the optional proxy reader port.
+The managed [Data MCP companion](../data-mcp.md) instead connects directly to non-removing [PostgreSQL](https://www.postgresql.org/) members on private port 5432, bypassing [ProxySQL](https://proxysql.com/) and (for [Supabase](https://supabase.com/)) [Supavisor](https://github.com/supabase/supavisor). Its multi-host URI uses `target_session_attrs=prefer-standby` for reads and `read-write` for the primary-only write identity, with hostname-verified TLS and the cluster CA when TLS is enabled. This avoids proxy extended-protocol limitations and does not require the optional proxy reader port.
 
-Public exposure is opt-in. Zerops can enforce a CIDR allowlist; backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
+Public exposure is opt-in. [Zerops](https://zerops.io/) can enforce a CIDR allowlist; backends without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
 
-On Dokploy, the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
+On [Dokploy](https://dokploy.com/), the public PostgreSQL port is fixed at **5432/tcp** and Swarm ingress
 ports are Swarm-wide, so only one service on that Swarm can publish it. A
 conflicting enable fails promptly with `PublicPortInUse`, leaving the private
 endpoint intact; disable the other service's publication or keep this cluster
@@ -76,7 +76,7 @@ timeouts. The example retries transport establishment only, never SQL. Clients
 must still reconnect after idle/persistent sessions reach the drain deadline or
 after an unplanned failure. An already non-listening or writer-unhealthy proxy
 does not wait out the drain window. Crashes and SIGKILL bypass the graceful hook;
-there is no added failover delay. Nomad renders a 120-second task kill timeout,
+there is no added failover delay. [Nomad](https://developer.hashicorp.com/nomad) renders a 120-second task kill timeout,
 but its client's [`max_kill_timeout`](https://developer.hashicorp.com/nomad/docs/configuration/client#max_kill_timeout)
 defaults to **30 seconds** and caps that request. The 25-second proxy hook leaves
 five seconds for ordinary native exit under that default; a stuck native process
@@ -112,13 +112,13 @@ A non-secret `role.json` can request a generated password:
 
 Creation without a supplied login password returns `generatedPassword` once; rotation also returns a newly generated password. Responses are `no-store`; authorized idempotent retries replay the sealed result. Role reads do not reveal stored passwords. `validUntil` accepts an RFC3339 timestamp. PUT replaces attributes; PATCH changes only supplied fields. Optional `password` belongs only in a protected request document, never command arguments or source control.
 
-Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable; Supabase protects its service identities too. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
+Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable; [Supabase](https://supabase.com/) protects its service identities too. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
 
 In-process callers of `postgres.Access.CreateRole` / `UpdateRole` may additionally
 set `Role.MemberOfAdmin` (`memberOfAdmin,omitempty` on the internal agent/journal
 protocol). Every entry must also appear in `MemberOf`; the same target allowlist
 applies. This is intentionally absent from the public OpenAPI and public role
-responses. OpenBao's dedicated `LOGIN CREATEROLE` account uses both
+responses. [OpenBao](https://openbao.org/)'s dedicated `LOGIN CREATEROLE` account uses both
 `pg_read_all_data` and `pg_write_all_data` in both lists so it can delegate those
 memberships to dynamic roles. Grants use `WITH ADMIN OPTION`; removing only an
 admin entry uses `REVOKE ADMIN OPTION FOR`, preserving ordinary membership.
@@ -127,10 +127,10 @@ additional administrative RBAC checks as other privileged roles. Empty admin
 lists are omitted, preserving existing journal request bytes and receipt hashes.
 
 
-Managed login passwords are sealed and loaded into all proxies because ProxySQL needs recoverable passwords. SQL-created roles/password changes are not automatically imported; manage proxy-facing identities through this API. Access mutations use a freshly resolved writable primary, and HA actions require Patroni's leader lock. No current primary returns unavailable rather than directing writes to a replica. This is direct access administration, not continuous reconciliation of arbitrary SQL changes.
+Managed login passwords are sealed and loaded into all proxies because [ProxySQL](https://proxysql.com/) needs recoverable passwords. SQL-created roles/password changes are not automatically imported; manage proxy-facing identities through this API. Access mutations use a freshly resolved writable primary, and HA actions require [Patroni](https://patroni.readthedocs.io/)'s leader lock. No current primary returns unavailable rather than directing writes to a replica. This is direct access administration, not continuous reconciliation of arbitrary SQL changes.
 
 **Proxy publication is asynchronous.** A role-create `201`, update/rotation
-`200`, or delete `204` confirms the PostgreSQL mutation and managed credential
+`200`, or delete `204` confirms the [PostgreSQL](https://www.postgresql.org/) mutation and managed credential
 storage, not that every ProxySQL instance has applied it. Immediate proxy logins
 can fail with `User not found` or still encounter the preceding password until
 publication completes. Deletion likewise propagates asynchronously; it is not
@@ -242,15 +242,15 @@ karactl -n NS postgres databases delete appdb app --force --yes
 
 Database privileges are CONNECT/CREATE/TEMP; schema privileges are USAGE/CREATE. This is not table/sequence/function ACL management or an arbitrary SQL endpoint. Role/database deletion, grant revocation and password rotation require CLI confirmation or `--yes`.
 
-Both control plane and agent reject CREATE (and any unsupported write privilege) on PostgreSQL system schemas and engine-managed namespaces: `pg_*`, `information_schema`, `_karakoram*`, Supabase's `auth`, `storage`, `realtime`, `_realtime`, `extensions`, `graphql*`, `supabase_*`, `vault`, `pgsodium`, `pgsodium_masks`, `net`, `cron`, `pgbouncer`, `_supavisor` and `_analytics`. USAGE remains available; revoking historical CREATE grants remains allowed. Use an application-owned schema for object creation.
+Both control plane and agent reject CREATE (and any unsupported write privilege) on [PostgreSQL](https://www.postgresql.org/) system schemas and engine-managed namespaces: `pg_*`, `information_schema`, `_karakoram*`, [Supabase](https://supabase.com/)'s `auth`, `storage`, `realtime`, `_realtime`, `extensions`, `graphql*`, `supabase_*`, `vault`, `pgsodium`, `pgsodium_masks`, `net`, `cron`, `pgbouncer`, `_supavisor` and `_analytics`. USAGE remains available; revoking historical CREATE grants remains allowed. Use an application-owned schema for object creation.
 
 When upgrading an existing installation, audit schema ACLs and objects in these namespaces in every database, including `postgres`: a previously issued CREATE grant or malicious overload is not removed automatically. Revoke unauthorized CREATE grants (including inherited/PUBLIC grants), inspect ownership and function definitions, and remove unauthorized objects before resuming privileged management. Grant listing includes system-schema ACLs so existing grants remain visible for revocation.
 
 ## TLS
 
-The default `requireTLS` requires encrypted client authentication; `preferTLS` allows encrypted and plaintext clients; `disabled` disables proxy frontend TLS but does not disable internal etcd/Patroni/replication protection. PostgreSQL data-member TLS remains available for private/internal use. CA sources are `selfSigned` and `userProvided`; the latter requires the CA certificate/signing key and a suitable server certificate/key through the shared TLS inputs. Supplied certificates must cover required member names, loopback and exposed addresses, and permit server/client authentication. Keep private keys out of options and normal request logs.
+The default `requireTLS` requires encrypted client authentication; `preferTLS` allows encrypted and plaintext clients; `disabled` disables proxy frontend TLS but does not disable internal [etcd](https://etcd.io/)/[Patroni](https://patroni.readthedocs.io/)/replication protection. [PostgreSQL](https://www.postgresql.org/) data-member TLS remains available for private/internal use. CA sources are `selfSigned` and `userProvided`; the latter requires the CA certificate/signing key and a suitable server certificate/key through the shared TLS inputs. Supplied certificates must cover required member names, loopback and exposed addresses, and permit server/client authentication. Keep private keys out of options and normal request logs.
 
-Proxy-to-PostgreSQL traffic and ProxySQL's backend monitor require TLS and use the cluster CA through [`pgsql-ssl_p2s_ca`](https://proxysql.com/documentation/global-variables/pgsql-variables/#pgsql-ssl_p2s_ca). Missing or malformed CA material is rejected before applying a proxy configuration; an unrelated backend certificate is rejected by libpq's CA-chain verification. Proxies restart when adopting this trust setting so previously unverified pooled connections are not retained.
+Proxy-to-PostgreSQL traffic and [ProxySQL](https://proxysql.com/)'s backend monitor require TLS and use the cluster CA through [`pgsql-ssl_p2s_ca`](https://proxysql.com/documentation/global-variables/pgsql-variables/#pgsql-ssl_p2s_ca). Missing or malformed CA material is rejected before applying a proxy configuration; an unrelated backend certificate is rejected by libpq's CA-chain verification. Proxies restart when adopting this trust setting so previously unverified pooled connections are not retained.
 
 **Backend hostname verification limitation:** ProxySQL 3.0.11 uses libpq `sslmode=require` with an explicit root certificate for both [query](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Connection.cpp) and [monitor](https://github.com/sysown/proxysql/blob/v3.0.11/lib/PgSQL_Monitor.cpp) connections. With the CA supplied, this authenticates the certificate chain, but it does **not** compare the certificate's names to the configured backend hostname; it is not `verify-full`. Keep the cluster CA/signing key private, use a dedicated CA per cluster, and restrict private backend network access. Client-to-proxy `sslmode=verify-full` and direct PostgreSQL connections are separate TLS legs.
 
@@ -304,18 +304,18 @@ restart receipts are retained until a complete instance observation is available
 
 ## Proxy compatibility
 
-ProxySQL 3.0.11 is a PostgreSQL-aware proxy, not a transparent TCP tunnel. The upstream 3.0 series Stable Tier label is not a PostgreSQL-specific GA or complete protocol guarantee.
+[ProxySQL](https://proxysql.com/) 3.0.11 is a [PostgreSQL](https://www.postgresql.org/)-aware proxy, not a transparent TCP tunnel. The upstream 3.0 series Stable Tier label is not a PostgreSQL-specific GA or complete protocol guarantee.
 
 - LISTEN/NOTIFY forwarding, named portals, Flush semantics, incremental Execute row limits and extended COPY FROM STDIN are unsupported.
 - Mixed result formats per column are unsupported. For pgx, select simple protocol or uniform text results where required.
 - Optional read/write splitting uses SELECT-pattern rules (including a FOR UPDATE exception), not full SQL parsing; read-after-write consistency and every read-with-side-effect pattern are not guaranteed.
 - Failover changes the backend writer; clients must reconnect/retry according to application transaction semantics.
 
-Supabase internal services bypass these limitations using their local raw TCP leader forwarder. This does not change the public application's proxy protocol contract. See [ADR 0034](../adr/0034-postgres-engine.md).
+[Supabase](https://supabase.com/) internal services bypass these limitations using their local raw TCP leader forwarder. This does not change the public application's proxy protocol contract. See [ADR 0034](../adr/0034-postgres-engine.md).
 
 ## Data MCP identities
 
-PostgreSQL and Supabase use the `pgedge-postgres-mcp` companion with separate
+[PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use the `pgedge-postgres-mcp` companion with separate
 `karakoram-mcp-ro` / `karakoram-mcp-rw` system identities, mapped to reserved
 PostgreSQL LOGIN roles `kk_mcp_ro` / `kk_mcp_rw`. Neither has superuser, database
 or role creation, replication, ownership, or RLS bypass privileges. Supabase's
@@ -349,7 +349,7 @@ Database scope is not an isolation boundary against existing PUBLIC grants.
 The companion connects only to its selected scoped database (the first entry).
 
 Credentials always contain all live data-member DNS names, never the proxy, even
-when ProxySQL is configured: PostgreSQL URIs use
+when [ProxySQL](https://proxysql.com/) is configured: PostgreSQL URIs use
 `target_session_attrs=prefer-standby` for reads and `read-write` for writes.
 TLS-enabled clusters supply their CA and `sslmode=verify-full`; disabled TLS
 uses `sslmode=disable`. The credential consumer must install the supplied CA

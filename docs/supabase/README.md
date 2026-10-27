@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Supabase
 
-The `supabase` provider combines the [PostgreSQL core](../postgres/README.md) with modular native Supabase services. This brief guide describes interfaces and limits, not deployment acceptance or complete parity with every upstream hosting feature.
+The `supabase` provider combines the [PostgreSQL core](../postgres/README.md) with modular native [Supabase](https://supabase.com/) services. This brief guide describes interfaces and limits, not deployment acceptance or complete parity with every upstream hosting feature.
 
-Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL pgEdge companion and dedicated non-BYPASSRLS roles, not Supabase service credentials. Database/schema scope and PostgreSQL PUBLIC-grant limitations apply; access is disabled by default.
+Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL [pgEdge](https://www.pgedge.com/) companion and dedicated non-BYPASSRLS roles, not Supabase service credentials. Database/schema scope and PostgreSQL PUBLIC-grant limitations apply; access is disabled by default.
 
 ## At a glance
 
@@ -18,9 +18,9 @@ Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL pgEdge companion a
 | Database access | [PostgreSQL native access API](../postgres/access-and-tls.md); internal services use a local raw TCP leader forwarder, not ProxySQL |
 | Recovery | [pgBackRest/PITR](../postgres/backups.md) for database data, not separate S3 objects or control-plane secrets |
 
-Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and Supavisor 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror for source-built services and the extension bundle. See [components and artifact availability](components.md).
+Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror for source-built services and the extension bundle. See [components and artifact availability](components.md).
 
-The internal leader forwarder uses the backend's declared private IPv4 or IPv6 family for database connections and Patroni probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
+The internal leader forwarder uses the backend's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
 
 ## Create
 
@@ -67,7 +67,7 @@ Options are a strict object. The PostgreSQL `synchronousMode`, `parameters` and 
 - Application/component versions cannot be selected independently of the release lock.
 - Components and extensions without qualified locked bytes are rejected, even if build recipes exist. A mirror cannot add a missing lock entry.
 - Separate database members do not establish host separation; auxiliary replicas are not a service-level HA guarantee.
-- Database restores/clones are not complete application/object-store recovery. Preserve control-plane state/master key and protect S3 objects separately.
+- Database restores/clones are not complete application/object-store recovery. Preserve control-plane state/master key and protect [S3](https://aws.amazon.com/s3/) objects separately.
 - Public application database clients still inherit [ProxySQL protocol limits](../postgres/access-and-tls.md#proxy-compatibility); the internal leader forwarder does not remove those limits.
 
 See [ADR 0035](../adr/0035-supabase-engine.md) and [native artifact operations](../native-artifacts.md).

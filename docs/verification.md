@@ -7,10 +7,10 @@ Verification checks contracts, real engine behavior and deployed workflows at di
 ## What checks establish
 
 - **Local automated checks:** validation, authorization, state transitions, recovery checkpoints and generated-contract consistency.
-- **Docker integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not backend placement or provisioning.
-- **Native PostgreSQL/Supabase integration:** compiled test binaries run with real installed packages/artifacts in disposable Ubuntu 24.04 Incus/LXC system containers; no application-container runtime or image extraction is required for this path.
-- **Native MySQL/PXC integration:** real Percona Server or PXC, ProxySQL and selected XtraBackup/MinIO scenarios from environment-selected artifacts and disposable scratch paths; [prerequisites and focused commands](mysql/verification.md).
-- **Native Weaviate integration:** official native binaries, loopback singleton/three-member formation, API keys/RBAC, client TLS, full S3 recovery, singleton and three-member adjacent-minor upgrades; no Docker prerequisite.
+- **[Docker](https://www.docker.com/) integration:** real engine/agent protocols, TLS, administration and selected snapshot/membership behavior, not backend placement or provisioning.
+- **Native [PostgreSQL](https://www.postgresql.org/)/[Supabase](https://supabase.com/) integration:** compiled test binaries run with real installed packages/artifacts in disposable [Ubuntu](https://ubuntu.com/) 24.04 [Incus](https://linuxcontainers.org/incus/)/[LXC](https://linuxcontainers.org/lxc/) system containers; no application-container runtime or image extraction is required for this path.
+- **Native [MySQL](https://www.oracle.com/mysql/)/[PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) integration:** real [Percona](https://www.percona.com/) Server or PXC, [ProxySQL](https://proxysql.com/) and selected [XtraBackup](https://www.percona.com/mysql/software/percona-xtrabackup)/[MinIO](https://www.min.io/) scenarios from environment-selected artifacts and disposable scratch paths; [prerequisites and focused commands](mysql/verification.md).
+- **Native [Weaviate](https://weaviate.io/) integration:** official native binaries, loopback singleton/three-member formation, API keys/RBAC, client TLS, full [S3](https://aws.amazon.com/s3/) recovery, singleton and three-member adjacent-minor upgrades; no Docker prerequisite.
 - **Deployed checks:** paid platform resources, engine data paths and recovery under the configured prerequisites. Skipped capabilities are unverified, not successful.
 - **Browser checks:** rendered navigation, permissions and workflows. Static checks and backing-API scenarios are not browser automation; no automated browser-workflow suite is supplied.
 
@@ -18,7 +18,7 @@ Inspect individual assertions/skips, terminal operations, observed generations, 
 
 ## Running the checks
 
-Run from the repository root with Go 1.26+. Docker tests need daemon access/image pulls; host-network tests need Linux and unused ports, not a host serving important databases. Install UI dependencies before generated consistency checks. UI helper tests require Node 22+ with experimental TypeScript stripping.
+Run from the repository root with [Go](https://go.dev/) 1.26+. [Docker](https://www.docker.com/) tests need daemon access/image pulls; host-network tests need [Linux](https://www.kernel.org/) and unused ports, not a host serving important databases. Install UI dependencies before generated consistency checks. UI helper tests require [Node](https://nodejs.org/) 22+ with experimental [TypeScript](https://www.typescriptlang.org/) stripping.
 
 ```sh
 # Local unit/HTTP checks:
@@ -33,15 +33,15 @@ make build-all
 make openapi-check
 ```
 
-`make test-integration` selects only the integration-suite directory; the command above includes internal tagged tests too. Local recovery state machines use controlled doubles; actual data/S3 recovery needs deployed checks.
+`make test-integration` selects only the integration-suite directory; the command above includes internal tagged tests too. Local recovery state machines use controlled doubles; actual data/[S3](https://aws.amazon.com/s3/) recovery needs deployed checks.
 
 `TestPostgresBindingsAcrossOpenBaoAndTemporal` in `internal/server` is a normal
 unit test included in `go test ./...`. It uses the production provider composition,
-one shared binding manager, SQLite, authenticated HTTP requests and the real
-PostgreSQL Core against a test HTTPS member-agent protocol. It covers pending
+one shared binding manager, [SQLite](https://sqlite.org/), authenticated HTTP requests and the real
+[PostgreSQL](https://www.postgresql.org/) Core against a test HTTPS member-agent protocol. It covers pending
 and ready bindings, source deletion protection, rotation, credential-free
-inventory/events and destructive versus retained-data release for Temporal and
-OpenBao. The infrastructure backend and member SQL boundary are controlled
+inventory/events and destructive versus retained-data release for [Temporal](https://temporal.io/) and
+[OpenBao](https://openbao.org/). The infrastructure backend and member SQL boundary are controlled
 test doubles; this does not establish native SQL or deployed runtime behavior.
 
 The integration-tagged `TestNativePostgresBindingsAcrossOpenBaoAndTemporal`
@@ -70,7 +70,7 @@ re-applies repair in the same manager after the source restore generation advanc
 Infrastructure deployment, source member identity and consumer runtimes remain
 outside this native access-path test.
 
-Use a disposable project/bucket, secure environment credentials and [suite prerequisites/cleanup](../test/e2e/README.md). Checks create paid services, mutate data and temporarily modify authorization/SSO. Namespace scenarios need a second project, IPv6 CIDR and all storage-creation inputs; serialize them with RBAC/OIDC/settings changes. Elasticsearch deployed scenarios need a same-project private-network runner.
+Use a disposable project/bucket, secure environment credentials and [suite prerequisites/cleanup](../test/e2e/README.md). Checks create paid services, mutate data and temporarily modify authorization/SSO. Namespace scenarios need a second project, IPv6 CIDR and all storage-creation inputs; serialize them with RBAC/[OIDC](https://openid.net/developers/how-connect-works/)/settings changes. [Elasticsearch](https://www.elastic.co/elasticsearch) deployed scenarios need a same-project private-network runner.
 
 ```sh
 export KARAKORAM_E2E_URL=https://karakoram.example.com
@@ -102,7 +102,7 @@ Missing server/UI/PostgreSQL environment variables skip the test: **skip is not 
 
 ### Native PostgreSQL and Supabase integration
 
-Compile on a compatible Linux host, then copy the test binaries into an isolated Ubuntu 24.04 Incus/LXC guest with native Percona packages and required locked artifacts. Run as an unprivileged runtime user, with private disposable data directories and an isolated network namespace: tests own fixed PostgreSQL/service loopback ports. Never run them against production data or alongside important host databases.
+Compile on a compatible Linux host, then copy the test binaries into an isolated [Ubuntu](https://ubuntu.com/) 24.04 [Incus](https://linuxcontainers.org/incus/)/[LXC](https://linuxcontainers.org/lxc/) guest with native [Percona](https://www.percona.com/) packages and required locked artifacts. Run as an unprivileged runtime user, with private disposable data directories and an isolated network namespace: tests own fixed PostgreSQL/service loopback ports. Never run them against production data or alongside important host databases.
 
 ```sh
 go test -c -tags integration -o /tmp/postgres-native.test ./internal/agent/postgres
@@ -111,7 +111,7 @@ go test -c -tags integration -o /tmp/envoy-native.test ./internal/agent/supabase
 go test -c -tags integration -o /tmp/pgbackrest-inventory.test ./internal/backupstorage
 ```
 
-Inside the prepared guest, set `KARAKORAM_PG_BIN_DIR` to the installed PostgreSQL bin directory. PostgreSQL cases additionally require the native utilities used by their selected scenario (including ProxySQL/pgBackRest); major-upgrade coverage needs both major packages and `KARAKORAM_PG_UPGRADE=1`. Supabase API cases require `KARAKORAM_SUPABASE_AUTH_DIR`, `KARAKORAM_SUPABASE_REST_DIR` and `KARAKORAM_SUPABASE_GATEWAY_DIR`. Gateway conformance uses `KARAKORAM_ENVOY_BIN`; Vector uses `KARAKORAM_SUPABASE_VECTOR_DIR`. Additional component cases select installed Storage/Realtime/meta/Studio directories with the corresponding `KARAKORAM_SUPABASE_*_DIR` variables and need their actual artifacts. Storage object tests also need securely injected `KARAKORAM_SUPABASE_S3_*` settings for a disposable S3 destination.
+Inside the prepared guest, set `KARAKORAM_PG_BIN_DIR` to the installed PostgreSQL bin directory. PostgreSQL cases additionally require the native utilities used by their selected scenario (including [ProxySQL](https://proxysql.com/)/[pgBackRest](https://pgbackrest.org/)); major-upgrade coverage needs both major packages and `KARAKORAM_PG_UPGRADE=1`. [Supabase](https://supabase.com/) API cases require `KARAKORAM_SUPABASE_AUTH_DIR`, `KARAKORAM_SUPABASE_REST_DIR` and `KARAKORAM_SUPABASE_GATEWAY_DIR`. Gateway conformance uses `KARAKORAM_ENVOY_BIN`; [Vector](https://vector.dev/) uses `KARAKORAM_SUPABASE_VECTOR_DIR`. Additional component cases select installed Storage/Realtime/meta/Studio directories with the corresponding `KARAKORAM_SUPABASE_*_DIR` variables and need their actual artifacts. Storage object tests also need securely injected `KARAKORAM_SUPABASE_S3_*` settings for a disposable S3 destination.
 
 Run the copied binary with its normal `-test.v`/`-test.run` options after provisioning these prerequisites. Consult the integration source for the exact selected case's inputs; missing variables mean **skipped**, not passed. Native artifact build/qualification commands and resource safeguards are in [native artifacts](native-artifacts.md). Remove disposable guests and objects after capturing private, redacted evidence. Native protocol tests do not establish backend provisioning, public networking, independent placement or complete restore/clone behavior; those need deployment-level scenarios.
 
@@ -120,12 +120,12 @@ Run the copied binary with its normal `-test.v`/`-test.run` options after provis
 OpenBao coverage has separate layers; test existence is not a claim that this checkout or your deployment passed:
 
 - **Unit/API/CLI tests:** option admission, encrypted initialization receipts, secret-free configuration/status, reveal authorization/audit, connection target authorization, quorum-safe membership and rolling ordering, resumable snapshot backup/restore/clone, and seal/storage seams.
-- **Native agent integration:** `TestNativeOpenBao` in `internal/agent/openbao/integration_test.go` runs three real OpenBao members with TLS, encrypted initialization receipt replay/acknowledgement, Raft formation, process crash/restart, explicit re-unseal, certificate hot reload and metrics. Declarative MongoDB plugin registration is optional; this is not a database-credential issuance test.
+- **Native agent integration:** `TestNativeOpenBao` in `internal/agent/openbao/integration_test.go` runs three real OpenBao members with TLS, encrypted initialization receipt replay/acknowledgement, Raft formation, process crash/restart, explicit re-unseal, certificate hot reload and metrics. Declarative [MongoDB](https://www.mongodb.com/) plugin registration is optional; this is not a database-credential issuance test.
 - **Native control-plane integration:** `TestNativeControlPlane` in `internal/engine/openbao/native_integration_test.go` drives provider reconciliation with real member agents/OpenBao: formation and reveal, secret-leak checks, automatic re-unseal after a child restart, rolling restart, 3→5→3 scaling, replacement, snapshot backup/restore through a signed S3 test endpoint, and a native PostgreSQL connection with real credential issuance and cleanup while dynamic leases remain outstanding. PostgreSQL target identity operations use a SQL-backed test adapter against the native server, not a deployed PostgreSQL member-agent path. Its infrastructure/S3 harness does not establish real backend or external S3 acceptance.
 - **Native PostgreSQL-storage integration:** `TestNativeControlPlanePostgresStorage` uses real agents/OpenBao and a SQL-backed binding adapter to create the PostgreSQL database/role, initialize and unseal three HA peers, check native storage/HA tables, recover data after every local member volume is replaced, and verify destructive versus retained-data/NOLOGIN release. It does not establish production binding inventory, source deletion protection or credential custody; concrete PgPlatform manager injection and merged API/CLI/UI composition acceptance remain prerequisites.
 - **Native deleted-source clone integration:** `TestNativeControlPlaneCloneDeletedSource` exports a snapshot from a real singleton source, deletes its processes/volumes/secrets/record, then force-restores three native members using offline supplied shares. It checks differing source/target thresholds, recovered data, explicit native seal/unseal, management authentication and cleanup. Infrastructure and the signed S3 endpoint are test fakes, not production backend or real S3 acceptance.
-- **Manual native development proofs:** MongoDB TLS replica-set configuration, independent hyphenated connection/role names, root rotation and readonly/readwrite credential issuance/revocation; RabbitMQ HTTPS management and TLS AMQP issuance, readonly versus readwrite authorization, vhost isolation and revocation. Native target processes and OpenBao were real; these scratch development checks are not permanent automated-suite or deployed control-plane coverage.
-- **Pending live verification:** all Zerops/Dokploy/Nomad workflows, production binding-service composition, real S3 restore/clone, transit/KMS external dependencies and external access. A newer-version rolling upgrade also awaits a newer catalog entry.
+- **Manual native development proofs:** MongoDB TLS replica-set configuration, independent hyphenated connection/role names, root rotation and readonly/readwrite credential issuance/revocation; [RabbitMQ](https://www.rabbitmq.com/) HTTPS management and TLS AMQP issuance, readonly versus readwrite authorization, vhost isolation and revocation. Native target processes and OpenBao were real; these scratch development checks are not permanent automated-suite or deployed control-plane coverage.
+- **Pending live verification:** all [Zerops](https://zerops.io/)/[Dokploy](https://dokploy.com/)/[Nomad](https://developer.hashicorp.com/nomad) workflows, production binding-service composition, real S3 restore/clone, transit/KMS external dependencies and external access. A newer-version rolling upgrade also awaits a newer catalog entry.
 
 Native tests require an unprivileged Linux user, disposable directories and unused loopback ports, not Docker or production data. Set `KARAKORAM_OPENBAO_BIN` to the native `bao` executable and `KARAKORAM_PG_BIN_DIR` to the native PostgreSQL binary directory for the control-plane credential scenario. The agent's optional plugin case uses `KARAKORAM_OPENBAO_MONGODB_PLUGIN`; the native-artifact installation test for the locked OpenBao archives runs when `KARAKORAM_OPENBAO_ARTIFACT_DIR` names a directory containing them; the control-plane harness requires the locked MongoDB plugin archive beside `bao` or this explicit executable override. Consult the integration sources for exact binary prerequisites and skip conditions. An unset opt-in variable can skip a native case; a prerequisite missing from an enabled scenario can fail it. Skipped is not passed.
 
@@ -158,7 +158,7 @@ This is a Linux active-generation guarantee, not retroactive cleanup of
 descendants from generations already authorized for natural-exit reaping.
 Natural exits retain their existing no-descendant-signalling semantics.
 Non-Linux launches retain existing support but lack the Linux group-death proof;
-their timeout escalation targets only the direct child. A canceled Galera
+their timeout escalation targets only the direct child. A canceled [Galera](https://galeracluster.com/)
 recovery launcher must exit without starting another mysqld; recovery still runs
 only at the actual stopped-to-starting boundary.
 
@@ -220,13 +220,13 @@ Coverage descriptions, not evidence that this checkout or deployment passed:
 | Control plane: auth/RBAC/OIDC, namespaces/relays | Local identity/policy/transport | Accounts/OIDC, second-project management/recovery | Restricted direct navigation, group grants, relay health |
 | Installation/state/admin recovery | Local startup/recovery contracts | No dedicated installer scenario | Complete checklist below |
 
-Recorded live Elasticsearch checks include Stack and dedicated-master formation, data/access, lifecycle and snapshot recovery; they are functional evidence on disposable data, not durability/load certification.
+Recorded live [Elasticsearch](https://www.elastic.co/elasticsearch) checks include Stack and dedicated-master formation, data/access, lifecycle and snapshot recovery; they are functional evidence on disposable data, not durability/load certification.
 
 ## Browser and installation checklists
 
 With admin/restricted accounts on a disposable deployment:
 
-1. Exercise sign-in/password change, expiry/refresh, sign-out and configured OIDC; verify restricted direct navigation and credential-reveal boundaries.
+1. Exercise sign-in/password change, expiry/refresh, sign-out and configured [OIDC](https://openid.net/developers/how-connect-works/); verify restricted direct navigation and credential-reveal boundaries.
 2. Create each needed topology; change settings, observe convergence and test application access. Verify backups by recovered contents independently.
 3. Inspect charts/logs/events/operations; refresh nested routes, reconnect event replay and exercise request failures. Switch namespaces and verify same-named objects and source-export permissions remain isolated.
 4. Confirm state mount, singleton, project-scoped token, preserved key, public HTTPS and private agent connectivity; never publish 9443.

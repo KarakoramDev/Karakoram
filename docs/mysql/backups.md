@@ -4,11 +4,11 @@
 
 [Overview](README.md) · [Access](access-and-tls.md) · [Operations](operations.md)
 
-Replication is not a backup. Register and verify an S3 backup storage, select it on the cluster, schedule full backups and test recovery into an independent cluster. Use the shared [backup storage and retention guide](../backups.md) for permissions and storage registration; MySQL/PXC use the provider-specific rules below.
+Replication is not a backup. Register and verify an [S3](https://aws.amazon.com/s3/) backup storage, select it on the cluster, schedule full backups and test recovery into an independent cluster. Use the shared [backup storage and retention guide](../backups.md) for permissions and storage registration; [MySQL](https://www.mysql.com/)/[PXC](https://docs.percona.com/percona-xtradb-cluster/) use the provider-specific rules below.
 
 ## Physical backup chains
 
-Both providers stream XtraBackup through `xbcloud` to S3 without staging the full archive locally. Types are `full` and LSN-based `incremental`, not `logical`, `physical`, `diff` or `incr`. Each incremental depends on a successful parent in the same repository incarnation and server major. Preserve the full root and every intervening incremental. The pinned compatible XtraBackup release performs its normal server-version check; numerical patch values across the two products are not directly comparable.
+Both providers stream [XtraBackup](https://docs.percona.com/percona-xtrabackup/) through `xbcloud` to S3 without staging the full archive locally. Types are `full` and LSN-based `incremental`, not `logical`, `physical`, `diff` or `incr`. Each incremental depends on a successful parent in the same repository incarnation and server major. Preserve the full root and every intervening incremental. The pinned compatible XtraBackup release performs its normal server-version check; numerical patch values across the two products are not directly comparable.
 
 ```sh
 karactl -n NS backups create CLUSTER baseline --type full --storage ARCHIVE
@@ -49,7 +49,7 @@ the frozen-plan verification immediately before replacing the datadir.
 The sealed manifest protects the selected **physical snapshot** against
 repository substitution; frozen-plan checks also detect later staging changes.
 Continuous binary-log archives remain trusted repository input before initial
-preflight, as PostgreSQL WAL and PSMDB/PBM oplog archives do. Their self-checksums
+preflight, as [PostgreSQL](https://www.postgresql.org/) WAL and [PSMDB](https://docs.percona.com/percona-server-for-mongodb/)/[PBM](https://docs.percona.com/percona-backup-mongodb/) oplog archives do. Their self-checksums
 are not off-repository authentication against a writer replacing both logs and
 sidecars. Source/position binding rejects incompatible honest histories, not a
 forged canonical stream. See the [shared continuous-archive trust boundary](../security.md#backup-repositories-and-continuous-log-writers).
@@ -79,7 +79,7 @@ completion timestamp. Retained pre-full binary logs are not eligible merely
 because they contain a GTID absent from that full: the same old row can have
 been recorded under another SID or a shifted sequence number. Latest, GTID and
 time recovery must all prove the snapshot-to-archive boundary before replay.
-This rule applies to Percona Server singletons, Group Replication and PXC.
+This rule applies to [Percona Server](https://docs.percona.com/percona-server/) singletons, Group Replication and PXC.
 Unproven lineage stops the advertised recovery window; it is not repaired by
 skipping unknown events or resetting GTID history.
 
@@ -100,7 +100,7 @@ karactl -n NS backups pitr-window CLUSTER -o json
 
 ## PXC GTID continuity
 
-Galera `Synced` and matching rows are not sufficient proof of MySQL GTID
+[Galera](https://galeracluster.com/) `Synced` and matching rows are not sufficient proof of MySQL GTID
 continuity. On the pinned PXC 8.0.46-38.1 and 8.4.11-11.1 releases, a missing-write
 IST rejoin can assign a replicated application row a different GTID on the
 receiver, including a SID that is the bitwise inverse of the Galera state UUID.

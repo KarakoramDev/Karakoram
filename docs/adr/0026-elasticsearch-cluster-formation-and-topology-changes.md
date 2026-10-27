@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Elasticsearch bootstrap is not ongoing discovery. Reapplying `cluster.initial_master_nodes` after formation can create a different cluster instead of recovering the existing one. Restarts, shard evacuation and master voting changes require different safety gates ([bootstrapping](https://www.elastic.co/docs/deploy-manage/distributed-architecture/discovery-cluster-formation/modules-discovery-bootstrap-cluster), [node removal](https://www.elastic.co/docs/deploy-manage/maintenance/add-and-remove-elasticsearch-nodes)).
+[Elasticsearch](https://www.elastic.co/elasticsearch) bootstrap is not ongoing discovery. Reapplying `cluster.initial_master_nodes` after formation can create a different cluster instead of recovering the existing one. Restarts, shard evacuation and master voting changes require different safety gates ([bootstrapping](https://www.elastic.co/docs/deploy-manage/distributed-architecture/discovery-cluster-formation/modules-discovery-bootstrap-cluster), [node removal](https://www.elastic.co/docs/deploy-manage/maintenance/add-and-remove-elasticsearch-nodes)).
 
 ## Decision
 
@@ -23,7 +23,7 @@ Serialize rolling restarts, version changes and restart-relevant settings/resour
 3. Change and restart/redeploy one node; observe its rejoin and expected version.
 4. Clear the allocation override and wait for green or acceptable yellow before proceeding.
 
-Order data-only nodes first, then non-elected master-eligible nodes, with the elected master last. Persist per-member progress so reconciliation resumes the same step. After Elasticsearch completes, upgrade Kibana with all its instances stopped, then Logstash, then APM Server. Never run mixed Kibana versions ([Kibana upgrade](https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster/kibana)).
+Order data-only nodes first, then non-elected master-eligible nodes, with the elected master last. Persist per-member progress so reconciliation resumes the same step. After Elasticsearch completes, upgrade [Kibana](https://www.elastic.co/kibana) with all its instances stopped, then [Logstash](https://www.elastic.co/logstash), then [APM Server](https://www.elastic.co/observability/application-performance-monitoring). Never run mixed Kibana versions ([Kibana upgrade](https://www.elastic.co/docs/deploy-manage/upgrade/deployment-or-cluster/kibana)).
 
 Scale-up provisions a fresh monotonic node identity, updates seed files and waits for join/rebalance. Scale-down drains one node at a time: ensure remaining data nodes can hold the maximum configured replica count plus a primary; merge the departing name into persistent `cluster.routing.allocation.exclude._name`; wait for zero shards on that node and no relocation. Report `ShardDrainBlocked` rather than deleting when placement cannot satisfy the drain. For a master-eligible node, add a voting-configuration exclusion and wait before stopping it; remove only one master at a time and never the last. Delete runtime before volume, remove only the owned allocation exclusion, clear voting exclusions after departure with `wait_for_removal=true`, and update seed files ([allocation settings](https://www.elastic.co/docs/reference/elasticsearch/configuration-reference/cluster-level-shard-allocation-routing-settings), [voting exclusions](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-cluster-post-voting-config-exclusions)). Dedicated-master count changes are 3↔5, serialized through those steps.
 
@@ -35,7 +35,7 @@ Maintenance may wait for replica capacity, disk space, recovery or quorum. Yello
 
 ## Alternatives considered
 
-- **Node Shutdown API as used by ECK:** convenient restart/remove/replace intents, but Elastic explicitly documents direct use as unsupported; Karakoram uses supported self-managed operations ([API contract](https://www.elastic.co/docs/api/doc/elasticsearch/v8/operation/operation-shutdown-put-node)).
+- **Node Shutdown API as used by [ECK](https://www.elastic.co/elastic-cloud-kubernetes):** convenient restart/remove/replace intents, but Elastic explicitly documents direct use as unsupported; Karakoram uses supported self-managed operations ([API contract](https://www.elastic.co/docs/api/doc/elasticsearch/v8/operation/operation-shutdown-put-node)).
 - **`discovery.type: single-node`:** convenient first startup, but prevents joining additional nodes while enabled and requires a configuration transition to expand.
 - **Static seed lists:** sufficient for fixed deployments, but introduce avoidable restarts/stale discovery during topology changes.
 - **Delete before drain or replace in place:** can lose shard copies or quorum and reuses identity; rejected in favor of add-then-drain.

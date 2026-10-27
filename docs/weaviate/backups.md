@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Weaviate backups and recovery
 
-Weaviate uses native `backup-s3` **full** backups, with members writing directly to S3. No incremental chain, replica deduplication or point-in-time recovery is supported. Backups protect native collection/schema, object/vector data and native user/role state; they do not replace [control-plane state protection](../operations.md#control-plane-state-backup-and-recovery).
+[Weaviate](https://weaviate.io/) uses native `backup-s3` **full** backups, with members writing directly to [S3](https://aws.amazon.com/s3/). No incremental chain, replica deduplication or point-in-time recovery is supported. Backups protect native collection/schema, object/vector data and native user/role state; they do not replace [control-plane state protection](../operations.md#control-plane-state-backup-and-recovery).
 
 ## Bind storage
 

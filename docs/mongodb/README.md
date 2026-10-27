@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MongoDB
 
-Manage Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM) on Zerops.
+Manage [Percona Server for MongoDB](https://docs.percona.com/percona-server-for-mongodb/) (PSMDB) and [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/) (PBM) on [Zerops](https://zerops.io/).
 
 Opt-in [cluster data MCP](../data-mcp.md) uses a private `mongodb-mcp-server` companion and separate scoped read/write users. Configure `scope.databases`; system databases cannot be scoped. It is disabled by default and independent of ordinary credential reveal.
 
@@ -62,7 +62,7 @@ Use the [replica-set checklist and CLI alternative](replica-sets.md) or [sharded
 - No arbitrary package versions, downgrades or skipped-major upgrades; [binary upgrades and explicit FCV](operations.md) are separate.
 - Overrides cannot replace managed networking/authentication/TLS/replication/sharding/process/logging/dbpath/cache settings.
 - Public seeds are not external replica-set HA; read [public exposure and discovery](access-and-tls.md#public-exposure-and-discovery).
-- Shared SeaweedFS dbpaths and live volume archives are not supported MongoDB recovery substitutes; use [PBM](backups.md).
+- Shared [SeaweedFS](https://seaweedfs.com/) dbpaths and live volume archives are not supported MongoDB recovery substitutes; use [PBM](backups.md).
 - Restore is disruptive, compatibility-bound and not necessarily a complete logical rollback; [restore and clone](backups.md) define coverage and retained-snapshot requirements.
 - Count retention does not guarantee PITR duration; inspect observed continuous windows after backup/storage changes.
 - [Monitoring and process tails](operations.md#monitoring-vocabulary) have bounded coverage; see [log retention](../operations.md#health-and-logs).

@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Some MySQL users want synchronous multi-node replication with Galera semantics (virtually synchronous commit, certification, every node a candidate writer) rather than Group Replication. Percona XtraDB Cluster (PXC) ships its own server binaries with the Galera library, its own state transfer (SST/IST) and its own full-outage recovery rules. Its backups are XtraBackup backups, but a PXC data directory carries Galera state that a Percona Server cluster does not.
+Some [MySQL](https://www.mysql.com) users want synchronous multi-node replication with [Galera](https://galeracluster.com) semantics (virtually synchronous commit, certification, every node a candidate writer) rather than Group Replication. [Percona XtraDB Cluster](https://docs.percona.com/percona-xtradb-cluster/) (PXC) ships its own server binaries with the Galera library, its own state transfer (SST/IST) and its own full-outage recovery rules. Its backups are [XtraBackup](https://docs.percona.com/percona-xtrabackup/) backups, but a PXC data directory carries Galera state that a [Percona Server](https://docs.percona.com/percona-server/) cluster does not.
 
 ## Decision
 
@@ -24,7 +24,7 @@ The dedicated traffic root has subject `<cluster>-galera-ca`, distinct from the 
 
 ### Writer and routing
 
-Although Galera accepts writes on every node, clients get a single writer: ProxySQL `mysql_galera_hostgroups` with writer/backup-writer/reader/offline hostgroups 10/11/20/30, `max_writers=1` and `writer_is_also_reader=2`. Traffic eligibility is `wsrep_cluster_status=Primary`, `wsrep_local_state=Synced` and `wsrep_ready=ON`, not TCP reachability. A node in a non-Primary component returns error 1047 to reads and writes and is removed from routing. A query that times out during writer failover has an unknown commit outcome; applications need idempotent retries.
+Although Galera accepts writes on every node, clients get a single writer: [ProxySQL](https://proxysql.com) `mysql_galera_hostgroups` with writer/backup-writer/reader/offline hostgroups 10/11/20/30, `max_writers=1` and `writer_is_also_reader=2`. Traffic eligibility is `wsrep_cluster_status=Primary`, `wsrep_local_state=Synced` and `wsrep_ready=ON`, not TCP reachability. A node in a non-Primary component returns error 1047 to reads and writes and is removed from routing. A query that times out during writer failover has an unknown commit outcome; applications need idempotent retries.
 
 ### Formation and recovery
 

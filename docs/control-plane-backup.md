@@ -1,6 +1,6 @@
 # Control-plane backup and rebuild
 
-Control-plane backups preserve SQLite coordinator state, not database-engine data. Continue using [database backups](backups.md) for application data. The control plane remains a single-replica service.
+Control-plane backups preserve [SQLite](https://sqlite.org/) coordinator state, not database-engine data. Continue using [database backups](backups.md) for application data. The control plane remains a single-replica service.
 
 This Ops feature is **verified offline** (tests without a live backend). A successful state snapshot does not establish engine-data recovery or a backend rebuild recovery-time guarantee.
 
@@ -16,7 +16,7 @@ karactl control-plane backups run -o json
 karactl control-plane backups list --limit 100 -o yaml
 ```
 
-`--storage` accepts `[namespace/]name`; without a namespace it uses the selected namespace, or `default`. The storage must already exist and be S3-compatible; verification is recommended but not required. A policy-referenced storage cannot be deleted. `set` replaces policy, rather than patching it; defaults are disabled, `0 3 * * *`, and 14 retained successful backups. Supply all desired fields, or use an API-shaped `-f` file. Retention is 1–1000.
+`--storage` accepts `[namespace/]name`; without a namespace it uses the selected namespace, or `default`. The storage must already exist and be [S3](https://aws.amazon.com/s3/)-compatible; verification is recommended but not required. A policy-referenced storage cannot be deleted. `set` replaces policy, rather than patching it; defaults are disabled, `0 3 * * *`, and 14 retained successful backups. Supply all desired fields, or use an API-shaped `-f` file. Retention is 1–1000.
 
 Schedules use five-field UTC cron with at most one catch-up. Manual runs use the same controller, storage policy and retention as scheduled runs. Only one backup executes at a time. Records progress through Pending, Running, Succeeded or Failed. Inspect the completed record: acceptance of `run` is not evidence of a usable backup. Failures emit `ControlPlaneBackupFailed` warning events.
 
@@ -35,10 +35,10 @@ The timestamp is `YYYYMMDDTHHMMSSZ`. The JSON manifest contains `format: karakor
 
 A snapshot includes desired state, inventory, operation journals, accounts, policies, installation identity, sealed secrets and PKI. Secrets and private keys remain sealed using the original master key. **The master key is not in the backup.** Preserve `KARAKORAM_MASTER_KEY` independently, securely, and test recovery. The fingerprint detects a wrong key; it is not a substitute for a strong master key or trusted backup custody. Hashes detect corruption, not malicious replacement of both archive and manifest.
 
-SQLite `VACUUM INTO` snapshots every table, including `postgres_bindings` and its source-incarnation/dependency metadata, not a hand-maintained table allowlist. Desired options, internal lifecycle journals and sealed cluster secrets for all registered engines are included, including Keycloak, OpenBao, Temporal, MySQL, PXC, Neo4j and Weaviate. These records do not include those engines' external data or volumes.
+SQLite `VACUUM INTO` snapshots every table, including `postgres_bindings` and its source-incarnation/dependency metadata, not a hand-maintained table allowlist. Desired options, internal lifecycle journals and sealed cluster secrets for all registered engines are included, including [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/). These records do not include those engines' external data or volumes.
 
 The snapshot includes API-token hashes and immutable restriction metadata,
-OAuth grant/token hashes, and sealed Data MCP companion state/configuration.
+[OAuth](https://oauth.net/2/) grant/token hashes, and sealed Data [MCP](https://modelcontextprotocol.io/) companion state/configuration.
 Raw API-token bearer secrets are not stored; Data MCP credentials stay in their
 existing sealed cluster-secret records. Snapshots are complete installation
 recovery artifacts, not restricted-token exports: protect backup storage and
@@ -90,21 +90,21 @@ For every backend: isolate the old coordinator, retain engine services/volumes, 
 
 1. Stop or isolate the old control-plane service; do not delete database member services or their storage.
 2. Redeploy the control-plane service with a persistent data mount and a compatible binary. Keep normal startup disabled while preparing recovery.
-3. Restore the original master key, Zerops backend token/project configuration and public/advertised endpoints from independent secret/configuration custody. These environment settings are not recovered by restoring SQLite.
+3. Restore the original master key, [Zerops](https://zerops.io/) backend token/project configuration and public/advertised endpoints from independent secret/configuration custody. These environment settings are not recovered by restoring SQLite.
 4. Run offline restore against the mounted data directory, then enable normal startup. Check namespace connectivity and existing member trust before accepting mutations.
 
 ### Nomad
 
 1. Stop the old control-plane allocation/job without purging member jobs or CSI volumes.
 2. Redeploy the control-plane job with one allocation, the intended persistent state volume and compatible binary; use a one-shot recovery task or an allocation shell before enabling the server task.
-3. Reinstall the same master key and the independently retained Nomad endpoint, namespace/region, ACL token, TLS and advertised-address configuration; see [Nomad](nomad.md).
+3. Reinstall the same master key and the independently retained [Nomad](https://developer.hashicorp.com/nomad) endpoint, namespace/region, ACL token, TLS and advertised-address configuration; see [Nomad](nomad.md).
 4. Restore on the mounted volume, remove the recovery override and start one server allocation. Verify backend access and member connectivity before resuming automated work.
 
 ### Dokploy
 
 1. Stop the old control-plane application/container and prevent automatic restart; retain database applications/services and volumes.
 2. Redeploy only the control-plane application with its persistent data volume and compatible binary, temporarily overriding normal server startup for recovery.
-3. Reapply the original master key and independently saved Dokploy API token, endpoint and deployment/public-address configuration; see [Dokploy](dokploy.md).
+3. Reapply the original master key and independently saved [Dokploy](https://dokploy.com/) API token, endpoint and deployment/public-address configuration; see [Dokploy](dokploy.md).
 4. Run offline restore on the mounted state directory, restore the normal command, then start one replica. Review application ownership and member reachability before permitting changes.
 
 ## Stale snapshots

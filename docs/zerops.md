@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Zerops backend
 
-Zerops is Karakoram's reference infrastructure backend. It supplies Ubuntu runtimes, Local Storage and public routing in an **existing Zerops project**; Karakoram owns the engine topology, credentials, health and recovery. Karakoram does not create the project or manage its system `core` service.
+[Zerops](https://zerops.io/) is Karakoram's reference infrastructure backend. It supplies [Ubuntu](https://ubuntu.com/) runtimes, Local Storage and public routing in an **existing Zerops project**; Karakoram owns the engine topology, credentials, health and recovery. Karakoram does not create the project or manage its system `core` service.
 
 For a backend comparison, see [Backends](backends.md). For engine configuration and supported topologies, start with [MongoDB](mongodb/README.md), [PostgreSQL](postgres/README.md), [Supabase](supabase/README.md), [RabbitMQ](rabbitmq/README.md) or [Elasticsearch](elasticsearch/README.md).
 
@@ -45,7 +45,7 @@ Backend capabilities do not establish engine availability or independent failure
 - Capacity for the control plane: one Ubuntu 24.04 container, shared CPU, 0.5–1 GiB RAM, 1–2 GiB runtime disk and a separate 5 GiB Local Storage volume. A LIGHT project can host this footprint, but cluster services need additional capacity.
 - Available control-plane service names, normally `karakoram` and `karakoramdata`. Additional targets need capacity and a free relay hostname, normally `karakoramrelay`.
 - For public TCP, project IPv6 or dedicated IPv4 and clients that can reach the chosen address family. Shared IPv4 HTTP routing is not a generic database TCP gateway.
-- For a local checkout deployment, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt installation needs no local Go or Node toolchain.
+- For a local checkout deployment, authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt installation needs no local [Go](https://go.dev/) or [Node](https://nodejs.org/) toolchain.
 
 Full access without sudo mode cannot read sensitive environment values, but it retains infrastructure mutation authority. Keep the token server-side and preserve service environment isolation. Karakoram is not a sandbox against project administrators. See [Security](security.md).
 
@@ -95,7 +95,7 @@ Placement groups are heuristic observations, not authoritative host identities o
 
 Runtime root disks are wiped on deployment. Engine data belongs only on its assigned persistent volume, not the root disk or a shared filesystem. Local Storage has a 5 GB minimum; mounted capacity follows the volume service's `maxDisk`, not runtime disk or volume `minDisk`. Growth is supported, but reducing either desired persistent disk bound is rejected. Retaining a volume does not replicate its contents or move them to another host.
 
-Use [engine-native backups](backups.md), not live Local Storage archives, for consistent database recovery. Back up control-plane SQLite state consistently and keep its original master key; see [control-plane state backup and recovery](operations.md#control-plane-state-backup-and-recovery).
+Use [engine-native backups](backups.md), not live Local Storage archives, for consistent database recovery. Back up control-plane [SQLite](https://www.sqlite.org/) state consistently and keep its original master key; see [control-plane state backup and recovery](operations.md#control-plane-state-backup-and-recovery).
 
 ## Public TCP and HTTPS
 
@@ -103,7 +103,7 @@ Engines are private by default. Explicit public TCP exposure uses a project publ
 
 Route synchronization is project-wide. The backend accounts for other services' routes, including staged/deleting routes, when allocating ports, and waits for the synchronization Process and observable route state. `Ready` or `isSynced` is not proof of external reachability: test allowed and denied clients independently, including address-family connectivity.
 
-Discovery-based clients may need more than one reachable seed endpoint. For MongoDB, external discovery must reach the required members with matching advertised addresses, DNS and certificate SANs. Follow the engine's access guide rather than exposing only the primary or substituting one load-balanced seed. See [MongoDB access and TLS](mongodb/access-and-tls.md) and [ADR 0017](adr/0017-public-tcp-exposure.md).
+Discovery-based clients may need more than one reachable seed endpoint. For [MongoDB](https://www.mongodb.com/), external discovery must reach the required members with matching advertised addresses, DNS and certificate SANs. Follow the engine's access guide rather than exposing only the primary or substituting one load-balanced seed. See [MongoDB access and TLS](mongodb/access-and-tls.md) and [ADR 0017](adr/0017-public-tcp-exposure.md).
 
 Managed public HTTPS is separate from public TCP. For supported HTTP components, the backend enables Zerops subdomain access and reports HTTPS URLs for HTTP-enabled runtime ports. Zerops terminates TLS at its shared L7 balancer and forwards HTTP to the runtime. This is not end-to-end engine TLS or a TCP database endpoint. The control-plane UI/API uses public HTTPS to port 8080; keep the private agent listener on TLS 9443 unexposed. Custom control-plane domains are covered in [Install](install.md).
 

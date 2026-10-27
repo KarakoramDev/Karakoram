@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Sharding
 
-Provision config servers, shard replica sets and mongos routing for PSMDB.
+Provision config servers, shard replica sets and mongos routing for [PSMDB](https://docs.percona.com/percona-server-for-mongodb/).
 
 ## At a glance
 
@@ -16,7 +16,7 @@ These are validation bounds, not load-tested maxima or a project-capacity guaran
 
 ## Create
 
-In **Create cluster → MongoDB**, choose **Sharded**, configure each component, and review the complete runtime/storage footprint. The **sharded** preset is described in the [overview](README.md).
+In **Create cluster → [MongoDB](https://www.mongodb.com/)**, choose **Sharded**, configure each component, and review the complete runtime/storage footprint. The **sharded** preset is described in the [overview](README.md).
 
 CLI alternative:
 

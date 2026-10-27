@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Temporal is a workflow service, not a database. Its server is four stateless roles (frontend, history, matching, internal worker) whose durable state lives entirely in a persistence store and a visibility store. Running it well needs the database lifecycle Karakoram already has for PostgreSQL (HA, pgBackRest backups, PITR, restore, upgrades) plus Temporal-specific concerns: versioned schema migrations, an immutable history shard count, internode and client TLS, namespaces, a Web UI, independent role scaling and strictly sequential server upgrades. Duplicating PostgreSQL lifecycle inside a Temporal provider would create a second, weaker database implementation.
+[Temporal](https://temporal.io) is a workflow service, not a database. Its server is four stateless roles (frontend, history, matching, internal worker) whose durable state lives entirely in a persistence store and a visibility store. Running it well needs the database lifecycle Karakoram already has for [PostgreSQL](https://www.postgresql.org) (HA, [pgBackRest](https://pgbackrest.org) backups, PITR, restore, upgrades) plus Temporal-specific concerns: versioned schema migrations, an immutable history shard count, internode and client TLS, namespaces, a Web UI, independent role scaling and strictly sequential server upgrades. Duplicating PostgreSQL lifecycle inside a Temporal provider would create a second, weaker database implementation.
 
 ## Decision
 
@@ -14,7 +14,7 @@ Add a `temporal` provider. `spec.version` is the Temporal server version. Every 
 
 Persistence and visibility always live in a Karakoram PostgreSQL cluster referenced through the generic PostgreSQL binding (ADR 0045): `engineOptions.persistence.postgres` names the source cluster (namespace optional, defaults to the Temporal cluster's namespace). The binding creates two databases on the **same** source (persistence and SQL visibility, default names `temporal_<cluster>` and `temporal_<cluster>_visibility`) and one least-privilege login role owning both. One source cluster means one backup or point in time covers both stores consistently. Temporal uses the `postgres12_pgx` plugin with TLS `verify-full` against the binding's CA and the binding's stable writer endpoint. The binding admits PostgreSQL major ≥ 12. There is no embedded database mode: a provider-owned PostgreSQL would either duplicate HA/backup/upgrade logic or require providers to create clusters, which the provider contract does not allow. If the build has no binding service, admission rejects Temporal clusters with an explicit reason.
 
-The standard server constructs one PostgreSQL binding manager and shares that same service with the bindings API, Keycloak, OpenBao and Temporal. Embedders that omit the service still receive admission rejection; consumers use the single contract in `internal/pgbinding`.
+The standard server constructs one PostgreSQL binding manager and shares that same service with the bindings API, [Keycloak](https://www.keycloak.org), [OpenBao](https://openbao.org) and Temporal. Embedders that omit the service still receive admission rejection; consumers use the single contract in `internal/pgbinding`.
 
 Bound credentials are never copied into options or status. The control plane resolves the password in-process when publishing member configuration. A change of the binding's credential generation re-renders configuration and rolls every role.
 
@@ -26,7 +26,7 @@ Temporal roles are stateless [components](0031-engine-component-model.md) in `sp
 - Topology `split`: `history` (1–9), `matching` (1–5), `frontend` (1–5) and `worker` (1–3) each run one role; `server` must be zero.
 - `ui` (0–3, default 1) runs the Web UI in both topologies.
 
-Each component is one backend service; replicas are containers scaled through backend horizontal scaling. Roles find each other through Temporal's membership (ringpop) via the persistence store; each instance advertises the private IPv4 address it uses to reach the bound PostgreSQL writer, not its shared service DNS identity, and fixed per-role ports (gRPC/membership: frontend 7233/6933 plus HTTP API 7243, history 7234/6934, matching 7235/6935, worker 7239/6939). The internal worker reaches frontends through membership, not a load balancer. Clients and the UI reach the frontend component's private service address.
+Each component is one backend service; replicas are containers scaled through backend horizontal scaling. Roles find each other through Temporal's membership ([ringpop](https://github.com/uber/ringpop-go)) via the persistence store; each instance advertises the private IPv4 address it uses to reach the bound PostgreSQL writer, not its shared service DNS identity, and fixed per-role ports ([gRPC](https://grpc.io)/membership: frontend 7233/6933 plus HTTP API 7243, history 7234/6934, matching 7235/6935, worker 7239/6939). The internal worker reaches frontends through membership, not a load balancer. Clients and the UI reach the frontend component's private service address.
 
 `engineOptions.historyShards` (default 512, 1–16384) is fixed at creation and immutable: changing it would orphan existing workflow state. The Temporal cluster name (`clusterMetadata.currentClusterName`) is the Karakoram cluster name and never changes. Multi-cluster replication and global namespaces are out of scope.
 
@@ -46,11 +46,11 @@ CA rotation is a checkpointed three-phase trust roll across all enabled componen
 
 ### Web UI
 
-The `ui` component runs the native `ui-server` against the frontend with a client certificate. It is private by default, without UI login authentication. Public HTTPS (`engineOptions.ui.publicHttps`) requires enabled UI replicas, backend subdomain support and OIDC configuration (`engineOptions.ui.oidc` issuer/client ID, client secret write-only and sealed). OIDC is supported only together with public HTTPS, which supplies the `/auth/sso/callback` origin. Options reject public exposure without OIDC; configuration publication requires the sealed secret before public routing is enabled. The frontend remains private regardless of `requireClientAuth`.
+The `ui` component runs the native `ui-server` against the frontend with a client certificate. It is private by default, without UI login authentication. Public HTTPS (`engineOptions.ui.publicHttps`) requires enabled UI replicas, backend subdomain support and [OIDC](https://openid.net/developers/how-connect-works/) configuration (`engineOptions.ui.oidc` issuer/client ID, client secret write-only and sealed). OIDC is supported only together with public HTTPS, which supplies the `/auth/sso/callback` origin. Options reject public exposure without OIDC; configuration publication requires the sealed secret before public routing is enabled. The frontend remains private regardless of `requireClientAuth`.
 
 The `karactl temporal` commands expose this access surface:
 
-- `client-certificate issue <cluster> --common-name worker [--ttl 720h] (--out-dir DIR | --stdout)` issues a certificate. Lifetimes are Go durations rounded to the nearest whole hour. Directory output creates `worker.crt` and `worker.key` with mode 0600 and `ca.crt` with mode 0644, creating missing directories with mode 0700. All three paths are checked before writing; existing files are never overwritten. `--stdout` emits the certificate, private key and CA PEM bundle; protect redirected output. Serial, expiry, frontend address and TLS server name go to stderr.
+- `client-certificate issue <cluster> --common-name worker [--ttl 720h] (--out-dir DIR | --stdout)` issues a certificate. Lifetimes are [Go](https://go.dev) durations rounded to the nearest whole hour. Directory output creates `worker.crt` and `worker.key` with mode 0600 and `ca.crt` with mode 0644, creating missing directories with mode 0700. All three paths are checked before writing; existing files are never overwritten. `--stdout` emits the certificate, private key and CA PEM bundle; protect redirected output. Serial, expiry, frontend address and TLS server name go to stderr.
 - `client-certificate list <cluster>` lists certificate metadata, shortening the CA fingerprint only in table output. `-o json` and `-o yaml` retain the complete response.
 - `namespace list <cluster>` lists workflow namespaces; `namespace delete <cluster> <name> [--yes]` requires confirmation because it deletes workflows.
 - `ui-oidc-secret set <cluster> (--from-file F | --from-stdin)` reads the write-only secret without accepting an argv secret value, removes one trailing LF or CRLF, and rejects an empty result. It never prints the secret.
@@ -79,10 +79,10 @@ Temporal gets PostgreSQL HA, backups, PITR and upgrades from the existing engine
 
 ## Alternatives considered
 
-- **Embed the PostgreSQL core (as Supabase does).** Rejected: the core reads `spec.version` as the PostgreSQL version throughout, while Temporal needs `spec.version` for its own sequential upgrades.
+- **Embed the PostgreSQL core (as [Supabase](https://supabase.com) does).** Rejected: the core reads `spec.version` as the PostgreSQL version throughout, while Temporal needs `spec.version` for its own sequential upgrades.
 - **Provider-owned child PostgreSQL cluster.** Rejected for now: providers have read-only cluster access; cross-cluster creation belongs to the binding layer if ever needed.
 - **Single embedded PostgreSQL member without HA/backups.** Rejected: a second, weaker database lifecycle that cannot meet the backup contract.
-- **Cassandra or Elasticsearch visibility.** Rejected: new dependencies; SQL visibility on PostgreSQL 12+ provides advanced visibility.
+- **[Cassandra](https://cassandra.apache.org) or [Elasticsearch](https://www.elastic.co/elasticsearch) visibility.** Rejected: new dependencies; SQL visibility on PostgreSQL 12+ provides advanced visibility.
 - **Control-plane-driven schema step on a dedicated member.** Rejected: old members lack the new tool during upgrades; per-member idempotent migration under an advisory lock is simpler and ordered by the rolling upgrade.
 
 ## References

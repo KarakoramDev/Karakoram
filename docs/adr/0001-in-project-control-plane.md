@@ -4,13 +4,13 @@ Status: Accepted
 
 ## Context
 
-Karakoram is self-hosted orchestration software, not a managed database service. Zerops is its infrastructure backend for replica sets, sharding, backups, upgrades, access management and monitoring. OpenEverest v2 supplies useful product concepts, but its control plane and providers depend on Kubernetes. Zerops API credentials alone do not provide private database connectivity.
+Karakoram is self-hosted orchestration software, not a managed database service. [Zerops](https://zerops.io) is its infrastructure backend for replica sets, sharding, backups, upgrades, access management and monitoring. [OpenEverest](https://openeverest.io) v2 supplies useful product concepts, but its control plane and providers depend on [Kubernetes](https://kubernetes.io). Zerops API credentials alone do not provide private database connectivity.
 
 ## Decision
 
-Deploy Karakoram inside the user's existing Zerops project as a separate runtime service named `karakoram`. Its own project is namespace `default`, managed using an environment-held project-scoped token and direct private service hostnames. Additional existing projects are managed as namespaces through outbound relays (ADR 0018), each with its own token. The control plane owns desired state, REST API, CLI-facing workflows, web UI and reconciliation; PSMDB/PBM provide database mechanisms. Neither Kubernetes nor an external hosted coordinator is required.
+Deploy Karakoram inside the user's existing Zerops project as a separate runtime service named `karakoram`. Its own project is namespace `default`, managed using an environment-held project-scoped token and direct private service hostnames. Additional existing projects are managed as namespaces through outbound relays (ADR 0018), each with its own token. The control plane owns desired state, REST API, CLI-facing workflows, web UI and reconciliation; [PSMDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb)/[PBM](https://docs.percona.com/percona-backup-mongodb/) provide database mechanisms. Neither Kubernetes nor an external hosted coordinator is required.
 
-Expose the UI/API through Zerops HTTPS routing to port 8080. Keep the agent-facing TLS listener on port 9443 private. Installation does not create projects or modify the platform's `core` service. Karakoram is the sole product name; references to OpenEverest, Percona and MongoDB describe origins or dependencies, not affiliation.
+Expose the UI/API through Zerops HTTPS routing to port 8080. Keep the agent-facing TLS listener on port 9443 private. Installation does not create projects or modify the platform's `core` service. Karakoram is the sole product name; references to OpenEverest, [Percona](https://www.percona.com) and [MongoDB](https://www.mongodb.com) describe origins or dependencies, not affiliation.
 
 ## Consequences
 

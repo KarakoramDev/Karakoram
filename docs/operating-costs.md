@@ -4,24 +4,24 @@
 
 **The figures below are rough estimates; check the providers’ current pricing before ordering. Prices collected on 26 October 2026.** Karakoram is Apache-2.0 software; these are infrastructure estimates, not a Karakoram subscription, quote, performance promise or availability guarantee.
 
-Karakoram is multi-platform: **Zerops** is the reference backend; **Dokploy** and **Nomad** run on infrastructure you supply. The same VM budget below applies to both backends; the cloud providers are hosting examples, not additional Karakoram backends. See [Backends](backends.md), [clusters](clusters.md) and [limitations](limitations.md).
+Karakoram is multi-platform: **[Zerops](https://zerops.io/)** is the reference backend; **[Dokploy](https://dokploy.com)** and **[Nomad](https://developer.hashicorp.com/nomad)** run on infrastructure you supply. The same VM budget below applies to both backends; the cloud providers are hosting examples, not additional Karakoram backends. See [Backends](backends.md), [clusters](clusters.md) and [limitations](limitations.md).
 
 Karakoram itself is **free and open source**. These are the infrastructure costs of running clusters on each backend/provider, not a price Karakoram charges.
 
 ## Assumptions
 
-- Use **730 hours/month**, on-demand Linux/amd64, no reservations, savings plans, credits or free trials. Hetzner and DigitalOcean monthly caps apply; Zerops' published 30-day rates are multiplied by 730/720. Regions: **Nuremberg/Helsinki for Hetzner compute and European object storage; Frankfurt (eu-central-1) for AWS; FRA1 for DigitalOcean; Gravelines (GRA), France, for OVHcloud Public Cloud**.
+- Use **730 hours/month**, on-demand [Linux](https://www.kernel.org/)/amd64, no reservations, savings plans, credits or free trials. [Hetzner](https://www.hetzner.com/) and [DigitalOcean](https://www.digitalocean.com/) monthly caps apply; Zerops' published 30-day rates are multiplied by 730/720. Regions: **Nuremberg/Helsinki for Hetzner compute and European object storage; Frankfurt (eu-central-1) for [AWS](https://aws.amazon.com/); FRA1 for DigitalOcean; Gravelines (GRA), France, for [OVHcloud](https://www.ovhcloud.com/) Public Cloud**.
 - Native currencies: **USD for Zerops, AWS and DigitalOcean; EUR for Hetzner and OVHcloud**. No currency conversion. Totals are rounded to whole currency units, or one decimal below 10; unit rates retain precision. VAT/taxes excluded.
 - Egress, cross-zone traffic, object requests, paid support, load balancers, NAT gateways, replacement/upgrade overlap and retained/orphaned resources are excluded. Private networking/IPv6 is assumed where necessary. Hetzner's selected public price includes IPv4; AWS public IPv4 is not included. Do not expose internal management listeners.
 - Each engine table is an **entire standalone installation**: engine resources + one Karakoram control plane + one backend server host for Dokploy or Nomad + backup storage. Zerops includes a free Lightweight core for MINIMAL, or one Serious core for MINIMAL HA / PRODUCTION-SHAPED. Share overhead across engines in the same installation instead of paying it once per engine.
 - Backup occupancy per cluster is **20 GB/GiB MINIMAL, 100 GB/GiB MINIMAL HA, 500 GB/GiB PRODUCTION-SHAPED**. This is retained physical object occupancy, not logical database size, a retention policy or a compression assumption. Size WAL/oplog history, full/incremental copies and restore staging separately.
 - CPU/RAM/data disk are stated per member as **cores / GiB / GB** (provider storage billing units differ). Every VM has spare RAM above the engine reservation; VM quantities include the OS/scheduler budget. Small shared/burstable VMs are not performance-equivalent to dedicated cores.
 - MINIMAL and MINIMAL HA use explicit admission floors, not necessarily the larger presets. Where validation supplies no positive numeric RAM floor, use the created default and say so. Explicitly set minimum and maximum CPU/RAM/data-disk bounds to the listed size; otherwise omitted maxima can allocate more storage/resources.
-- MINIMAL HA means an engine quorum topology, **not end-to-end service HA**. PostgreSQL's minimum proxy and Supabase's minimum API services remain singletons. For Dokploy and Nomad, place each voting/data member on a distinct worker VM; auxiliary replicas also have separate VMs here. Zerops **cannot guarantee host/rack/zone anti-affinity**, so its HA-shaped topology is not a failure-domain guarantee. See [limitations](limitations.md).
+- MINIMAL HA means an engine quorum topology, **not end-to-end service HA**. [PostgreSQL](https://www.postgresql.org/)'s minimum proxy and [Supabase](https://supabase.com/)'s minimum API services remain singletons. For Dokploy and Nomad, place each voting/data member on a distinct worker VM; auxiliary replicas also have separate VMs here. Zerops **cannot guarantee host/rack/zone anti-affinity**, so its HA-shaped topology is not a failure-domain guarantee. See [limitations](limitations.md).
 
 ## How we calculated
 
-Zerops defaults to **SHARED** CPU in the engine providers and the control-plane import. Resource cost is the sum over runtimes of CPU + RAM + ephemeral disk, plus persistent volume capacity. Object storage and project core are separate. The estimates budget the upper ephemeral-disk bound: 3 GB per MongoDB/RabbitMQ/Elasticsearch/OpenBao/Weaviate member. PostgreSQL/Supabase/MySQL/PXC and Neo4j currently pass data-component disk bounds to both the runtime and persistent volume, so both are counted. Zerops Local Storage has a 5-GB minimum even when engine admission permits 1 GB. Auxiliary services use their 1-GB runtime-disk default. No extra CPU/RAM charge is invented for a Local Storage volume.
+[Zerops](https://zerops.io/) defaults to **SHARED** CPU in the engine providers and the control-plane import. Resource cost is the sum over runtimes of CPU + RAM + ephemeral disk, plus persistent volume capacity. Object storage and project core are separate. The estimates budget the upper ephemeral-disk bound: 3 GB per [MongoDB](https://www.mongodb.com/)/[RabbitMQ](https://www.rabbitmq.com/)/[Elasticsearch](https://www.elastic.co/elasticsearch)/[OpenBao](https://openbao.org/)/[Weaviate](https://weaviate.io/) member. PostgreSQL/Supabase/[MySQL](https://www.mysql.com)/[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) and [Neo4j](https://neo4j.com/) currently pass data-component disk bounds to both the runtime and persistent volume, so both are counted. Zerops Local Storage has a 5-GB minimum even when engine admission permits 1 GB. Auxiliary services use their 1-GB runtime-disk default. No extra CPU/RAM charge is invented for a Local Storage volume.
 
 VM estimates are **host count × VM price + storage + object storage + shared control overhead**. AWS adds a 20-GiB gp3 OS disk to every VM and a separate data disk to each data member; DigitalOcean includes its OS disk and adds Volumes for data. Hetzner uses included local SSD capacity for node-pinned persistent host directories, not network Volumes: 40 GB on CX23 or 160 GB on CX43 accommodates the listed data plus OS budget. This is local, non-replicated member storage; engine replication and separate backups remain necessary. An optional Hetzner network-Volume variant is **not priced** because its current unit rate was not recoverable from the official public page; do not interpret that as free block storage.
 
@@ -87,7 +87,7 @@ The small backend server host is a **budget allowance**, not a product admission
 
 ## MongoDB
 
-Use a replica set, **not a sharded cluster**, for these tiers. Admission permits 1/3/5/7 data members, at least one whole CPU, 0.5 GiB RAM and 5 GB persistent disk. Defaults/presets create 1 GiB RAM, not the 0.5-GiB admission floor. PBM runs with each data member; it is not an extra VM. These tiny floors are for disposable workloads, not recovery/load guarantees. See [MongoDB](mongodb/README.md) and [replica sets](mongodb/replica-sets.md).
+Use a replica set, **not a sharded cluster**, for these tiers. Admission permits 1/3/5/7 data members, at least one whole CPU, 0.5 GiB RAM and 5 GB persistent disk. Defaults/presets create 1 GiB RAM, not the 0.5-GiB admission floor. [PBM](https://docs.percona.com/percona-backup-mongodb/) runs with each data member; it is not an extra VM. These tiny floors are for disposable workloads, not recovery/load guarantees. See [MongoDB](mongodb/README.md) and [replica sets](mongodb/replica-sets.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk |
 | --- | --- |
@@ -113,7 +113,7 @@ Use a replica set, **not a sharded cluster**, for these tiers. Admission permits
 
 ## PostgreSQL
 
-Admission requires 1 member for `single`, or 3/5 for `ha`; data members require 1 CPU, 1 GiB RAM and 5 GB disk. The created RAM default is 2 GiB. **Patroni and etcd are co-located on each HA data member**: three data VMs already include all three etcd voters. HA requires at least one separate ProxySQL replica. For `single`, explicitly disabling the default proxy is admitted and gives the strict minimum. ProxySQL has no explicit numeric positive RAM floor beyond common validation, so use its 1 CPU / 1 GiB / 1-GB runtime default. See [PostgreSQL](postgres/README.md).
+Admission requires 1 member for `single`, or 3/5 for `ha`; data members require 1 CPU, 1 GiB RAM and 5 GB disk. The created RAM default is 2 GiB. **[Patroni](https://patroni.readthedocs.io/) and [etcd](https://etcd.io/) are co-located on each HA data member**: three data VMs already include all three etcd voters. HA requires at least one separate [ProxySQL](https://proxysql.com/) replica. For `single`, explicitly disabling the default proxy is admitted and gives the strict minimum. ProxySQL has no explicit numeric positive RAM floor beyond common validation, so use its 1 CPU / 1 GiB / 1-GB runtime default. See [PostgreSQL](postgres/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -143,11 +143,11 @@ One proxy is a singleton client endpoint despite the HA database core. Two proxi
 
 ## Supabase
 
-Supabase inherits PostgreSQL's data/topology floors. **The strict admitted minimum is database-only**: every optional application component can be explicitly disabled, as can the proxy with `single`. Its MINIMAL and MINIMAL HA costs are therefore exactly the corresponding provider cells in the PostgreSQL monthly-total table above. That is not a functioning Supabase API stack.
+[Supabase](https://supabase.com/) inherits [PostgreSQL](https://www.postgresql.org/)'s data/topology floors. **The strict admitted minimum is database-only**: every optional application component can be explicitly disabled, as can the proxy with `single`. Its MINIMAL and MINIMAL HA costs are therefore exactly the corresponding provider cells in the PostgreSQL monthly-total table above. That is not a functioning Supabase API stack.
 
-The table below makes the requested **database plus services** comparison explicit: add gateway, Auth and PostgREST to those strict minima. They are **default-enabled, not mandatory admission dependencies**. Each has 1 CPU / 1 GiB RAM / 1-GB runtime disk by default; common validation requires positive RAM but defines no fixed positive numeric RAM floor, so the created default is used. Omitted application entries enable these three; explicit zero disables them. The functional MINIMAL row explicitly disables the default proxy, as the single core permits.
+The table below makes the requested **database plus services** comparison explicit: add gateway, Auth and [PostgREST](https://postgrest.org/) to those strict minima. They are **default-enabled, not mandatory admission dependencies**. Each has 1 CPU / 1 GiB RAM / 1-GB runtime disk by default; common validation requires positive RAM but defines no fixed positive numeric RAM floor, so the created default is used. Omitted application entries enable these three; explicit zero disables them. The functional MINIMAL row explicitly disables the default proxy, as the single core permits.
 
-Realtime, Storage, imgproxy, metadata, Studio, functions, pooler, analytics and vector are optional and **excluded** from these prices. imgproxy requires Storage; Studio requires metadata + gateway; vector requires analytics. Storage requires registered S3 configuration; its application objects are additional to backup occupancy. Analytics has a 1-GiB admission floor; Realtime permits only one enabled replica. See [Supabase](supabase/README.md) and [components](supabase/components.md).
+Realtime, Storage, [imgproxy](https://imgproxy.net/), metadata, Studio, functions, pooler, analytics and vector are optional and **excluded** from these prices. imgproxy requires Storage; Studio requires metadata + gateway; vector requires analytics. Storage requires registered S3 configuration; its application objects are additional to backup occupancy. Analytics has a 1-GiB admission floor; Realtime permits only one enabled replica. See [Supabase](supabase/README.md) and [components](supabase/components.md).
 
 | Tier sizing | Database and selected application services |
 | --- | --- |
@@ -205,7 +205,7 @@ Admission allows 1/3/5/7 brokers, at least 1 whole CPU, 0.5 GiB RAM and 5 GB dat
 
 ## Elasticsearch
 
-Combined master/data nodes admit 1–9 members, at least 1 whole CPU, 1.5 GiB RAM and 5 GB persistent disk. Their resource default is 2 GiB RAM and 5–20 GB disk; these floor estimates explicitly pin disk to 5 GB. Three combined nodes supply the smallest useful majority-based redundant topology; configure shard replicas as well. **Dedicated masters are optional**, not three missing VMs in these estimates. The alternative dedicated-master topology requires 3 or 5 masters in addition to data nodes. Kibana, Logstash and APM are optional and disabled in every row below. See [Elasticsearch](elasticsearch/README.md).
+Combined master/data nodes admit 1–9 members, at least 1 whole CPU, 1.5 GiB RAM and 5 GB persistent disk. Their resource default is 2 GiB RAM and 5–20 GB disk; these floor estimates explicitly pin disk to 5 GB. Three combined nodes supply the smallest useful majority-based redundant topology; configure shard replicas as well. **Dedicated masters are optional**, not three missing VMs in these estimates. The alternative dedicated-master topology requires 3 or 5 masters in addition to data nodes. [Kibana](https://www.elastic.co/kibana), [Logstash](https://www.elastic.co/logstash) and APM are optional and disabled in every row below. See [Elasticsearch](elasticsearch/README.md).
 
 | Tier sizing | Combined nodes × CPU / RAM / persistent disk |
 | --- | --- |
@@ -234,9 +234,9 @@ Plan space for shard recovery/rebalance and watermarks, not just indexed data. O
 
 ## Additional v0.4.0 engines
 
-These engines and the Citus distributed topology are new in v0.4.0; their release status is listed once in [engine availability](backends.md#engine-availability). The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except Temporal on Zerops as explained below; backend support is not deployment acceptance.
+These engines and the [Citus](https://www.citusdata.com/) distributed topology are new in v0.4.0; their release status is listed once in [engine availability](backends.md#engine-availability). The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except [Temporal](https://temporal.io/) on Zerops as explained below; backend support is not deployment acceptance.
 
-PostGIS, pgvector and TimescaleDB profiles cost the same as the corresponding PostgreSQL tier above; no extra runtime is required, but workload-driven CPU/RAM/disk growth is additional.
+[PostGIS](https://postgis.net/), [pgvector](https://github.com/pgvector/pgvector) and [TimescaleDB](https://www.timescale.com/) profiles cost the same as the corresponding PostgreSQL tier above; no extra runtime is required, but workload-driven CPU/RAM/disk growth is additional.
 
 ### OpenBao
 
@@ -294,7 +294,7 @@ A bound PostgreSQL source is mandatory. Each cell includes one additional source
 
 ### Percona Server for MySQL
 
-Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling ProxySQL; `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; XtraBackup runs with data members, not on extra hosts. See [MySQL](mysql/README.md).
+Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling [ProxySQL](https://proxysql.com/); `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; [XtraBackup](https://docs.percona.com/percona-xtrabackup/8.4/) runs with data members, not on extra hosts. See [MySQL](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -320,7 +320,7 @@ Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permi
 
 ### Percona XtraDB Cluster (PXC)
 
-PXC has **no singleton topology**: its admitted minimum is 3 Galera members plus 1 required ProxySQL replica; 5 data members are also admitted. Data floors/defaults and proxy resources match Percona Server above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
+[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) has **no singleton topology**: its admitted minimum is 3 [Galera](https://galeracluster.com/) members plus 1 required [ProxySQL](https://proxysql.com/) replica; 5 data members are also admitted. Data floors/defaults and proxy resources match [Percona Server](https://docs.percona.com/percona-server/8.4/) above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -397,7 +397,7 @@ Admission permits one member for `single`, or 3–9 for `cluster`, at 1 whole CP
 
 ### Keycloak
 
-**Singleton only: no HA tier** in the implemented provider. Admission requires 1 CPU / 1.5 GiB RAM / 1-GB disposable runtime disk; pin maxima explicitly rather than the created 2-CPU / 2-GiB / 3-GB upper bounds. A bound PostgreSQL source is mandatory: each cell includes PostgreSQL MINIMAL (1 / 1 / 5, proxy disabled), sharing control-plane/backend-server overhead, with the 20/500 backup occupancy charged once on that source. Production-shaped enlarges the Keycloak runtime, not the singleton source; size/upgrade the source separately for workload and recovery needs. Backups protect the source rather than the disposable runtime. Private ingress only is priced, so Nomad’s lack of managed public HTTPS does not exclude it; external public ingress costs remain excluded. See [Keycloak](keycloak/README.md).
+**Singleton only: no HA tier** in the implemented provider. Admission requires 1 CPU / 1.5 GiB RAM / 1-GB disposable runtime disk; pin maxima explicitly rather than the created 2-CPU / 2-GiB / 3-GB upper bounds. A bound [PostgreSQL](https://www.postgresql.org/) source is mandatory: each cell includes PostgreSQL MINIMAL (1 / 1 / 5, proxy disabled), sharing control-plane/backend-server overhead, with the 20/500 backup occupancy charged once on that source. Production-shaped enlarges the [Keycloak](https://www.keycloak.org/) runtime, not the singleton source; size/upgrade the source separately for workload and recovery needs. Backups protect the source rather than the disposable runtime. Private ingress only is priced, so Nomad’s lack of managed public HTTPS does not exclude it; external public ingress costs remain excluded. See [Keycloak](keycloak/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |

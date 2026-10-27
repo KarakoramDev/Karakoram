@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Temporal operations
 
-Start with the [prerequisites and options](README.md) and [access/TLS](access-and-tls.md). Temporal operations depend on a healthy bound PostgreSQL source; additional stateless replicas do not replace database HA or establish independent failure domains.
+Start with the [prerequisites and options](README.md) and [access/TLS](access-and-tls.md). [Temporal](https://temporal.io/) operations depend on a healthy bound [PostgreSQL](https://www.postgresql.org/) source; additional stateless replicas do not replace database HA or establish independent failure domains.
 
 ## Workflow namespaces
 

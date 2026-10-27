@@ -45,7 +45,7 @@ Token management rules:
 
 The per-cluster data-plane gateway adds RBAC resource `cluster-data` (actions `read`, `write`). It is not part of the built-in viewer or operator roles; administrators have it through `*`. The gateway additionally requires an explicit `cluster-data` entry in a token's `permissions`, so unrestricted tokens never reach cluster data.
 
-Tokens authenticate with the owner's `user:` and `role:` subjects only. OIDC group grants apply to browser sessions, not tokens; grant agent accounts explicit `user:` or role bindings.
+Tokens authenticate with the owner's `user:` and `role:` subjects only. [OIDC](https://openid.net/developers/how-connect-works/) group grants apply to browser sessions, not tokens; grant agent accounts explicit `user:` or role bindings.
 
 `karactl tokens create` gains `--name`, `--expires`, `--read-only`, `--scope-namespace`, `--scope-cluster`, `--permission` and `--allow-credential-reveal`. The UI token dialog edits the same fields at creation and shows them on the token list.
 

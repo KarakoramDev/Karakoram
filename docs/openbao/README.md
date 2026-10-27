@@ -61,8 +61,8 @@ A wait timeout does not cancel creation. Continue observing with `clusters wait 
 - `logLevel`: `trace`, `debug`, `info` (default), `warn`, `error`.
 - Version changes are forward-only and catalog-bound. The current catalog contains only 2.7.1, so no newer-version upgrade is currently available.
 - No PITR, seal migration, performance/DR replication, OpenBao namespaces or HSM seals. Lost-quorum recovery is manual.
-- PostgreSQL storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, Keycloak, OpenBao and Temporal. Provider metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
-- RabbitMQ credential connections require one shared default/maximum TTL pair per connection. Native TLS credential issuance, permissions and revocation are covered by development proofs (see [verification](../verification.md#openbao-coverage)).
+- [PostgreSQL](https://www.postgresql.org/) storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, [Keycloak](https://www.keycloak.org/), OpenBao and [Temporal](https://temporal.io/). Provider metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
+- [RabbitMQ](https://www.rabbitmq.com/) credential connections require one shared default/maximum TTL pair per connection. Native TLS credential issuance, permissions and revocation are covered by development proofs (see [verification](../verification.md#openbao-coverage)).
 
 ## Guides
 

@@ -8,7 +8,7 @@ These are procedures, not a claim that a checkout or deployment passed. Missing 
 
 ## Native prerequisites
 
-Use checksum-verified native Percona artifacts compatible with the machine and all required runtime libraries. No Docker, privileged package installation or global service changes are needed for these cases. Extract prerequisites into locations selected by your environment; do not assume a checkout-relative cache or a particular workstation filesystem.
+Use checksum-verified native [Percona](https://www.percona.com/) artifacts compatible with the machine and all required runtime libraries. No [Docker](https://www.docker.com/), privileged package installation or global service changes are needed for these cases. Extract prerequisites into locations selected by your environment; do not assume a checkout-relative cache or a particular workstation filesystem.
 
 | Variable | Input |
 | --- | --- |
@@ -19,7 +19,7 @@ Use checksum-verified native Percona artifacts compatible with the machine and a
 | `KARAKORAM_MYSQL_TEST_TMPDIR` | Optional short, writable disposable scratch root; defaults to the system temporary directory |
 | `KARAKORAM_MYSQL_LD_LIBRARY_PATH` | Optional extracted runtime-library search path |
 
-Use a short scratch root because Unix socket names have length limits. PXC SST additionally needs its bundled compatible XtraBackup tools and native `socat`, `openssl` and shell utilities. Keep upstream SST scripts intact. Tests allocate ephemeral loopback listeners; do not configure a shared fixed database port or run against an existing database. Serialize resource-intensive suites. Follow the checkout's Go toolchain selection (via mise where configured) and the environment's resource-limiting wrapper if required.
+Use a short scratch root because Unix socket names have length limits. [PXC](https://docs.percona.com/percona-xtradb-cluster/) SST additionally needs its bundled compatible [XtraBackup](https://docs.percona.com/percona-xtrabackup/) tools and native `socat`, `openssl` and shell utilities. Keep upstream SST scripts intact. Tests allocate ephemeral loopback listeners; do not configure a shared fixed database port or run against an existing database. Serialize resource-intensive suites. Follow the checkout's Go toolchain selection (via mise where configured) and the environment's resource-limiting wrapper if required.
 
 Native subprocesses also retain the caller's `TMPDIR`; the runner checks the
 effective server `tmpdir`. Select an owned scratch directory when shared
@@ -40,7 +40,7 @@ go test -tags integration -count=1 -v -timeout 20m ./internal/agent/mysql \
 
 The raw group proof waits through native shutdown/transport transients by replaying only the same durable clone intent. Every retry requires a matching request and native baseline already on disk; it cannot issue a new CLONE after a lost reply. The injected restart interruption must still be observed explicitly, and production readiness/process-exit fences remain enforced.
 
-With Percona Server and compatible XtraBackup selected, physical recovery additionally requires:
+With [Percona Server](https://docs.percona.com/percona-server/) and compatible XtraBackup selected, physical recovery additionally requires:
 
 ```sh
 : "${KARAKORAM_MYSQL_XTRABACKUP_DIR:?Select compatible native XtraBackup}"
@@ -64,7 +64,7 @@ the later rows and exact GTIDs without replaying retained pre-baseline schema
 or data transactions. The original full/incremental, SHA256 and recovered-account
 proof remains a separate case.
 
-For Galera, export the real control-plane member configurations into a private
+For [Galera](https://galeracluster.com/), export the real control-plane member configurations into a private
 directory before running the separate native runner. The bridge invokes
 production `Core.Sync`, sealed PKI and `MemberConfig`; it simulates infrastructure
 and transport, not the security policy. It writes initial, formed, traffic-rotated
@@ -111,10 +111,10 @@ members with equal rows, payload hashes and GTIDs: once after an operator stop
 and start, once by the supervisor alone. Each attempt logs whether the receiver
 aborted and whether upstream reset its state; only attempts with an observed
 abort count as interrupted-transfer recovery evidence.
-Unused PostgreSQL admin and frontend listeners are confined to Unix sockets in
+Unused [PostgreSQL](https://www.postgresql.org/) admin and frontend listeners are confined to Unix sockets in
 the owner-only proxy directory (the pinned build rejects empty listeners). Native
 tests inspect runtime variables and sockets, so no default PostgreSQL TCP port
-is silently occupied by this MySQL-only proxy.
+is silently occupied by this [MySQL](https://www.mysql.com/)-only proxy.
 
 Cleanup waits for owned runtime shutdown before removing disposable data and fails closed when termination cannot be proven. Contributor-level platform semantics are described in [native subprocess lifecycle](../verification.md#native-mysql-subprocess-lifecycle).
 
@@ -131,7 +131,7 @@ Inspect the selected tests' assertions: access, physical backup/PITR and Galera 
 3. Create a scoped database/user/grant, connect using CA-verified TLS through the application endpoint, and verify denied plaintext/unauthorized access. Rotate with a retained password, confirm both during transition, discard old and confirm rejection. Check externally allowed and denied clients separately when exposing the endpoint.
 4. Confirm expected replication eligibility and one routed writer. Write identifiable transactions, lose the writer, reconnect and check their outcomes without blind retry. Lose quorum and confirm minority traffic rejection/fencing; do not advertise a failover-time guarantee from one sample.
 5. For PXC, confirm encrypted SST and subsequent IST when cache permits, compatible schema enforcement and flow-control visibility. For full-outage recovery, capture every recovered same-history position; deliberately missing or conflicting evidence must block bootstrap. Never perform destructive partition recovery without independently fencing missing members.
-6. Verify S3 full/incremental provenance, chain-aware retention and checksum-verified archive continuity. Restore an exact same-second transaction boundary and show the target transaction present and later transaction absent. Introduce an archive gap in disposable data and confirm that the PITR endpoint does not jump past it.
+6. Verify [S3](https://aws.amazon.com/s3/) full/incremental provenance, chain-aware retention and checksum-verified archive continuity. Restore an exact same-second transaction boundary and show the target transaction present and later transaction absent. Introduce an archive gap in disposable data and confirm that the PITR endpoint does not jump past it.
 7. Restore in place and to a new same-provider/major cluster. Confirm source isolation, new server UUIDs, preserved GTIDs and new Group Replication/Galera history. Confirm recovered rows, account/grant behavior and proxy authentication, including snapshot/rotation caveats. Cross-provider and cross-major restores must be rejected.
 8. Exercise only offered upgrade paths, backup freshness gates, 3↔5 scaling, replacement, rolling settings and suspend/resume. Observe convergence and application contents after every operation. Inspect and remove disposable resources after capturing private evidence.
 

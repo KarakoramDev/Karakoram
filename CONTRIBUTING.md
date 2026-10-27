@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Contributing to Karakoram
 
-Contribute to Apache-2.0 orchestration for MongoDB (Percona Server/PBM), RabbitMQ and Elasticsearch on [Zerops](https://zerops.io).
+Contribute to Apache-2.0 orchestration for [MongoDB](https://www.mongodb.com) ([Percona Server](https://www.percona.com/mongodb/software/percona-server-for-mongodb)/[PBM](https://docs.percona.com/percona-backup-mongodb/)), [RabbitMQ](https://www.rabbitmq.com) and [Elasticsearch](https://www.elastic.co/elasticsearch) on [Zerops](https://zerops.io).
 
-Read [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security](docs/security.md) and [limitations](docs/limitations.md). No Kubernetes dependencies or implied vendor/OpenEverest affiliation or endorsement.
+Read [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security](docs/security.md) and [limitations](docs/limitations.md). No [Kubernetes](https://kubernetes.io) dependencies or implied vendor/[OpenEverest](https://openeverest.io) affiliation or endorsement.
 
 ## Conduct and contribution process
 
@@ -28,7 +28,7 @@ Coding agents must also read [AGENTS.md](AGENTS.md) for repository layout, comma
 
 ## Development setup
 
-Requirements: **Go 1.26+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.
+Requirements: **[Go](https://go.dev) 1.26+**, [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/), **[Node](https://nodejs.org) 22.6+** and [npm](https://docs.npmjs.com/). The UI test runner uses Node's built-in [TypeScript](https://www.typescriptlang.org) support. Agent integration tests require [Docker](https://www.docker.com) and [Linux](https://kernel.org) host networking; unit tests need no Zerops account.
 
 ```sh
 make ui
@@ -40,7 +40,7 @@ Binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds UI asset
 
 `make build` is for development. Publish artifacts with `make release`, not by copying `bin/`; see [Releasing](#releasing).
 
-For frontend development, run `npm run dev` in `ui/`: Vite listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another backend; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real backend settings. Do not commit populated environment files or substitute fake production credentials.
+For frontend development, run `npm run dev` in `ui/`: [Vite](https://vite.dev) listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another backend; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real backend settings. Do not commit populated environment files or substitute fake production credentials.
 
 ## Releasing
 
@@ -52,7 +52,7 @@ Default Zerops deploy/run configuration must remain compatible with the binary p
 
 ### Prerequisites and release notes
 
-- Development tools above, Bash, Git, GNU tar/coreutils (`date`, `sha256sum`), gzip, OpenSSH `ssh-keygen` supporting `-Y sign`/`-Y verify`.
+- Development tools above, [Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com), [GNU tar](https://cgit.git.savannah.gnu.org/cgit/tar.git/)/[coreutils](https://www.gnu.org/software/coreutils/) (`date`, `sha256sum`), [gzip](https://cgit.git.savannah.gnu.org/cgit/gzip.git/), [OpenSSH](https://www.openssh.com) `ssh-keygen` supporting `-Y sign`/`-Y verify`.
 - Publication: `gh` authenticated with public-repository release rights; Git push rights for `origin` tags and `main`.
 - Signing key: `~/.config/karakoram/release-signing-ed25519`, overridden by `KARAKORAM_RELEASE_SIGNING_KEY`. Authorize its public key in [`deploy/allowed_signers`](deploy/allowed_signers) for `release@karakoram.dev`; never commit the private key.
 - Write `NOTES` outside the checkout (or commit before preparation): changes, security fixes, upgrade steps, state-schema/rollback compatibility. Notes are not generated. Review changes and run applicable [checks](#checks); release targets do not replace them.
@@ -101,7 +101,7 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | Area | Responsibility |
 | --- | --- |
 | `internal/server`, `internal/api` | Runtime wiring, strict HTTP contract, handlers and authorization |
-| `internal/domain`, `internal/store` | Models, SQLite migrations, durable intent/checkpoints/events/secrets |
+| `internal/domain`, `internal/store` | Models, [SQLite](https://sqlite.org) migrations, durable intent/checkpoints/events/secrets |
 | `internal/reconciler` | Serialized lifecycle/operations, observation and cleanup |
 | `internal/engine` | In-process provider registry and reconciliation/data-plane interfaces |
 | `internal/engine/psmdb`, `internal/engine/psmdb/pbm` | MongoDB topology/access/TLS and PBM backup/PITR/restore |
@@ -111,7 +111,7 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | `internal/agent`, `internal/agentapi` | Engine process supervision/rendering and private protocol |
 | `internal/auth`, `internal/rbac` | Identity, sessions/tokens and policy |
 | `internal/scheduler`, `internal/events`, `internal/monitoring` | Schedules/retention, durable activity/SSE and metrics |
-| `internal/cli`, `ui/`, `internal/ui` | CLI, typed React application and embedded assets |
+| `internal/cli`, `ui/`, `internal/ui` | CLI, typed [React](https://react.dev) application and embedded assets |
 
 - Keep generic durability in reconciler/store; engine mechanisms stay within their provider; Zerops wire formats stay in the backend adapter.
 - Provider metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Providers are compiled in, not dynamically installable plugins.
@@ -134,7 +134,7 @@ make generate
 make openapi-check
 ```
 
-Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, plus the RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation writes `ui/src/api/schema.d.ts` using lockfile-pinned openapi-typescript. Keep handwritten public client helpers separate from generated files and independent of `internal/`; external consumers import `pkg/client`. See [Clients/SDK](docs/api.md#clientssdk).
+Go generation uses pinned [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, plus the RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation writes `ui/src/api/schema.d.ts` using lockfile-pinned [openapi-typescript](https://openapi-ts.dev). Keep handwritten public client helpers separate from generated files and independent of `internal/`; external consumers import `pkg/client`. See [Clients/SDK](docs/api.md#clientssdk).
 
 `make openapi-check` rejects YAML aliases and regenerates/compares Go contract/client/RBAC and TypeScript files; it is a drift check, not live behavior verification. If editing introduces YAML anchors/aliases, normalize without changing meaning:
 
@@ -156,7 +156,7 @@ make lint
 make openapi-check
 ```
 
-Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, staticcheck 2025.1.1 and UI typecheck/ESLint; install UI dependencies first.
+Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2025.1.1 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
 
 Live tests are opt-in and destructive to their resources:
 
@@ -165,7 +165,7 @@ Live tests are opt-in and destructive to their resources:
 make e2e
 ```
 
-Follow [test/e2e/README.md](test/e2e/README.md) for S3, IPv6 allowlist, CLI and OIDC settings. Use an isolated installation in a dedicated project: the suite mutates global policy/settings, so never run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. Report scenarios exercised and results in the pull request.
+Follow [test/e2e/README.md](test/e2e/README.md) for [S3](https://aws.amazon.com/s3/), IPv6 allowlist, CLI and [OIDC](https://openid.net/developers/how-connect-works/) settings. Use an isolated installation in a dedicated project: the suite mutates global policy/settings, so never run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. Report scenarios exercised and results in the pull request.
 
 ## Security and licensing
 

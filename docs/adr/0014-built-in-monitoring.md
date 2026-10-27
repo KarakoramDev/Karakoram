@@ -4,11 +4,11 @@ Status: Accepted
 
 ## Context
 
-Per-member visibility requires MongoDB application telemetry in addition to Zerops platform metrics. OpenEverest's PSMDB monitoring integration uses an independently operated PMM server and member-side PMM clients, not a standalone exporter endpoint.
+Per-member visibility requires [MongoDB](https://www.mongodb.com) application telemetry in addition to [Zerops](https://zerops.io) platform metrics. [OpenEverest](https://openeverest.io)'s [PSMDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) monitoring integration uses an independently operated [PMM](https://docs.percona.com/percona-monitoring-and-management/) server and member-side PMM clients, not a standalone exporter endpoint.
 
 ## Decision
 
-Collect MongoDB metrics in the node agent through its local driver using the purpose-specific `clusterMonitor` account. Expose Prometheus text through authenticated private agent `/v1/metrics`. The control plane scrapes/aggregates member samples, retains bounded UI time series and serves:
+Collect MongoDB metrics in the node agent through its local driver using the purpose-specific `clusterMonitor` account. Expose [Prometheus](https://prometheus.io) text through authenticated private agent `/v1/metrics`. The control plane scrapes/aggregates member samples, retains bounded UI time series and serves:
 
 - `/api/v1/clusters/{c}/metrics?range=` for the UI dashboard;
 - `/metrics` as a Prometheus-compatible endpoint for external monitoring, protected by Bearer/API-token authentication and monitoring RBAC.

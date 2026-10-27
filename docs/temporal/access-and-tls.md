@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Temporal access and TLS
 
-See the [overview](README.md) for prerequisites and [operations](operations.md) for maintenance. Karakoram project namespaces and Temporal workflow namespaces are separate concepts; `karactl -n NS` selects the former.
+See the [overview](README.md) for prerequisites and [operations](operations.md) for maintenance. Karakoram project namespaces and [Temporal](https://temporal.io/) workflow namespaces are separate concepts; `karactl -n NS` selects the former.
 
-These access paths apply to Dokploy and Nomad; Zerops is not supported in v0.4.0 because Temporal requires private IPv4 membership networking. Public Web UI HTTPS is available only on configured Dokploy; Nomad UI access remains private.
+These access paths apply to [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad); [Zerops](https://zerops.io/) is not supported in v0.4.0 because Temporal requires private IPv4 membership networking. Public Web UI HTTPS is available only on configured Dokploy; Nomad UI access remains private.
 
 ## Trust and authorization
 

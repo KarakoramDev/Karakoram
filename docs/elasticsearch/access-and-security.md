@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Access and security
 
-Connect clients and manage Elasticsearch, Kibana and intake identities separately from Karakoram accounts.
+Connect clients and manage [Elasticsearch](https://www.elastic.co/elasticsearch), [Kibana](https://www.elastic.co/kibana) and intake identities separately from Karakoram accounts.
 
 ## Connect and reveal credentials
 
@@ -16,7 +16,7 @@ Ordinary cluster status contains password-free endpoints. In Overview, expand **
 
 Credential URIs describe the cluster; use returned [component endpoints](stack.md), not those URIs, for Kibana/APM. Do not reveal into CI/shared logs or terminal recordings.
 
-**Admin-only health check:** this Bash recipe uses the revealed `elastic` superuser, authenticated [karactl](../cli.md), `jq` and `curl`. Run it from a trusted diagnostic workload in the namespace's Zerops project for private access; for public access, change `PUBLIC=false` to `PUBLIC=true` and use an allowed client. See [namespace networking](../namespaces.md) for private reachability.
+**Admin-only health check:** this Bash recipe uses the revealed `elastic` superuser, authenticated [karactl](../cli.md), `jq` and `curl`. Run it from a trusted diagnostic workload in the namespace's [Zerops](https://zerops.io/) project for private access; for public access, change `PUBLIC=false` to `PUBLIC=true` and use an allowed client. See [namespace networking](../namespaces.md) for private reachability.
 
 ```bash
 (
@@ -73,7 +73,7 @@ The secret header is read from an owner-only curl configuration, never a process
 | APM intake | 8200 HTTP | Private, dual-stack `[::]`; optional public HTTPS subdomain |
 | APM monitoring | 5066 HTTP | Localhost only |
 
-Elasticsearch security is always enabled. HTTP and transport use per-node certificates under the cluster CA; transport requires client authentication with CA-based certificate verification. Components verify Elasticsearch HTTPS and CA trust automatically. Kibana/APM public routes terminate TLS at the balancer, forwarding HTTP on the private project network; Logstash inputs are not secured automatically.
+Elasticsearch security is always enabled. HTTP and transport use per-node certificates under the cluster CA; transport requires client authentication with CA-based certificate verification. Components verify Elasticsearch HTTPS and CA trust automatically. Kibana/APM public routes terminate TLS at the balancer, forwarding HTTP on the private project network; [Logstash](https://www.elastic.co/logstash) inputs are not secured automatically.
 
 CA sources are `selfSigned` or `userProvided`. The latter requires a certificate and matching signing private key, supplied through protected write-only TLS inputs; see [PKI input contract](../../api/openapi.yaml). CA source/material cannot change in place. Leaf rotation uses `karactl clusters rotate-tls search --wait --yes` and watched PEM reload without Elasticsearch restart; it does not rotate the CA or Kibana encryption keys.
 
@@ -159,6 +159,6 @@ Every node has file-realm `karakoram` (superuser control/recovery) and `karakora
 
 Regular reconciliation reasserts the provider-owned Logstash/APM writer roles, native users, enabled state and sealed passwords even when desired secrets have not changed. Native edits/deletion of these managed objects are repaired; customer-owned users and roles are not modified. Kibana's service token is separately authenticated and replaced if revoked.
 
-Node S3 keys reside in `elasticsearch.keystore`; rendered configuration, TLS keys, file-realm files and component secrets are owner-only (0600 files, 0700 directories). Kibana's token/encryption keys and APM's intake token/writer password are in component configuration; Logstash's writer credential is injected into its process environment. These are accessible to privileged runtime administrators: see [trust boundaries and encryption at rest](../security.md).
+Node [S3](https://aws.amazon.com/s3/) keys reside in `elasticsearch.keystore`; rendered configuration, TLS keys, file-realm files and component secrets are owner-only (0600 files, 0700 directories). Kibana's token/encryption keys and APM's intake token/writer password are in component configuration; Logstash's writer credential is injected into its process environment. These are accessible to privileged runtime administrators: see [trust boundaries and encryption at rest](../security.md).
 
 `karactl system-users list search` lists rotation targets: `elastic`, `karakoram-monitor`, `kibana-token`, `logstash`, `apm`, `apm-secret-token`. Use `karactl system-users rotate search IDENTITY`; rotation republishes/restarts affected components. The internal file-realm control user is not a rotation target. Credential rotation does not change the CA or cluster-lifetime Kibana encryption keys.

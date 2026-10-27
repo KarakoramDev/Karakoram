@@ -10,15 +10,15 @@ Choose an infrastructure backend before installing. Karakoram is multi-platform;
 | Dokploy | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
 | Nomad | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
 
-The deployment steps below are for the **Zerops backend**, in an existing Zerops project. CLI installation is shared across backends.
+The deployment steps below are for the **[Zerops](https://zerops.io/) backend**, in an existing Zerops project. CLI installation is shared across backends.
 
 ## Prerequisites
 
 - Permission to import services and deploy code in an existing project. Organization Owner/Admin access and project-creation rights are not required.
-- **Control-plane capacity:** one Ubuntu 24.04 container, shared CPU, 0.5–1 GiB RAM, 1–2 GiB runtime disk and a separate 5 GiB Local Storage volume. A LIGHT project can host this footprint; cluster services require additional capacity. Review engine minimums ([MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md)) and the wizard's aggregate footprint before creating clusters.
+- **Control-plane capacity:** one [Ubuntu](https://ubuntu.com/) 24.04 container, shared CPU, 0.5–1 GiB RAM, 1–2 GiB runtime disk and a separate 5 GiB Local Storage volume. A LIGHT project can host this footprint; cluster services require additional capacity. Review engine minimums ([MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md)) and the wizard's aggregate footprint before creating clusters.
 - A Zerops token: **Settings → Access Tokens Management → Custom access per project → Full access**, for this project only, **sudo mode off**. Read-only access cannot provision, update secrets, grow storage or configure routing. Save the one-time value in a password manager; see [Security](security.md) and [Zerops permissions](https://docs.zerops.io/features/rbac#integration-tokens).
 - Free service names `karakoram` and `karakoramdata`, or customize them below.
-- For local deployment: authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt setup needs no Go or Node toolchain locally or on Zerops.
+- For local deployment: authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt setup needs no [Go](https://go.dev/) or [Node](https://nodejs.org/) toolchain locally or on Zerops.
 
 ## Setups: prebuilt release or source build
 
@@ -90,7 +90,7 @@ The local template has neither `buildFromGit` nor an inline pipeline: it creates
 
 ### Build provenance for local pushes
 
-Only `karakoram-source` needs these inputs. `--no-git` source uploads lack Git metadata; obtain:
+Only `karakoram-source` needs these inputs. `--no-git` source uploads lack [Git](https://git-scm.com/) metadata; obtain:
 
 ```sh
 git describe --tags --always
@@ -110,7 +110,7 @@ zerops:
 
 Refresh both values for each push. These are remote **build** inputs; workstation exports, `run.envVariables` and post-deploy runtime edits cannot relink the executable. The explicit commit overrides Git discovery; the pipeline records a UTC build date. Without provenance the API/UI show `unknown (built without git metadata)`.
 
-Local builds accept the same inputs (or explicit Make `VERSION`/`COMMIT` overrides):
+Local builds accept the same inputs (or explicit [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/) `VERSION`/`COMMIT` overrides):
 
 ```sh
 KARAKORAM_VERSION="$(git describe --tags --always)" \
@@ -170,7 +170,7 @@ To build the exact checkout:
 
 ## Import YAML installation from a public repository
 
-1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Its `buildFromGit` points to `https://github.com/KarakoramDev/Karakoram`; no fork required. Forks need a plain **public** GitHub/GitLab URL without trailing `.git` and `zeropsSetup: karakoram-source`; private repositories are unsupported.
+1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Its `buildFromGit` points to `https://github.com/KarakoramDev/Karakoram`; no fork required. Forks need a plain **public** [GitHub](https://github.com/)/[GitLab](https://about.gitlab.com/) URL without trailing `.git` and `zeropsSetup: karakoram-source`; private repositories are unsupported.
 2. Set the empty token in a private copy, or add it in the GUI immediately after import.
 3. Choose **Import services** in the existing project's dashboard, or run:
 
@@ -187,7 +187,7 @@ Both templates require `#yamlPreprocessor=on` to generate secrets. Multi-argumen
 
 Match the CLI release to the **deployed control-plane version**, not the latest release independently. Read `https://example.com/api/v1/version`; with an existing CLI, `karactl --server https://example.com version` shows client/server versions. If the server reports unknown provenance, identify its deployed release/revision before choosing a binary.
 
-[Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover Linux/macOS (`linux`/`darwin`, `amd64`/`arm64`) and Windows (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
+[Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover [Linux](https://www.kernel.org/)/[macOS](https://www.apple.com/macos/) (`linux`/`darwin`, `amd64`/`arm64`) and [Windows](https://learn.microsoft.com/en-us/windows/) (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
 
 ```sh
 RELEASE=v0.2.0
@@ -205,7 +205,7 @@ sha256sum --ignore-missing -c checksums.txt &&
   install -Dm755 "$ASSET" "$HOME/.local/bin/karactl"
 ```
 
-Authenticate the signing key against a trusted checkout or independently trusted fingerprint: downloading it beside the binary does not establish authenticity. Verify in the download directory; proceed only after signature success and the selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for checksums; Windows needs OpenSSH signature verification and SHA-256 verification. Add `$HOME/.local/bin` to `PATH`.
+Authenticate the signing key against a trusted checkout or independently trusted fingerprint: downloading it beside the binary does not establish authenticity. Verify in the download directory; proceed only after signature success and the selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for checksums; Windows needs [OpenSSH](https://www.openssh.com/) signature verification and SHA-256 verification. Add `$HOME/.local/bin` to `PATH`.
 
 Alternatively build the matching checkout with Go 1.26+:
 

@@ -2,16 +2,16 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Cluster data MCP
 
-Data MCP gives an MCP client tools for the **data inside one cluster**, not authority to create, restore or administer clusters. It is **experimental** in this release: the interfaces and reviewed tool catalogue can change between minor versions. Each cluster has its own Streamable HTTP endpoint:
+Data [MCP](https://modelcontextprotocol.io/) gives an MCP client tools for the **data inside one cluster**, not authority to create, restore or administer clusters. It is **experimental** in this release: the interfaces and reviewed tool catalogue can change between minor versions. Each cluster has its own Streamable HTTP endpoint:
 
 ```text
 https://<karakoram>/mcp/clusters/{namespace}/{cluster}
 Authorization: Bearer <restricted-api-token>
 ```
 
-It uses the existing public listener; no public database port or companion port is needed. MongoDB/PSMDB uses `mongodb-mcp-server`, PostgreSQL and Supabase use `pgedge-postgres-mcp`, and Elasticsearch and RabbitMQ use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [agent access security model](security.md#agent-access-mcp-security-model), [access control](access-control.md) and the [MCP quick start](mcp-quickstart.md#5-data-mcp-quick-start).
+It uses the existing public listener; no public database port or companion port is needed. [MongoDB](https://www.mongodb.com/)/PSMDB uses `mongodb-mcp-server`, [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use `pgedge-postgres-mcp`, and [Elasticsearch](https://www.elastic.co/elasticsearch) and [RabbitMQ](https://www.rabbitmq.com/) use native toolsets. See the [design decision](adr/0043-data-mcp-gateway.md), [agent access security model](security.md#agent-access-mcp-security-model), [access control](access-control.md) and the [MCP quick start](mcp-quickstart.md#5-data-mcp-quick-start).
 
-PostgreSQL extension profiles retain Data MCP support on single and HA topologies. Distributed PostgreSQL (Citus) rejects `spec.dataMcp.enabled: true` at admission because its group-aware access model is not supported by the PostgreSQL companion. Keycloak does not support Data MCP.
+PostgreSQL extension profiles retain Data MCP support on single and HA topologies. Distributed PostgreSQL ([Citus](https://www.citusdata.com/)) rejects `spec.dataMcp.enabled: true` at admission because its group-aware access model is not supported by the PostgreSQL companion. [Keycloak](https://www.keycloak.org/) does not support Data MCP.
 
 Data endpoints support stateless MCP `2026-07-28` and legacy initialize-based Streamable HTTP (`2025-11-25`, `2025-06-18`, `2025-03-26`), for both companion-backed and native toolsets. Companion connections negotiate an initialize-based revision independently of the client's protocol; they do not forward the client's protocol version.
 
@@ -19,9 +19,9 @@ Tool lists are caller-specific. On MCP `2026-07-28`, `tools/list` returns `cache
 
 ## Enable and scope access
 
-**Off by default:** an absent `spec.dataMcp` or `enabled: false` disables the endpoint and removes its managed data identities and companion when no longer needed. Disabled configurations can retain their settings for later use. Installation policy can also disable all MCP access with `KARAKORAM_MCP=off`; the installation default is `readonly`, not permission to enable any cluster automatically.
+**Off by default:** an absent `spec.dataMcp` or `enabled: false` disables the endpoint and removes its managed data identities and companion when no longer needed. Disabled configurations can retain their settings for later use. Installation policy can also disable all [MCP](https://modelcontextprotocol.io/) access with `KARAKORAM_MCP=off`; the installation default is `readonly`, not permission to enable any cluster automatically.
 
-For example, this cluster merge patch enables read-only access to one MongoDB database:
+For example, this cluster merge patch enables read-only access to one [MongoDB](https://www.mongodb.com/) database:
 
 ```yaml
 spec:
@@ -56,9 +56,9 @@ Each scope list accepts at most **64** nonblank entries of at most **256 bytes**
 ### Engine scope semantics
 
 - **MongoDB/PSMDB:** only `databases`. Names must be valid UTF-8 without surrounding whitespace/control characters, fewer than 64 bytes, and exclude MongoDB's prohibited name characters. `admin`, `local`, `config` and `$external` cannot be scoped. Empty scope grants the corresponding `readAnyDatabase`/`readWriteAnyDatabase` data role; explicit scope grants `read`/`readWrite` on the named application databases.
-- **PostgreSQL/Supabase:** only `databases` and `schemas`. Identifiers must be nonempty, at most 63 bytes and contain no NUL. Schemas `information_schema` and names beginning `pg_` are rejected. Named databases and schemas must exist when grants reconcile. Empty database scope selects **`postgres`** for explicit object grants and the companion connection, **not every database**. With neither database nor schema scope, the reader additionally receives `pg_read_all_data`. Empty schema scope selects non-system schemas in the selected database(s). The companion connects only to the **first selected database**; database switching is unavailable. See the PUBLIC caveat below.
-- **Elasticsearch:** only `indexPatterns`. Provider admission and native gateway routing share one rule: patterns must contain 1–255 bytes of lowercase ASCII letters, digits, `_`, `.`, `-`, `*` or `?`, and cannot begin with `.`, `-` or `_` (including `_all`). Other characters, including `+`, whitespace and non-ASCII letters, are rejected. Use simple patterns such as `app-*`. Empty scope resolves open indices, but hidden/system/dot indices remain inaccessible. Aliases and concrete backing targets are checked, not just the requested pattern.
-- **RabbitMQ:** only `vhosts`; names must contain 1–255 UTF-8 bytes without control characters. Empty scope grants existing vhosts, and reconciliation includes newly created vhosts. Every tool call must still name a permitted, nonempty `vhost`.
+- **[PostgreSQL](https://www.postgresql.org/)/[Supabase](https://supabase.com/):** only `databases` and `schemas`. Identifiers must be nonempty, at most 63 bytes and contain no NUL. Schemas `information_schema` and names beginning `pg_` are rejected. Named databases and schemas must exist when grants reconcile. Empty database scope selects **`postgres`** for explicit object grants and the companion connection, **not every database**. With neither database nor schema scope, the reader additionally receives `pg_read_all_data`. Empty schema scope selects non-system schemas in the selected database(s). The companion connects only to the **first selected database**; database switching is unavailable. See the PUBLIC caveat below.
+- **[Elasticsearch](https://www.elastic.co/elasticsearch):** only `indexPatterns`. Provider admission and native gateway routing share one rule: patterns must contain 1–255 bytes of lowercase ASCII letters, digits, `_`, `.`, `-`, `*` or `?`, and cannot begin with `.`, `-` or `_` (including `_all`). Other characters, including `+`, whitespace and non-ASCII letters, are rejected. Use simple patterns such as `app-*`. Empty scope resolves open indices, but hidden/system/dot indices remain inaccessible. Aliases and concrete backing targets are checked, not just the requested pattern.
+- **[RabbitMQ](https://www.rabbitmq.com/):** only `vhosts`; names must contain 1–255 UTF-8 bytes without control characters. Empty scope grants existing vhosts, and reconciliation includes newly created vhosts. Every tool call must still name a permitted, nonempty `vhost`.
 
 Prefer explicit, narrow scope even for read-only deployments. Scope controls managed grants and tool routing; it is not a substitute for reviewing pre-existing database privileges.
 
@@ -86,11 +86,11 @@ karactl mcp config --cluster production/appdb --client vscode
 karactl mcp config --cluster production/appdb --write --client json
 ```
 
-`--cluster` requires `namespace/name`; it does not use the ordinary implicit namespace. Formats are `json` (default: `url` and `headers`), `claude-code` (a `claude mcp add --transport http` command), `cursor` (`mcpServers`) and `vscode` (`servers`, with `type: http`). Each invocation creates a new token scoped to both that namespace and cluster, with `cluster-data:read`; `--write` adds `cluster-data:write` and removes the read-only restriction. The default lifetime is **90 days**; override `--expires-in` with a positive Go duration or whole days, such as `24h` or `90d`. `--token-name` overrides the default `mcp-data-<cluster>-<hostname>` name.
+`--cluster` requires `namespace/name`; it does not use the ordinary implicit namespace. Formats are `json` (default: `url` and `headers`), `claude-code` (a `claude mcp add --transport http` command), `cursor` (`mcpServers`) and `vscode` (`servers`, with `type: http`). Each invocation creates a new token scoped to both that namespace and cluster, with `cluster-data:read`; `--write` adds `cluster-data:write` and removes the read-only restriction. The default lifetime is **90 days**; override `--expires-in` with a positive [Go](https://go.dev/) duration or whole days, such as `24h` or `90d`. `--token-name` overrides the default `mcp-data-<cluster>-<hostname>` name.
 
 **Output contains a credential shown only once.** Store it in protected client configuration; do not paste it into tickets, logs or source control. Revoke it through API token management when no longer needed. The bearer is a Karakoram API token, never a database password or infrastructure token.
 
-The gateway rejects browser cookies, unrestricted/legacy tokens and missing explicit data permissions. Tokens must name at least one namespace or cluster; both restriction lists empty is denied, and every nonempty list must match the requested cluster. `Origin` must be absent or exactly match the configured public origin; MCP sessions are bound to their token. Use the CLI's cluster-scoped tokens rather than broad manually constructed restrictions.
+The gateway rejects browser cookies, unrestricted/legacy tokens and missing explicit data permissions. Tokens must name at least one namespace or cluster; both restriction lists empty is denied, and every nonempty list must match the requested cluster. `Origin` must be absent or exactly match the configured public origin; [MCP](https://modelcontextprotocol.io/) sessions are bound to their token. Use the CLI's cluster-scoped tokens rather than broad manually constructed restrictions.
 
 ## Reviewed tool catalogue
 
@@ -114,7 +114,7 @@ All approved tools force `connectionId: preconfigured`; connection overrides are
 | Write | None |
 | Destructive | `query_database_write` |
 
-`query_database_write` is a gateway alias for `query_database` using the write identity. **Every call to the alias requires confirmation**, because arbitrary SQL can be destructive; it is not an ordinary write-class tool. Database switching, LLM/embedding/knowledge tools are unavailable. Supabase uses the dedicated PostgreSQL identity, not `service_role` or an RLS-bypassing application credential.
+`query_database_write` is a gateway alias for `query_database` using the write identity. **Every call to the alias requires confirmation**, because arbitrary SQL can be destructive; it is not an ordinary write-class tool. Database switching, LLM/embedding/knowledge tools are unavailable. [Supabase](https://supabase.com/) uses the dedicated [PostgreSQL](https://www.postgresql.org/) identity, not `service_role` or an RLS-bypassing application credential.
 
 ### Elasticsearch — `native-elasticsearch` manifest 1
 
@@ -136,7 +136,7 @@ Search size defaults to **10**, capped at **100**, with a forced **5-second** se
 
 Every tool requires an explicit permitted **`vhost`**, including `overview`. List tools default to page **1**, `page_size: 100`, maximum **100** per page. Some lists are paginated locally after a bounded Management API response, so page size is not a database-load guarantee.
 
-`overview` returns only the exact requested vhost object, including message statistics, selected locally from the Management API vhost collection. It requests summary columns, but RabbitMQ 4.3.6 ignores that column selection and fails on paginated vhost collections. The single-vhost endpoint requires administrator privileges; no such privileges are granted to data identities. The tool fails closed if the collection exceeds the **4 MiB** response bound, even when the requested vhost alone would fit.
+`overview` returns only the exact requested vhost object, including message statistics, selected locally from the Management API vhost collection. It requests summary columns, but [RabbitMQ](https://www.rabbitmq.com/) 4.3.6 ignores that column selection and fails on paginated vhost collections. The single-vhost endpoint requires administrator privileges; no such privileges are granted to data identities. The tool fails closed if the collection exceeds the **4 MiB** response bound, even when the requested vhost alone would fit.
 
 `messages_peek` **consumes and requeues** messages: it is a write, not a read-only inspection. Count defaults to **5**, capped at **20**. Only `ackmode: ack_requeue_true` and `encoding: auto` are accepted; payloads are truncated at **64 KiB**. `message_publish` accepts a UTF-8 payload of at most **64 KiB**. `queue_purge` permanently removes ready messages and always requires confirmation.
 
@@ -144,7 +144,7 @@ Every tool requires an explicit permitted **`vhost`**, including `overview`. Lis
 
 Destructive tools always require gateway-run confirmation; `tools.confirmWrites: true` extends this to ordinary writes. The client must support **form elicitation and multi-round-trip tool calls (MRTR)**: the initial result requests input and supplies signed `requestState`; the continuation supplies that state and an accepted `confirm: true` response. Approval is bound to the cluster, token, tool, class and canonical effective-argument SHA-256, expires within the call timeout and is single-use. Missing capability, changed arguments, expiry, replay, decline or unavailable confirmation **fails closed**, without executing the tool. Upstream elicitation is not exposed as an alternative confirmation path; upstream resources are not proxied.
 
-Treat all returned content as **untrusted data, not instructions**. For upstreams without their own wrapping, the gateway adds a fresh per-call nonce boundary. MongoDB's manifest declares its upstream untrusted-data wrapping. Structured/non-text results are normalized into text, with no parallel unwrapped structured result. Results are truncated with `[Result truncated]` to fit the byte budget; output is not a complete export mechanism.
+Treat all returned content as **untrusted data, not instructions**. For upstreams without their own wrapping, the gateway adds a fresh per-call nonce boundary. [MongoDB](https://www.mongodb.com/)'s manifest declares its upstream untrusted-data wrapping. Structured/non-text results are normalized into text, with no parallel unwrapped structured result. Results are truncated with `[Result truncated]` to fit the byte budget; output is not a complete export mechanism.
 
 Default gateway limits:
 
@@ -156,7 +156,7 @@ Default gateway limits:
 | Serialized result budget | 256 KiB; usable text is smaller to reserve JSON escaping/envelope/boundary space |
 | Tool call timeout | 60 seconds, including confirmation |
 
-Rate/concurrency denial uses MCP error **`-32029`**. Limits reduce exposure, not query cost: aggregations, scans, local list pagination and requeued-message reads can still load production.
+Rate/concurrency denial uses [MCP](https://modelcontextprotocol.io/) error **`-32029`**. Limits reduce exposure, not query cost: aggregations, scans, local list pagination and requeued-message reads can still load production.
 
 ## Managed identities and rotation
 
@@ -169,13 +169,13 @@ Data credentials are generated and sealed, used privately by the gateway/compani
 | Elasticsearch | Roles **`karakoram_mcp_ro` / `karakoram_mcp_rw`**: cluster `monitor`; scoped index `read`, `view_index_metadata`, `monitor`, plus `write` for RW. `allow_restricted_indices: false`; gateway separately excludes all hidden/system/dot indices. No index/user administration grants. |
 | RabbitMQ | Both identities have **`monitoring`** tag. Per permitted vhost, Configure is `^$`, Read is `.*`; Write is `^$` for RO and `.*` for RW. The gateway, not the tag alone, prevents RO message consumption. |
 
-**PostgreSQL PUBLIC caveat:** reconciliation does not revoke PUBLIC CONNECT/object grants, because that would change application privileges. Scope is not an isolation boundary for objects already accessible to PUBLIC. GUCs are role defaults, not a SQL sandbox or immutable resource quota. Review PUBLIC grants, callable functions and application RLS before enabling an agent. SQL that requires privileges not granted above will fail even after approval.
+**[PostgreSQL](https://www.postgresql.org/) PUBLIC caveat:** reconciliation does not revoke PUBLIC CONNECT/object grants, because that would change application privileges. Scope is not an isolation boundary for objects already accessible to PUBLIC. GUCs are role defaults, not a SQL sandbox or immutable resource quota. Review PUBLIC grants, callable functions and application RLS before enabling an agent. SQL that requires privileges not granted above will fail even after approval.
 
 ## Companion operations and status
 
-MongoDB, PostgreSQL and Supabase add one private stateless service named **`<cluster>mcp`**, separate from database membership. It runs the Karakoram agent on the backend runtime (Ubuntu 24.04 on Zerops) with pinned [native artifacts](native-artifacts.md#data-mcp-companion-artifacts): `mongodb-mcp-server` **3.1.0** or `pgedge-postgres-mcp` **1.1.0**. Development builds require **`KARAKORAM_ARTIFACT_MIRROR`** for the MongoDB bundle because it has no upstream download URL; provide the lock-file artifact under its exact filename at the mirror. Admission fails if the artifact URL cannot be resolved. See [artifact resolution](native-artifacts.md#download-and-verification).
+[MongoDB](https://www.mongodb.com/), [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) add one private stateless service named **`<cluster>mcp`**, separate from database membership. It runs the Karakoram agent on the backend runtime ([Ubuntu](https://ubuntu.com/) 24.04 on [Zerops](https://zerops.io/)) with pinned [native artifacts](native-artifacts.md#data-mcp-companion-artifacts): `mongodb-mcp-server` **3.1.0** or `pgedge-postgres-mcp` **1.1.0**. Development builds require **`KARAKORAM_ARTIFACT_MIRROR`** for the MongoDB bundle because it has no upstream download URL; provide the lock-file artifact under its exact filename at the mirror. Admission fails if the artifact URL cannot be resolved. See [artifact resolution](native-artifacts.md#download-and-verification).
 
-PostgreSQL and Supabase companions connect directly to the active database members on private port **5432**, bypassing ProxySQL and Supavisor even when configured. Multi-host connections use `target_session_attrs=prefer-standby` for reads (falling back to the primary when no standby is available) and `target_session_attrs=read-write` for writes. This preserves pgEdge/pgx extended-protocol compatibility; enabling Data MCP does not enable a proxy reader listener. TLS-enabled clusters retain `sslmode=verify-full` with the cluster CA. All three backends provide companion-to-member private networking: Zerops project DNS, Dokploy target-overlay service aliases, and Nomad native service discovery mapped to routable allocation addresses. Operator-managed network policies must permit these private connections; no public database exposure is required.
+PostgreSQL and Supabase companions connect directly to the active database members on private port **5432**, bypassing [ProxySQL](https://proxysql.com/) and [Supavisor](https://github.com/supabase/supavisor) even when configured. Multi-host connections use `target_session_attrs=prefer-standby` for reads (falling back to the primary when no standby is available) and `target_session_attrs=read-write` for writes. This preserves [pgEdge](https://www.pgedge.com/)/[pgx](https://github.com/jackc/pgx) extended-protocol compatibility; enabling Data [MCP](https://modelcontextprotocol.io/) does not enable a proxy reader listener. TLS-enabled clusters retain `sslmode=verify-full` with the cluster CA. All three backends provide companion-to-member private networking: Zerops project DNS, [Dokploy](https://dokploy.com/) target-overlay service aliases, and [Nomad](https://developer.hashicorp.com/nomad) native service discovery mapped to routable allocation addresses. Operator-managed network policies must permit these private connections; no public database exposure is required.
 
 Companion resources default to shared CPU and 0.25–0.5 GiB RAM. `spec.dataMcp.resources` overrides those defaults. In an override, omitted/zero resource bounds, an omitted CPU mode and an omitted `startCpu` are unmanaged: backends with partial-update semantics may retain their existing values. Removing an override field does not request a reset or block later configuration and credential updates. Removing the entire resources override reapplies the controller's explicit defaults while leaving fields outside those defaults unmanaged.
 
@@ -202,6 +202,6 @@ Stored text can contain prompt injection. Boundaries and confirmations help an a
 
 Queries can consume CPU, memory, I/O and locks despite result bounds. Start with low-risk datasets, monitor database load and audit history, and review engine-specific privileges. Confirmations are not transactions or rollback. A transport/audit error after execution does not prove a mutation was undone; inspect state before repeating it.
 
-Sessions, confirmation signing keys and consumed challenges, and rate/concurrency counters are local to each control-plane process. MCP clients need instance affinity; restarting that process ends its sessions and pending confirmations.
+Sessions, confirmation signing keys and consumed challenges, and rate/concurrency counters are local to each control-plane process. [MCP](https://modelcontextprotocol.io/) clients need instance affinity; restarting that process ends its sessions and pending confirmations.
 
 Every `tools/call`, including denied, pending, declined, rate-limited and upstream-error calls, attempts an **`Audit`** event with resource **`cluster-data`**, reason `DataMcpToolCall`, cluster, actor, tool target, class, outcome, duration, confirmation state and **`argsHash`** (SHA-256 of canonical arguments; effective arguments after manifest defaults/clamps on admitted calls). `auditQueryText: true` additionally records `args`, which may contain sensitive query text or document values. Audit recording failure returns an error; it does not roll back a completed data change. Protect audit access and retention accordingly.

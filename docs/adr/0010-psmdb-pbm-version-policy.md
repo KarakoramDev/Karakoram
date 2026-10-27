@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Karakoram uses Percona Server for MongoDB (PSMDB) and Percona Backup for MongoDB (PBM), including physical backups. MongoDB release availability does not establish PSMDB package availability or PBM compatibility on Ubuntu 24.04. The supported catalog must reflect the actual engine packages and their tested compatibility.
+Karakoram uses [Percona Server for MongoDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) (PSMDB) and [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/) (PBM), including physical backups. [MongoDB](https://www.mongodb.com) release availability does not establish PSMDB package availability or PBM compatibility on [Ubuntu](https://ubuntu.com) 24.04. The supported catalog must reflect the actual engine packages and their tested compatibility.
 
 ## Decision
 

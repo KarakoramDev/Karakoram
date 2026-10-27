@@ -53,7 +53,7 @@ Rotation changes the native password before committing the new managed secret; r
 
 **Every Community user can read, write and administer the whole server.** There are no limited roles, per-database grants or read-only users. Network policy and credential handling remain essential.
 
-The cluster's native **Users** tab lists users and password-change state, creates users, sets/generates passwords and confirms deletion. Leave the password field empty to generate one; save the one-time reveal before dismissing it. The managed administrator belongs in **System users**, not this tab. The connection panel's **How to connect (Bolt / Neo4j drivers)** section explains CA trust and private/public listener scope; download the CA through credential reveal.
+The cluster's native **Users** tab lists users and password-change state, creates users, sets/generates passwords and confirms deletion. Leave the password field empty to generate one; save the one-time reveal before dismissing it. The managed administrator belongs in **System users**, not this tab. The connection panel's **How to connect (Bolt / [Neo4j](https://neo4j.com/) drivers)** section explains CA trust and private/public listener scope; download the CA through credential reveal.
 
 ```sh
 karactl -n NS neo4j users list graphdb
@@ -75,7 +75,7 @@ The API paths below are relative to `/api/v1/clusters/{cluster}`:
 | `DELETE /neo4j/users/{user}` | — | 204 |
 | `POST /neo4j/users/{user}/password` | Optional `{password?}` | `{generatedPassword?}` |
 
-Native routes use `database-users` permissions; every mutation additionally requires `clusters:update`. Cookie mutations require CSRF protection; mutations support `Idempotency-Key`. Password responses use `Cache-Control: no-store`. The generic MongoDB-shaped `/database-users` and `/database-roles` routes are not Neo4j access APIs.
+Native routes use `database-users` permissions; every mutation additionally requires `clusters:update`. Cookie mutations require CSRF protection; mutations support `Idempotency-Key`. Password responses use `Cache-Control: no-store`. The generic [MongoDB](https://www.mongodb.com/)-shaped `/database-users` and `/database-roles` routes are not Neo4j access APIs.
 
 Management MCP exposes `neo4j_users_list` and `neo4j_user_get` as reads, and `neo4j_user_create`, `neo4j_user_delete` and `neo4j_user_password_set` as destructive operations requiring confirmation. Create and password changes are secret-bearing operations: restricted API tokens must permit credential reveal as well as the required permissions, even when supplying a password explicitly. Neo4j does not support the cluster Data MCP gateway.
 

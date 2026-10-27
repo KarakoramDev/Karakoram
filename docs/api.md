@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # REST API and SDK
 
-The public contract is [api/openapi.yaml](../api/openapi.yaml), OpenAPI 3.0.3; use the specification embedded in your running server at **`GET /api/v1/openapi.yaml`** for deployment-matched schemas and clients.
+The public contract is [api/openapi.yaml](../api/openapi.yaml), [OpenAPI](https://www.openapis.org/) 3.0.3; use the specification embedded in your running server at **`GET /api/v1/openapi.yaml`** for deployment-matched schemas and clients.
 
 Most routes are under `/api/v1`. `/healthz` and authenticated `/metrics` are installation-root exceptions. The specification download is public, served as `application/yaml` and cacheable for five minutes; there is no bundled Swagger UI. Relay and agent protocols are not public management APIs.
 
@@ -10,13 +10,13 @@ Agents can use the embedded [MCP server](mcp.md) at `/mcp`, with the same REST e
 
 ## Authentication
 
-Scripts use a Karakoram API token, **not a backend infrastructure credential** (such as a Zerops integration token):
+Scripts use a Karakoram API token, **not a backend infrastructure credential** (such as a [Zerops](https://zerops.io/) integration token):
 
 ```http
 Authorization: Bearer <karakoram-token>
 ```
 
-Bearer tokens use their owner's current permissions and need no CSRF header. Local `POST /auth/login` takes `{username, password}`, sets session cookies and returns `{account, csrfToken, expiresAt}`. Cookie-authenticated unsafe methods require **`X-Karakoram-CSRF`** matching the session token/readable CSRF cookie; login itself does not. `GET /auth/me` returns the current cookie session's CSRF token, including after OIDC. `POST /auth/refresh` rotates refresh credentials; reusing an older refresh token revokes that family. Complete mandatory password changes and reauthenticate before creating tokens or ordinary work.
+Bearer tokens use their owner's current permissions and need no CSRF header. Local `POST /auth/login` takes `{username, password}`, sets session cookies and returns `{account, csrfToken, expiresAt}`. Cookie-authenticated unsafe methods require **`X-Karakoram-CSRF`** matching the session token/readable CSRF cookie; login itself does not. `GET /auth/me` returns the current cookie session's CSRF token, including after [OIDC](https://openid.net/developers/how-connect-works/). `POST /auth/refresh` rotates refresh credentials; reusing an older refresh token revokes that family. Complete mandatory password changes and reauthenticate before creating tokens or ordinary work.
 
 OIDC uses `/auth/oidc/login` and `/auth/oidc/callback` with redirects/state/PKCE, not device-code login. Successful OIDC redirects to the installation root; `returnTo` currently does not change that. Account/password rules, token expiry/revocation and SSO setup live in [access control](access-control.md); cookie protections live in [security](security.md).
 
@@ -33,7 +33,7 @@ The UI bounds ordinary API requests to **30 seconds**, excluding SSE. Network/5x
 
 ### Curl bootstrap
 
-Requires Bash, curl, jq and an enabled local account whose mandatory password change is complete. Replace the origin without a trailing slash. The protected temporary cookie jar and CSRF header are both needed for token creation:
+Requires [Bash](https://cgit.git.savannah.gnu.org/cgit/bash.git/), [curl](https://curl.se/), [jq](https://jqlang.org/) and an enabled local account whose mandatory password change is complete. Replace the origin without a trailing slash. The protected temporary cookie jar and CSRF header are both needed for token creation:
 
 ```bash
 set -euo pipefail
@@ -77,15 +77,15 @@ Save the one-time `KARAKORAM_TOKEN` securely before closing the shell. `TOKEN_ID
 
 ## Authorization and credential reveal
 
-OpenAPI's `x-karakoram-rbac` declares each operation's resource/action/object. Lists, streams and metrics filter individual authorized objects; collection access does not reveal all resources. See [access control](access-control.md).
+[OpenAPI](https://www.openapis.org/)'s `x-karakoram-rbac` declares each operation's resource/action/object. Lists, streams and metrics filter individual authorized objects; collection access does not reveal all resources. See [access control](access-control.md).
 
 `GET /clusters/{cluster}/connection` is an explicit, audited reveal requiring `cluster-credentials:read`, with `Cache-Control: no-store`. It returns **provider-defined administrative credentials** and public CA, not an application identity. Ordinary cluster/status reads are password-free. Follow engine access procedures: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). Storage keys/private PEM inputs are write-only; generated application passwords and API-token secrets are creation responses, not later GET results.
 
-PostgreSQL and Supabase use [native PostgreSQL access](postgres/access-and-tls.md), not `/database-users` or `/database-roles`. Supabase's separate GET `/clusters/{cluster}/supabase/credentials` requires `cluster-credentials:read` and returns API/Studio URLs and sensitive service/dashboard keys with no-store; do not confuse this with a normal cluster read.
+[PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use [native PostgreSQL access](postgres/access-and-tls.md), not `/database-users` or `/database-roles`. Supabase's separate GET `/clusters/{cluster}/supabase/credentials` requires `cluster-credentials:read` and returns API/Studio URLs and sensitive service/dashboard keys with no-store; do not confuse this with a normal cluster read.
 
 ## Operation safety metadata
 
-Every OpenAPI operation declares `x-karakoram-agent` immediately after its
+Every [OpenAPI](https://www.openapis.org/) operation declares `x-karakoram-agent` immediately after its
 `x-karakoram-rbac` block. `go generate ./api/...` validates this inventory and
 emits `internal/api/agentmap.gen.go`; CI's `make openapi-check` rejects missing,
 invalid or stale metadata.
@@ -112,7 +112,7 @@ verification messages also receive this classification. Backup deletion uses
 backup and restore creation use `record`. Namespace deletion returns no
 Operation or record, so it uses `none`; observe its lifecycle separately.
 
-OpenBao's connection response is an exception to the administrative-credential set: it contains HTTPS endpoints and CA only. Initialization material has a separate confirmed reveal route and permission; see [OpenBao access and TLS](openbao/access-and-tls.md).
+[OpenBao](https://openbao.org/)'s connection response is an exception to the administrative-credential set: it contains HTTPS endpoints and CA only. Initialization material has a separate confirmed reveal route and permission; see [OpenBao access and TLS](openbao/access-and-tls.md).
 
 The `openbao_unseal_keys_reveal` management tool is secret and requires explicit
 confirmation, as do creation and deletion of managed database connections.
@@ -123,7 +123,7 @@ password-free summaries and are idempotent reads.
 
 ## Resource families
 
-Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to provider capabilities and RBAC. Use OpenAPI for exact paths, payloads and permissions.
+Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{cluster}`. **All** remains subject to provider capabilities and RBAC. Use [OpenAPI](https://www.openapis.org/) for exact paths, payloads and permissions.
 
 | Family | Routes or cluster suffixes | Engines |
 | --- | --- | --- |
@@ -156,23 +156,23 @@ Paths below are relative to `/api/v1`; cluster suffixes follow `/clusters/{clust
 | Notifications | `/notification-channels`, `/notification-channels/{channel}`, `/notification-channels/{channel}/test` | Installation-wide |
 | Backup verification | Cluster `/backup-drills`, `/backup-drills/{drill}` | Engines with eligible successful backups |
 
-PostgreSQL role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
-Neo4j native-user reads use `database-users:read`; create/delete/password changes additionally require `clusters:update` alongside the corresponding `database-users` permission. Password responses are no-store. The managed `neo4j` administrator is hidden from lists and cannot be mutated here. See [Neo4j access and TLS](neo4j/access-and-tls.md).
+[PostgreSQL](https://www.postgresql.org/) role PUT replaces attributes; PATCH changes only supplied fields. Database routes expose creation/read/deletion, not update; grants are bounded database/schema privileges. Generated login passwords are one-time no-store responses, with sealed idempotent replay. Native access uses `database-users` RBAC, with extra `clusters:update` authorization for privileged role/membership/password changes. See [payloads and limits](postgres/access-and-tls.md).
+[Neo4j](https://neo4j.com/) native-user reads use `database-users:read`; create/delete/password changes additionally require `clusters:update` alongside the corresponding `database-users` permission. Password responses are no-store. The managed `neo4j` administrator is hidden from lists and cannot be mutated here. See [Neo4j access and TLS](neo4j/access-and-tls.md).
 
 See [consumer bindings](postgres/bindings.md) for rotation and deletion/upgrade guards. In-place restores of a bound PostgreSQL source require `acknowledgeBoundConsumers: true`; otherwise HTTP 409 `bound_consumers` lists affected consumer identities.
 
 Distributed PostgreSQL exposes `POST /clusters/{cluster}/actions/rebalance` with `{strategy?: string}` and returns 202 Operation (`type: rebalance`). It uses `clusters:update`, CSRF and idempotency conventions. Members expose a read-only `group` (0 coordinator); `CitusTopology` conditions report metadata drift. See [distributed PostgreSQL](postgres/distributed.md).
-MySQL native access uses `database-users` RBAC for application users at the fixed `%` host, databases and bounded database privileges. User PATCH changes only supplied connection-limit and lock fields. Create and password rotation return generated passwords only once, with `Cache-Control: no-store` and sealed replay when an idempotency key is supplied. Rotation accepts `retainCurrent` for dual passwords; discard-old removes the retained password. Database creation defaults to `utf8mb4` / `utf8mb4_0900_ai_ci`; deletion requires `force=true` for a nonempty database. Grant listing requires at least one `user` or `database` filter. Global privileges and `GRANT OPTION` are not exposed.
+[MySQL](https://www.oracle.com/mysql/) native access uses `database-users` RBAC for application users at the fixed `%` host, databases and bounded database privileges. User PATCH changes only supplied connection-limit and lock fields. Create and password rotation return generated passwords only once, with `Cache-Control: no-store` and sealed replay when an idempotency key is supplied. Rotation accepts `retainCurrent` for dual passwords; discard-old removes the retained password. Database creation defaults to `utf8mb4` / `utf8mb4_0900_ai_ci`; deletion requires `force=true` for a nonempty database. Grant listing requires at least one `user` or `database` filter. Global privileges and `GRANT OPTION` are not exposed.
 
-The topology contract accepts MySQL Group Replication `group` and PXC `cluster` alongside `single`; provider catalogs identify which topologies each engine supports. Backup type enums include `incremental` for MySQL/PXC, separately from PostgreSQL's `incr` spelling.
+The topology contract accepts MySQL Group Replication `group` and [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) `cluster` alongside `single`; provider catalogs identify which topologies each engine supports. Backup type enums include `incremental` for MySQL/PXC, separately from PostgreSQL's `incr` spelling.
 
 MySQL and PXC share the native access routes, not provider identity or interchangeable backups. See [access and TLS](mysql/access-and-tls.md), [GTID-based recovery](mysql/backups.md) and [explicit PXC minority recovery](mysql/operations.md#explicit-pxc-minority-recovery). Quorum recovery requires cluster update permission, returns an accepted Operation and is not arbitrary SQL or a fencing bypass.
 
-Weaviate uses [native users/roles](weaviate/access-and-tls.md), not MongoDB identity routes. List/get requires `database-users/read`; user create/update/delete uses the corresponding action. Assigning any role other than `viewer` or `read-only` additionally requires `clusters/update`, including roles already present on user update. Key rotation requires `database-users/update` and, if the user's current roles include any role beyond `viewer` or `read-only`, `clusters/update`. User deletion requires only `database-users/delete`, even for privileged users. Every role create/replace/delete requires both `database-users/update` and `clusters/update`. System/environment identities and built-in roles remain protected. Creation/key rotation returns no-store generated API keys; GET cannot retrieve them, while matching idempotency retries replay sealed results for 24 hours. Administrative reveal separately requires `cluster-credentials:read`.
+[Weaviate](https://weaviate.io/) uses [native users/roles](weaviate/access-and-tls.md), not [MongoDB](https://www.mongodb.com/) identity routes. List/get requires `database-users/read`; user create/update/delete uses the corresponding action. Assigning any role other than `viewer` or `read-only` additionally requires `clusters/update`, including roles already present on user update. Key rotation requires `database-users/update` and, if the user's current roles include any role beyond `viewer` or `read-only`, `clusters/update`. User deletion requires only `database-users/delete`, even for privileged users. Every role create/replace/delete requires both `database-users/update` and `clusters/update`. System/environment identities and built-in roles remain protected. Creation/key rotation returns no-store generated API keys; GET cannot retrieve them, while matching idempotency retries replay sealed results for 24 hours. Administrative reveal separately requires `cluster-credentials:read`.
 
-Supabase function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
+[Supabase](https://supabase.com/) function GETs use `clusters:read`, mutations `clusters:update`; SMTP password is write-only. Function PUT replaces the relative-path/source map (100 functions maximum, 1 MiB each, nonempty `index.ts`). JWT rotation returns a durable operation. Source storage does not establish runnable Functions availability; enabled service artifacts must exist in the release lock. See [Supabase operations](supabase/operations.md).
 
-Temporal certificate issuance requires `cluster-credentials:read`; certificate/namespace listing requires `clusters:read`; namespace deletion and UI OIDC secret writes require `clusters:update`, all scoped to the cluster. Issuance returns private material once with `no-store`; secret writes return no value. See [Temporal access/TLS](temporal/access-and-tls.md) and [namespace/recovery operations](temporal/operations.md).
+[Temporal](https://temporal.io/) certificate issuance requires `cluster-credentials:read`; certificate/namespace listing requires `clusters:read`; namespace deletion and UI [OIDC](https://openid.net/developers/how-connect-works/) secret writes require `clusters:update`, all scoped to the cluster. Issuance returns private material once with `no-store`; secret writes return no value. See [Temporal access/TLS](temporal/access-and-tls.md) and [namespace/recovery operations](temporal/operations.md).
 
 Fleet disruption requests and cluster updates support `ignoreMaintenanceWindow=true` where declared in the specification. Without an override, accepted operations can remain Pending until the next configured window; acceptance is not permission to interrupt an in-progress member step. See [maintenance and relocation](operations.md) and [agent rollout](upgrade.md).
 
@@ -184,13 +184,13 @@ Object routes and creation default to **`default`**. Omitting `namespace` on cro
 
 For an explicit nonexistent namespace, authorized callers receive **404** `not_found` with `details.resource: namespace` and `details.name`. Without a permission there, collections remain empty and object requests retain their normal **403**, regardless of existence. Public/authentication routes do not resolve this parameter.
 
-**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation accepts required `name`, `projectId` (backend target ID) and write-only `token`, plus optional `description`, `backend` (default `zerops`) and `config` (non-secret string settings). `GET /backends` requires `namespaces/read` on global `*` and lists registered kinds, capabilities, relay requirements and config keys; namespace responses include `backend` and enabled `capabilities`. Registered backends are `zerops`, `dokploy`, and `nomad`; unknown config keys return **400**. Zerops accepts no config keys; its API URL is operator-only (`KARAKORAM_ZEROPS_API_URL`) and applies equally to legacy and new namespaces. Dokploy's `url` and Nomad's `address` settings are restricted to operator-approved origins ([Dokploy target settings](dokploy.md#target-settings), [Nomad target settings](nomad.md#target-settings)).
+**`GET /namespaces` paginates normally**, after authorization filtering. Namespace creation accepts required `name`, `projectId` (backend target ID) and write-only `token`, plus optional `description`, `backend` (default `zerops`) and `config` (non-secret string settings). `GET /backends` requires `namespaces/read` on global `*` and lists registered kinds, capabilities, relay requirements and config keys; namespace responses include `backend` and enabled `capabilities`. Registered backends are `zerops`, `dokploy`, and `nomad`; unknown config keys return **400**. [Zerops](https://zerops.io/) accepts no config keys; its API URL is operator-only (`KARAKORAM_ZEROPS_API_URL`) and applies equally to legacy and new namespaces. [Dokploy](https://dokploy.com/)'s `url` and [Nomad](https://developer.hashicorp.com/nomad)'s `address` settings are restricted to operator-approved origins ([Dokploy target settings](dokploy.md#target-settings), [Nomad target settings](nomad.md#target-settings)).
 
 Creation returns **201** after synchronous validation, then deploys a relay asynchronously only if the backend requires one (as Zerops does). **`DELETE /namespaces/{namespace}` returns 202 without a body or `Karakoram-Operation-Id`**: poll namespace lifecycle/health and events until removal, not `/operations`. Registration, token validation/rotation and guarded deletion belong in [namespaces](namespaces.md). Recovery source namespace fields and source-export permissions belong in [backups](backups.md).
 
 ## Requests and asynchronous work
 
-Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero is not a request for defaults: resources and required member counts must satisfy their bounds, while optional component `replicas: 0` explicitly disables that component where the engine permits it. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. Go input fields use pointers: nil requests defaults, a pointer to zero does not.
+Create accepts `{name, spec}`; PUT replaces `{spec}`; PATCH accepts only `{spec: {...}}` as a JSON merge patch. Arrays replace entirely. Name/status/generation/timestamps are server-owned. Unknown fields, wrong types, invalid enums/bounds and trailing JSON produce **400** with `details.field` and `details.reason`. Explicit zero is not a request for defaults: resources and required member counts must satisfy their bounds, while optional component `replicas: 0` explicitly disables that component where the engine permits it. `spec.provider` is required; omitted version/topology/components/resources use that catalog's defaults. [Go](https://go.dev/) input fields use pointers: nil requests defaults, a pointer to zero does not.
 
 Cluster create, PUT and PATCH apply engine defaults and validation, then check the namespace backend's static capabilities before saving. A spec requiring an unavailable capability returns **400 `invalid_request`** naming the backend and missing capabilities (for example `publicTcp`); admission does not make a platform API request.
 
@@ -253,14 +253,14 @@ The boolean query `ignoreMaintenanceWindow` is declared on cluster PUT/PATCH, re
 
 ## Safe retries with Idempotency-Key
 
-Supply the header only on operations declaring `IdempotencyKey` in OpenAPI: supported resource creation/update and lifecycle/recovery actions, not every mutation. Use a unique random key per intended mutation, **1–255 visible ASCII characters without spaces**, and reuse the same key/body for network retries.
+Supply the header only on operations declaring `IdempotencyKey` in [OpenAPI](https://www.openapis.org/): supported resource creation/update and lifecycle/recovery actions, not every mutation. Use a unique random key per intended mutation, **1–255 visible ASCII characters without spaces**, and reuse the same key/body for network retries.
 
-- Scope includes account creation identity/OIDC issuer or the specific bearer token, method, route, namespace and path parameters. Omitted namespace and explicit `default` share a scope. Authentication, CSRF and authorization are checked again on replay.
+- Scope includes account creation identity/[OIDC](https://openid.net/developers/how-connect-works/) issuer or the specific bearer token, method, route, namespace and path parameters. Omitted namespace and explicit `default` share a scope. Authentication, CSRF and authorization are checked again on replay.
 - Successful **2xx** status/body/relevant headers are replayable for **24 hours**, including one-time secrets and operation IDs. Replay sets `Idempotent-Replayed: true`. It is the original response snapshot; query current state separately.
 - JSON whitespace/key order do not affect matching; array order, values, omitted fields, explicit null and numeric spellings do. A changed body returns **409 conflict**, `details.field: Idempotency-Key`, `details.reason: conflict`. Concurrent in-flight duplicates return **409** with reason `invalid_state`; retry the same key/body after completion.
 - **4xx/5xx are not cached**. Operation-backed mutations atomically save a recovery response with their accepted operation. If the server stops or the final response cannot be saved after acceptance, the same key replays the accepted resource/Operation snapshot and its original `Karakoram-Operation-Id`, rather than creating another action. The recovery response keeps the endpoint's normal success status and response shape; once the ordinary successful response is saved, replay uses its exact status/body/headers. Non-operation-backed mutations can still have an ambiguous remote or response boundary: inspect their resources before retrying. Expiry permits new execution; a fresh key is not a recovery shortcut or an exactly-once guarantee.
 
-`karactl` does not send this header and has no flag for it. Raw HTTP clients set `Idempotency-Key`; Go callers can pass a per-call `client.RequestEditorFn` that sets the header, or configure request editing with `client.WithRequestEditorFn`. Retain each mutation's key across retries; never reuse one fixed key for unrelated writes or log replayed secrets.
+`karactl` does not send this header and has no flag for it. Raw HTTP clients set `Idempotency-Key`; [Go](https://go.dev/) callers can pass a per-call `client.RequestEditorFn` that sets the header, or configure request editing with `client.WithRequestEditorFn`. Retain each mutation's key across retries; never reuse one fixed key for unrelated writes or log replayed secrets.
 
 ## Pagination and events
 
@@ -305,7 +305,7 @@ The stream sends an immediately flushed connected comment and **15-second heartb
 
 Errors are `{code, message, details?}`. Branch on code/field/reason, not English messages. An HTTP-successful poll can describe a failed Operation.
 
-Cluster create, PUT and PATCH return `400 invalid_request` when fresh backend information positively establishes that public `spec.exposure.ipType` is unavailable. Zerops checks current project IPv4/IPv6 addresses, not cached namespace identity. Select a provisioned family, provision the requested public address, or disable public exposure. A failed lookup or backend without authoritative family information does not reject the request: reconciliation reports `ExposureSupported=Unknown/PublicIPSupportUnknown` while attempting routing normally. Dokploy and Nomad accept both family selections for native published ports; configured public addresses advertise endpoints, not an authoritative inventory of host ingress families.
+Cluster create, PUT and PATCH return `400 invalid_request` when fresh backend information positively establishes that public `spec.exposure.ipType` is unavailable. [Zerops](https://zerops.io/) checks current project IPv4/IPv6 addresses, not cached namespace identity. Select a provisioned family, provision the requested public address, or disable public exposure. A failed lookup or backend without authoritative family information does not reject the request: reconciliation reports `ExposureSupported=Unknown/PublicIPSupportUnknown` while attempting routing normally. [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) accept both family selections for native published ports; configured public addresses advertise endpoints, not an authoritative inventory of host ingress families.
 
 Updates that preserve public/private mode, IP family and allowlist keep unchanged legacy exposure; an unrelated update is not rejected solely because that existing exposure is unavailable. New exposure choices or routing changes still undergo the availability check.
 
@@ -335,15 +335,15 @@ rules retain their separate admission behavior.
 
 Outside that fence, an unsupported engine action returns `409 conflict` with
 `details.resource: operation`, `details.name: <requested action>` and
-`details.reason: unsupported`; the message identifies the engine. PostgreSQL and
-Supabase do not support the generic system-user rotation action. Password
+`details.reason: unsupported`; the message identifies the engine. [PostgreSQL](https://www.postgresql.org/) and
+[Supabase](https://supabase.com/) do not support the generic system-user rotation action. Password
 rotation for **non-reserved PostgreSQL login roles** uses
 `POST /clusters/{cluster}/postgres/roles/{role}/password`; managed roles such as
 `postgres` remain engine-owned and are not made rotatable by that hint.
 
 ## Clients/SDK
 
-Install the public Go client at a release/commit matching the server:
+Install the public [Go](https://go.dev/) client at a release/commit matching the server:
 
 ```sh
 go get github.com/KarakoramDev/Karakoram/pkg/client@<version>
@@ -401,11 +401,11 @@ npx openapi-typescript openapi.yaml -o karakoram-api.d.ts
 npm install openapi-fetch
 ```
 
-Configure `/api/v1` base URL and bearer authentication. TypeScript generation produces types; pair with `openapi-fetch`, or generate a runtime client with `-g typescript-fetch`. Generated clients still need error handling, polling and SSE parsing. Repository regeneration belongs in [CONTRIBUTING](../CONTRIBUTING.md).
+Configure `/api/v1` base URL and bearer authentication. [TypeScript](https://www.typescriptlang.org/) generation produces types; pair with `openapi-fetch`, or generate a runtime client with `-g typescript-fetch`. Generated clients still need error handling, polling and SSE parsing. Repository regeneration belongs in [CONTRIBUTING](../CONTRIBUTING.md).
 
 ## OpenBao operations
 
-POST `/clusters/{cluster}/openbao/unseal-keys/reveal` accepts `{"confirm":"<cluster name>"}`, requires `openbao-unseal-keys:reveal`, returns no-store initialization material and audits disclosure without response secrets. Database-connection GET/list uses `clusters:read`; POST uses `clusters:update` plus target `database-users:create`; DELETE uses `clusters:update` plus target `database-users:delete`. Connections target Ready, TLS-enabled PostgreSQL, PSMDB replica sets or RabbitMQ in the same namespace.
+POST `/clusters/{cluster}/openbao/unseal-keys/reveal` accepts `{"confirm":"<cluster name>"}`, requires `openbao-unseal-keys:reveal`, returns no-store initialization material and audits disclosure without response secrets. Database-connection GET/list uses `clusters:read`; POST uses `clusters:update` plus target `database-users:create`; DELETE uses `clusters:update` plus target `database-users:delete`. Connections target Ready, TLS-enabled [PostgreSQL](https://www.postgresql.org/), PSMDB replica sets or [RabbitMQ](https://www.rabbitmq.com/) in the same namespace.
 
 POST `/clusters/{cluster}/openbao/database-connections` example:
 
@@ -413,4 +413,4 @@ POST `/clusters/{cluster}/openbao/database-connections` example:
 {"name":"orders","targetCluster":"ordersdb","roles":[{"name":"reader","access":"readonly","defaultTtlSeconds":3600,"maxTtlSeconds":86400}]}
 ```
 
-The returned secret-free record can be `pending`; use its final `credentialsPath` with a native OpenBao token once `ready`. OpenBao issues credentials, not Karakoram. Shared restart/replace-member/rotate-tls routes and catalog-bound version patches drive maintenance. Shared backup/restore routes use `raft-snapshot`; cluster-create and restore requests accept top-level write-only `openbaoUnsealShares` for deleted-source recovery. See [operations](openbao/operations.md) and [recovery request examples](openbao/backups.md).
+The returned secret-free record can be `pending`; use its final `credentialsPath` with a native [OpenBao](https://openbao.org/) token once `ready`. OpenBao issues credentials, not Karakoram. Shared restart/replace-member/rotate-tls routes and catalog-bound version patches drive maintenance. Shared backup/restore routes use `raft-snapshot`; cluster-create and restore requests accept top-level write-only `openbaoUnsealShares` for deleted-source recovery. See [operations](openbao/operations.md) and [recovery request examples](openbao/backups.md).

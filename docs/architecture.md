@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Architecture
 
-Karakoram is a self-hosted, multi-platform control plane that reconciles engine clusters across infrastructure backends and namespace targets. Zerops is the reference backend; Dokploy and Nomad are also available. See [Backends](backends.md).
+Karakoram is a self-hosted, multi-platform control plane that reconciles engine clusters across infrastructure backends and namespace targets. [Zerops](https://zerops.io/) is the reference backend; [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad) are also available. See [Backends](backends.md).
 
 ## Deployment and trust boundaries
 
@@ -20,8 +20,8 @@ flowchart LR
   Agent -->|Render files / supervise processes| Engine
 ```
 
-- **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. UI/API traffic enters through public HTTPS; the private agent listener uses TLS 9443. SQLite stores desired state, observations, operations, events and encrypted secret values. The master key is a separately managed service secret.
-- **Data-bearing members:** singleton Ubuntu 24.04 runtimes with independently identified persistent volumes and stable identities (Local Storage on Zerops). Increasing a runtime's container count is not engine replication.
+- **Control plane:** one runtime service, normally `karakoram`, with one container and a `karakoramdata` Local Storage volume mounted at `/mnt/karakoramdata`. UI/API traffic enters through public HTTPS; the private agent listener uses TLS 9443. [SQLite](https://sqlite.org/) stores desired state, observations, operations, events and encrypted secret values. The master key is a separately managed service secret.
+- **Data-bearing members:** singleton [Ubuntu](https://ubuntu.com/) 24.04 runtimes with independently identified persistent volumes and stable identities (Local Storage on Zerops). Increasing a runtime's container count is not engine replication.
 - **Stateless components:** provider-supported auxiliary runtimes do not have durable data volumes. Containers sharing a service identity are not independent data-bearing members.
 - **Node agent:** `karakoram agent` supervises the selected engine and exposes a bounded private API, not a remote shell.
 
@@ -29,7 +29,7 @@ Private networking alone is not an authentication boundary. Agent traffic uses p
 
 ## Namespaces and relay routing
 
-A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are the [Zerops backend](zerops.md) (targets are Zerops projects), the [Dokploy backend](dokploy.md) (Dokploy environments on a Docker Swarm), and the [Nomad backend](nomad.md) (Nomad namespaces on an operator-managed cluster). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; all three current backends require it.
+A namespace selects an immutable backend kind and target with its infrastructure credentials. Backends are the [Zerops backend](zerops.md) (targets are Zerops projects), the [Dokploy backend](dokploy.md) (Dokploy environments on a [Docker Swarm](https://docs.docker.com/engine/swarm/)), and the [Nomad backend](nomad.md) (Nomad namespaces on an operator-managed cluster). `default` is the control plane's own target and uses direct private networking. Additional namespaces use an outbound relay only when their backend's `BackendInfo.Relay` requires one; all three current backends require it.
 
 The relay opens an outbound WebSocket connection through public HTTPS and carries an inner mutually authenticated TLS tunnel. Provider-approved administration traffic and protected agent traffic use namespace-qualified streams; agent configuration pulls retain end-to-end TLS. A namespace token or relay outage interrupts management of that namespace, not every project. The relay is not application networking.
 
@@ -45,7 +45,7 @@ Backend capabilities describe optional public routing, disk growth, quotas, plac
 
 Clusters separate desired `spec` from observed `status`, with generation tracking. Mutations persist intent before reconciliation. Per-cluster workers serialize synchronization and imperative operations; unrelated clusters can progress independently. Providers persist checkpoints and platform identifiers, then observe completion before advancing disruptive work.
 
-Provider persistence replaces each owned state value, not just its nonempty fields. PostgreSQL, Elasticsearch and Supabase replace their complete `Cluster.Internal` namespace objects. Flat MongoDB and RabbitMQ state uses `internal/statejson.ReplaceOwned`: explicit JSON tags define owned root keys, omitted empty fields remove prior values, and unrelated workflow keys survive. Nested values are replaced whole; adding an optional owned field must not require a second, hand-maintained deletion list.
+Provider persistence replaces each owned state value, not just its nonempty fields. [PostgreSQL](https://www.postgresql.org/), [Elasticsearch](https://www.elastic.co/elasticsearch) and [Supabase](https://supabase.com/) replace their complete `Cluster.Internal` namespace objects. Flat [MongoDB](https://www.mongodb.com/) and [RabbitMQ](https://www.rabbitmq.com/) state uses `internal/statejson.ReplaceOwned`: explicit JSON tags define owned root keys, omitted empty fields remove prior values, and unrelated workflow keys survive. Nested values are replaced whole; adding an optional owned field must not require a second, hand-maintained deletion list.
 
 Neither HTTP acceptance nor a successful infrastructure configuration process proves engine health. There is no distributed exactly-once transaction across SQLite, infrastructure backends and engine/storage APIs: durable identifiers and observation constrain replay, while ambiguous outcomes require investigation. [Clusters and operations](clusters.md#operations-and-status) defines generations, operation phases, health, cancellation and wait behavior.
 
@@ -73,7 +73,7 @@ retains the configured stop signal to the child's process group.
 
 The control plane owns scheduling and count retention; its downtime pauses new scheduling and retention. Already-started engine-side work can continue without the control plane. Engine backups and control-plane state backups protect different assets: preserve both the SQLite state and its master key as described in [state backup and recovery](operations.md#control-plane-state-backup-and-recovery).
 
-Agents expose member metrics for control-plane collection, history and authenticated Prometheus export. Persisted events feed live UI/API updates; the live event stream is an acceleration, not the persistence layer. See [Monitoring and events](monitoring.md) and [API pagination and events](api.md#pagination-and-events).
+Agents expose member metrics for control-plane collection, history and authenticated [Prometheus](https://prometheus.io/) export. Persisted events feed live UI/API updates; the live event stream is an acceleration, not the persistence layer. See [Monitoring and events](monitoring.md) and [API pagination and events](api.md#pagination-and-events).
 
 ## Failure domains
 
@@ -83,7 +83,7 @@ The control plane is single-replica. Persistent volumes are node-local on curren
 
 Providers are compiled into Karakoram, not dynamically installable plugins. Each owns its version catalog, validation/defaults, topology, health observation, lifecycle checkpoints, access APIs and backup semantics. Shared interfaces handle infrastructure, namespaces, secrets, operations and monitoring; capability metadata gates supported UI/API actions. A cluster's provider is immutable.
 
-Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declarations with per-component replicas and resources in `spec.components.extra`. Shared stateless reconciliation handles enable/disable stages through engine callbacks; credentials, application readiness, resizing and stateful safety remain engine-owned. Elasticsearch uses this for Kibana, Logstash and APM; PostgreSQL for ProxySQL; Supabase for its modular native services. See [ADR 0031](adr/0031-engine-component-model.md).
+Optional auxiliary services use ordered `ComponentDef`/`ComponentSet` declarations with per-component replicas and resources in `spec.components.extra`. Shared stateless reconciliation handles enable/disable stages through engine callbacks; credentials, application readiness, resizing and stateful safety remain engine-owned. Elasticsearch uses this for [Kibana](https://www.elastic.co/kibana), [Logstash](https://www.elastic.co/logstash) and [APM](https://www.elastic.co/observability/application-performance-monitoring); PostgreSQL for [ProxySQL](https://proxysql.com/); Supabase for its modular native services. See [ADR 0031](adr/0031-engine-component-model.md).
 
 | Engine | Provider | Runtime and operational details |
 | --- | --- | --- |

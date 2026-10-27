@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Some workloads outgrow one PostgreSQL writer: multi-tenant SaaS, very large tables, real-time analytics. Citus distributes tables across PostgreSQL nodes while keeping the PostgreSQL protocol and extension ecosystem, and Patroni 3+ manages Citus formations natively. Neither Percona nor the PostgreSQL community repositories for Ubuntu 24.04 ship Citus for Percona Server for PostgreSQL, and the [existing HA design](0034-postgres-engine.md) assumes one writer, one Patroni scope with one leader key, one etcd ensemble per member set and one pgBackRest stanza.
+Some workloads outgrow one [PostgreSQL](https://www.postgresql.org) writer: multi-tenant SaaS, very large tables, real-time analytics. [Citus](https://www.citusdata.com) distributes tables across PostgreSQL nodes while keeping the PostgreSQL protocol and extension ecosystem, and [Patroni](https://patroni.readthedocs.io) 3+ manages Citus formations natively. Neither [Percona](https://www.percona.com) nor the PostgreSQL community repositories for [Ubuntu](https://ubuntu.com) 24.04 ship Citus for [Percona Server for PostgreSQL](https://docs.percona.com/postgresql/), and the [existing HA design](0034-postgres-engine.md) assumes one writer, one Patroni scope with one leader key, one [etcd](https://etcd.io) ensemble per member set and one [pgBackRest](https://pgbackrest.org) stanza.
 
 ## Decision
 
@@ -26,7 +26,7 @@ Replication, failover, replacement, rolling configuration and minor upgrades reu
 
 ### Client access
 
-The ProxySQL `proxy` component publishes only coordinator members; its native read-only monitoring routes writes to the coordinator primary. Worker members are reachable only on the private network. Applications distribute tables with Citus SQL (`create_distributed_table`, `create_reference_table`). Native access API actions run on the coordinator in the distributed database and are propagated by Citus to workers; roles are created with Citus' DDL propagation enabled.
+The [ProxySQL](https://proxysql.com) `proxy` component publishes only coordinator members; its native read-only monitoring routes writes to the coordinator primary. Worker members are reachable only on the private network. Applications distribute tables with Citus SQL (`create_distributed_table`, `create_reference_table`). Native access API actions run on the coordinator in the distributed database and are propagated by Citus to workers; roles are created with Citus' DDL propagation enabled.
 
 ### Scaling and rebalancing
 
@@ -79,7 +79,7 @@ Distributed clusters reuse Patroni, pgBackRest, ProxySQL and the PKI. A formatio
 - **Karakoram-managed `pg_dist_node`:** competes with Patroni during failover.
 - **Arbitrary-timestamp distributed PITR:** not consistent across groups without coordinated markers.
 - **Restore point before base backups:** a backup cannot recover backwards to an earlier marker.
-- **YugabyteDB:** dropped from the roadmap in favour of Citus on real PostgreSQL.
+- **[YugabyteDB](https://www.yugabyte.com):** dropped from the roadmap in favour of Citus on real PostgreSQL.
 - **Community Citus packages:** built against community PostgreSQL, not Percona's server.
 
 ## References

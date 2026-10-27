@@ -28,7 +28,7 @@ The supported transition is **2026.09.0 → 2026.10.0**, requested by changing `
 
 ## Monitoring
 
-Community has no native Prometheus metrics endpoint. The member gathers authenticated Query API observations (including the JVM memory bean), plus filesystem store size; generic process-tree CPU/RAM and volume metrics remain available through [Karakoram monitoring](../monitoring.md).
+Community has no native [Prometheus](https://prometheus.io/) metrics endpoint. The member gathers authenticated Query API observations (including the JVM memory bean), plus filesystem store size; generic process-tree CPU/RAM and volume metrics remain available through [Karakoram monitoring](../monitoring.md).
 
 | Metric | Meaning |
 | --- | --- |
@@ -43,7 +43,7 @@ Community has no native Prometheus metrics endpoint. The member gathers authenti
 | `neo4j_transactions_active` | Active transactions, including the scrape transaction |
 | `neo4j_store_size_bytes` | Files below database directories; not total volume usage |
 
-The UI's Neo4j monitoring panels show Availability, JVM heap, Configured page cache, Graph size, Active transactions and Store size, alongside shared resource charts.
+The UI's [Neo4j](https://neo4j.com/) monitoring panels show Availability, JVM heap, Configured page cache, Graph size, Active transactions and Store size, alongside shared resource charts.
 
 These are gauges. If a collection step fails, the member returns only `neo4j_up=0`, not healthy zero values for the remaining series. Offline maintenance also reports unavailable. Counts and store observations are monitoring work, not an application consistency or backup-coverage check; monitor application queries, free disk, operations and backup outcomes separately.
 

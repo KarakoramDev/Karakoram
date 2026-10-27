@@ -1,6 +1,6 @@
 # Karakoram architecture decisions
 
-These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted MongoDB, RabbitMQ, Elasticsearch/Elastic Stack, PostgreSQL, Neo4j Community and modular Supabase orchestration through namespaces, without Kubernetes. Zerops is the reference backend; Dokploy and Nomad are also available. Decisions are not deployment-specific availability or recovery guarantees.
+These accepted records describe the architecture and its design rationale. Karakoram provides self-hosted [MongoDB](https://www.mongodb.com), [RabbitMQ](https://www.rabbitmq.com), [Elasticsearch](https://www.elastic.co/elasticsearch)/[Elastic Stack](https://www.elastic.co/elastic-stack), [PostgreSQL](https://www.postgresql.org), [Neo4j](https://neo4j.com) Community and modular [Supabase](https://supabase.com) orchestration through namespaces, without [Kubernetes](https://kubernetes.io). [Zerops](https://zerops.io) is the reference backend; [Dokploy](https://dokploy.com) and [Nomad](https://developer.hashicorp.com/nomad) are also available. Decisions are not deployment-specific availability or recovery guarantees.
 
 Decision priorities are: **(1) database correctness and recoverability, (2) simple self-hosted operation, (3) maintainable engine/infrastructure separation**. Availability guarantees must be limited by the platform's actual failure domains, not inferred from member count. Each record includes alternatives and accepted failure/operational costs.
 

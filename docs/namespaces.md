@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Namespaces and relays
 
-A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` (Zerops projects, see [Zerops backend](zerops.md)), `dokploy` (Dokploy environments on a Docker Swarm, see [Dokploy backend](dokploy.md)), or `nomad` (Nomad namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
+A namespace maps one backend target to its infrastructure credentials, management routing and RBAC scope. Each namespace has an immutable backend kind: `zerops` ([Zerops](https://zerops.io/) projects, see [Zerops backend](zerops.md)), `dokploy` ([Dokploy](https://dokploy.com/) environments on a [Docker Swarm](https://docs.docker.com/engine/swarm/), see [Dokploy backend](dokploy.md)), or `nomad` ([Nomad](https://developer.hashicorp.com/nomad) namespaces, see [Nomad backend](nomad.md)). Existing records and omitted create kinds default to `zerops`.
 
 `default` is the control-plane target: `KARAKORAM_BACKEND` selects its kind (default `zerops`, token from `KARAKORAM_ZEROPS_TOKEN`; `dokploy` reads `KARAKORAM_DOKPLOY_*`; `nomad` reads `KARAKORAM_NOMAD_*`, including `KARAKORAM_NOMAD_NAMESPACE`, `KARAKORAM_NOMAD_ADDR` and `KARAKORAM_NOMAD_TOKEN`) and networking is direct. Additional namespaces use an outbound management relay when their backend requires one (`BackendInfo.Relay`); all three current backends require it. Relays are not application VPNs or replication paths; namespaces are not hostile-tenant isolation. See [architecture](architecture.md) and the [relay threat model](security.md#relay-threat-model).
 
@@ -65,7 +65,7 @@ Rotation validates the **same backend target**, seals the replacement and update
 
 ## Relay health
 
-Each relay is one private Ubuntu runtime running `karakoram relay`, with private TCP 9443 and no public access. It connects outbound using WSS, inner mTLS 1.3 and multiplexed streams. Remote agents pull configuration through `https://<relay hostname>:9443` with end-to-end internal TLS.
+Each relay is one private [Ubuntu](https://ubuntu.com/) runtime running `karakoram relay`, with private TCP 9443 and no public access. It connects outbound using WSS, inner mTLS 1.3 and multiplexed streams. Remote agents pull configuration through `https://<relay hostname>:9443` with end-to-end internal TLS.
 
 The outer HTTPS certificate must match the host in `KARAKORAM_PUBLIC_URL`
 and chain to the **relay runtime's system trust store**. `KARAKORAM_RELAY_CA`
@@ -93,7 +93,7 @@ so reconnect logs and persisted health messages remain bounded.
 The hostname appends `relay` to the control-plane hostname; over 25 characters it uses the first sixteen characters, four hexadecimal SHA-256 characters and `relay`. `KARAKORAM_RELAY_HOSTNAME` affects new enrollments only; recorded hostnames/SANs remain unchanged.
 
 The relay's destination policy authorizes exact logical member/port pairs, not
-arbitrary IPs or dotted hostnames. PostgreSQL proxy readiness and retirement
+arbitrary IPs or dotted hostnames. [PostgreSQL](https://www.postgresql.org/) proxy readiness and retirement
 add an instance selector while retaining the logical member's TLS identity.
 The hub checks each selector against fresh live-container inventory from that
 namespace's own backend and member before sending it over authenticated mTLS.

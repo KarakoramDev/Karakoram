@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Weaviate combines Raft-replicated metadata with independently replicated object/vector shards. Native installation, stable member identity, authenticated access, explicit shard movement and topology-preserving recovery are required; adding a runtime alone does not rebalance data. The official release executable includes both BSD-licensed source and runtime-gated enterprise code.
+[Weaviate](https://weaviate.io) combines Raft-replicated metadata with independently replicated object/vector shards. Native installation, stable member identity, authenticated access, explicit shard movement and topology-preserving recovery are required; adding a runtime alone does not rebalance data. The official release executable includes both BSD-licensed source and runtime-gated enterprise code.
 
 ## Decision
 
@@ -12,7 +12,7 @@ Weaviate combines Raft-replicated metadata with independently replicated object/
 
 Provider `weaviate` installs official linux-amd64 release tarballs, catalog-pinned to 1.40.1 (default) and 1.39.12. The native-artifact lock records downloaded size, SHA256 cross-checked against the release sidecar, upstream URL and dereferenced tag commit. Members download from upstream or an operator mirror and verify the digest; Karakoram does not redistribute the executable. Install each version under `/opt/karakoram/weaviate-<version>`; the archive has root `weaviate`, `LICENSE` and `README.md` files.
 
-Record the mixed binary license as `BSD-3-Clause AND LicenseRef-Weaviate-Enterprise`, not BSD-only. Force `NAMESPACES_ENABLED=false`, `SELF_RECOVERY_ENABLED=false`, `BACKUP_DEDUPE_ENABLED=false`; never supply `LICENSE_KEY`, `LICENSE_KEY_FILE` or backup `dedupeReplicas`. Typed options and an explicit inference-variable allowlist prevent raw environment injection. Ordinary replication, movement, RBAC, DB users and full S3 backups are community features; this boundary does not grant enterprise rights.
+Record the mixed binary license as `BSD-3-Clause AND LicenseRef-Weaviate-Enterprise`, not BSD-only. Force `NAMESPACES_ENABLED=false`, `SELF_RECOVERY_ENABLED=false`, `BACKUP_DEDUPE_ENABLED=false`; never supply `LICENSE_KEY`, `LICENSE_KEY_FILE` or backup `dedupeReplicas`. Typed options and an explicit inference-variable allowlist prevent raw environment injection. Ordinary replication, movement, RBAC, DB users and full [S3](https://aws.amazon.com/s3/) backups are community features; this boundary does not grant enterprise rights.
 
 ### Membership and replication
 
@@ -26,9 +26,9 @@ Drain each replica with `POST /v1/replication/replicate` using lower-camel `coll
 
 ### Authentication and TLS
 
-Disable anonymous access; enable API keys, RBAC and dynamic DB users. Static `karakoram-admin` is the sole bootstrap/root identity; its secret is revealed only through protected credentials access. Native key validation permits multiple distinct keys for one user, so rotate static keys with old+new during a rolling restart and remove old in a second roll. Application users and custom roles use native REST management; protect the root identity and built-in roles. OIDC is not configured.
+Disable anonymous access; enable API keys, RBAC and dynamic DB users. Static `karakoram-admin` is the sole bootstrap/root identity; its secret is revealed only through protected credentials access. Native key validation permits multiple distinct keys for one user, so rotate static keys with old+new during a rolling restart and remove old in a second roll. Application users and custom roles use native REST management; protect the root identity and built-in roles. [OIDC](https://openid.net/developers/how-connect-works/) is not configured.
 
-Generate shared `CLUSTER_BASIC_AUTH_USERNAME`/`CLUSTER_BASIC_AUTH_PASSWORD` for internal HTTP and inter-node replication clients. Upstream also applies these credentials to internal replication gRPC services, including FileReplicationService on the client gRPC listener. They do not authenticate gossip/Raft or encrypt transport. Do not expose internal ports publicly.
+Generate shared `CLUSTER_BASIC_AUTH_USERNAME`/`CLUSTER_BASIC_AUTH_PASSWORD` for internal HTTP and inter-node replication clients. Upstream also applies these credentials to internal replication [gRPC](https://grpc.io) services, including FileReplicationService on the client gRPC listener. They do not authenticate gossip/Raft or encrypt transport. Do not expose internal ports publicly.
 
 Upstream accepts exactly one internal username/password, so members with different internal passwords cannot talk to each other. Rotating the internal credential therefore stops all members, applies the new credential to every member and starts them together after a healthy, synchronized quorum check; the operation reports the brief unavailability. Root-key rotation stays a two-phase rolling restart.
 
@@ -36,9 +36,9 @@ Default TLS is `requireTLS`, with self-signed or user-provided CA; `disabled` is
 
 Expired native leaves may recover through the normal quorum-gated rolling workflow. Control-plane rolling observation allows an expired certificate only when its DER bytes exactly match the recorded active member leaf and that same durable roll includes a valid replacement leaf for the member; TLS rotation uses pinned observations for its replacement preflight as well. Agent recovery readiness also pins the active member leaf. Both retain CA-chain, server-usage and hostname verification at the leaf's validity midpoint. Desired replacement secrets are not pin authority. Ordinary readiness and native mutations remain strict; status marks expired members unhealthy with an explicit certificate-expired condition. The exception does not waive readiness, voter or synchronization gates.
 
-Default private ports are gossip 7946 TCP **and UDP**, data 7947 TCP, Raft 8300 TCP and Raft RPC 8301 TCP. The stock memberlist transport is not TCP-only. Internal transports are plaintext; require a suitable private/encrypted backend network and do not set `CLUSTER_ADVERTISE_ADDR` for normal LAN operation. Public REST/gRPC require TLS. Set `GO_PROFILING_DISABLE=true` and `DISABLE_TELEMETRY=true`. Prometheus 2112 binds wildcard upstream with no host option; omitting a public deployment port is not a firewall. Enforce private network policy and scrape locally.
+Default private ports are gossip 7946 TCP **and UDP**, data 7947 TCP, Raft 8300 TCP and Raft RPC 8301 TCP. The stock memberlist transport is not TCP-only. Internal transports are plaintext; require a suitable private/encrypted backend network and do not set `CLUSTER_ADVERTISE_ADDR` for normal LAN operation. Public REST/gRPC require TLS. Set `GO_PROFILING_DISABLE=true` and `DISABLE_TELEMETRY=true`. [Prometheus](https://prometheus.io) 2112 binds wildcard upstream with no host option; omitting a public deployment port is not a firewall. Enforce private network policy and scrape locally.
 
-Derive the REST/gossip bind host from the backend private address family: IPv4-only Nomad and Dokploy layouts use `0.0.0.0`; IPv6 Zerops and default/dual-stack layouts use `::`.
+Derive the REST/gossip bind host from the backend private address family: IPv4-only [Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com) layouts use `0.0.0.0`; IPv6 [Zerops](https://zerops.io) and default/dual-stack layouts use `::`.
 
 ### Backup and recovery
 
@@ -73,7 +73,7 @@ Scrape Prometheus locally with bounded responses. Export only `wvspec.MetricName
 
 ### Testing
 
-Use validation/unit tests and fake-native-API provider tests for durable replay, topology, authorization and redaction. Build-tagged native integration tests exercise authenticated singleton and three-member loopback formation, RBAC/DB users, TLS, S3 backup/restore and rolling 1.39.12→1.40.1 upgrades with official binaries supplied explicitly. Native S3 tests require an external test endpoint; no Docker dependency. Live backend acceptance remains a separate gate, including UDP/private network behavior.
+Use validation/unit tests and fake-native-API provider tests for durable replay, topology, authorization and redaction. Build-tagged native integration tests exercise authenticated singleton and three-member loopback formation, RBAC/DB users, TLS, S3 backup/restore and rolling 1.39.12→1.40.1 upgrades with official binaries supplied explicitly. Native S3 tests require an external test endpoint; no [Docker](https://www.docker.com) dependency. Live backend acceptance remains a separate gate, including UDP/private network behavior.
 
 ## Consequences
 

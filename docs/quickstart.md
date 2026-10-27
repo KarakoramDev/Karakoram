@@ -10,7 +10,7 @@ Choose a backend, install the control plane, then create a cluster and back it u
 | Dokploy | Follow [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy), then use the engine guides linked below. |
 | Nomad | Follow [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad), then use the engine guides linked below. |
 
-The steps below use the **Zerops backend**. You need a Zerops account and existing project. LIGHT hosts the control plane; clusters need **additional capacity**. Check engine sizing below and the wizard's total against project capacity. Other Zerops deployment paths: [Install](install.md).
+The steps below use the **[Zerops](https://zerops.io/) backend**. You need a Zerops account and existing project. LIGHT hosts the control plane; clusters need **additional capacity**. Check engine sizing below and the wizard's total against project capacity. Other Zerops deployment paths: [Install](install.md).
 
 ## 1. Create a Zerops token
 
@@ -66,7 +66,7 @@ This is [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Default `ka
 
 ## 4. Add storage
 
-**Storage is required before any backup.** Create an S3 bucket, for example using Zerops Object Storage. Open **Settings → Backup storages**, then **Create**:
+**Storage is required before any backup.** Create an [S3](https://aws.amazon.com/s3/) bucket, for example using Zerops Object Storage. Open **Settings → Backup storages**, then **Create**:
 
 | Field | Value |
 | --- | --- |
@@ -94,7 +94,7 @@ Review member sizing and total project capacity. Select backup storage; keep the
 
 Open **Cluster → Backups → Backup now**. This is asynchronous: follow the operation and wait until backup inventory reports **Succeeded**. If storage was skipped, add it before retrying.
 
-- [MongoDB](mongodb/backups.md): Percona Backup for MongoDB (PBM) logical or physical backup.
+- [MongoDB](mongodb/backups.md): [Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/latest/) (PBM) logical or physical backup.
 - [RabbitMQ](rabbitmq/backups.md): definitions only—no messages or point-in-time recovery (PITR).
 - [Elasticsearch](elasticsearch/snapshots.md): native snapshot.
 

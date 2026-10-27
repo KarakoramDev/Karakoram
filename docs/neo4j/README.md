@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Neo4j Community
 
-Karakoram operates a native Neo4j Community server with one persistent member volume. See [release status and backend availability](../backends.md#engine-availability) and [ADR 0055](../adr/0055-neo4j-community-engine.md).
+Karakoram operates a native [Neo4j](https://neo4j.com/) Community server with one persistent member volume. See [release status and backend availability](../backends.md#engine-availability) and [ADR 0055](../adr/0055-neo4j-community-engine.md).
 
 ## At a glance
 
@@ -74,7 +74,7 @@ Unknown fields, `null` options, multiline values and generic `engineConfig` text
 
 Use [Bolt, native users and TLS](access-and-tls.md), [offline backups](backups.md) and [operations](operations.md).
 
-- Community only: no Enterprise/BYOL mode, clustering, failover, online backup, RBAC or native Prometheus endpoint.
+- Community only: no Enterprise/BYOL mode, clustering, failover, online backup, RBAC or native [Prometheus](https://prometheus.io/) endpoint.
 - Only one user database, `neo4j`, alongside `system`; no additional user databases.
 - **Every native user has full administrative privileges.** Separate credentials do not provide least-privilege isolation.
 - Backups, restore, restart, TLS rotation, memory/settings changes and upgrades are full outages.

@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Identity providers, workflow engines, secret stores and similar services need a PostgreSQL database. Embedding a private database in each service duplicates HA, backups and upgrades; asking operators to create roles by hand loses credential rotation and lets a database be deleted underneath its consumers.
+Identity providers, workflow engines, secret stores and similar services need a [PostgreSQL](https://www.postgresql.org) database. Embedding a private database in each service duplicates HA, backups and upgrades; asking operators to create roles by hand loses credential rotation and lets a database be deleted underneath its consumers.
 
 ## Decision
 
@@ -35,7 +35,7 @@ The `kb_` prefix is reserved: binding roles are routable through the source prox
 
 ### Sample consumer
 
-Keycloak is the first consumer: a stateless `keycloak` provider running the official Keycloak distribution natively on a pinned JDK, configured with one bound database, its bootstrap administrator sealed, and its configuration rolled on credential rotation.
+[Keycloak](https://www.keycloak.org) is the first consumer: a stateless `keycloak` provider running the official Keycloak distribution natively on a pinned JDK, configured with one bound database, its bootstrap administrator sealed, and its configuration rolled on credential rotation.
 
 ## Consequences
 

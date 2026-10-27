@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MongoDB operations
 
-Scale, upgrade and diagnose managed PSMDB members and PBM processes.
+Scale, upgrade and diagnose managed [PSMDB](https://docs.percona.com/percona-server-for-mongodb/) members and [PBM](https://docs.percona.com/percona-backup-mongodb/) processes.
 
 ## Resource scaling
 
@@ -46,7 +46,7 @@ Secondaries upgrade first, then primary stepdown/former-primary deployment, wait
 
 **Upgrades** shows observed **Running version**, possibly mixed during rollout, separately from **Desired version**. Missing observations mean **not yet observed**, not deployment success.
 
-Zerops exact-version deployment retries have a hard budget.
+[Zerops](https://zerops.io/) exact-version deployment retries have a hard budget.
 `DeploymentRetriesExhausted` records the blocked member and stops submissions for
 that target while other members remain observable and can finish provisioning.
 An unstarted member is not treated as bootstrapped or upgraded, and existing
@@ -65,7 +65,7 @@ Use major form, not `8.0.32-14`. Wrong/non-deployed major returns **400** with f
 
 For stuck/wrong requests, inspect `operations cluster demo`, `operations get ID`, members/status/FCV and events in the database namespace. `karactl operations cancel ID` (API `POST /api/v1/operations/{id}/cancel`) is safe only **before `apply-fcv`**. Acceptance is 202, not completed cancellation; wait to terminal. A 409 `invalid_state` means inspect the new checkpoint, not submit competing work. Cancellation cannot undo applied FCV.
 
-Once terminal and healthy, re-read observed FCV; promote only if still needed and all binaries match. Never edit operation records or change desired binaries to justify a wrong FCV target. Preserve diagnostics and use MongoDB's supported recovery if native FCV partially failed.
+Once terminal and healthy, re-read observed FCV; promote only if still needed and all binaries match. Never edit operation records or change desired binaries to justify a wrong FCV target. Preserve diagnostics and use [MongoDB](https://www.mongodb.com/)'s supported recovery if native FCV partially failed.
 
 ## Rolling restart and overrides
 
@@ -114,7 +114,7 @@ API: `GET /api/v1/clusters/{cluster}/members/{member}/logs?process=mongod&lines=
 
 ## Monitoring vocabulary
 
-Enable `spec.monitoring.enabled` (CLI create default true), then **Monitoring** or `karactl clusters metrics demo --range 1h --step 30s -o json`. Agents authenticate with `clusterMonitor` and collect process/filesystem data. [Shared monitoring](../monitoring.md) owns scrape/history/API range semantics and authorization; MongoDB ships exporter/dashboard, not PMM/query analytics.
+Enable `spec.monitoring.enabled` (CLI create default true), then **Monitoring** or `karactl clusters metrics demo --range 1h --step 30s -o json`. Agents authenticate with `clusterMonitor` and collect process/filesystem data. [Shared monitoring](../monitoring.md) owns scrape/history/API range semantics and authorization; MongoDB ships exporter/dashboard, not [PMM](https://www.percona.com/software/database-tools/percona-monitoring-and-management)/query analytics.
 
 Every public metric has `namespace`, `cluster`, `member`; `set`/`role` are status properties, not guaranteed labels. Availability-dependent metrics may be absent, notably mongos oplog/WiredTiger values. Counter JSON series are reset-aware rates, not raw counters.
 
@@ -140,7 +140,7 @@ Every public metric has `namespace`, `cluster`, `member`; `set`/`role` are statu
 | `karakoram_mongodb_documents_total` | Counter; `operation` | `documents.total`: inserted/updated/deleted/returned |
 | `karakoram_mongodb_network_bytes_total` | Counter bytes; `direction` | `network.bytes`: bytesIn/bytesOut |
 
-Prometheus throughput: `rate(karakoram_opcounters_total[5m])`; never rate gauges. Raw CPU `rate(karakoram_process_cpu_seconds_total[5m]) * 100` can exceed clamped UI values on multicore work.
+[Prometheus](https://prometheus.io/) throughput: `rate(karakoram_opcounters_total[5m])`; never rate gauges. Raw CPU `rate(karakoram_process_cpu_seconds_total[5m]) * 100` can exceed clamped UI values on multicore work.
 
 ## Troubleshooting
 

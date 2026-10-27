@@ -4,13 +4,13 @@ Status: Accepted
 
 ## Context
 
-Applications that require MySQL cannot assume MariaDB compatibility. A MySQL engine needs a native runtime, a single-writer authority that keeps working while the control plane is unavailable, physical backups with binary-log point-in-time recovery, and MySQL-shaped account administration. A member count alone is not a failure-domain guarantee, and a singleton is not highly available.
+Applications that require [MySQL](https://www.mysql.com) cannot assume [MariaDB](https://mariadb.org) compatibility. A MySQL engine needs a native runtime, a single-writer authority that keeps working while the control plane is unavailable, physical backups with binary-log point-in-time recovery, and MySQL-shaped account administration. A member count alone is not a failure-domain guarantee, and a singleton is not highly available.
 
 ## Decision
 
 ### Artifacts and versions
 
-The `mysql` provider runs official Percona Server minimal binary tarballs with compatible Percona XtraBackup as checksum-locked [native artifacts](0036-native-artifacts.md), not distribution-managed services. Offer 8.4 LTS by default and 8.0 for existing workloads. Each server catalog entry pins compatible backup tooling without disabling XtraBackup's server-version check. [Native artifacts](../native-artifacts.md) owns the current inventory and runtime dependencies.
+The `mysql` provider runs official [Percona Server](https://docs.percona.com/percona-server/) minimal binary tarballs with compatible [Percona](https://www.percona.com) [XtraBackup](https://docs.percona.com/percona-xtrabackup/) as checksum-locked [native artifacts](0036-native-artifacts.md), not distribution-managed services. Offer 8.4 LTS by default and 8.0 for existing workloads. Each server catalog entry pins compatible backup tooling without disabling XtraBackup's server-version check. [Native artifacts](../native-artifacts.md) owns the current inventory and runtime dependencies.
 
 ### Topologies and writer authority
 
@@ -20,13 +20,13 @@ Formation and whole-group re-formation are journaled, evidence-based control-pla
 
 ### Client proxy and access
 
-ProxySQL supplies the application endpoint with one routed writer. Groups require a proxy; only single-member deployments permit direct proxy-free access. Optional reader routing is a convenience, not a read-after-write guarantee. Clients reconnect after failover.
+[ProxySQL](https://proxysql.com) supplies the application endpoint with one routed writer. Groups require a proxy; only single-member deployments permit direct proxy-free access. Optional reader routing is a convenience, not a read-after-write guarantee. Clients reconnect after failover.
 
 Frontend proxy authentication requires recoverable credentials. Native MySQL access manages TLS-only accounts, databases and database-level grants, synchronizing sealed managed passwords to proxy configuration. SQL-created identities are not automatically routable. System identities remain separate and protected. [Access and TLS](../mysql/access-and-tls.md) owns the user-facing routes, permissions, password rotation and connection guidance.
 
 ### Backups and recovery
 
-Use XtraBackup physical full/incremental streams to registered S3 storage and GTID-keyed binary-log archiving from the current writer. PITR coverage is conservative and must be continuous; later successful uploads cannot bridge a gap. Restore is destructive and offline, preserves recovered GTIDs, regenerates server UUIDs and isolates restored groups with a new group identity. Source/target provider and server major must match. Retention preserves chain dependencies; managed account recovery additionally requires sealed backup-time credential provenance. [Backups and PITR](../mysql/backups.md) owns repository structure, preparation, transaction boundaries and account caveats.
+Use XtraBackup physical full/incremental streams to registered [S3](https://aws.amazon.com/s3/) storage and GTID-keyed binary-log archiving from the current writer. PITR coverage is conservative and must be continuous; later successful uploads cannot bridge a gap. Restore is destructive and offline, preserves recovered GTIDs, regenerates server UUIDs and isolates restored groups with a new group identity. Source/target provider and server major must match. Retention preserves chain dependencies; managed account recovery additionally requires sealed backup-time credential provenance. [Backups and PITR](../mysql/backups.md) owns repository structure, preparation, transaction boundaries and account caveats.
 
 ### Maintenance
 
@@ -41,10 +41,10 @@ Group Replication gives automatic failover without an external coordination serv
 - **Asynchronous or semi-synchronous replication with Karakoram-driven failover:** makes the control plane the writer authority and needs its own fencing; Group Replication already provides quorum-based single-writer election.
 - **Group Replication multi-primary:** write conflicts surface as transaction rollbacks and DDL restrictions; single-primary is the safe default.
 - **XCom communication stack:** needs a second routable port and IP allowlists per member; the MySQL stack reuses authenticated TLS on the client port.
-- **MySQL Router:** requires InnoDB Cluster metadata created by MySQL Shell; ProxySQL is already locked and operated for PostgreSQL.
-- **Distribution packages:** Ubuntu ships Oracle MySQL, not Percona Server; Percona repositories install services and do not pin XtraBackup to the server.
+- **MySQL Router:** requires InnoDB Cluster metadata created by MySQL Shell; ProxySQL is already locked and operated for [PostgreSQL](https://www.postgresql.org).
+- **Distribution packages:** [Ubuntu](https://ubuntu.com) ships Oracle MySQL, not Percona Server; Percona repositories install services and do not pin XtraBackup to the server.
 - **Logical dumps as the primary backup:** slow to restore for larger databases and no consistent binary-log starting point without locking.
-- **Percona XtraDB Cluster in the same provider:** different binaries, consensus and recovery; see [0053](0053-pxc-engine.md).
+- **[Percona XtraDB Cluster](https://docs.percona.com/percona-xtradb-cluster/) in the same provider:** different binaries, consensus and recovery; see [0053](0053-pxc-engine.md).
 
 ## References
 

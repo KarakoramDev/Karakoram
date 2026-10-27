@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Distributed PostgreSQL with Citus
 
-`postgres` topology `distributed` runs one coordinator (group **0**) and **1–8 worker groups**. Each group has its own persistent data members and Patroni replication/failover scope. `components.engine.replicas` is the count **per group**, not the total: 1 or 3, default 3. Three-member groups provide group-local failover; one-member groups have no replica to promote. Coordinator members provide the shared etcd quorum; workers use it as clients.
+`postgres` topology `distributed` runs one coordinator (group **0**) and **1–8 worker groups**. Each group has its own persistent data members and [Patroni](https://patroni.readthedocs.io/) replication/failover scope. `components.engine.replicas` is the count **per group**, not the total: 1 or 3, default 3. Three-member groups provide group-local failover; one-member groups have no replica to promote. Coordinator members provide the shared [etcd](https://etcd.io/) quorum; workers use it as clients.
 
-ProxySQL routes application connections only to coordinator members. It never advertises workers as application endpoints. Citus routes distributed SQL from the coordinator to worker primaries; do not use worker endpoints as interchangeable connection seeds. Ordinary PostgreSQL tables remain local until the application explicitly creates distributed/reference tables using Citus SQL.
+[ProxySQL](https://proxysql.com/) routes application connections only to coordinator members. It never advertises workers as application endpoints. [Citus](https://www.citusdata.com/) routes distributed SQL from the coordinator to worker primaries; do not use worker endpoints as interchangeable connection seeds. Ordinary [PostgreSQL](https://www.postgresql.org/) tables remain local until the application explicitly creates distributed/reference tables using Citus SQL.
 
 ## Availability and licensing
 
-The native-artifact catalog includes real, smoke-qualified Citus 14.2.0 archives for PostgreSQL 16, 17 and 18. Creation still requires the matching `citus-pg<major>` entry to be locked **and resolvable**: development builds need a mirror serving the exact locked bytes, and releases need their matching downloadable assets. A topology entry alone does not establish availability. Inspect `karactl providers get postgres -o json` and the release artifact lock before deployment. Supabase does not offer this topology.
+The native-artifact catalog includes real, smoke-qualified Citus 14.2.0 archives for PostgreSQL 16, 17 and 18. Creation still requires the matching `citus-pg<major>` entry to be locked **and resolvable**: development builds need a mirror serving the exact locked bytes, and releases need their matching downloadable assets. A topology entry alone does not establish availability. Inspect `karactl providers get postgres -o json` and the release artifact lock before deployment. [Supabase](https://supabase.com/) does not offer this topology.
 
 Karakoram remains Apache-2.0. Citus is an **AGPL-3.0-only** component, separately downloaded as an unmodified artifact, not bundled into the Karakoram binary. Its corresponding source is the upstream Citus tag matching the locked artifact (see [Citus upstream](https://github.com/citusdata/citus)); retain the artifact's license notices and source/tag reference and assess your obligations for your deployment. See [native artifacts](../native-artifacts.md).
 
@@ -74,7 +74,7 @@ Shard movement adds database load. Track the returned operation rather than resu
 
 ## Coordinated backup and PITR
 
-A distributed backup is a coordinated formation backup, not an independently restorable coordinator snapshot. Each group has its own pgBackRest data/archive path and backup manifest entry. Backup work precedes the coordinated marker; named restore points and WAL/archive barriers establish a common recoverable boundary across all groups.
+A distributed backup is a coordinated formation backup, not an independently restorable coordinator snapshot. Each group has its own [pgBackRest](https://pgbackrest.org/) data/archive path and backup manifest entry. Backup work precedes the coordinated marker; named restore points and WAL/archive barriers establish a common recoverable boundary across all groups.
 
 PITR uses persisted **named coordinated restore points**, not arbitrary wall-clock timestamps. **Timestamp restore targets are rejected** for distributed formations. Select an available named point from the recovery inventory and preserve the complete formation backup and all required group archives. The coordinator LSN returned by Citus is exact; sampled **worker LSNs are conservative post-point upper bounds**, used to fence archival coverage, not exact per-worker restore-point positions. They must not be presented as exact marker LSNs or used as independent targets.
 

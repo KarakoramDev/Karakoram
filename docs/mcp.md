@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MCP server
 
-Karakoram embeds an MCP server at `https://YOUR-CONTROL-PLANE/mcp`. It executes management requests in-process through the same REST authentication, authorization, validation, idempotency and audit path. It never sends telemetry. For a step-by-step client setup, start with the [MCP quick start](mcp-quickstart.md).
+Karakoram embeds an [MCP](https://modelcontextprotocol.io/) server at `https://YOUR-CONTROL-PLANE/mcp`. It executes management requests in-process through the same REST authentication, authorization, validation, idempotency and audit path. It never sends telemetry. For a step-by-step client setup, start with the [MCP quick start](mcp-quickstart.md).
 
 ## Enable and authenticate
 
@@ -15,7 +15,7 @@ services:
       KARAKORAM_MCP: readonly
 ```
 
-Use a dedicated Karakoram API token in the HTTP `Authorization: Bearer …` header, not a Zerops project token. Keep tokens in your client's secret store, never in a checked-in project configuration. Cookies are ignored. Token owner permissions are evaluated again for each REST operation; revocation stops subsequent calls. Prefer restricted, read-only tokens scoped to the namespaces and clusters the agent needs. Credential reveal requires its own permission and token restriction allowance.
+Use a dedicated Karakoram API token in the HTTP `Authorization: Bearer …` header, not a [Zerops](https://zerops.io/) project token. Keep tokens in your client's secret store, never in a checked-in project configuration. Cookies are ignored. Token owner permissions are evaluated again for each REST operation; revocation stops subsequent calls. Prefer restricted, read-only tokens scoped to the namespaces and clusters the agent needs. Credential reveal requires its own permission and token restriction allowance.
 
 The endpoint supports stateless MCP `2026-07-28` and legacy initialize-based Streamable HTTP (`2025-11-25`, `2025-06-18`, `2025-03-26`). It does not serve deprecated HTTP+SSE. Legacy sessions are memory-only, principal-bound and expire after 30 idle minutes; at most 256 are retained.
 
@@ -23,13 +23,13 @@ Tool lists are filtered by the caller's current permissions and selected toolset
 
 ## Client configuration
 
-Claude Code supports a remote HTTP server:
+[Claude Code](https://code.claude.com/docs/en/overview) supports a remote HTTP server:
 
 ```sh
 claude mcp add --transport http karakoram https://YOUR-CONTROL-PLANE/mcp --header 'Authorization: Bearer YOUR_API_TOKEN'
 ```
 
-Cursor (`.cursor/mcp.json`) and clients accepting `mcpServers` use this generic shape (substitute the token through the client's supported secret mechanism):
+[Cursor](https://cursor.com/) (`.cursor/mcp.json`) and clients accepting `mcpServers` use this generic shape (substitute the token through the client's supported secret mechanism):
 
 ```json
 {
@@ -42,7 +42,7 @@ Cursor (`.cursor/mcp.json`) and clients accepting `mcpServers` use this generic 
 }
 ```
 
-VS Code (`.vscode/mcp.json`) uses `servers` and supports prompted secret inputs:
+[VS Code](https://code.visualstudio.com/) (`.vscode/mcp.json`) uses `servers` and supports prompted secret inputs:
 
 ```json
 {
@@ -61,7 +61,7 @@ Client configuration formats change; use the client's remote Streamable HTTP opt
 
 ## Tools, completion and confirmation
 
-Tool names are stable snake_case names from the OpenAPI agent metadata. Path and query parameters are top-level arguments; JSON request bodies are under `body`. Nullable fields accept JSON `null`, including merge-patch removals and removing an API token's expiry. Lists are sorted and filtered by server mode, current RBAC and token restrictions. Narrow large lists using OpenAPI tags, for example `/mcp?toolsets=Clusters,Backups`; names are case-insensitive. Include `Workflows` to retain workflow tools when narrowing.
+Tool names are stable snake_case names from the [OpenAPI](https://www.openapis.org/) agent metadata. Path and query parameters are top-level arguments; JSON request bodies are under `body`. Nullable fields accept JSON `null`, including merge-patch removals and removing an API token's expiry. Lists are sorted and filtered by server mode, current RBAC and token restrictions. Narrow large lists using OpenAPI tags, for example `/mcp?toolsets=Clusters,Backups`; names are case-insensitive. Include `Workflows` to retain workflow tools when narrowing.
 
 `wait` observes an operation ID, a cluster generation, a backup or restore, with a default 120-second and maximum 600-second wait. Cancelling the client wait never cancels the underlying operation. `cluster_diagnose` gathers status, members, recent operations, warning events and backups; unavailable or unauthorized sections are omitted with notes.
 
@@ -75,7 +75,7 @@ Readonly mode classifies side effects, not confidentiality: secret-bearing opera
 
 ## Connect with OAuth
 
-Set `KARAKORAM_OAUTH=on` and restart the control plane. OAuth is off by default.
+Set `KARAKORAM_OAUTH=on` and restart the control plane. [OAuth](https://oauth.net/2/) is off by default.
 Configure the connector with `https://<your-control-plane>/mcp`. Its 401 challenge
 links to protected-resource metadata, which advertises the embedded authorization
 server. Use the same public HTTPS origin as `KARAKORAM_PUBLIC_URL`.
@@ -130,7 +130,7 @@ For clients requiring stdio, run `karactl --context production mcp`. The bridge 
 
 Use `--toolsets Clusters,Backups,Workflows` to narrow discovery on the server. This does not grant permission or change server mode.
 
-`karactl mcp config --client claude-code|cursor|vscode|codex|json` creates a dedicated restricted API token and prints remote HTTP client configuration. The default client is `json`, token name is `mcp-CLIENT-DATE`, and expiry is 90 days. Repeat `--namespace NAME` to restrict its scope; `--write` removes the token's read-only restriction but cannot override owner RBAC or server readonly mode. Override the name with `--token-name` or lifetime with `--expires-in 30d` (Go durations such as `720h` are also accepted).
+`karactl mcp config --client claude-code|cursor|vscode|codex|json` creates a dedicated restricted API token and prints remote HTTP client configuration. The default client is `json`, token name is `mcp-CLIENT-DATE`, and expiry is 90 days. Repeat `--namespace NAME` to restrict its scope; `--write` removes the token's read-only restriction but cannot override owner RBAC or server readonly mode. Override the name with `--token-name` or lifetime with `--expires-in 30d` ([Go](https://go.dev/) durations such as `720h` are also accepted).
 
 The same command with `--cluster NAMESPACE/NAME` mints a cluster-scoped data token for the per-cluster [data MCP](data-mcp.md#connect-an-agent-client) endpoint instead; `--namespace`, `--stdio` and `--output` do not apply there.
 
@@ -140,6 +140,6 @@ karactl --context production mcp config --client vscode --expires-in 30d --outpu
 karactl --context production mcp config --client codex --stdio
 ```
 
-Claude Code output is a shell command, Codex output is TOML, and other clients receive JSON. Remote configurations include the endpoint and `Authorization: Bearer` header. Protect this output: the newly created secret is printed once with a warning. `--stdio` prints a command using the selected saved context, never embeds a token in the snippet, and reveals the new dedicated token separately on stderr for provisioning. It does not modify the context; save that token into a dedicated context if the bridge should use its restrictions.
+Claude Code output is a shell command, [Codex](https://developers.openai.com/codex/) output is TOML, and other clients receive JSON. Remote configurations include the endpoint and `Authorization: Bearer` header. Protect this output: the newly created secret is printed once with a warning. `--stdio` prints a command using the selected saved context, never embeds a token in the snippet, and reveals the new dedicated token separately on stderr for provisioning. It does not modify the context; save that token into a dedicated context if the bridge should use its restrictions.
 
 No files are written unless `--output FILE` is set, which writes the snippet with mode 0600. Do not commit generated configurations containing credentials. See the [CLI guide](cli.md#mcp-clients) for context and output details.

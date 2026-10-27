@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Dokploy backend
 
-The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed Docker Swarm that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with MongoDB, RabbitMQ and Elasticsearch on a three-node test Swarm, but it has no production track record. Zerops remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
+The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed [Docker Swarm](https://docs.docker.com/engine/swarm/) that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) on a three-node test Swarm, but it has no production track record. [Zerops](https://zerops.io/) remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered S3 destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered [S3](https://aws.amazon.com/s3/) destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
 
 ## How it maps
 
@@ -19,9 +19,9 @@ The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com
 |Public TCP|Swarm ingress-published ports (routing mesh); exposed services switch to VIP endpoint mode, returning to DNSRR after port removal|
 |Public HTTPS (Kibana, RabbitMQ management)|Dokploy domains served by Dokploy's Traefik|
 
-Docker is used on this backend only because Dokploy runs Swarm services. Each member image is a pinned Ubuntu 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
+[Docker](https://www.docker.com/) is used on this backend only because Dokploy runs Swarm services. Each member image is a pinned [Ubuntu](https://ubuntu.com/) 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
 
-Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking Bash with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
+Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking [Bash](https://cgit.git.savannah.gnu.org/cgit/bash.git/) with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
 ### Platform deployment admission
 
@@ -190,7 +190,7 @@ back to ambiguous name inspection. Use hostnames outside this reserved prefix.
 
 - Dokploy **v0.30.8** (the tested version) on an amd64 Docker Swarm; the API is unversioned, so test upgrades first.
 - For more than one node: a container registry configured in Dokploy (Settings → Registry) that every node can pull from. Single-node Swarms may omit it.
-- Outbound HTTPS from the manager during builds (Ubuntu, Percona, RabbitMQ and Elastic package sources), from every node to Docker Hub (volume deletion runs a one-shot task from the pinned `ubuntu:24.04` digest on the volume's node), and from members to your S3 storage.
+- Outbound HTTPS from the manager during builds (Ubuntu, [Percona](https://www.percona.com/), RabbitMQ and Elastic package sources), from every node to [Docker Hub](https://hub.docker.com/) (volume deletion runs a one-shot task from the pinned `ubuntu:24.04` digest on the volume's node), and from members to your S3 storage.
 - Elasticsearch: `vm.max_map_count=262144` on every node (`/etc/sysctl.d`).
 - Enough free disk on every node for volumes and images (each engine image is roughly 0.3–1.7 GB).
 - An overlay network for Karakoram, normally a dedicated attachable one (the backend creates it through Dokploy when it is missing).
@@ -226,8 +226,8 @@ The control plane runs as one Dokploy application with a persistent volume; its 
    - Volume mount: named volume (for example `karakoram-data`) at `/var/lib/karakoram`.
    - Swarm placement: pin to the Dokploy manager node (`node.hostname==<manager>`): the named volume is node-local, and the control plane then talks to Dokploy's plain-HTTP service URL without leaving the host (Swarm overlay traffic between nodes is unencrypted). If it must run elsewhere, point `KARAKORAM_DOKPLOY_URL` at Dokploy's HTTPS domain instead.
    - Environment settings: turn off **Create .env file**, so Dokploy does not write the control plane's secrets into the build directory.
-   - Swarm update and rollback config: `{"Parallelism": 1, "Order": "stop-first"}` — SQLite allows one writer.
-   - Swarm network: `[{"Target": "<network>", "Aliases": ["karakoram"]}, {"Target": "dokploy-network"}]`. Members reach the control plane as `https://karakoram:9443`; `dokploy-network` lets Traefik and the control plane reach Dokploy.
+   - Swarm update and rollback config: `{"Parallelism": 1, "Order": "stop-first"}` — [SQLite](https://www.sqlite.org/) allows one writer.
+   - Swarm network: `[{"Target": "<network>", "Aliases": ["karakoram"]}, {"Target": "dokploy-network"}]`. Members reach the control plane as `https://karakoram:9443`; `dokploy-network` lets [Traefik](https://traefik.io/traefik/) and the control plane reach Dokploy.
    - Registry: your registry (multi-node).
 4. Environment:
 

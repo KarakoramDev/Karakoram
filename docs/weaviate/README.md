@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Weaviate
 
-Deploy official native Weaviate on private member runtimes with persistent volumes. Karakoram is Apache-2.0; the downloaded Weaviate executable has a separate, mixed license boundary described below.
+Deploy official native [Weaviate](https://weaviate.io/) on private member runtimes with persistent volumes. Karakoram is Apache-2.0; the downloaded Weaviate executable has a separate, mixed license boundary described below.
 
 ## At a glance
 
