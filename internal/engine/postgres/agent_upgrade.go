@@ -154,6 +154,12 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 					if e != nil {
 						return result, fmt.Errorf("cannot establish current primary for agent rollout member %s; restore primary observations and re-run upgrade-agents if the operation fails: %w", m.Name, e)
 					}
+					if writer.Timeline != cp.Timeline || cp.Primary != "" {
+						leader, writer, e = agentUpgradePrimary(ctx, rc, s.group(m.Group))
+						if e != nil {
+							return result, fmt.Errorf("cannot establish authoritative primary for agent rollout member %s; restore all group observations and re-run upgrade-agents if the operation fails: %w", m.Name, e)
+						}
+					}
 					if writer.SystemID != "" && writer.SystemID != cp.SystemID {
 						return result, engine.Invalid("agent rollout primary %s has a different PostgreSQL system identity; inspect cluster identity and re-run upgrade-agents after recovery", leader.Name)
 					}
@@ -174,6 +180,12 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 							return result, fmt.Errorf("agent rollout member %s has not caught up to current primary %s on timeline %d; restore streaming replication and re-run upgrade-agents if the operation fails: %w", m.Name, leader.Name, cp.Timeline, engine.ErrUnavailable)
 						}
 						return agentUpgradeResult(&cp)
+					}
+					if cp.Primary != "" {
+						proved, e := agentUpgradeReplayProof(ctx, rc, leader.Name, m.Name, cp.Timeline, cp.Barrier, cp.SystemID)
+						if e != nil || !proved {
+							return result, fmt.Errorf("primary has not proved agent rollout member %s streaming replay past its barrier; restore replication and re-run upgrade-agents if the operation fails: %w", m.Name, engine.ErrUnavailable)
+						}
 					}
 				}
 			}

@@ -468,6 +468,16 @@ group and system identity. Completion requires the replica to report streaming,
 the current leader and timeline, no lag, and replay at or beyond that barrier;
 WAL positions from different timelines are never compared. A different system
 identity fails explicitly rather than treating a foreign replica as caught up.
+Barrier refresh requires successful observations of every group member and a
+unique self-reported primary with healthy DCS. Local replica status alone is not
+proof of its WAL source: the control plane also reads the selected primary's
+replication view to confirm exactly one streaming sender for that member and
+acknowledged replay past the barrier, on the expected primary system/timeline.
+This bounded read-only query uses the existing `kk_monitor` identity,
+namespace-aware native connection and cluster-CA hostname verification. It
+requires no member-agent upgrade. Missing SQL access or replication proof never
+acknowledges the member; do not weaken TLS or grant arbitrary SQL access to
+bypass a failed proof.
 Unproven catch-up remains subject to the existing retry/deadline budgets; restore
 replication and follow the failure's `re-run upgrade-agents` guidance.
 

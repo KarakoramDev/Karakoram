@@ -611,7 +611,7 @@ func TestExtensionPreloadChangesRequireMaintenanceAdmission(t *testing.T) {
 }
 
 func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
-	for _, fault := range []string{"lag", "wrong-leader", "old-timeline", "replica-identity", "primary-identity", "second-failover", "more-members"} {
+	for _, fault := range []string{"lag", "wrong-leader", "old-timeline", "replica-identity", "primary-identity", "second-failover", "more-members", "partition", "stale-leader", "unhealthy-dcs", "duplicate-primary", "forked-upstream"} {
 		t.Run(fault, func(t *testing.T) {
 			p, rc, b := setup(t, "ha")
 			s := converge(t, p, rc)
@@ -644,6 +644,23 @@ func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
 				st.SystemID = "foreign-system"
 				b.statusOverrides[name] = st
 			}
+			proof := installRolloutReplaySQL(t, rc)
+			switch fault {
+			case "partition":
+				b.statusFailures = map[string]int{"demop2": 100}
+			case "stale-leader", "unhealthy-dcs":
+				writer := b.statusOverrides["demop0"]
+				if fault == "stale-leader" {
+					writer.Leader = "demop2"
+				} else {
+					writer.EtcdHealthy = false
+				}
+				b.statusOverrides["demop0"] = writer
+			case "duplicate-primary":
+				peer := b.statusOverrides["demop2"]
+				peer.Role, peer.Leader = "primary", "demop2"
+				b.statusOverrides["demop2"] = peer
+			}
 			op := rolloutOperation(false)
 			op.Checkpoint, _ = json.Marshal(cp)
 			step := func() (engine.OpResult, error) {
@@ -660,6 +677,12 @@ func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
 			}
 			before := len(b.actions)
 			result, err := step()
+			if fault == "partition" || fault == "stale-leader" || fault == "unhealthy-dcs" || fault == "duplicate-primary" {
+				if err == nil || !strings.Contains(err.Error(), "re-run upgrade-agents") || cp.Timeline != 6 || cp.Primary != "" || cp.Index != 0 {
+					t.Fatalf("non-authoritative primary refreshed or acknowledged barrier: %+v %v", cp, err)
+				}
+				return
+			}
 			if strings.HasSuffix(fault, "identity") {
 				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "re-run upgrade-agents") {
 					t.Fatalf("diverged identity did not fail explicitly: %+v %v", result, err)
@@ -685,6 +708,10 @@ func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
 				replica.Leader = "demop2"
 			case "old-timeline":
 				replica.Timeline = 6
+			case "forked-upstream":
+				// Local streaming, DCS leader, system ID, timeline and replay
+				// all match, but the selected primary has no replay proof.
+				proof.Store(false)
 			}
 			b.statusOverrides["demop1"] = replica
 			if fault != "more-members" {
@@ -694,6 +721,7 @@ func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
 			}
 			replica.Timeline, replica.WALPosition, replica.Leader = cp.Timeline, cp.Barrier, cp.Primary
 			b.statusOverrides["demop1"] = replica
+			proof.Store(true)
 			if _, err := step(); err != nil || cp.Index != 1 || cp.Waiting {
 				t.Fatalf("caught-up old-target member did not complete: %+v %v", cp, err)
 			}
