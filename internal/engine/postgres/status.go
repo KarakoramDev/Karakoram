@@ -154,19 +154,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		hash, hashErr := desiredConfigHash(rc, revision)
 		credentialsPublished = credentialsKnown && !credentialsPending && revisionErr == nil && hashErr == nil && s.ConfigHash == hash
 	}
-	// With no proxy the data runtime owns public-port changes. Observe its
-	// infrastructure barrier before collecting fresh native/config status.
 	direct := s.find(connectionMember(rc, s))
-	directReady := true
-	var directRuntime *infra.Service
-	if direct != nil && direct.Role == "data" && direct.Stage != "planned" && direct.Stage != "imported" {
-		runtime, err := rc.Backend.GetService(ctx, direct.Name)
-		if err != nil {
-			return out, err
-		}
-		directReady = runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
-		directRuntime = runtime
-	}
 	liveMembers := observeStatusMembers(ctx, rc, s.Members)
 	// Bind every proxy's fresh runtime rows to the writer observed in this
 	// sweep. Running alone only promises some ONLINE writer (older agents may
@@ -208,12 +196,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			continue
 		}
 		observation := liveMembers[i]
-		runtime := directRuntime
-		if m != direct || m.Role != "data" {
-			runtime, err = rc.Backend.GetService(ctx, m.Name)
-			if err != nil {
-				return out, err
-			}
+		runtime := observation.runtime
+		if observation.runtimeErr != nil {
+			return out, fmt.Errorf("observe PostgreSQL member %s runtime: %w", m.Name, observation.runtimeErr)
 		}
 		if runtime != nil {
 			member.Autoscaling = runtime.Autoscaling
@@ -421,7 +406,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if m == direct && m.Role == "data" {
-			member.Health = member.Health && directReady
+			member.Health = member.Health && runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
 		}
 		engine.ApplyAgentDiagnostic(&member, observation.agent.Error)
 		if m.Role == "data" {
@@ -451,11 +436,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		healthy = healthy && member.Health && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
-		containers, e := rc.Backend.Containers(ctx, m.Name)
-		if e != nil {
-			return out, e
+		if observation.inventory.Err != nil {
+			return out, fmt.Errorf("observe PostgreSQL member %s containers: %w", m.Name, observation.inventory.Err)
 		}
-		for _, container := range containers {
+		for _, container := range observation.inventory.Containers {
 			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
 				member.PlacementGroup = container.PlacementGroup
 			}

@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
@@ -26,6 +27,9 @@ type memberObservation struct {
 
 	// Service discovery is independent of per-instance native health.
 	proxyEndpointErr error
+	runtime          *infra.Service
+	runtimeErr       error
+	inventory        engine.InstanceInventory
 }
 
 type proxyInstanceObservation struct {
@@ -70,9 +74,8 @@ func observationErrorSummary(err error) string {
 
 func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*member) []memberObservation {
 	out := make([]memberObservation, len(members))
-	if rc.Agents == nil {
-		return out
-	}
+	// Inventory and native reads share a sweep, not a serial budget per
+	// member. Keep each result indexed by member; reduction remains serial.
 	var workers sync.WaitGroup
 	for i, m := range members {
 		if m.Stage == "planned" || m.Stage == "imported" {
@@ -81,31 +84,52 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 		workers.Add(1)
 		go func() {
 			defer workers.Done()
-			ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-			defer cancel()
-			if m.Role == "proxy" {
-				out[i] = observeProxyStatus(ctx, rc, m)
-				return
-			}
-			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if err != nil {
-				out[i].err = err
-				return
-			}
-			// Generic and engine requests have independent HTTP transports.
-			// Overlap cold TLS setup instead of spending two serial connection
-			// budgets inside one bounded member observation.
+			var sample memberObservation
+			var runtime *infra.Service
+			var runtimeErr error
+			var inventory engine.InstanceInventory
 			var probes sync.WaitGroup
-			var agentErr, nativeErr error
 			probes.Go(func() {
-				out[i].agent, agentErr = a.Status(ctx)
-				out[i].agentHealthy = agentErr == nil
+				runtime, runtimeErr = rc.Backend.GetService(ctx, m.Name)
 			})
 			probes.Go(func() {
-				nativeErr = a.Engine(ctx, "postgres", "status", struct{}{}, &out[i].status)
+				if m.Role == "proxy" && rc.Agents != nil {
+					probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+					defer cancel()
+					sample = observeProxyInventoryStatus(probe, rc, m, func() engine.InstanceInventory {
+						inventory.Containers, inventory.Err = rc.Backend.Containers(probe, m.Name)
+						return inventory
+					})
+				} else {
+					inventory.Containers, inventory.Err = rc.Backend.Containers(ctx, m.Name)
+				}
 			})
+			if m.Role != "proxy" && rc.Agents != nil {
+				probes.Go(func() {
+					probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+					defer cancel()
+					a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
+					if err != nil {
+						sample.err = err
+						return
+					}
+					// Generic and engine requests use independent transports.
+					var native sync.WaitGroup
+					var agentErr, nativeErr error
+					native.Go(func() {
+						sample.agent, agentErr = a.Status(probe)
+						sample.agentHealthy = agentErr == nil
+					})
+					native.Go(func() {
+						nativeErr = a.Engine(probe, "postgres", "status", struct{}{}, &sample.status)
+					})
+					native.Wait()
+					sample.err = errors.Join(agentErr, nativeErr)
+				})
+			}
 			probes.Wait()
-			out[i].err = errors.Join(agentErr, nativeErr)
+			sample.runtime, sample.runtimeErr, sample.inventory = runtime, runtimeErr, inventory
+			out[i] = sample
 		}()
 	}
 	workers.Wait()
@@ -115,6 +139,13 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 // Sample proxy endpoints alongside data members. Only writer-route evaluation
 // depends on the current primary, not the HTTP observations themselves.
 func observeProxyStatus(ctx context.Context, rc *engine.Context, m *member) memberObservation {
+	return observeProxyInventoryStatus(ctx, rc, m, func() engine.InstanceInventory {
+		containers, err := rc.Backend.Containers(ctx, m.Name)
+		return engine.InstanceInventory{Containers: containers, Err: err}
+	})
+}
+
+func observeProxyInventoryStatus(ctx context.Context, rc *engine.Context, m *member, inventory func() engine.InstanceInventory) memberObservation {
 	var out memberObservation
 	// A healthy task cannot prove that clients can reach the advertised
 	// logical endpoint. Probe the same namespace/DNS/VIP path used by Sync;
@@ -128,8 +159,7 @@ func observeProxyStatus(ctx context.Context, rc *engine.Context, m *member) memb
 		out.proxyEndpointErr = err
 	})
 	var mu sync.Mutex
-	containers, inventoryErr := rc.Backend.Containers(ctx, m.Name)
-	_, out.proxyCount, out.err = engine.VisitObservedInstancesWithIdentity(ctx, rc, m.Name, engine.InstanceInventory{Containers: containers, Err: inventoryErr}, func(a *agentapi.Client, instance string) (bool, error) {
+	_, out.proxyCount, out.err = engine.VisitObservedInstancesWithIdentity(ctx, rc, m.Name, inventory(), func(a *agentapi.Client, instance string) (bool, error) {
 		sample := proxyInstanceObservation{instance: instance}
 		var genericErr, nativeErr error
 		var probes sync.WaitGroup

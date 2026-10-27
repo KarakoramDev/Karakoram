@@ -7,10 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 type coldObservationAgents struct{ options agentapi.ClientOptions }
@@ -87,5 +91,90 @@ func TestObservationColdTLSAndSlowNativeFitsSweep(t *testing.T) {
 		if sample.err != nil || !sample.agentHealthy || !sample.status.Running {
 			t.Fatalf("cold healthy member %s lost fresh availability: %+v", s.data()[i].Name, sample)
 		}
+	}
+}
+
+// Dokploy serializes GetService under its lifecycle lock. Containers is an
+// independent API read, and both must overlap the native/member observations.
+type delayedStatusInventoryBackend struct {
+	*fakeBackend
+	runtimeMu        sync.Mutex
+	runtimeDelay     time.Duration
+	containerDelay   time.Duration
+	runtimeErr       error
+	containerErr     error
+	proxyInventories atomic.Int32
+}
+
+func (b *delayedStatusInventoryBackend) GetService(ctx context.Context, name string) (*infra.Service, error) {
+	b.runtimeMu.Lock()
+	defer b.runtimeMu.Unlock()
+	if err := waitObservationLatency(ctx, b.runtimeDelay); err != nil {
+		return nil, err
+	}
+	if b.runtimeErr != nil {
+		return nil, b.runtimeErr
+	}
+	return b.fakeBackend.GetService(ctx, name)
+}
+
+func (b *delayedStatusInventoryBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
+	if strings.HasSuffix(name, "px") {
+		b.proxyInventories.Add(1)
+	}
+	if err := waitObservationLatency(ctx, b.containerDelay); err != nil {
+		return nil, err
+	}
+	if b.containerErr != nil {
+		return nil, b.containerErr
+	}
+	return b.fakeBackend.Containers(ctx, name)
+}
+
+func TestStatusOverlapsHAInfrastructureInventory(t *testing.T) {
+	p, rc, base := setup(t, "ha")
+	s := converge(t, p, rc)
+	backend := &delayedStatusInventoryBackend{
+		fakeBackend: base, runtimeDelay: 850 * time.Millisecond, containerDelay: 500 * time.Millisecond,
+	}
+	rc.Backend, rc.Clock = backend, engine.RealClock{}
+	status, err := engine.ObserveStatus(t.Context(), p, rc)
+	if err != nil || status.Phase != domain.PhaseReady || status.ObservedAt.IsZero() {
+		t.Fatalf("healthy HA inventory exceeded readiness sweep: phase=%s observed=%s error=%v", status.Phase, status.ObservedAt, err)
+	}
+	if len(status.Members) != len(s.Members) {
+		t.Fatalf("member inventory incomplete: got %d want %d", len(status.Members), len(s.Members))
+	}
+	for _, m := range status.Members {
+		if !m.Health || !m.Agent.Healthy || m.PlacementGroup != "node-a" {
+			t.Errorf("lost fresh member or placement evidence: %+v", m)
+		}
+	}
+	if count := backend.proxyInventories.Load(); count != 1 {
+		t.Fatalf("proxy task inventory repeated within one sweep: got %d want 1", count)
+	}
+}
+
+func TestStatusInfrastructureErrorsRemainFailClosed(t *testing.T) {
+	failure := errors.New("platform observation unavailable")
+	for _, kind := range []string{"runtime", "containers"} {
+		t.Run(kind, func(t *testing.T) {
+			p, rc, base := setup(t, "ha")
+			converge(t, p, rc)
+			backend := &delayedStatusInventoryBackend{fakeBackend: base}
+			if kind == "runtime" {
+				backend.runtimeErr = failure
+			} else {
+				backend.containerErr = failure
+			}
+			rc.Backend = backend
+			status, err := engine.ObserveStatus(t.Context(), p, rc)
+			if !errors.Is(err, failure) || status.Phase == domain.PhaseReady || !status.ObservedAt.IsZero() {
+				t.Fatalf("failed infrastructure read renewed readiness: phase=%s observed=%s error=%v", status.Phase, status.ObservedAt, err)
+			}
+			if !strings.Contains(err.Error(), "demop0 "+kind) {
+				t.Fatalf("missing member/step attribution: %v", err)
+			}
+		})
 	}
 }

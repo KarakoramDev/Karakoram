@@ -102,6 +102,13 @@ karactl -n NS clusters members appdb -o json
 
 Quote `"off"` in YAML if your YAML tooling interprets it as a boolean. For HA, set topology `ha` and engine replicas 3 or 5. Names are lowercase alphanumeric, start with a letter and follow the shared API's cluster-name bounds. Wait timeouts do not cancel work; observe the existing operation/generation rather than submitting another create.
 
+Availability sampling overlaps each member's platform runtime/task inventory
+with its agent and native PostgreSQL observations. ProxySQL instance checks and
+placement use the same task inventory within that sweep. HA member count must
+not add serial platform-read budgets after native health has been collected.
+The bounded freshness lease is unchanged: unavailable platform or native reads
+still withdraw readiness rather than reusing a previous healthy sample.
+
 ## Options
 
 `engineOptions` is a strict object: unknown fields and `null` are rejected. `engineConfig` is not accepted.
