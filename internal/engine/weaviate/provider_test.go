@@ -144,7 +144,7 @@ func coreSetup(t *testing.T, replicas int, handlers ...func(http.ResponseWriter,
 				for _, n := range s.Voters {
 					voter = voter || n == m.Name
 				}
-				stats = append(stats, map[string]any{"name": m.Name, "status": "HEALTHY", "bootstrapped": true, "dbLoaded": true, "open": true, "ready": true, "isVoter": voter, "leaderId": s.Voters[0], "raft": map[string]any{"latestConfiguration": config}})
+				stats = append(stats, map[string]any{"name": m.Name, "status": "HEALTHY", "dbLoaded": true, "open": true, "ready": true, "isVoter": voter, "leaderId": s.Voters[0], "raft": map[string]any{"latestConfiguration": config}})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"statistics": stats, "synchronized": f.quorum})
 		case "/v1/schema":

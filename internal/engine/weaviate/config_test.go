@@ -66,6 +66,58 @@ func TestExactClusterMemberSpecAndStorageRolling(t *testing.T) {
 	}
 }
 
+func TestSingletonStorageRollWithRetainedRaftStatistics(t *testing.T) {
+	f := coreSetup(t, 1) // Native statistics intentionally omit bootstrapped.
+	ctx := context.Background()
+	f.rc.Cluster.Spec.Version = "1.39.12"
+	s := coreConverge(t, f)
+	name, volume := s.Members[0].Name, s.Members[0].Volume
+	previousVersion := s.Members[0].ConfigVersion
+	storage := &domain.BackupStorage{Name: "archive", Type: "s3", EndpointURL: "https://s3.example.test", Region: "us-east-1", Bucket: "bucket", Credentials: domain.StorageCredentials{AccessKeyID: "test-access", SecretAccessKey: "test-secret"}}
+	if err := f.rc.Store.(*store.Store).CreateBackupStorage(ctx, storage); err != nil {
+		t.Fatal(err)
+	}
+	f.rc.Cluster.Generation++
+	f.rc.Cluster.Spec.Backup.Storage = storage.Name
+	s = coreConverge(t, f)
+	m := s.Members[0]
+	if m.Name != name || m.Volume != volume || m.ConfigVersion <= previousVersion {
+		t.Fatal("storage roll must acknowledge a new configuration with unchanged identity and volume")
+	}
+	if f.rc.Cluster.Status.ObservedGeneration != f.rc.Cluster.Generation {
+		t.Fatal("storage generation was not observed")
+	}
+	cfg, err := f.p.MemberConfig(ctx, f.rc, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec wvspec.MemberSpec
+	if err = json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.Backup == nil || spec.Backup.Bucket != storage.Bucket {
+		t.Fatal("storage binding was not delivered")
+	}
+	status, err := f.p.Status(ctx, f.rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Phase != domain.PhaseReady || len(status.Members) != 1 || !status.Members[0].Health {
+		t.Fatalf("retained singleton not healthy: phase=%s members=%+v", status.Phase, status.Members)
+	}
+	for _, kind := range []string{"Quorum", "ClusterHealth"} {
+		found := false
+		for _, condition := range status.Conditions {
+			if condition.Type == kind {
+				found = condition.Status == "True"
+			}
+		}
+		if !found {
+			t.Fatalf("%s not true", kind)
+		}
+	}
+}
+
 func TestInferenceModulesAreEnabledDeterministically(t *testing.T) {
 	f := coreSetup(t, 1)
 	ctx := context.Background()

@@ -213,7 +213,11 @@ func validateClusterStatistics(s *state, stats wvapi.ClusterStatistics) (bool, e
 		}
 		var leader string
 		_ = json.Unmarshal(st.LeaderID, &leader)
-		if !st.Ready || !st.DBLoaded || !st.Open || !st.Bootstrapped || st.Status != "HEALTHY" || !slices.Contains(s.Voters, leader) || st.IsVoter != slices.Contains(s.Voters, st.Name) {
+		// bootstrapped describes the native bootstrap path, not current
+		// readiness: a retained Raft store can elect a leader after restart
+		// while that process-local flag remains false (and is omitted in JSON).
+		// Require current readiness and the persisted voter configuration below.
+		if !st.Ready || !st.DBLoaded || !st.Open || st.Status != "HEALTHY" || !slices.Contains(s.Voters, leader) || st.IsVoter != slices.Contains(s.Voters, st.Name) {
 			return false, nil
 		}
 		var configuration []struct {
