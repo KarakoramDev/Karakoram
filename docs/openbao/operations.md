@@ -8,6 +8,11 @@ Karakoram persists one initialization owner before calling `sys/init`. Only that
 
 The owner is unsealed and becomes active first. Further members join one at a time; each must become a healthy Raft voter in autopilot before the next. Runtime deployment or an agent configuration acknowledgement alone is not readiness. [OpenBao](https://openbao.org/) active members report role `primary`; unsealed standbys report `secondary`.
 
+The public member role preserves this native observation independently from
+the process state (`RUNNING`). The same primary/secondary mapping applies to
+Raft and PostgreSQL-storage HA peers on every backend. Sealed, uninitialized
+or unavailable native observations do not imply a primary or standby role.
+
 ```sh
 karactl -n NS clusters status secrets -o json
 karactl -n NS clusters members secrets -o json

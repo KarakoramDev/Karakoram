@@ -293,7 +293,13 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 }
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
+	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
 	switch m.Role {
+	case "primary", "secondary":
+		if config {
+			return api.MemberRole("config-" + m.Role)
+		}
+		return api.MemberRole(m.Role)
 	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector":
 		return api.MemberRole(m.Role)
 	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
@@ -306,7 +312,6 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 	if state == "" || state == "paused" || state == "error" {
 		state = strings.ToLower(m.Role)
 	}
-	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
 	switch state {
 	case "primary", "secondary":
 		if config {
