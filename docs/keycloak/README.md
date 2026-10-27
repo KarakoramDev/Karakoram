@@ -55,6 +55,12 @@ The member configuration is sealed at rest, including the generated temporary `a
 
 Each reconciliation resolves the binding again. Credential generation, endpoint, CA, hostname or proxy-header changes republish the sealed configuration and trigger an agent reload. The agent starts the configured runtime on first apply and stops then starts it when configuration changes, unless maintenance, an operator stop hold or the desired process list prevents startup. There is only one runtime, so rotation interrupts authentication. Applied configuration versions and management health must both match before the cluster is ready.
 
+The desired generation is acknowledged after the sole live agent accepts its
+configuration and runtime resources/routing have converged. Periodic health polls
+continue without keeping that generation pending. Missing agents, stale applied
+configuration and agent-reported configuration errors do not acknowledge it;
+native management health still independently controls Ready.
+
 ## Routing and health
 
 Application HTTP listens on private port **8080** for a trusted TLS-terminating ingress. Management HTTP on **127.0.0.1:9000** is not exposed by the runtime's port declarations. Native readiness calls `/health/ready` and requires HTTP 200 with status `UP`. Agent health is independently protected by cluster-scoped TLS on port 9443.

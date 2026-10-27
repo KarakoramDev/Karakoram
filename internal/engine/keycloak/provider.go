@@ -460,8 +460,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "deploy"}
 		return result, nil
 	}
+	configApplied := false
 	if rc.Agents != nil {
-		_, _, err = engine.VisitLiveInstancesConcurrent(ctx, rc, s.Member, func(client *agentapi.Client) (bool, error) {
+		var count int
+		configApplied, count, err = engine.VisitLiveInstancesConcurrent(ctx, rc, s.Member, func(client *agentapi.Client) (bool, error) {
 			applied, e := client.Status(ctx)
 			if e != nil {
 				return false, e
@@ -469,11 +471,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			if applied.ConfigVersion < s.ConfigVersion {
 				return false, client.Reload(ctx)
 			}
-			return true, nil
+			return applied.Error == "", nil
 		})
 		if err != nil {
 			return result, err
 		}
+		configApplied = configApplied && count == 1
 	}
 	if !reflect.DeepEqual(s.Resources, rc.Cluster.Spec.Components.Engine.Resources) {
 		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
@@ -498,6 +501,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 		s.Pending = &pending{Op: op, Action: "public", Public: o.PublicHTTPS}
 		return result, nil
+	}
+	if configApplied {
+		// Periodic health requeues do not mean the desired generation is still
+		// pending. Only acknowledge after the live agent accepted configuration
+		// and every provider mutation above has completed.
+		rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	}
 	return result, nil
 }

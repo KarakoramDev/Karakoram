@@ -117,6 +117,7 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 - Engine driver metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Engine drivers are compiled in, not dynamically installable plugins.
 - Perform at most one disruptive action per reconciliation step. Persist intent/checkpoints and remote identifiers before progressing, then observe completion. SQLite and remote services are not one transaction.
 - Preserve agent config/control/receipt compatibility through rolling deployments. Maintenance/process holds survive restarts and pulls; ambiguous initiation is not permission to repeat destructive work.
+- Engine tests must prove that an unchanged, Ready cluster submits no infrastructure mutations. Reuse `internal/engine/enginetest.AssertIdle` with the engine's native/agent fixture: it uses the real Zerops layout and capabilities, round-trips cluster state through SQLite/JSON on every reconciliation, and requires twenty converged cycles with zero backend mutation submissions. Explicit `startCpu` values exercise decoded-pointer equality. Keep every supported engine/topology covered by `TestIdleReconcileZeroProviderMutations`; the recorder contract test guards the infrastructure mutation surface.
 - Ordinary status/log/event reads must remain credential-free. Preserve separate `cluster-credentials:read`, per-object filtering and deny-overrides policies.
 
 ## Public API changes and regeneration
