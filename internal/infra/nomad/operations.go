@@ -73,6 +73,7 @@ type operation struct {
 	Lease            *operationLease   `json:"lease,omitempty"`
 
 	ResourceCorrection *resourceCorrection `json:"resourceCorrection,omitempty"`
+	ResourceRejected   bool                `json:"resourceRejected,omitempty"`
 }
 
 // Conditional resource corrections retain their exact predecessor and accepted
@@ -178,7 +179,10 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	// Plan before saving the new resources or issuing the single-writer stop.
 	// An infeasible replacement must leave both the serving job and its durable
 	// specification untouched, including when convergence retries this request.
-	if action == "resources" && o.Phase == "stopping" {
+	// Conditional initial-deployment corrections have no serving allocation
+	// to protect; their separate admission/history fence must remain usable
+	// while placement is blocked (including on an ineligible node).
+	if action == "resources" && o.Phase == "stopping" && unplacedPrevious == nil {
 		proposed := *r
 		proposed.Pending = &o
 		if err := b.planResourceUpdate(work, &proposed); err != nil {
@@ -425,6 +429,9 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if current.Phase == "failed" {
 		state.Failed = true
 		state.Message = current.Message
+		if current.ResourceRejected {
+			return state, &infra.ResourceUpdateRejectedError{Message: current.Message}
+		}
 		return state, nil
 	}
 	if b.operationLeaseBlocked(r) {
@@ -489,9 +496,11 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 			if !observed.Stop {
 				// A lost/failed initial stop may be retried after capacity
 				// changed. Replan before that retry, not after stopping.
-				if current.Action == "resources" {
+				if current.Action == "resources" && current.UnplacedPrevious == nil {
 					if err := b.planResourceUpdate(ctx, r); err != nil {
 						if errors.Is(err, infra.ErrRejected) {
+							var rejected *infra.ResourceUpdateRejectedError
+							current.ResourceRejected = errors.As(err, &rejected)
 							failed, saveErr := b.failOperation(ctx, r, state, err.Error())
 							return failed, errors.Join(err, saveErr)
 						}

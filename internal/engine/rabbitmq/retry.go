@@ -231,6 +231,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			s.resetPlatformRetry(v)
 			return false, err
 		}
+		var rejected *infra.ResourceUpdateRejectedError
+		if errors.As(err, &rejected) {
+			return true, s.failPendingCause(rc, err)
+		}
 		if err != nil {
 			return true, err
 		}

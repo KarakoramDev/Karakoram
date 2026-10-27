@@ -32,8 +32,17 @@ func (s *internalState) platformFailureMessage() string {
 }
 func (s *internalState) failPendingCause(rc *engine.Context, cause error) error {
 	v := s.Pending
+	var resourceRejected *infra.ResourceUpdateRejectedError
+	if errors.As(cause, &resourceRejected) {
+		// Admission failed before changing applied bounds. Discard the
+		// captured resource change as well as its receipt, so a corrective
+		// spec is not pinned behind this rejected target.
+		if m := s.find(v.Member); m != nil && m.Change != nil && m.Change.Kind == "resources" {
+			m.Change = nil
+		}
+	}
 	var wait *engine.PlatformRetryWait
-	if errors.As(cause, &wait) || errors.Is(cause, infra.ErrDeploymentRetriesExhausted) || errors.Is(cause, engine.ErrNotSupported) || errors.Is(cause, infra.ErrUnsupported) {
+	if errors.As(cause, &wait) || engine.PlatformFailureDefinitive(cause) || errors.Is(cause, engine.ErrNotSupported) || errors.Is(cause, infra.ErrUnsupported) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause
@@ -179,6 +188,11 @@ func (p *Provider) observeReceipt(ctx context.Context, rc *engine.Context, s *in
 			}
 			s.resetPlatformRetry(v)
 			return true, err
+		}
+		var rejected *infra.ResourceUpdateRejectedError
+		if errors.As(err, &rejected) {
+			s.Pending = v
+			return true, s.failPendingCause(rc, err)
 		}
 		if err != nil {
 			return false, err

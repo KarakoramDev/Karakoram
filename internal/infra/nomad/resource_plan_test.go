@@ -179,7 +179,7 @@ func TestResourcePlanRechecksBeforeRetryingStop(t *testing.T) {
 	}
 	for range 3 {
 		state, err = b.OpStatus(t.Context(), encodeOp(*r.Pending))
-		if err != nil || !state.Failed {
+		if !errors.As(err, &rejected) || !state.Failed {
 			t.Fatalf("terminal retry fence lost: %+v %v", state, err)
 		}
 	}

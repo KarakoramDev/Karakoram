@@ -13,7 +13,8 @@ import (
 // PlatformFailureDefinitive reports failures that cannot be resolved by replaying
 // the same platform intent.
 func PlatformFailureDefinitive(err error) bool {
-	return errors.Is(err, infra.ErrDeploymentRetriesExhausted) || errors.Is(err, infra.ErrPlacementUnsatisfiable)
+	var rejected *infra.ResourceUpdateRejectedError
+	return errors.As(err, &rejected) || errors.Is(err, infra.ErrDeploymentRetriesExhausted) || errors.Is(err, infra.ErrPlacementUnsatisfiable)
 }
 
 // PlatformRetryWait reports an already scheduled retry, not a new failed

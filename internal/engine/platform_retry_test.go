@@ -103,7 +103,7 @@ func TestRetryScheduleOldCPRoundTrip(t *testing.T) {
 }
 
 func TestPlatformFailureDefinitive(t *testing.T) {
-	for _, err := range []error{infra.ErrPlacementUnsatisfiable, infra.ErrDeploymentRetriesExhausted} {
+	for _, err := range []error{infra.ErrPlacementUnsatisfiable, infra.ErrDeploymentRetriesExhausted, &infra.ResourceUpdateRejectedError{Message: "node n: dimension cpu exhausted"}} {
 		if !PlatformFailureDefinitive(fmt.Errorf("wrapped: %w", err)) {
 			t.Fatalf("definitive failure classified retryable: %v", err)
 		}
