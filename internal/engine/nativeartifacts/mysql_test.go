@@ -15,6 +15,9 @@ func TestPerconaArtifacts(t *testing.T) {
 			t.Fatal(err)
 		}
 		runtimeDeps := []string{"libaio1t64", "libnuma1", "libev4t64"}
+		if strings.HasPrefix(name, "percona-server-") {
+			runtimeDeps = append(runtimeDeps, "libtirpc3t64")
+		}
 		if strings.HasPrefix(name, "percona-xtradb-cluster-") {
 			runtimeDeps = append(runtimeDeps, "socat", "openssl")
 		}

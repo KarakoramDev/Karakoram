@@ -23,7 +23,7 @@ func (p *Core) prepareCommands(version, owner string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	commands := []string{"sudo apt-get update && sudo apt-get install -y ca-certificates curl python3 xz-utils libaio1t64 libnuma1 libev4t64"}
+	commands := []string{"sudo apt-get update && sudo apt-get install -y ca-certificates curl python3 xz-utils libaio1t64 libnuma1 libev4t64 libtirpc3t64"}
 	if p.Name() == "pxc" {
 		commands[0] += " socat openssl"
 	}

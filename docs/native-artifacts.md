@@ -67,6 +67,18 @@ Application tarballs also retain the frozen validator source and original `appli
 
 [MySQL](https://www.oracle.com/mysql/) catalog releases pair a versioned `percona-server-<version>` entry with the same-major `percona-xtrabackup-<version>` entry. These are official GPL-2.0-only [Linux](https://www.kernel.org/) amd64 glibc2.35 **minimal** tarballs, with immutable upstream tag commits and verified download hashes and sizes. The 8.4 line uses [XtraBackup](https://www.percona.com/mysql/software/percona-xtrabackup) 8.4.0-7; the 8.0 line uses 8.0.35-36. The lock also pins [Percona](https://www.percona.com/) XtraDB Cluster 8.4.11-11.1 and 8.0.46-38.1 as official GPL-2.0-only Linux amd64 glibc2.35 minimal tarballs. The Server and XtraBackup entries use `libaio1t64`, `libnuma1`, and `libev4t64` (the latter is needed by `xbcloud`); [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster) additionally uses `socat` and `openssl` for its SST scripts.
 
+Percona Server entries also require Ubuntu 24.04's `libtirpc3t64`, which supplies
+`libtirpc.so.3` for Group Replication. PXC's pinned tarballs instead bundle their
+own `libtirpc.so`; its Galera topology does not load Group Replication.
+The X plugin is disabled by the managed server configuration.
+Checking only `mysqld --version` does not exercise dynamic plugin loading.
+The shared MySQL/PXC preparation explicitly installs this package on every
+backend: inside Nomad's exec rootfs before agent startup, in Dokploy's generated
+Ubuntu 24.04 image build, and through Zerops `prepareCommands` on `ubuntu@24.04`.
+Do not rely on a backend base image or unrelated package to supply it implicitly.
+These dependencies are APT packages, not additional native mirror objects; the
+locked Percona tarball bytes and checksums are unchanged.
+
 Archive extraction retains the upstream top-level directory. Install into `/opt/karakoram/percona-server-<version>`, `/opt/karakoram/percona-xtrabackup-<version>`, or `/opt/karakoram/percona-xtradb-cluster-<version>` and set the member's `serverDir` / `xtraBackupDir` to the contained upstream directory, not the outer installation root. No package service is installed. Member payloads contain sealed-store credentials resolved for authenticated delivery and must be cached with owner-only permissions; never log them. Only allowlisted my.cnf parameters may cross the member boundary.
 
 ## Official Weaviate artifacts

@@ -640,7 +640,8 @@
     "runtimeDeps": [
       "libaio1t64",
       "libnuma1",
-      "libev4t64"
+      "libev4t64",
+      "libtirpc3t64"
     ]
   },
   {
@@ -659,7 +660,8 @@
     "runtimeDeps": [
       "libaio1t64",
       "libnuma1",
-      "libev4t64"
+      "libev4t64",
+      "libtirpc3t64"
     ]
   },
   {
@@ -758,7 +760,8 @@
     "runtimeDeps": [
       "libaio1t64",
       "libnuma1",
-      "libev4t64"
+      "libev4t64",
+      "libtirpc3t64"
     ]
   },
   {
@@ -777,7 +780,8 @@
     "runtimeDeps": [
       "libaio1t64",
       "libnuma1",
-      "libev4t64"
+      "libev4t64",
+      "libtirpc3t64"
     ]
   },
   {

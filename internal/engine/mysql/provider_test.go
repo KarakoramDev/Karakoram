@@ -70,6 +70,12 @@ func TestNativePreparationDoesNotResolveServerPackages(t *testing.T) {
 			if err != nil {
 				t.Fatal(provider, version.Version, err)
 			}
+			// Minimal server tarballs do not bundle libtirpc.so.3 for plugins.
+			// Every backend executes this same preparation, including image builds.
+			packages := " " + commands[0] + " "
+			if !strings.Contains(packages, " libtirpc3t64 ") {
+				t.Fatalf("%s %s omits the Ubuntu 24.04 plugin dependency libtirpc3t64", provider, version.Version)
+			}
 			for _, command := range commands {
 				if strings.Contains(command, "percona-release") || strings.Contains(command, "percona-toolkit") ||
 					strings.Contains(command, "apt-get install") && (strings.Contains(command, "percona-") || strings.Contains(command, "mysql-")) {
@@ -84,6 +90,11 @@ func TestNativePreparationDoesNotResolveServerPackages(t *testing.T) {
 				artifact, err := nativeartifacts.Get(name)
 				if err != nil {
 					t.Fatal(err)
+				}
+				for _, dependency := range artifact.RuntimeDeps {
+					if !strings.Contains(packages, " "+dependency+" ") {
+						t.Fatalf("%s %s omits %s runtime dependency %s", provider, version.Version, name, dependency)
+					}
 				}
 				if !strings.Contains(strings.Join(commands, "\n"), artifact.SHA256+"  "+artifact.File) {
 					t.Fatalf("%s %s omits the locked artifact %s", provider, version.Version, name)
