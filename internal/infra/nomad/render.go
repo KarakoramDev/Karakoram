@@ -109,6 +109,12 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 		"Resources":  resources,
 		"KillSignal": "SIGTERM", "KillTimeout": int64(120 * time.Second),
 	}
+	if r.Pending != nil && r.Pending.Action == "resources" && (r.Volume != "" || len(r.Deployment.Runtime.Args) != 0 && r.Deployment.Runtime.Args[0] == "relay") {
+		// Resource updates use stop/purge/register for stateful members. Make
+		// the operation identity a task-spec change too, so job plan cannot
+		// acknowledge an in-place/no-op update instead of replacement placement.
+		task["Meta"] = map[string]string{"karakoram.operation": r.Pending.Issued.Format(time.RFC3339Nano)}
+	}
 	net := map[string]any{"Mode": "cni/" + network}
 	reserved := make([]any, 0, len(r.PublicPorts))
 	for _, port := range r.PublicPorts {

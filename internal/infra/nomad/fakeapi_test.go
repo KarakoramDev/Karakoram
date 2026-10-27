@@ -592,9 +592,16 @@ func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid plan job", 400)
 			return
 		}
-		// The default fixture has unlimited CPU/RAM. Admission failure tests
-		// supply scheduler metrics through requestHook without mutating jobs.
-		fakeJSON(w, 200, fakeRow{"FailedTGAllocs": nil})
+		// The default fixture has unlimited CPU/RAM, but an unchanged task
+		// spec is not a replacement-placement proof.
+		replacements := 1
+		if existing := f.jobs[fakeKey(ns, fakeString(job, "ID"))]; existing != nil {
+			oldGroups, groups := fakeRows(existing.row["TaskGroups"]), fakeRows(job["TaskGroups"])
+			if len(oldGroups) == 1 && len(groups) == 1 && reflect.DeepEqual(oldGroups[0]["Tasks"], groups[0]["Tasks"]) {
+				replacements = 0
+			}
+		}
+		fakeJSON(w, 200, fakeRow{"FailedTGAllocs": nil, "Annotations": fakeRow{"DesiredTGUpdates": fakeRow{"member": fakeRow{"DestructiveUpdate": replacements}}}})
 		return
 	}
 	if path == "/v1/jobs" {

@@ -188,3 +188,107 @@ func TestResourcePlanRechecksBeforeRetryingStop(t *testing.T) {
 		t.Fatalf("retry stopped original allocation: %+v %v", after, err)
 	}
 }
+
+func TestResourcePlanUsesExactReplacementMarker(t *testing.T) {
+	f := newFakeNomad(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+	deployFake(t, b, "runtime", "volume")
+	current, err := b.require(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var planned map[string]any
+	f.mu.Lock()
+	f.requestHook = func(w http.ResponseWriter, r *http.Request) (bool, func()) {
+		if r.URL.Path == "/v1/job/runtime/plan" {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			planned = fakeMap(body["Job"])
+			fakeJSON(w, 200, fakeRow{"Annotations": fakeRow{"DesiredTGUpdates": fakeRow{"member": fakeRow{"DestructiveUpdate": 1}}}})
+			return true, nil
+		}
+		return false, nil
+	}
+	f.mu.Unlock()
+	// Only change a bound that does not change rendered CPU: this used to
+	// plan the old job even though registration would replace the allocation.
+	change := current.Resources
+	change.MinCPU = change.MinCPU / 2
+	op, err := b.SetResources(t.Context(), "runtime", change)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending, err := b.require(t.Context(), "runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := b.renderJob(t.Context(), pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(rendered["Job"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var registered map[string]any
+	if err := json.Unmarshal(encoded, &registered); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(planned, registered) {
+		t.Fatalf("plan differs from exact registration: planned=%+v registered=%+v", planned, registered)
+	}
+	marker := fakeString(fakeMap(planned["Meta"]), "karakoram.operation")
+	if marker == "" || marker == current.Pending.Issued.Format("2006-01-02T15:04:05.999999999Z07:00") {
+		t.Fatal("plan retained predecessor operation marker")
+	}
+	task := fakeRows(fakeRows(planned["TaskGroups"])[0]["Tasks"])[0]
+	if fakeString(fakeMap(task["Meta"]), "karakoram.operation") != marker {
+		t.Fatal("plan lacks destructive task-spec marker")
+	}
+	awaitFake(t, b, op)
+}
+
+func TestResourcePlanRejectsNoopAndInPlaceProof(t *testing.T) {
+	for _, kind := range []string{"noop", "inplace"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newFakeNomad(t)
+			b := fakeBackend(t, f, nil)
+			importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+			deployFake(t, b, "runtime", "volume")
+			f.mu.Lock()
+			f.requestHook = func(w http.ResponseWriter, r *http.Request) (bool, func()) {
+				if r.URL.Path != "/v1/job/runtime/plan" {
+					return false, nil
+				}
+				inPlace := 0
+				if kind == "inplace" {
+					inPlace = 1
+				}
+				fakeJSON(w, 200, fakeRow{"Annotations": fakeRow{"DesiredTGUpdates": fakeRow{"member": fakeRow{"InPlaceUpdate": inPlace}}}})
+				return true, nil
+			}
+			f.mu.Unlock()
+			if _, err := b.SetResources(t.Context(), "runtime", infra.Resources{MaxRAM: 2}); !errors.Is(err, infra.ErrRejected) {
+				t.Fatalf("non-placement plan admitted destructive stop: %v", err)
+			}
+		})
+	}
+}
+
+func TestResourcePlanRejectsIneligiblePinnedNode(t *testing.T) {
+	f := newFakeNomad(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+	deployFake(t, b, "runtime", "volume")
+	volume, err := b.require(t.Context(), "volume")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.setNodeEligible(volume.Node, false)
+	if _, err := b.SetResources(t.Context(), "runtime", infra.Resources{MinCPU: .25}); !errors.Is(err, infra.ErrRejected) || !strings.Contains(err.Error(), volume.Node) {
+		t.Fatalf("ineligible pinned node admitted: %v", err)
+	}
+}

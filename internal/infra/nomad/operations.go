@@ -179,7 +179,9 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	// An infeasible replacement must leave both the serving job and its durable
 	// specification untouched, including when convergence retries this request.
 	if action == "resources" && o.Phase == "stopping" {
-		if err := b.planResourceUpdate(work, r); err != nil {
+		proposed := *r
+		proposed.Pending = &o
+		if err := b.planResourceUpdate(work, &proposed); err != nil {
 			return infra.Op{}, err
 		}
 	}
