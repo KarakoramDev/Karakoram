@@ -6,6 +6,8 @@ package nomad
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -115,6 +117,74 @@ func TestLogsTruncateGrowingTail(t *testing.T) {
 	lines, err := b.Logs(t.Context(), "runtime", infra.LogQuery{Limit: 1})
 	if err != nil || len(lines) != 1 || lines[0].Message != "newest line" {
 		t.Fatalf("growing tail = %+v, %v", lines, err)
+	}
+}
+
+func TestLogsMissingStreamDoesNotHideScaledMember(t *testing.T) {
+	for _, member := range []string{"demom3", "demom4", "demop3", "demopx"} {
+		for _, missing := range []string{"stdout", "stderr", "both"} {
+			t.Run(member+"/"+missing, func(t *testing.T) {
+				f := newFakeNomad(t)
+				b := fakeBackend(t, f, nil)
+				importFake(t, b, runtimeSpec(member, ""))
+				deployFake(t, b, member, "")
+				transport := b.c.http.Transport
+				b.c.http.Transport = testRoundTripper(func(r *http.Request) (*http.Response, error) {
+					if strings.HasPrefix(r.URL.Path, "/v1/client/fs/logs/") {
+						stream := r.URL.Query().Get("type")
+						status, message := 200, "member diagnostic\n"
+						if missing == "both" || stream == missing {
+							status = 404
+							message = fmt.Sprintf("log entry for task %q and log type %q not found", r.URL.Query().Get("task"), stream)
+						}
+						return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(message))}, nil
+					}
+					return transport.RoundTrip(r)
+				})
+				logs, err := b.Logs(t.Context(), member, infra.LogQuery{Limit: 100})
+				want := 1
+				if missing == "both" {
+					want = 0
+				}
+				if err != nil || len(logs) != want {
+					t.Fatalf("log tail = %+v, %v; want %d lines", logs, err, want)
+				}
+				if want == 1 && (logs[0].Message != "member diagnostic" || logs[0].Stream == missing) {
+					t.Fatalf("readable sibling output lost: %+v", logs)
+				}
+			})
+		}
+	}
+}
+
+func TestLogsPreserveActiveAllocationErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, message string
+		status        int
+		want          error
+	}{
+		{"unknown-allocation", "unknown allocation", 404, infra.ErrNotFound},
+		{"task-not-started", `task "member" not started yet. No logs available`, 404, infra.ErrNotFound},
+		{"wrong-task-stream", `log entry for task "other" and log type "stdout" not found`, 404, infra.ErrNotFound},
+		{"forbidden", "permission denied", 403, infra.ErrUnauthorized},
+		{"unavailable", "client unavailable", 503, infra.ErrUnavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeNomad(t)
+			b := fakeBackend(t, f, nil)
+			importFake(t, b, runtimeSpec("demom3", ""))
+			deployFake(t, b, "demom3", "")
+			transport := b.c.http.Transport
+			b.c.http.Transport = testRoundTripper(func(r *http.Request) (*http.Response, error) {
+				if strings.HasPrefix(r.URL.Path, "/v1/client/fs/logs/") {
+					return &http.Response{StatusCode: tc.status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(tc.message))}, nil
+				}
+				return transport.RoundTrip(r)
+			})
+			if _, err := b.Logs(t.Context(), "demom3", infra.LogQuery{Limit: 100}); !errors.Is(err, tc.want) {
+				t.Fatalf("active allocation error = %v, want %v", err, tc.want)
+			}
+		})
 	}
 }
 
