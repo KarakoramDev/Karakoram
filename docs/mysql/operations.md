@@ -23,6 +23,11 @@ for the first eligible writer. Such members are not a failed infrastructure
 lookup; the cluster stays non-Ready until their runtime and native health are
 observed. This applies to both MySQL and PXC.
 
+Proxy provisioning waits for a native-online writer to complete its data-member
+join checkpoint, so its first configuration contains an eligible backend.
+A pending proxy deployment does not block that initial data join, including
+when reconciliation resumes a proxy deployment accepted by an earlier version.
+
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 
 ### PXC GTID history safety

@@ -245,6 +245,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	writer := false
 	if clustered(s.Topology) || s.Topology == "single" {
 		for _, m := range s.data() {
+			// Proxy configuration only publishes joined data backends. Native
+			// ONLINE alone precedes that checkpoint and cannot admit a proxy.
+			if m.Stage != "joined" {
+				continue
+			}
 			st, e := live(ctx, rc, m.Name)
 			if e == nil && (onlinePrimary(st) || s.Topology == "single" && st.MemberState == "ONLINE") {
 				writer = true
@@ -376,6 +381,12 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	deploymentsBusy := false
 	for _, m := range s.Members {
+		// A proxy started by an earlier reconciliation may still be waiting
+		// for its first backend. Do not let its rollout block the data join
+		// checkpoint that supplies that backend.
+		if m.Role == "proxy" && !writer {
+			continue
+		}
 		if m.Stage != "deploying" {
 			continue
 		}
