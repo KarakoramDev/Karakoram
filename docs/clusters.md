@@ -185,6 +185,12 @@ incarnation; concurrent lifecycle changes discard the sample. It writes status
 only, never provider internal state or applied generation. Running imperative
 operations retain their serialized observation/checkpoint ownership; suspended,
 restoring, deleting and not-yet-formed clusters are not promoted by this loop.
+Ordinary and independent observation paths share a per-cluster publication gate
+from snapshot acquisition through the completed status write. In particular,
+finishing probes does not release the gate: an older delayed positive cannot
+overwrite a newer failure, or replace a newer lease with an older sample.
+The gate is released after pre-Sync publication and held again for the final
+observation/publication, so it does not serialize renewal behind slow Sync.
 Unavailable agents/platform reads still fail closed under the unchanged lease.
 Reconciliation stages emit sanitized monotonic durations at DEBUG, or WARN when
 a stage exceeds the 15-second lease; fields contain cluster identity, stage and

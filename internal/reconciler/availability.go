@@ -18,6 +18,10 @@ import (
 // only a fenced availability sample can be published. Imperative operations
 // retain their existing serialized observation/checkpoint ownership.
 func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) error {
+	if err := holdObservation(ctx); err != nil {
+		return err
+	}
+	defer releaseObservation(ctx)
 	c, previousStatus, err := m.opts.Store.GetClusterObservation(ctx, ref)
 	if err != nil {
 		return err
@@ -95,5 +99,43 @@ func (m *Manager) logStage(ref domain.ClusterRef, stage string, started time.Tim
 		m.opts.Context.Logger.Warn("reconcile stage exceeds availability lease", "cluster", ref.Key(), "stage", stage, "duration", duration)
 	} else {
 		m.opts.Context.Logger.Debug("reconcile stage completed", "cluster", ref.Key(), "stage", stage, "duration", duration)
+	}
+}
+
+type observationPublicationKey struct{}
+
+// Each caller has its own scope over the same per-worker gate. held is accessed
+// only by that caller's goroutine; never share a scope with the renewal loop.
+// The gate spans observation AND publication, not Sync. Serializing complete
+// samples avoids merging mixed health/lifecycle status or ordering failures by
+// ObservedAt, which is intentionally zero on failed sweeps.
+type observationPublication struct {
+	gate chan struct{}
+	held bool
+}
+
+func withObservationPublication(ctx context.Context, gate chan struct{}) context.Context {
+	return context.WithValue(ctx, observationPublicationKey{}, &observationPublication{gate: gate})
+}
+
+func holdObservation(ctx context.Context) error {
+	scope, _ := ctx.Value(observationPublicationKey{}).(*observationPublication)
+	if scope == nil || scope.held {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case scope.gate <- struct{}{}:
+		scope.held = true
+		return nil
+	}
+}
+
+func releaseObservation(ctx context.Context) {
+	scope, _ := ctx.Value(observationPublicationKey{}).(*observationPublication)
+	if scope != nil && scope.held {
+		scope.held = false
+		<-scope.gate
 	}
 }

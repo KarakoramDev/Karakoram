@@ -205,3 +205,139 @@ func TestIndependentAvailabilityRetainsLifecycleOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestObservationAndPublicationAreArbitratedInBothDirections(t *testing.T) {
+	for _, renewalFirst := range []bool{false, true} {
+		for _, firstHealthy := range []bool{false, true} {
+			name := map[bool]string{false: "ordinary-first", true: "renewal-first"}[renewalFirst] +
+				map[bool]string{false: "/failure-before-success", true: "/success-before-failure"}[firstHealthy]
+			t.Run(name, func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					p := &operationProvider{fakeProvider: &fakeProvider{}}
+					m, st := newTestManager(t, p)
+					m.opts.Context.ObservationEpoch = "current-process"
+					c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}, Internal: json.RawMessage(`{"checkpoint":true}`),
+						Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1}}
+					if err := st.CreateCluster(t.Context(), c); err != nil {
+						t.Fatal(err)
+					}
+					gate := make(chan struct{}, 1)
+					normalCtx := withObservationPublication(t.Context(), gate)
+					renewalCtx := withObservationPublication(t.Context(), gate)
+					entered := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
+					release := [2]chan struct{}{make(chan struct{}), make(chan struct{})}
+					var renewalOnce sync.Once
+					var probes [2]atomic.Int32
+					healthy := func(renewal bool) bool {
+						if renewal == renewalFirst {
+							return firstHealthy
+						}
+						return !firstHealthy
+					}
+					p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+						index := 0
+						if rc.AvailabilityOnly {
+							index = 1
+							renewalOnce.Do(func() {
+								close(entered[1])
+								<-release[1]
+							})
+						}
+						probes[index].Add(1)
+						if !healthy(rc.AvailabilityOnly) {
+							return domain.ClusterStatus{}, errors.New("agent unavailable")
+						}
+						return domain.ClusterStatus{Phase: domain.PhaseReady,
+							Conditions: []domain.Condition{{Type: "Ready", Status: "True"}},
+							Members:    []domain.MemberStatus{{Name: "member", Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: rc.Clock.Now()}}}}, nil
+					}
+					done := [2]chan error{make(chan error, 1), make(chan error, 1)}
+					normal := func() {
+						if err := holdObservation(normalCtx); err != nil {
+							done[0] <- err
+							return
+						}
+						defer releaseObservation(normalCtx)
+						current, err := st.GetCluster(normalCtx, c.Ref())
+						if err != nil {
+							done[0] <- err
+							return
+						}
+						rc := m.opts.Context
+						rc.Cluster = current
+						status, _ := m.observeStatus(normalCtx, p, &rc)
+						// Reproduce the reviewed gap AFTER a complete ordinary
+						// sample but BEFORE its unconditional lifecycle write.
+						close(entered[0])
+						<-release[0]
+						status.ObservedGeneration = current.Status.ObservedGeneration
+						current.Status = status
+						current.Internal = json.RawMessage(`{"ordinary":"owns-checkpoint"}`)
+						done[0] <- m.state(normalCtx, current, domain.PhaseReady)
+					}
+					renewal := func() { done[1] <- m.renewAvailability(renewalCtx, c.Ref()) }
+					first, second := 0, 1
+					if renewalFirst {
+						first, second = 1, 0
+					}
+					start := [2]func(){normal, renewal}
+					go start[first]()
+					<-entered[first]
+					go start[second]()
+					synctest.Wait()
+					if probes[second].Load() != 0 {
+						t.Fatal("second path observed before the first path published")
+					}
+					select {
+					case <-entered[second]:
+						t.Fatal("second publication overtook the held sample")
+					default:
+					}
+					close(release[first])
+					<-entered[second]
+					stored, err := st.GetCluster(t.Context(), c.Ref())
+					if err != nil || (stored.Status.Phase == domain.PhaseReady) != firstHealthy {
+						t.Fatal("first sample was not published before the next observation", stored, err)
+					}
+					close(release[second])
+					for _, result := range done {
+						if err := <-result; err != nil {
+							t.Fatal(err)
+						}
+					}
+					stored, err = st.GetCluster(t.Context(), c.Ref())
+					if err != nil || (stored.Status.Phase == domain.PhaseReady) == firstHealthy ||
+						stored.Status.Members[0].Agent.Healthy == firstHealthy || stored.Status.ObservedGeneration != 1 ||
+						string(stored.Internal) != `{"ordinary":"owns-checkpoint"}` {
+						t.Fatal("observation ordering changed health or lifecycle ownership", stored, err)
+					}
+				})
+			})
+		}
+	}
+}
+
+func TestPostSyncDependencyFailureCannotRepublishCachedAvailability(t *testing.T) {
+	m, st := newTestManager(t, &fakeProvider{})
+	c := &domain.Cluster{Namespace: "broken", Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+		Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1, ObservedAt: time.Now(), ObservationEpoch: "current-process",
+			Conditions: []domain.Condition{{Type: "Ready", Status: "True"}},
+			Members:    []domain.MemberStatus{{Name: "member", Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: time.Now()}}}}}
+	if err := st.CreateNamespace(t.Context(), &domain.Namespace{Name: c.Namespace, Phase: "Ready"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateCluster(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	rc := m.opts.Context
+	rc.Cluster = c
+	if err := m.resolve(t.Context(), &rc); err == nil {
+		t.Fatal("unresolved namespace did not fail")
+	}
+	stored, err := st.GetCluster(t.Context(), c.Ref())
+	if err != nil || stored.Status.Phase == domain.PhaseReady || !stored.Status.ObservedAt.IsZero() ||
+		stored.Status.ObservationEpoch != "" || stored.Status.Members[0].Health || stored.Status.Members[0].Agent.Healthy ||
+		stored.Status.ObservedGeneration != 1 {
+		t.Fatal("dependency failure republished pre-Sync positives", stored, err)
+	}
+}

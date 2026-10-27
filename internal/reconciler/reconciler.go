@@ -188,7 +188,9 @@ func (m *Manager) discover(ctx context.Context) error {
 func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	name := ref.Key()
 	defer m.wg.Done()
-	availabilityCtx, stopAvailability := context.WithCancel(ctx)
+	publicationGate := make(chan struct{}, 1)
+	ctx = withObservationPublication(ctx, publicationGate)
+	availabilityCtx, stopAvailability := context.WithCancel(withObservationPublication(ctx, publicationGate))
 	availabilityDone := make(chan struct{})
 	go func() {
 		defer close(availabilityDone)
@@ -294,6 +296,10 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 // Operation and platform retry deadlines remain untouched; a fenced native
 // receipt must not suppress health sampling or cause an early mutation retry.
 func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRef) error {
+	if err := holdObservation(ctx); err != nil {
+		return err
+	}
+	defer releaseObservation(ctx)
 	c, err := m.opts.Store.GetCluster(ctx, ref)
 	if err != nil {
 		return err
@@ -441,6 +447,10 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
 	started := time.Now()
 	defer m.logStage(ref, "reconcile", started)
+	if err := holdObservation(ctx); err != nil {
+		return 0, err
+	}
+	defer releaseObservation(ctx)
 	actor := "reconciler"
 	operation := ""
 	defer func() {
@@ -691,6 +701,18 @@ func (m *Manager) resolve(ctx context.Context, rc *engine.Context) error {
 	backend, err := m.opts.Namespaces.Backend(rc.Namespace)
 	if err != nil {
 		c := rc.Cluster
+		// A post-Sync dependency failure may still carry the pre-Sync sample.
+		// It is a new failure, not permission to republish cached positives
+		// over an intervening renewal.
+		hasAvailability := !c.Status.ObservedAt.IsZero() || c.Status.ObservationEpoch != ""
+		for _, member := range c.Status.Members {
+			hasAvailability = hasAvailability || member.Health || member.Agent.Healthy
+		}
+		if hasAvailability {
+			c.Status = engine.UnknownObservation(c.Status, rc.Clock.Now(), "NamespaceUnavailable")
+		}
+		c.Status.ObservedAt = time.Time{}
+		c.Status.ObservationEpoch = ""
 		message := fmt.Sprintf("namespace %q unavailable: %v", rc.Namespace, err)
 		// Dependency failure cannot release an in-progress restore's lifecycle
 		// fence, including during read-only error-backoff observations.
@@ -778,6 +800,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			saveErr = m.opts.Store.UpdateOperationAndClusterState(ctx, operation, rc.Cluster)
 		}
 		m.logStage(rc.Cluster.Ref(), "availability.pre-sync.publish", started)
+		// Release only after this complete sample is durably published. Sync
+		// remains outside the gate so renewal can run during slow convergence.
+		releaseObservation(ctx)
 		if saveErr != nil {
 			return engine.Result{}, saveErr
 		}
@@ -854,6 +879,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	// requesting periodic requeues; that observation only moves forward.
 	if applied := rc.Cluster.Status.ObservedGeneration; syncErr == nil && result.ConvergenceError == nil && applied > observedGeneration && applied <= rc.Cluster.Generation {
 		observedGeneration = applied
+	}
+	if err := holdObservation(ctx); err != nil {
+		return result, errors.Join(syncErr, err)
 	}
 	if err := m.resolve(ctx, rc); err != nil {
 		return result, errors.Join(syncErr, err)

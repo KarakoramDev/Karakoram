@@ -9,6 +9,12 @@ import (
 )
 
 func (m *Manager) observeStatus(ctx context.Context, p engine.Provider, rc *engine.Context) (domain.ClusterStatus, error) {
+	// Publication owners release this gate only after their state write, not
+	// when probes return: a delayed positive sample must not overwrite a
+	// newer failed renewal. Sync runs outside this observation gate.
+	if err := holdObservation(ctx); err != nil {
+		return domain.ClusterStatus{}, err
+	}
 	started := time.Now()
 	status, err := engine.ObserveStatus(ctx, p, rc)
 	m.logStage(rc.Cluster.Ref(), "availability.observe", started)

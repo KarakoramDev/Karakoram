@@ -22,6 +22,13 @@ refuses publication once an imperative operation is Running. It never persists
 provider changes from Status or acknowledges desired generations. Lifecycle
 mutations, operation checkpoints and restore/deletion fences remain serialized;
 this separate availability publisher cannot complete or resume them.
+Both paths arbitrate each complete observation through its publication using a
+shared per-worker gate; a completed probe alone does not release publication
+ownership. This prevents the ordinary writer from replaying an older healthy
+sample over a newer failure and prevents either writer from shortening a newer
+lease. Pre-Sync publication releases the gate before Sync; final observation
+retains it through the lifecycle checkpoint. No health/lifecycle merge or
+wall-clock comparison is used to order failed (zero-lease) samples.
 
 Record durable events and publish them through `/events/stream` SSE. Reconnects replay authorized events using event IDs; in-process delivery is an acceleration, not the source of truth.
 
