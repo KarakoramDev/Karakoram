@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -66,14 +67,19 @@ func (e *Runner) status(ctx context.Context) (myspec.StatusResponse, error) {
 	if err != nil {
 		return out, err
 	}
-	err = db.QueryRowContext(ctx, "SELECT @@server_uuid,@@gtid_executed,@@read_only,@@super_read_only,VERSION()").Scan(&out.ServerUUID, &out.GTIDExecuted, &out.ReadOnly, &out.SuperReadOnly, &out.Version)
+	err = observeNativeStatus(ctx, db, s, p, &out)
+	return out, err
+}
+
+func observeNativeStatus(ctx context.Context, db *sql.DB, s myspec.Spec, p paths, out *myspec.StatusResponse) error {
+	err := db.QueryRowContext(ctx, "SELECT @@server_uuid,@@gtid_executed,@@read_only,@@super_read_only,VERSION()").Scan(&out.ServerUUID, &out.GTIDExecuted, &out.ReadOnly, &out.SuperReadOnly, &out.Version)
 	if err != nil {
-		return out, err
+		return err
 	}
 	if s.Galera != nil {
 		status, err := galeraStatusDB(ctx, db)
 		if err != nil {
-			return out, err
+			return err
 		}
 		out.MemberState = status.LocalStateComment
 		if status.Eligible() {
@@ -81,11 +87,16 @@ func (e *Runner) status(ctx context.Context) (myspec.StatusResponse, error) {
 		}
 	} else if s.Topology == myspec.TopologyGroup {
 		err = db.QueryRowContext(ctx, "SELECT MEMBER_STATE,MEMBER_ROLE FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@server_uuid").Scan(&out.MemberState, &out.MemberRole)
-		if err != nil {
-			return out, err
+		if errors.Is(err, sql.ErrNoRows) {
+			// Before bootstrap (and after leaving), GR can expose only an
+			// OFFLINE row with an empty MEMBER_ID. SQL is reachable, but this
+			// server is not yet a group member; formation must be able to see it.
+			out.MemberState, out.MemberRole = "OFFLINE", ""
+		} else if err != nil {
+			return err
 		}
 		if err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM performance_schema.replication_group_members WHERE MEMBER_STATE='ONLINE'").Scan(&out.GroupMembers); err != nil {
-			return out, err
+			return err
 		}
 	} else {
 		out.MemberState = "ONLINE"
@@ -93,9 +104,9 @@ func (e *Runner) status(ctx context.Context) (myspec.StatusResponse, error) {
 	}
 	out.PhysicalIdentity, err = physicalIdentity(p, out.ServerUUID)
 	if err != nil {
-		return out, err
+		return err
 	}
-	return out, nil
+	return nil
 }
 
 // offlineGTID is exclusively a control-plane recovery observation of an

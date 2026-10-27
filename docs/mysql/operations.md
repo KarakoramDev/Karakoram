@@ -17,6 +17,14 @@ karactl -n NS events list --cluster CLUSTER -o json
 
 For [MySQL](https://www.mysql.com/) groups, require `ONLINE` membership, one primary, read-only secondaries and the expected member count. The default `BEFORE_ON_PRIMARY_FAILOVER` policy waits for the new primary's backlog before it serves traffic. For [PXC](https://docs.percona.com/percona-xtradb-cluster/), require `Primary`, `Synced` and `wsrep_ready=ON`; `Primary` is [Galera](https://galeracluster.com/) component membership, **not** a promise that every node is the application writer. [ProxySQL](https://proxysql.com/) selects one routed writer. Donor/joining states and SST can temporarily reduce eligibility.
 
+Before Group Replication bootstrap, a SQL-ready server may expose an `OFFLINE`
+performance-schema row with an empty member ID. Absence of a row matching that
+server's UUID is reported as `OFFLINE` with no member role, not as an unreachable
+native status endpoint. This is a nonmember observation, not quorum readiness:
+the control plane still requires its durable bootstrap epoch and observed
+`ONLINE` primary before admitting the writer. SQL query failures remain errors.
+Single-server and PXC readiness use their own existing native checks.
+
 During initial provisioning, members not yet imported into the provider are
 reported unavailable without a placement. This includes ProxySQL while it waits
 for the first eligible writer. Such members are not a failed infrastructure

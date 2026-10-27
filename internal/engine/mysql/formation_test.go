@@ -2,7 +2,11 @@
 // Copyright 2026 The Karakoram Authors
 package mysql
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+)
 
 const sid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 const sid2 = "11111111-2222-3333-4444-555555555555"
@@ -80,5 +84,41 @@ func TestSelectSuperset(t *testing.T) {
 func TestSelectSupersetRequiresIdentity(t *testing.T) {
 	if _, err := selectSuperset(map[string]mysqloffline{"m0": {GTID: sid + ":1"}}); err == nil {
 		t.Fatal("accepted unverified data identity")
+	}
+}
+
+func TestInitialGRFormationAcceptsReachableNonmember(t *testing.T) {
+	p, rc, b := setup(t, "group")
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range s.data() {
+		m.Stage = "deployed"
+		b.native[m.Name] = myspec.StatusResponse{
+			ServerUUID: sid, MemberState: "OFFLINE", MemberRole: "",
+			DataIdentity: myspec.DataIdentity{Initialized: true},
+		}
+	}
+	if changed, err := p.reconcileFormation(t.Context(), rc, s); err != nil || !changed || s.Formation.State != "bootstrapping" {
+		t.Fatalf("initial formation: changed=%v error=%v state=%s", changed, err, s.Formation.State)
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range s.data() {
+		b.applied[m.Name] = m.ConfigVersion
+	}
+	if changed, err := p.reconcileFormation(t.Context(), rc, s); err != nil || !changed {
+		t.Fatalf("nonmember bootstrap: changed=%v error=%v", changed, err)
+	}
+	if got := b.bootstrap[s.Formation.FormationEpoch]; got != 1 {
+		t.Fatalf("bootstrap dispatches=%d, want one", got)
+	}
+	if changed, err := p.reconcileFormation(t.Context(), rc, s); err != nil || !changed || s.Formation.State != "formed" {
+		t.Fatalf("bootstrap observation: changed=%v error=%v state=%s", changed, err, s.Formation.State)
 	}
 }
