@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -176,13 +177,27 @@ func TestConformanceObservedMemberResourcesAndScheduleStorage(t *testing.T) {
 	if !storage.Type.Is("string") || len(storage.AllOf) != 0 || storage.Nullable {
 		t.Fatal("schedule storage must be an optional, non-nullable plain string")
 	}
+	// These schemas cover both runtime-only engines and persistent data engines.
+	// The shared floor must allow 1 GiB; higher persistent floors belong to
+	// provider validation, not to the runtime observation or shared input schema.
 	for _, schema := range []string{"ResourcesInput", "ResourcesPatch"} {
 		for _, field := range []string{"minDisk", "maxDisk"} {
 			bound := doc.Components.Schemas[schema].Value.Properties[field].Value.Min
-			if bound == nil || *bound != 5 {
-				t.Fatalf("%s.%s lost its persistent-volume request minimum", schema, field)
+			if bound == nil || *bound != 1 {
+				t.Fatalf("%s.%s must retain the shared 1-GiB request minimum", schema, field)
 			}
 		}
+	}
+	p := postgres.New(postgres.Options{})
+	data := &domain.Cluster{Name: "pgfloor"}
+	p.ApplyDefaults(&data.Spec)
+	if err := p.Validate(ctx, nil, data); err != nil {
+		t.Fatalf("default PostgreSQL data resources rejected: %v", err)
+	}
+	data.Spec.Components.Engine.Resources.MinDisk = 1
+	data.Spec.Components.Engine.Resources.MaxDisk = 1
+	if err := p.Validate(ctx, nil, data); err == nil {
+		t.Fatal("PostgreSQL provider lost its 5-GiB persistent-volume minimum")
 	}
 }
 
