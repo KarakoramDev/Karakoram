@@ -192,7 +192,9 @@ func TestResourcePlanRechecksBeforeRetryingStop(t *testing.T) {
 func TestResourcePlanUsesExactReplacementMarker(t *testing.T) {
 	f := newFakeNomad(t)
 	b := fakeBackend(t, f, nil)
-	importFake(t, b, volumeSpec("volume"), runtimeSpec("runtime", "volume"))
+	spec := runtimeSpec("runtime", "volume")
+	spec.Resources = infra.Resources{MinCPU: 1, MaxCPU: 2, MinRAM: 1, MaxRAM: 1}
+	importFake(t, b, volumeSpec("volume"), spec)
 	deployFake(t, b, "runtime", "volume")
 	current, err := b.require(t.Context(), "runtime")
 	if err != nil {
