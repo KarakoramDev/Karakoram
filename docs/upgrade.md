@@ -27,6 +27,17 @@ cluster's desired release to that observed release (or a supported newer one)
 before any runtime preparation. Do not install older packages over the existing
 data directory to make the binary match the old specification.
 
+For PostgreSQL 16, SQL and older agents may report only the upstream release
+`16.15`, with no Percona package revision. Select catalog version `16.15.1`
+for that release (or a newer supported same-major catalog version). Missing
+product revisions are not treated as downgrades or unresolved drift; an explicitly
+reported newer product revision still blocks an older pin. The corrective engine
+upgrade rolls members normally, including when they still run v0.4.0 agents.
+Wait for its generation to converge before `upgrade-agents`. An agent-only rollout
+before correcting the stale database pin is rejected rather than reinstalling
+older database packages. Public member versions retain the actual SQL release,
+which can remain `16.15` after alignment to catalog `16.15.1`.
+
 v0.4.1 keeps the requested server package as the APT candidate throughout profile
 installation. Updated member agents report the running Percona product release,
 not configuration intent. An unavailable SQL version observation is empty.

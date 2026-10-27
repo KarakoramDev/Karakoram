@@ -28,7 +28,12 @@ func observedServerVersion(serverVersion, description string) string {
 	if version := parseVersion(description, false); version != "" {
 		return version
 	}
-	return serverVersion
+	// Upstream builds (including Percona Distribution 16) may omit a
+	// product revision and append branding to server_version.
+	if fields := strings.Fields(serverVersion); len(fields) > 0 {
+		return fields[0]
+	}
+	return ""
 }
 
 func tlsClient(s pgspec.Spec) (*http.Client, error) {

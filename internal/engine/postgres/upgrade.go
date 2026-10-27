@@ -48,7 +48,7 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 			if err != nil {
 				return true, err
 			}
-			if st.Version != "" && st.Version != m.Version {
+			if st.Version != "" && !observedReleaseMatches(st.Version, m.Version) {
 				return true, engine.Invalid("PostgreSQL member %s version drift: observed %s, assigned %s; before a major upgrade, verify SQL versions, explicitly align the current catalog release, and take a new backup", m.Name, st.Version, m.Version)
 			}
 			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
@@ -59,7 +59,7 @@ func (p *Core) reconcileUpgrade(ctx context.Context, rc *engine.Context, s *stat
 			if err != nil {
 				return true, err
 			}
-			if agent.EngineVersion != "" && agent.EngineVersion != m.Version {
+			if agent.EngineVersion != "" && !observedReleaseMatches(agent.EngineVersion, m.Version) {
 				return true, engine.Invalid("PostgreSQL member %s binary version drift: observed %s, assigned %s; before a major upgrade, verify SQL versions, explicitly align the current catalog release, and take a new backup", m.Name, agent.EngineVersion, m.Version)
 			}
 		}
@@ -260,7 +260,7 @@ func requireUpgradeBackup(ctx context.Context, rc *engine.Context, from string) 
 		return fmt.Errorf("list upgrade backups: %w", err)
 	}
 	for _, backup := range backups {
-		if backup.Phase == domain.PhaseSucceeded && backup.SourceVersion == from && backup.Postgres != nil && backup.Postgres.Label != "" {
+		if backup.Phase == domain.PhaseSucceeded && observedReleaseMatches(backup.SourceVersion, from) && backup.Postgres != nil && backup.Postgres.Label != "" {
 			return nil
 		}
 	}

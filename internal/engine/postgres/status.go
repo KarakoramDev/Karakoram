@@ -95,13 +95,13 @@ func (p *Core) ProjectCredentialsStatus(ctx context.Context, rc *engine.Context,
 // forward rollout. Once SQL observes the target, the source checkpoint is cleared.
 func expectedRolloutVersion(rc *engine.Context, s *state, m *member, observed string) bool {
 	target := rc.Cluster.Spec.Version
-	if s.Upgrade != nil && s.Upgrade.To == target && s.Upgrade.From == observed {
+	if s.Upgrade != nil && s.Upgrade.To == target && observedReleaseMatches(observed, s.Upgrade.From) {
 		return true
 	}
-	if m.Version == observed && upgradeAllowed(m.Version, target) {
+	if observedReleaseMatches(observed, m.Version) && upgradeAllowed(m.Version, target) {
 		return true
 	}
-	return m.PreviousVersion != "" && m.Version == target && m.PreviousVersion == observed && upgradeAllowed(m.PreviousVersion, target)
+	return m.PreviousVersion != "" && m.Version == target && observedReleaseMatches(observed, m.PreviousVersion) && upgradeAllowed(m.PreviousVersion, target)
 }
 
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
@@ -423,7 +423,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		}
 		if m.Role == "data" {
 			switch {
-			case member.Version != "" && member.Version == rc.Cluster.Spec.Version:
+			case member.Version != "" && observedReleaseMatches(member.Version, rc.Cluster.Spec.Version):
 				if m.VersionDrift != "" || m.PreviousVersion != "" {
 					m.VersionDrift, m.PreviousVersion = "", ""
 					driftChanged = true

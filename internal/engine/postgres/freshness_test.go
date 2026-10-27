@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -124,6 +126,33 @@ func TestMajorUpgradeRequiresExplicitDriftResolution(t *testing.T) {
 	}
 }
 
+func TestMajorUpgradeAcceptsAlignedUpstreamReleaseBackup(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "16.15.1"
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	st, err := live(t.Context(), rc, m.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Version = "16.15"
+	b.statusOverrides = map[string]pgspec.StatusResponse{m.Name: st}
+	b.genericOverrides = map[string]agentapi.Status{m.Name: {ConfigVersion: m.ConfigVersion, EngineVersion: "16.15"}}
+	rc.Cluster.Spec.Backup.Storage = "archive"
+	if err := rc.Store.CreateBackup(t.Context(), &domain.Backup{
+		Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: "aligned-upstream",
+		Provider: "postgres", Storage: "archive", Type: "full", Phase: domain.PhaseSucceeded,
+		SourceVersion: "16.15", Postgres: &domain.PostgresBackup{Label: "20261027-120000F"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rc.Cluster.Spec.Version = "17.11.1"
+	handled, err := p.reconcileUpgrade(t.Context(), rc, s)
+	if err != nil || !handled || s.Upgrade == nil {
+		t.Fatalf("aligned upstream release or truthful backup rejected: handled=%t err=%v", handled, err)
+	}
+}
+
 func TestLegacyAgentBinaryObservationBlocksDowngrade(t *testing.T) {
 	p, rc, b := setup(t, "single")
 	rc.Cluster.Spec.Version = "17.10.1"
@@ -158,6 +187,165 @@ func TestLegacyAgentBinaryObservationBlocksDowngrade(t *testing.T) {
 	rc.Cluster.Spec.Version = "17.11.1"
 	if _, err := readyDesired(t.Context(), rc, m); err != nil {
 		t.Fatalf("explicit alignment remains blocked: %v", err)
+	}
+}
+
+func TestCorrectiveMinorUpgradeWithVersionDrift(t *testing.T) {
+	for _, topology := range []string{"single", "ha"} {
+		for _, legacy := range []bool{true, false} {
+			for _, observed := range []string{"16.15", "16.14.2"} {
+				t.Run(topology+"/"+observed+fmt.Sprint("/legacy=", legacy), func(t *testing.T) {
+					p, rc, b := setup(t, topology)
+					rc.Cluster.Spec.Version = "16.14.1"
+					s := converge(t, p, rc)
+					b.genericOverrides = map[string]agentapi.Status{}
+					b.statusOverrides = map[string]pgspec.StatusResponse{}
+					for _, m := range s.data() {
+						st, err := live(t.Context(), rc, m.Name)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if !legacy {
+							st.Version = observed
+							b.statusOverrides[m.Name] = st
+						}
+						b.genericOverrides[m.Name] = agentapi.Status{ConfigVersion: m.ConfigVersion, EngineVersion: observed}
+					}
+					status, err := p.Status(t.Context(), rc)
+					if err != nil {
+						t.Fatal(err)
+					}
+					rc.Cluster.Status = status
+					// Before selecting a corrective release, an agent-only
+					// deployment must not reinstall the old database pin.
+					if _, err := p.agentUpgradeRuntimeSpec(rc, s.data()[0]); err == nil && !legacy {
+						t.Fatal("agent rollout accepted the stale pin")
+					}
+					rc.Cluster.Spec.Version = "16.15.1"
+					rc.Cluster.Generation++
+					b.actions = nil
+					for range 100 {
+						for name, st := range b.statusOverrides {
+							if topology == "ha" {
+								leader := b.leader
+								if leader == "" {
+									leader = "demop0"
+								}
+								st.Leader, st.Role = leader, "replica"
+								if name == leader {
+									st.Role = "primary"
+								}
+								b.statusOverrides[name] = st
+							}
+						}
+						s, _ = load(rc.Cluster)
+						for _, m := range s.data() {
+							st := b.genericOverrides[m.Name]
+							st.ConfigVersion = m.ConfigVersion
+							b.genericOverrides[m.Name] = st
+						}
+						if _, err := p.Sync(t.Context(), rc); err != nil {
+							t.Fatal(err)
+						}
+						// A completed package deployment supplies the target
+						// native release; legacy status echoes its assignment.
+						for _, action := range b.actions {
+							if strings.HasPrefix(action, "deploy:") {
+								delete(b.statusOverrides, strings.TrimPrefix(action, "deploy:"))
+							}
+						}
+						status, err := p.Status(t.Context(), rc)
+						if err != nil {
+							t.Fatal(err)
+						}
+						rc.Cluster.Status = status
+						if status.Phase == domain.PhaseReady && status.ObservedGeneration == rc.Cluster.Generation {
+							break
+						}
+					}
+					if rc.Cluster.Status.Phase != domain.PhaseReady || rc.Cluster.Status.ObservedGeneration != rc.Cluster.Generation {
+						t.Fatalf("corrective upgrade did not converge: %+v", rc.Cluster.Status)
+					}
+					s, _ = load(rc.Cluster)
+					for _, m := range s.data() {
+						if m.Version != "16.15.1" || !slices.Contains(b.actions, "deploy:"+m.Name) {
+							t.Fatalf("member did not roll to corrective pin: %+v actions=%v", m, b.actions)
+						}
+						if _, err := p.agentUpgradeRuntimeSpec(rc, m); err != nil {
+							t.Fatalf("agent rollout after corrective upgrade blocked: %v", err)
+						}
+					}
+					rc.Backend = &rolloutBackend{fakeBackend: b, rc: rc}
+					op := rolloutOperation(true)
+					done := false
+					for range 80 {
+						result, err := p.upgradeAgents(t.Context(), rc, op, false)
+						if err != nil {
+							t.Fatal(err)
+						}
+						op.Checkpoint = result.Checkpoint
+						if result.Done {
+							done = true
+							break
+						}
+					}
+					if !done {
+						t.Fatal("agent rollout after corrective upgrade did not finish")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestUpgradeAllowedWithPartialObservedVersion(t *testing.T) {
+	for _, tc := range []struct {
+		from, to string
+		allowed  bool
+	}{
+		{"16.15", "16.15.1", true},
+		{"16.14.2", "16.15.1", true},
+		{"16.15", "16.14.1", false},
+		{"16.15.2", "16.15.1", false},
+		{"16.15.1", "16.15.1", false},
+		{"17.11", "16.15.1", false},
+	} {
+		if got := upgradeAllowed(tc.from, tc.to); got != tc.allowed {
+			t.Errorf("upgradeAllowed(%q, %q)=%t, want %t", tc.from, tc.to, got, tc.allowed)
+		}
+	}
+}
+
+func TestPartialObservedReleaseResolvesDriftWithoutInventingRevision(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "16.14.1"
+	s := converge(t, p, rc)
+	m := s.data()[0]
+	st, err := live(t.Context(), rc, m.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Version = "16.15"
+	b.statusOverrides = map[string]pgspec.StatusResponse{m.Name: st}
+	status, err := p.Status(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc.Cluster.Status = status
+	rc.Cluster.Spec.Version = "16.15.1"
+	converge(t, p, rc)
+	for _, condition := range rc.Cluster.Status.Conditions {
+		if condition.Type == "VersionDrift" {
+			t.Fatalf("upstream-only observation remained drifted: %+v", condition)
+		}
+	}
+	for _, member := range rc.Cluster.Status.Members {
+		if member.Name == m.Name && member.Version != "16.15" {
+			t.Fatalf("fabricated product revision: %q", member.Version)
+		}
+	}
+	if observedReleaseMatches("16.15.2", "16.15.1") {
+		t.Fatal("reported product revision mismatch was hidden")
 	}
 }
 

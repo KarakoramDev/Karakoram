@@ -404,14 +404,30 @@ func (p *Core) parseOptions(raw json.RawMessage) (EngineOptions, error) {
 	return ParseOptions(raw)
 }
 
+// observedReleaseMatches preserves the actual observation while allowing
+// upstream-only PostgreSQL output to omit Percona's package revision.
+// A reported product revision must still match exactly.
+func observedReleaseMatches(observed, assigned string) bool {
+	return observed == assigned || (strings.Count(observed, ".") == 1 &&
+		strings.HasPrefix(assigned, observed+"."))
+}
+
 func upgradeAllowed(from, to string) bool {
 	if major(to) != major(from) && major(to) != major(from)+1 {
 		return false
 	}
 	a, b := strings.Split(from, "."), strings.Split(to, ".")
-	for i := 0; i < len(a) && i < len(b); i++ {
-		x, _ := strconv.Atoi(a[i])
-		y, _ := strconv.Atoi(b[i])
+	// Legacy agents report upstream major.minor rather than Percona's
+	// major.minor.revision. Missing numeric components sort as zero, so
+	// 16.15 -> 16.15.1 is not mistaken for a downgrade.
+	for i := 0; i < max(len(a), len(b)); i++ {
+		x, y := 0, 0
+		if i < len(a) {
+			x, _ = strconv.Atoi(a[i])
+		}
+		if i < len(b) {
+			y, _ = strconv.Atoi(b[i])
+		}
 		if x != y {
 			return y > x
 		}

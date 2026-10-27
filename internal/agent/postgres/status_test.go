@@ -30,6 +30,7 @@ func TestObservedServerVersion(t *testing.T) {
 	}{
 		{"17.11", "17.11 - Percona Server for PostgreSQL 17.11.1 - Percona Distribution", "17.11.1"},
 		{"16.14", "16.14 - Percona Server for PostgreSQL 16.14.1 - Percona Distribution", "16.14.1"},
+		{"16.15 - Percona Distribution", "PostgreSQL 16.15 - Percona Distribution on x86_64-pc-linux-gnu", "16.15"},
 		{"18.6", "PostgreSQL 18.6 on x86_64-pc-linux-gnu", "18.6"},
 		{"17.11", "Percona Server for PostgreSQL ", "17.11"},
 	} {
