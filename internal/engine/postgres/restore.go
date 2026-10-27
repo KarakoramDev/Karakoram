@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -349,6 +351,18 @@ func (p *Core) syncBackups(ctx context.Context, rc *engine.Context, s *state) (b
 		return false, err
 	}
 	identity := storage.Name + ":" + repoPrefix(storage, rc.Cluster, s) + ":" + strconvMajor(rc.Cluster.Spec.Version)
+	if s.Topology == "distributed" {
+		// A worker addition or retired-group reincarnation creates a new
+		// repository even when storage, cluster lineage and major are unchanged.
+		// Sort paths so member allocation order cannot invalidate the checkpoint.
+		groups := s.groups()
+		paths := make([]string, 0, len(groups))
+		for _, g := range groups {
+			paths = append(paths, groupRepoPrefix(storage, rc.Cluster, s, g.id))
+		}
+		slices.Sort(paths)
+		identity += ":" + strings.Join(paths, ",")
+	}
 	if bs.Stanza == identity {
 		if s.Topology == "distributed" {
 			return p.scheduleCitusPoint(ctx, rc, s)

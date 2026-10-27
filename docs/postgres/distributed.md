@@ -76,6 +76,16 @@ Shard movement adds database load. Track the returned operation rather than resu
 
 A distributed backup is a coordinated formation backup, not an independently restorable coordinator snapshot. Each group has its own [pgBackRest](https://pgbackrest.org/) data/archive path and backup manifest entry. Backup work precedes the coordinated marker; named restore points and WAL/archive barriers establish a common recoverable boundary across all groups.
 
+The control plane initializes every group's stanza after its members join and
+before accepting archive health as Ready. Adding a worker group or recreating a
+retired group invalidates the stanza checkpoint, including the group's repository
+incarnation; unchanged reconciliation does not repeat initialization. Storage or
+repository-lineage changes also require fresh stanza initialization. A missing
+worker stanza can therefore heal through control-plane reconciliation without an
+agent rollout. An archive failure still blocks Ready even when every native member
+and Citus metadata are healthy; `Ready=False/MembersStarting` can accompany the
+more specific `WALArchive=False/ArchiveFailing` condition.
+
 PITR uses persisted **named coordinated restore points**, not arbitrary wall-clock timestamps. **Timestamp restore targets are rejected** for distributed formations. Select an available named point from the recovery inventory and preserve the complete formation backup and all required group archives. The coordinator LSN returned by Citus is exact; sampled **worker LSNs are conservative post-point upper bounds**, used to fence archival coverage, not exact per-worker restore-point positions. They must not be presented as exact marker LSNs or used as independent targets.
 
 Restore fences the entire formation, restores every group to the same named point, rebuilds replicas and checks Citus metadata before releasing access. A clone must have the source formation's worker-group count. Never mix groups from unrelated backups or restore only one group into a running formation. See [PostgreSQL backups](backups.md) for storage, retention and archive requirements.

@@ -28,6 +28,8 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 	}
 	validMetadata := false
 	stopped, wiped, resets, starts := 0, 0, 0, 0
+	stanzas := map[string]bool{}
+	finished := 0
 	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/status":
@@ -58,7 +60,20 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 			}
 			starts++
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
-		case "/v1/reload", "/v1/postgres/rekey", "/v1/postgres/stanza-create", "/v1/postgres/finish-restore":
+		case "/v1/postgres/stanza-create":
+			var input pgspec.RepositoryRequest
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				t.Fatal(err)
+			}
+			stanzas[input.Repository.Path] = true
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/finish-restore":
+			if len(stanzas) != 2 {
+				t.Error("archiving enabled before every fresh group stanza exists", stanzas)
+			}
+			finished++
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/reload", "/v1/postgres/rekey":
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		case "/v1/postgres/citus-status":
 			nodes := []pgspec.CitusNode{{NodeID: 1, GroupID: 0, Host: s.data()[0].Name, Port: 5432, Active: true}, {NodeID: 2, GroupID: 1, Host: "worker1", Port: 5432, Active: true}}
@@ -111,6 +126,9 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 	r, err = rc.Store.GetRestore(t.Context(), rc.Cluster.Ref(), r.Name)
 	if err != nil || r.Phase != domain.PhaseSucceeded {
 		t.Fatal(r, err)
+	}
+	if finished != 2 {
+		t.Fatal("did not enable archiving on every group", finished)
 	}
 	bs, err = loadBackupState(rc.Cluster)
 	if err != nil || bs.ManagedRolesHeld {
