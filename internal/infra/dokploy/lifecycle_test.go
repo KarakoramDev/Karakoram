@@ -337,6 +337,48 @@ func TestLogsSelectNewestAcrossRetainedSwarmTasks(t *testing.T) {
 	}
 }
 
+func TestLogsPreserveUnknownTimestampNeighbours(t *testing.T) {
+	const older = "2026-10-27T14:58:00Z older\n"
+	const current = "2026-10-27T15:23:00Z current\n"
+	for _, tc := range []struct {
+		name, raw string
+		want      [2]string
+	}{
+		{"missing-trailing", older + current + "diagnostic\n", [2]string{"current", "diagnostic"}},
+		{"malformed-trailing", older + current + "not-a-time diagnostic\n", [2]string{"current", "not-a-time diagnostic"}},
+		{"leading", "diagnostic\n" + current + older, [2]string{"diagnostic", "current"}},
+		{"mixed-task-batches", current + "diagnostic\n" + older, [2]string{"current", "diagnostic"}},
+		{"mixed-missing-malformed", current + "diagnostic\nbad-timestamp continuation\n" + older, [2]string{"diagnostic", "bad-timestamp continuation"}},
+		{"all-unknown", "first\ndiagnostic\nbad-timestamp continuation\n", [2]string{"diagnostic", "bad-timestamp continuation"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			b := fakeBackend(t, f, nil)
+			imported := importFake(t, b, runtimeSpec("runtime", ""))
+			deployFake(t, b, "runtime", "")
+			f.mu.Lock()
+			f.apps[imported.Services["runtime"]].logs = tc.raw
+			f.mu.Unlock()
+			lines, err := b.Logs(t.Context(), "runtime", infra.LogQuery{Limit: 2})
+			if err != nil || len(lines) != 2 {
+				t.Fatalf("mixed timestamp tail: %+v %v", lines, err)
+			}
+			if lines[0].Message != tc.want[0] || lines[1].Message != tc.want[1] {
+				t.Fatalf("unknown timestamp moved away from transport neighbours: %+v", lines)
+			}
+			wantTime := time.Date(2026, 10, 27, 15, 23, 0, 0, time.UTC)
+			if tc.name == "all-unknown" {
+				wantTime = time.Time{}
+			}
+			for _, line := range lines {
+				if !line.Timestamp.Equal(wantTime) {
+					t.Fatalf("unexpected diagnostic timestamp anchor: %+v", line)
+				}
+			}
+		})
+	}
+}
+
 func TestFailedUploadDoesNotMarkServiceDeployed(t *testing.T) {
 	f := newFakeAPI(t)
 	b := fakeBackend(t, f, nil)

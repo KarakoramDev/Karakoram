@@ -86,6 +86,7 @@ func (b *Backend) Logs(ctx context.Context, hostname string, q infra.LogQuery) (
 }
 func parseLogs(raw string, q infra.LogQuery) []infra.LogLine {
 	out := []infra.LogLine{}
+	var previous time.Time
 	for _, text := range strings.Split(raw, "\n") {
 		if text == "" {
 			continue
@@ -104,6 +105,20 @@ func parseLogs(raw string, q infra.LogQuery) []infra.LogLine {
 		}
 		if q.Container != "" && !strings.Contains(line.Container, q.Container) {
 			continue
+		}
+		if line.Timestamp.IsZero() {
+			// Untimestamped stderr/continuations follow their transport
+			// neighbour; zero time must not move them ahead of every task.
+			line.Timestamp = previous
+		} else {
+			if previous.IsZero() {
+				// Leading diagnostics have no preceding record. Anchor them
+				// before the first known timestamp, retaining source order.
+				for i := range out {
+					out[i].Timestamp = line.Timestamp
+				}
+			}
+			previous = line.Timestamp
 		}
 		out = append(out, line)
 	}
