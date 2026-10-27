@@ -109,15 +109,20 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		if service == nil || service.Status != infra.StatusRunning && service.Status != infra.StatusActive {
 			member.Health = false
 		}
-		containers, e := rc.Backend.Containers(ctx, m.Name)
-		if e != nil {
-			return status, e
-		}
-		for _, container := range containers {
-			if container.PlacementGroup != "" {
-				member.PlacementGroup = container.PlacementGroup
-				status.Placement.Groups[container.PlacementGroup] = append(status.Placement.Groups[container.PlacementGroup], m.Name)
-				break
+		// Planned members, including the proxy waiting for its first writer,
+		// have no infrastructure identity yet. Observe them as unavailable
+		// without asking the backend for containers of a nonexistent service.
+		if service != nil {
+			containers, e := rc.Backend.Containers(ctx, m.Name)
+			if e != nil {
+				return status, e
+			}
+			for _, container := range containers {
+				if container.PlacementGroup != "" {
+					member.PlacementGroup = container.PlacementGroup
+					status.Placement.Groups[container.PlacementGroup] = append(status.Placement.Groups[container.PlacementGroup], m.Name)
+					break
+				}
 			}
 		}
 		if !member.Health {

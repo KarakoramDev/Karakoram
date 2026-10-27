@@ -85,7 +85,10 @@ func (b *fakeBackend) Deploy(_ context.Context, name string, d infra.Deployment)
 func (*fakeBackend) OpStatus(context.Context, infra.Op) (infra.OpState, error) {
 	return infra.OpState{Done: true}, nil
 }
-func (*fakeBackend) Containers(_ context.Context, name string) ([]infra.Container, error) {
+func (b *fakeBackend) Containers(_ context.Context, name string) ([]infra.Container, error) {
+	if b.services[name] == nil {
+		return nil, infra.ErrNotFound
+	}
 	return []infra.Container{{ID: name + "-instance", Hostname: name + "-instance", Status: infra.ContainerRunning, PlacementGroup: name + "-host"}}, nil
 }
 func (*fakeBackend) DeletePublicPorts(context.Context, string) error { return nil }
