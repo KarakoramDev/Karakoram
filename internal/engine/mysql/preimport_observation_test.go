@@ -14,6 +14,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type preimportDNSAgents struct {
@@ -39,6 +41,24 @@ func TestCreateImportsBeforeNativeDNSObservation(t *testing.T) {
 				p, rc, b = setupPXC(t)
 			} else {
 				p, rc, b = setup(t, "group")
+			}
+			// Match live creation: PITR observation also selects an archive
+			// writer, independently of ordinary status and GTID observation.
+			storage := &domain.BackupStorage{Namespace: "default", Name: "archive", Type: "s3", EndpointURL: "https://objects.example", Bucket: "backups", Region: "region", Prefix: "prefix", ForcePathStyle: true, VerifyTLS: true, Credentials: domain.StorageCredentials{AccessKeyID: "access", SecretAccessKey: "secret"}}
+			if err := rc.Store.(*store.Store).CreateBackupStorage(t.Context(), storage); err != nil {
+				t.Fatal(err)
+			}
+			rc.Cluster.Spec.Backup.Storage = storage.Name
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			action := b.action
+			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+				if r.URL.Path == "/v1/mysql/archive-status" {
+					if err := json.NewEncoder(w).Encode(myspec.BinlogArchiveStatus{}); err != nil {
+						t.Error(err)
+					}
+					return true
+				}
+				return action != nil && action(w, r, name)
 			}
 			agents := rc.Agents
 			dns := &preimportDNSAgents{t: t}
@@ -154,5 +174,47 @@ func TestGaleraStatusBoundsNativeRequest(t *testing.T) {
 	}
 	if ctx.Err() != nil {
 		t.Fatal("native probe exhausted parent reconciliation budget")
+	}
+}
+
+func TestPXCInitialProcessAdmissionFollowsFormation(t *testing.T) {
+	p, rc, _ := setupPXC(t)
+	// Allocate, seal credentials and freeze the first import plan, as a new
+	// create does before any member can pull its initial configuration.
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stage := range []string{"unformed", "bootstrapping", "formed"} {
+		s.Formation.State = stage
+		if stage == "bootstrapping" {
+			s.Formation.FormationEpoch++
+		}
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range s.data() {
+			cfg, err := p.MemberConfig(t.Context(), rc, m.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec myspec.Spec
+			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			wantRunning := stage == "formed" || stage == "bootstrapping" && m.Name == s.Formation.Seed
+			if got := len(cfg.DesiredProcesses) > 0; got != wantRunning {
+				t.Fatalf("%s member %s desired processes=%v", stage, m.Name, cfg.DesiredProcesses)
+			}
+			if want := stage == "bootstrapping" && m.Name == s.Formation.Seed; spec.Galera.Bootstrap != want {
+				t.Fatalf("%s member %s bootstrap=%v", stage, m.Name, spec.Galera.Bootstrap)
+			}
+			if stage == "unformed" && cfg.DesiredProcesses == nil {
+				t.Fatal("nil desired processes would allow implicit startup")
+			}
+		}
 	}
 }

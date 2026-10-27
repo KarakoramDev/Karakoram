@@ -28,10 +28,25 @@ or query Galera: its planned DNS name may not exist yet. PXC keeps these members
 in the quorum comparison as unavailable, without advancing the GTID safe
 watermark. Galera status probes use the bounded native observation timeout
 (currently four seconds), not the entire reconciliation deadline.
+PITR/archive status selects only joined data members, so enabling binary-log
+archiving during creation does not resolve planned names either.
 Initial imports still advance through durable per-member plan, submit and
-completion checkpoints over successive reconciliations. Upgrading only the
-control plane resumes a create stalled at these checkpoints; do not recreate the
-cluster or edit its internal state to bypass observation.
+completion checkpoints over successive reconciliations. A control-plane upgrade
+can resume an otherwise healthy create stalled at these checkpoints; do not edit
+internal state to bypass observation.
+
+PXC deployment initially starts only the agent. All data runtimes must deploy
+before the control plane publishes the seed's bootstrap epoch; only that seed
+may start mysqld until it forms a Primary component. Remaining members then start
+as SST/IST joiners. A runtime deployment is not permission to launch an
+uninitialized seed as an ordinary joiner.
+
+An older create may already have started the seed without bootstrap permission
+and left uninitialized/foreign-looking data. A control-plane upgrade alone does
+not authorize erasing or reinitializing that data. Preserve the logs, volume
+contents and identity receipts and follow explicit recovery; disposable empty
+test clusters can instead be fully deleted and freshly created after operator
+authorization. Never relax the identity guard to make such a create pass.
 
 Proxy provisioning waits for a native-online writer to complete its data-member
 join checkpoint, so its first configuration contains an eligible backend.

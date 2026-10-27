@@ -186,6 +186,12 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			g.StartPosition = s.Formation.StartPosition
 		}
 		sp.Galera = g
+		// Deployment starts the agent, not Galera. Wait for the durable
+		// bootstrap epoch before starting the seed, then admit SST joiners
+		// only after that seed has formed a Primary component.
+		if s.Formation.State == "unformed" || s.Formation.State == "bootstrapping" && !g.Bootstrap {
+			desired = []string{}
+		}
 	}
 	if m.Role == "proxy" {
 		desired = []string{"proxysql"}

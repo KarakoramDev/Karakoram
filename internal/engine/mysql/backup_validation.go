@@ -118,6 +118,11 @@ func (p *Core) validateBackups(ctx context.Context, old, n *domain.Cluster) erro
 }
 func archiveWriter(ctx context.Context, rc *engine.Context, s *state) (string, error) {
 	for _, m := range s.data() {
+		// Archive ownership requires an admitted data member, not a planned
+		// hostname. PITR observation must not spend the sweep on absent DNS.
+		if m.ServiceID == "" || m.Stage != "joined" || m.Removing {
+			continue
+		}
 		st, err := live(ctx, rc, m.Name)
 		if err == nil && st.MemberState == "ONLINE" && (s.Topology == "single" || onlinePrimary(st)) {
 			return m.Name, nil
