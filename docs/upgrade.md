@@ -30,9 +30,12 @@ data directory to make the binary match the old specification.
 v0.4.1 keeps the requested server package as the APT candidate throughout profile
 installation. Updated member agents report the running Percona product release,
 not configuration intent. An unavailable SQL version observation is empty.
-When an observed data-member release differs from the desired release, the
-control plane reports `VersionDrift=True` with the member, observed release,
-desired release and recovery guidance, and the cluster is not Ready. The
+An unexpected observed data-member release raises `VersionDrift=True` with the
+member, observed/desired releases and recovery guidance, and the cluster is not
+Ready. Expected source releases during a forward rollout remain Updating
+instead of producing drift incidents. A confirmed mismatch survives missing
+observations as `VersionDrift=Unknown` until fresh SQL confirms the target;
+missing observations alone do not create drift on unaffected members. The
 specification is never rewritten automatically. Preparing a runtime below its
 observed server release is rejected, including agent-only redeployment.
 

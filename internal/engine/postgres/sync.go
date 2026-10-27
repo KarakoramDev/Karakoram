@@ -955,6 +955,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		versionChanged := m.Version != rc.Cluster.Spec.Version
 		profilesAdded := p.profilesAdded(m.Options, rc.Cluster.Spec.EngineOptions)
+		if versionChanged && m.Role == "data" {
+			m.PreviousVersion = m.Version
+		}
 		m.ConfigRestartPending = m.Role == "data" && !versionChanged && needsDisruption(p, rc, m, desired)
 		m.Options = append(json.RawMessage(nil), rc.Cluster.Spec.EngineOptions...)
 		m.Version = rc.Cluster.Spec.Version

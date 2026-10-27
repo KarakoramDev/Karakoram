@@ -58,6 +58,10 @@ type member struct {
 	ImportBatch          *engine.ImportPlan             `json:"importBatch,omitempty"`
 	Stage                string                         `json:"stage"`
 	Version              string                         `json:"version"`
+	// PreviousVersion is the minor-rollout source until SQL confirms the target.
+	PreviousVersion      string                         `json:"previousVersion,omitempty"`
+	// VersionDrift is the last confirmed unexpected SQL release, not a live observation.
+	VersionDrift         string                         `json:"versionDrift,omitempty"`
 	Resources            domain.Resources               `json:"resources"`
 	Disk                 domain.Resources               `json:"disk"`
 	Replicas             int                            `json:"replicas"`

@@ -161,6 +161,147 @@ func TestLegacyAgentBinaryObservationBlocksDowngrade(t *testing.T) {
 	}
 }
 
+func TestExpectedVersionRolloutsDoNotReportDrift(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, target string
+		checkpoint, major    bool
+	}{
+		{"minor source before deployment", "17.10.1", "17.11.1", false, false},
+		{"minor source after deployment checkpoint", "17.10.1", "17.11.1", true, false},
+		{"major source during admitted upgrade", "16.15.1", "17.11.1", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc, b := setup(t, "ha")
+			rc.Cluster.Spec.Version = tc.source
+			s := converge(t, p, rc)
+			rc.Cluster.Spec.Version = tc.target
+			rc.Cluster.Generation++
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b.statusOverrides = map[string]pgspec.StatusResponse{}
+			for _, m := range s.data() {
+				st, err := live(t.Context(), rc, m.Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				st.Version = tc.source
+				b.statusOverrides[m.Name] = st
+				if tc.checkpoint {
+					m.Version = tc.target
+					if !tc.major {
+						m.PreviousVersion = tc.source
+					}
+				}
+			}
+			if tc.major {
+				s.Upgrade = &upgradeState{From: tc.source, To: tc.target, Stage: "prepare"}
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			status, err := p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.Phase != domain.PhaseUpdating {
+				t.Fatalf("expected rollout phase=%s, want Updating", status.Phase)
+			}
+			for _, condition := range status.Conditions {
+				if condition.Type == "VersionDrift" {
+					t.Fatalf("source release during rollout was classified as drift: %+v", condition)
+				}
+			}
+			// A different release is not excused by an upgrade checkpoint.
+			first := s.data()[0].Name
+			st := b.statusOverrides[first]
+			st.Version = "18.6.1"
+			b.statusOverrides[first] = st
+			status, err = p.Status(t.Context(), rc)
+			if err != nil || status.Phase != domain.PhaseDegraded {
+				t.Fatalf("unrelated rollout mismatch was hidden: phase=%s err=%v", status.Phase, err)
+			}
+		})
+	}
+}
+
+func TestKnownVersionDriftSurvivesMissingObservations(t *testing.T) {
+	p, rc, b := setup(t, "single")
+	rc.Cluster.Spec.Version = "17.10.1"
+	s := converge(t, p, rc)
+	name := s.data()[0].Name
+	base, err := live(t.Context(), rc, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setVersion := func(version string) domain.ClusterStatus {
+		t.Helper()
+		st := base
+		st.Version = version
+		b.statusOverrides = map[string]pgspec.StatusResponse{name: st}
+		status, err := p.Status(t.Context(), rc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rc.Cluster.Status = status
+		return status
+	}
+	assertDrift := func(status domain.ClusterStatus, want string) {
+		t.Helper()
+		if status.Phase != domain.PhaseDegraded {
+			t.Fatalf("unresolved drift phase=%s, want Degraded", status.Phase)
+		}
+		for _, condition := range status.Conditions {
+			if condition.Type == "VersionDrift" && condition.Status == want {
+				return
+			}
+		}
+		t.Fatalf("missing VersionDrift=%s: %+v", want, status.Conditions)
+	}
+	// No version observation must not invent a mismatch on a never-drifted member.
+	unknown := setVersion("")
+	for _, condition := range unknown.Conditions {
+		if condition.Type == "VersionDrift" {
+			t.Fatal("unknown initial observation manufactured drift")
+		}
+	}
+	assertDrift(setVersion("17.11.1"), "True")
+	// Reconstruct the provider and discard public status to prove evidence is
+	// retained in serialized provider state, not only a previous condition.
+	p = New(p.options)
+	rc.Cluster.Status = domain.ClusterStatus{}
+	for range 2 {
+		status := setVersion("")
+		assertDrift(status, "Unknown")
+		for _, member := range status.Members {
+			if member.Name == name && member.Version != "" {
+				t.Fatal("last-known drift was substituted for a fresh member version")
+			}
+		}
+	}
+	stored, err := load(rc.Cluster)
+	if err != nil || stored.find(name).VersionDrift != "17.11.1" {
+		t.Fatalf("confirmed mismatch was not persisted: %v", err)
+	}
+	if _, err := p.runtimeSpec(rc, stored.find(name)); err == nil {
+		t.Fatal("missing fresh version allowed a previously observed downgrade")
+	}
+	matching := setVersion("17.10.1")
+	for _, condition := range matching.Conditions {
+		if condition.Type == "VersionDrift" {
+			t.Fatal("fresh matching SQL observation did not clear drift")
+		}
+	}
+	if matching.Phase != domain.PhaseReady {
+		t.Fatalf("matching observation did not recover readiness: %s", matching.Phase)
+	}
+	stored, err = load(rc.Cluster)
+	if err != nil || stored.find(name).VersionDrift != "" {
+		t.Fatalf("resolved drift remained persisted: %v", err)
+	}
+}
+
 func TestFreshnessHungFormerPrimaryDoesNotHideNewWriter(t *testing.T) {
 	p, rc, _ := setup(t, "ha")
 	s := converge(t, p, rc)

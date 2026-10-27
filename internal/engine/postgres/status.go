@@ -91,6 +91,19 @@ func (p *Core) ProjectCredentialsStatus(ctx context.Context, rc *engine.Context,
 	return status
 }
 
+// expectedRolloutVersion accepts only the assigned or checkpointed source of a
+// forward rollout. Once SQL observes the target, the source checkpoint is cleared.
+func expectedRolloutVersion(rc *engine.Context, s *state, m *member, observed string) bool {
+	target := rc.Cluster.Spec.Version
+	if s.Upgrade != nil && s.Upgrade.To == target && s.Upgrade.From == observed {
+		return true
+	}
+	if m.Version == observed && upgradeAllowed(m.Version, target) {
+		return true
+	}
+	return m.PreviousVersion != "" && m.Version == target && m.PreviousVersion == observed && upgradeAllowed(m.PreviousVersion, target)
+}
+
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
 	defer func() {
 		engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
@@ -100,6 +113,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return domain.ClusterStatus{}, err
 	}
+	driftChanged := false
+	defer func() {
+		if driftChanged {
+			if err := save(rc.Cluster, s); statusErr == nil {
+				statusErr = err
+			}
+		}
+	}()
 	out := domain.ClusterStatus{Phase: domain.PhaseCreating, Version: rc.Cluster.Spec.Version, Members: []domain.MemberStatus{}, Connection: discovery(rc, s), Placement: domain.Placement{Groups: map[string][]string{}}}
 	if s.Suspended {
 		out.Phase = domain.PhaseSuspended
@@ -117,7 +138,8 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	var paused, etcdIssues, archiveIssues []string
 	var dataIssues, capacityIssues, slotIssues, slotUnknown, archiveUnknown []string
 	var proxyIssues []string
-	var versionDrift []string
+	var versionDrift, versionDriftUnknown []string
+	versionRolloutPending := false
 	var proxyDetails []string
 	var proxyPlacementIssues, proxyRolloutIssues, proxyRolloutFailures []string
 	var processConditions []domain.Condition
@@ -177,6 +199,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		}
 		if m.Stage == "planned" || m.Stage == "imported" {
 			healthy = false
+			if m.Role == "data" && m.VersionDrift != "" {
+				versionDriftUnknown = append(versionDriftUnknown, fmt.Sprintf("%s: last confirmed mismatch %s, desired %s; fresh matching SQL observation unavailable", m.Name, m.VersionDrift, rc.Cluster.Spec.Version))
+			}
 			out.Members = append(out.Members, member)
 			continue
 		}
@@ -243,9 +268,6 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				}
 				if st.Version != "" && m.Role == "data" {
 					member.Version = st.Version
-					if st.Version != rc.Cluster.Spec.Version {
-						versionDrift = append(versionDrift, fmt.Sprintf("%s: observed %s, desired %s", m.Name, st.Version, rc.Cluster.Spec.Version))
-					}
 				}
 				writer = writer || st.Running && (st.Role == "primary" || st.Role == "standalone")
 				if st.DataRecoveryRequired {
@@ -399,6 +421,26 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		for _, diagnostic := range proxyProcesses {
 			processConditions = append(processConditions, engine.ApplyProcessDiagnostics(&member, diagnostic.processes, diagnostic.instance, now(rc))...)
 		}
+		if m.Role == "data" {
+			switch {
+			case member.Version != "" && member.Version == rc.Cluster.Spec.Version:
+				if m.VersionDrift != "" || m.PreviousVersion != "" {
+					m.VersionDrift, m.PreviousVersion = "", ""
+					driftChanged = true
+				}
+			case member.Version != "" && !expectedRolloutVersion(rc, s, m, member.Version):
+				if m.VersionDrift != member.Version {
+					m.VersionDrift = member.Version
+					driftChanged = true
+				}
+				versionDrift = append(versionDrift, fmt.Sprintf("%s: observed %s, desired %s", m.Name, member.Version, rc.Cluster.Spec.Version))
+			case m.VersionDrift != "":
+				versionDriftUnknown = append(versionDriftUnknown, fmt.Sprintf("%s: last confirmed mismatch %s, desired %s; fresh matching SQL observation unavailable", m.Name, m.VersionDrift, rc.Cluster.Spec.Version))
+			}
+			if m.Version != rc.Cluster.Spec.Version || m.PreviousVersion != "" {
+				versionRolloutPending = true
+			}
+		}
 		healthy = healthy && member.Health && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
 		containers, e := rc.Backend.Containers(ctx, m.Name)
 		if e != nil {
@@ -471,7 +513,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return out, err
 	}
-	if healthy && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy) {
+	if healthy && !versionRolloutPending && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy) {
 		out.Phase = domain.PhaseReady
 		out.ObservedGeneration = rc.Cluster.Generation
 	} else if rc.Cluster.Status.ObservedGeneration > 0 {
@@ -515,10 +557,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		out.Phase, out.Message = domain.PhaseUpdating, s.SwitchoverBlocked
 	}
 	out.Conditions = []domain.Condition{{Type: "Ready", Status: condition, Reason: reason, LastTransitionTime: now(rc)}}
-	if len(versionDrift) > 0 {
-		message := "PostgreSQL version drift: " + strings.Join(versionDrift, "; ") + ". Verify each running server with SQL, take a backup, and explicitly select the observed or a newer supported catalog release before redeploying members. The specification is unchanged; automatic downgrades are blocked."
+	if len(versionDrift) > 0 || len(versionDriftUnknown) > 0 {
+		driftStatus, driftReason := "True", "ObservedVersionMismatch"
+		if len(versionDrift) == 0 {
+			driftStatus, driftReason = "Unknown", "ObservationUnavailable"
+		}
+		message := "PostgreSQL version drift: " + strings.Join(append(versionDrift, versionDriftUnknown...), "; ") + ". Verify each running server with SQL, take a backup, and explicitly select the observed or a newer supported catalog release before redeploying members. The specification is unchanged; automatic downgrades are blocked."
 		out.Conditions = append(out.Conditions, domain.Condition{
-			Type: "VersionDrift", Status: "True", Reason: "ObservedVersionMismatch",
+			Type: "VersionDrift", Status: driftStatus, Reason: driftReason,
 			Message: message, LastTransitionTime: now(rc),
 		})
 		out.Phase, out.Message = domain.PhaseDegraded, message

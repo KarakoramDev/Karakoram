@@ -42,13 +42,18 @@ Before refreshing an old agent or redeploying an existing runtime, inspect
 `SELECT version()` on **every data member** using verified TLS. Status from an
 old agent cannot establish that the server matches the specification.
 
-Updated agents report the SQL-observed Percona product release. If it differs
-from `spec.version`, `VersionDrift=True` lists the affected members, observed and
-desired versions, and operator guidance; the cluster is Degraded rather than
-Ready. No observation is substituted with the desired release, and the control
-plane never rewrites `spec.version` or automatically downgrades an observed newer
-server. Runtime preparation below an observed release is blocked, including an
-agent-only rollout.
+Updated agents report the SQL-observed Percona product release. An unexpected
+difference from `spec.version` raises `VersionDrift=True` with the affected
+members, releases and operator guidance; the cluster is Degraded rather than
+Ready. Assigned/checkpointed source releases during a forward minor or major
+upgrade are expected: the cluster remains Updating, without drift incidents.
+After a confirmed mismatch, missing version observations retain
+`VersionDrift=Unknown` and Degraded readiness until fresh SQL matches the target;
+an unknown observation alone does not invent drift on an unaffected member.
+No last-known or desired release substitutes for an unavailable member version.
+The control plane never rewrites `spec.version` or automatically downgrades an
+observed newer server. Runtime preparation below an observed release is blocked,
+including an agent-only rollout.
 
 Take a backup and explicitly select the observed catalog release or a supported
 newer release through the cluster API. For example, if the specification says

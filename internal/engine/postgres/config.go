@@ -44,6 +44,9 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	// A prepared runtime must never replace an observed newer server with the
 	// older assigned release, including during an otherwise agent-only rollout.
 	if m.Role == "data" {
+		if err := guardServerDowngrade(m.Name, m.VersionDrift, rc.Cluster.Spec.Version); err != nil {
+			return infra.RuntimeSpec{}, err
+		}
 		for _, observed := range rc.Cluster.Status.Members {
 			if observed.Name == m.Name {
 				if err := guardServerDowngrade(m.Name, observed.Version, rc.Cluster.Spec.Version); err != nil {
