@@ -23,11 +23,17 @@ Keycloak is an independent engine driver, not a PostgreSQL cluster variant. Crea
 
 Before deploying any runtime, the control plane ensures a binding with a dedicated non-superuser owning login and database. Only that login's password, resolved in-process through `pgbinding.Service.Password`, reaches the consumer. Source administrator credentials never reach Keycloak. JDBC uses the binding writer endpoint with `sslmode=verify-full` and an owner-only CA file. A source that cannot supply verify-full trust is rejected.
 
-The managed JDBC URL sets `binaryTransfer=false`. ProxySQL 3.0.11 cannot
-represent mixed text/binary result-column formats emitted by pgjdbc, which can
-otherwise prevent Liquibase migrations and Keycloak startup on proxied sources.
-All results therefore use text format, including with a direct singleton source;
-prepared statements, parameter binding and TLS hostname verification remain enabled.
+The managed JDBC URL sets `preferQueryMode=simple`. ProxySQL 3.0.11 rejects
+named cursor portals and mixed text/binary result-column formats. Keycloak
+26.8.1 configures Hibernate's statement fetch size to 64, which makes pgjdbc
+use named portals inside transactions even if binary transfer or server-side
+preparation is disabled. Simple mode avoids both protocol limitations, including
+explicit JDBC fetch sizes; `defaultRowFetchSize=0` alone cannot override those.
+pgjdbc still safely encodes JDBC `PreparedStatement` parameters, but does not
+use server-side prepared statements or incremental cursor fetching. Results are
+buffered in memory, so large queries can consume more member memory.
+TLS hostname verification and the binding's writer endpoint remain unchanged;
+the same configuration also works with direct singleton sources.
 
 The setting is rendered by the member agent, not the control plane. Existing
 consumers need a newly deployed agent; ordinary restart and `upgrade-agents`

@@ -12,14 +12,19 @@ from the control-plane executable; follow [member-agent rollout](#rolling-out-me
 
 ### Keycloak and Temporal PostgreSQL proxy compatibility
 
-v0.4.0 Keycloak/Liquibase can fail before readiness when its PostgreSQL binding
-uses ProxySQL: the proxy cannot represent mixed text/binary result-column
-formats. Temporal's pgx persistence/visibility queries have the same restriction,
-including explicitly prepared visibility queries. New consumer deployments use
-Keycloak JDBC `binaryTransfer=false` and Temporal's `postgres12` (lib/pq) plugin
-with `disable_prepared_binary_result=yes`. TLS hostname verification, bound
-parameters and the writer proxy remain in place. OpenBao 2.7.1 PG storage uses
-pgx but only single-column reads, so this specific rejection does not affect it.
+v0.4.0 Keycloak can fail before readiness when its PostgreSQL binding uses
+ProxySQL: the proxy rejects mixed text/binary result-column formats and named
+cursor portals. Disabling binary transfer alone is insufficient: Keycloak's
+Hibernate fetch size of 64 still creates named portals in transactions.
+New consumer deployments use Keycloak JDBC `preferQueryMode=simple`, covering
+both restrictions even with explicit fetch sizes. JDBC parameter encoding and
+TLS hostname verification remain enabled, but server-side preparation and
+incremental cursor fetching are disabled; large results are buffered in memory.
+Temporal uses the `postgres12` (lib/pq) plugin with
+`disable_prepared_binary_result=yes`, including for explicitly prepared
+visibility queries; lib/pq binds the unnamed portal. The writer proxy remains
+in place. OpenBao 2.7.1 PG storage uses pgx but only single-column reads, so the
+mixed-format rejection does not affect it.
 
 **Upgrading the control plane alone does not install these agent-rendered
 settings. Neither provider supports `upgrade-agents`; process restart/reload

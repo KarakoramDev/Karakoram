@@ -47,8 +47,13 @@ func TestRenderProtectsSecretsAndTLS(t *testing.T) {
 	if e != nil || u.Query().Get("sslmode") != "verify-full" || u.Query().Get("sslrootcert") != "/data/ca.pem" || u.User != nil {
 		t.Fatal(u, e)
 	}
-	if u.Query().Get("binaryTransfer") != "false" || !strings.Contains(conf, "binaryTransfer\\=false") {
-		t.Fatal("JDBC binary transfer must remain disabled for ProxySQL compatibility")
+	if u.Query().Get("preferQueryMode") != "simple" || !strings.Contains(conf, "preferQueryMode\\=simple") {
+		t.Fatal("JDBC simple mode must cover explicit fetch sizes and mixed result formats")
+	}
+	for _, obsolete := range []string{"binaryTransfer", "prepareThreshold", "defaultRowFetchSize"} {
+		if u.Query().Has(obsolete) || strings.Contains(conf, obsolete) {
+			t.Fatalf("%s must not substitute for simple protocol", obsolete)
+		}
 	}
 	if string(files["keycloak/ca.pem"]) != "CA" {
 		t.Fatal("missing CA")
