@@ -94,6 +94,16 @@ Readiness remains false while post-upgrade extension updates are pending; the
 `ExtensionsUpdated=False` condition reports `ExtensionUpdatePending` until a retry
 completes successfully.
 
+TimescaleDB updates use a dedicated fresh backend for each database: the first SQL
+statement is `ALTER EXTENSION "timescaledb" UPDATE`. Even a catalog existence query
+can load the old version through TimescaleDB's preload hook, so discovery and other
+extension updates must not run on that backend first. Installed-extension discovery
+still skips absent extensions; PostGIS, vector and other extensions keep their
+normal update path. Unsupported-operation errors are permanent request rejections,
+not temporary-unavailability responses. This agent-side behavior is shared across
+backends and the PostgreSQL core used by Supabase; existing installations need an
+agent rollout, not only a control-plane upgrade.
+
 Non-Supabase profile bootstrap and per-database extension creation retain the
 management connection's pinned `search_path = pg_catalog`. Extensions without a
 control-file schema are explicitly installed in `public`; fixed-schema extensions

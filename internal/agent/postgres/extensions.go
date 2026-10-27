@@ -98,10 +98,27 @@ func updateDatabaseExtensions(ctx context.Context, c *pgx.Conn, database string,
 		if !installed {
 			continue
 		}
-		if _, err := target.Exec(ctx, updateExtensionStatement(name)); err != nil {
+		if err := updateInstalledExtension(ctx, target, database, name); err != nil {
 			return result, err
 		}
 		result.Updated = append(result.Updated, name)
 	}
 	return result, nil
+}
+
+func updateInstalledExtension(ctx context.Context, discovery *pgx.Conn, database, name string) error {
+	target := discovery
+	if name == "timescaledb" {
+		// Even the pg_extension existence query loads TimescaleDB's old
+		// version through its post-parse hook. UPDATE must be the first SQL
+		// statement in a fresh backend, not on the discovery connection.
+		var err error
+		target, err = databaseConnect(ctx, discovery, database)
+		if err != nil {
+			return err
+		}
+		defer target.Close(ctx)
+	}
+	_, err := target.Exec(ctx, updateExtensionStatement(name))
+	return err
 }

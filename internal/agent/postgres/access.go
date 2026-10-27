@@ -43,6 +43,8 @@ func accessFailure(err error) error {
 			return &accessError{http.StatusNotFound, "PostgreSQL object not found"}
 		case "25006":
 			return &accessError{http.StatusServiceUnavailable, "PostgreSQL is not currently writable"}
+		case "0A000":
+			return invalidAccess("PostgreSQL does not support the requested operation")
 		case "42710", "42P04", "23505", "2BP01", "55006", "55000", "40001", "40P01":
 			return &accessError{http.StatusConflict, "PostgreSQL object conflicts with the requested change"}
 		case "42501":

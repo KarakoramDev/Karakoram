@@ -156,7 +156,7 @@ func TestGrantSQLSafety(t *testing.T) {
 	}
 }
 func TestAccessSQLStateSanitization(t *testing.T) {
-	for code, status := range map[string]int{"42704": 404, "3D000": 404, "42710": 409, "2BP01": 409, "55006": 409, "42501": 403, "22023": 400, "08006": 503, "25006": 503} {
+	for code, status := range map[string]int{"42704": 404, "3D000": 404, "42710": 409, "2BP01": 409, "55006": 409, "42501": 403, "22023": 400, "0A000": 400, "08006": 503, "25006": 503} {
 		err := accessFailure(&pgconn.PgError{Code: code, Message: "secret-verifier-and-statement", Detail: "private"}).(*accessError)
 		if err.status != status || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "private") {
 			t.Fatalf("unsafe SQLSTATE mapping %s: %v", code, err)
