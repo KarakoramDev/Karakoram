@@ -357,7 +357,15 @@ func (p *Provider) rejectResources(ctx context.Context, rc *engine.Context, s *s
 func (p *Provider) reconcileExemptRenewal(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	var renewal *rolling
 	changed := false
-	for _, m := range ordered(s) {
+	members := ordered(s)
+	retiring := false
+	for _, m := range members {
+		if m.Removing {
+			retiring = true
+			break
+		}
+	}
+	for _, m := range members {
 		if m.Removing || m.ConfigVersion == 0 {
 			continue
 		}
@@ -368,6 +376,13 @@ func (p *Provider) reconcileExemptRenewal(ctx context.Context, rc *engine.Contex
 		active, projected, leafChanged, err := p.exemptConfig(ctx, rc, m, desired)
 		if err != nil {
 			return true, err
+		}
+		if leafChanged && retiring {
+			// A native roll cannot pass its membership-readiness gate while
+			// retirement owns a removing member. Finish that owner first,
+			// but continue publishing independently changed agent transport.
+			projected.TLS = active.TLS
+			leafChanged = false
 		}
 		if configHash(projected) == configHash(active) {
 			continue

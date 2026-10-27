@@ -89,6 +89,8 @@ deletion. Ordinary recovery must not recreate a runtime during its retirement.
 Urgent database leaf renewal bypasses the time window, not native quorum or
 one-member-at-a-time readiness/acknowledgement gates. Accepted application
 settings and resource bounds remain frozen during that renewal.
+An already-admitted retirement finishes before a new native-leaf rolling journal
+is installed; independent transport-certificate renewal can still proceed.
 
 ## Moving a member
 
