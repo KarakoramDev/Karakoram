@@ -74,6 +74,15 @@ func observationErrorSummary(err error) string {
 
 func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*member) []memberObservation {
 	out := make([]memberObservation, len(members))
+	direct := ""
+	if rc.Cluster.Spec.Components.Extra["proxy"].Replicas == 0 {
+		for _, m := range members {
+			if m.Role == "data" && m.Group == 0 {
+				direct = m.Name
+				break
+			}
+		}
+	}
 	// Inventory and native reads share a sweep, not a serial budget per
 	// member. Keep each result indexed by member; reduction remains serial.
 	var workers sync.WaitGroup
@@ -88,9 +97,18 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 			var runtime *infra.Service
 			var runtimeErr error
 			var inventory engine.InstanceInventory
+			// Without a proxy, public-port convergence belongs to the data
+			// runtime. Its platform barrier must precede fresh native status.
+			var runtimeReady chan struct{}
+			if m.Name == direct {
+				runtimeReady = make(chan struct{})
+			}
 			var probes sync.WaitGroup
 			probes.Go(func() {
 				runtime, runtimeErr = rc.Backend.GetService(ctx, m.Name)
+				if runtimeReady != nil {
+					close(runtimeReady)
+				}
 			})
 			probes.Go(func() {
 				if m.Role == "proxy" && rc.Agents != nil {
@@ -106,6 +124,9 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 			})
 			if m.Role != "proxy" && rc.Agents != nil {
 				probes.Go(func() {
+					if runtimeReady != nil {
+						<-runtimeReady
+					}
 					probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 					defer cancel()
 					a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)

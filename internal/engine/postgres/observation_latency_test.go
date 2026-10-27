@@ -104,6 +104,7 @@ type delayedStatusInventoryBackend struct {
 	runtimeErr       error
 	containerErr     error
 	proxyInventories atomic.Int32
+	runtimeObserved  atomic.Bool
 }
 
 func (b *delayedStatusInventoryBackend) GetService(ctx context.Context, name string) (*infra.Service, error) {
@@ -115,6 +116,7 @@ func (b *delayedStatusInventoryBackend) GetService(ctx context.Context, name str
 	if b.runtimeErr != nil {
 		return nil, b.runtimeErr
 	}
+	b.runtimeObserved.Store(true)
 	return b.fakeBackend.GetService(ctx, name)
 }
 
@@ -176,5 +178,35 @@ func TestStatusInfrastructureErrorsRemainFailClosed(t *testing.T) {
 				t.Fatalf("missing member/step attribution: %v", err)
 			}
 		})
+	}
+}
+
+type runtimeBarrierAgents struct {
+	fakeAgents
+	observed *atomic.Bool
+	early    *atomic.Bool
+}
+
+func (a runtimeBarrierAgents) Dial(ctx context.Context, ref domain.ClusterRef, name string) (*agentapi.Client, error) {
+	if !a.observed.Load() {
+		a.early.Store(true)
+		return nil, errors.New("native read preceded public runtime barrier")
+	}
+	return a.fakeAgents.Dial(ctx, ref, name)
+}
+
+func TestStatusDirectNativeWaitsForRuntimeBarrier(t *testing.T) {
+	p, rc, base := setup(t, "single")
+	proxy := rc.Cluster.Spec.Components.Extra["proxy"]
+	proxy.Replicas = 0
+	rc.Cluster.Spec.Components.Extra["proxy"] = proxy
+	converge(t, p, rc)
+	backend := &delayedStatusInventoryBackend{fakeBackend: base, runtimeDelay: 50 * time.Millisecond}
+	rc.Backend = backend
+	var early atomic.Bool
+	rc.Agents = runtimeBarrierAgents{fakeAgents: rc.Agents.(fakeAgents), observed: &backend.runtimeObserved, early: &early}
+	status, err := engine.ObserveStatus(t.Context(), p, rc)
+	if err != nil || status.Phase != domain.PhaseReady || early.Load() {
+		t.Fatalf("direct endpoint lost runtime-before-native ordering: phase=%s error=%v", status.Phase, err)
 	}
 }
