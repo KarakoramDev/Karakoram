@@ -31,8 +31,8 @@ func TestPXCExportNativeMemberConfigs(t *testing.T) {
 	}
 	// Publicly supported parameter inputs bound native memory without altering
 	// the generated security policy or lowering production resource validation.
-	rc.Cluster.Spec.Components.Engine.Resources.MinRAM = 1
-	rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 1
+	rc.Cluster.Spec.Components.Engine.Resources.MinRAM = 2
+	rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 2
 	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"parameters":{"innodb_buffer_pool_size":"134217728","max_connections":"30"},"binlog":{"archiveInterval":3600,"expireSeconds":604800}}`)
 	if err := p.Validate(t.Context(), nil, rc.Cluster); err != nil {
 		t.Fatal(err)

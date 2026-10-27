@@ -140,6 +140,88 @@ func TestPXCProviderCatalogAndValidation(t *testing.T) {
 		t.Fatal("accepted GR options")
 	}
 }
+
+func TestPXCResourceMemoryFloor(t *testing.T) {
+	for _, ram := range []float64{1, 1.5, 2} {
+		p := New(Options{Provider: "pxc"})
+		c := &domain.Cluster{Name: "sample"}
+		p.ApplyDefaults(&c.Spec)
+		c.Spec.Components.Engine.Resources.MinRAM = ram
+		// An elastic maximum must not bypass the guaranteed-memory floor.
+		c.Spec.Components.Engine.Resources.MaxRAM = 4
+		for _, parameters := range []string{`{}`, `{"parameters":{"innodb_buffer_pool_size":"134217728","max_connections":"30"}}`} {
+			c.Spec.EngineOptions = json.RawMessage(parameters)
+			for _, old := range []*domain.Cluster{nil, c} {
+				err := p.Validate(t.Context(), old, c)
+				if ram < 2 {
+					if err == nil || !strings.Contains(err.Error(), "PXC data members require at least 2 GiB RAM") {
+						t.Fatalf("RAM %g: expected PXC memory floor, got %v", ram, err)
+					}
+				} else if err != nil {
+					t.Fatalf("RAM %g: %v", ram, err)
+				}
+			}
+		}
+	}
+}
+
+func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
+	for _, topology := range []string{"single", "group", "cluster"} {
+		for _, ram := range []float64{1, 2} {
+			var p *Core
+			var rc *engine.Context
+			var b *fakeBackend
+			if topology == "cluster" {
+				p, rc, b = setupPXC(t)
+			} else {
+				p, rc, b = setup(t, topology)
+			}
+			rc.Cluster.Spec.Components.Engine.Resources.MinRAM = ram
+			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 4
+			err := p.Validate(t.Context(), nil, rc.Cluster)
+			if topology == "cluster" && ram == 1 {
+				if err == nil {
+					t.Fatal("admitted unsafe 1 GiB PXC")
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatal(topology, ram, err)
+			}
+			converge(t, p, rc, b)
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, m := range s.data() {
+				config, err := p.MemberConfig(t.Context(), rc, m.Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var spec myspec.Spec
+				if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+					t.Fatal(err)
+				}
+				limit := int64(ram * (1 << 30))
+				if spec.BufferPoolBytes != limit/2 || spec.MaxConnections != 200 {
+					t.Fatalf("%s RAM %g: unexpected memory defaults: %+v", topology, ram, spec)
+				}
+				// This is explicit cache headroom, not a bound on native RSS:
+				// connection buffers, PS and replication allocate dynamically.
+				caches := spec.BufferPoolBytes
+				if topology == "cluster" {
+					if spec.Galera == nil || spec.Galera.GCacheSize != "128M" {
+						t.Fatal("missing Galera cache budget")
+					}
+					caches += 128 << 20
+				}
+				if limit-caches < limit*3/8 {
+					t.Fatalf("%s RAM %g: explicit caches leave less than 37.5%% headroom", topology, ram)
+				}
+			}
+		}
+	}
+}
 func TestPXCFormationReplayAndNativeConfig(t *testing.T) {
 	p, rc, b := setupPXC(t)
 	converge(t, p, rc, b)

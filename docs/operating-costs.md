@@ -320,29 +320,29 @@ Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permi
 
 ### Percona XtraDB Cluster (PXC)
 
-[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) has **no singleton topology**: its admitted minimum is 3 [Galera](https://galeracluster.com/) members plus 1 required [ProxySQL](https://proxysql.com/) replica; 5 data members are also admitted. Data floors/defaults and proxy resources match [Percona Server](https://docs.percona.com/percona-server/8.4/) above (1 / 1 / 5 floor; 2-GiB data RAM default; proxy 1 / 1 / 1 default). MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
+[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) has **no singleton topology**: its admitted minimum is 3 [Galera](https://galeracluster.com/) members plus 1 required [ProxySQL](https://proxysql.com/) replica; 5 data members are also admitted. Data floors are 1 / 2 / 5 (2-GiB data RAM default); proxy resources retain the 1 / 1 / 1 default. Unlike MySQL, 1-GiB PXC data members are rejected because Galera adds memory overhead. MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
-| MINIMAL | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
-| MINIMAL HA | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| MINIMAL | 3 × 1 / 2 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| MINIMAL HA | 3 × 1 / 2 / 5; 1 proxy at 1 / 1 / 1 runtime |
 | PRODUCTION-SHAPED | 3 × 4 / 8 / 100; 2 proxies at 1 / 1 / 1 runtime; S3 backups |
 
 | Worker placement | Minimal | Minimal HA | Production-shaped |
 | --- | --- | --- | --- |
 | **Zerops** | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 2 × managed runtime |
 | Hetzner | 3 × CX23 + 1 × CX23 | 3 × CX23 + 1 × CX23 | 3 × CX43 + 2 × CX23 |
-| AWS | 3 × t3.small + 1 × t3.small | 3 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
-| DigitalOcean | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
-| OVHcloud | 3 × d2-2 + 1 × d2-2 | 3 × d2-2 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
+| AWS | 3 × t3.medium + 1 × t3.small | 3 × t3.medium + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
+| DigitalOcean | 3 × Basic 4-GiB + 1 × Basic 2-GiB | 3 × Basic 4-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
+| OVHcloud | 3 × d2-4 + 1 × d2-2 | 3 × d2-4 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
 
 | Monthly total | Minimal | Minimal HA | Production-shaped |
 | --- | ---: | ---: | ---: |
-| **Zerops (USD)** | $22 | $33 | $168 |
+| **Zerops (USD)** | $31 | $42 | $168 |
 | Hetzner (EUR) | €42 | €42 | €80 |
-| AWS (USD) | $136 | $138 | $646 |
-| DigitalOcean (USD) | $91 | $91 | $389 |
-| OVHcloud (EUR) | €57 | €57 | €362 |
+| AWS (USD) | $189 | $191 | $646 |
+| DigitalOcean (USD) | $127 | $127 | $389 |
+| OVHcloud (EUR) | €79 | €79 | €362 |
 
 ### Neo4j Community
 

@@ -195,6 +195,11 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.Components.Engine.Resources.MinRAM < 1 || s.Components.Engine.Resources.MinDisk < 5 {
 		return engine.Invalid("data members require at least 1 GiB RAM and 5 GB disk")
 	}
+	// Galera and SST share the data member's memory budget with mysqld.
+	// The shared MySQL floor is insufficient even for an idle PXC seed.
+	if p.Name() == "pxc" && s.Components.Engine.Resources.MinRAM < 2 {
+		return engine.Invalid("PXC data members require at least 2 GiB RAM")
+	}
 	if s.EngineConfig != "" {
 		return engine.Invalid("MySQL uses engineOptions, not engineConfig")
 	}
