@@ -27,56 +27,62 @@ func testSpec() tspec.Spec {
 
 // TestRenderRoles checks role selection and private TLS configuration.
 func TestRenderRoles(t *testing.T) {
-	for _, component := range []string{tspec.Server, tspec.History, tspec.Matching, tspec.Frontend, tspec.Worker, tspec.UI} {
-		t.Run(component, func(t *testing.T) {
-			s := testSpec()
-			s.Component = component
-			if component == tspec.UI {
-				s.Persistence = nil
-				s.FrontendAddress = "frontend:7233"
-				s.UI = &tspec.UISettings{PublicURL: "https://ui.example.test/workflows", OIDC: &tspec.OIDC{Issuer: "https://issuer.example.test", ClientID: "id", ClientSecret: "private-oidc", CallbackURL: "https://ui.example.test/workflows/auth/sso/callback"}}
-			}
-			if err := s.Validate(); err != nil {
-				t.Fatal(err)
-			}
-			p, files, err := render(s, "/data", "10.0.0.1", "0.0.0.0", s.InstallDir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if strings.Contains(strings.Join(append(p.Args, p.Env...), " "), "private-") {
-				t.Fatal("secret in process arguments or environment")
-			}
-			var config map[string]any
-			if err := yaml.Unmarshal(files["temporal/development.yaml"], &config); err != nil {
-				t.Fatal(err)
-			}
-			if component == tspec.UI {
-				if config["publicPath"] != "/workflows" || config["port"] != 8080 {
-					t.Fatal(config)
+	for _, version := range []string{"1.31.4", "1.32.1"} {
+		for _, component := range []string{tspec.Server, tspec.History, tspec.Matching, tspec.Frontend, tspec.Worker, tspec.UI} {
+			t.Run(version+"/"+component, func(t *testing.T) {
+				s := testSpec()
+				s.Version = version
+				if component != tspec.UI {
+					s.InstallDir = "/opt/karakoram/temporal-server-" + version
 				}
-				return
-			}
-			text := string(files["temporal/development.yaml"])
-			for _, key := range []string{"postgres12_pgx", "numHistoryShards: 8", "enableHostVerification: true", "serverName: pg.example.test", "maxConns: 10", "maxIdleConns: 10", "broadcastAddress: 10.0.0.1", "requireClientAuth: true", "127.0.0.1:9090", "/data/karakoram/temporal/postgres-ca.pem", "systemWorker:", "httpPort: 7243"} {
-				if !strings.Contains(text, key) {
-					t.Errorf("config missing %s", key)
+				s.Component = component
+				if component == tspec.UI {
+					s.Persistence = nil
+					s.FrontendAddress = "frontend:7233"
+					s.UI = &tspec.UISettings{PublicURL: "https://ui.example.test/workflows", OIDC: &tspec.OIDC{Issuer: "https://issuer.example.test", ClientID: "id", ClientSecret: "private-oidc", CallbackURL: "https://ui.example.test/workflows/auth/sso/callback"}}
 				}
-			}
-			persistence := config["persistence"].(map[string]any)
-			stores := persistence["datastores"].(map[string]any)
-			for name, raw := range stores {
-				sql := raw.(map[string]any)["sql"].(map[string]any)
-				attrs := sql["connectAttributes"].(map[string]any)
-				if attrs["default_query_exec_mode"] != "exec" {
-					t.Errorf("%s must request all-text results through ProxySQL", name)
+				if err := s.Validate(); err != nil {
+					t.Fatal(err)
 				}
-			}
-			for _, role := range tspec.Roles(component) {
-				if !strings.Contains(strings.Join(p.Args, " "), "--service="+role) {
-					t.Error("missing role", role)
+				p, files, err := render(s, "/data", "10.0.0.1", "0.0.0.0", s.InstallDir)
+				if err != nil {
+					t.Fatal(err)
 				}
-			}
-		})
+				if strings.Contains(strings.Join(append(p.Args, p.Env...), " "), "private-") {
+					t.Fatal("secret in process arguments or environment")
+				}
+				var config map[string]any
+				if err := yaml.Unmarshal(files["temporal/development.yaml"], &config); err != nil {
+					t.Fatal(err)
+				}
+				if component == tspec.UI {
+					if config["publicPath"] != "/workflows" || config["port"] != 8080 {
+						t.Fatal(config)
+					}
+					return
+				}
+				text := string(files["temporal/development.yaml"])
+				for _, key := range []string{"pluginName: postgres12", "numHistoryShards: 8", "enableHostVerification: true", "serverName: pg.example.test", "maxConns: 10", "maxIdleConns: 10", "broadcastAddress: 10.0.0.1", "requireClientAuth: true", "127.0.0.1:9090", "/data/karakoram/temporal/postgres-ca.pem", "systemWorker:", "httpPort: 7243"} {
+					if !strings.Contains(text, key) {
+						t.Errorf("config missing %s", key)
+					}
+				}
+				persistence := config["persistence"].(map[string]any)
+				stores := persistence["datastores"].(map[string]any)
+				for name, raw := range stores {
+					sql := raw.(map[string]any)["sql"].(map[string]any)
+					attrs := sql["connectAttributes"].(map[string]any)
+					if sql["pluginName"] != "postgres12" || attrs["disable_prepared_binary_result"] != "yes" || len(attrs) != 1 {
+						t.Errorf("%s must force text results even for explicitly prepared visibility queries", name)
+					}
+				}
+				for _, role := range tspec.Roles(component) {
+					if !strings.Contains(strings.Join(p.Args, " "), "--service="+role) {
+						t.Error("missing role", role)
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -184,14 +190,17 @@ func TestSchemaToolUsesTextResults(t *testing.T) {
 	dir := t.TempDir()
 	// Validate the global connection option before either migration subcommand.
 	script := `#!/bin/sh
+plugin=no
+formats=no
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--connect-attributes" ]; then
-    [ "$2" = "default_query_exec_mode=exec" ] || exit 41
-    exit 0
-  fi
+  case "$1" in
+    --plugin) [ "$2" = "postgres12" ] || exit 40; plugin=yes; shift ;;
+    --connect-attributes) [ "$2" = "disable_prepared_binary_result=yes" ] || exit 41; formats=yes; shift ;;
+    setup-schema|update-schema) [ "$plugin" = yes ] && [ "$formats" = yes ] && exit 0; exit 42 ;;
+  esac
   shift
 done
-exit 42
+exit 43
 `
 	if err := os.WriteFile(filepath.Join(dir, "temporal-sql-tool"), []byte(script), 0700); err != nil {
 		t.Fatal(err)

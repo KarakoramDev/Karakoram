@@ -90,13 +90,20 @@ karactl -n NS clusters status workflows -o json
 Database names must be distinct lowercase SQL identifiers, at most 63 characters (`[a-z_][a-z0-9_]*`); PostgreSQL system databases and the `_karakoram` prefix are reserved.
 Namespace declarations are limited to 99 entries, and the serialized ensure request including the implicit `default` namespace must fit within 64 KiB.
 
-Both databases live on the same source and have one binding-managed owner/login role. Connections use `postgres12_pgx`, the stable writer endpoint and TLS hostname verification (`verify-full`). Passwords are resolved from the binding, never stored in options/status; credential-generation changes roll the components.
+Both databases live on the same source and have one binding-managed owner/login role. Connections use `postgres12` (lib/pq), the stable writer endpoint and TLS hostname verification (`verify-full`). Passwords are resolved from the binding, never stored in options/status; credential-generation changes roll the components.
 
-Server persistence and visibility connections, schema migrations and the agent's
-schema checks use pgx `default_query_exec_mode=exec`: extended queries with bound
-parameters and all-text results, without the prepared-statement cache. ProxySQL
-3.0.11 cannot represent pgx's default mixed text/binary result-column formats.
-This setting also applies to direct singleton sources; TLS verification is unchanged.
+Server persistence and visibility connections and schema migrations set lib/pq
+`disable_prepared_binary_result=yes`, forcing all-text results even for explicit
+prepared statements. ProxySQL 3.0.11 cannot represent mixed text/binary result
+formats. pgx's `default_query_exec_mode=exec` alone is insufficient: explicitly
+prepared visibility queries bypass that default. The agent's schema checks do
+not explicitly prepare and continue using pgx `exec`. These choices apply to
+direct singleton sources too; bound parameters and TLS verification are retained.
+
+This fix requires newly deployed consumer agents; a control-plane upgrade or
+ordinary restart does not replace them. See the [v0.4.1 consumer rollout
+procedure](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)
+before recreating any existing consumer with valuable state.
 
 The persistence block, `historyShards` and topology are immutable after creation. The Temporal cluster name is the Karakoram cluster name. Choose database names and shard count before admitting production workflows.
 

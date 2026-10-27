@@ -10,6 +10,58 @@ Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY`
 before replacing the control plane. Engine packages and member agents are separate
 from the control-plane executable; follow [member-agent rollout](#rolling-out-member-agents).
 
+### Keycloak and Temporal PostgreSQL proxy compatibility
+
+v0.4.0 Keycloak/Liquibase can fail before readiness when its PostgreSQL binding
+uses ProxySQL: the proxy cannot represent mixed text/binary result-column
+formats. Temporal's pgx persistence/visibility queries have the same restriction,
+including explicitly prepared visibility queries. New consumer deployments use
+Keycloak JDBC `binaryTransfer=false` and Temporal's `postgres12` (lib/pq) plugin
+with `disable_prepared_binary_result=yes`. TLS hostname verification, bound
+parameters and the writer proxy remain in place. OpenBao 2.7.1 PG storage uses
+pgx but only single-column reads, so this specific rejection does not affect it.
+
+**Upgrading the control plane alone does not install these agent-rendered
+settings. Neither provider supports `upgrade-agents`; process restart/reload
+also retains the old executable.** Do not copy binaries into running members.
+
+For a failed, disposable consumer with **no valuable application state**, save
+its API create request (not response-only fields), record the source/binding and
+database names, then after deploying the fixed control plane and configured
+member artifact, recreate **only the consumer**:
+
+```sh
+karactl -n NS clusters delete CONSUMER --wait --yes
+karactl -n NS clusters create -f consumer.json --wait --timeout 30m
+karactl -n NS clusters status CONSUMER -o json
+karactl -n NS clusters members CONSUMER -o json
+```
+
+This is full deletion: it **drops the consumer-owned bound databases and login**.
+Never target the source PostgreSQL cluster. Verify the new member's build
+identity and native readiness, not merely a Ready binding. A Keycloak fixture
+that never passed initial Liquibase startup has no user-created realms or users;
+after confirming no imported/pre-existing data or external writes, recreation
+loses only incomplete bootstrap/schema state. Do not generalize this to an
+already-used Keycloak cluster.
+
+Temporal can accept writes before a later visibility lookup fails. Readiness
+failure or the proxy error does **not** prove it is empty: deletion can destroy
+workflow histories, running executions/timers/tasks, namespace metadata and SQL
+visibility. For any valuable Temporal or Keycloak data, stop application writes,
+take and verify a source PostgreSQL backup, retain the current consumer and
+binding, and arrange an explicitly reviewed data-preserving migration or
+deployment procedure. The disposable recreation sequence is not that procedure;
+this release does not add a generic in-place agent rollout for these providers.
+
+**Do not use `--keep-volumes` suspend/resume as an agent-upgrade shortcut.**
+Binding release with retention disables the login and removes its binding
+record; a subsequent new binding incarnation can reject the retained database
+owner rather than safely adopt it. Retention is not a transparent redeployment
+or a backup. Do not edit internal state, role ownership or platform logical
+records to bypass this fence.
+
+
 ### PostgreSQL exact versions and existing version drift
 
 In v0.4.0, installing PostgreSQL profiles could upgrade a previously exact-pinned

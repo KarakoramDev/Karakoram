@@ -29,6 +29,12 @@ otherwise prevent Liquibase migrations and Keycloak startup on proxied sources.
 All results therefore use text format, including with a direct singleton source;
 prepared statements, parameter binding and TLS hostname verification remain enabled.
 
+The setting is rendered by the member agent, not the control plane. Existing
+consumers need a newly deployed agent; ordinary restart and `upgrade-agents`
+are not a supported rollout for this provider. Follow the
+[v0.4.1 consumer rollout procedure](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility),
+including its data-retention warnings.
+
 The member configuration is sealed at rest, including the generated temporary `admin` password under `keycloak/admin`. It is not returned through ordinary cluster reads. Member pulls are restricted to the allocated member identity and use the existing authenticated agent channel. On the runtime, database and bootstrap credentials live only in mode-0600 files under `<data-dir>/karakoram/keycloak/`; they are not placed in process arguments or environment variables. The optimized distribution is built with `kc.sh build --db=postgres --health-enabled=true` before `start --optimized`.
 
 Each reconciliation resolves the binding again. Credential generation, endpoint, CA, hostname or proxy-header changes republish the sealed configuration and trigger an agent reload. The agent starts the configured runtime on first apply and stops then starts it when configuration changes, unless maintenance, an operator stop hold or the desired process list prevents startup. There is only one runtime, so rotation interrupts authentication. Applied configuration versions and management health must both match before the cluster is ready.

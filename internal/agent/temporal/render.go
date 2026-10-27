@@ -81,13 +81,13 @@ func render(s tspec.Spec, dataDir, address, bind, install string) (agent.Process
 		files["temporal/dynamic.yaml"] = []byte("{}\n")
 		store := func(database string, conns int) configMap {
 			return configMap{"sql": configMap{
-				"pluginName":      "postgres12_pgx",
+				"pluginName":      "postgres12",
 				"databaseName":    database,
 				"connectAddr":     net.JoinHostPort(d.Host, strconv.Itoa(d.Port)),
 				"connectProtocol": "tcp",
-				// pgx exec mode retains parameter binding with all-text results:
-				// ProxySQL cannot represent mixed per-column result formats.
-				"connectAttributes": configMap{"default_query_exec_mode": "exec"},
+				// lib/pq can force text results even for explicit prepares.
+				// pgx's default query mode does not cover that path.
+				"connectAttributes": configMap{"disable_prepared_binary_result": "yes"},
 				"user":              d.Username, "password": d.Password,
 				"maxConns": conns, "maxIdleConns": conns,
 				"maxConnLifetime": "1h",
