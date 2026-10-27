@@ -314,6 +314,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, e
 	}
 	for _, m := range ordered(s) {
+		// Retirement owns this identity, including any deliberate restart
+		// needed to finish a late shard drain. Ordinary provisioning must not
+		// recreate a runtime after its retirement deletion has completed.
+		if m.Removing {
+			continue
+		}
 		if m.ConfigVersion == 0 {
 			cfg, e := p.desiredConfig(ctx, rc, s, m)
 			if e != nil {
@@ -341,25 +347,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			}
 		}
 	}
-	if allowed, _ := rc.DisruptionAllowed(); !allowed && (s.Rolling == nil || s.Rolling.OperationID == "" && (s.Rolling.Step == "gate" || s.Rolling.Step == "activate")) {
-		for _, m := range ordered(s) {
-			if m.Removing || m.ConfigVersion == 0 {
-				continue
-			}
-			desired, e := p.desiredConfig(ctx, rc, s, m)
-			if e != nil {
-				return result, e
-			}
-			changed, e := p.publishExemptConfig(ctx, rc, s, m, desired)
-			if e != nil {
-				return result, e
-			}
-			if changed {
-				// An unstarted desired roll may have captured obsolete leaves.
-				// Rebuild it after exempt renewal instead of replaying them.
-				s.Rolling = nil
-				return result, nil
-			}
+	if allowed, _ := rc.DisruptionAllowed(); !allowed && (s.Rolling == nil || s.Rolling.OperationID == "" && s.Rolling.Reason != "renew-tls" && (s.Rolling.Step == "gate" || s.Rolling.Step == "activate")) {
+		if busy, e := p.reconcileExemptRenewal(ctx, rc, s); busy || e != nil {
+			return result, e
 		}
 	}
 	if s.Rolling == nil {

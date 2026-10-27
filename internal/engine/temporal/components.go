@@ -321,6 +321,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 	for _, def := range componentSet(rc.Cluster.Spec.Topology.Type) {
 		m := s.Members[def.Name]
 		d := rc.Cluster.Spec.Components.Extra[def.Name]
+		if m != nil && m.Recovering {
+			d.Resources, d.Replicas = m.Resources, m.Replicas
+		}
 		if def.Name == tspec.UI && d.Replicas > 0 {
 			f := s.Members[frontendComponent(rc.Cluster)]
 			if f == nil {
@@ -345,6 +348,10 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return true, e
 			}
 			if svc == nil {
+				m.Recovering = m.Recovering || m.ConfigHash != ""
+				if m.Recovering {
+					d.Resources, d.Replicas = m.Resources, m.Replicas
+				}
 				m.Stage = engine.ComponentPlanned
 				m.ServiceID = ""
 				m.Public = false
@@ -444,10 +451,32 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				if e != nil {
 					return e
 				}
+				if m.Recovering {
+					accepted, _, e := p.configurationNeedsWindow(ctx, rc, m, sp)
+					if e != nil {
+						return e
+					}
+					version := m.Version
+					if m.Component == tspec.UI {
+						version = s.Version
+					}
+					sp = deferredConfiguration(accepted, conn.CredentialGeneration, version, m.RestartNonce)
+				}
 				if e = p.publishConfig(ctx, rc, m, sp, ca); e != nil {
 					return e
 				}
-				runtime, e := p.runtimeSpec(rc, m)
+				deploymentContext := rc
+				if m.Recovering {
+					accepted := *rc.Cluster
+					accepted.Spec.Version = m.Version
+					if m.Component == tspec.UI {
+						accepted.Spec.Version = s.Version
+					}
+					view := *rc
+					view.Cluster = &accepted
+					deploymentContext = &view
+				}
+				runtime, e := p.runtimeSpec(deploymentContext, m)
 				if e != nil {
 					return e
 				}
@@ -466,6 +495,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				m.Observed = status
 				if status.Ready {
 					m.Stage = engine.ComponentJoined
+					m.Recovering = false
 					m.NativeReadiness = nil
 					if s.Upgrade != nil && s.Upgrade.Component == m.Component {
 						s.Upgrade.Component = ""

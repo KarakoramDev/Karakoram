@@ -75,6 +75,7 @@ type componentMember struct {
 	Resources       domain.Resources      `json:"resources"`
 	Public          bool                  `json:"public"`
 	RuntimeDeployed bool                  `json:"runtimeDeployed,omitempty"`
+	Recovering      bool                  `json:"recovering,omitempty"`
 	NativeReadiness *bool                 `json:"nativeReadiness,omitempty"`
 	Observed        tspec.Status          `json:"observed"`
 	RestartNonce    string                `json:"restartNonce,omitempty"`

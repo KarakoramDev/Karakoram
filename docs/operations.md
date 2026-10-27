@@ -83,6 +83,12 @@ can recover, and rotated binding credentials or renewed transport certificates
 can be published while pending application settings remain unchanged. A deferred
 change in one application component must not hold another component's exempt
 credential roll behind its maintenance gate.
+Retiring members are not lost serving runtimes: their scale-in workflow retains
+exclusive ownership of stopping, any drain-required restart, and runtime/volume
+deletion. Ordinary recovery must not recreate a runtime during its retirement.
+Urgent database leaf renewal bypasses the time window, not native quorum or
+one-member-at-a-time readiness/acknowledgement gates. Accepted application
+settings and resource bounds remain frozen during that renewal.
 
 ## Moving a member
 

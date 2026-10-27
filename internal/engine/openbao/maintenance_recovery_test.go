@@ -12,6 +12,7 @@ import (
 func TestMaintenanceScaleInDoesNotBlockUnseal(t *testing.T) {
 	p, rc, _, agents := setup(t)
 	ready(t, p, rc)
+	generation := rc.Cluster.Status.ObservedGeneration
 	rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
 	rc.Cluster.Spec.Components.Engine.Replicas = 1
 	rc.Cluster.Generation++
@@ -23,6 +24,9 @@ func TestMaintenanceScaleInDoesNotBlockUnseal(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := state(t, rc)
+		if rc.Cluster.Status.ObservedGeneration != generation {
+			t.Fatal("deferred scale-in generation was acknowledged during recovery")
+		}
 		for _, m := range s.Members {
 			if m.Removing {
 				t.Fatal("closed scale-in retired a member")
@@ -38,5 +42,18 @@ func TestMaintenanceScaleInDoesNotBlockUnseal(t *testing.T) {
 	}
 	if len(state(t, rc).Members) != 3 {
 		t.Fatal("scale-in was not deferred")
+	}
+	for range 6 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+		if rc.Cluster.Status.ObservedGeneration != generation {
+			t.Fatal("healthy excess members falsely completed scale-in")
+		}
+	}
+	rc.Cluster.Spec.Maintenance.Windows = nil
+	ready(t, p, rc)
+	if len(state(t, rc).Members) != 1 || rc.Cluster.Status.ObservedGeneration != rc.Cluster.Generation {
+		t.Fatal("open-window scale-in did not converge")
 	}
 }

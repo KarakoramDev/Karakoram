@@ -293,6 +293,9 @@ func (p *Provider) finishNativeSync(ctx context.Context, rc *engine.Context, s *
 	if busy, err := p.reconcileExposure(ctx, rc, s); busy || err != nil {
 		return r, err
 	}
+	if len(s.Members) != rc.Cluster.Spec.Components.Engine.Replicas {
+		return r, nil
+	}
 	s.Phase = "ready"
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	r.RequeueAfter = 30 * time.Second

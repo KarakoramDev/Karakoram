@@ -438,6 +438,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if !autopilot.Healthy {
 		return result, nil
 	}
+	if len(s.Members) != rc.Cluster.Spec.Components.Engine.Replicas {
+		return result, nil
+	}
 	s.Phase = "ready"
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	result.RequeueAfter = 30 * time.Second

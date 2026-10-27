@@ -44,7 +44,7 @@ func drainRuntimeRecovery(ctx context.Context, rc *engine.Context, s *state) (bo
 }
 func (p *Provider) reconcileRuntime(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	for _, m := range ordered(s) {
-		if m.Stage != "ready" && m.Stage != "deployed" {
+		if m.Removing || m.Stage != "ready" && m.Stage != "deployed" {
 			continue
 		}
 		input, e := runtimeMember(ctx, rc, m)

@@ -34,7 +34,7 @@ func rollingNeedsWindow(ctx context.Context, rc *engine.Context, m *member, targ
 	if reason == "rotate-root-add" || reason == "rotate-root-remove" {
 		return false, nil
 	}
-	if reason != "config" || !reflect.DeepEqual(m.Resources, target.Resources) {
+	if reason != "config" && reason != "renew-tls" || !reflect.DeepEqual(m.Resources, target.Resources) {
 		return true, nil
 	}
 	raw, err := secret(ctx, rc, "config/"+m.Name)
@@ -349,4 +349,57 @@ func (p *Provider) rejectResources(ctx context.Context, rc *engine.Context, s *s
 	m.Resources = applied
 	s.Pending, s.Rolling = nil, nil
 	return cause
+}
+
+// Transport-only renewal is independent. A native leaf changes restart-bearing
+// material, so even emergency renewal retains the ordinary one-member rolling
+// readiness and acknowledgement checkpoints, using accepted application intent.
+func (p *Provider) reconcileExemptRenewal(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	var renewal *rolling
+	changed := false
+	for _, m := range ordered(s) {
+		if m.Removing || m.ConfigVersion == 0 {
+			continue
+		}
+		desired, err := p.desiredConfig(ctx, rc, s, m)
+		if err != nil {
+			return true, err
+		}
+		active, projected, leafChanged, err := p.exemptConfig(ctx, rc, m, desired)
+		if err != nil {
+			return true, err
+		}
+		if configHash(projected) == configHash(active) {
+			continue
+		}
+		// Only an unstarted desired roll reaches this helper. Its snapshots
+		// must not later replay superseded leaf or transport material.
+		s.Rolling = nil
+		if leafChanged {
+			target := rollingTarget{Config: projected, Resources: m.Resources, PreviousConfig: &active, PreviousResources: m.Resources}
+			raw, err := json.Marshal(target)
+			if err != nil {
+				return true, err
+			}
+			if err = putSecret(ctx, rc, "target/"+m.Name, raw); err != nil {
+				return true, err
+			}
+			if renewal == nil {
+				renewal = &rolling{Reason: "renew-tls", Step: "gate"}
+			}
+			renewal.Order = append(renewal.Order, m.Name)
+			continue
+		}
+		if err = activateConfig(ctx, rc, s, m, projected); err != nil {
+			return true, err
+		}
+		m.Stage = "deployed"
+		changed = true
+	}
+	if renewal != nil {
+		s.Rolling = renewal
+		s.Phase = "rolling"
+		return true, nil
+	}
+	return changed, nil
 }

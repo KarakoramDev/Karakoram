@@ -142,10 +142,10 @@ func activateConfig(ctx context.Context, rc *engine.Context, s *state, m *member
 	return nil
 }
 
-func (p *Provider) publishExemptConfig(ctx context.Context, rc *engine.Context, s *state, m *member, desired agentapi.MemberConfig) (bool, error) {
+func (p *Provider) exemptConfig(ctx context.Context, rc *engine.Context, m *member, desired agentapi.MemberConfig) (agentapi.MemberConfig, agentapi.MemberConfig, bool, error) {
 	active, err := p.MemberConfig(ctx, rc, m.Name)
 	if err != nil {
-		return false, err
+		return active, active, false, err
 	}
 	projected := active
 	projected.AgentTLS = desired.AgentTLS
@@ -153,26 +153,14 @@ func (p *Provider) publishExemptConfig(ctx context.Context, rc *engine.Context, 
 	if active.TLS.CertPEM != "" && active.TLS.CertPEM != desired.TLS.CertPEM && active.TLS.CAPEM == desired.TLS.CAPEM {
 		urgent, err := pki.NeedsRenewal([]byte(active.TLS.CertPEM), 7*24*time.Hour, now(rc))
 		if err != nil {
-			return false, err
+			return active, active, false, err
 		}
 		if urgent {
 			projected.TLS = desired.TLS
 			leafChanged = true
 		}
 	}
-	if configHash(projected) == configHash(active) {
-		return false, nil
-	}
-	if leafChanged {
-		if err = restartConfig(&projected, s.ConfigVersion+1); err != nil {
-			return false, err
-		}
-	}
-	if err = activateConfig(ctx, rc, s, m, projected); err != nil {
-		return false, err
-	}
-	m.Stage = "deployed"
-	return true, nil
+	return active, projected, leafChanged, nil
 }
 func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
 	s, e := load(rc.Cluster)
