@@ -33,6 +33,7 @@ func listenHost(host string) string {
 	}
 	return host
 }
+
 // PostgreSQL binds IPv6 sockets with IPV6_V6ONLY. An IPv6 wildcard alone
 // therefore cannot serve IPv4 addresses published for the same service name.
 // Use PostgreSQL's all-addresses wildcard without changing other processes'
