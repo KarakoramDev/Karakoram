@@ -353,7 +353,7 @@ func TestAdmissionLongRunningPagedEvidence(t *testing.T) {
 				b.maxInflightDeploys = 1
 				for i := range total {
 					p := admissionProcess(fmt.Sprintf("p%d", i), "a", "FINISHED")
-					p.Created = time.Now().Add(-2 * time.Hour)
+					p.Created = time.Now().Add(-2*time.Hour - time.Duration(i)*time.Second)
 					f.processes = append(f.processes, p)
 				}
 				f.processes[total-1].Status = status
@@ -585,6 +585,7 @@ func TestAdmissionIncrementalInventoryContinuity(t *testing.T) {
 	state := b.deploymentAdmission()
 	for i := range 807 {
 		p := admissionProcess(fmt.Sprintf("old%d", i), "a", "FINISHED")
+		p.Created = time.Now().Add(-time.Hour - time.Duration(i)*time.Second)
 		p.ActionName = "stack.updateAutoscaling"
 		f.processes = append(f.processes, p)
 	}
@@ -604,22 +605,67 @@ func TestAdmissionIncrementalInventoryContinuity(t *testing.T) {
 		t.Fatalf("new prefix: processes=%v reads=%d", got, f.processReads)
 	}
 	f.processes[0].Status = "FINISHED"
-	if got := observe(); len(got) != 1 || got[0].Status != "FINISHED" || f.processReads != 12 {
+	if got := observe(); len(got) != 1 || got[0].Status != "FINISHED" || f.processReads != 11 {
 		t.Fatalf("active refresh: processes=%v reads=%d", got, f.processReads)
 	}
-	if got := observe(); len(got) != 0 || f.processReads != 13 {
+	if got := observe(); len(got) != 0 || f.processReads != 12 {
 		t.Fatalf("terminal process refreshed again: processes=%v reads=%d", got, f.processReads)
 	}
 	// Retention shrank the inventory: cold-scan again, including old unfinished work.
 	f.processes = f.processes[1:]
 	f.processes[len(f.processes)-1].Status = "UNKNOWN"
 	f.processes[len(f.processes)-1].ActionName = "appVersion.deploy"
-	if got := observe(); len(got) != 1 || got[0].Status != "UNKNOWN" || f.processReads != 22 {
+	if got := observe(); len(got) != 1 || got[0].Status != "UNKNOWN" || f.processReads != 21 {
 		t.Fatalf("shrunken history skipped: processes=%v reads=%d", got, f.processReads)
 	}
 	// A new ID without a total increase cannot prove continuity.
 	f.processes[0] = admissionProcess("replacement", "a", "RUNNING")
-	if got := observe(); len(got) != 2 || f.processReads != 31 {
+	if got := observe(); len(got) != 2 || f.processReads != 30 {
 		t.Fatalf("ID gap skipped: processes=%v reads=%d", got, f.processReads)
+	}
+}
+
+func TestAdmissionEqualTimestampRetentionDoesNotHideNewWork(t *testing.T) {
+	b, f := admissionBackend(t)
+	at := time.Now().Add(-time.Hour)
+	for i, id := range []string{"A", "B", "C"} {
+		p := admissionProcess(id, "a", "FINISHED")
+		p.Created = at.Add(-time.Duration(i) * time.Minute)
+		f.processes = append(f.processes, p)
+	}
+	state := b.deploymentAdmission()
+	if _, err := b.serviceProcesses(t.Context(), state, "a"); err != nil {
+		t.Fatal(err)
+	}
+	x := admissionProcess("X", "a", "RUNNING")
+	x.Created = at
+	f.processes = []Process{f.processes[0], x, f.processes[1]}
+	got, err := b.serviceProcesses(t.Context(), state, "a")
+	if err != nil || len(got) != 1 || got[0].ID != "X" {
+		t.Fatalf("equal-created insertion hidden by retention: processes=%v err=%v", got, err)
+	}
+	if _, retained := state.inventories["a"].seen["C"]; retained {
+		t.Fatal("retention mismatch did not rebuild index")
+	}
+}
+
+func TestAdmissionInventoryEvictedOnlyAfterSuccessfulObservation(t *testing.T) {
+	b, f := admissionBackend(t)
+	state := b.deploymentAdmission()
+	stale := &serviceProcessInventory{seen: map[string]struct{}{"old": {}}}
+	state.inventories = map[string]*serviceProcessInventory{"deleted": stale}
+	f.evidenceCode = http.StatusForbidden
+	if _, _, err := b.deploymentObservation(t.Context(), state); err == nil {
+		t.Fatal("expected failed observation")
+	}
+	if state.inventories["deleted"] != stale {
+		t.Fatal("failed observation evicted inventory")
+	}
+	f.evidenceCode = 0
+	if _, _, err := b.deploymentObservation(t.Context(), state); err != nil {
+		t.Fatal(err)
+	}
+	if _, retained := state.inventories["deleted"]; retained {
+		t.Fatal("successful complete observation retained deleted service")
 	}
 }

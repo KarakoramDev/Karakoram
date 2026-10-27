@@ -129,6 +129,11 @@ func (b *Backend) deploymentObservation(ctx context.Context, state *deploymentAd
 		}
 		all = append(all, processes...)
 	}
+	for service := range state.inventories {
+		if _, owned := names[service]; !owned {
+			delete(state.inventories, service)
+		}
+	}
 	state.processes, state.names, state.observedAt = all, names, time.Now()
 	return all, names, nil
 }
@@ -137,6 +142,7 @@ type serviceProcessInventory struct {
 	total  int
 	seen   map[string]struct{}
 	active map[string]Process
+	newest time.Time
 }
 
 type processEvidenceError string
@@ -154,8 +160,10 @@ func terminalProcess(p Process) bool {
 
 // serviceProcesses requires the admission lock. A cold inventory must reach its
 // end: no age cutoff can prove that an older process has finished. Once indexed,
-// terminal records are immutable. The total delta must match the unseen prefix
-// before a known ID proves continuity; otherwise scan the complete inventory.
+// terminal records are immutable. Scan the entire prior newest timestamp group:
+// equal-created insertions can follow a known ID. A strictly older known anchor
+// plus the unseen count/total delta establishes append-only continuity;
+// otherwise scan to the end and rebuild rather than trusting net cardinality.
 func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmission, service string) ([]Process, error) {
 	old := state.inventories[service]
 	seen := make(map[string]struct{})
@@ -163,6 +171,8 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 	var all []Process
 	total, complete := 0, false
 	incremental := old != nil
+	var newest time.Time
+	unseen := 0
 	validate := func(p Process) (Process, error) {
 		if p.ID == "" || p.ServiceStackID != "" && p.ServiceStackID != service || p.ProjectID != "" && p.ProjectID != b.client.project {
 			return p, processEvidenceError("zerops: missing or inconsistent service process identity")
@@ -178,7 +188,7 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 		}
 		if offset == 0 {
 			total = page.Total
-			incremental = incremental && total >= old.total
+			incremental = incremental && !old.newest.IsZero() && total >= old.total
 		} else if page.Total != total {
 			return nil, processEvidenceError("zerops: service process inventory changed during observation; retry required")
 		}
@@ -187,13 +197,22 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 			if err != nil {
 				return nil, err
 			}
+			if p.Created.After(newest) {
+				newest = p.Created
+			}
+			if p.Created.IsZero() {
+				incremental = false
+			}
 			if incremental {
-				if _, known := old.seen[p.ID]; known {
-					if len(seen) == total-old.total {
+				_, known := old.seen[p.ID]
+				if p.Created.Before(old.newest) {
+					if known && unseen == total-old.total {
 						complete = true
 						break
 					}
 					incremental = false
+				} else if !known {
+					unseen++
 				}
 			}
 			if _, duplicate := seen[p.ID]; duplicate {
@@ -203,7 +222,13 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 			if !terminalProcess(p) {
 				active[p.ID] = p
 			}
-			if activeDeploymentProcess(p) || deploymentProcess(p) {
+			knownTerminal := false
+			if old != nil {
+				_, known := old.seen[p.ID]
+				_, unfinished := old.active[p.ID]
+				knownTerminal = known && !unfinished && terminalProcess(p)
+			}
+			if !knownTerminal && (activeDeploymentProcess(p) || deploymentProcess(p)) {
 				all = append(all, p)
 			}
 		}
@@ -249,7 +274,7 @@ func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmissi
 	if state.inventories == nil {
 		state.inventories = make(map[string]*serviceProcessInventory)
 	}
-	state.inventories[service] = &serviceProcessInventory{total: total, seen: seen, active: active}
+	state.inventories[service] = &serviceProcessInventory{total: total, seen: seen, active: active, newest: newest}
 	return all, nil
 }
 
