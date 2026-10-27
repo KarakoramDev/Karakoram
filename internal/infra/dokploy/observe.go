@@ -5,6 +5,7 @@ package dokploy
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -106,5 +107,8 @@ func parseLogs(raw string, q infra.LogQuery) []infra.LogLine {
 		}
 		out = append(out, line)
 	}
+	// Swarm service logs can batch retained task output after current output.
+	// Select the newest global tail by timestamp, not by transport arrival.
+	slices.SortStableFunc(out, func(a, b infra.LogLine) int { return a.Timestamp.Compare(b.Timestamp) })
 	return out
 }

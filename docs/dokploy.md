@@ -170,7 +170,7 @@ destructive deployment.
 |`publicHttps`|yes, with `domainSuffix`|Dokploy domains `<service>-<port>-<target hash>.<domainSuffix>`; needs wildcard DNS to the Traefik node(s).|
 |`diskGrowth`, `volumeQuota`|no|Docker local volumes live on the node filesystem without a size limit; size requests are not enforced and disk growth is rejected. Monitor node disks.|
 |`placement`|yes|Authoritative node per member (`placementGroup` = Swarm node hostname).|
-|`logs`|yes|Platform logs through Dokploy.|
+|`logs`|yes|Platform logs through Dokploy. Swarm output can include current and retained tasks; Karakoram orders timestamped records before selecting the newest global tail, preserving source order for equal timestamps. A quiet current task can still have older retained records in its tail.|
 |`horizontalScaling`|yes|Stateless components (Kibana, Logstash, APM, mongos) scale by replicas.|
 |`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this provider needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
 |`exec`, `metrics`, `dedicatedCpu`, `envChangeRestarts`|no|Variable writes apply at the next restart.|

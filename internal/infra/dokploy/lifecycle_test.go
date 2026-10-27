@@ -310,6 +310,33 @@ func TestLogsPreserveMessagePipe(t *testing.T) {
 	}
 }
 
+func TestLogsSelectNewestAcrossRetainedSwarmTasks(t *testing.T) {
+	const current = "2026-10-27T15:23:00Z current first\n2026-10-27T15:23:00Z current second\n"
+	const retained = "2026-10-27T14:58:00Z retained task stopped\n2026-10-27T14:58:01Z retained task exited\n"
+	for _, tc := range []struct{ name, raw string }{
+		{"current-batch-first", current + retained},
+		{"retained-batch-first", retained + current},
+		{"interleaved", "2026-10-27T15:23:00Z current first\n2026-10-27T14:58:00Z retained task stopped\n2026-10-27T15:23:00Z current second\n2026-10-27T14:58:01Z retained task exited\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeAPI(t)
+			b := fakeBackend(t, f, nil)
+			imported := importFake(t, b, runtimeSpec("runtime", ""))
+			deployFake(t, b, "runtime", "")
+			f.mu.Lock()
+			f.apps[imported.Services["runtime"]].logs = tc.raw
+			f.mu.Unlock()
+			lines, err := b.Logs(t.Context(), "runtime", infra.LogQuery{Limit: 2})
+			if err != nil || len(lines) != 2 {
+				t.Fatalf("merged task tail: %+v %v", lines, err)
+			}
+			if lines[0].Message != "current first" || lines[1].Message != "current second" {
+				t.Fatalf("retained task batch hid current output or timestamp ties reordered: %+v", lines)
+			}
+		})
+	}
+}
+
 func TestFailedUploadDoesNotMarkServiceDeployed(t *testing.T) {
 	f := newFakeAPI(t)
 	b := fakeBackend(t, f, nil)
