@@ -11,11 +11,13 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate/wvspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"math"
 	"net/url"
 	"path"
 	"slices"
 	"strconv"
+	"time"
 )
 
 func hash(v any) string {
@@ -138,6 +140,39 @@ func activateConfig(ctx context.Context, rc *engine.Context, s *state, m *member
 	m.TLSMode = cfg.TLS.Mode
 	m.ConfigHash = configHash(cfg)
 	return nil
+}
+
+func (p *Provider) publishExemptConfig(ctx context.Context, rc *engine.Context, s *state, m *member, desired agentapi.MemberConfig) (bool, error) {
+	active, err := p.MemberConfig(ctx, rc, m.Name)
+	if err != nil {
+		return false, err
+	}
+	projected := active
+	projected.AgentTLS = desired.AgentTLS
+	leafChanged := false
+	if active.TLS.CertPEM != "" && active.TLS.CertPEM != desired.TLS.CertPEM && active.TLS.CAPEM == desired.TLS.CAPEM {
+		urgent, err := pki.NeedsRenewal([]byte(active.TLS.CertPEM), 7*24*time.Hour, now(rc))
+		if err != nil {
+			return false, err
+		}
+		if urgent {
+			projected.TLS = desired.TLS
+			leafChanged = true
+		}
+	}
+	if configHash(projected) == configHash(active) {
+		return false, nil
+	}
+	if leafChanged {
+		if err = restartConfig(&projected, s.ConfigVersion+1); err != nil {
+			return false, err
+		}
+	}
+	if err = activateConfig(ctx, rc, s, m, projected); err != nil {
+		return false, err
+	}
+	m.Stage = "deployed"
+	return true, nil
 }
 func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
 	s, e := load(rc.Cluster)

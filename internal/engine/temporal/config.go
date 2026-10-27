@@ -238,19 +238,27 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 
 // configurationNeedsWindow distinguishes desired application changes from
 // credential/transport renewal, emergency leaf renewal and scale-out.
-func (p *Provider) configurationNeedsWindow(ctx context.Context, rc *engine.Context, m *componentMember, desired tspec.Spec) (bool, error) {
+func (p *Provider) configurationNeedsWindow(ctx context.Context, rc *engine.Context, m *componentMember, desired tspec.Spec) (tspec.Spec, bool, error) {
+	active, err := p.exemptConfiguration(ctx, rc, m, desired)
+	if err != nil {
+		return active, false, err
+	}
+	active.RestartToken, desired.RestartToken = "", ""
+	return active, !reflect.DeepEqual(active, desired), nil
+}
+
+// Keep accepted application settings while projecting independently exempt
+// binding material and urgent leaves into the same role's next publication.
+func (p *Provider) exemptConfiguration(ctx context.Context, rc *engine.Context, m *componentMember, desired tspec.Spec) (tspec.Spec, error) {
 	config, err := p.MemberConfig(ctx, rc, m.Name)
 	if err != nil {
-		return false, err
+		return tspec.Spec{}, err
 	}
 	var active tspec.Spec
 	if err = json.Unmarshal(config.EngineSpec, &active); err != nil {
-		return false, err
+		return active, err
 	}
-	active.RestartToken, desired.RestartToken = "", ""
 	if active.Persistence != nil && desired.Persistence != nil {
-		// A binding's rotated credentials/trust and writer endpoint must
-		// converge without waiting for unrelated application maintenance.
 		active.Persistence.Host, active.Persistence.Port = desired.Persistence.Host, desired.Persistence.Port
 		active.Persistence.Username, active.Persistence.Password = desired.Persistence.Username, desired.Persistence.Password
 		active.Persistence.CAPEM = desired.Persistence.CAPEM
@@ -267,13 +275,24 @@ func (p *Provider) configurationNeedsWindow(ctx context.Context, rc *engine.Cont
 		}
 		urgent, err := pki.NeedsRenewal([]byte(*pair.oldCert), 7*24*time.Hour, clockNow(rc))
 		if err != nil {
-			return false, err
+			return active, err
 		}
 		if urgent {
-			*pair.newCert, *pair.newKey = *pair.oldCert, *pair.oldKey
+			*pair.oldCert, *pair.oldKey = *pair.newCert, *pair.newKey
 		}
 	}
-	return !reflect.DeepEqual(active, desired), nil
+	return active, nil
+}
+
+func deferredConfiguration(active tspec.Spec, generation int64, version, nonce string) tspec.Spec {
+	active.RestartToken = ""
+	active.RestartToken = configDigest(struct {
+		Spec          tspec.Spec
+		Generation    int64
+		ServerVersion string
+		RestartNonce  string
+	}{active, generation, version, nonce})
+	return active
 }
 
 // MemberConfig returns a sealed, secret-bearing envelope for a known member.

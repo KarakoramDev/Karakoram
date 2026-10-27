@@ -77,6 +77,12 @@ drain/retirement follow it too. A binding credential-generation roll in Keycloak
 or Temporal is credential rotation and remains exempt, even when applying those
 credentials restarts the consumer. An unrelated desired application change in
 the same reconciliation still needs its own maintenance permission.
+Deferring that change does not stop reconciliation of accepted running state:
+lost runtimes are redeployed at their accepted version/resources, sealed peers
+can recover, and rotated binding credentials or renewed transport certificates
+can be published while pending application settings remain unchanged. A deferred
+change in one application component must not hold another component's exempt
+credential roll behind its maintenance gate.
 
 ## Moving a member
 

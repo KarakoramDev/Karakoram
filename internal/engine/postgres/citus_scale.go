@@ -63,7 +63,7 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 			return false, nil // Let initial creation/resume provision the coordinator.
 		}
 		if rc.WaitForWindow().RequeueAfter > 0 {
-			return true, nil
+			return false, nil
 		}
 		s.CitusScale = &citusScaleState{Group: highest, Stage: "drain"}
 		return true, nil // Checkpoint intent before the first native mutation.
@@ -72,7 +72,7 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 	switch cp.Stage {
 	case "drain":
 		if !cp.Started && rc.WaitForWindow().RequeueAfter > 0 {
-			return true, nil
+			return false, nil
 		}
 		coordinator, catalog, err := coordinatorCatalog(ctx, rc, s)
 		if err != nil {
@@ -105,7 +105,7 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 	case "fence":
 		if !cp.Started {
 			if rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
+				return false, nil
 			}
 			cp.Started = true
 		}
@@ -203,6 +203,16 @@ func (p *Core) reconcileCitusScaleDown(ctx context.Context, rc *engine.Context, 
 func (p *Core) reconcileCitusRegistration(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	if s.Topology != "distributed" {
 		return false, nil
+	}
+	options, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return true, err
+	}
+	for _, m := range s.data() {
+		if m.Group > options.citusOptions().WorkerGroups {
+			rc.SyncWait = "waiting for Citus worker-group retirement"
+			return true, nil
+		}
 	}
 	observations := map[string]pgspec.StatusResponse{}
 	for _, group := range s.groups() {

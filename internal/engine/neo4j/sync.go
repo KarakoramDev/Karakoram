@@ -5,6 +5,7 @@ package neo4j
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -106,6 +107,15 @@ func observePending(ctx context.Context, rc *engine.Context, s *state) (bool, er
 		}
 	}
 	st, err := rc.Backend.OpStatus(ctx, *m.Pending)
+	var resourceRejected *infra.ResourceUpdateRejectedError
+	if errors.As(err, &resourceRejected) {
+		// Admission did not apply the pending bounds. Do not hold newer
+		// intent behind a durable terminal rejection receipt.
+		m.Pending = nil
+		m.PendingAction = ""
+		m.PendingResources = domain.Resources{}
+		return true, err
+	}
 	if err != nil {
 		return true, err
 	}
@@ -174,10 +184,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	m := s.Member
 	// Runtime resource changes may restart the member. Refuse unsupported
 	// volume growth before submitting those changes or publishing new config.
-	if r := rc.Cluster.Spec.Components.Engine.Resources; m.VolumeID != "" && m.ImportBatch == nil && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
-		if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+	if m.VolumeID != "" && m.ImportBatch == nil {
+		disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Disk, rc.Cluster.Spec.Components.Engine.Resources)
+		if e != nil {
 			return result, e
 		}
+		m.Disk.MinDisk, m.Disk.MaxDisk = disk.MinDisk, disk.MaxDisk
 	}
 	s.Suspended = false
 	if err = restrictExposure(ctx, rc, m); err != nil {
@@ -252,6 +264,11 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err = verify(ctx, rc, m); err != nil {
 		return result, err
 	}
+	// Recovery deploys the accepted runtime before considering any new desired
+	// disruption. A closed RAM/version window must not strand an imported member.
+	if m.Stage == "imported" && m.RuntimeRecovery.Initialized && m.Version != "" {
+		return result, p.deployMember(ctx, rc, s, m.Version)
+	}
 	r := rc.Cluster.Spec.Components.Engine.Resources
 	options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
 	if e != nil {
@@ -314,17 +331,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 	}
 	if m.Stage == "imported" {
-		runtime, e := p.runtimeSpec(rc, s)
-		if e != nil {
-			return result, e
-		}
-		op, e := engine.Deploy(ctx, rc, m.Name, runtime)
-		if e != nil {
-			return result, e
-		}
-		track(m, "deploy", op)
-		m.PendingVersion = rc.Cluster.Spec.Version
-		return result, nil
+		return result, p.deployMember(ctx, rc, s, rc.Cluster.Spec.Version)
 	}
 	if err = save(rc.Cluster, s); err != nil {
 		return result, err
@@ -395,5 +402,23 @@ func restrictExposure(ctx context.Context, rc *engine.Context, m *member) error 
 		m.Public = false
 		return nil
 	}
+	return nil
+}
+
+func (p *Provider) deployMember(ctx context.Context, rc *engine.Context, s *state, version string) error {
+	accepted := *rc.Cluster
+	accepted.Spec.Version = version
+	view := *rc
+	view.Cluster = &accepted
+	runtime, err := p.runtimeSpec(&view, s)
+	if err != nil {
+		return err
+	}
+	op, err := engine.Deploy(ctx, rc, s.Member.Name, runtime)
+	if err != nil {
+		return err
+	}
+	track(s.Member, "deploy", op)
+	s.Member.PendingVersion = version
 	return nil
 }

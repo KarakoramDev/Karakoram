@@ -165,6 +165,15 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.reconcileRestoreRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	for _, m := range s.Members {
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, desiredComponent(rc, m).Resources)
+			if e != nil {
+				return result, e
+			}
+			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
+		}
+	}
 	if s.UID == "" {
 		s.UID, err = secrets.RandomString(16)
 		if err != nil {
@@ -282,6 +291,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 		if m.ImportBatch == nil {
 			specs := []infra.ServiceSpec{}
+			disk := desired.Resources
 			if m.Volume != "" {
 				v, e := rc.Backend.GetService(ctx, m.Volume)
 				if e != nil {
@@ -300,6 +310,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 						return result, engine.UnverifiedOwnership(v)
 					}
 					m.VolumeID = v.ID
+					disk = v.Resources
 				}
 			}
 			runtime, e := rc.Backend.GetService(ctx, m.Name)
@@ -312,6 +323,8 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				return result, engine.Invalid("incomplete import has no frozen batch for %s", m.Name)
 			}
 			m.Resources = desired.Resources
+			// A retained volume keeps its backend size, not the runtime desire.
+			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
 			m.Replicas = desired.Replicas
 			m.Version = rc.Cluster.Spec.Version
 			options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
@@ -411,8 +424,17 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if changed, e := p.reconcileFormation(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
-	converged := true
+	options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if e != nil {
+		return result, e
+	}
+	parameters := restartParameters(options.Parameters)
+	converged := s.Rolling == nil && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas
 	for _, m := range s.Members {
+		desired := desiredComponent(rc, m)
+		if rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters) || m.Replicas != desired.Replicas {
+			converged = false
+		}
 		if m.Stage != "deployed" && m.Stage != "joined" {
 			converged = false
 			continue

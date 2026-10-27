@@ -68,6 +68,11 @@ func (p *Provider) reconcileRuntime(ctx context.Context, rc *engine.Context, s *
 		if out.Busy {
 			return true, nil
 		}
+		if m.Stage == "deployed" && m.RuntimeRecovery.Initialized {
+			if _, _, err := p.memberReady(ctx, rc, m); err == nil {
+				m.Stage = "ready"
+			}
+		}
 	}
 	return false, nil
 }

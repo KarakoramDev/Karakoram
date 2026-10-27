@@ -88,7 +88,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			return false, nil
 		}
 		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
-			return true, nil
+			return false, nil
 		}
 		for _, m := range s.Members {
 			target := desiredComponent(rc, m).Resources
@@ -150,7 +150,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			return true, nil
 		}
 		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
-			return true, nil
+			return false, nil
 		}
 		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
 			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
@@ -175,7 +175,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		u.Stage = "handoff"
 	case "handoff":
 		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
-			return true, nil
+			return false, nil
 		}
 		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
 			if err := planner.PlanResources(ctx, m.Name, target.Resources); err != nil {

@@ -411,7 +411,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "import"}
 		return result, nil
 	}
-	if s.Deployed {
+	if s.ConfigHash != "" {
 		config, e := p.MemberConfig(ctx, rc, s.Member)
 		if e != nil {
 			return result, e
@@ -423,8 +423,10 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		// Binding credential-generation rolls and agent TLS renewal are
 		// exempt, but user-requested application configuration is not.
 		if previous.Hostname != o.Hostname || previous.ProxyHeaders != o.ProxyHeaders {
-			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
-				return wait, nil
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				// Defer only the application change. Rotated binding credentials
+				// and renewed agent transport material must still be published.
+				o.Hostname, o.ProxyHeaders = previous.Hostname, previous.ProxyHeaders
 			}
 		}
 	}

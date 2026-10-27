@@ -137,6 +137,10 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 			return true, fmt.Errorf("unknown pending action %s", q.Action)
 		}
 		if e != nil {
+			var rejected *infra.ResourceUpdateRejectedError
+			if (q.Action == "resources" || q.Action == "volume-resources") && errors.As(e, &rejected) {
+				return true, p.rejectResources(ctx, rc, s, m, e)
+			}
 			if q.Action == "deploy" && errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
 				spec, err := p.runtimeSpec(rc, m, m.DesiredVersion)
 				if err != nil {
@@ -186,6 +190,10 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 		return true, engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, e)
 	}
 	if e != nil {
+		var rejected *infra.ResourceUpdateRejectedError
+		if (q.Action == "resources" || q.Action == "volume-resources") && errors.As(e, &rejected) {
+			return true, p.rejectResources(ctx, rc, s, m, e)
+		}
 		return true, e
 	}
 	if st.Failed {
@@ -250,6 +258,15 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if busy, e := advanceUnplacedRetirement(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	for _, m := range s.Members {
+		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, rc.Cluster.Spec.Components.Engine.Resources)
+			if e != nil {
+				return result, e
+			}
+			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
+		}
+	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
@@ -272,11 +289,6 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Suspended = false
 		s.CleanupSecrets = false
 		return result, nil
-	}
-	if s.Rolling == nil {
-		if busy, e := p.advanceScaleDown(ctx, rc, s); busy || e != nil {
-			return result, e
-		}
 	}
 	if len(s.Members) < rc.Cluster.Spec.Components.Engine.Replicas {
 		for len(s.Members) < rc.Cluster.Spec.Components.Engine.Replicas {
@@ -322,11 +334,41 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			return result, e
 		}
 	}
+	if s.Rolling == nil || s.Rolling.Step == "gate" || s.Rolling.Step == "activate" {
+		if s.ScaleDown == nil || s.ScaleDown.Stage == "feasibility" {
+			if busy, e := p.reconcileRuntime(ctx, rc, s); busy || e != nil {
+				return result, e
+			}
+		}
+	}
+	if allowed, _ := rc.DisruptionAllowed(); !allowed && (s.Rolling == nil || s.Rolling.OperationID == "" && (s.Rolling.Step == "gate" || s.Rolling.Step == "activate")) {
+		for _, m := range ordered(s) {
+			if m.Removing || m.ConfigVersion == 0 {
+				continue
+			}
+			desired, e := p.desiredConfig(ctx, rc, s, m)
+			if e != nil {
+				return result, e
+			}
+			changed, e := p.publishExemptConfig(ctx, rc, s, m, desired)
+			if e != nil {
+				return result, e
+			}
+			if changed {
+				// An unstarted desired roll may have captured obsolete leaves.
+				// Rebuild it after exempt renewal instead of replaying them.
+				s.Rolling = nil
+				return result, nil
+			}
+		}
+	}
+	if s.Rolling == nil {
+		if busy, e := p.advanceScaleDown(ctx, rc, s); busy || e != nil {
+			return result, e
+		}
+	}
 	if s.Rolling != nil {
 		return result, p.rollingStep(ctx, rc, s)
-	}
-	if busy, e := p.reconcileRuntime(ctx, rc, s); busy || e != nil {
-		return result, e
 	}
 	for _, m := range ordered(s) {
 		cfg, e := p.desiredConfig(ctx, rc, s, m)

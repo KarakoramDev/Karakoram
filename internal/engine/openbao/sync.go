@@ -118,10 +118,12 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	}
 	for _, m := range s.Members {
 		r := rc.Cluster.Spec.Components.Engine.Resources
-		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
-			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Disk, r)
+			if e != nil {
 				return result, e
 			}
+			m.Disk.MinDisk, m.Disk.MaxDisk = disk.MinDisk, disk.MaxDisk
 		}
 	}
 	if s.InitializationOutcomeLost != "" {
@@ -176,10 +178,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		members := ordered(s)
 		target := members[len(members)-1]
 		if !target.Removing {
-			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
-				return wait, nil
+			if rc.WaitForWindow().RequeueAfter == 0 {
+				target.Removing = true
 			}
-			target.Removing = true
 		}
 	}
 	if s.InitOwner == "" {

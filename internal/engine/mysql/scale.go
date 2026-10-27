@@ -72,6 +72,9 @@ func (p *Core) reconcileMembership(ctx context.Context, rc *engine.Context, s *s
 	}
 	for _, m := range s.data() {
 		if m.Retirement != "" {
+			if m.Retirement == "handoff" && rc.WaitForWindow().RequeueAfter > 0 {
+				return false, nil
+			}
 			_, err := p.retireMember(ctx, rc, s, m)
 			return true, err
 		}
@@ -95,7 +98,7 @@ func (p *Core) reconcileMembership(ctx context.Context, rc *engine.Context, s *s
 		return true, nil
 	}
 	if rc.WaitForWindow().RequeueAfter > 0 {
-		return true, nil
+		return false, nil
 	}
 	// Highest identity is removed first. No writer is ever removed in place.
 	data := s.data()

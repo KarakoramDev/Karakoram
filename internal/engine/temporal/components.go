@@ -284,29 +284,31 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 	if busy, e := observePending(ctx, rc, s); busy || e != nil {
 		return true, e
 	}
+	deferred := false
 
 	// Upgrade admission and settle checkpoints precede role reconciliation.
 	if s.Version != "" && s.Version != rc.Cluster.Spec.Version && s.Upgrade == nil {
 		if rc.WaitForWindow().RequeueAfter > 0 {
+			deferred = true
+		} else {
+			// No schema migration starts until every current component is healthy.
+			for _, name := range tspec.RollOrder {
+				m := s.Members[name]
+				if m == nil {
+					continue
+				}
+				status, e := componentStatus(ctx, rc, m)
+				if e != nil {
+					return true, e
+				}
+				m.Observed = status
+				if !status.Ready {
+					return true, nil
+				}
+			}
+			s.Upgrade = &upgradeState{From: s.Version, To: rc.Cluster.Spec.Version}
 			return true, nil
 		}
-		// No schema migration starts until every current component is healthy.
-		for _, name := range tspec.RollOrder {
-			m := s.Members[name]
-			if m == nil {
-				continue
-			}
-			status, e := componentStatus(ctx, rc, m)
-			if e != nil {
-				return true, e
-			}
-			m.Observed = status
-			if !status.Ready {
-				return true, nil
-			}
-		}
-		s.Upgrade = &upgradeState{From: s.Version, To: rc.Cluster.Spec.Version}
-		return true, nil
 	}
 	if s.Upgrade != nil && !s.Upgrade.SettleUntil.IsZero() {
 		if clockNow(rc).Before(s.Upgrade.SettleUntil) {
@@ -365,26 +367,29 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return true, e
 			}
 			if sp.RestartToken != m.ConfigHash {
-				needsWindow, e := p.configurationNeedsWindow(ctx, rc, m, sp)
+				exempt, needsWindow, e := p.configurationNeedsWindow(ctx, rc, m, sp)
 				if e != nil {
 					return true, e
 				}
 				if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+					sp = deferredConfiguration(exempt, conn.CredentialGeneration, s.Version, m.RestartNonce)
+					deferred = true
+				}
+				if sp.RestartToken != m.ConfigHash {
+					if s.Upgrade != nil {
+						s.Upgrade.Component = m.Component
+					}
+					if sp.Version != m.Version {
+						m.Stage = engine.ComponentImported
+						return true, nil
+					}
+					if e = p.publishConfig(ctx, rc, m, sp, ca); e != nil {
+						return true, e
+					}
+					m.Stage = engine.ComponentDeployed
+					reloadComponent(ctx, rc, m)
 					return true, nil
 				}
-				if s.Upgrade != nil {
-					s.Upgrade.Component = m.Component
-				}
-				if sp.Version != m.Version {
-					m.Stage = engine.ComponentImported
-					return true, nil
-				}
-				if e = p.publishConfig(ctx, rc, m, sp, ca); e != nil {
-					return true, e
-				}
-				m.Stage = engine.ComponentDeployed
-				reloadComponent(ctx, rc, m)
-				return true, nil
 			}
 			// Transport certificates renew independently of application material.
 			cert, e := componentCertificate(ctx, rc, m, "agent", ca)
@@ -404,6 +409,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 				return true, nil
 			}
 		}
+		memberDeferred := false
 		handled, e := engine.ReconcileStatelessComponent(ctx, def, current, d, engine.ComponentCallbacks{
 			Import: func(ctx context.Context) error {
 				if m == nil {
@@ -474,6 +480,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 			},
 			Scale: func(ctx context.Context, n int) error {
 				if n < m.Replicas && rc.WaitForWindow().RequeueAfter > 0 {
+					memberDeferred = true
 					return nil
 				}
 				op, e := rc.Backend.SetContainerCount(ctx, m.Name, n, n)
@@ -484,6 +491,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 			},
 			Resize: func(ctx context.Context, r domain.Resources) error {
 				if rc.WaitForWindow().RequeueAfter > 0 {
+					memberDeferred = true
 					return nil
 				}
 				op, e := rc.Backend.SetResources(ctx, m.Name, r)
@@ -494,17 +502,24 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 			},
 			Delete: func(ctx context.Context) error {
 				if rc.WaitForWindow().RequeueAfter > 0 {
+					memberDeferred = true
 					return nil
 				}
 				return deleteComponent(ctx, rc, s, m)
 			},
 		})
+		if memberDeferred && e == nil {
+			deferred = true
+			continue
+		}
 		if handled || e != nil {
 			return handled, e
 		}
 	}
-	s.Version = rc.Cluster.Spec.Version
-	s.Upgrade = nil
+	if !deferred {
+		s.Version = rc.Cluster.Spec.Version
+		s.Upgrade = nil
+	}
 	s.CredentialGeneration = conn.CredentialGeneration
-	return false, nil
+	return deferred, nil
 }

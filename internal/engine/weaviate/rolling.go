@@ -22,8 +22,10 @@ import (
 )
 
 type rollingTarget struct {
-	Config    agentapi.MemberConfig `json:"config"`
-	Resources domain.Resources      `json:"resources"`
+	Config            agentapi.MemberConfig  `json:"config"`
+	Resources         domain.Resources       `json:"resources"`
+	PreviousConfig    *agentapi.MemberConfig `json:"previousConfig,omitempty"`
+	PreviousResources domain.Resources       `json:"previousResources"`
 }
 
 // Automatic transport renewal never needs a window. Database leaf renewal
@@ -95,6 +97,12 @@ func (p *Provider) startRolling(ctx context.Context, rc *engine.Context, s *stat
 				return e
 			}
 		}
+		previous, e := p.MemberConfig(ctx, rc, m.Name)
+		if e != nil {
+			return e
+		}
+		target.PreviousConfig = &previous
+		target.PreviousResources = m.Resources
 		raw, e := json.Marshal(target)
 		if e != nil {
 			return e
@@ -295,3 +303,50 @@ func (*Provider) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	return true, nil
 }
 func (*Provider) SyncDuringOperation(*domain.Operation) bool { return false }
+
+// A definitive placement refusal owns no replacement. Release its captured
+// intent and restore the serving configuration so a corrected generation can
+// converge instead of resubmitting the rejected resource receipt.
+func (p *Provider) rejectResources(ctx context.Context, rc *engine.Context, s *state, m *member, cause error) error {
+	if err := verifyMemberServices(ctx, rc, m); err != nil {
+		return errors.Join(cause, err)
+	}
+	runtime, err := rc.Backend.GetService(ctx, m.Name)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	if runtime == nil {
+		return errors.Join(cause, engine.ErrUnavailable)
+	}
+	applied := runtime.Resources
+	disk, err := engine.ObserveVolumeSize(ctx, rc.Backend, m.Volume, m.VolumeID)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	if disk != nil {
+		applied.MinDisk, applied.MaxDisk = disk.MinDisk, disk.MaxDisk
+	} else {
+		applied.MinDisk, applied.MaxDisk = m.Resources.MinDisk, m.Resources.MaxDisk
+	}
+	if s.Rolling != nil {
+		raw, err := secret(ctx, rc, "target/"+m.Name)
+		if err != nil {
+			return errors.Join(cause, err)
+		}
+		var target rollingTarget
+		if err = json.Unmarshal(raw, &target); err != nil {
+			return errors.Join(cause, err)
+		}
+		if target.PreviousConfig != nil {
+			if disk == nil {
+				applied.MinDisk, applied.MaxDisk = target.PreviousResources.MinDisk, target.PreviousResources.MaxDisk
+			}
+			if err = activateConfig(ctx, rc, s, m, *target.PreviousConfig); err != nil {
+				return errors.Join(cause, err)
+			}
+		}
+	}
+	m.Resources = applied
+	s.Pending, s.Rolling = nil, nil
+	return cause
+}
