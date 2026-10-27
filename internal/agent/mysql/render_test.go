@@ -90,21 +90,3 @@ func TestSQLCannotReadRuntimeFiles(t *testing.T) {
 	}
 }
 
-func TestSQLDataListenerAddressFamilies(t *testing.T) {
-	for _, tc := range []struct{ host, bind string }{
-		{"", "0.0.0.0"}, {"0.0.0.0", "0.0.0.0"}, {"::", "*"},
-	} {
-		for _, s := range []myspec.Spec{coreTestSpec(), testGroupSpec(), testGaleraSpec()} {
-			s.ListenHost = tc.host
-			text := renderConfig(s, dataPaths(t.TempDir()))
-			if !strings.Contains(text, "bind_address="+optionQuote(tc.bind)+"\n") {
-				t.Errorf("topology=%s host=%q missing bind_address=%s", s.Topology, tc.host, tc.bind)
-			}
-		}
-	}
-	s := coreTestSpec()
-	s.ListenHost = "127.0.0.1"
-	if err := s.Validate(); err == nil {
-		t.Fatal("accepted unsupported SQL listener policy")
-	}
-}

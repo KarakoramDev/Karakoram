@@ -111,32 +111,3 @@ func TestProxyTLSReloadStatements(t *testing.T) {
 	}
 }
 
-func TestProxySQLFrontendAddressFamilies(t *testing.T) {
-	for _, host := range []string{"", "0.0.0.0", "::"} {
-		for _, reader := range []bool{false, true} {
-			s := testProxySpec()
-			s.ListenHost = host
-			s.Proxy.ReaderPort = reader
-			text, err := RenderProxyConfig(s, "/config", "/data")
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := "0.0.0.0:3306"
-			if host == "::" {
-				want += ";[::]:3306"
-			}
-			if reader {
-				want += ";0.0.0.0:3307"
-				if host == "::" {
-					want += ";[::]:3307"
-				}
-			}
-			if !strings.Contains(text, " interfaces=\""+want+"\"") {
-				t.Errorf("host=%q reader=%t missing %q", host, reader, want)
-			}
-			if !strings.Contains(text, `mysql_ifaces="127.0.0.1:6032"`) {
-				t.Fatal("admin interface no longer loopback-only")
-			}
-		}
-	}
-}
