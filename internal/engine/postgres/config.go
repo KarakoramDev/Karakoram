@@ -241,7 +241,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			return agentapi.MemberConfig{}, err
 		}
 		sp.PatroniREST = credential("kk_admin")
-		cidrs := []string{"::/0"}
+		// IPv6-capable service DNS can also publish A records. Match the
+		// dual-family PostgreSQL listener rather than treating the backend's
+		// preferred private family as its only possible client source family.
+		cidrs := []string{"0.0.0.0/0", "::/0"}
 		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
 			cidrs = []string{"0.0.0.0/0"}
 		}

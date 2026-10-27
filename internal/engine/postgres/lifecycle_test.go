@@ -408,16 +408,22 @@ func TestProxyJoinPublicationDuringBootstrapAndConversion(t *testing.T) {
 }
 
 func TestIPv4HBAFamily(t *testing.T) {
-	p, rc, _ := setup(t, "single")
-	converge(t, p, rc)
-	config, err := p.MemberConfig(context.Background(), rc, "demop0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var spec pgspec.Spec
-	json.Unmarshal(config.EngineSpec, &spec)
-	if len(spec.Postgres.ClientCIDRs) != 1 || spec.Postgres.ClientCIDRs[0] != "0.0.0.0/0" {
-		t.Fatal("backend private family ignored")
+	for _, topology := range []string{"single", "ha"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, _ := setup(t, topology)
+			converge(t, p, rc)
+			config, err := p.MemberConfig(context.Background(), rc, "demop0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec pgspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(spec.Postgres.ClientCIDRs, []string{"0.0.0.0/0"}) {
+				t.Fatalf("IPv4-only backend HBA changed: %v", spec.Postgres.ClientCIDRs)
+			}
+		})
 	}
 }
 
@@ -430,19 +436,23 @@ func (b ipv6Backend) Layout() infra.Layout {
 }
 
 func TestIPv6HBAFamily(t *testing.T) {
-	p, rc, b := setup(t, "single")
-	rc.Backend = ipv6Backend{b}
-	converge(t, p, rc)
-	config, err := p.MemberConfig(context.Background(), rc, "demop0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var spec pgspec.Spec
-	if err = json.Unmarshal(config.EngineSpec, &spec); err != nil {
-		t.Fatal(err)
-	}
-	if len(spec.Postgres.ClientCIDRs) != 1 || spec.Postgres.ClientCIDRs[0] != "::/0" {
-		t.Fatal("backend private family ignored")
+	for _, topology := range []string{"single", "ha"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, b := setup(t, topology)
+			rc.Backend = ipv6Backend{b}
+			converge(t, p, rc)
+			config, err := p.MemberConfig(context.Background(), rc, "demop0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec pgspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(spec.Postgres.ClientCIDRs, []string{"0.0.0.0/0", "::/0"}) {
+				t.Fatalf("dual-family backend must admit both source families: %v", spec.Postgres.ClientCIDRs)
+			}
+		})
 	}
 }
 

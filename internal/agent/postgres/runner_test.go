@@ -86,6 +86,68 @@ func TestSingleRenderer(t *testing.T) {
 		t.Fatal("loopback replication missing")
 	}
 }
+
+func TestDualFamilyHBA(t *testing.T) {
+	for _, mode := range []string{"requireTLS", "preferTLS"} {
+		for _, fence := range []string{"none", "recovery", "restore"} {
+			t.Run(mode+"/"+fence, func(t *testing.T) {
+				s := testSpec()
+				s.ListenHost = "::"
+				s.Postgres.ClientCIDRs = []string{"0.0.0.0/0", "::/0"}
+				s.Postgres.RequireTLS = mode == "requireTLS"
+				s.Postgres.RecoveryClientsHeld = fence == "recovery"
+				if fence == "restore" {
+					s.Bootstrap.Method = "restore"
+				}
+				s.CAPEM, s.ServerCert = testTLS(t)
+				lines := hba(s)
+				kind := "host"
+				if s.Postgres.RequireTLS {
+					kind = "hostssl"
+				}
+				for _, cidr := range s.Postgres.ClientCIDRs {
+					// "all all" covers kk_monitor and every proxied client
+					// role, not only the superuser or a single DNS answer.
+					client := kind + " all all " + cidr + " scram-sha-256"
+					found := false
+					for _, line := range lines {
+						found = found || line == client
+						if strings.Contains(line, " trust") || mode == "requireTLS" && strings.HasPrefix(line, "host all all ") {
+							t.Fatalf("authentication/TLS weakened: %s", line)
+						}
+					}
+					if found != (fence == "none") {
+						t.Fatalf("unexpected remote-client admission (%s): %v", client, lines)
+					}
+					replication := "hostssl replication kk_replicator " + cidr + " scram-sha-256"
+					if !strings.Contains(strings.Join(lines, "\n"), replication) {
+						t.Fatalf("TLS replication missing: %s", replication)
+					}
+				}
+				// Standalone uses hba directly; Patroni must receive the
+				// identical policy, including both restore fences.
+				s.Topology = pgspec.TopologyHA
+				s.Etcd = &pgspec.Etcd{State: "new", Token: "test", InitialCluster: "member0=https://localhost:2380"}
+				s.Peers = []pgspec.Peer{{Name: s.Member, Host: "localhost", Etcd: "voter"}}
+				text, err := renderPatroni(s, dataPaths("/volume"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var config struct {
+					Postgresql struct {
+						HBA []string `yaml:"pg_hba"`
+					} `yaml:"postgresql"`
+				}
+				if err := yaml.Unmarshal([]byte(text), &config); err != nil {
+					t.Fatal(err)
+				}
+				if strings.Join(config.Postgresql.HBA, "\n") != strings.Join(lines, "\n") {
+					t.Fatalf("Patroni HBA differs from standalone: %v", config.Postgresql.HBA)
+				}
+			})
+		}
+	}
+}
 func TestPatroniRenderer(t *testing.T) {
 	s := testSpec()
 	s.Topology = pgspec.TopologyHA
