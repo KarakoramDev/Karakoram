@@ -7,6 +7,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"os"
 	"path/filepath"
 	"testing"
@@ -233,5 +234,54 @@ func TestPXCAddedInitializerCaptureWaitsForSealedIdentity(t *testing.T) {
 		if err := spec.Validate(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+type pxcBindBackend struct {
+	infra.Backend
+	family string
+}
+
+func (b pxcBindBackend) Layout() infra.Layout {
+	layout := b.Backend.Layout()
+	layout.PrivateAddressFamily = b.family
+	return layout
+}
+
+func TestPXCGaleraBindFollowsBackendFamily(t *testing.T) {
+	for _, tc := range []struct{ family, listen string }{
+		{infra.AddressFamilyIPv4, "0.0.0.0"},
+		{infra.AddressFamilyIPv6, "::"},
+	} {
+		t.Run(tc.family, func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			rc.Backend = pxcBindBackend{Backend: b, family: tc.family}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := p.MemberConfig(t.Context(), rc, s.data()[0].Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec myspec.Spec
+			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if spec.Galera.ListenHost != tc.listen {
+				t.Fatalf("family %s bind=%s, want %s", tc.family, spec.Galera.ListenHost, tc.listen)
+			}
+			if err := spec.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			for _, peer := range spec.Galera.Peers {
+				if peer.Host != peer.Name {
+					t.Fatalf("backend bind policy replaced advertised identity: %+v", peer)
+				}
+			}
+		})
 	}
 }

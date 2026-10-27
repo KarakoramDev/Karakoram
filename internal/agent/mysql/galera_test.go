@@ -4,6 +4,8 @@ package mysql
 
 import (
 	"context"
+	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,6 +43,56 @@ func TestGaleraRendering(t *testing.T) {
 	env := strings.Join(galeraEnv(s), "\n")
 	if !strings.Contains(env, "/bin/pxc_extra/pxb-8.4/bin:") {
 		t.Fatal(env)
+	}
+}
+
+func TestGaleraListenerUsesNumericBindNotDNSIdentity(t *testing.T) {
+	for _, tc := range []struct{ host, policy, bind string }{
+		{"nmypxc6m0", "", "0.0.0.0"},
+		{"pxcm0.internal.example", "", "0.0.0.0"},
+		{"nmypxc6m0", "0.0.0.0", "0.0.0.0"},
+		{"zeropspxcm0", "::", "::"},
+		{"10.65.3.13", "", "10.65.3.13"},
+		{"127.0.0.1", "", "127.0.0.1"},
+		{"2001:db8::13", "", "2001:db8::13"},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			s := testGaleraSpec()
+			s.Galera.Peers[0].Host = tc.host
+			s.Galera.ListenHost = tc.policy
+			opts := RenderGaleraOptions(s, t.TempDir())
+			provider := opts["wsrep_provider_options"]
+			listener := strings.Split(strings.TrimPrefix(provider, "gmcast.listen_addr="), ";")[0]
+			u, err := url.Parse(listener)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ip := net.ParseIP(u.Hostname()); ip == nil || u.Hostname() != tc.bind || u.Port() != "4567" {
+				t.Fatalf("listener %q is not the expected numeric bind %s", listener, tc.bind)
+			}
+			// Advertised peer, node, IST and SST addresses keep the stable
+			// identity; changing a bind must not publish wildcard endpoints.
+			for key, want := range map[string]string{
+				"wsrep_cluster_address":     "gcomm://" + net.JoinHostPort(tc.host, "4567"),
+				"wsrep_node_address":        net.JoinHostPort(tc.host, "4567"),
+				"wsrep_sst_receive_address": net.JoinHostPort(tc.host, "4444"),
+			} {
+				if opts[key] != want {
+					t.Fatalf("%s=%s, want %s", key, opts[key], want)
+				}
+			}
+			if !strings.Contains(provider, ";ist.recv_addr="+net.JoinHostPort(tc.host, "4568")+";") || !strings.Contains(provider, ";socket.ssl=true;") {
+				t.Fatal("bind policy changed IST identity or disabled encryption", provider)
+			}
+		})
+	}
+}
+
+func TestGaleraListenerRejectsHostnameBindPolicy(t *testing.T) {
+	s := testGaleraSpec()
+	s.Galera.ListenHost = s.Member
+	if err := s.Galera.Validate(); err == nil {
+		t.Fatal("accepted DNS name as a numeric Galera bind policy")
 	}
 }
 func TestGaleraBootstrapLauncherOnce(t *testing.T) {

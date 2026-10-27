@@ -31,6 +31,15 @@ func galeraAddress(host string, port int) string { return net.JoinHostPort(host,
 func RenderGaleraOptions(s myspec.Spec, root string) map[string]string {
 	g := s.Galera
 	local := galeraLocal(s)
+	listenHost := g.ListenHost
+	if listenHost == "" {
+		listenHost = local.Host
+		if net.ParseIP(listenHost) == nil {
+			// Older configurations do not carry a bind policy. Never pass a
+			// DNS identity to Galera's numeric outgoing source-address parser.
+			listenHost = "0.0.0.0"
+		}
+	}
 	seeds := make([]string, 0, len(g.Peers))
 	for _, p := range g.Peers {
 		seeds = append(seeds, galeraAddress(p.Host, p.Port))
@@ -47,7 +56,7 @@ func RenderGaleraOptions(s myspec.Spec, root string) map[string]string {
 		"wsrep_node_name": s.Member, "wsrep_node_address": galeraAddress(local.Host, g.GaleraPort),
 		"wsrep_node_incoming_address": galeraAddress(local.Host, sqlPort),
 		"wsrep_sst_method":            "xtrabackup-v2", "wsrep_sst_receive_address": galeraAddress(local.Host, g.SSTPort),
-		"wsrep_provider_options": "gmcast.listen_addr=tcp://" + galeraAddress(local.Host, g.GaleraPort) + ";ist.recv_addr=" + galeraAddress(local.Host, g.ISTPort) + ";gcache.size=" + g.GCacheSize + ";gcache.recover=yes;socket.ssl=true;socket.ssl_ca=" + filepath.Join(root, "galera-ca.pem") + ";socket.ssl_cert=" + filepath.Join(root, "galera-cert.pem") + ";socket.ssl_key=" + filepath.Join(root, "galera-key.pem"),
+		"wsrep_provider_options": "gmcast.listen_addr=tcp://" + galeraAddress(listenHost, g.GaleraPort) + ";ist.recv_addr=" + galeraAddress(local.Host, g.ISTPort) + ";gcache.size=" + g.GCacheSize + ";gcache.recover=yes;socket.ssl=true;socket.ssl_ca=" + filepath.Join(root, "galera-ca.pem") + ";socket.ssl_cert=" + filepath.Join(root, "galera-cert.pem") + ";socket.ssl_key=" + filepath.Join(root, "galera-key.pem"),
 		// Disable only upstream's auto-copy of SQL TLS paths: all replication,
 		// IST and SST channels are explicitly encrypted with the shared leaf.
 		"pxc_encrypt_cluster_traffic": "OFF", "pxc_strict_mode": "ENFORCING", "binlog_format": "ROW", "log_replica_updates": "ON",

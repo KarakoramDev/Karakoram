@@ -49,6 +49,16 @@ may start mysqld until it forms a Primary component. Remaining members then star
 as SST/IST joiners. A runtime deployment is not permission to launch an
 uninitialized seed as an ordinary joiner.
 
+Galera's local bind address is distinct from its advertised member names.
+The control plane supplies a numeric IPv4 wildcard on IPv4-only Nomad/Dokploy
+layouts and an IPv6 wildcard (`[::]:4567`) on Zerops's IPv6-capable layout.
+The pinned Galera provider resolves a hostname listener but subsequently parses
+that original host as a numeric outgoing source bind, so using a member DNS name
+as `gmcast.listen_addr` can abort connection establishment with `Invalid argument`.
+Peer discovery, advertised node/IST/SST identities and encrypted traffic remain
+unchanged. The IPv6 wildcard's IPv4 acceptance follows the host kernel's
+dual-stack policy; it is not a claim of an IPv4 listener on an IPv6-only host.
+
 An older create may already have started the seed without bootstrap permission
 and left uninitialized/foreign-looking data. A control-plane upgrade alone does
 not authorize erasing or reinitializing that data. Preserve the logs, volume

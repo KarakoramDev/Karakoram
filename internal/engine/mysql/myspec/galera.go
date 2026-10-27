@@ -5,6 +5,7 @@ package myspec
 import (
 	"encoding/pem"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -42,9 +43,11 @@ type Galera struct {
 	GaleraPort     int    `json:"galeraPort"`
 	ISTPort        int    `json:"istPort"`
 	SSTPort        int    `json:"sstPort"`
-	Bootstrap      bool   `json:"bootstrap"`
-	StartPosition  string `json:"startPosition,omitempty"`
-	GCacheSize     string `json:"gcacheSize"`
+	// ListenHost is a numeric bind address, separate from advertised peer DNS.
+	ListenHost    string `json:"listenHost,omitempty"`
+	Bootstrap     bool   `json:"bootstrap"`
+	StartPosition string `json:"startPosition,omitempty"`
+	GCacheSize    string `json:"gcacheSize"`
 	// TrafficCert is identical on all members and separate from client SQL TLS.
 	TrafficCert  *Certificate `json:"trafficCert"`
 	TrafficCAPEM string       `json:"trafficCAPEM"`
@@ -92,6 +95,9 @@ func ParseGaleraPosition(p string) (string, int64, error) {
 func (g Galera) Validate() error {
 	if !ValidGaleraClusterName(g.ClusterName) || g.FormationEpoch == 0 || len(g.Peers) == 0 {
 		return fmt.Errorf("invalid Galera cluster identity")
+	}
+	if g.ListenHost != "" && net.ParseIP(g.ListenHost) == nil {
+		return fmt.Errorf("Galera listen host must be a numeric IP address")
 	}
 	ca, trailing := pem.Decode([]byte(g.TrafficCAPEM))
 	if ca == nil || ca.Type != "CERTIFICATE" || strings.TrimSpace(string(trailing)) != "" || strings.TrimSpace(g.TrafficCAPEM) != strings.TrimSpace(string(pem.EncodeToMemory(ca))) {
