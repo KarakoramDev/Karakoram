@@ -33,6 +33,16 @@ func listenHost(host string) string {
 	}
 	return host
 }
+// PostgreSQL binds IPv6 sockets with IPV6_V6ONLY. An IPv6 wildcard alone
+// therefore cannot serve IPv4 addresses published for the same service name.
+// Use PostgreSQL's all-addresses wildcard without changing other processes'
+// listener policy or widening explicitly restricted addresses.
+func postgresListenHost(host string) string {
+	if host == "::" {
+		return "*"
+	}
+	return host
+}
 func proxyInterfaces(host string, reader bool) string {
 	interfaces := net.JoinHostPort(listenHost(host), "5432")
 	if reader {
@@ -70,7 +80,7 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 		m[k] = v
 	}
 	if s.ListenHost != "" {
-		m["listen_addresses"] = s.ListenHost
+		m["listen_addresses"] = postgresListenHost(s.ListenHost)
 	}
 	if len(s.Postgres.SharedPreloadLibraries) > 0 {
 		m["shared_preload_libraries"] = strings.Join(s.Postgres.SharedPreloadLibraries, ",")
@@ -250,7 +260,7 @@ func renderPatroni(s pgspec.Spec, p paths) (string, error) {
 		hosts = append([]string(nil), s.Etcd.Endpoints...)
 	}
 	bootstrap := map[string]any{"dcs": dynamicConfig(s, p), "initdb": []any{"data-checksums", map[string]string{"encoding": "UTF8"}, map[string]string{"locale": "C.UTF-8"}, map[string]string{"auth-host": "scram-sha-256"}, map[string]string{"auth-local": "scram-sha-256"}}, "post_bootstrap": filepath.Join(p.root, "bootstrap-roles.sh")}
-	pg := map[string]any{"listen": net.JoinHostPort(listenHost(s.ListenHost), "5432"), "connect_address": net.JoinHostPort(localHost(s), "5432"), "data_dir": p.pgdata, "bin_dir": s.BinDir, "pgpass": filepath.Join(p.root, "patroni.pgpass"), "authentication": map[string]any{"superuser": auth(s.Superuser), "replication": auth(s.Replication), "rewind": auth(s.Rewind)}, "pg_hba": hba(s), "parameters": parameters(s, p), "remove_data_directory_on_rewind_failure": true, "remove_data_directory_on_diverged_timelines": true, "create_replica_methods": []string{"basebackup"}}
+	pg := map[string]any{"listen": net.JoinHostPort(listenHost(postgresListenHost(s.ListenHost)), "5432"), "connect_address": net.JoinHostPort(localHost(s), "5432"), "data_dir": p.pgdata, "bin_dir": s.BinDir, "pgpass": filepath.Join(p.root, "patroni.pgpass"), "authentication": map[string]any{"superuser": auth(s.Superuser), "replication": auth(s.Replication), "rewind": auth(s.Rewind)}, "pg_hba": hba(s), "parameters": parameters(s, p), "remove_data_directory_on_rewind_failure": true, "remove_data_directory_on_diverged_timelines": true, "create_replica_methods": []string{"basebackup"}}
 	// Keep Patroni's native initdb/password/bootstrap lifecycle, but consume
 	// first-initialization authorization before the real binary can run.
 	pg["bin_name"] = map[string]string{"initdb": filepath.Join(p.root, "bootstrap-initdb.sh")}

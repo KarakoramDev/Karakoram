@@ -266,8 +266,8 @@ func TestIPv6ListenersAndReplicationCIDRs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(y, "[::]:8008") || !strings.Contains(y, "[::]:5432") {
-		t.Fatal("Patroni IPv6 listener missing")
+	if !strings.Contains(y, "[::]:8008") || !strings.Contains(y, "*:5432") {
+		t.Fatal("Patroni REST IPv6 or PostgreSQL dual-stack listener missing")
 	}
 	etcd := strings.Join(etcdProcess(s, p).Args, " ")
 	if !strings.Contains(etcd, "https://[::]:2379") || !strings.Contains(etcd, "https://[::]:2380") {

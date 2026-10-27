@@ -67,6 +67,16 @@ primary does not serialize healthy peers behind the engine action timeout.
 Publication still follows the reconcile interval and infrastructure/API latency;
 this is not a failover SLA.
 
+On IPv6-capable providers, PostgreSQL listens on both available address families
+(`listen_addresses='*'`, including Patroni-managed instances). Service DNS can
+publish both A and AAAA records: a proxy may select either address, while a
+direct client can silently fall back from one to the other. A PostgreSQL `::`
+listener alone does not accept IPv4 connections. This does not change TLS,
+SCRAM or client-CIDR enforcement, or the IPv6 listener policy for etcd and
+Patroni REST. Existing IPv6-only PostgreSQL listeners need an agent rollout
+containing this correction; a control-plane-only update or proxy restart does
+not change a running PostgreSQL listener.
+
 On graceful **agent runtime termination**, an HA leader first requests [Patroni](https://patroni.readthedocs.io/)
 `/switchover` while Patroni and the local etcd voter are still alive, before
 draining the agent HTTP server. The handoff has at most four seconds, including
