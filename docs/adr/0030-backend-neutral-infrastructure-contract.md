@@ -31,7 +31,7 @@ The cutover implements neutral runtime intent, opaque operation handles and capa
 - **Private-address resolution:** member hostnames still serve as private DNS names; there is no provider address resolver.
 - **Per-service public endpoints:** public TCP discovery still uses `Project` public IPs plus allocated ports, not a general per-service endpoint result.
 - **Ownership labels:** ownership remains non-sensitive environment markers plus recorded service IDs and legacy secret evidence, not a platform-label abstraction.
-- **Log fallback:** member logs already come from the node API, while infrastructure `Logs` and its capability describe platform logs. There is no new generic fallback from unsupported platform logs to member logs.
+- **Log sources:** supervised child-process logs come from the node API. The explicit `process=agent` member-log selector uses infrastructure `Logs` and its capability to read the member runtime's platform output, including supervisor diagnostics and forwarded child output. The server verifies cluster membership before accessing namespace-wide backend logs. This is source selection, not an automatic fallback: an unavailable child-log endpoint or unsupported platform logs still returns an error.
 
 The neutral contract still requires [Linux](https://kernel.org) runtime services, the supported [Ubuntu](https://ubuntu.com) base, single-writer persistent-volume semantics and artifact execution. It is not a claim to cover arbitrary schedulers or storage models.
 

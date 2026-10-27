@@ -880,6 +880,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if strings.Contains(name, "Temporal") {
 		return s.temporal(ctx, name, in, rc, p)
 	}
+	if name == "GetMemberLogs" {
+		return s.memberLogs(ctx, rc, p, in.Member)
+	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
 		return s.unsupportedClusterAction(name, p)
@@ -942,35 +945,6 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.failure(err)
 		}
 		return ok(placementAPI(v))
-	case "GetMemberLogs":
-		q := request(ctx).URL.Query()
-		lines := 100
-		if v := q.Get("lines"); v != "" {
-			lines, err = strconv.Atoi(v)
-			if err != nil || lines < 1 || lines > 10000 {
-				return invalid()
-			}
-		}
-		proc := q.Get("process")
-		processes := p.Describe().Processes
-		if proc == "" {
-			proc = "agent"
-			if len(processes) > 0 {
-				proc = processes[0]
-			}
-		}
-		if proc != "agent" && !slices.Contains(processes, proc) {
-			return invalid()
-		}
-		logs, err := dp.MemberLogs(ctx, rc, in.Member, proc, lines)
-		if err != nil {
-			return s.failure(err)
-		}
-		a := api.MemberLogs{Member: in.Member, Lines: []api.LogLine{}}
-		for _, l := range logs {
-			a.Lines = append(a.Lines, api.LogLine{Timestamp: l.Timestamp, Process: l.Process, Message: l.Message})
-		}
-		return response{status: 200, body: a, noStore: true}
 	default:
 		return s.database(ctx, name, in, rc, dp)
 	}

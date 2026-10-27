@@ -212,8 +212,8 @@ prevents the first requested cancel after describe confirms nonterminal metadata
 
 Use two log sources:
 
-- **Zerops deployment/application logs:** preparation, readiness, startup, supervisor diagnostics and forwarded child output, including failures before the agent is reachable. Signed project-log URLs/tokens are credentials.
-- **Karakoram member logs:** authenticated, bounded process tails, not a historical archive:
+- **Backend deployment/application logs:** preparation, readiness, startup, supervisor diagnostics and forwarded child output, including failures before the agent is reachable. `karactl clusters logs demo <member> --process agent --lines 100` reads the member runtime's application log tail through the namespace backend (Zerops, Dokploy or Nomad). It is not filtered to supervisor-only messages; retention and timestamps are platform-dependent. A backend without log support rejects the request. Signed project-log URLs/tokens are credentials.
+- **Karakoram child-process logs:** authenticated, bounded process tails, not a historical archive:
 
   ```sh
   karactl clusters logs demo <member> --process <process> --lines 100

@@ -16,6 +16,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -367,6 +368,122 @@ func TestProviderProcessLogs(t *testing.T) {
 		if w.Code != want {
 			t.Fatal(process, w.Code, w.Body.String())
 		}
+	}
+}
+
+type memberLogsBackend struct {
+	fakeBackend
+	supported bool
+	calls     int
+	member    string
+	query     infra.LogQuery
+	err       error
+}
+
+func (b *memberLogsBackend) Capabilities() infra.Capabilities {
+	return infra.Capabilities{Logs: b.supported}
+}
+
+func (b *memberLogsBackend) Logs(_ context.Context, member string, q infra.LogQuery) ([]infra.LogLine, error) {
+	b.calls++
+	b.member, b.query = member, q
+	return []infra.LogLine{{Message: "configuration applied", Stream: "stderr"}}, b.err
+}
+
+type childLogsProvider struct {
+	fakeProvider
+	calls int
+}
+
+func (p *childLogsProvider) MemberLogs(ctx context.Context, rc *engine.Context, member, process string, lines int) ([]domain.MemberLogLine, error) {
+	p.calls++
+	if process == "agent" {
+		return nil, engine.ErrInvalid
+	}
+	return p.fakeProvider.MemberLogs(ctx, rc, member, process, lines)
+}
+
+func TestMemberAgentLogsUseRuntimeBackend(t *testing.T) {
+	for _, tc := range []struct {
+		name, member, query string
+		supported           bool
+		err                 error
+		want, calls         int
+	}{
+		{"agent", "prodm0", "?process=agent&lines=37", true, nil, 200, 1},
+		{"other-cluster-member", "devm0", "?process=agent", true, nil, 404, 0},
+		{"unknown-member", "missing", "?process=agent", true, nil, 404, 0},
+		{"invalid-lines", "prodm0", "?process=agent&lines=10001", true, nil, 400, 0},
+		{"unsupported", "prodm0", "?process=agent", false, nil, 409, 0},
+		{"backend-missing", "prodm0", "?process=agent", true, infra.ErrNotFound, 500, 1},
+		{"backend-unavailable", "prodm0", "?process=agent", true, infra.ErrUnavailable, 500, 1},
+		{"child", "prodm0", "?process=mongod", true, nil, 200, 0},
+		{"default-child", "prodm0", "", true, nil, 200, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			b := &memberLogsBackend{supported: tc.supported, err: tc.err}
+			s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+			p := &childLogsProvider{}
+			var err error
+			s.Registry, err = engine.NewRegistry(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "GET", "/api/v1/clusters/prod/members/"+tc.member+"/logs"+tc.query, "", token)
+			if w.Code != tc.want || b.calls != tc.calls {
+				t.Fatalf("status=%d backend calls=%d: %s", w.Code, b.calls, w.Body.String())
+			}
+			if tc.name == "agent" {
+				var logs api.MemberLogs
+				if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+					t.Fatal(err)
+				}
+				if p.calls != 0 || b.member != "prodm0" || b.query != (infra.LogQuery{Limit: 37}) {
+					t.Fatalf("provider calls=%d member=%q query=%+v", p.calls, b.member, b.query)
+				}
+				if len(logs.Lines) != 1 || logs.Lines[0].Process != "agent" || logs.Lines[0].Message != "configuration applied" {
+					t.Fatalf("runtime logs not returned: %+v", logs)
+				}
+				if !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+					t.Fatal("logs must not be cached")
+				}
+			}
+			if (tc.name == "child" || tc.name == "default-child") && p.calls != 1 {
+				t.Fatalf("child logs bypassed provider: %d calls", p.calls)
+			}
+		})
+	}
+}
+
+func TestBuiltInProviderAgentLogs(t *testing.T) {
+	s, _, token := testServer(t)
+	var err error
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: s.postgresBindings})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &memberLogsBackend{supported: true}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	for _, info := range s.Registry.List() {
+		t.Run(info.Name, func(t *testing.T) {
+			p, err := s.Registry.Get(info.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := "log" + info.Name[:min(len(info.Name), 9)]
+			member := name + "m0"
+			c := domain.Cluster{Name: name, Spec: domain.ClusterSpec{Provider: info.Name}, Status: domain.ClusterStatus{Members: []domain.MemberStatus{{Name: member}}}}
+			p.ApplyDefaults(&c.Spec)
+			if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
+				t.Fatal(err)
+			}
+			before := b.calls
+			w := call(s, "GET", "/api/v1/clusters/"+c.Name+"/members/"+member+"/logs?process=agent", "", token)
+			if w.Code != 200 || b.calls != before+1 || b.member != member || b.query.Limit != 100 {
+				t.Fatalf("status=%d backend calls=%d member=%q: %s", w.Code, b.calls-before, b.member, w.Body.String())
+			}
+		})
 	}
 }
 
