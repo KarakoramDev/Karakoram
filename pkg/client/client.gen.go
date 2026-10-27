@@ -32187,6 +32187,7 @@ type GetMemberLogsResponse struct {
 	JSON413      *PayloadTooLarge
 	JSON415      *UnsupportedMediaType
 	JSON500      *InternalError
+	JSON503      *Unavailable
 }
 
 // Status returns HTTPResponse.Status
@@ -45202,6 +45203,13 @@ func ParseGetMemberLogsResponse(rsp *http.Response) (*GetMemberLogsResponse, err
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Unavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

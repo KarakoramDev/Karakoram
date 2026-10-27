@@ -31332,6 +31332,15 @@ func (response GetMemberLogs500JSONResponse) VisitGetMemberLogsResponse(w http.R
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetMemberLogs503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMemberLogs503JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type MoveClusterMemberRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Member  string      `json:"member"`

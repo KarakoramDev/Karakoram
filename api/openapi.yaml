@@ -8856,6 +8856,8 @@ paths:
                 $ref: '#/components/schemas/MemberLogs'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
       parameters:
         - name: process
           in: query

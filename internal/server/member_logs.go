@@ -5,13 +5,17 @@ package server
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/redact"
 )
 
 func (s *Server) memberLogs(ctx context.Context, rc *engine.Context, p engine.Provider, member string) response {
@@ -47,11 +51,16 @@ func (s *Server) memberLogs(ctx context.Context, rc *engine.Context, p engine.Pr
 		}
 		logs, err := rc.Backend.Logs(ctx, member, infra.LogQuery{Limit: lines})
 		if err != nil {
-			return s.failure(err)
+			switch {
+			case errors.Is(err, infra.ErrNotFound):
+				return s.failure(engine.ErrNotFound)
+			case errors.Is(err, infra.ErrUnavailable):
+				return s.failure(engine.ErrUnavailable)
+			default:
+				return s.failure(err)
+			}
 		}
-		for _, l := range logs {
-			a.Lines = append(a.Lines, api.LogLine{Timestamp: l.Timestamp, Process: proc, Message: l.Message})
-		}
+		a.Lines = runtimeLogLines(logs, proc, lines)
 	} else {
 		dp, yes := p.(engine.DataPlane)
 		if !yes {
@@ -66,4 +75,58 @@ func (s *Server) memberLogs(ctx context.Context, rc *engine.Context, p engine.Pr
 		}
 	}
 	return response{status: 200, body: a, noStore: true}
+}
+
+// Runtime logs may predate supervised-output redaction. Sanitize each physical
+// pipe independently, including multiline values, before exposing platform text.
+func runtimeLogLines(logs []infra.LogLine, process string, limit int) []api.LogLine {
+	type pipe struct{ container, stream string }
+	type tail struct {
+		sanitizer redact.Stream
+		at        time.Time
+	}
+	tails := make(map[pipe]*tail)
+	order := make([]*tail, 0)
+	out := make([]api.LogLine, 0, min(len(logs), limit))
+	next := 0
+	appendLine := func(at time.Time, message string) {
+		line := api.LogLine{Timestamp: at, Process: process, Message: message}
+		if len(out) < limit {
+			out = append(out, line)
+		} else {
+			out[next] = line
+			next = (next + 1) % limit
+		}
+	}
+	for _, line := range logs {
+		key := pipe{line.Container, line.Stream}
+		t := tails[key]
+		if t == nil {
+			t = &tail{}
+			tails[key] = t
+			order = append(order, t)
+		}
+		t.at = line.Timestamp
+		for message := range strings.SplitSeq(strings.TrimSuffix(line.Message, "\n"), "\n") {
+			safe, gap, keep := t.sanitizer.Line(message)
+			if gap != "" {
+				appendLine(line.Timestamp, gap)
+			}
+			if keep {
+				appendLine(line.Timestamp, safe)
+			}
+		}
+	}
+	for _, t := range order {
+		if gap := t.sanitizer.Omission(); gap != "" {
+			appendLine(t.at, gap)
+		}
+	}
+	if next != 0 {
+		// Rotate the bounded ring back into chronological response order.
+		slices.Reverse(out[:next])
+		slices.Reverse(out[next:])
+		slices.Reverse(out)
+	}
+	return out
 }

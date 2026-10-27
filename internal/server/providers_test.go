@@ -378,6 +378,7 @@ type memberLogsBackend struct {
 	member    string
 	query     infra.LogQuery
 	err       error
+	logs      []infra.LogLine
 }
 
 func (b *memberLogsBackend) Capabilities() infra.Capabilities {
@@ -387,6 +388,9 @@ func (b *memberLogsBackend) Capabilities() infra.Capabilities {
 func (b *memberLogsBackend) Logs(_ context.Context, member string, q infra.LogQuery) ([]infra.LogLine, error) {
 	b.calls++
 	b.member, b.query = member, q
+	if b.logs != nil {
+		return b.logs, b.err
+	}
 	return []infra.LogLine{{Message: "configuration applied", Stream: "stderr"}}, b.err
 }
 
@@ -415,8 +419,8 @@ func TestMemberAgentLogsUseRuntimeBackend(t *testing.T) {
 		{"unknown-member", "missing", "?process=agent", true, nil, 404, 0},
 		{"invalid-lines", "prodm0", "?process=agent&lines=10001", true, nil, 400, 0},
 		{"unsupported", "prodm0", "?process=agent", false, nil, 409, 0},
-		{"backend-missing", "prodm0", "?process=agent", true, infra.ErrNotFound, 500, 1},
-		{"backend-unavailable", "prodm0", "?process=agent", true, infra.ErrUnavailable, 500, 1},
+		{"backend-missing", "prodm0", "?process=agent", true, infra.ErrNotFound, 404, 1},
+		{"backend-unavailable", "prodm0", "?process=agent", true, infra.ErrUnavailable, 503, 1},
 		{"child", "prodm0", "?process=mongod", true, nil, 200, 0},
 		{"default-child", "prodm0", "", true, nil, 200, 0},
 	} {
@@ -453,6 +457,60 @@ func TestMemberAgentLogsUseRuntimeBackend(t *testing.T) {
 				t.Fatalf("child logs bypassed provider: %d calls", p.calls)
 			}
 		})
+	}
+}
+
+func TestMemberAgentLogsRedactRuntimeOutput(t *testing.T) {
+	s, _, token := testServer(t)
+	b := &memberLogsBackend{supported: true, logs: []infra.LogLine{
+		{Container: "first", Stream: "stdout", Message: `password: "`},
+		{Container: "first", Stream: "stderr", Message: "stderr diagnostic retained"},
+		{Container: "second", Stream: "stdout", Message: "second container retained"},
+		{Container: "first", Stream: "stdout", Message: "multiline-value"},
+		{Container: "first", Stream: "stdout", Message: `closing-value"`},
+		{Container: "first", Stream: "stdout", Message: `token=inline-value progress`},
+		{Container: "first", Stream: "stdout", Message: `{"password":"json-value","message":"ready"}`},
+		{Container: "first", Stream: "stdout", Message: "secret: |\n  yaml-value\n2026-10-27T13:00:00Z recovered"},
+		{Container: "first", Stream: "stdout", Message: "mongodb://user:uri-value@example.invalid/db"},
+		{Container: "first", Stream: "stdout", Message: "password: \"\ntrailing-value"},
+	}}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	w := call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines=100", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var logs api.MemberLogs
+	if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+		t.Fatal(err)
+	}
+	var messages strings.Builder
+	for _, line := range logs.Lines {
+		if line.Process != "agent" {
+			t.Fatalf("unexpected process %q", line.Process)
+		}
+		messages.WriteString(line.Message)
+		messages.WriteByte('\n')
+	}
+	got := messages.String()
+	for _, secret := range []string{"multiline-value", "closing-value", "inline-value", "json-value", "yaml-value", "uri-value", "trailing-value"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("runtime credential %q escaped redaction", secret)
+		}
+	}
+	for _, diagnostic := range []string{"stderr diagnostic retained", "second container retained", "ready", "recovered", "[redacted]", "lines omitted: possible credential material"} {
+		if !strings.Contains(got, diagnostic) {
+			t.Fatalf("missing safe diagnostic %q in %q", diagnostic, got)
+		}
+	}
+	w = call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines=2", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+		t.Fatal(err)
+	}
+	if len(logs.Lines) > 2 || strings.Contains(w.Body.String(), "trailing-value") {
+		t.Fatal("redaction expanded past the requested limit or leaked a continuation")
 	}
 }
 
