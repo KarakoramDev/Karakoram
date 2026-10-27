@@ -55,11 +55,11 @@ type member struct {
 	// ImportBatch preserves the exact original subset across ambiguous imports.
 	// Resources/Replicas are frozen with it; sensitive Env is rebuilt from the
 	// sealed member token, never stored in Cluster.Internal.
-	ImportBatch          *engine.ImportPlan             `json:"importBatch,omitempty"`
-	Stage                string                         `json:"stage"`
-	Version              string                         `json:"version"`
+	ImportBatch *engine.ImportPlan `json:"importBatch,omitempty"`
+	Stage       string             `json:"stage"`
+	Version     string             `json:"version"`
 	// PreviousVersion is the minor-rollout source until SQL confirms the target.
-	PreviousVersion      string                         `json:"previousVersion,omitempty"`
+	PreviousVersion string `json:"previousVersion,omitempty"`
 	// VersionDrift is the last confirmed unexpected SQL release, not a live observation.
 	VersionDrift         string                         `json:"versionDrift,omitempty"`
 	Resources            domain.Resources               `json:"resources"`

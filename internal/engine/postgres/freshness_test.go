@@ -173,7 +173,7 @@ func TestExpectedVersionRolloutsDoNotReportDrift(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, b := setup(t, "ha")
 			rc.Cluster.Spec.Version = tc.source
-			s := converge(t, p, rc)
+			converge(t, p, rc)
 			rc.Cluster.Spec.Version = tc.target
 			rc.Cluster.Generation++
 			s, err := load(rc.Cluster)
