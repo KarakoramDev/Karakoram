@@ -46,8 +46,16 @@ func postgresListenHost(host string) string {
 }
 func proxyInterfaces(host string, reader bool) string {
 	interfaces := net.JoinHostPort(listenHost(host), "5432")
+	// ProxySQL explicitly sets IPV6_V6ONLY: publish both sockets for a
+	// dual-family layout rather than relying on IPv4-mapped connections.
+	if host == "::" {
+		interfaces = "0.0.0.0:5432;" + interfaces
+	}
 	if reader {
 		interfaces += ";" + net.JoinHostPort(listenHost(host), "5433")
+		if host == "::" {
+			interfaces += ";0.0.0.0:5433"
+		}
 	}
 	return interfaces
 }

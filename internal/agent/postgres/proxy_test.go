@@ -330,3 +330,33 @@ func TestProxyStatusProbesIdleShunnedWriter(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyFrontendAddressFamilies(t *testing.T) {
+	for _, tc := range []struct {
+		host, writer, reader string
+	}{
+		{"", "0.0.0.0:5432", "0.0.0.0:5432;0.0.0.0:5433"},
+		{"0.0.0.0", "0.0.0.0:5432", "0.0.0.0:5432;0.0.0.0:5433"},
+		{"::", "0.0.0.0:5432;[::]:5432", "0.0.0.0:5432;[::]:5432;[::]:5433;0.0.0.0:5433"},
+	} {
+		for _, reader := range []bool{false, true} {
+			p := &pgspec.Proxy{ReaderPort: reader}
+			want := tc.writer
+			if reader {
+				want = tc.reader
+			}
+			if got := proxyStartupSettings(p, tc.host)["pgsql-interfaces"]; got != want {
+				t.Errorf("host=%q reader=%t interfaces=%q, want %q", tc.host, reader, got, want)
+			}
+			text := renderProxy(p, dataPaths(t.TempDir()), tc.host)
+			if !strings.Contains(text, " interfaces=\""+want+"\";") {
+				t.Errorf("cold-start configuration lacks interfaces=%q", want)
+			}
+			for _, admin := range []string{`mysql_ifaces="127.0.0.1:6032"`, `pgsql_ifaces="127.0.0.1:6132"`} {
+				if !strings.Contains(text, admin) {
+					t.Errorf("administrative interface changed: missing %s", admin)
+				}
+			}
+		}
+	}
+}

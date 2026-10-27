@@ -335,7 +335,7 @@ func TestIPv6ListenersAndReplicationCIDRs(t *testing.T) {
 	if !strings.Contains(etcd, "https://[::]:2379") || !strings.Contains(etcd, "https://[::]:2380") {
 		t.Fatal("etcd IPv6 listener missing")
 	}
-	if proxyInterfaces(s.ListenHost, true) != "[::]:5432;[::]:5433" || frontendAddress(s.ListenHost) != "[::1]:5432" {
+	if proxyInterfaces(s.ListenHost, true) != "0.0.0.0:5432;[::]:5432;[::]:5433;0.0.0.0:5433" || frontendAddress(s.ListenHost) != "[::1]:5432" {
 		t.Fatal("proxy IPv6 listener missing")
 	}
 	if !strings.Contains(strings.Join(hba(s), "\n"), "hostssl replication kk_replicator 127.0.0.0/8 scram-sha-256") {
