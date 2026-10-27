@@ -78,3 +78,23 @@ func TestRecoveryPasswordOnlyActionValidation(t *testing.T) {
 		t.Fatal("recovery password action accepted plaintext")
 	}
 }
+
+func TestRecoveryPasswordBindingValidation(t *testing.T) {
+	verifier := testVerifier()
+	for _, name := range []string{"app", "kb_0123456789abcdef0123456789abcdef"} {
+		request := pgspec.AccessRequest{Binding: true, Operation: "password", Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: name}, Password: &verifier}}
+		if err := validateAccessRequest(pgspec.ActionRoles, request); err == nil {
+			t.Fatal("ordinary password mutation bypassed binding identity fence")
+		}
+		request.Operation = "recover-password"
+		if err := validateAccessRequest(pgspec.ActionRoles, request); err != nil {
+			t.Fatal("restore-only password request rejected", err)
+		}
+		for _, protected := range []string{"postgres", "kk_monitor", "pg_monitor"} {
+			request.Role.Name = protected
+			if err := validateAccessRequest(pgspec.ActionRoles, request); err == nil {
+				t.Fatal("recovery accepted protected identity", protected)
+			}
+		}
+	}
+}

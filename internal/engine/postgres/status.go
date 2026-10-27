@@ -660,7 +660,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			if checkpoint.Label != "" {
 				source += ", set " + checkpoint.Label
 			}
-			out.Message = fmt.Sprintf("Resuming restore %s at checkpoint %s (generation %d; %s); repair the source repository or member dependency. Client and process holds remain until the same restore completes.", s.RestoreRecovery.ID, checkpoint.Step, checkpoint.Generation, source)
+			out.Message = fmt.Sprintf("Resuming restore %s at checkpoint %s (generation %d; %s); repair the source repository/member dependency or upgrade the control plane and member agents. Client and process holds remain until this exact restore completes. To abandon recovery, delete the cluster; restore another backup into a new target. Do not resubmit the restore or edit pg_hba.conf.", s.RestoreRecovery.ID, checkpoint.Step, checkpoint.Generation, source)
 			if s.RestoreRecovery.Kind == domain.OperationBackup {
 				out.Message = fmt.Sprintf("Aborting coordinated backup %s; formation membership remains fenced until all original native backup receipts are terminal.", s.RestoreRecovery.ID)
 			}

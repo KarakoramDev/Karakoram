@@ -420,3 +420,50 @@ func TestNativeMajorUpgrade(t *testing.T) {
 	}
 	t.Log("native Percona16→17: maintenance exclusion, explicit locale, pg_upgrade check/link, durable activation, retained row and idempotent completion passed")
 }
+
+func TestNativeRecoveryPasswordRequiresClientHold(t *testing.T) {
+	if os.Getenv("KARAKORAM_PG_BIN_DIR") == "" {
+		t.Skip("set KARAKORAM_PG_BIN_DIR for native recovery acceptance")
+	}
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("held-%t", held), func(t *testing.T) {
+			s := testSpec()
+			s.BinDir = os.Getenv("KARAKORAM_PG_BIN_DIR")
+			s.Postgres.RecoveryClientsHeld = held
+			h := startNativeAgent(t, s)
+			for _, name := range []string{"recovery_app", "kb_0123456789abcdef0123456789abcdef"} {
+				before, after := "before-recovery-password", "after-recovery-password"
+				verifier := nativeVerifier(t, before)
+				role := pgspec.RoleWrite{Role: pgspec.Role{Name: name, Login: true, ConnectionLimit: 7}, Password: &verifier}
+				nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Binding: bindingRole(name), Operation: "create", Role: &role}, nil)
+				verifier = nativeVerifier(t, after)
+				req := pgspec.AccessRequest{Binding: true, Operation: "recover-password", Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: name}, Password: &verifier}}
+				response, err := h.request(http.MethodPost, "/v1/postgres/roles", req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response.Body.Close()
+				want := http.StatusConflict
+				password := before
+				if held {
+					want, password = http.StatusOK, after
+				}
+				if response.StatusCode != want {
+					t.Fatalf("recovery password HTTP %d; want %d", response.StatusCode, want)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				defer cancel()
+				c, err := userConnect(ctx, dataPaths(h.dir).socket, "postgres", name, password)
+				if err != nil {
+					t.Fatal("recovery password did not match expected credential", err)
+				}
+				c.Close(ctx)
+				var got pgspec.Role
+				nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "get", Name: name}, &got)
+				if !got.Login || got.ConnectionLimit != 7 || len(got.MemberOf) != 0 {
+					t.Fatal("password recovery changed catalog attributes", got)
+				}
+			}
+		})
+	}
+}

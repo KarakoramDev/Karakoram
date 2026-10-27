@@ -47,6 +47,49 @@ observation drift explicitly rather than rejecting an actual-release backup as
 though no current backup existed. Review [PostgreSQL version-drift recovery](postgres/README.md#existing-version-drift)
 before proceeding. This upgrade neither downgrades engines nor recreates clusters.
 
+### PostgreSQL restores stuck at access
+
+v0.4.0 accidentally sent every managed-role recovery password request through
+the binding mutation scope. The agent rejected it before SQL execution because
+normal binding mutations require an OID-fenced journal. This affects every
+backend, including single-member and HA PostgreSQL/Supabase; it requires a
+managed login role present in the recovered catalog. It is not an IPv6, TLS,
+extension-profile or PostgreSQL minor-version error. v0.2.0 and v0.3.0 do not
+contain this regression.
+
+An affected restore is Failed and the cluster Degraded at `access`, with client
+HBA rules and proxy users intentionally held closed. **Do not submit another
+restore or edit HBA files.** Preserve the control-plane database/master key,
+backup objects and sealed recovery credentials.
+
+For a stuck cluster with only ordinary managed roles (no `kb_` binding roles),
+deploy the fixed control plane first, preserving its state and master key.
+The fixed control plane uses the original password-only protocol accepted by
+v0.4.0 member agents: the existing journal automatically resumes, rekeys roles,
+publishes access and releases client holds. No new API action is required.
+Wait for `RestoreRecovery` to clear, restore-resource success, working verified
+SQL and fresh cluster readiness before refreshing agents. The original Failed
+operation remains historical evidence. If version drift also exists, resolve
+the actual/desired release mismatch as described above **after recovery and
+before any member redeployment**; this recovery does not downgrade PostgreSQL.
+
+New control-plane/member-agent pairs also support password-only recovery of
+binding identities, gated by the member's client-held state. **An already stuck
+v0.4.0 source containing recovered `kb_` roles cannot use `upgrade-agents` as an
+escape:** its restore journal owns the operation queue. Skipping binding rekey
+is not safe: normal binding ownership checks do not reapply a password rotated
+since the backup, and could leave a nominally repaired consumer unable to log
+in. There is no in-place legacy-agent bypass. Preserve the backup and use the
+supported delete/new-target recovery in
+[failed restore and client holds](postgres/backups.md#failed-restore-and-client-holds).
+Remove dependent consumers/bindings through their supported lifecycle first if
+they prevent source deletion. Do not copy executables into running containers.
+
+Before another restore, complete a supported member-agent rollout on a healthy
+cluster. A failed destructive restore never opens incomplete data merely
+because a retry budget expires: repair and automatic continuation, or explicit
+target abandonment and new-target recovery, are the supported outcomes.
+
 ## Upgrading from v0.3.0 to v0.4.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.4.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup); retain the old binary and state together for recovery. Existing namespaces, clusters, credentials and policies are retained; upgrading does not migrate their provider or opt them into new engine topologies.

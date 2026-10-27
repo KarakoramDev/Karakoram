@@ -123,6 +123,39 @@ Source repository access is read-only in the recovery workflow: no source stanza
 
 During recovery, remote database-client HBA rules and ProxySQL client users are held closed. Local administration and replication remain available for recovery and replica rebuilds. Client rules and managed proxy logins return only after source-only configuration has been removed.
 
+### Failed restore and client holds
+
+A queue operation can become **Failed** while the cluster remains **Degraded**
+with `RestoreRecovery=False/RestoreRecoveryPending`. The condition identifies
+the original operation, checkpoint, generation and frozen backup set. Ordinary
+reconciliation resumes that exact journal; it does not run the destructive
+restore again from the beginning. Fix the named repository/member dependency
+and monitor the restore resource and recovery condition. A historical Failed
+operation does not change to Succeeded when background recovery finishes.
+
+At `access`, native data recovery and replica rebuild have already completed.
+Karakoram rekeys recovered managed login roles to the target's current passwords
+(or the imported snapshot passwords for a clone), then publishes normal HBA
+rules and proxy users. Successful reconciliation releases client holds
+automatically. It does not overwrite recovered role attributes or memberships.
+Restore-only binding password changes require a client-held member and still
+check native writable-primary authority; normal binding mutations retain their
+OID/receipt fences.
+
+There is no safe timeout that opens a partly restored database: data already
+replaced by a destructive restore cannot be rolled back by dropping a hold.
+Until the exact restore can finish, keep applications quiesced. Do not edit
+`pg_hba.conf`, clear internal journals, or resubmit an in-place restore while its
+recovery journal owns the cluster. To abandon an unrecoverable target, use
+`karactl -n NS clusters delete CLUSTER --keep-backups --wait`; preserve backup
+inventory, sealed credentials and the master key, and restore a retained backup
+into a **new** target using `dataSource`. A new-target restore may need to precede
+source deletion when a live-source/PITR dependency prevents deletion.
+
+For the v0.4.0 access-checkpoint defect and mixed-version binding limitations,
+follow the [v0.4.1 recovery notes](../upgrade.md#postgresql-restores-stuck-at-access).
+
+
 Patroni uses the private Unix socket for local administration and replication
 probes; connections between members retain hostname-verified TLS. Custom restore
 bootstrap persists its generation marker with a file `fsync`, atomic rename and

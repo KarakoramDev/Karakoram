@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -114,7 +115,14 @@ func (p *Core) reconcileRecoveredRoles(ctx context.Context, rc *engine.Context) 
 		if err != nil {
 			return err
 		}
-		if err = p.accessAction(BindingContext(ctx), rc, "roles", pgspec.AccessRequest{Operation: "password", Role: &RoleWrite{Role: Role{Name: name}, Password: &verifier}}, nil); err != nil {
+		// Ordinary roles use the original password-only protocol, including
+		// during recovery of an older member agent. Binding identities require
+		// the restore-only action; ordinary binding mutation fences stay intact.
+		request := pgspec.AccessRequest{Operation: "password", Role: &RoleWrite{Role: Role{Name: name}, Password: &verifier}}
+		if strings.HasPrefix(name, "kb_") {
+			request.Operation, request.Binding = "recover-password", true
+		}
+		if err = p.accessAction(ctx, rc, "roles", request, nil); err != nil {
 			return err
 		}
 		kept = append(kept, name)

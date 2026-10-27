@@ -90,8 +90,8 @@ func TestManagedRoleRecoveryManifestCloneAndCurrentRotation(t *testing.T) {
 						}
 						json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 					case "password":
-						if request.Role.Name != "app" || request.Role.Password == nil {
-							t.Error("incorrect recovery password action")
+						if request.Binding || request.Role.Name != "app" || request.Role.Password == nil {
+							t.Error("ordinary recovery password action entered binding mutation scope")
 						} else {
 							appliedVerifier = *request.Role.Password
 						}
@@ -263,5 +263,45 @@ func TestDeletingRecoveryProvenanceDeletesManagedManifest(t *testing.T) {
 	}
 	if _, err := rc.Secrets.GetClusterSecret(t.Context(), domain.ClusterRef{Namespace: backup.Namespace, Name: backup.RecoveryIdentity}, "access/manifest"); !missing(err) {
 		t.Fatal("deleted backup retained its sealed managed passwords", err)
+	}
+}
+
+func TestRecoveredBindingPasswordUsesHeldOnlyAction(t *testing.T) {
+	p, rc, _ := backupFixture(t, "single")
+	const name = "kb_0123456789abcdef0123456789abcdef"
+	if err := putSecret(t.Context(), rc, "access/roles", []byte(`["`+name+`"]`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := putSecret(t.Context(), rc, rolePasswordKey(name), []byte("current-binding-password")); err != nil {
+		t.Fatal(err)
+	}
+	applied := false
+	installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/postgres/status":
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "standalone"})
+		case "/v1/postgres/roles":
+			var req pgspec.AccessRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Error(err)
+			}
+			if req.Operation == "list" {
+				json.NewEncoder(w).Encode([]Role{{Name: name, Login: true}})
+				return
+			}
+			if req.Operation != "recover-password" || !req.Binding || req.Role == nil || req.Role.Name != name || req.Role.Password == nil {
+				t.Error("binding recovery bypassed restore-only password protocol")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			assertRecoveryPassword(t, *req.Role.Password, "current-binding-password")
+			applied = true
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	if err := p.reconcileRecoveredRoles(t.Context(), rc); err != nil || !applied {
+		t.Fatal("binding password recovery did not complete", err)
 	}
 }

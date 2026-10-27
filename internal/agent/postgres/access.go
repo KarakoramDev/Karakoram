@@ -503,7 +503,7 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 			if managedRole(req.Name) || req.Binding && bindingRole(req.Name) {
 				return nil
 			}
-		case "password":
+		case "password", "recover-password":
 			if req.Role != nil && (managedRole(req.Role.Name) || req.Binding && bindingRole(req.Role.Name)) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
 				return nil
 			}
@@ -579,7 +579,7 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			return roles, nil
 		case "create", "update":
 			return struct{}{}, writeRole(ctx, c, req.Operation, *req.Role)
-		case "password":
+		case "password", "recover-password":
 			_, err := c.Exec(ctx, "ALTER ROLE "+pgx.Identifier{req.Role.Name}.Sanitize()+" PASSWORD $1", pgx.QueryExecModeSimpleProtocol, *req.Role.Password)
 			return struct{}{}, err
 		case "delete":
@@ -703,6 +703,11 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				s, err := decodeSpec(locked.Config())
 				if err != nil {
 					return err
+				}
+				// Recovery may rekey identities from the recovered catalog, but
+				// must never bypass ordinary binding OID fences on an open server.
+				if req.Operation == "recover-password" && (s.Postgres == nil || !s.Postgres.RecoveryClientsHeld) {
+					return &accessError{http.StatusConflict, "recovery password action requires client holds"}
 				}
 				if s.Role != pgspec.RoleData {
 					return &accessError{http.StatusServiceUnavailable, "access action requires a data member"}
