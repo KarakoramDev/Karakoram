@@ -67,6 +67,12 @@ a deferred application change. Native management health independently controls R
 
 Application HTTP listens on private port **8080** for a trusted TLS-terminating ingress. Management HTTP on **127.0.0.1:9000** is not exposed by the runtime's port declarations. Native readiness calls `/health/ready` and requires HTTP 200 with status `UP`. Agent health is independently protected by cluster-scoped TLS on port 9443.
 
+Successful agent observations carry a control-plane sample timestamp. Native-ready
+results renew the shared availability lease only while that sample is fresh;
+failed or expired observations withdraw health and connectivity claims. A
+control-plane upgrade repairs missing observation timestamps without replacing
+the serving agent or changing its credentials.
+
 `hostname` accepts an explicit HTTP(S) origin. Omitting it disables strict hostname checks for private development only. `publicHttps` requires an explicit HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure provider must support public HTTPS subdomain routing. Configure DNS and the ingress so the origin matches that routing. **Only trust an ingress that overwrites the selected headers**; otherwise clients can forge their external address/scheme. A private HTTP endpoint is not an Internet-facing production endpoint.
 
 Create, replace and patch admission, including dry runs, reject `publicHttps: true`

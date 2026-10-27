@@ -674,7 +674,16 @@ func (*Provider) Status(ctx context.Context, rc *engine.Context) (domain.Cluster
 		return health.Ready && applied.Error == "", nil
 	})
 	ready = ready && count == 1
-	out.Members = []domain.MemberStatus{{Name: s.Member, Set: "keycloak", Role: "keycloak", State: "running", Health: ready, Version: kcspec.Version, Agent: domain.AgentStatus{Healthy: err == nil && count > 0}}}
+	agent := domain.AgentStatus{Healthy: err == nil && count > 0}
+	if agent.Healthy {
+		// The shared availability fence accepts only samples observed during
+		// this sweep, not merely a positive connectivity flag.
+		agent.LastSeen = time.Now()
+		if rc.Clock != nil {
+			agent.LastSeen = rc.Clock.Now()
+		}
+	}
+	out.Members = []domain.MemberStatus{{Name: s.Member, Set: "keycloak", Role: "keycloak", State: "running", Health: ready, Version: kcspec.Version, Agent: agent}}
 	if ready {
 		out.Phase = domain.Phase("Ready")
 		out.Message = "Keycloak is ready"
