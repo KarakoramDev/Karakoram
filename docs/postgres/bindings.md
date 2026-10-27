@@ -48,6 +48,33 @@ Rotation, keep-data disable and role deletion first verify the sealed creation r
 
 The binding role has an explicit 100-connection limit. Sources must use TLS; consumers verify the source certificate (`verify-full`). HA sources require a writer proxy; proxy-free connections are supported only for single-member sources.
 
+### Protocol compatibility and primary failover
+
+Bindings use the private writer endpoint, not a snapshot of the current primary's
+member address. With ProxySQL, its PostgreSQL read-only monitor moves the writer
+hostgroup after promotion; binding users keep transactions on that hostgroup.
+Connections or transactions active during a primary failure can fail. Clients
+must reconnect and retry at their application's transaction boundary; the proxy
+does not replay an interrupted transaction or guarantee uninterrupted service.
+
+ProxySQL 3.0.11 does not implement the full PostgreSQL extended protocol: named
+portals, heterogeneous result-column formats and `LISTEN` are unsupported.
+Managed consumers deliberately use the following compatible paths:
+
+| Consumer | Driver and managed protocol |
+| --- | --- |
+| [Keycloak](../keycloak/README.md#database-and-credential-boundary) | pgjdbc with `preferQueryMode=simple`; JDBC parameter encoding remains, server cursors do not |
+| [Temporal](../temporal/README.md) | `postgres12` (lib/pq), `disable_prepared_binary_result=yes` for server stores and schema tools; unnamed execution portals |
+| [OpenBao PostgreSQL storage](../openbao/operations.md#postgresql-storage-opt-in) | pgx; fixed single-column reads and SQL-row HA leases, not session advisory locks |
+
+These choices are for the pinned managed distributions, not a compatibility
+promise for arbitrary extensions, SQL clients or future driver versions.
+[PostgreSQL Data MCP](../data-mcp.md) is different: its companion requires the full
+protocol and already uses direct multi-member discovery with
+`target_session_attrs=read-write` for writes and `prefer-standby` for reads.
+That driver checks a member's role when opening a connection; a single stored
+primary address would not provide equivalent failover.
+
 ## Inspect and rotate
 
 ```sh

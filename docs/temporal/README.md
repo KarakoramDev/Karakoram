@@ -100,6 +100,20 @@ prepared visibility queries bypass that default. The agent's schema checks do
 not explicitly prepare and continue using pgx `exec`. These choices apply to
 direct singleton sources too; bound parameters and TLS verification are retained.
 
+Named prepared statements are supported by this proxy; they are not named
+cursor portals. lib/pq executes them with an unnamed portal and no incremental
+cursor fetch. The dedicated pgx schema-lock connection uses a session advisory
+lock, which ProxySQL tracks to disable multiplexing. That lock is lost with its
+backend session, not migrated across a database failover. Do not intentionally
+fail over a source during schema migration.
+
+After a primary failure the stable writer endpoint routes new database work to
+the promoted primary; SQL pools can replace failed connections. In-flight
+transactions may fail and Temporal must recover through its persistence/task
+retry paths. Qualify history, binary payloads, timers and explicit-prepared
+visibility lookups after failover; frontend health alone is insufficient. See
+the [binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
+
 This fix requires newly deployed consumer agents; a control-plane upgrade or
 ordinary restart does not replace them. See the [v0.4.1 consumer rollout
 procedure](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)

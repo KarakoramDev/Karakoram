@@ -35,6 +35,16 @@ buffered in memory, so large queries can consume more member memory.
 TLS hostname verification and the binding's writer endpoint remain unchanged;
 the same configuration also works with direct singleton sources.
 
+The same datasource supplies Liquibase, Hibernate and the default Infinispan
+JDBC-ping discovery SQL; simple mode also covers discovery's prepared statements.
+The managed scheduler uses Keycloak's basic timer, not a Quartz JDBC job store.
+This is not support for custom extensions that require `LISTEN` or other
+unsupported proxy features. During PostgreSQL primary failover, the writer
+endpoint remains stable, but in-flight requests can fail until the JDBC pool
+replaces failed connections. Verify new authentication and persisted realm/user
+operations after recovery, not merely an already-cached session. See the
+[binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
+
 The setting is rendered by the member agent, not the control plane. Existing
 consumers need a newly deployed agent; ordinary restart and `upgrade-agents`
 are not a supported rollout for this provider. Follow the

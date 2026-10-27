@@ -120,6 +120,22 @@ Upgrades are forward-only to catalog-listed versions; inspect `providers get ope
 
 The engine driver implements `engineOptions.storage: {"type":"postgresql","postgresql":{"cluster":"appdb"}}` through a [PostgreSQL](https://www.postgresql.org/) binding service: same-namespace PostgreSQL 13+, a dedicated owned database/role, verified TLS, and native OpenBao HA tables. Members are stateless HA peers, not Raft voters. Binding credential changes roll members; deletion releases the binding after runtimes terminate, with data retention following `keepVolumes`.
 
+OpenBao 2.7.1 PostgreSQL physical storage uses pgx v5, not lib/pq. Its fixed KV,
+listing and HA reads each return a single column, so their binary/text formats
+cannot form the heterogeneous result array rejected by ProxySQL 3.0.11.
+Prepared statements use unnamed execution portals; no JDBC or lib/pq
+compatibility settings are required. Transactions use the same storage queries.
+
+HA ownership is a row in `openbao_ha_locks` with a database-clock expiry
+(15-second lease, renewed every five seconds), not a session advisory lock or
+`LISTEN` subscription. A failed renewal signals leadership loss. During source
+primary failover, the writer endpoint remains stable and new SQL connections can
+reach the promoted primary, but active requests can fail and an OpenBao leader
+can step down before HA ownership recovers. Check native active/standby health
+and persisted KV reads/writes after recovery; a Ready binding alone is not a
+storage failover proof. See the
+[binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
+
 PostgreSQL peers retain cluster/member/volume identity fencing, but their local volume is not marked as initialized durable native storage: replacing an empty peer disk must not trigger the Raft data-loss guard when all durable state remains in PostgreSQL. Raft peers retain that guard unchanged. An already-initialized external database without recoverable control-plane initialization material or an encrypted initialization receipt still fails closed with `InitializationOutcomeLost`; stateless disk replacement never authorizes reinitialization.
 
 The standard server constructs one PostgreSQL binding service and passes the same instance through `internal/server.engineOptions.Bindings` to `openbao.ProviderOptions.Bindings` (and to [Keycloak](https://www.keycloak.org/), [Temporal](https://temporal.io/) and the bindings API). Engine driver metadata advertises `postgresql-storage` only when that dependency is present, and the UI gates the choice from that capability; a composition without the service rejects PostgreSQL storage at admission. The native integration scenario `TestNativeControlPlanePostgresStorage` creates a real PostgreSQL role/database and exercises native HA initialization, unseal, persistence across replacement of all local member volumes, and both release retention modes. There are no OpenBao snapshots/PITR in this mode: recovery belongs to the bound PostgreSQL cluster plus retained seal material. Ordinary [PostgreSQL credential connections](access-and-tls.md#managed-database-connections) do not depend on this service.
