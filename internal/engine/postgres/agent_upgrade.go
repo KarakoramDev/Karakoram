@@ -23,6 +23,7 @@ type agentUpgradeCheckpoint struct {
 	Barrier  string                     `json:"barrier,omitempty"`
 	Timeline int                        `json:"timeline,omitempty"`
 	SystemID string                     `json:"systemId,omitempty"`
+	Primary  string                     `json:"barrierPrimary,omitempty"`
 }
 
 func agentUpgradeResult(cp *agentUpgradeCheckpoint) (engine.OpResult, error) {
@@ -55,6 +56,11 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		}
 	}()
 	if cancel && !cp.Waiting {
+		return engine.OpResult{Done: true}, nil
+	}
+	// Completing a frozen target does not deploy the new control-plane build.
+	// A restart after the final acknowledgement must still retire the journal.
+	if cp.Order != nil && cp.Index >= len(cp.Order) {
 		return engine.OpResult{Done: true}, nil
 	}
 	if !cp.Waiting && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
@@ -99,9 +105,6 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		}
 		return agentUpgradeResult(&cp) // Persist the frozen target and order before disruption.
 	}
-	if cp.Index >= len(cp.Order) {
-		return engine.OpResult{Done: true}, nil
-	}
 	m := s.find(cp.Order[cp.Index])
 	if m == nil {
 		return result, engine.ErrNotFound
@@ -142,10 +145,39 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			if e != nil {
 				return result, e
 			}
-			if st.Role == "replica" && (!st.Streaming || st.LagBytes > 0) {
-				return agentUpgradeResult(&cp)
+			if cp.Barrier != "" {
+				if st.SystemID != "" && st.SystemID != cp.SystemID {
+					return result, engine.Invalid("agent rollout member %s has a different PostgreSQL system identity; inspect cluster identity and re-run upgrade-agents after recovery", m.Name)
+				}
+				if st.Role == "replica" {
+					leader, writer, e := s.group(m.Group).primary(ctx, rc)
+					if e != nil {
+						return result, fmt.Errorf("cannot establish current primary for agent rollout member %s; restore primary observations and re-run upgrade-agents if the operation fails: %w", m.Name, e)
+					}
+					if writer.SystemID != "" && writer.SystemID != cp.SystemID {
+						return result, engine.Invalid("agent rollout primary %s has a different PostgreSQL system identity; inspect cluster identity and re-run upgrade-agents after recovery", leader.Name)
+					}
+					if writer.SystemID == "" || writer.Timeline < 1 || !walAtLeast(writer.WALPosition, "0/0") {
+						return result, fmt.Errorf("cannot establish current primary WAL identity for agent rollout member %s; restore observations and re-run upgrade-agents if the operation fails: %w", m.Name, engine.ErrUnavailable)
+					}
+					if writer.Timeline != cp.Timeline || (cp.Primary != "" && cp.Primary != leader.Name) {
+						// A failover makes the old timeline barrier impossible to
+						// satisfy. Persist a fresh barrier on the current writer;
+						// never compare WAL positions across timelines.
+						cp.Primary, cp.Timeline, cp.Barrier = leader.Name, writer.Timeline, writer.WALPosition
+						return agentUpgradeResult(&cp)
+					}
+					if st.SystemID != cp.SystemID || !st.Streaming || st.LagBytes > 0 ||
+						st.Timeline != cp.Timeline || !walAtLeast(st.WALPosition, cp.Barrier) ||
+						(cp.Primary != "" && st.Leader != leader.Name) {
+						if cp.Primary != "" {
+							return result, fmt.Errorf("agent rollout member %s has not caught up to current primary %s on timeline %d; restore streaming replication and re-run upgrade-agents if the operation fails: %w", m.Name, leader.Name, cp.Timeline, engine.ErrUnavailable)
+						}
+						return agentUpgradeResult(&cp)
+					}
+				}
 			}
-			if st.Role == "replica" && cp.Barrier != "" && (st.SystemID != cp.SystemID || st.Timeline != cp.Timeline || !walAtLeast(st.WALPosition, cp.Barrier)) {
+			if st.Role == "replica" && (!st.Streaming || st.LagBytes > 0) {
 				return agentUpgradeResult(&cp)
 			}
 		}
@@ -205,7 +237,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		return result, e
 	}
 	if m.Role == "data" && patroniTopology(m.Topology) {
-		cp.Barrier, cp.Timeline, cp.SystemID = "", 0, ""
+		cp.Barrier, cp.Timeline, cp.SystemID, cp.Primary = "", 0, "", ""
 		for _, peer := range s.group(m.Group).data() {
 			observed, e := live(ctx, rc, peer.Name)
 			if e != nil {

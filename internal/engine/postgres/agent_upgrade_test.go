@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -606,5 +607,107 @@ func TestExtensionPreloadChangesRequireMaintenanceAdmission(t *testing.T) {
 		if got := needsDisruption(p, rc, member, desiredComponent(rc, member)); got != test.disruptive {
 			t.Fatalf("preloads %s -> %s disruptive=%v, want %v", test.before, test.after, got, test.disruptive)
 		}
+	}
+}
+
+func TestAgentRolloutRefreshesBarrierAfterFailover(t *testing.T) {
+	for _, fault := range []string{"lag", "wrong-leader", "old-timeline", "replica-identity", "primary-identity", "second-failover", "more-members"} {
+		t.Run(fault, func(t *testing.T) {
+			p, rc, b := setup(t, "ha")
+			s := converge(t, p, rc)
+			b.statusOverrides = map[string]pgspec.StatusResponse{}
+			for _, m := range s.data() {
+				st, err := live(t.Context(), rc, m.Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				st.SystemID, st.Timeline, st.WALPosition, st.Leader = "system", 11, "0/300", "demop0"
+				b.statusOverrides[m.Name] = st
+			}
+			target := engine.AgentUpgradePayload{TargetBuild: "previous-cp-build"}
+			b.genericOverrides = map[string]agentapi.Status{
+				"demop1": {ConfigVersion: s.find("demop1").ConfigVersion, Agent: agentapi.AgentBuild{Build: target.TargetBuild}},
+			}
+			cp := agentUpgradeCheckpoint{
+				Target: target, Order: []string{"demop1"}, Waiting: true,
+				Barrier: "0/200", Timeline: 6, SystemID: "system",
+			}
+			if fault == "more-members" {
+				cp.Order = append(cp.Order, "demop2")
+			}
+			if fault == "replica-identity" || fault == "primary-identity" {
+				name := "demop1"
+				if fault == "primary-identity" {
+					name = "demop0"
+				}
+				st := b.statusOverrides[name]
+				st.SystemID = "foreign-system"
+				b.statusOverrides[name] = st
+			}
+			op := rolloutOperation(false)
+			op.Checkpoint, _ = json.Marshal(cp)
+			step := func() (engine.OpResult, error) {
+				t.Helper()
+				p = New(p.options) // Resume exclusively from the durable receipt.
+				result, err := p.RunOperation(t.Context(), rc, op)
+				if result.Checkpoint != nil {
+					op.Checkpoint = result.Checkpoint
+					if e := json.Unmarshal(result.Checkpoint, &cp); e != nil {
+						t.Fatal(e)
+					}
+				}
+				return result, err
+			}
+			before := len(b.actions)
+			result, err := step()
+			if strings.HasSuffix(fault, "identity") {
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "re-run upgrade-agents") {
+					t.Fatalf("diverged identity did not fail explicitly: %+v %v", result, err)
+				}
+				return
+			}
+			if err != nil || result.Done || cp.Index != 0 || cp.Timeline != 11 || cp.Barrier != "0/300" || cp.Primary != "demop0" {
+				t.Fatalf("current-primary barrier not durably refreshed: %+v %v", cp, err)
+			}
+			if fault == "second-failover" {
+				writer := b.statusOverrides["demop0"]
+				writer.Timeline, writer.WALPosition = 12, "0/400"
+				b.statusOverrides["demop0"] = writer
+				if _, err := step(); err != nil || cp.Timeline != 12 || cp.Barrier != "0/400" {
+					t.Fatalf("second failover did not refresh barrier: %+v %v", cp, err)
+				}
+			}
+			replica := b.statusOverrides["demop1"]
+			switch fault {
+			case "lag":
+				replica.WALPosition = "0/250"
+			case "wrong-leader":
+				replica.Leader = "demop2"
+			case "old-timeline":
+				replica.Timeline = 6
+			}
+			b.statusOverrides["demop1"] = replica
+			if fault != "more-members" {
+				if _, err := step(); !errors.Is(err, engine.ErrUnavailable) || !strings.Contains(err.Error(), "re-run upgrade-agents") {
+					t.Fatalf("unproven catch-up passed barrier or lost recovery guidance: %v", err)
+				}
+			}
+			replica.Timeline, replica.WALPosition, replica.Leader = cp.Timeline, cp.Barrier, cp.Primary
+			b.statusOverrides["demop1"] = replica
+			if _, err := step(); err != nil || cp.Index != 1 || cp.Waiting {
+				t.Fatalf("caught-up old-target member did not complete: %+v %v", cp, err)
+			}
+			result, err = step()
+			if fault == "more-members" {
+				if !errors.Is(err, engine.ErrInvalid) {
+					t.Fatalf("new CP was allowed to disrupt remaining frozen-target member: %+v %v", result, err)
+				}
+			} else if err != nil || !result.Done {
+				t.Fatalf("final frozen-target acknowledgement failed after CP change: %+v %v", result, err)
+			}
+			if len(b.actions) != before {
+				t.Fatal("waiting recovery redeployed or mutated a member", b.actions[before:])
+			}
+		})
 	}
 }

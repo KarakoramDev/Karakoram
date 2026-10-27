@@ -461,6 +461,22 @@ message to re-run `upgrade-agents`. Keep that receipt for evidence and submit a
 new rollout targeting the current control plane. An already Running rollout
 retains its provider-specific recovery/checkpoint safeguards.
 
+PostgreSQL resumes an in-flight member after a control-plane restart. If a
+failover changed the WAL timeline while a replica was being redeployed, it
+persists a fresh barrier from the current primary of the same replication
+group and system identity. Completion requires the replica to report streaming,
+the current leader and timeline, no lag, and replay at or beyond that barrier;
+WAL positions from different timelines are never compared. A different system
+identity fails explicitly rather than treating a foreign replica as caught up.
+Unproven catch-up remains subject to the existing retry/deadline budgets; restore
+replication and follow the failure's `re-run upgrade-agents` guidance.
+
+A changed control-plane build can finish acknowledging the final already
+deployed member against the original frozen target and retire that operation.
+It cannot deploy remaining members for the old target: that requires a new
+rollout. Success of the old operation does not imply agents match the new
+control plane; inspect inventory before requesting the new rollout.
+
 Agent rollout requires an advertised engine driver operation backed by a one-member disruption journal. [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/), [Temporal](https://temporal.io/), [MySQL](https://www.oracle.com/mysql/), [PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/) and [Weaviate](https://weaviate.io/) do not currently implement that contract: automatic rollout reports unsupported agents without scheduling any disruption, and manual rollout is rejected. Enabling automatic rollout never opts these engines into a generic restart or redeployment fallback.
 
 Automatic rollout is **off by default**:
