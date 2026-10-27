@@ -93,12 +93,21 @@ func (e *ClusterDataError) Error() string {
 func (e *ClusterDataError) Unwrap() error { return e.Err }
 
 func scanCluster(row scanner) (*domain.Cluster, error) {
+	return scanClusterStatus(row, nil)
+}
+
+// scanClusterStatus can retain the exact stored status for optimistic
+// observation publication, before read-time diagnostic redaction/decoding.
+func scanClusterStatus(row scanner, storedStatus *[]byte) (*domain.Cluster, error) {
 	var c domain.Cluster
 	var spec, status, internal, opts, managed []byte
 	var created, updated int64
 	err := row.Scan(&c.Namespace, &c.Name, &spec, &status, &internal, &c.Generation, &c.Deleting, &opts, &created, &updated, &c.RequestedBy, &managed, &c.MaintenanceOverrideGeneration)
 	if err != nil {
 		return nil, typed(err)
+	}
+	if storedStatus != nil {
+		*storedStatus = status
 	}
 	status = redact.DiagnosticsJSON(status)
 	for _, pair := range []struct {

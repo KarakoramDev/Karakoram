@@ -108,6 +108,13 @@ placement use the same task inventory within that sweep. HA member count must
 not add serial platform-read budgets after native health has been collected.
 The bounded freshness lease is unchanged: unavailable platform or native reads
 still withdraw readiness rather than reusing a previous healthy sample.
+Already Ready/Degraded clusters can renew availability independently while an
+ordinary reconciliation is busy. PostgreSQL's idle Sync still checks ownership,
+runtime recovery and proxy readiness, which can involve several serial platform
+reads even with no desired changes. These lifecycle safety checks no longer
+need to finish before the next availability sweep. Status-only publication is
+fenced against concurrent lifecycle checkpoints; the four-second member probe,
+five-second sweep, retry count and fifteen-second lease remain unchanged.
 
 ## Options
 

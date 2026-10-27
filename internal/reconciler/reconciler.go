@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
@@ -51,8 +52,9 @@ type Options struct {
 	FailureCleanupTimeout time.Duration
 }
 type worker struct {
-	trigger chan struct{}
-	started bool
+	trigger     chan struct{}
+	started     bool
+	reconciling atomic.Bool
 }
 
 // Manager owns one serialized, retrying reconciliation worker per cluster.
@@ -186,6 +188,16 @@ func (m *Manager) discover(ctx context.Context) error {
 func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	name := ref.Key()
 	defer m.wg.Done()
+	availabilityCtx, stopAvailability := context.WithCancel(ctx)
+	availabilityDone := make(chan struct{})
+	go func() {
+		defer close(availabilityDone)
+		m.availabilityLoop(availabilityCtx, ref, w)
+	}()
+	defer func() {
+		stopAvailability()
+		<-availabilityDone
+	}()
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	observations := time.NewTicker(engine.ReadinessInterval)
@@ -213,7 +225,9 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 		case <-triggers:
 		case <-timer.C:
 		}
+		w.reconciling.Store(true)
 		delay, err := m.reconcile(ctx, ref)
+		w.reconciling.Store(false)
 		if errors.Is(err, errClusterGone) {
 			m.mu.Lock()
 			if m.workers[name] == w {
@@ -410,6 +424,8 @@ func phaseChangeMessage(c *domain.Cluster, previous domain.Phase) string {
 	return boundedMessage(message, 1024)
 }
 func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
+	started := time.Now()
+	defer m.logStage(c.Ref(), "state.publish", started)
 	c.Status.Message = boundedMessage(redact.Diagnostic(c.Status.Message), 512)
 	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 		return err
@@ -423,6 +439,8 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	return nil
 }
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	started := time.Now()
+	defer m.logStage(ref, "reconcile", started)
 	actor := "reconciler"
 	operation := ""
 	defer func() {
@@ -667,6 +685,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 
 // resolve refreshes project dependencies immediately before each provider call.
 func (m *Manager) resolve(ctx context.Context, rc *engine.Context) error {
+	started := time.Now()
+	defer m.logStage(rc.Cluster.Ref(), "resolve", started)
 	rc.Namespace = domain.NormalizedNamespace(rc.Cluster.Namespace)
 	backend, err := m.opts.Namespaces.Backend(rc.Namespace)
 	if err != nil {
@@ -749,6 +769,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		// checkpoint. Publish successful retries too, so recovery cannot hide a
 		// freshly renewed lease behind long-running work.
 		var saveErr error
+		started := time.Now()
 		if operation == nil {
 			saveErr = m.opts.Store.UpdateClusterState(ctx, rc.Cluster)
 		} else {
@@ -756,6 +777,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			// checkpoint; never publish its cluster state without that receipt.
 			saveErr = m.opts.Store.UpdateOperationAndClusterState(ctx, operation, rc.Cluster)
 		}
+		m.logStage(rc.Cluster.Ref(), "availability.pre-sync.publish", started)
 		if saveErr != nil {
 			return engine.Result{}, saveErr
 		}
@@ -764,7 +786,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	rc.DeploymentWait = ""
 	rc.DeploymentWaitReason, rc.DeploymentWaitKey = "", ""
 	rc.SyncWait = ""
+	exposureStarted := time.Now()
 	exposureCondition, exposureErr := engine.CheckExposureSupport(ctx, rc.Backend, rc.Cluster.Spec.Exposure)
+	m.logStage(rc.Cluster.Ref(), "exposure.check", exposureStarted)
 	var result engine.Result
 	syncErr := errors.Join(exposureErr, initialFailure)
 	if recoveringInitial {
@@ -788,7 +812,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		}
 	}
 	if syncErr == nil {
+		started := time.Now()
 		result, syncErr = p.Sync(ctx, rc)
+		m.logStage(rc.Cluster.Ref(), "provider.sync", started)
 	}
 	if _, supportsDataMcp := p.(engine.DataMcpProvider); syncErr == nil && !recoveringInitial && supportsDataMcp {
 		companionResult, companionErr := m.opts.Companion.Sync(ctx, rc)

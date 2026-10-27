@@ -14,11 +14,27 @@ Represent imperative backup, deletion of backups, restore, FCV raise, rolling re
 
 Persist step intent and known platform/[PBM](https://docs.percona.com/percona-backup-mongodb/) identifiers, poll completion without blocking a worker indefinitely, and checkpoint observed results. After a crash or uncertain submission, inspect stable service identities and engine/PBM state before resubmitting. No exactly-once claim is made across [SQLite](https://sqlite.org) and external systems. Preserve deletion intent until cleanup or explicit retention is complete.
 
+An already Ready/Degraded cluster also has a bounded read-only availability loop
+while its ordinary reconciliation is busy. It loads an isolated durable snapshot
+instead of sharing the lifecycle worker's mutable state. Its status-only update
+compares the inspected status, provider state, generation and incarnation and
+refuses publication once an imperative operation is Running. It never persists
+provider changes from Status or acknowledges desired generations. Lifecycle
+mutations, operation checkpoints and restore/deletion fences remain serialized;
+this separate availability publisher cannot complete or resume them.
+
 Record durable events and publish them through `/events/stream` SSE. Reconnects replay authorized events using event IDs; in-process delivery is an acceleration, not the source of truth.
 
 ## Consequences
 
 Management survives request disconnects and process restarts. Partial failure remains visible with actionable status, not false completion. Checkpoints and external observation are essential: locks alone do not make a platform call atomic. Long restore/upgrade work serializes other disruptive work on that cluster. Event visibility is subject to the same per-cluster RBAC as resource reads.
+
+Long successful synchronization cannot starve availability merely by occupying
+the lifecycle worker. Actual observation/platform/publication failures still
+expire positive availability under the existing lease. The additional bounded
+reads share backend observation admission; they do not reserve mutation slots or
+turn cached health into fresh evidence. Checkpoint conflicts discard the sample
+until a subsequent sweep rather than merging an old observation into new intent.
 
 ## Alternatives considered
 

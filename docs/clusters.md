@@ -177,6 +177,19 @@ positive member sample cannot renew availability. During creation, expected
 not-yet-deployed agents remain unavailable without replacing deployment progress
 diagnostics or gating recovery/provisioning `Sync`.
 
+While an ordinary reconciliation is busy, an independent five-second availability
+loop can refresh an already Ready/Degraded cluster from an isolated persisted
+snapshot. A slow `Sync` cannot by itself starve publication. Publication compares
+the complete inspected status/provider checkpoint, generation and cluster
+incarnation; concurrent lifecycle changes discard the sample. It writes status
+only, never provider internal state or applied generation. Running imperative
+operations retain their serialized observation/checkpoint ownership; suspended,
+restoring, deleting and not-yet-formed clusters are not promoted by this loop.
+Unavailable agents/platform reads still fail closed under the unchanged lease.
+Reconciliation stages emit sanitized monotonic durations at DEBUG, or WARN when
+a stage exceeds the 15-second lease; fields contain cluster identity, stage and
+duration, not credentials, request bodies or private observation provenance.
+
 Persisted health has a **15-second maximum sample age**: five seconds between
 cycles plus at most two five-second sweeps. Cluster/status/member API projections
 withdraw positive availability after that bound even if recovery, an operation,
