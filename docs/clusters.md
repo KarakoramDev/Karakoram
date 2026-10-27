@@ -282,7 +282,24 @@ autoscaling observations and are not used as allocation fallbacks. Live agent
 allocation readings take precedence; an absent runtime has no effective bounds
 to report.
 
-Sizing floors/defaults: [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md). They are validation floors, not workload sizing recommendations.
+Disk admission is provider/component-specific, not a universal 5-GiB API floor.
+Explicit engine disk bounds accept values from 1 GiB at the HTTP schema layer;
+provider validation then enforces these floors for create, replacement and patch:
+
+| Component | Minimum desired disk (GiB) |
+| --- | --- |
+| [PostgreSQL](postgres/README.md) / Supabase data; [MySQL/PXC](mysql/README.md) data | 5 |
+| [MongoDB](mongodb/README.md) data, config servers and routers; [RabbitMQ](rabbitmq/README.md); [OpenBao](openbao/README.md) | 5 |
+| [Elasticsearch](elasticsearch/README.md) data/combined nodes and dedicated masters | 5 |
+| [Neo4j](neo4j/README.md); [Weaviate](weaviate/README.md) | 1 persistent |
+| [Keycloak](keycloak/README.md); enabled proxies, Supabase services, [Temporal](temporal/README.md) roles and Elastic optional components | 1 runtime |
+
+Each maximum must remain at least its minimum. Omitted bounds use provider
+defaults, which may be larger. Zerops separately rounds imported persistent
+Local Storage volumes up to its 5-GB minimum; this does not raise the runtime
+disk floor. Nomad host volumes and Dokploy named volumes do not enforce requested
+capacity as a quota, and do not support disk growth. See [backends](backends.md).
+These are validation floors, not workload sizing recommendations.
 
 ```sh
 karactl -n <namespace> clusters scale <cluster> --min-cpu 1 --max-cpu 2 --wait

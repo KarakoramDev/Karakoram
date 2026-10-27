@@ -14081,12 +14081,12 @@ components:
           description: GiB
         minDisk:
           type: number
-          minimum: 5
-          description: GiB
+          minimum: 1
+          description: GiB; provider/component floors may be higher.
         maxDisk:
           type: number
-          minimum: 5
-          description: GiB
+          minimum: 1
+          description: GiB; must be at least minDisk and meet provider/component floors.
         startCpu:
           type: number
           minimum: 1
@@ -14272,13 +14272,13 @@ components:
           nullable: true
         minDisk:
           type: number
-          minimum: 5
-          description: GiB
+          minimum: 1
+          description: GiB; provider/component floors may be higher.
           nullable: true
         maxDisk:
           type: number
-          minimum: 5
-          description: GiB
+          minimum: 1
+          description: GiB; must be at least minDisk and meet provider/component floors.
           nullable: true
         startCpu:
           type: number

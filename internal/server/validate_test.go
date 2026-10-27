@@ -52,7 +52,7 @@ func TestRequestValidation(t *testing.T) {
 		{"retain negative", "PATCH", "/api/v1/clusters/prod", `{"spec":{"backup":{"schedules":[{"name":"daily","cron":"0 0 * * *","type":"logical","retainCount":-1,"enabled":true}]}}}`, "application/json", "spec.backup.schedules.0.retainCount", "out_of_range", 400},
 		{"shards zero", "PATCH", "/api/v1/clusters/prod", `{"spec":{"topology":{"shards":0}}}`, "application/json", "spec.topology.shards", "out_of_range", 400},
 		{"RAM minimum", "PATCH", "/api/v1/clusters/prod", `{"spec":{"components":{"engine":{"resources":{"minRam":0.25}}}}}`, "application/json", "spec.components.engine.resources.minRam", "out_of_range", 400},
-		{"disk minimum", "PATCH", "/api/v1/clusters/prod", `{"spec":{"components":{"engine":{"resources":{"minDisk":1}}}}}`, "application/json", "spec.components.engine.resources.minDisk", "out_of_range", 400},
+		{"disk minimum", "PATCH", "/api/v1/clusters/prod", `{"spec":{"components":{"engine":{"resources":{"minDisk":0.5}}}}}`, "application/json", "spec.components.engine.resources.minDisk", "out_of_range", 400},
 		{"patch unknown", "PATCH", "/api/v1/clusters/prod", `{"spec":{"components":{"engine":{"replcias":3}}}}`, "application/json", "spec.components.engine.replcias", "unknown_field", 400},
 		{"patch server owned", "PATCH", "/api/v1/clusters/prod", `{"spec":{},"status":{}}`, "application/json", "status", "unknown_field", 400},
 		{"bad enum", "PATCH", "/api/v1/clusters/prod", `{"spec":{"tls":{"mode":"something"}}}`, "application/json", "spec.tls.mode", "unsupported", 400},

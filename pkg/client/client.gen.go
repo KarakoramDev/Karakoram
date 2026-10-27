@@ -3100,14 +3100,14 @@ type ResourcesInput struct {
 	CpuMode *ResourcesInputCpuMode `json:"cpuMode,omitempty"`
 	MaxCpu  *float32               `json:"maxCpu,omitempty"`
 
-	// MaxDisk GiB
+	// MaxDisk GiB; must be at least minDisk and meet provider/component floors.
 	MaxDisk *float32 `json:"maxDisk,omitempty"`
 
 	// MaxRam GiB
 	MaxRam *float32 `json:"maxRam,omitempty"`
 	MinCpu *float32 `json:"minCpu,omitempty"`
 
-	// MinDisk GiB
+	// MinDisk GiB; provider/component floors may be higher.
 	MinDisk *float32 `json:"minDisk,omitempty"`
 
 	// MinRam GiB
@@ -3123,14 +3123,14 @@ type ResourcesPatch struct {
 	CpuMode *ResourcesPatchCpuMode `json:"cpuMode"`
 	MaxCpu  *float32               `json:"maxCpu"`
 
-	// MaxDisk GiB
+	// MaxDisk GiB; must be at least minDisk and meet provider/component floors.
 	MaxDisk *float32 `json:"maxDisk"`
 
 	// MaxRam GiB
 	MaxRam *float32 `json:"maxRam"`
 	MinCpu *float32 `json:"minCpu"`
 
-	// MinDisk GiB
+	// MinDisk GiB; provider/component floors may be higher.
 	MinDisk *float32 `json:"minDisk"`
 
 	// MinRam GiB
