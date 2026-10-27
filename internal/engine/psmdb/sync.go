@@ -397,10 +397,12 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	// resized for the same desired generation.
 	for _, m := range s.Members {
 		r := component(rc.Cluster.Spec, m).Resources
-		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
-			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+		if m.VolumeID != "" && m.ImportPlan == nil && !m.Removing {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Disk, r)
+			if e != nil {
 				return result, e
 			}
+			m.Disk.MinDisk, m.Disk.MaxDisk = disk.MinDisk, disk.MaxDisk
 		}
 	}
 	result.RequeueAfter = 5 * time.Second

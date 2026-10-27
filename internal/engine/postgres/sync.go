@@ -567,6 +567,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			if m.ImportBatch == nil {
 				var specs []infra.ServiceSpec
+				disk := desired.Resources
 				if m.Volume != "" {
 					v, e := rc.Backend.GetService(ctx, m.Volume)
 					if e != nil {
@@ -581,6 +582,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 							spec.SpreadAvoid = []string{cp.AvoidGroup}
 						}
 						specs = append(specs, spec)
+					} else {
+						// Reusing a volume is not a resize acknowledgement.
+						disk = v.Resources
 					}
 				}
 				runtime, e := rc.Backend.GetService(ctx, m.Name)
@@ -595,7 +599,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				}
 				m.Resources = desired.Resources
 				if m.Volume != "" {
-					m.Disk = domain.Resources{MinDisk: desired.Resources.MinDisk, MaxDisk: desired.Resources.MaxDisk}
+					m.Disk = domain.Resources{MinDisk: disk.MinDisk, MaxDisk: disk.MaxDisk}
 				}
 				m.Replicas = desired.Replicas
 				m.Version = rc.Cluster.Spec.Version

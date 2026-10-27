@@ -77,10 +77,12 @@ when the namespace provider lacks it; rejected requests do not change the cluste
 generation or enqueue an operation. Legacy desired state is checked again before
 convergence starts disruptive resource work: unsupported growth fails its
 operation terminally without stopping a serving member.
+
 For a size increase accepted by an older control plane, revert both disk bounds
-to the volume's acknowledged size before retrying. On a provider without growth,
-admission uses those acknowledged volume bounds rather than the unapplied
-desired size, so this correction is not treated as a real volume shrink.
+to the volume size recorded by the provider before retrying. On a provider without
+growth, admission checks every existing volume's provider-reported bounds rather
+than trusting unapplied desired sizes or old provider sizing caches. A correction
+cannot grow a smaller peer or shrink a larger peer in a mixed-size component.
 Resuming retained volumes with a larger, unsupported desired size is rejected
 before a resume operation is queued. Actual volume shrinking remains unsupported.
 

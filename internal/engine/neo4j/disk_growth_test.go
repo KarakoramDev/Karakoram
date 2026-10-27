@@ -44,8 +44,13 @@ func TestUnsupportedDiskGrowthKeepsServing(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(before, after) {
 			t.Fatalf("unsupported growth changed member state: %v", err)
 		}
-		if !reflect.DeepEqual(calls, b.Calls()) || a.restarts != restarts {
-			t.Fatal("unsupported growth touched infrastructure or restarted Neo4j")
+		for _, call := range b.Calls()[len(calls):] {
+			if call != "GetService" {
+				t.Fatalf("unsupported growth mutated infrastructure: %s", call)
+			}
+		}
+		if a.restarts != restarts {
+			t.Fatal("unsupported growth restarted Neo4j")
 		}
 	}
 	status, err := p.Status(t.Context(), rc)
@@ -54,13 +59,13 @@ func TestUnsupportedDiskGrowthKeepsServing(t *testing.T) {
 	}
 	// Revert the unapplied desire, using the same baseline as admission. The
 	// old desired value must not turn this correction into a forbidden shrink.
-	previous, err := engine.VolumeAdmissionBaseline(p, rc.Cluster)
-	if err != nil {
-		t.Fatal(err)
-	}
 	rc.Cluster.Spec.Components.Engine.Resources.MinDisk--
 	rc.Cluster.Spec.Components.Engine.Resources.MaxDisk--
 	rc.Cluster.Generation++
+	previous, err := engine.VolumeAdmissionBaseline(t.Context(), p, rc.Cluster, rc.Cluster.Spec, rc.Backend)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := p.Validate(t.Context(), previous, rc.Cluster); err != nil {
 		t.Fatal("revert rejected", err)
 	}

@@ -24,13 +24,19 @@ func TestDiskGrowthLegacyRevertAndResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	caps := infra.Capabilities{Logs: true}
-	s.namespaces = engine.StaticNamespaces{DefaultBackend: fake.New(fake.Options{Name: "dokploy", Capabilities: caps})}
+	b := fake.New(fake.Options{Name: "dokploy", Capabilities: caps})
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	op, err := b.ImportServices(t.Context(), []infra.ServiceSpec{engine.VolumeServiceSpec("legacy", "legacyn0", "legacyn0v", "token", domain.Resources{MinDisk: 10, MaxDisk: 10})})
+	if err != nil {
+		t.Fatal(err)
+	}
 	c := &domain.Cluster{Name: "legacy", Generation: 6}
 	p.ApplyDefaults(&c.Spec)
 	c.Spec.Components.Engine.Resources.MinDisk = 11
 	c.Spec.Components.Engine.Resources.MaxDisk = 11
 	c.Status = domain.ClusterStatus{Phase: domain.PhaseSuspended, ObservedGeneration: 5}
-	c.Internal = []byte(`{"neo4j":{"uid":"legacy","configVersion":1,"suspended":true,"member":{"name":"legacyn0","volume":"legacyn0v","volumeId":"retained-volume","stage":"planned","disk":{"minDisk":10,"maxDisk":10}}}}`)
+	// Deliberately poison the legacy provider cache: the backend still has 10.
+	c.Internal = []byte(`{"neo4j":{"uid":"legacy","configVersion":1,"suspended":true,"member":{"name":"legacyn0","volume":"legacyn0v","volumeId":"` + op.Services["legacyn0v"] + `","stage":"planned","disk":{"minDisk":11,"maxDisk":11}}}}`)
 	if err := s.Store.CreateCluster(t.Context(), c); err != nil {
 		t.Fatal(err)
 	}

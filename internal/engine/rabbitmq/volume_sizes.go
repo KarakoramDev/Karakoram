@@ -8,16 +8,16 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
 
-// VolumeSizes reports acknowledged bounds, not a pending desired resize.
-func (*Provider) VolumeSizes(c *domain.Cluster) (domain.Components, error) {
+// VolumeReferences exposes persistent identities for backend sizing observation.
+func (*Provider) VolumeReferences(c *domain.Cluster) ([]engine.VolumeReference, error) {
 	s, err := loadState(c)
 	if err != nil {
-		return domain.Components{}, err
+		return nil, err
 	}
-	var out domain.Components
+	var out []engine.VolumeReference
 	for _, m := range s.Members {
 		if m.VolumeID != "" {
-			engine.AddVolumeSize(&out, "engine", m.Disk)
+			out = append(out, engine.VolumeReference{Component: "engine", Hostname: m.Volume, ID: m.VolumeID})
 		}
 	}
 	return out, nil

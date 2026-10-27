@@ -182,9 +182,12 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 	if previous != nil {
 		if !have.DiskGrowth {
 			var err error
-			previous, err = engine.VolumeAdmissionBaseline(p, previous)
+			previous, err = engine.VolumeAdmissionBaseline(ctx, p, previous, c.Spec, resolvedBackend)
 			if err != nil {
 				r := s.failure(err)
+				if errors.Is(err, engine.ErrNotSupported) {
+					r = fail(400, "invalid_request", err.Error())
+				}
 				return &r
 			}
 		}
