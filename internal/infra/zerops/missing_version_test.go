@@ -4,11 +4,13 @@
 package zerops
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -47,6 +49,10 @@ func TestMissingAppVersionClassification(t *testing.T) {
 func TestMissingReceiptVersionWaitsForTerminalEvidence(t *testing.T) {
 	for _, stage := range []string{"upload-ready", "uploading", "deploy-ready", "deploying", "submitted", "exhausted"} {
 		for _, evidence := range []string{"running", "unknown", "unreadable", "truncated"} {
+			reason, detail := "PreviousDeployment", "waiting for previous platform deployment to finish"
+			if evidence == "unreadable" || evidence == "truncated" {
+				reason, detail = "DeploymentEvidenceUnavailable", "previous deployment process evidence unavailable"
+			}
 			t.Run(stage+"/"+evidence, func(t *testing.T) {
 				server := newFakeAPI(t)
 				mutations, reads := 0, 0
@@ -79,7 +85,7 @@ func TestMissingReceiptVersionWaitsForTerminalEvidence(t *testing.T) {
 				for _, opID := range []string{"version:missing", receipt.Process} {
 					state, err := b.OpStatus(t.Context(), infra.Op{ID: opID, Kind: "deploy", ServiceID: id})
 					var waiting *infra.DeploymentWaitError
-					if state.Done || state.Failed || !errors.As(err, &waiting) || waiting.Reason != "PreviousDeployment" {
+					if state.Done || state.Failed || state.Status != "PreviousDeployment" || !errors.As(err, &waiting) || waiting.Reason != reason || !waiting.DeploymentWaiting() || !strings.Contains(state.Message, reason+": "+detail) || infra.RetryAt(err).IsZero() || errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
 						t.Fatalf("incomplete evidence became terminal: state=%+v err=%v", state, err)
 					}
 				}
@@ -87,7 +93,7 @@ func TestMissingReceiptVersionWaitsForTerminalEvidence(t *testing.T) {
 				deployment.RetryEpoch = 1
 				_, err := b.Deploy(t.Context(), "member", deployment)
 				var waiting *infra.DeploymentWaitError
-				if !errors.As(err, &waiting) || waiting.Reason != "PreviousDeployment" {
+				if !errors.As(err, &waiting) || waiting.Reason != reason || !waiting.DeploymentWaiting() || !strings.Contains(waiting.Detail, detail) || infra.RetryAt(err).IsZero() || errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
 					t.Fatalf("incomplete evidence allowed retry: %v", err)
 				}
 				got, err := b.receipt(t.Context(), id)
@@ -248,12 +254,16 @@ func TestMissingVersionCompleteServiceHistoryAllowsReplacement(t *testing.T) {
 					}
 				} else {
 					var waiting *infra.DeploymentWaitError
-					if state.Done || state.Failed || !errors.As(err, &waiting) || waiting.Reason != "PreviousDeployment" {
+					if state.Done || state.Failed || state.Status != "PreviousDeployment" || !errors.As(err, &waiting) || waiting.Reason != "DeploymentEvidenceUnavailable" || !waiting.DeploymentWaiting() || state.Message != waiting.Error() || !strings.Contains(waiting.Detail, "previous deployment process evidence unavailable") || infra.RetryAt(err).IsZero() || errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
 						t.Fatalf("incomplete %s history did not wait: %+v %v", history, state, err)
 					}
 					_, err := b.Deploy(t.Context(), "member", hardeningDeployment())
-					if !errors.As(err, &waiting) || waiting.Reason != "PreviousDeployment" || mutations != 0 {
+					if !errors.As(err, &waiting) || waiting.Reason != "DeploymentEvidenceUnavailable" || !waiting.DeploymentWaiting() || mutations != 0 {
 						t.Fatalf("incomplete history allowed mutation: %v mutations=%d", err, mutations)
+					}
+					got, err := b.receipt(t.Context(), id)
+					if err != nil || got != receipt {
+						t.Fatalf("evidence wait consumed receipt retry budget: %+v %v", got, err)
 					}
 				}
 			})
@@ -371,5 +381,99 @@ func TestMissingVersionFullClusterDeleteAndRerun(t *testing.T) {
 	done, err = provider.Cleanup(t.Context(), rc, domain.DeleteOptions{})
 	if !done || err != nil || mutations != 0 {
 		t.Fatalf("repeated delete not absent-only: done=%v err=%v mutations=%d", done, err, mutations)
+	}
+}
+
+type missingVersionEvents struct{ events []domain.Event }
+
+func (e *missingVersionEvents) Record(_ context.Context, event domain.Event) error {
+	e.events = append(e.events, event)
+	return nil
+}
+
+func TestMissingVersionEvidenceWaitDoesNotFailCaller(t *testing.T) {
+	for _, evidence := range []string{"unreadable", "truncated"} {
+		t.Run(evidence, func(t *testing.T) {
+			server := newFakeAPI(t)
+			armed, mutations := false, 0
+			b := hardeningBackend(t, server, receiptTransport(func(r *http.Request) (*http.Response, error) {
+				if armed && r.Method != http.MethodGet {
+					mutations++
+				}
+				if armed && strings.HasSuffix(r.URL.Path, "/process") {
+					status, body := http.StatusServiceUnavailable, `{}`
+					if evidence == "truncated" {
+						status, body = http.StatusOK, `{"list":[],"total":501}`
+					}
+					return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+				}
+				return http.DefaultTransport.RoundTrip(r)
+			}))
+			id := importHardeningRuntime(t, b)
+			receipt := operationReceipt{Action: "deploy", Stage: "submitted", Version: "missing", Process: "expired-process", PriorRetries: 2}
+			if err := b.saveReceipt(t.Context(), id, receipt); err != nil {
+				t.Fatal(err)
+			}
+			provider := rabbitmq.New(rabbitmq.Options{})
+			cluster := &domain.Cluster{Name: "demo"}
+			provider.ApplyDefaults(&cluster.Spec)
+			pending := struct {
+				Action string   `json:"action"`
+				Member string   `json:"member"`
+				Op     infra.Op `json:"op"`
+			}{"deploy", "member", infra.Op{ID: "version:missing", Kind: "deploy", ServiceID: id}}
+			internal, err := json.Marshal(map[string]any{
+				"uid": "original", "phase": "creating",
+				"members": []map[string]any{{"name": "member", "serviceId": id, "stage": "ready"}},
+				"pending": pending,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cluster.Internal = internal
+			events := &missingVersionEvents{}
+			rc := &engine.Context{Cluster: cluster, Backend: b, Artifact: receiptEngineArtifact{}, Events: events, Clock: &receiptEngineClock{now: time.Now()}}
+			armed = true
+			// Poll the real provider repeatedly: an observation error must retain
+			// the pending operation, not create a counted platform retry or fence.
+			for range 3 {
+				_, err := provider.Sync(t.Context(), rc)
+				var wait *infra.DeploymentWaitError
+				if !errors.As(err, &wait) || wait.Reason != "DeploymentEvidenceUnavailable" || !wait.DeploymentWaiting() || infra.RetryAt(err).IsZero() {
+					t.Fatalf("provider lost non-terminal evidence wait: %v", err)
+				}
+				var observed struct {
+					Pending         *struct{ Op infra.Op }
+					Retry           json.RawMessage
+					PlatformRetries map[string]json.RawMessage
+				}
+				if err := json.Unmarshal(cluster.Internal, &observed); err != nil {
+					t.Fatal(err)
+				}
+				if observed.Pending == nil || !reflect.DeepEqual(observed.Pending.Op, pending.Op) || len(observed.Retry) != 0 || len(observed.PlatformRetries) != 0 || len(cluster.Status.DeploymentFailures) != 0 {
+					t.Fatalf("provider counted evidence wait as failure: %s %+v", cluster.Internal, cluster.Status.DeploymentFailures)
+				}
+			}
+			// Admission uses the same typed wait, converted to a scheduled
+			// platform wait with a specific condition and a Normal event.
+			_, err = engine.Deploy(t.Context(), rc, "member", hardeningDeployment().Runtime)
+			var wait *engine.PlatformRetryWait
+			var cause *infra.DeploymentWaitError
+			if !errors.As(err, &wait) || !errors.As(err, &cause) || cause.Reason != "DeploymentEvidenceUnavailable" || wait.RetryAt.IsZero() {
+				t.Fatalf("admission counted evidence wait as failure: %v", err)
+			}
+			status := domain.ClusterStatus{}
+			engine.ApplyDeploymentStatus(rc, &status)
+			if len(status.DeploymentFailures) != 0 || len(status.Conditions) != 1 || status.Conditions[0].Reason != cause.Reason || status.Message != cause.Error() {
+				t.Fatalf("evidence wait lost specific non-terminal status: %+v", status)
+			}
+			if len(events.events) != 1 || events.events[0].Type != "Normal" || events.events[0].Message != cause.Error() {
+				t.Fatalf("evidence wait lost Normal event: %+v", events.events)
+			}
+			got, err := b.receipt(t.Context(), id)
+			if err != nil || got != receipt || mutations != 0 {
+				t.Fatalf("caller wait consumed budget or mutated platform: %+v %v mutations=%d", got, err, mutations)
+			}
+		})
 	}
 }
