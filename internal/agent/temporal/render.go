@@ -85,7 +85,10 @@ func render(s tspec.Spec, dataDir, address, bind, install string) (agent.Process
 				"databaseName":    database,
 				"connectAddr":     net.JoinHostPort(d.Host, strconv.Itoa(d.Port)),
 				"connectProtocol": "tcp",
-				"user":            d.Username, "password": d.Password,
+				// pgx exec mode retains parameter binding with all-text results:
+				// ProxySQL cannot represent mixed per-column result formats.
+				"connectAttributes": configMap{"default_query_exec_mode": "exec"},
+				"user":              d.Username, "password": d.Password,
 				"maxConns": conns, "maxIdleConns": conns,
 				"maxConnLifetime": "1h",
 				"tls": configMap{

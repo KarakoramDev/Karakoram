@@ -23,6 +23,12 @@ Keycloak is an independent engine driver, not a PostgreSQL cluster variant. Crea
 
 Before deploying any runtime, the control plane ensures a binding with a dedicated non-superuser owning login and database. Only that login's password, resolved in-process through `pgbinding.Service.Password`, reaches the consumer. Source administrator credentials never reach Keycloak. JDBC uses the binding writer endpoint with `sslmode=verify-full` and an owner-only CA file. A source that cannot supply verify-full trust is rejected.
 
+The managed JDBC URL sets `binaryTransfer=false`. ProxySQL 3.0.11 cannot
+represent mixed text/binary result-column formats emitted by pgjdbc, which can
+otherwise prevent Liquibase migrations and Keycloak startup on proxied sources.
+All results therefore use text format, including with a direct singleton source;
+prepared statements, parameter binding and TLS hostname verification remain enabled.
+
 The member configuration is sealed at rest, including the generated temporary `admin` password under `keycloak/admin`. It is not returned through ordinary cluster reads. Member pulls are restricted to the allocated member identity and use the existing authenticated agent channel. On the runtime, database and bootstrap credentials live only in mode-0600 files under `<data-dir>/karakoram/keycloak/`; they are not placed in process arguments or environment variables. The optimized distribution is built with `kc.sh build --db=postgres --health-enabled=true` before `start --optimized`.
 
 Each reconciliation resolves the binding again. Credential generation, endpoint, CA, hostname or proxy-header changes republish the sealed configuration and trigger an agent reload. The agent starts the configured runtime on first apply and stops then starts it when configuration changes, unless maintenance, an operator stop hold or the desired process list prevents startup. There is only one runtime, so rotation interrupts authentication. Applied configuration versions and management health must both match before the cluster is ready.

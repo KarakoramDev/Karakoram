@@ -42,6 +42,8 @@ func (s Spec) Validate() error {
 
 // JDBCURL enforces hostname verification against the binding CA, without credentials in the URL.
 func (s Spec) JDBCURL(caFile string) string {
-	q := url.Values{"sslmode": {"verify-full"}, "sslrootcert": {caFile}}
+	// ProxySQL's libpq backend cannot represent mixed per-column result formats.
+	// Keep extended queries and prepared statements, but request text for every type.
+	q := url.Values{"sslmode": {"verify-full"}, "sslrootcert": {caFile}, "binaryTransfer": {"false"}}
 	return "jdbc:postgresql://" + net.JoinHostPort(s.Host, strconv.Itoa(s.Port)) + "/" + url.PathEscape(s.Database) + "?" + q.Encode()
 }

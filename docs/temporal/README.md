@@ -92,6 +92,12 @@ Namespace declarations are limited to 99 entries, and the serialized ensure requ
 
 Both databases live on the same source and have one binding-managed owner/login role. Connections use `postgres12_pgx`, the stable writer endpoint and TLS hostname verification (`verify-full`). Passwords are resolved from the binding, never stored in options/status; credential-generation changes roll the components.
 
+Server persistence and visibility connections, schema migrations and the agent's
+schema checks use pgx `default_query_exec_mode=exec`: extended queries with bound
+parameters and all-text results, without the prepared-statement cache. ProxySQL
+3.0.11 cannot represent pgx's default mixed text/binary result-column formats.
+This setting also applies to direct singleton sources; TLS verification is unchanged.
+
 The persistence block, `historyShards` and topology are immutable after creation. The Temporal cluster name is the Karakoram cluster name. Choose database names and shard count before admitting production workflows.
 
 ## Status

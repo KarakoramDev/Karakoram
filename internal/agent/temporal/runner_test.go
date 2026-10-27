@@ -16,6 +16,8 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"github.com/jackc/pgx/v5"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,6 +60,15 @@ func TestRenderRoles(t *testing.T) {
 			for _, key := range []string{"postgres12_pgx", "numHistoryShards: 8", "enableHostVerification: true", "serverName: pg.example.test", "maxConns: 10", "maxIdleConns: 10", "broadcastAddress: 10.0.0.1", "requireClientAuth: true", "127.0.0.1:9090", "/data/karakoram/temporal/postgres-ca.pem", "systemWorker:", "httpPort: 7243"} {
 				if !strings.Contains(text, key) {
 					t.Errorf("config missing %s", key)
+				}
+			}
+			persistence := config["persistence"].(map[string]any)
+			stores := persistence["datastores"].(map[string]any)
+			for name, raw := range stores {
+				sql := raw.(map[string]any)["sql"].(map[string]any)
+				attrs := sql["connectAttributes"].(map[string]any)
+				if attrs["default_query_exec_mode"] != "exec" {
+					t.Errorf("%s must request all-text results through ProxySQL", name)
 				}
 			}
 			for _, role := range tspec.Roles(component) {
@@ -145,5 +156,49 @@ func TestSchemaToolSanitization(t *testing.T) {
 	err := runSchemaTool(context.Background(), testSpec(), dir, dir, "temporal", "setup-schema", "-v", "0.0")
 	if err == nil || !strings.Contains(err.Error(), "exit 42") || strings.Contains(err.Error(), "private-password") {
 		t.Fatal("schema output was not sanitized")
+	}
+}
+
+func TestSchemaConnectionsUseTextResults(t *testing.T) {
+	ca, err := pki.NewCA("schema-test", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSpec()
+	s.Persistence.CAPEM = string(ca.CertPEM)
+	for _, database := range []string{s.Persistence.Database, s.Persistence.VisibilityDatabase} {
+		c, err := databaseConfig(s.Persistence, database)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.DefaultQueryExecMode != pgx.QueryExecModeExec {
+			t.Fatal("schema connection must request all-text results")
+		}
+		if c.Database != database || c.TLSConfig == nil || c.TLSConfig.InsecureSkipVerify || c.TLSConfig.ServerName != s.Persistence.Host || c.Fallbacks != nil {
+			t.Fatal("schema connection lost database or verify-full TLS")
+		}
+	}
+}
+
+func TestSchemaToolUsesTextResults(t *testing.T) {
+	dir := t.TempDir()
+	// Validate the global connection option before either migration subcommand.
+	script := `#!/bin/sh
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--connect-attributes" ]; then
+    [ "$2" = "default_query_exec_mode=exec" ] || exit 41
+    exit 0
+  fi
+  shift
+done
+exit 42
+`
+	if err := os.WriteFile(filepath.Join(dir, "temporal-sql-tool"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{"setup-schema", "update-schema"} {
+		if err := runSchemaTool(context.Background(), testSpec(), dir, dir, "temporal", command); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

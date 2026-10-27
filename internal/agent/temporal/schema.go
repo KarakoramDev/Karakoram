@@ -35,6 +35,8 @@ func databaseConfig(d *tspec.Database, database string) (*pgx.ConnConfig, error)
 	c.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, ServerName: d.Host}
 	c.Fallbacks = nil
 	c.ConnectTimeout = 10 * time.Second
+	// Match the server and migration tool's all-text extended-query mode.
+	c.DefaultQueryExecMode = pgx.QueryExecModeExec
 	return c, nil
 }
 
@@ -51,7 +53,7 @@ func toolError(err error) error {
 
 func runSchemaTool(ctx context.Context, s tspec.Spec, install, dir, database string, command ...string) error {
 	d := s.Persistence
-	args := []string{"--endpoint", d.Host, "--port", strconv.Itoa(d.Port), "--user", d.Username, "--database", database, "--plugin", "postgres12_pgx", "--tls", "--tls-ca-file", filepath.Join(dir, "postgres-ca.pem"), "--tls-server-name", d.Host}
+	args := []string{"--endpoint", d.Host, "--port", strconv.Itoa(d.Port), "--user", d.Username, "--database", database, "--plugin", "postgres12_pgx", "--connect-attributes", "default_query_exec_mode=exec", "--tls", "--tls-ca-file", filepath.Join(dir, "postgres-ca.pem"), "--tls-server-name", d.Host}
 	args = append(args, command...)
 	cmd := exec.CommandContext(ctx, filepath.Join(install, "temporal-sql-tool"), args...)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8", "GOMAXPROCS=2", "SQL_PASSWORD=" + d.Password}

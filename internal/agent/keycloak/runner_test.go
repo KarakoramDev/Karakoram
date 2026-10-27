@@ -47,6 +47,9 @@ func TestRenderProtectsSecretsAndTLS(t *testing.T) {
 	if e != nil || u.Query().Get("sslmode") != "verify-full" || u.Query().Get("sslrootcert") != "/data/ca.pem" || u.User != nil {
 		t.Fatal(u, e)
 	}
+	if u.Query().Get("binaryTransfer") != "false" || !strings.Contains(conf, "binaryTransfer\\=false") {
+		t.Fatal("JDBC binary transfer must remain disabled for ProxySQL compatibility")
+	}
 	if string(files["keycloak/ca.pem"]) != "CA" {
 		t.Fatal("missing CA")
 	}
