@@ -122,7 +122,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 	case s.operation == "replaceClusterBalancer":
 		c.Flags().Bool("enabled", true, "Enable balancing")
 	case s.operation == "createBackup":
-		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions, snapshot, full, incremental, diff or incr)")
+		c.Flags().String("type", "logical", "Backup type supported by the cluster's provider (see `providers get PROVIDER`: e.g. logical, physical, snapshot, full, incremental, diff, incr, dump)")
 		c.Flags().String("storage", "", "Backup storage (defaults to cluster configuration)")
 		c.Annotations[operationAnnotation] += ",getCluster"
 	case s.operation == "createRestore":
@@ -345,8 +345,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		typ, _ := cmd.Flags().GetString("type")
-		if typ != "logical" && typ != "physical" && typ != "definitions" && typ != "snapshot" && typ != "full" && typ != "diff" && typ != "incr" {
-			return nil, usageError("backup type must be logical, physical, definitions, snapshot, full, diff or incr")
+		if strings.TrimSpace(typ) == "" {
+			return nil, usageError("--type is required; supported types are listed in the provider's backupTypes")
 		}
 		storage, _ := cmd.Flags().GetString("storage")
 		if storage == "" {
