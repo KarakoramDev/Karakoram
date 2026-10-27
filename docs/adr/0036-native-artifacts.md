@@ -37,7 +37,7 @@ Provenance distinguishes official binaries from Karakoram source builds. Record 
 
 ## Consequences
 
-Engine creation is bounded by the release's real artifact inventory. A usable source-built component in a development deployment requires both a lock entry and a configured mirror. Release preparation must produce all locked Karakoram-built bytes before staging. Mirrors can support private/offline supply chains without changing the engine specification, but operators must preserve the locked files and their provenance. The current artifact baseline is [Linux](https://kernel.org) amd64/Ubuntu 24.04; this is not cross-architecture availability.
+Engine creation is bounded by the release's real artifact inventory. A usable source-built component in a development deployment requires both a lock entry and a configured mirror or explicit artifact release containing the locked bytes. Release preparation must produce all locked Karakoram-built bytes before staging. Mirrors can support private/offline supply chains without changing the engine specification, but operators must preserve the locked files and their provenance. The current artifact baseline is [Linux](https://kernel.org) amd64/Ubuntu 24.04; this is not cross-architecture availability.
 
 ## Alternatives considered
 
