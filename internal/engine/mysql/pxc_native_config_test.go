@@ -328,3 +328,54 @@ func TestPXCGaleraBindFollowsBackendFamily(t *testing.T) {
 		})
 	}
 }
+
+func TestSQLBindFollowsBackendFamilyAndCapability(t *testing.T) {
+	for _, topology := range []string{"single", "group", "cluster"} {
+		for _, family := range []string{infra.AddressFamilyIPv4, infra.AddressFamilyIPv6, ""} {
+			t.Run(topology+"/"+family, func(t *testing.T) {
+				p, rc, b := setup(t, topology)
+				if topology == "cluster" {
+					p, rc, b = setupPXC(t)
+				}
+				rc.Backend = pxcBindBackend{Backend: b, family: family}
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				state, err := load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, member := range state.Members {
+					for _, capabilities := range [][]string{nil, {agentapi.ConfigCapabilityGaleraListenHost}, {agentapi.ConfigCapabilityMySQLListenHost}, nil} {
+						rc.AgentConfigCapabilities = capabilities
+						cfg, err := p.MemberConfig(t.Context(), rc, member.Name)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var spec myspec.Spec
+						if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+							t.Fatal(err)
+						}
+						want := ""
+						if len(capabilities) == 1 && capabilities[0] == agentapi.ConfigCapabilityMySQLListenHost {
+							want = "::"
+							if family == infra.AddressFamilyIPv4 {
+								want = "0.0.0.0"
+							}
+						}
+						if spec.ListenHost != want {
+							t.Fatalf("role=%s capabilities=%v SQL bind=%q, want %q", member.Role, capabilities, spec.ListenHost, want)
+						}
+						var fields map[string]json.RawMessage
+						if err := json.Unmarshal(cfg.EngineSpec, &fields); err != nil {
+							t.Fatal(err)
+						}
+						if _, exists := fields["listenHost"]; exists != (want != "") {
+							t.Fatal("legacy strict schema received unsupported SQL listener field")
+						}
+					}
+				}
+			})
+		}
+	}
+}

@@ -165,7 +165,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		tlsChanged := proxyTLSChanged(previous, s)
 		states, _ := n.Snapshot()
 		wasRunning := states["proxysql"].PID != 0
-		listenerChanged := previous.Proxy != nil && previous.Proxy.ReaderPort != s.Proxy.ReaderPort
+		listenerChanged := previous.Proxy != nil && (previous.Proxy.ReaderPort != s.Proxy.ReaderPort || previous.ListenHost != s.ListenHost)
 		if listenerChanged {
 			if err = stopConfigured(ctx, n, "proxysql"); err != nil {
 				return nil, err

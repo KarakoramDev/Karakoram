@@ -217,7 +217,7 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 // Config pulls the member configuration from the control plane.
 func (c *Client) Config(ctx context.Context) (MemberConfig, error) {
 	var v MemberConfig
-	err := c.request(ctx, "GET", "/internal/agent/v1/config?capability="+ConfigCapabilityGaleraListenHost, nil, &v)
+	err := c.request(ctx, "GET", "/internal/agent/v1/config?capability="+ConfigCapabilityGaleraListenHost+"&capability="+ConfigCapabilityMySQLListenHost, nil, &v)
 	return v, err
 }
 

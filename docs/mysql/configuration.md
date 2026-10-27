@@ -8,6 +8,8 @@
 
 `engineConfig` is not supported. Use string-valued, provider-allowlisted `engineOptions.parameters`; unknown settings are rejected. The provider remains authoritative even when a UI field validates locally. TLS must be `requireTLS`. Network listeners, data identity, replication, archiving and system accounts are managed settings, not raw configuration overrides.
 
+SQL listeners follow the backend layout: IPv4-only layouts retain IPv4 sockets; IPv6-capable layouts use MySQL's `*` all-addresses listener and separate IPv4/IPv6 ProxySQL writer and optional reader sockets. Proxy administration remains loopback-only. The control plane sends this policy only to agents advertising SQL-listener support on their configuration pull; updating the control plane alone does not change older agents' listeners. MySQL/PXC do not support `upgrade-agents`; existing deployments need replacement with a corrected agent through a supported lifecycle, rather than hand-editing managed configuration.
+
 Example shared by `mysql` and `pxc`:
 
 ```yaml

@@ -50,7 +50,7 @@ func nativeProxyBinary() string {
 	}
 	return "/usr/bin/proxysql"
 }
-func nativeProxyListeners() (string, string) {
+func nativeProxyListeners(myspec.Spec) (string, string) {
 	admin, client := os.Getenv("KARAKORAM_PROXYSQL_ADMIN_ADDR"), os.Getenv("KARAKORAM_PROXYSQL_CLIENT_ADDR")
 	if admin == "" {
 		admin = "127.0.0.1:6032"

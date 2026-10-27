@@ -140,9 +140,11 @@ type Proxy struct {
 	MaxConnections int         `json:"maxConnections"`
 }
 type Spec struct {
-	Member           string            `json:"member"`
-	Role             string            `json:"role"`
-	Topology         string            `json:"topology"`
+	Member   string `json:"member"`
+	Role     string `json:"role"`
+	Topology string `json:"topology"`
+	// ListenHost selects IPv4-only or dual-family SQL listeners.
+	ListenHost       string            `json:"listenHost,omitempty"`
 	Ordinal          int               `json:"ordinal"`
 	Version          string            `json:"version"`
 	ServerDir        string            `json:"serverDir"`
@@ -472,6 +474,9 @@ func ReservedUser(s string) bool {
 func (s Spec) Validate() error {
 	if !memberName.MatchString(s.Member) || s.Ordinal < 0 || (s.Role != RoleData && s.Role != RoleProxy) || (s.Topology != TopologySingle && s.Topology != TopologyGroup && s.Topology != TopologyCluster) || !(version.MatchString(s.Version) || s.Topology == TopologyCluster && galeraVersion.MatchString(s.Version)) {
 		return fmt.Errorf("invalid member identity, topology or version")
+	}
+	if s.ListenHost != "" && s.ListenHost != "0.0.0.0" && s.ListenHost != "::" {
+		return fmt.Errorf("invalid SQL listener policy")
 	}
 	ca, _ := pem.Decode([]byte(s.CAPEM))
 	if ca == nil || ca.Type != "CERTIFICATE" || s.ServerCert == nil {

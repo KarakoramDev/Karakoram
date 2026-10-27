@@ -45,12 +45,15 @@ func RenderProxyConfig(s myspec.Spec, configDir, dataDir string) (string, error)
 		return "", err
 	}
 	var b strings.Builder
-	admin, interfaces := nativeProxyListeners()
+	admin, interfaces := nativeProxyListeners(s)
 	// Empty PostgreSQL interfaces are rejected by the pinned ProxySQL build.
 	// Keep both unused protocols on owner-only Unix sockets, never default TCP.
 	fmt.Fprintf(&b, "datadir=%s\nadmin_variables={\n admin_credentials=%s\n mysql_ifaces=%s\n pgsql_ifaces=%s\n}\npgsql_variables={\n interfaces=%s\n}\n", proxyConfigQuote(dataDir), proxyConfigQuote(p.Admin.Username+":"+p.Admin.Password), proxyConfigQuote(admin), proxyConfigQuote(filepath.Join(dataDir, "pgsql-admin.sock")), proxyConfigQuote(filepath.Join(dataDir, "pgsql-client.sock")))
 	if p.ReaderPort {
 		interfaces += ";0.0.0.0:3307"
+		if s.ListenHost == "::" {
+			interfaces += ";[::]:3307"
+		}
 	}
 	healthcheck := "groupreplication"
 	if p.Mode == "galera" {
@@ -129,7 +132,7 @@ func proxyAdmin(ctx context.Context, s myspec.Spec) (*sql.DB, error) {
 	cfg.User = s.Proxy.Admin.Username
 	cfg.Passwd = s.Proxy.Admin.Password
 	cfg.Net = "tcp"
-	cfg.Addr, _ = nativeProxyListeners()
+	cfg.Addr, _ = nativeProxyListeners(myspec.Spec{})
 	cfg.Timeout = 2 * time.Second
 	cfg.ReadTimeout = 3 * time.Second
 	cfg.WriteTimeout = 3 * time.Second

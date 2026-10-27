@@ -126,6 +126,8 @@ func TestAgentConfigCapabilitiesAreAuthenticatedAndRequestScoped(t *testing.T) {
 		{"?capability=" + agentapi.ConfigCapabilityGaleraListenHost, []string{agentapi.ConfigCapabilityGaleraListenHost}},
 		{"", nil},
 		{"?capability=unknown&capability=" + agentapi.ConfigCapabilityGaleraListenHost, []string{"unknown", agentapi.ConfigCapabilityGaleraListenHost}},
+		{"?capability=" + agentapi.ConfigCapabilityGaleraListenHost + "&capability=" + agentapi.ConfigCapabilityMySQLListenHost, []string{agentapi.ConfigCapabilityGaleraListenHost, agentapi.ConfigCapabilityMySQLListenHost}},
+		{"", nil},
 	} {
 		request := httptest.NewRequest("GET", "/internal/agent/v1/config"+tc.query, nil)
 		request.Header.Set("Authorization", "Bearer config-member-token")

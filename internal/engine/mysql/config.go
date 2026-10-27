@@ -148,6 +148,12 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	o.Parameters = memberParameters(m, o.Parameters)
 	sp := myspec.Spec{Member: name, Role: m.Role, Topology: s.Topology, Ordinal: m.Index, Version: version, ServerDir: serverDir, XtraBackupDir: backupDir, BufferPoolBytes: buffer, MaxConnections: 200, Parameters: o.Parameters, CAPEM: get("tls/ca.crt"), ServerCert: cert("servers"), Superuser: credential("root"), Agent: credential("kk_agent"), Replication: credential("kk_repl"), Monitor: credential("kk_monitor"), BackupUser: credential("kk_backup"), AllowInitialize: m.Role == "data" && !m.Initialized && !m.CloneReplacesData && !s.Formation.reforming()}
+	if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {
+		sp.ListenHost = "::"
+		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
+			sp.ListenHost = "0.0.0.0"
+		}
+	}
 	sp.SlowShutdown = m.SlowShutdown
 	sp.Admin = credential("admin")
 	for _, peer := range s.data() {
