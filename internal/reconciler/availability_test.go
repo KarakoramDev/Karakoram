@@ -6,9 +6,13 @@ package reconciler
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +22,9 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
+	"github.com/KarakoramDev/Karakoram/internal/store"
+	"modernc.org/sqlite"
 )
 
 type blockedSyncProvider struct {
@@ -340,4 +347,124 @@ func TestPostSyncDependencyFailureCannotRepublishCachedAvailability(t *testing.T
 		stored.Status.ObservedGeneration != 1 {
 		t.Fatal("dependency failure republished pre-Sync positives", stored, err)
 	}
+}
+
+var preliminaryPublicationFaultID atomic.Uint64
+
+func TestPreliminaryPublicationFailureRetainsGateThroughFallback(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var writes atomic.Int32
+		function := fmt.Sprintf("d040_preliminary_write_%d", preliminaryPublicationFaultID.Add(1))
+		if err := sqlite.RegisterScalarFunction(function, 0, func(_ *sqlite.FunctionContext, _ []driver.Value) (driver.Value, error) {
+			if writes.Add(1) == 1 {
+				return nil, errors.New("transient preliminary publication failure")
+			}
+			return nil, nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		key, err := secrets.New(strings.Repeat("k", 32))
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "publication.db")
+		st, err := store.Open(path, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer st.Close()
+		p := &operationProvider{fakeProvider: &fakeProvider{}}
+		registry, err := engine.NewRegistry(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m, err := New(Options{Store: st, Registry: registry, Context: engine.Context{ObservationEpoch: "current-process"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}, Internal: json.RawMessage(`{"checkpoint":true}`),
+			Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1}}
+		if err := st.CreateCluster(t.Context(), c); err != nil {
+			t.Fatal(err)
+		}
+		admin, err := sql.Open("sqlite", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer admin.Close()
+		if _, err := admin.ExecContext(t.Context(), `CREATE TRIGGER fail_preliminary BEFORE UPDATE OF status ON clusters WHEN NEW.name='demo' BEGIN SELECT `+function+`(); END`); err != nil {
+			t.Fatal(err)
+		}
+		gate := make(chan struct{}, 1)
+		normalCtx := withObservationPublication(t.Context(), gate)
+		renewalCtx := withObservationPublication(t.Context(), gate)
+		renewalEntered, releaseRenewal := make(chan struct{}), make(chan struct{})
+		releaseFallback := make(chan struct{})
+		var renewalOnce sync.Once
+		var renewalProbes atomic.Int32
+		p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+			if rc.AvailabilityOnly {
+				renewalProbes.Add(1)
+				renewalOnce.Do(func() {
+					close(renewalEntered)
+					<-releaseRenewal
+				})
+				return domain.ClusterStatus{}, errors.New("newer agent observation failed")
+			}
+			return domain.ClusterStatus{Phase: domain.PhaseReady, Conditions: []domain.Condition{{Type: "Ready", Status: "True"}},
+				Members: []domain.MemberStatus{{Name: "member", Health: true, Agent: domain.AgentStatus{Healthy: true, LastSeen: rc.Clock.Now()}}}}, nil
+		}
+		p.syncFn = func(*engine.Context) (engine.Result, error) {
+			t.Error("Sync ran after preliminary publication failed")
+			return engine.Result{}, nil
+		}
+		failedPublication := make(chan error, 1)
+		normalDone, renewalDone := make(chan error, 1), make(chan error, 1)
+		go func() {
+			defer releaseObservation(normalCtx)
+			current, err := st.GetCluster(normalCtx, c.Ref())
+			if err != nil {
+				failedPublication <- err
+				normalDone <- err
+				return
+			}
+			rc := m.opts.Context
+			rc.Cluster = current
+			_, err = m.synchronize(normalCtx, p, &rc, nil)
+			failedPublication <- err
+			<-releaseFallback
+			// Match reconcile's unconditional m.state even when synchronize
+			// reports a preliminary publication failure.
+			normalDone <- m.state(normalCtx, current, domain.PhaseReady)
+		}()
+		if err := <-failedPublication; err == nil || !strings.Contains(err.Error(), "transient preliminary publication failure") {
+			t.Fatal("did not exercise the failed preliminary state write", err)
+		}
+		go func() { renewalDone <- m.renewAvailability(renewalCtx, c.Ref()) }()
+		synctest.Wait()
+		if renewalProbes.Load() != 0 {
+			t.Fatal("failed preliminary publication released ownership before the caller's fallback write")
+		}
+		close(releaseFallback)
+		<-renewalEntered
+		stored, err := st.GetCluster(t.Context(), c.Ref())
+		if err != nil || stored.Status.Phase != domain.PhaseReady || stored.Status.ObservationEpoch != "current-process" {
+			t.Fatal("fallback did not publish before the subsequent observation", stored, err)
+		}
+		close(releaseRenewal)
+		if err := <-normalDone; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-renewalDone; err != nil {
+			t.Fatal(err)
+		}
+		stored, err = st.GetCluster(t.Context(), c.Ref())
+		if err != nil || stored.Status.Phase == domain.PhaseReady || !stored.Status.ObservedAt.IsZero() ||
+			stored.Status.Members[0].Agent.Healthy || stored.Status.ObservedGeneration != 1 || string(stored.Internal) != `{"checkpoint":true}` {
+			t.Fatal("older fallback restored positive health over the subsequent failure", stored, err)
+		}
+		if writes.Load() != 3 {
+			t.Fatal("expected one failed preliminary write, one fallback and one failed-health publication", writes.Load())
+		}
+	})
 }

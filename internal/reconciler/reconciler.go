@@ -800,12 +800,14 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			saveErr = m.opts.Store.UpdateOperationAndClusterState(ctx, operation, rc.Cluster)
 		}
 		m.logStage(rc.Cluster.Ref(), "availability.pre-sync.publish", started)
+		if saveErr != nil {
+			// The caller still publishes this snapshot on error. Retain the
+			// gate through that write and its deferred release.
+			return engine.Result{}, saveErr
+		}
 		// Release only after this complete sample is durably published. Sync
 		// remains outside the gate so renewal can run during slow convergence.
 		releaseObservation(ctx)
-		if saveErr != nil {
-			return engine.Result{}, saveErr
-		}
 	}
 	observedGeneration := rc.Cluster.Status.ObservedGeneration
 	rc.DeploymentWait = ""

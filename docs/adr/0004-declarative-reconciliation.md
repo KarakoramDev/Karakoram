@@ -26,9 +26,11 @@ Both paths arbitrate each complete observation through its publication using a
 shared per-worker gate; a completed probe alone does not release publication
 ownership. This prevents the ordinary writer from replaying an older healthy
 sample over a newer failure and prevents either writer from shortening a newer
-lease. Pre-Sync publication releases the gate before Sync; final observation
-retains it through the lifecycle checkpoint. No health/lifecycle merge or
-wall-clock comparison is used to order failed (zero-lease) samples.
+lease. Only a successful pre-Sync publication releases the gate before Sync.
+If that write fails, ownership remains through the caller's error-path state
+publication and deferred release. Final observation retains ownership through
+the lifecycle checkpoint. No health/lifecycle merge or wall-clock comparison is
+used to order failed (zero-lease) samples.
 
 Record durable events and publish them through `/events/stream` SSE. Reconnects replay authorized events using event IDs; in-process delivery is an acceleration, not the source of truth.
 
