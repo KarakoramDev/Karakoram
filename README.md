@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Karakoram
 
-Karakoram is a multi-platform, self-hosted control plane for MongoDB, RabbitMQ, Elasticsearch, Weaviate, PostgreSQL, MySQL, Percona XtraDB Cluster, Neo4j Community, modular Supabase, Keycloak, OpenBao and Temporal orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
+Karakoram is a multi-platform, self-hosted control plane for database and stateful-service orchestration inside your infrastructure, without Kubernetes or a hosted coordinator. A Go control plane provides a REST API, `karactl` CLI and web UI; backends supply infrastructure, while you operate the installation, credentials, data and recovery procedures. Zerops is the reference backend. Dokploy and Nomad are also available; see [Backends](docs/backends.md) for their status.
 
 ## Engines
 
