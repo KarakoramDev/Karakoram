@@ -85,3 +85,25 @@ func TestObservedOwnershipOmitsMaskedSensitiveValues(t *testing.T) {
 		t.Fatalf("masked ownership: %+v", service)
 	}
 }
+
+func TestObservedAutoscalingRequiresEffectiveRuntimeConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name, base, vertical string
+		want                 bool
+	}{
+		{"runtime", "ubuntu-24.04", `{"cpuMode":"SHARED","minResource":{"cpuCoreCount":1,"memoryGBytes":2,"diskGBytes":3},"maxResource":{"cpuCoreCount":2,"memoryGBytes":4,"diskGBytes":5}}`, true},
+		{"volume", "local-storage", `{"minResource":{"diskGBytes":5},"maxResource":{"diskGBytes":10}}`, false},
+		{"unknown", "ubuntu-24.04", `null`, false},
+		{"empty", "ubuntu-24.04", `{}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := observed(ServiceStack{Base: tc.base, CurrentAutoscaling: map[string]json.RawMessage{"verticalAutoscaling": json.RawMessage(tc.vertical)}})
+			if (service.Autoscaling != nil) != tc.want {
+				t.Fatalf("autoscaling=%+v, want present=%t", service.Autoscaling, tc.want)
+			}
+			if tc.want && *service.Autoscaling != service.Resources {
+				t.Fatalf("effective bounds differ from platform resources: %+v", service)
+			}
+		})
+	}
+}

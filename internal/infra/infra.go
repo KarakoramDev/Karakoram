@@ -114,10 +114,14 @@ type Service struct {
 	// Importing identifies a durable reservation whose original ImportServices
 	// batch must be replayed before deployment or lifecycle mutations. Ownership
 	// and a nonnil service alone do not establish that setup completed.
-	Importing     bool      `json:"importing,omitempty"`
-	Resources     Resources `json:"resources"`
-	MinContainers int       `json:"minContainers"`
-	MaxContainers int       `json:"maxContainers"`
+	Importing bool      `json:"importing,omitempty"`
+	Resources Resources `json:"resources"`
+	// Autoscaling is the effective vertical-autoscaling configuration observed
+	// from the platform. Nil when unavailable or when Resources describes
+	// scheduler reservations/limits rather than platform autoscaling.
+	Autoscaling   *Resources `json:"autoscaling,omitempty"`
+	MinContainers int        `json:"minContainers"`
+	MaxContainers int        `json:"maxContainers"`
 	// Ownership contains only Karakoram identity keys, never arbitrary environment
 	// secrets. Values the token cannot read are omitted, never stored masked.
 	Ownership map[string]string `json:"-"`

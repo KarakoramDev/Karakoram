@@ -216,8 +216,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if runtime != nil {
-			resources := runtime.Resources
-			member.Autoscaling = &resources
+			member.Autoscaling = runtime.Autoscaling
 		}
 		member.Resources = engine.MemberResources(nil, member.Autoscaling)
 		var proxyProcesses []struct {

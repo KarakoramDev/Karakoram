@@ -399,7 +399,11 @@ func observed(s ServiceStack) infra.Service {
 	if strings.HasPrefix(typ, "local-storage") {
 		kind = infra.KindVolume
 	}
-	return infra.Service{ID: s.ID, Hostname: s.Name, Kind: kind, Status: s.Status, Resources: r, MinContainers: int(number(h, "minContainerCount")), MaxContainers: int(number(h, "maxContainerCount"))}
+	service := infra.Service{ID: s.ID, Hostname: s.Name, Kind: kind, Status: s.Status, Resources: r, MinContainers: int(number(h, "minContainerCount")), MaxContainers: int(number(h, "maxContainerCount"))}
+	if kind == infra.KindRuntime && len(v) > 0 {
+		service.Autoscaling = &r
+	}
+	return service
 }
 
 // GetService returns nil when absent, invalidating stale platform IDs as needed.
