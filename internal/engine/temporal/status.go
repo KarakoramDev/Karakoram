@@ -136,6 +136,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 	out.Phase = domain.PhaseUpdating
 	out.Members = nil
 	out.Conditions = nil
+	// This is a new live sweep, not the persisted observation copied above.
+	out.ObservationEpoch = ""
 	out.Version = ""
 	s, e := loadState(rc.Cluster)
 	if e != nil {
@@ -201,6 +203,10 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 		}
 		member := domain.MemberStatus{Name: m.Name, Set: name, Role: name, Version: observed.Version, State: "Waiting", Health: observed.Ready}
 		if observed.Ready {
+			// componentStatus requires fresh generic status/configuration and
+			// native readiness from every live instance. Publish that evidence
+			// to the shared availability fence, not just member.Health.
+			member.Agent = domain.AgentStatus{Healthy: true, LastSeen: clockNow(rc)}
 			member.State = "Ready"
 		} else {
 			ready = false

@@ -106,10 +106,12 @@ func (b *RecordingBackend) SubdomainURLs(ctx context.Context, name string) ([]st
 	return b.Backend.(infra.SubdomainAccess).SubdomainURLs(ctx, name)
 }
 
-// AssertIdle drives ordinary Sync+Status to Ready, persists through the real SQL
-// store and JSON decoder after EVERY cycle, then requires twenty further Ready
-// cycles without a single infrastructure mutation. Applied generation is checked
-// separately: a healthy but unconverged fixture cannot accidentally pass.
+// AssertIdle drives ordinary Sync plus the shared availability observation to
+// Ready, persists through the real SQL store and JSON decoder after EVERY cycle,
+// then requires twenty further Ready cycles without an infrastructure mutation.
+// Applied generation is checked separately: a healthy but unconverged fixture
+// cannot accidentally pass. Positive provider samples must satisfy the same
+// freshness contract as production, not just return Ready from raw Status.
 // apply models agent configuration acceptance, not provider reconciliation.
 func AssertIdle(t *testing.T, p engine.Provider, rc *engine.Context, apply func()) {
 	t.Helper()
@@ -179,7 +181,7 @@ func AssertIdle(t *testing.T, p engine.Provider, rc *engine.Context, apply func(
 		if apply != nil {
 			apply()
 		}
-		status, err := p.Status(t.Context(), rc)
+		status, err := engine.ObserveStatus(t.Context(), p, rc)
 		if err != nil {
 			t.Fatalf("Status: %v", err)
 		}

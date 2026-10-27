@@ -131,6 +131,13 @@ Normal cluster status is password-free:
 - `TemporalNamespaces` contains observed workflow namespaces; `TemporalSchema` conditions report persistence/visibility versions by component; `TemporalUpgrade` reports an active rolling upgrade.
 - `TemporalRestoreRecovery` fences maintenance while stopped runtimes are restarted and readiness-checked after an interrupted or failed source restore.
 
+A Ready component proves that every live instance passed authenticated generic
+agent/configuration checks and native readiness. Status publishes that positive
+agent evidence with a fresh control-plane timestamp so the shared availability
+lease can accept it. Each live sweep replaces the prior observation identity;
+failed or expired observations never renew readiness. Repairing missing agent
+observation evidence requires only a control-plane upgrade, not agent replacement.
+
 ## Limits
 
 No multi-cluster replication or global namespaces, no per-namespace authorization, and no individual client-certificate revocation. Namespace descriptions cannot be cleared through Temporal's API. Temporal restores require recorded backups, not a PITR timestamp or an arbitrary clone destination. Backup manifests live in Temporal cluster state, so preserve [control-plane state and its master key](../operations.md#control-plane-state-backup-and-recovery) as well as PostgreSQL backups.
