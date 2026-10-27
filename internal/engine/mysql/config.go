@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -174,9 +175,11 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	if m.Role == "data" && s.Topology == "cluster" {
 		g := &myspec.Galera{ClusterName: s.Formation.GroupName, FormationEpoch: s.Formation.FormationEpoch, GaleraPort: myspec.PortGalera, ISTPort: myspec.PortGaleraIST, SSTPort: myspec.PortGaleraSST, GCacheSize: "128M"}
-		g.ListenHost = "::"
-		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
-			g.ListenHost = "0.0.0.0"
+		if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityGaleraListenHost) {
+			g.ListenHost = "::"
+			if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
+				g.ListenHost = "0.0.0.0"
+			}
 		}
 		g.TrafficCert = &myspec.Certificate{CertPEM: get(galeraTrafficBase + ".crt"), KeyPEM: get(galeraTrafficBase + ".key")}
 		g.TrafficCAPEM = get(galeraTrafficCA + ".crt")

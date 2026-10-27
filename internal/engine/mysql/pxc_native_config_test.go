@@ -3,6 +3,7 @@
 package mysql
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -256,6 +257,7 @@ func TestPXCGaleraBindFollowsBackendFamily(t *testing.T) {
 		t.Run(tc.family, func(t *testing.T) {
 			p, rc, b := setupPXC(t)
 			rc.Backend = pxcBindBackend{Backend: b, family: tc.family}
+			rc.AgentConfigCapabilities = []string{agentapi.ConfigCapabilityGaleraListenHost}
 			if _, err := p.Sync(t.Context(), rc); err != nil {
 				t.Fatal(err)
 			}
@@ -280,6 +282,47 @@ func TestPXCGaleraBindFollowsBackendFamily(t *testing.T) {
 			for _, peer := range spec.Galera.Peers {
 				if peer.Host != peer.Name {
 					t.Fatalf("backend bind policy replaced advertised identity: %+v", peer)
+				}
+			}
+			// Snapshot the previous strict nested schema, not today's Galera
+			// struct: embedding today's type would hide a compatibility break.
+			type previousGalera struct {
+				ClusterName    string              `json:"clusterName"`
+				FormationEpoch uint64              `json:"formationEpoch"`
+				Peers          []myspec.Peer       `json:"peers"`
+				GaleraPort     int                 `json:"galeraPort"`
+				ISTPort        int                 `json:"istPort"`
+				SSTPort        int                 `json:"sstPort"`
+				Bootstrap      bool                `json:"bootstrap"`
+				StartPosition  string              `json:"startPosition,omitempty"`
+				GCacheSize     string              `json:"gcacheSize"`
+				TrafficCert    *myspec.Certificate `json:"trafficCert"`
+				TrafficCAPEM   string              `json:"trafficCAPEM"`
+			}
+			decodePrevious := func(raw []byte) error {
+				var previous struct {
+					myspec.Spec
+					Galera *previousGalera `json:"galera,omitempty"`
+				}
+				d := json.NewDecoder(bytes.NewReader(raw))
+				d.DisallowUnknownFields()
+				return d.Decode(&previous)
+			}
+			if err := decodePrevious(cfg.EngineSpec); err == nil {
+				t.Fatal("previous schema fixture accidentally accepts the new field")
+			}
+			withoutPolicy := bytes.Replace(cfg.EngineSpec, []byte(`"listenHost":"`+tc.listen+`",`), nil, 1)
+			for _, capabilities := range [][]string{nil, {"unknown-capability"}, nil} {
+				rc.AgentConfigCapabilities = capabilities
+				legacy, err := p.MemberConfig(t.Context(), rc, s.data()[0].Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := decodePrevious(legacy.EngineSpec); err != nil {
+					t.Fatalf("legacy strict decoder rejected new CP output: %v", err)
+				}
+				if !bytes.Equal(legacy.EngineSpec, withoutPolicy) {
+					t.Fatal("legacy request changed fields beyond omitting the unsupported bind policy")
 				}
 			}
 		})

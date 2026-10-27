@@ -120,6 +120,7 @@ func (s *Server) InternalHandler() http.Handler {
 			_ = failure.write(w)
 			return
 		}
+		rc.AgentConfigCapabilities = r.URL.Query()["capability"]
 		var cfg agentapi.MemberConfig
 		if token.Member == companion.Member(rc.Cluster.Name) {
 			cfg, err = companion.MemberConfig(r.Context(), rc, token.Member)

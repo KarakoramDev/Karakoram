@@ -7,10 +7,13 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
@@ -86,5 +89,50 @@ func TestAgentDialerNamespacesRouteAndCacheIndependently(t *testing.T) {
 	defer namespaces.mu.Unlock()
 	if len(namespaces.addresses) != 1 {
 		t.Fatal("default namespace used relay transport")
+	}
+}
+
+type configCapabilityProvider struct {
+	fakeProvider
+	capabilities []string
+}
+
+func (p *configCapabilityProvider) MemberConfig(ctx context.Context, rc *engine.Context, member string) (agentapi.MemberConfig, error) {
+	p.capabilities = slices.Clone(rc.AgentConfigCapabilities)
+	return p.fakeProvider.MemberConfig(ctx, rc, member)
+}
+
+func TestAgentConfigCapabilitiesAreAuthenticatedAndRequestScoped(t *testing.T) {
+	s, _, _ := testServer(t)
+	p := &configCapabilityProvider{}
+	registry, err := engine.NewRegistry(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Registry = registry
+	if err := s.Store.SetAgentToken(t.Context(), &domain.AgentToken{Cluster: "prod", Member: "prodm0", Token: "config-member-token"}); err != nil {
+		t.Fatal(err)
+	}
+	unauthenticated := httptest.NewRecorder()
+	s.InternalHandler().ServeHTTP(unauthenticated, httptest.NewRequest("GET", "/internal/agent/v1/config?capability="+agentapi.ConfigCapabilityGaleraListenHost, nil))
+	if unauthenticated.Code != 401 || p.capabilities != nil {
+		t.Fatal("configuration capability bypassed member authentication")
+	}
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"", nil},
+		{"?capability=" + agentapi.ConfigCapabilityGaleraListenHost, []string{agentapi.ConfigCapabilityGaleraListenHost}},
+		{"", nil},
+		{"?capability=unknown&capability=" + agentapi.ConfigCapabilityGaleraListenHost, []string{"unknown", agentapi.ConfigCapabilityGaleraListenHost}},
+	} {
+		request := httptest.NewRequest("GET", "/internal/agent/v1/config"+tc.query, nil)
+		request.Header.Set("Authorization", "Bearer config-member-token")
+		response := httptest.NewRecorder()
+		s.InternalHandler().ServeHTTP(response, request)
+		if response.Code != 200 || !slices.Equal(p.capabilities, tc.want) {
+			t.Fatalf("status=%d capabilities=%v, want %v", response.Code, p.capabilities, tc.want)
+		}
 	}
 }

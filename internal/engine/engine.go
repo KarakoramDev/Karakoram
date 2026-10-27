@@ -216,6 +216,9 @@ type Context struct {
 	Dialer    ContextDialer
 	AgentURL  string
 	Cluster   *domain.Cluster
+	// AgentConfigCapabilities applies only to the authenticated config pull
+	// being served. Unknown/absent capabilities must retain the legacy schema.
+	AgentConfigCapabilities []string
 	// Operation is set only while an imperative operation owns this invocation.
 	Operation *domain.Operation
 	Backend   infra.Backend

@@ -50,8 +50,15 @@ as SST/IST joiners. A runtime deployment is not permission to launch an
 uninitialized seed as an ordinary joiner.
 
 Galera's local bind address is distinct from its advertised member names.
-The control plane supplies a numeric IPv4 wildcard on IPv4-only Nomad/Dokploy
-layouts and an IPv6 wildcard (`[::]:4567`) on Zerops's IPv6-capable layout.
+For agents advertising `capability=mysql-galera-listen-host` on their
+authenticated configuration pull, the control plane supplies a numeric IPv4
+wildcard on IPv4-only Nomad/Dokploy layouts and an IPv6 wildcard
+(`[::]:4567`) on Zerops's IPv6-capable layout. The capability applies even on the
+first pull and only to that request. Older agents receive the unchanged legacy
+schema without `listenHost`, avoiding their strict decoder's unknown-field
+rejection. A fixed agent talking to an older control plane can still receive a
+fieldless legacy configuration; its DNS-host fallback is IPv4-only, so full
+Zerops IPv6 bind support requires both the fixed control plane and fixed agent.
 The pinned Galera provider resolves a hostname listener but subsequently parses
 that original host as a numeric outgoing source bind, so using a member DNS name
 as `gmcast.listen_addr` can abort connection establishment with `Invalid argument`.

@@ -12,6 +12,15 @@ Run `karakoram agent` as the member's supervisor. Pull `GET /internal/agent/v1/c
 
 Return versioned `MemberConfig`: role, replset, config overrides, keyfile, engine TLS material, agent server certificate/key, required local system credentials, PBM/process intent and maintenance mode. Cache it at `{DATA_DIR}/karakoram/config.json` with mode 0600; pull every 60 seconds and on reload. Render protected configuration files and supervise mongod/mongos/pbm-agent, forwarding SIGTERM for clean shutdown. Mongos without a data volume cannot rely on cache persistence across redeploys and must refetch configuration then.
 
+Agents advertise strict-decoder additions on that same authenticated GET using
+repeatable `capability` query parameters. Capabilities are request-scoped, not
+persisted cluster intent, and must work on the first pull without a reverse
+agent-status probe. The control plane omits optional engine fields unless that
+request explicitly advertises support; unknown capabilities grant no authority.
+`capability=mysql-galera-listen-host` permits the numeric `Galera.listenHost`
+field. Legacy requests omit it and retain their previous schema; older control
+planes ignore this query parameter and continue returning legacy configuration.
+
 For control-plane-to-agent HTTPS on private port 9443, verify the agent certificate and require the same member token. Limit commands to status, reload, named process start/stop/restart, maintenance, idempotent localhost bootstrap, whitelisted PBM actions, bounded logs and metrics. Never expose a shell or arbitrary exec endpoint. Maintenance explicitly disables automatic mongod restart during physical restore.
 
 ## Consequences

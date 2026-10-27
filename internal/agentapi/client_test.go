@@ -41,6 +41,9 @@ func TestPinnedClient(t *testing.T) {
 		case "/v1/bootstrap":
 			w.Write([]byte(`{"initialized":true,"userCreated":true}`))
 		case "/internal/agent/v1/config":
+			if got := r.URL.Query().Get("capability"); got != ConfigCapabilityGaleraListenHost {
+				t.Errorf("first configuration pull capability=%q", got)
+			}
 			w.Write([]byte(`{"role":"mongod-rs","configVersion":7}`))
 		default:
 			w.WriteHeader(http.StatusNoContent)

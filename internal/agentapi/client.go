@@ -205,7 +205,7 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 		return err
 	}
 	limit := int64(16 << 20)
-	if path == "/internal/agent/v1/config" {
+	if parts[0] == "/internal/agent/v1/config" {
 		// Supabase permits 100 functions with 1 MiB of source each. JSON escaping
 		// and source-file names can expand the admitted 7 MiB function envelope.
 		// Keep this larger allowance confined to the pinned control-plane pull.
@@ -217,7 +217,7 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 // Config pulls the member configuration from the control plane.
 func (c *Client) Config(ctx context.Context) (MemberConfig, error) {
 	var v MemberConfig
-	err := c.request(ctx, "GET", "/internal/agent/v1/config", nil, &v)
+	err := c.request(ctx, "GET", "/internal/agent/v1/config?capability="+ConfigCapabilityGaleraListenHost, nil, &v)
 	return v, err
 }
 

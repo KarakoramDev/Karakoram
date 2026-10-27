@@ -16,6 +16,10 @@ const (
 	RoleRouter       = "mongos"
 )
 
+// ConfigCapabilityGaleraListenHost advertises strict-decoder support for the
+// numeric Galera bind policy on a configuration pull, including the first pull.
+const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
+
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`
