@@ -59,6 +59,7 @@ These are provider capabilities, not guarantees of engine availability. Query `G
 | Engine model | Shared native contract for catalog engines/topologies above, except Temporal | Shared runtime contract; subject to the status and feature gates above | Same runtime contract; no managed public HTTPS |
 | Placement | No anti-affinity guarantee; observed placement is not authoritative | Authoritative Swarm node; volumes spread while eligible nodes remain | Authoritative Nomad node; volumes spread while eligible nodes remain |
 | Persistent storage | Node-local Local Storage; enforced volume sizing and supported growth, no shrink | Node-local Docker named volumes; no enforced quota or supported growth | Dynamic `mkdir` host volumes; no enforced quota or supported growth |
+| In-place disk growth (`diskGrowth`) | Supported | Unsupported; updates rejected before reconciliation | Unsupported; updates rejected before reconciliation |
 | Public TCP | Project public addresses and provider-enforced CIDR allowlists | Swarm routing mesh; no provider CIDR filtering | Static host ports; operator load balancer must forward to the correct node; no provider CIDR filtering |
 | Managed public HTTPS | Supported | Requires configured `domainSuffix`, wildcard DNS and Traefik | Unsupported; use a separately operated external proxy without enabling provider-managed HTTPS options |
 | Resource bounds and autoscaling | Platform autoscaling bounds; dedicated CPU supported | Scheduler reservations/limits, not Zerops-style resource autoscaling; no dedicated CPU capability | Scheduler reservations/limits, not Zerops-style resource autoscaling; dedicated CPU requires whole cores |
@@ -66,6 +67,22 @@ These are provider capabilities, not guarantees of engine availability. Query `G
 | Credential scope | Project-scoped token | Admin API key; use a dedicated Dokploy installation | Namespace ACL writes, but not hostile-tenant metadata isolation; trust all job submitters reaching the clients |
 
 For public TCP on Dokploy and Nomad, admission requires an allowlist covering the whole address family and explicit `allowAllAddresses: true`. Apply narrower access rules at your firewall/load balancer; this acknowledgement does not create filtering. Nomad rejects managed public HTTPS for Supabase gateway, [Kibana](https://www.elastic.co/kibana), APM and [RabbitMQ](https://www.rabbitmq.com/) management. Review the complete [Zerops capabilities](zerops.md#capabilities), [Dokploy capabilities](dokploy.md#capabilities), [Nomad capabilities](nomad.md#capabilities) and [Limitations](limitations.md).
+
+Creating volumes at their initial requested size and adding new members are not
+in-place growth. Increasing either disk bound of an existing enabled component
+requires `diskGrowth`, including updates that also add replicas. PUT, PATCH and
+their dry-run equivalents return HTTP 400 with
+`not supported for this cluster: backend BACKEND does not provide diskGrowth`
+when the namespace provider lacks it; rejected requests do not change the cluster
+generation or enqueue an operation. Legacy desired state is checked again before
+convergence starts disruptive resource work: unsupported growth fails its
+operation terminally without stopping a serving member.
+For a size increase accepted by an older control plane, revert both disk bounds
+to the volume's acknowledged size before retrying. On a provider without growth,
+admission uses those acknowledged volume bounds rather than the unapplied
+desired size, so this correction is not treated as a real volume shrink.
+Resuming retained volumes with a larger, unsupported desired size is rejected
+before a resume operation is queued. Actual volume shrinking remains unsupported.
 
 ## Choose and configure a provider
 

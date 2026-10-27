@@ -81,6 +81,28 @@ func CheckCapabilities(p Provider, spec domain.ClusterSpec, backend string, have
 	return fmt.Errorf("%w: backend %s does not provide %s", ErrNotSupported, backend, strings.Join(missing, ", "))
 }
 
+// CheckDiskGrowthUpdate checks transitions, not initial sizing: creating a new
+// component or adding replicas does not grow an existing volume.
+func CheckDiskGrowthUpdate(previous, next domain.ClusterSpec, backend string, have infra.Capabilities) error {
+	if have.DiskGrowth {
+		return nil
+	}
+	grows := func(old, target domain.ComponentSpec) bool {
+		return old.Replicas > 0 && target.Replicas > 0 &&
+			(target.Resources.MinDisk > old.Resources.MinDisk || target.Resources.MaxDisk > old.Resources.MaxDisk)
+	}
+	old, target := previous.Components, next.Components
+	if grows(old.Engine, target.Engine) || grows(old.ConfigServer, target.ConfigServer) || grows(old.Router, target.Router) {
+		return fmt.Errorf("%w: backend %s does not provide diskGrowth", ErrNotSupported, backend)
+	}
+	for name, component := range target.Extra {
+		if grows(old.Extra[name], component) {
+			return fmt.Errorf("%w: backend %s does not provide diskGrowth", ErrNotSupported, backend)
+		}
+	}
+	return nil
+}
+
 // CheckExposureSupport refuses only a positively unsupported public IP family.
 // Unknown capability does not change admission or convergence behavior.
 func CheckExposureSupport(ctx context.Context, backend infra.Backend, exposure domain.Exposure) (domain.Condition, error) {

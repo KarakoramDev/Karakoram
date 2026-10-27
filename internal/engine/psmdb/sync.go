@@ -113,6 +113,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			s.resetPlatformRetry(v)
 			return false, e
 		}
+		var rejected *infra.ResourceUpdateRejectedError
+		if errors.As(e, &rejected) {
+			return true, s.failPendingCause(rc, e)
+		}
 		if e != nil {
 			return true, e
 		}
@@ -381,14 +385,6 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			err = e
 		}
 	}()
-	result.RequeueAfter = 5 * time.Second
-	if s.CloneQueued {
-		if complete, err := reconcileInitialRestore(ctx, rc, s); err != nil {
-			return result, err
-		} else if !complete {
-			return result, nil
-		}
-	}
 	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
 		// Retirement checkpoints still persist independently, including the
 		// exact-ID deletion receipt and positive runtime absence before storage
@@ -396,6 +392,24 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 		// five-second sleeps multiply across never-placed surplus members.
 		result.RequeueAfter = time.Second
 		return result, e
+	}
+	// Check every existing volume before any member can be stepped down or
+	// resized for the same desired generation.
+	for _, m := range s.Members {
+		r := component(rc.Cluster.Spec, m).Resources
+		if m.VolumeID != "" && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+				return result, e
+			}
+		}
+	}
+	result.RequeueAfter = 5 * time.Second
+	if s.CloneQueued {
+		if complete, err := reconcileInitialRestore(ctx, rc, s); err != nil {
+			return result, err
+		} else if !complete {
+			return result, nil
+		}
 	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return result, e

@@ -255,6 +255,14 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	for _, m := range s.Members {
+		r := rc.Cluster.Spec.Components.Engine.Resources
+		if m.VolumeID != "" && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+				return result, e
+			}
+		}
+	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
 	}

@@ -144,7 +144,7 @@ func validateDataMcp(p engine.Provider, c *domain.Cluster) error {
 	return nil
 }
 
-func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previousExposure *domain.Exposure) *response {
+func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previous *domain.Cluster) *response {
 	kind := "zerops"
 	namespace := domain.NormalizedNamespace(c.Namespace)
 	n, err := s.Store.GetNamespace(ctx, namespace)
@@ -167,16 +167,30 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 		if backend, err := s.namespaces.Backend(namespace); err == nil && backend != nil {
 			resolvedBackend = backend
 			have = backend.Capabilities()
-			unchangedExposure := previousExposure != nil &&
-				previousExposure.Public == c.Spec.Exposure.Public &&
-				previousExposure.IPType == c.Spec.Exposure.IPType &&
-				slices.Equal(previousExposure.Allowlist, c.Spec.Exposure.Allowlist)
+			unchangedExposure := previous != nil &&
+				previous.Spec.Exposure.Public == c.Spec.Exposure.Public &&
+				previous.Spec.Exposure.IPType == c.Spec.Exposure.IPType &&
+				slices.Equal(previous.Spec.Exposure.Allowlist, c.Spec.Exposure.Allowlist)
 			if !unchangedExposure {
 				if _, err := engine.CheckExposureSupport(ctx, backend, c.Spec.Exposure); err != nil {
 					r := fail(400, "invalid_request", err.Error())
 					return &r
 				}
 			}
+		}
+	}
+	if previous != nil {
+		if !have.DiskGrowth {
+			var err error
+			previous, err = engine.VolumeAdmissionBaseline(p, previous)
+			if err != nil {
+				r := s.failure(err)
+				return &r
+			}
+		}
+		if err := p.Validate(ctx, previous, c); err != nil {
+			r := s.failure(err)
+			return &r
 		}
 	}
 	if validator, ok := p.(engine.BackendValidator); ok {
@@ -188,6 +202,12 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, have); err != nil {
 		r := fail(400, "invalid_request", err.Error())
 		return &r
+	}
+	if previous != nil {
+		if err := engine.CheckDiskGrowthUpdate(previous.Spec, c.Spec, info.Kind, have); err != nil {
+			r := fail(400, "invalid_request", err.Error())
+			return &r
+		}
 	}
 	return nil
 }
@@ -251,6 +271,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if copyErr = json.Unmarshal(data, c); copyErr != nil {
 			return s.failure(copyErr)
 		}
+		// Internal is intentionally absent from public JSON, but capability
+		// previews still need the provider's acknowledged volume inventory.
+		c.Internal = bytes.Clone(rc.Cluster.Internal)
 		rc.Cluster = c
 	}
 	ctx = store.WithClusterSnapshot(ctx, c)
@@ -369,10 +392,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				return s.failure(err)
 			}
 		}
-		if err = p.Validate(ctx, c, &next); err != nil {
-			return s.failure(err)
-		}
-		if failure := s.validateBackendCapabilities(ctx, p, &next, &c.Spec.Exposure); failure != nil {
+		if failure := s.validateBackendCapabilities(ctx, p, &next, c); failure != nil {
 			return *failure
 		}
 		if next.Spec.Version != c.Spec.Version {
@@ -462,6 +482,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ResumeCluster":
+		// A retained volume keeps its acknowledged size. A stale desired size
+		// must be corrected before resuming on a backend that cannot grow it.
+		next := *c
+		if failure := s.validateBackendCapabilities(ctx, p, &next, c); failure != nil {
+			return *failure
+		}
 		op := domain.Operation{Kind: domain.OperationResume, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := *c

@@ -192,7 +192,7 @@ func PublicHTTPS(b infra.Backend) (infra.SubdomainAccess, error) {
 // RequireDiskGrowth refuses growing a volume on a backend that cannot.
 func RequireDiskGrowth(b infra.Backend) error {
 	if !b.Capabilities().DiskGrowth {
-		return fmt.Errorf("%w: backend %s cannot grow volumes", ErrNotSupported, b.Name())
+		return fmt.Errorf("%w: backend %s does not provide diskGrowth", ErrNotSupported, b.Name())
 	}
 	return nil
 }

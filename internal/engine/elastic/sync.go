@@ -220,6 +220,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *st
 			}
 			return false, p.failPendingCause(ctx, rc, s, v, err)
 		}
+		var rejected *infra.ResourceUpdateRejectedError
+		if errors.As(err, &rejected) {
+			return true, p.failPendingCause(ctx, rc, s, v, err)
+		}
 		if err != nil {
 			return true, err
 		}
@@ -635,14 +639,22 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 			err = e
 		}
 	}()
+	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	for _, m := range s.Members {
+		r := component(rc.Cluster.Spec, m).Resources
+		if m.VolumeID != "" && !m.Removing && (r.MinDisk > m.Disk.MinDisk || r.MaxDisk > m.Disk.MaxDisk) {
+			if e := engine.RequireDiskGrowth(rc.Backend); e != nil {
+				return result, e
+			}
+		}
+	}
 	if e := observeInitialRestore(ctx, rc, s); e != nil {
 		return result, e
 	}
 	if s.Phase == "ready" {
 		s.Phase = "updating"
-	}
-	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
-		return result, e
 	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return result, e
