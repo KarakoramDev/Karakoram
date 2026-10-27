@@ -18,7 +18,7 @@ Opt-in [cluster data MCP](../data-mcp.md) uses the PostgreSQL [pgEdge](https://w
 | Database access | [PostgreSQL native access API](../postgres/access-and-tls.md); internal services use a local raw TCP leader forwarder, not ProxySQL |
 | Recovery | [pgBackRest/PITR](../postgres/backups.md) for database data, not separate S3 objects or control-plane secrets |
 
-Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror for source-built services and the extension bundle. See [components and artifact availability](components.md).
+Component versions are locked to the Karakoram release. The current lock supplies every component in `minimal`, `standard` and `full`, including Studio 2026.10.12-bc27d2661edd, Edge Runtime 1.77.4 and [Supavisor](https://github.com/supabase/supavisor) 2.9.13. Standard/full require registered Storage configuration, and development builds need an artifact mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing the exact locked source-built services and extension bundle. See [components and artifact availability](components.md).
 
 The internal leader forwarder uses the provider's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
 

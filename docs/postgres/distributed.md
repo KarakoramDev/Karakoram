@@ -8,7 +8,7 @@
 
 ## Availability and licensing
 
-The native-artifact catalog includes real, smoke-qualified Citus 14.2.0 archives for PostgreSQL 16, 17 and 18. Creation still requires the matching `citus-pg<major>` entry to be locked **and resolvable**: development builds need a mirror serving the exact locked bytes, and releases need their matching downloadable assets. A topology entry alone does not establish availability. Inspect `karactl providers get postgres -o json` and the release artifact lock before deployment. [Supabase](https://supabase.com/) does not offer this topology.
+The native-artifact catalog includes real, smoke-qualified Citus 14.2.0 archives for PostgreSQL 16, 17 and 18. Creation still requires the matching `citus-pg<major>` entry to be locked **and resolvable**: development builds need a mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` serving the exact locked bytes, and releases need their matching downloadable assets. A topology entry alone does not establish availability. Inspect `karactl providers get postgres -o json` and the release artifact lock before deployment. [Supabase](https://supabase.com/) does not offer this topology.
 
 Karakoram remains Apache-2.0. Citus is an **AGPL-3.0-only** component, separately downloaded as an unmodified artifact, not bundled into the Karakoram binary. Its corresponding source is the upstream Citus tag matching the locked artifact (see [Citus upstream](https://github.com/citusdata/citus)); retain the artifact's license notices and source/tag reference and assess your obligations for your deployment. See [native artifacts](../native-artifacts.md).
 

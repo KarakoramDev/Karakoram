@@ -14,9 +14,16 @@ Resolve the URL in the control plane, in this order:
 
 1. `KARAKORAM_ARTIFACT_MIRROR` plus `/<file>` when configured, including official artifacts;
 2. the locked official `upstreamURL`;
-3. `https://github.com/KarakoramDev/Karakoram/releases/download/<running-version>/<file>` for a versioned release and a Karakoram-built artifact.
+3. `https://github.com/KarakoramDev/Karakoram/releases/download/<release>/<file>` for a Karakoram-built artifact, using explicit `KARAKORAM_ARTIFACT_RELEASE` when configured, otherwise the running release version.
 
-A development build without a mirror cannot resolve a Karakoram-built entry and returns an admission error naming the artifact and environment variable. A mirror changes transport location, not version, checksum or allowed capabilities. Serve exact locked bytes and use HTTPS in production. A mirror cannot make an absent lock entry available.
+A development build without a mirror or explicit artifact release cannot resolve a Karakoram-built entry and returns an admission error naming the artifact and configuration choices. A mirror or artifact release changes transport location, not version, checksum or allowed capabilities. Serve exact locked bytes and use HTTPS in production. Neither setting can make an absent lock entry available. An artifact release override leaves official upstream URLs intact; the global mirror still overrides those URLs too.
+
+Git-describe distance/hash versions (for example `v1.2.3-4-gabcdef0`, optionally
+ending in `-dirty`) are development builds for resolution, not release tags.
+Reject their implicit release fallback with the same missing-mirror error before
+member deployment. An operator may select a published artifact release only when
+all required locked bytes are present and match. The override does not probe
+remote existence or change the running executable used for member deployment.
 
 Preparation uses the existing executable/runtime deployment model. It downloads and checks SHA-256 before installation, resolves Debian dependencies with apt, and preserves application archives under `/opt/karakoram/<name>-<version>` with runtime ownership. Raw executables receive executable permissions. PostgreSQL extension archives instead validate the declared major, fail closed on missing/invalid majors, and accept only regular files/directories within that major's `usr/lib/postgresql/<pgMajor>` and `usr/share/postgresql/<pgMajor>` trees and their directory ancestors. Root extracts into private staging and copies only those two trees without changing destination ownership; archives never extract directly into the system root. Package autostart prevention remains the engine's responsibility. Lock size is also checked during build/publication; member preparation's integrity check is SHA-256.
 

@@ -19,9 +19,40 @@ Resolution order is:
 
 1. `KARAKORAM_ARTIFACT_MIRROR`, with `/<file>` appended;
 2. the artifact's official `upstreamURL`;
-3. for a versioned release, `https://github.com/KarakoramDev/Karakoram/releases/download/<running-version>/<file>`.
+3. `https://github.com/KarakoramDev/Karakoram/releases/download/<release>/<file>`, using `KARAKORAM_ARTIFACT_RELEASE` when set, otherwise the running version if it is a release tag.
 
-A development build needs a mirror for Karakoram-built files. The typed `MissingMirrorError` names the artifact and required environment variable. Configure the variable on the control plane; resolved URLs are rendered into member preparation commands. Mirrors must serve the exact locked bytes. Production mirrors should use HTTPS.
+A development build needs a mirror or an explicit published artifact release for Karakoram-built files. The typed `MissingMirrorError` names the artifact and configuration choices. Configure these variables on the control plane; resolved URLs are rendered into member preparation commands. Both choices must serve the exact locked bytes. Production mirrors should use HTTPS.
+
+`git describe` versions such as `v1.2.3-4-gabcdef0` (including a trailing
+`-dirty`) identify development builds, not published native-asset releases.
+They require an explicit artifact source even though their suffix resembles a SemVer prerelease.
+Actual release tags such as `v1.2.3` and `v1.2.3-rc.1` retain the release
+fallback; operators must publish their assets using the release tooling.
+Pushing a source commit does not publish assets under its describe version.
+
+For a source build with native bytes unchanged from a published release, select
+that release **only after comparing required files and SHA-256 with the embedded
+lock**:
+
+```yaml
+# Control-plane runtime environment, not build-only or member environment.
+KARAKORAM_ARTIFACT_RELEASE: v1.2.3
+```
+
+This selects the GitHub release directory for Karakoram-built artifacts only;
+official artifacts retain their locked upstream URLs. Invalid tags and
+git-describe development versions are rejected before deployment. This does not
+probe remote asset existence: the operator must select a published release that
+actually contains the required locked bytes.
+
+`KARAKORAM_ARTIFACT_MIRROR` still takes precedence for **all** locked artifacts,
+including official upstream files; it must contain every needed artifact, with
+no missing-object fallback. Do not use a normal release directory as a global
+mirror for a mixed inventory: releases stage Karakoram-built files, not every
+official download. Keep the control-plane build version/commit truthful; do not
+disguise a source build as an old release. These settings affect native dependency
+downloads only. Member deployment still packages the running control-plane
+executable (`karakoram agent`), not a server binary downloaded from that release.
 
 [Neo4j](https://neo4j.com/) Community uses the official `neo4j-community-2026.09.0-unix.tar.gz` or `neo4j-community-2026.10.0-unix.tar.gz`, plus the official [Eclipse Temurin](https://adoptium.net/) 21 JRE `21.0.12.1+1` archive. All three have locked SHA-256, size and upstream provenance; mirrors must preserve those bytes. They are upstream releases, not Karakoram source rebuilds. See the [Neo4j guide](neo4j/README.md).
 

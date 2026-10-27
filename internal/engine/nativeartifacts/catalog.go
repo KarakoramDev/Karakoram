@@ -117,13 +117,18 @@ func legacyExtensionArtifact(a Artifact) bool {
 type MissingMirrorError struct{ Name string }
 
 func (e *MissingMirrorError) Error() string {
-	return fmt.Sprintf("native artifact %q requires KARAKORAM_ARTIFACT_MIRROR in a development build", e.Name)
+	return fmt.Sprintf("native artifact %q requires KARAKORAM_ARTIFACT_MIRROR or KARAKORAM_ARTIFACT_RELEASE in a development build", e.Name)
 }
 
 var releaseVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
 
+// git describe identifies source builds, not published release tags, even though
+// its distance/hash suffix also happens to be valid SemVer prerelease syntax.
+var describedVersion = regexp.MustCompile(`-[0-9]+-g[0-9a-f]+(?:-dirty)?$`)
+
 // ResolveURL applies the operator mirror, official upstream and release fallback
-// in that order. Resolution happens in the control plane, before deployment.
+// in that order. An explicit artifact release overrides only the release fallback.
+// Resolution happens in the control plane, before deployment.
 func ResolveURL(a Artifact) (string, error) {
 	if mirror := strings.TrimRight(os.Getenv("KARAKORAM_ARTIFACT_MIRROR"), "/"); mirror != "" {
 		return mirror + "/" + a.File, nil
@@ -131,8 +136,16 @@ func ResolveURL(a Artifact) (string, error) {
 	if a.UpstreamURL != "" {
 		return a.UpstreamURL, nil
 	}
-	if releaseVersion.MatchString(version.Version) {
-		return "https://github.com/KarakoramDev/Karakoram/releases/download/" + version.Version + "/" + a.File, nil
+	release := os.Getenv("KARAKORAM_ARTIFACT_RELEASE")
+	if release != "" {
+		if !releaseVersion.MatchString(release) || describedVersion.MatchString(release) {
+			return "", fmt.Errorf("native artifact %q: KARAKORAM_ARTIFACT_RELEASE must name a release tag, not a development build", a.Name)
+		}
+	} else {
+		release = version.Version
+	}
+	if releaseVersion.MatchString(release) && !describedVersion.MatchString(release) {
+		return "https://github.com/KarakoramDev/Karakoram/releases/download/" + release + "/" + a.File, nil
 	}
 	return "", &MissingMirrorError{Name: a.Name}
 }

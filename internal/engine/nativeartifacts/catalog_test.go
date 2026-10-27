@@ -117,6 +117,7 @@ func TestLock(t *testing.T) {
 func TestResolveURL(t *testing.T) {
 	old := version.Version
 	t.Cleanup(func() { version.Version = old })
+	t.Setenv("KARAKORAM_ARTIFACT_RELEASE", "")
 	a := Artifact{Name: "example", File: "example.tar.gz", UpstreamURL: "https://upstream.example/example.tar.gz"}
 	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://mirror.example/native///")
 	version.Version = "dev"
@@ -128,7 +129,7 @@ func TestResolveURL(t *testing.T) {
 		t.Fatalf("upstream: %q, %v", got, err)
 	}
 	a.UpstreamURL = ""
-	for _, v := range []string{"dev", "", "unknown", "v1.2.3/development"} {
+	for _, v := range []string{"dev", "", "unknown", "v1.2.3/development", "v0.4.0-36-gf8a5dd5b", "v1.2.3-rc.1-2-gabcdef0", "v1.2.3-0-gabcdef0", "v1.2.3-2-gabcdef0-dirty"} {
 		version.Version = v
 		_, err := ResolveURL(a)
 		var missing *MissingMirrorError
@@ -142,6 +143,61 @@ func TestResolveURL(t *testing.T) {
 		if got, err := ResolveURL(a); err != nil || got != want {
 			t.Fatalf("release: %q, %v", got, err)
 		}
+	}
+}
+
+func TestDescribeBuildResolvesExplicitArtifactSources(t *testing.T) {
+	old := version.Version
+	t.Cleanup(func() { version.Version = old })
+	t.Setenv("KARAKORAM_ARTIFACT_RELEASE", "")
+	version.Version = "v0.4.0-36-gf8a5dd5b"
+	a, err := Get("timescaledb-pg16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const mirror = "https://github.com/KarakoramDev/Karakoram/releases/download/v0.4.0"
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", mirror)
+	if got, err := ResolveURL(a); err != nil || got != mirror+"/"+a.File {
+		t.Fatalf("source build mirror: %q, %v", got, err)
+	}
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "")
+	a.UpstreamURL = "https://upstream.example/" + a.File
+	if got, err := ResolveURL(a); err != nil || got != a.UpstreamURL {
+		t.Fatalf("source build upstream: %q, %v", got, err)
+	}
+}
+
+func TestArtifactReleaseOverride(t *testing.T) {
+	old := version.Version
+	t.Cleanup(func() { version.Version = old })
+	version.Version = "v0.4.0-36-gf8a5dd5b"
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "")
+	a, err := Get("timescaledb-pg16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, release := range []string{"v0.4.0", "v0.4.1-rc.1"} {
+		t.Setenv("KARAKORAM_ARTIFACT_RELEASE", release)
+		want := "https://github.com/KarakoramDev/Karakoram/releases/download/" + release + "/" + a.File
+		if got, err := ResolveURL(a); err != nil || got != want {
+			t.Fatalf("artifact release %s: %q, %v", release, got, err)
+		}
+	}
+	for _, release := range []string{"dev", "v0.4.0-36-gf8a5dd5b", "../v0.4.0"} {
+		t.Setenv("KARAKORAM_ARTIFACT_RELEASE", release)
+		if _, err := ResolveURL(a); err == nil || !strings.Contains(err.Error(), "KARAKORAM_ARTIFACT_RELEASE") {
+			t.Fatalf("invalid artifact release %s: %v", release, err)
+		}
+	}
+	// Explicit mirrors and official downloads retain precedence, even if an
+	// unused release override is invalid.
+	a.UpstreamURL = "https://upstream.example/" + a.File
+	if got, err := ResolveURL(a); err != nil || got != a.UpstreamURL {
+		t.Fatalf("official upstream: %q, %v", got, err)
+	}
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://mirror.example/native")
+	if got, err := ResolveURL(a); err != nil || got != "https://mirror.example/native/"+a.File {
+		t.Fatalf("mirror: %q, %v", got, err)
 	}
 }
 

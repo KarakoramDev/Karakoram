@@ -211,7 +211,7 @@ Installations mirroring native artifacts must add the following exact filenames 
 | Neo4j / Java | `neo4j-community-2026.09.0-unix.tar.gz`, `neo4j-community-2026.10.0-unix.tar.gz`, `OpenJDK21U-jre_x64_linux_hotspot_21.0.12.1_1.tar.gz` |
 | Weaviate | `weaviate-v1.40.1-linux-amd64.tar.gz`, `weaviate-v1.39.12-linux-amd64.tar.gz` |
 
-[TimescaleDB](https://www.timescale.com/) and [Citus](https://www.citusdata.com/) bundles are Karakoram-built; development builds need a mirror for them. Other additions have official upstream URLs. [Weaviate](https://weaviate.io/) is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
+[TimescaleDB](https://www.timescale.com/) and [Citus](https://www.citusdata.com/) bundles are Karakoram-built; development builds need a mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing their exact locked bytes. Other additions have official upstream URLs. [Weaviate](https://weaviate.io/) is upstream-only, mixed-license and **not redistributed as a Karakoram release payload**. A private mirror is not permission to redistribute upstream software. See [native artifacts](native-artifacts.md) for resolution order, provenance and licensing.
 
 ### Deploy on Zerops
 
@@ -251,7 +251,7 @@ Existing API tokens stay unrestricted; mint [restricted tokens](access-control.m
 
 ### New native artifacts
 
-Data MCP companions for [MongoDB](https://www.mongodb.com/), [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use two new entries in `lock.json`, downloaded only when a cluster enables data MCP: `mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz` is a Karakoram-built release asset with no upstream URL, and `pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz` comes from the official [pgEdge](https://www.pgedge.com/) release. Operators running a `KARAKORAM_ARTIFACT_MIRROR` must add both files with their exact locked bytes; development builds need the mirror for the MongoDB bundle. See [data MCP companion artifacts](native-artifacts.md#data-mcp-companion-artifacts).
+Data MCP companions for [MongoDB](https://www.mongodb.com/), [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use two new entries in `lock.json`, downloaded only when a cluster enables data MCP: `mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz` is a Karakoram-built release asset with no upstream URL, and `pgedge-postgres-mcp-server_1.1.0_linux_x86_64.tar.gz` comes from the official [pgEdge](https://www.pgedge.com/) release. Operators running a `KARAKORAM_ARTIFACT_MIRROR` must add both files with their exact locked bytes; development builds need a mirror or explicit `KARAKORAM_ARTIFACT_RELEASE` containing the locked MongoDB bundle. See [data MCP companion artifacts](native-artifacts.md#data-mcp-companion-artifacts).
 
 ### Deploy on Zerops
 
