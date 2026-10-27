@@ -193,6 +193,10 @@ func (b *Backend) DeleteService(ctx context.Context, hostname string) (infra.Op,
 func (b *Backend) DeleteServiceByID(ctx context.Context, hostname, expectedID string) (infra.Op, error) {
 	return b.deleteService(ctx, hostname, expectedID, true)
 }
+
+// Deletion owns the receipt fence: cleanup need not first make a failed or
+// obsolete deployment healthy. deleteService still waits for terminal delivery.
+func (*Backend) SupersedesDeploymentsOnDelete() bool { return true }
 func (b *Backend) deleteService(ctx context.Context, hostname, expectedID string, fenced bool) (infra.Op, error) {
 	if err := b.mu.Lock(ctx); err != nil {
 		return infra.Op{}, err

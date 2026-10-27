@@ -259,6 +259,9 @@ func (b *Backend) mutationReady(ctx context.Context, a *application, m *metadata
 		return restoreConflict(state.Message)
 	}
 	if !state.Done && !state.Failed {
+		if _, cleanup := infra.CleanupIntentFromContext(ctx); cleanup && m.Desired == "deleting" {
+			return deploymentWait("PreviousDeployment", []string{a.ID}, "waiting for the exact Dokploy mutation receipt before deletion")
+		}
 		return restoreConflict("a Dokploy mutation is queued or running; wait for its exact receipt before stopping, deleting or redeploying")
 	}
 	var current application
@@ -284,6 +287,19 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		ctx = infra.WithoutObservation(ctx)
 	}
 	s := observe(a, m)
+	// Cleanup needs identity, not deployment readiness. Do not restore a runtime
+	// which the engine is about to remove, or require its failed build to heal.
+	// DeleteService retains the durable receipt and waits for terminal delivery
+	// before replacing it with the deletion operation.
+	if intent, ok := infra.CleanupIntentFromContext(ctx); ok {
+		if intent.Services[m.Hostname] != a.ID {
+			return s, restoreConflict("cleanup application identity changed; refusing runtime observation")
+		}
+		if m.Pending != nil && m.Pending.Failed {
+			s.Status = infra.StatusFailed
+		}
+		return s, nil
+	}
 	if m.PortChange != nil && m.PortChange.RollbackPort != 0 {
 		if readOnly {
 			return s, errObservationMutation

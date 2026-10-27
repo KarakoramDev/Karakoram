@@ -317,6 +317,20 @@ Resolve the original queue/build and obtain a terminal deployment receipt before
 retrying; never clear the receipt merely to force a second build. Failed terminal
 deployments require an explicit corrected deployment, not an automatic retry loop.
 
+Cluster deletion does not require a failed runtime build to become healthy.
+Cleanup observes the recorded application identity without restoring or rebuilding
+it, and deletion supersedes the obsolete engine deployment wait. A queued/running
+mutation still retains its exact receipt: deletion waits for terminal delivery
+without submitting another build, then removes the owned application even when
+that deployment failed or was cancelled. An uncertain/stalled delivery remains
+fenced and requires the operator inspection described above.
+
+The ordinary operation failure budget is distinct from the exact-version
+`DeploymentRetriesExhausted` budget. A failed Dokploy build or an exhausted
+create/delete operation alone does not qualify for `retry-deployments`; its `409`
+does not mean deletion requires another deployment attempt. Use cluster deletion
+to remove a failed initial application.
+
 An authoritative enqueue refusal (HTTP 4xx other than a request timeout) is
 different from lost/ambiguous acceptance: archive uploads, retained-source rebuilds
 and wipes retire that attempt's local and durable receipt, permitting a later
