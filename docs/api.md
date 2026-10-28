@@ -223,6 +223,12 @@ create and restore return an empty changes list. Sensitive diff values are
 masked. `effects` describes generic version, member, resource, exposure, TLS,
 backup and recovery consequences; it does not predict engine-specific restarts.
 `warnings` contains applicable admission caveats.
+Placement warnings describe observed member/container placement, not a predicted
+node allocation. A create preview has no provisioned members and does not
+forecast co-location from the current Ready-node count; empty `warnings` and
+an empty `status.placement.warning` do not certify future host separation.
+After provisioning, inspect `/clusters/{cluster}/placement` and the cluster's
+placement status. See [backend placement limits](limitations.md).
 
 Dry-run does not persist clusters, secrets, operations, restores or audit events,
 publish events, trigger reconciliation, or reserve/replay `Idempotency-Key`.
