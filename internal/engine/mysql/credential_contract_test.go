@@ -68,6 +68,8 @@ func TestGeneratedApplicationCredentialContracts(t *testing.T) {
 				switch r.URL.Path {
 				case "/v1/mysql/status":
 					_ = json.NewEncoder(w).Encode(myspec.StatusResponse{MemberState: "ONLINE", MemberRole: "PRIMARY"})
+				case "/v1/mysql/galera-status":
+					_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3})
 				case "/v1/mysql/" + myspec.ActionAccessUsers:
 					var request myspec.AccessRequest
 					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
