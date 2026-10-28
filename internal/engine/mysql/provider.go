@@ -200,6 +200,10 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if p.Name() == "pxc" && s.Components.Engine.Resources.MinRAM < 2 {
 		return engine.Invalid("PXC data members require at least 2 GiB RAM")
 	}
+	// Group communication and clone need headroom beyond the singleton budget.
+	if s.Topology.Type == "group" && s.Components.Engine.Resources.MinRAM < 2 {
+		return engine.Invalid("Group Replication data members require at least 2 GiB RAM")
+	}
 	if s.EngineConfig != "" {
 		return engine.Invalid("MySQL uses engineOptions, not engineConfig")
 	}

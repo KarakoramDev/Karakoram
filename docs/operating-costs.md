@@ -294,33 +294,33 @@ A bound PostgreSQL source is mandatory. Each cell includes one additional source
 
 ### Percona Server for MySQL
 
-Admission requires 1 / 1 / 5 per data member (RAM default 2 GiB). `single` permits one member and explicitly disabling [ProxySQL](https://proxysql.com/); `group` requires 3 or 5 data members and at least one ProxySQL replica. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; [XtraBackup](https://docs.percona.com/percona-xtrabackup/8.4/) runs with data members, not on extra hosts. See [MySQL](mysql/README.md).
+Admission requires 1 / 1 / 5 per `single` data member and **1 / 2 / 5 per Group Replication member** (RAM default 2 GiB). `single` permits one member and explicitly disabling [ProxySQL](https://proxysql.com/); `group` requires 3 or 5 data members and at least one ProxySQL replica. The minimum GR3 deployment therefore reserves 7 GiB including its default proxy. Corrected agents bound the GR message cache to one eighth of minimum RAM (128 MiB floor), leaving 37.5% outside the default pool and message cache; this is not a workload-RSS guarantee. ProxySQL has no fixed positive numeric RAM floor beyond common validation, so use its 1 / 1 / 1 runtime default. Group Replication is single-primary; [XtraBackup](https://docs.percona.com/percona-xtrabackup/8.4/) runs with data members, not on extra hosts. See [MySQL](mysql/configuration.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
 | MINIMAL | 1 × 1 / 1 / 5; proxy disabled |
-| MINIMAL HA | 3 × 1 / 1 / 5; 1 proxy at 1 / 1 / 1 runtime |
+| MINIMAL HA | 3 × 1 / 2 / 5; 1 proxy at 1 / 1 / 1 runtime |
 | PRODUCTION-SHAPED | 3 × 4 / 8 / 100; 2 proxies at 1 / 1 / 1 runtime; S3 backups |
 
 | Worker placement | Minimal | Minimal HA | Production-shaped |
 | --- | --- | --- | --- |
 | **Zerops** | 1 × managed runtime | 3 × managed runtime + 1 × managed runtime | 3 × managed runtime + 2 × managed runtime |
 | Hetzner | 1 × CX23 | 3 × CX23 + 1 × CX23 | 3 × CX43 + 2 × CX23 |
-| AWS | 1 × t3.small | 3 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
-| DigitalOcean | 1 × Basic 2-GiB | 3 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
-| OVHcloud | 1 × d2-2 | 3 × d2-2 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
+| AWS | 1 × t3.small | 3 × t3.medium + 1 × t3.small | 3 × m6i.xlarge + 2 × t3.small |
+| DigitalOcean | 1 × Basic 2-GiB | 3 × Basic 4-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 2 × Basic 2-GiB |
+| OVHcloud | 1 × d2-2 | 3 × d2-4 + 1 × d2-2 | 3 × b2-15 + 2 × d2-2 |
 
 | Monthly total | Minimal | Minimal HA | Production-shaped |
 | --- | ---: | ---: | ---: |
-| **Zerops (USD)** | $9.2 | $33 | $168 |
+| **Zerops (USD)** | $9.2 | $42 | $168 |
 | Hetzner (EUR) | €24 | €42 | €80 |
-| AWS (USD) | $77 | $138 | $646 |
-| DigitalOcean (USD) | $54 | $91 | $389 |
-| OVHcloud (EUR) | €32 | €57 | €362 |
+| AWS (USD) | $77 | $191 | $646 |
+| DigitalOcean (USD) | $54 | $127 | $389 |
+| OVHcloud (EUR) | €32 | €79 | €362 |
 
 ### Percona XtraDB Cluster (PXC)
 
-[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) has **no singleton topology**: its admitted minimum is 3 [Galera](https://galeracluster.com/) members plus 1 required [ProxySQL](https://proxysql.com/) replica; 5 data members are also admitted. Data floors are 1 / 2 / 5 (2-GiB data RAM default); proxy resources retain the 1 / 1 / 1 default. Unlike MySQL, 1-GiB PXC data members are rejected because Galera adds memory overhead. MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
+[PXC](https://docs.percona.com/percona-xtradb-cluster/8.4/) has **no singleton topology**: its admitted minimum is 3 [Galera](https://galeracluster.com/) members plus 1 required [ProxySQL](https://proxysql.com/) replica; 5 data members are also admitted. Data floors are 1 / 2 / 5 (2-GiB data RAM default); proxy resources retain the 1 / 1 / 1 default. Like MySQL Group Replication, PXC rejects 1-GiB data members; Galera and SST add memory overhead beyond singleton MySQL. MINIMAL and MINIMAL HA therefore share workers but differ in backup occupancy and Zerops core allowance. Proxies route one writer; two proxy replicas need an operator routing design. See [PXC](mysql/README.md).
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |

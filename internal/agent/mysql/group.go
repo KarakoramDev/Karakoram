@@ -58,12 +58,18 @@ func RenderGroupOptions(s myspec.Spec, root string) map[string]string {
 	for _, p := range g.Seeds {
 		seeds = append(seeds, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)))
 	}
+	// BufferPoolBytes is the control plane's half-MinRAM baseline, before user
+	// parameter overrides. Reserve one eighth of that member RAM for messages;
+	// never inherit the upstream 1 GiB cache on a small member. Cache metadata,
+	// connections, Performance Schema and clone still need separate headroom.
+	messageCache := max(int64(128<<20), s.BufferPoolBytes/4)
 	return map[string]string{
 		"plugin-load-add":                                         "group_replication.so;mysql_clone.so",
 		"loose-group_replication_group_name":                      g.GroupName,
 		"loose-group_replication_local_address":                   net.JoinHostPort(host, strconv.Itoa(port)),
 		"loose-group_replication_group_seeds":                     strings.Join(seeds, ","),
 		"loose-group_replication_communication_stack":             "MYSQL",
+		"loose-group_replication_message_cache_size":              strconv.FormatInt(messageCache, 10),
 		"loose-group_replication_single_primary_mode":             "ON",
 		"loose-group_replication_ssl_mode":                        "VERIFY_IDENTITY",
 		"loose-group_replication_recovery_use_ssl":                "ON",

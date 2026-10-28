@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -53,6 +54,38 @@ func TestRenderGroupOptions(t *testing.T) {
 	}
 	if RenderGroupOptions(myspec.Spec{}, root) != nil {
 		t.Fatal("singleton GR options")
+	}
+}
+
+func TestGroupMessageCacheMemoryBudget(t *testing.T) {
+	for _, version := range []string{"8.0.46-37", "8.4.11-11"} {
+		for _, ram := range []int64{1, 2, 4, 8} {
+			s := testGroupSpec()
+			s.Version, s.Topology = version, myspec.TopologyGroup
+			s.BufferPoolBytes = ram * (1 << 30) / 2
+			want := max(int64(128<<20), ram*(1<<30)/8)
+			// User buffer/concurrency tuning must not enlarge the managed cache.
+			s.Parameters = map[string]string{"innodb_buffer_pool_size": "134217728", "max_connections": "30"}
+			opts := RenderGroupOptions(s, t.TempDir())
+			key := "loose-group_replication_message_cache_size"
+			if opts[key] != strconv.FormatInt(want, 10) {
+				t.Fatalf("%s %d GiB: cache %s, want %d", version, ram, opts[key], want)
+			}
+			config := renderConfig(s, dataPaths(t.TempDir()))
+			if !strings.Contains(config, key+"="+optionQuote(opts[key])+"\n") {
+				t.Fatal("managed message cache missing from my.cnf")
+			}
+			if ram >= 2 && ram*(1<<30)-s.BufferPoolBytes-want < ram*(1<<30)*3/8 {
+				t.Fatal("less than 37.5% explicit-cache headroom")
+			}
+		}
+	}
+	for _, topology := range []string{myspec.TopologySingle, myspec.TopologyCluster} {
+		s := coreTestSpec()
+		s.Topology = topology
+		if strings.Contains(renderConfig(s, dataPaths(t.TempDir())), "group_replication_message_cache_size") {
+			t.Fatal("group memory setting leaked to non-GR topology")
+		}
 	}
 }
 

@@ -243,3 +243,28 @@ func TestPXCMemoryMinimumAdmission(t *testing.T) {
 		}
 	}
 }
+
+func TestGroupMemoryMinimumAdmission(t *testing.T) {
+	s, _, token := testServer(t)
+	if err := s.Registry.Register(mysql.New(mysql.Options{Store: s.Store})); err != nil {
+		t.Fatal(err)
+	}
+	spec := `{"provider":"mysql","topology":{"type":"group"},"components":{"engine":{"resources":{"minRam":1,"maxRam":4}}}}`
+	for _, prefix := range []string{"/api/v1/dry-run/clusters", "/api/v1/clusters"} {
+		w := call(s, "POST", prefix, `{"name":"smallgroup","spec":`+spec+`}`, token)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Group Replication data members require at least 2 GiB RAM") {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	if w := call(s, "POST", "/api/v1/clusters", `{"name":"smallgroup","spec":{"provider":"mysql","topology":{"type":"group"}}}`, token); w.Code != http.StatusCreated {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for _, prefix := range []string{"/api/v1/dry-run/clusters/", "/api/v1/clusters/"} {
+		for _, method := range []string{"PUT", "PATCH"} {
+			w := call(s, method, prefix+"smallgroup", `{"spec":`+spec+`}`, token)
+			if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "Group Replication data members require at least 2 GiB RAM") {
+				t.Fatal(w.Code, w.Body.String())
+			}
+		}
+	}
+}

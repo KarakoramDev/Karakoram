@@ -165,6 +165,27 @@ func TestPXCResourceMemoryFloor(t *testing.T) {
 	}
 }
 
+func TestGroupResourceMemoryFloor(t *testing.T) {
+	for _, ram := range []float64{1, 1.5, 2} {
+		p, rc, _ := setup(t, "group")
+		rc.Cluster.Spec.Components.Engine.Resources.MinRAM = ram
+		rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 4
+		for _, parameters := range []string{`{}`, `{"parameters":{"innodb_buffer_pool_size":"134217728","max_connections":"30"}}`} {
+			rc.Cluster.Spec.EngineOptions = json.RawMessage(parameters)
+			for _, old := range []*domain.Cluster{nil, rc.Cluster} {
+				err := p.Validate(t.Context(), old, rc.Cluster)
+				if ram < 2 {
+					if err == nil || !strings.Contains(err.Error(), "Group Replication data members require at least 2 GiB RAM") {
+						t.Fatalf("RAM %g: expected GR memory floor, got %v", ram, err)
+					}
+				} else if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+}
+
 func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 	for _, topology := range []string{"single", "group", "cluster"} {
 		for _, ram := range []float64{1, 2} {
@@ -179,9 +200,9 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 			rc.Cluster.Spec.Components.Engine.Resources.MinRAM = ram
 			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 4
 			err := p.Validate(t.Context(), nil, rc.Cluster)
-			if topology == "cluster" && ram == 1 {
+			if topology != "single" && ram == 1 {
 				if err == nil {
-					t.Fatal("admitted unsafe 1 GiB PXC")
+					t.Fatal("admitted unsafe 1 GiB clustered member")
 				}
 				continue
 			}
@@ -214,6 +235,10 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 						t.Fatal("missing Galera cache budget")
 					}
 					caches += 128 << 20
+				} else if topology == "group" {
+					// Agent rendering derives this managed cache from the baseline
+					// pool, not the independently overridable SQL parameter.
+					caches += max(int64(128<<20), spec.BufferPoolBytes/4)
 				}
 				if limit-caches < limit*3/8 {
 					t.Fatalf("%s RAM %g: explicit caches leave less than 37.5%% headroom", topology, ram)
