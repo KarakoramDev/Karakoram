@@ -6,7 +6,7 @@ The `temporal` engine driver runs native [Temporal](https://temporal.io/) workfl
 
 ## Prerequisites
 
-- **Provider:** [Zerops](https://zerops.io/) is not supported in v0.4.0; use [Dokploy](https://dokploy.com/) or [Nomad](https://developer.hashicorp.com/nomad). Temporal membership requires a private IPv4 route to the bound PostgreSQL writer, while Zerops uses private IPv6. Zerops support is pending IPv6 private networking; see [release status and provider availability](../providers.md#engine-availability).
+- **Provider:** [Zerops](https://zerops.io/) is not supported yet; use [Dokploy](https://dokploy.com/) or [Nomad](https://developer.hashicorp.com/nomad). Temporal membership requires a private IPv4 route to the bound PostgreSQL writer, while Zerops uses private IPv6. Zerops support is pending IPv6 private networking; see [release status and provider availability](../providers.md#engine-availability).
 - An existing Karakoram PostgreSQL source cluster, major **12 or later**, reachable from the Temporal members. The PostgreSQL engine driver's own version catalog still applies.
 - The **PostgreSQL binding service** (ADR 0045), which the standard server constructs once and shares with Temporal, [OpenBao](https://openbao.org/), [Keycloak](https://www.keycloak.org/) and the bindings API. A composition without it rejects Temporal clusters with `PostgreSQL bindings are unavailable`.
 - Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.

@@ -6,9 +6,85 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading from v0.4.0 to v0.4.1
 
-Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY`
-before replacing the control plane. Engine packages and member agents are separate
-from the control-plane executable; follow [member-agent rollout](#rolling-out-member-agents).
+Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup)
+and preserve the original `KARAKORAM_MASTER_KEY` separately before deploying.
+Retain the v0.4.0 executable with its pre-upgrade state. Then deploy v0.4.1:
+
+```sh
+git fetch origin --tags && git checkout v0.4.1
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+There are **no new SQLite migrations** in v0.4.1; the migration inventory still
+ends at 017. This does not make rollback of subsequent engine or infrastructure
+changes automatic. Engine packages and member agents are separate from the
+control-plane executable.
+
+### Member-agent rollout and changed minimums
+
+Before any PostgreSQL member redeployment, follow the
+[version-drift inventory](#postgresql-exact-versions-and-existing-version-drift)
+below. Recover an access-held restore before requesting an agent rollout.
+On a healthy cluster, `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m`
+supports **PostgreSQL (including Citus), Supabase, MongoDB, RabbitMQ and
+Elasticsearch**. It retains engine versions and honors maintenance windows and
+health/quorum gates. Follow [member-agent rollout](#rolling-out-member-agents)
+and verify every member's reported build afterward.
+
+**OpenBao, Temporal, MySQL, PXC, Neo4j, Weaviate and Keycloak do not support
+`upgrade-agents`.** Existing executables are not replaced by restarting the
+control plane or native process. Agent-side fixes reach these engines only
+through control-plane-managed member re-creation; use deletion/recreation for
+disposable clusters, or the engine's documented backup/new-target recovery
+where supported. Preserve and verify valuable data first. There is no generic
+data-preserving agent-only upgrade for these engines; consumer deletion is
+especially destructive, as explained below. Do not use volume retention or
+copying binaries as a substitute.
+
+Agent-side changes include Keycloak JDBC and Temporal SQL driver settings;
+MySQL Group Replication pre-bootstrap observation and message-cache budgeting;
+MySQL/PXC address-family-aware SQL listeners; PXC numeric Galera binding,
+managed access serialization and archive eligibility; and Neo4j idempotent
+restore credential recovery and its reload/error handling. PostgreSQL agents
+carry the listener/proxy, TimescaleDB and coordinated Citus recovery fixes.
+Control-plane-only fixes, including idle resource-update suppression, status
+publication and maintenance admission, apply without replacing agents.
+
+MySQL Group Replication and PXC now require **`minRam >= 2` GiB per data
+member**, even with custom buffer settings; raise `maxRam` with it when necessary.
+MySQL single-member deployments retain their 1 GiB floor. Both providers retain
+the 5 GB data-disk floor; proxy resources are separate. Create/update and dry-run
+admission reject undersized specifications, including unrelated updates to an
+existing undersized cluster. Existing clusters are **not automatically resized**
+by deployment of the control plane. Correct their requested RAM through
+supported resource maintenance, or delete/re-create an unsuccessful fresh
+deployment. A RAM-only resize is not proof that a new agent was installed.
+The Group Replication message-cache fix specifically needs new data-member
+agents; the PXC admission floor itself is control-plane-only. See
+[MySQL resource guidance](mysql/configuration.md#mysql-group-replication-only).
+Group Replication and PXC formation on Zerops remain known issues in this
+release; the higher floor is not a bootstrap workaround.
+
+Explicit 1 GB disks are now admitted for Keycloak, Neo4j and Weaviate, matching
+their engine minimums instead of the old shared 5 GB request floor. This does
+not shrink existing volumes or add disk growth to Dokploy/Nomad.
+
+There are **no new native release-asset bundles**. The four Percona Server lock
+entries add Ubuntu 24.04's `libtirpc3t64` runtime dependency; preparation installs
+it through APT. Exact-byte native artifact mirrors need no additional bundle,
+but restricted/offline installations must provide this package and its
+dependencies through their Ubuntu package source. Source-built control planes
+must use a published artifact release explicitly when needed; see
+[native artifacts](native-artifacts.md).
+
+Disruptive changes for the new engines, including runtime-replacing HTTPS,
+hostname and public TCP route changes, now wait for maintenance admission.
+Use a generation-scoped explicit override only when intended; safety checks
+still apply. Unchanged updates no longer cancel in-flight work. Status now
+retains observed members on failed reads, distinguishes version drift from
+configuration acknowledgement waits, and reports build inventory independently
+of rollout support. These corrections do not turn missing evidence into health.
 
 ### Keycloak and Temporal PostgreSQL proxy compatibility
 
@@ -44,11 +120,10 @@ karactl -n NS clusters members CONSUMER -o json
 
 This is full deletion: it **drops the consumer-owned bound databases and login**.
 Never target the source PostgreSQL cluster. Verify the new member's build
-identity and native readiness, not merely a Ready binding. A Keycloak fixture
-that never passed initial Liquibase startup has no user-created realms or users;
-after confirming no imported/pre-existing data or external writes, recreation
-loses only incomplete bootstrap/schema state. Do not generalize this to an
-already-used Keycloak cluster.
+identity and native readiness, not merely a Ready binding. A Keycloak deployment
+that never passed initial Liquibase startup may have only incomplete bootstrap
+state, but confirm there is no imported/pre-existing data or external writes
+before deleting it. Do not generalize this to an already-used Keycloak cluster.
 
 Temporal can accept writes before a later visibility lookup fails. Readiness
 failure or the proxy error does **not** prove it is empty: deletion can destroy
@@ -72,7 +147,7 @@ records to bypass this fence.
 In v0.4.0, installing PostgreSQL profiles could upgrade a previously exact-pinned
 server as an APT dependency. For example, a cluster assigned Percona PostgreSQL
 17.10.1 with PostGIS could actually run 17.11.1 while member status still reported
-17.10.1. This affects the shared PostgreSQL/Supabase core on all backends.
+17.10.1. This affects the shared PostgreSQL/Supabase core on all providers.
 Native-artifact mirrors do not freeze the separate APT repositories.
 
 **Before refreshing existing member agents, changing profiles/resources, or
@@ -120,7 +195,7 @@ before proceeding. This upgrade neither downgrades engines nor recreates cluster
 v0.4.0 accidentally sent every managed-role recovery password request through
 the binding mutation scope. The agent rejected it before SQL execution because
 normal binding mutations require an OID-fenced journal. This affects every
-backend, including single-member and HA PostgreSQL/Supabase; it requires a
+provider, including single-member and HA PostgreSQL/Supabase; it requires a
 managed login role present in the recovered catalog. It is not an IPv6, TLS,
 extension-profile or PostgreSQL minor-version error. v0.2.0 and v0.3.0 do not
 contain this regression.
@@ -165,7 +240,7 @@ credential returned by the connection endpoint.** `system-users rotate` returns
 HTTP 409 with an explanation; the other internal PostgreSQL system roles are
 also not rotatable through this command. Native application-role password
 rotation and managed binding rotation do not rotate the administrator.
-In-place administrator rotation is planned for a later release.
+In-place administrator rotation is planned for the next release.
 
 If this credential is exposed, restrict access at both private and public
 network boundaries and terminate existing privileged sessions; removing public
@@ -480,7 +555,7 @@ After state/key backup, select the published release:
 
 ```sh
 git fetch origin --tags
-git checkout v0.4.0
+git checkout v0.4.1
 zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
   --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
 ```

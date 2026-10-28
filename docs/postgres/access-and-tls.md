@@ -23,7 +23,7 @@ never disclosed.
 
 **Known security limitation:** there is no supported in-place password rotation
 for `postgres` or the other engine-owned system identities. This applies to
-v0.2.0, v0.3.0 and v0.4.0. `system-users list` inventories managed identities; it
+v0.2.0 through v0.4.1. `system-users list` inventories managed identities; it
 does not promise rotation for every entry. For PostgreSQL, `system-users rotate`
 only rotates enabled Data MCP identities, not `postgres`, `kk_replicator`,
 `kk_rewind`, `kk_monitor`, `kk_admin` or `kk_proxy_admin`. The native
