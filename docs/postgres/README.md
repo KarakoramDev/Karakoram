@@ -108,6 +108,10 @@ placement use the same task inventory within that sweep. HA member count must
 not add serial platform-read budgets after native health has been collected.
 The bounded freshness lease is unchanged: unavailable platform or native reads
 still withdraw readiness rather than reusing a previous healthy sample.
+PITR status reuses the same sweep's unique fresh writer and recovery watermark;
+it does not probe unavailable or not-yet-recreated peers a second time during
+resume. Without a fresh unique writer, PITR coverage is reported unknown rather
+than extending the health sweep or reusing an old recovery watermark.
 Existing members can renew availability independently while ordinary reconciliation
 is busy, including during non-Ready lifecycle or maintenance-deferred work without
 completing that lifecycle or acknowledging its generation. PostgreSQL's idle Sync

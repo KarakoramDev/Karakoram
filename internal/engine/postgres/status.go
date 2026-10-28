@@ -786,8 +786,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return out, err
 	}
+	// Reuse this sweep's unique fresh writer, never probe absent/resuming peers
+	// again merely to project PITR coverage after the native health budget.
+	var backupPrimary *pgspec.StatusResponse
+	if st, ok := observations[primaryHost]; ok {
+		backupPrimary = &st
+	}
 	// Backup observations must not discard a fresh database/quorum snapshot.
-	if err := p.backupStatus(ctx, rc, &out); err != nil {
+	if err := p.backupStatus(ctx, rc, &out, s, backupPrimary); err != nil {
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "Backup", Status: "Unknown", Reason: "ObservationUnavailable", Message: "Backup inventory could not be collected; database health is reported independently.", LastTransitionTime: now(rc)})
 	}
 	for _, m := range s.Members {

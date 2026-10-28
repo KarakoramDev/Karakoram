@@ -10,6 +10,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/robfig/cron/v3"
 )
 
@@ -143,7 +144,7 @@ func (p *Core) validateBackups(ctx context.Context, old, n *domain.Cluster) erro
 	}
 	return nil
 }
-func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *domain.ClusterStatus) error {
+func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *domain.ClusterStatus, s *state, primary *pgspec.StatusResponse) error {
 	if rc.Store == nil {
 		return nil
 	}
@@ -158,7 +159,15 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		}
 	}
 	if rc.Cluster.Spec.Backup.PITR.Enabled {
-		windows, err := p.PITRWindow(ctx, rc)
+		var windows []domain.TimeWindow
+		var err error
+		if s.Topology != "distributed" {
+			if primary == nil {
+				err = engine.ErrUnavailable
+			} else {
+				windows, err = p.pitrWindowFromPrimary(ctx, rc, s, *primary, items)
+			}
+		}
 		if err != nil {
 			status.Conditions = append(status.Conditions, domain.Condition{Type: "PITR", Status: "Unknown", Reason: "ObservationUnavailable", Message: "The conservative PITR window could not be collected; restore writer/repository access. Database and DCS health are reported independently.", LastTransitionTime: now(rc)})
 			return nil

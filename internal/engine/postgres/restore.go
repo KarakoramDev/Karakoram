@@ -797,16 +797,22 @@ func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.Tim
 	if err != nil {
 		return nil, err
 	}
+	items, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return nil, err
+	}
+	return p.pitrWindowFromPrimary(ctx, rc, s, st, items)
+}
+
+// pitrWindowFromPrimary derives recovery coverage from an already observed
+// writer. Availability sweeps must not start another round of native probes.
+func (p *Core) pitrWindowFromPrimary(ctx context.Context, rc *engine.Context, s *state, st pgspec.StatusResponse, items []domain.Backup) ([]domain.TimeWindow, error) {
 	if st.ArchiveFailing || st.RecoverableUntil == "" {
 		return nil, nil
 	}
 	end, err := time.Parse(time.RFC3339Nano, st.RecoverableUntil)
 	if err != nil {
 		return nil, fmt.Errorf("decode primary recovery watermark: %w", err)
-	}
-	items, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
-	if err != nil {
-		return nil, err
 	}
 	storage, err := p.backupStorage(ctx, rc, rc.Cluster.Spec.Backup.Storage, rc.Cluster.Ref().Namespace)
 	if err != nil {
