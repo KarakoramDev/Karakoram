@@ -253,7 +253,9 @@ func (p *Core) runCitusBackup(ctx context.Context, rc *engine.Context, op *domai
 		}
 		c.Index++
 	case "citus-record":
+		b.Size = 0
 		for _, g := range c.Groups {
+			b.Size += g.Backup.RepoBytes
 			if g.Group == 0 {
 				base := g.Backup
 				b.Postgres = &base

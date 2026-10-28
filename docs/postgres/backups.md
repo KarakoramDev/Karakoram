@@ -41,6 +41,15 @@ releases the fence; a subsequent backup captures the new primaries/timelines.
 An unreachable original agent keeps the fence until receipt observation is
 possible; do not manually clear it while a native backup may still be writing.
 
+The aggregate backup `size` is the sum of pgBackRest repository bytes for the
+recorded coordinator and worker-group backups. It is not total bucket usage:
+shared predecessor backups and archived WAL are not added. Named points that
+reuse bases describe those same base bytes, not newly uploaded bytes.
+For distributed clusters, `PITR=False` with reason `NamedPointsOnly` explains
+that recovery selects completed coordinated named points, not arbitrary
+timestamps; it does not diagnose a broken WAL chain. Check `WALArchive`
+separately for archive health.
+
 Each Citus group has a persistent repository incarnation. Initial group paths end
 in `/g<group>`; retiring and recreating a worker advances its path to
 `/g<group>-i<incarnation>` before new database initialization. Coordinator and

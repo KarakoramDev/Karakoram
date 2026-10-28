@@ -159,6 +159,10 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		}
 	}
 	if rc.Cluster.Spec.Backup.PITR.Enabled {
+		if s.Topology == "distributed" {
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "PITR", Status: "False", Reason: "NamedPointsOnly", Message: "Citus recovery uses coordinated named restore points, not a continuous timestamp recovery window. Select a completed named restore point.", LastTransitionTime: now(rc)})
+			return nil
+		}
 		var windows []domain.TimeWindow
 		var err error
 		if s.Topology != "distributed" {

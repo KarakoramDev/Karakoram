@@ -56,7 +56,7 @@ func TestCitusBackupOrdersAllBasesBeforeMarkerAndArchiveBarrier(t *testing.T) {
 			backups++
 			json.NewEncoder(w).Encode(pgspec.BackupResponse{State: "done", Label: "base"})
 		case "/v1/postgres/backup-info":
-			json.NewEncoder(w).Encode(pgspec.BackupInfoResponse{Backups: []pgspec.BackupInfo{{Label: "base", Version: "17", SystemID: "system"}}})
+			json.NewEncoder(w).Encode(pgspec.BackupInfoResponse{Backups: []pgspec.BackupInfo{{Label: "base", Version: "17", SystemID: "system", RepoBytes: int64(backups * 100)}}})
 		case "/v1/postgres/citus-restore-point":
 			if backups != 2 {
 				t.Error("marker before all group backups", backups)
@@ -117,6 +117,9 @@ func TestCitusBackupOrdersAllBasesBeforeMarkerAndArchiveBarrier(t *testing.T) {
 	if err != nil || b.Phase != domain.PhaseSucceeded || b.Postgres == nil || b.Postgres.RestorePoint == "" || len(b.Postgres.Groups) != 2 {
 		t.Fatal(b, err)
 	}
+	if b.Size != 300 {
+		t.Fatal("aggregate size must sum group repository bytes", b.Size)
+	}
 	if b.Postgres.Groups[1].LSN != "0/200" {
 		t.Fatal("worker WAL upper bound lost")
 	}
@@ -146,6 +149,22 @@ func TestCitusBackupOrdersAllBasesBeforeMarkerAndArchiveBarrier(t *testing.T) {
 	items, err = rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
 	if err != nil || len(items) != 2 {
 		t.Fatal("duplicate scheduled point", err)
+	}
+}
+
+func TestCitusPITRStatusExplainsNamedPoints(t *testing.T) {
+	p, rc, s := citusOpsFixture(t)
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	status := domain.ClusterStatus{}
+	if err := p.backupStatus(t.Context(), rc, &status, s, nil); err != nil {
+		t.Fatal(err)
+	}
+	if status.Backup.PITRWindow != nil || len(status.Conditions) != 1 {
+		t.Fatal("unexpected timestamp recovery window", status)
+	}
+	c := status.Conditions[0]
+	if c.Type != "PITR" || c.Status != "False" || c.Reason != "NamedPointsOnly" || !strings.Contains(c.Message, "named restore point") || strings.Contains(c.Message, "WALArchive") {
+		t.Fatal("misleading distributed recovery status", c)
 	}
 }
 
