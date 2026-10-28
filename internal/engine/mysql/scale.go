@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
 // maintenanceAllowed excludes physical backups and all topology/restore owners.
@@ -45,6 +46,23 @@ func (p *Core) adoptSingleton(ctx context.Context, rc *engine.Context, s *state)
 	st, err := live(ctx, rc, seed.Name)
 	if err != nil || st.MemberState != "ONLINE" {
 		return engine.ErrUnavailable
+	}
+	// No GR exists while this member is still single. Persist the replacement
+	// credential before publishing adoption; replay reuses it after a CP crash.
+	// The mandatory adoption restart applies renderAccounts' ALTER USER from
+	// the acknowledged config before the first START GROUP_REPLICATION.
+	password, err := secret(ctx, rc, "users/kk_repl")
+	if err != nil {
+		return err
+	}
+	if len(password) > 32 {
+		value, err := secrets.RandomString(32)
+		if err != nil {
+			return err
+		}
+		if err := putSecret(ctx, rc, "users/kk_repl", []byte(value)); err != nil {
+			return err
+		}
 	}
 	group, err := newUUID()
 	if err != nil {

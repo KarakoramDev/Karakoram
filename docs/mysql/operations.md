@@ -251,6 +251,22 @@ has consumed its epoch with error 3972 therefore needs delete and fresh create
 after the corrected control plane is deployed; updating agents alone is not a
 repair of its existing credential or epoch.
 
+For an already blocked initial GR formation with an overlong stored recovery
+credential, `BootstrapEpochConsumed` now explicitly reports the 32-character
+limit and directs operators to delete/recreate only disposable never-formed
+clusters, preserving valuable data instead. No account rotation or epoch reset
+is attempted merely because current members are OFFLINE: that snapshot cannot
+prove no group ever formed.
+
+There is one safe automatic migration boundary: conversion of an existing
+**single** MySQL member to Group Replication. Before publishing adoption, the
+control plane persists a new 32-character recovery credential if the old one is
+overlong. It then uses the existing mandatory adoption restart: the acknowledged
+configuration's protected startup SQL executes `ALTER USER` on that sole member
+before the first GR bootstrap. A control-plane crash before adoption state is
+saved reuses the persisted replacement; replay does not generate another value.
+This does not alter formed GR clusters or reopen consumed multi-member epochs.
+
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an

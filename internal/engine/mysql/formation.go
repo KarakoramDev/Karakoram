@@ -232,6 +232,15 @@ func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *st
 			if st.DataIdentity.FormationEpoch >= f.FormationEpoch {
 				if st.MemberState != "RECOVERING" {
 					f.Blocked = "Bootstrap epoch was consumed without an ONLINE primary; automatic re-bootstrap is forbidden"
+					if rc.Cluster.Spec.Provider == "mysql" {
+						password, err := secret(ctx, rc, "users/kk_repl")
+						if err != nil {
+							return true, err
+						}
+						if len(password) > 32 {
+							f.Blocked += "; stored recovery credential exceeds MySQL's 32-character START limit (3972). For a disposable never-formed cluster, delete and recreate using a corrected control plane; preserve valuable data for evidence-based recovery. Existing SQL credentials and bootstrap epochs are not reset automatically"
+						}
+					}
 				}
 				return true, nil
 			}
