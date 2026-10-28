@@ -442,6 +442,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	s.Phase = "ready"
+	s.RollingKind = ""
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	result.RequeueAfter = 30 * time.Second
 	return result, nil

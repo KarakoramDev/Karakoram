@@ -71,6 +71,7 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 	}
 	for _, m := range ordered(s) {
 		if m.Change != nil {
+			s.RollingKind = m.Change.Kind
 			if joining := s.find(s.Unsealing); joining != nil && !joining.Voter && !p.postgresStorage(rc.Cluster) {
 				return false, nil // Let ordinary formation finish its existing fence.
 			}
@@ -117,6 +118,7 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 					return true, nil
 				}
 				m.Change = &memberChange{Kind: kind, Version: rc.Cluster.Spec.Version, Fingerprint: fp, Resources: runtimeResources(rc.Cluster.Spec.Components.Engine.Resources), Disk: rc.Cluster.Spec.Components.Engine.Resources}
+				s.RollingKind = kind
 				return true, nil
 			}
 		}
@@ -305,6 +307,7 @@ func (p *Provider) finishNativeSync(ctx context.Context, rc *engine.Context, s *
 		return r, nil
 	}
 	s.Phase = "ready"
+	s.RollingKind = ""
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	r.RequeueAfter = 30 * time.Second
 	return r, nil

@@ -81,7 +81,42 @@ func TestMaintenanceResourceChange(t *testing.T) {
 			if err != nil || status.Phase != domain.PhaseUpdating || status.ObservedGeneration >= rc.Cluster.Generation {
 				t.Fatalf("started CPU roll lacks updating phase: %+v %v", status, err)
 			}
-			ready(t, p, rc)
+			// Inspect every persisted boundary, including the receipt-free gap
+			// after a member finishes and before its successor is planned.
+			gaps := 0
+			for range 200 {
+				result, err := p.Sync(t.Context(), rc)
+				if err != nil || result.ConvergenceError != nil {
+					t.Fatal(result, err)
+				}
+				s := state(t, rc)
+				status, err = p.Status(t.Context(), rc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if status.ObservedGeneration == rc.Cluster.Generation {
+					if status.Phase != domain.PhaseReady || s.RollingKind != "" {
+						t.Fatalf("completed roll retained lifecycle: %+v rolling=%q", status, s.RollingKind)
+					}
+					break
+				}
+				if status.Phase != domain.PhaseUpdating {
+					t.Fatalf("incomplete roll lost updating phase: %+v", status)
+				}
+				hasChange := false
+				for _, m := range s.Members {
+					hasChange = hasChange || m.Change != nil
+				}
+				if !hasChange {
+					gaps++
+					if result.RequeueAfter <= 0 || s.RollingKind != "resources" {
+						t.Fatal("member boundary lost durable rolling intent", result, s.RollingKind)
+					}
+				}
+			}
+			if gaps < len(state(t, rc).Members) || status.ObservedGeneration != rc.Cluster.Generation {
+				t.Fatalf("roll did not traverse member gaps and converge: gaps=%d status=%+v", gaps, status)
+			}
 			for _, m := range state(t, rc).Members {
 				if m.Resources != runtimeResources(rc.Cluster.Spec.Components.Engine.Resources) {
 					t.Fatal("resource change did not proceed")

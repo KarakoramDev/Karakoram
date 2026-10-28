@@ -40,6 +40,14 @@ func phase(s *internalState, observedGeneration int64) domain.Phase {
 					return domain.PhaseScaling
 				}
 			}
+			// A member receipt is cleared before the next member is planned.
+			// Keep the admitted roll visible across that gap and final checks.
+			if s.RollingKind == "deploy" {
+				return domain.PhaseUpgrading
+			}
+			if s.RollingKind != "" {
+				return domain.PhaseUpdating
+			}
 			return domain.PhaseReady
 		}
 		return domain.PhaseInitializing

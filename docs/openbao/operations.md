@@ -19,6 +19,12 @@ maintenance window or advance `observedGeneration`. Read-only seal/leader querie
 for independent members overlap; initialization, unseal and rollout mutations
 remain serialized. Unreachable/sealed members still withdraw positive health.
 
+For a formed cluster, a desired update deferred before maintenance admission
+remains Ready at the previously observed generation. Once a member roll is
+admitted, the public phase stays Updating (Upgrading for a version roll) across
+member boundaries and final convergence checks. Ready returns when the complete
+desired state converges and `observedGeneration` catches up to `generation`.
+
 ```sh
 karactl -n NS clusters status secrets -o json
 karactl -n NS clusters members secrets -o json

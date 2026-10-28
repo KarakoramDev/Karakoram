@@ -17,8 +17,10 @@ import (
 
 // internalState contains observations and receipts, never native credentials.
 type internalState struct {
-	UID                       string                    `json:"uid"`
-	Phase                     string                    `json:"phase"`
+	UID   string `json:"uid"`
+	Phase string `json:"phase"`
+	// RollingKind spans member receipts until the whole desired state converges.
+	RollingKind               string                    `json:"rollingKind,omitempty"`
 	Members                   []*member                 `json:"members"`
 	NextIndex                 int                       `json:"nextIndex"`
 	ConfigVersion             int64                     `json:"configVersion"`

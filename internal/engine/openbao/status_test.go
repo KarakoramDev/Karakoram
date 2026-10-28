@@ -148,3 +148,29 @@ func TestFormedClusterPhaseMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestFormedClusterPhaseBetweenMembers(t *testing.T) {
+	for _, tc := range []struct {
+		kind string
+		want domain.Phase
+	}{
+		{"resources", domain.PhaseUpdating},
+		{"restart", domain.PhaseUpdating},
+		{"deploy", domain.PhaseUpgrading},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			c := &domain.Cluster{}
+			s := &internalState{Phase: "initializing", Initialized: true, RollingKind: tc.kind, Members: []*member{{Stage: "ready"}}}
+			if err := s.save(c); err != nil {
+				t.Fatal(err)
+			}
+			s, err := loadState(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := phase(s, 9); got != tc.want {
+				t.Fatalf("receipt-free rolling phase = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
