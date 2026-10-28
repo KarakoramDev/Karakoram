@@ -46,6 +46,11 @@ targets are never silently changed to match a newer control-plane executable.
 
 Gate new disruptions for `restart`, `rotate-tls`, `upgrade-agents`, `raise-fcv`, user-requested replacement or move, engine upgrades, rolling resource changes, restart-required configuration and scale-in. Automatic database leaf-certificate renewal is gated only while more than seven days remain before expiry.
 
+Treat desired public HTTPS enable/disable on an existing runtime as a potential
+disruption on every backend: ingress updates can replace service tasks.
+Provisioning and cleanup retain their exemptions; urgent route revocation uses
+the explicit generation override.
+
 Exempt healing and system lost-volume replacement, delete/suspend/resume, create/scale-out, backup/restore/initial restore, credential rotation, agent transport-certificate renewal and certificates within seven days of expiry. Window closure must never interrupt a member already past its stop/drain boundary.
 
 Accept `ignoreMaintenanceWindow=true` on the gated imperative endpoints and cluster PUT/PATCH. Persist it on the operation, or as the server-managed override generation for desired-state convergence; an update override applies only to that generation.

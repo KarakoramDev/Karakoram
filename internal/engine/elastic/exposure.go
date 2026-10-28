@@ -76,6 +76,9 @@ func (p *Provider) revokeComponentExposure(ctx context.Context, rc *engine.Conte
 	for _, m := range s.componentMembers() {
 		desired := m.Kind == kindKibana && options.Kibana.Public || m.Kind == kindAPM && options.APM.Public
 		if m.Subdomain && !desired {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			return true, p.issueAction(ctx, rc, s, &pending{Action: "subdomain-off", Member: m.Name})
 		}
 	}
@@ -132,6 +135,9 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 	for _, m := range s.componentMembers() {
 		desired := m.Kind == kindKibana && options.Kibana.Public || m.Kind == kindAPM && options.APM.Public
 		if m.Subdomain != desired {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			action := "subdomain-off"
 			if desired {
 				action = "subdomain-on"

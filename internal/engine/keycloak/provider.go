@@ -494,6 +494,11 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	if s.Public != o.PublicHTTPS {
+		if rc.Cluster.Status.ObservedGeneration != 0 {
+			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+				return wait, nil
+			}
+		}
 		access, e := engine.PublicHTTPS(rc.Backend)
 		if e != nil {
 			return result, e

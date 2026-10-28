@@ -257,6 +257,9 @@ func syncUIExposure(ctx context.Context, rc *engine.Context, s *componentState, 
 	if o.UI.PublicHTTPS == m.Public {
 		return false, nil
 	}
+	if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+		return true, nil
+	}
 	if o.UI.PublicHTTPS {
 		secret, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), UIOIDCClientSecretKey)
 		if err != nil && !missing(err) {

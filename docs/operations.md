@@ -38,6 +38,13 @@ while more than seven days remain. A window is permission to **start**, not a
 deadline to finish: work already past a member's stop/drain boundary continues
 through recovery and rejoin.
 
+Public HTTPS enable/disable changes on existing Keycloak, Temporal UI, Supabase
+gateway, Elasticsearch Kibana/APM and RabbitMQ management runtimes also wait for
+the window (or a generation override). A backend may replace tasks to change
+ingress networks or service labels, so routing is not a non-disruptive exemption.
+This includes explicit route revocation; for urgent revocation use an override.
+Initial provisioning and deletion remain exempt.
+
 Healing and system lost-volume replacement, delete/suspend/resume, create and
 scale-out, backup/restore/initial restore, credential rotation, agent transport
 certificate renewal, and certificates with at most seven days remaining are

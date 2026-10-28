@@ -134,6 +134,9 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 			return false, err
 		}
 		if m.ManagementPublic != o.ManagementUI.Public {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			return true, p.submit(ctx, rc, s, &pending{Action: "management", Member: m.Name})
 		}
 	}

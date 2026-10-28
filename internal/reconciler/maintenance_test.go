@@ -4,6 +4,7 @@
 package reconciler
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -363,6 +364,16 @@ func TestReconcileDoesNotStartDeferredDesiredGeneration(t *testing.T) {
 		if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Elapsed != 0 || got.Step != "WaitingForWindow" {
 			t.Fatal("pre-sync tracking started deferred desired work", got, err)
 		}
+	}
+	// Availability/transport failures during a known deferral must not turn
+	// never-started desired work into Running or consume an execution attempt.
+	p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+		return engine.Result{}, errors.New("agent connection refused")
+	}
+	_, _ = m.reconcile(t.Context(), c.Ref())
+	got, err := st.GetOperation(t.Context(), op.ID)
+	if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Step != "WaitingForWindow" {
+		t.Fatal("health failure started deferred desired work", got, err)
 	}
 	m.opts.Context.Clock = fixedClock{now: time.Date(2026, 1, 1, 2, 1, 0, 0, time.UTC)}
 	p.syncFn = func(rc *engine.Context) (engine.Result, error) {

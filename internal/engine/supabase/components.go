@@ -638,6 +638,9 @@ func (p *Provider) syncGatewayRestrictions(ctx context.Context, rc *engine.Conte
 		m.Public = false
 		return true, nil
 	}
+	if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+		return true, nil
+	}
 	access, err := engine.PublicHTTPS(rc.Backend)
 	if err != nil {
 		return true, err
@@ -740,6 +743,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return true, e
 			}
 			if def.Name == "gateway" && m.Public != o.Gateway.PublicHTTPS {
+				if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				access, e := engine.PublicHTTPS(rc.Backend)
 				if e != nil {
 					return true, e

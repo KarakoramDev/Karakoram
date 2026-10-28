@@ -239,10 +239,13 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			continue
 		}
-		if convergenceAttempted && cause == nil && desiredGenerationMaintenanceWait(c, op) {
+		if convergenceAttempted && desiredGenerationMaintenanceWait(c, op) &&
+			(cause == nil || op.Phase == domain.PhasePending && op.Step == "WaitingForWindow") {
 			// A first evaluation is durably Running before Sync. If that
 			// evaluation only deferred desired work, it has not started a
 			// disruption. Never rewind a receipt from an earlier invocation.
+			// A failed health observation during a known Pending deferral
+			// is not evidence that desired work crossed that boundary either.
 			if op.ID == startedOperation {
 				op.Phase, op.StartedAt = domain.PhasePending, nil
 			}

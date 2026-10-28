@@ -163,6 +163,12 @@ func (b *backendFake) SetSubdomainAccess(_ context.Context, _ string, on bool) (
 	b.public = on
 	return infra.Op{}, nil
 }
+func (b *backendFake) SubdomainURLs(context.Context, string) ([]string, error) {
+	if b.public {
+		return []string{"https://identity.example.test"}, nil
+	}
+	return nil, nil
+}
 
 type artifactFake struct{}
 

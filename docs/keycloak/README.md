@@ -79,6 +79,11 @@ Create, replace and patch admission, including dry runs, reject `publicHttps: tr
 when the namespace provider does not advertise `publicHttps`. This includes [Nomad](https://developer.hashicorp.com/nomad)
 and [Dokploy](https://dokploy.com/) namespaces without configured HTTPS routing.
 
+On an existing runtime, changes to `hostname`, `proxyHeaders` and `publicHttps`
+respect the maintenance window. Public routing can replace the backend service's
+task even though application settings are delivered separately in sealed agent
+configuration. A closed window defers both changes, not just the agent reload.
+
 Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this engine driver; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
 
 Resource reconciliation compares values, including an explicit `startCpu`, not
