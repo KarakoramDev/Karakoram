@@ -304,6 +304,63 @@ func TestCredentialsPublishedRequiresCurrentRevisionOnEveryProxy(t *testing.T) {
 	assertPublished("False")
 }
 
+func TestAccessPublicationReportsConfigurationPending(t *testing.T) {
+	for _, stage := range []string{"joined", "deployed"} {
+		t.Run(stage, func(t *testing.T) {
+			p, rc, _, s, a, late := replicatedProxyFixture(t)
+			if err := p.bumpAccessRevision(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			revision, err := p.accessRevision(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.ConfigHash, err = desiredConfigHash(rc, revision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.ConfigVersion++
+			s.find("demopx").ConfigVersion = s.ConfigVersion
+			s.data()[0].Stage = stage
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			a.applied(s.ConfigVersion)
+			// A healthy but unacknowledged proxy still fences publication.
+			status, err := p.Status(t.Context(), rc)
+			if err != nil || healthCondition(status, "CredentialsPublished").Status != "False" {
+				t.Fatalf("publication barrier weakened: %+v %v", status, err)
+			}
+			late.applied(s.ConfigVersion)
+			status, err = p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			condition := healthCondition(status, "Ready")
+			if status.Phase != domain.PhaseUpdating || condition.Status != "False" || condition.Reason != "ConfigurationPending" {
+				t.Fatalf("configuration convergence misreported: %+v", status)
+			}
+			if healthCondition(status, "CredentialsPublished").Status != "True" ||
+				!strings.Contains(status.Message, "demop0") || !strings.Contains(status.Message, "observed") ||
+				condition.Message != status.Message {
+				t.Fatalf("missing independent publication/configuration diagnostics: %+v", status)
+			}
+			for _, member := range status.Members {
+				if !member.Health {
+					t.Fatalf("fixture is not serving: %+v", member)
+				}
+			}
+			late.mu.Lock()
+			late.running = false
+			late.mu.Unlock()
+			status, err = p.Status(t.Context(), rc)
+			if err != nil || healthCondition(status, "Ready").Reason != "ProxyUnavailable" {
+				t.Fatalf("configuration message hid native failure: %+v %v", status, err)
+			}
+		})
+	}
+}
+
 func TestProxyReadyAndStatusRequireEveryLiveInstance(t *testing.T) {
 	p, rc, b, s, _, late := replicatedProxyFixture(t)
 	m := s.find("demopx")

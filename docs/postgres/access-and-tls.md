@@ -214,10 +214,23 @@ the mutation. Use the status endpoint above rather than a cached cluster/list
 response. With proxies disabled, this publication condition is absent and
 PostgreSQL applies the credential mutation directly. This barrier certifies
 configuration publication, not session revocation or future availability.
-While publication is in progress after a role create or delete, the cluster
-briefly reports phase `Updating` with `Ready=False` and reason
-`MembersStarting`; existing connections are unaffected, and the cluster returns
-to `Ready` once the proxies apply the new configuration.
+Managed access changes also advance the shared member configuration revision.
+The cluster can therefore report phase `Updating` with `Ready=False` even when
+all native members are healthy and the specification generation is already
+observed. In this case the reason is `ConfigurationPending`, and the message
+identifies members awaiting configuration assignment, application or joined-stage
+acknowledgement. This is a configuration-convergence barrier, not evidence that
+PostgreSQL members are starting or that existing sessions have stopped serving.
+It also retains lifecycle admission gates that require a converged cluster.
+
+`CredentialsPublished=True` covers the proxies, **not** completion of every data
+member's configuration reload. Proxies are published before the sequential data
+member reloads; `Ready=False` can begin on a later reconciliation than publication
+becomes pending, and persist for minutes after publication succeeds. Reconciliation
+latency and member count affect this delay; there is no fixed publication-to-Ready
+deadline. Earlier releases used the generic `MembersStarting` reason for this
+same configuration wait. Use `CredentialsPublished` for the publication barrier,
+and inspect member health and the explicit configuration message independently.
 
 On receipt-capable agents, managed role writes seal a recovery intent **before**
 sending credential SQL. The agent commits the role mutation and an operation

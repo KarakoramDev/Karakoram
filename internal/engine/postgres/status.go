@@ -160,6 +160,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	var versionDrift, versionDriftUnknown []string
 	versionRolloutPending := false
 	var proxyDetails []string
+	var configurationPending []string
 	var proxyPlacementIssues, proxyRolloutIssues, proxyRolloutFailures []string
 	var processConditions []domain.Condition
 	var slotUnsupported, archiveUnsupported, etcdUnsupported, distanceUnsupported, pauseUnsupported, credentialLegacy []string
@@ -460,6 +461,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				versionRolloutPending = true
 			}
 		}
+		if (m.Stage == "joined" || m.Stage == "deployed") &&
+			(m.Stage != "joined" || member.Agent.ConfigVersion < m.ConfigVersion || m.ConfigVersion != s.ConfigVersion) {
+			configurationPending = append(configurationPending, fmt.Sprintf("%s (stage %s, observed %d, assigned %d, desired %d)", m.Name, m.Stage, member.Agent.ConfigVersion, m.ConfigVersion, s.ConfigVersion))
+		}
 		healthy = healthy && member.Health && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
 		if observation.inventory.Err != nil {
 			return out, fmt.Errorf("observe PostgreSQL member %s containers: %w", m.Name, observation.inventory.Err)
@@ -542,6 +547,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	condition := "False"
 	reason := "MembersStarting"
+	nativeHealthy := len(out.Members) > 0
+	for _, member := range out.Members {
+		nativeHealthy = nativeHealthy && member.Health && member.Agent.Healthy
+	}
+	if out.Phase == domain.PhaseUpdating && s.Formed && nativeHealthy && len(configurationPending) > 0 {
+		reason = "ConfigurationPending"
+	}
 	if len(slotIssues) > 0 {
 		reason = "SlotWALRetention"
 	}
@@ -575,6 +587,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		out.Phase, out.Message = domain.PhaseUpdating, s.SwitchoverBlocked
 	}
 	out.Conditions = []domain.Condition{{Type: "Ready", Status: condition, Reason: reason, LastTransitionTime: now(rc)}}
+	if reason == "ConfigurationPending" {
+		out.Message = "Native members are healthy; waiting for member configuration acknowledgements: " + strings.Join(configurationPending, ", ") + ". Credential publication is tracked separately by CredentialsPublished."
+		out.Conditions[0].Message = out.Message
+	}
 	if len(versionDrift) > 0 || len(versionDriftUnknown) > 0 {
 		driftStatus, driftReason := "True", "ObservedVersionMismatch"
 		if len(versionDrift) == 0 {
