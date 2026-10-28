@@ -218,6 +218,11 @@ Unavailable logs do not suppress the primary error. The safety condition remains
 `BootstrapEpochConsumed`; it does not authorize another attempt. Existing agents
 need replacement through supported lifecycle to gain these diagnostics; a
 control-plane-only update cannot add them retroactively.
+Native messages mentioning recovery credentials, password/identity statements or
+key/certificate material are omitted as whole records, including continuations,
+even when the credentials differ from the current configuration. Log excerpts
+accept only complete timestamp-delimited GR/GCS/XCom/recovery records carrying a
+MySQL error code; a leading partial record in the bounded file window is skipped.
 
 Preserve native error logs, effective GR/listener/TLS variables, member identities
 and executed GTIDs before recovery. For a previously formed group, fence/stop all

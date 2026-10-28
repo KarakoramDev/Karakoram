@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
@@ -17,9 +18,28 @@ import (
 
 const groupDiagnosticBytes = 1024
 
+var groupLogRecordStart = regexp.MustCompile(`(?m)^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}`)
+var groupLogErrorCode = regexp.MustCompile(`\[MY-[0-9]{6}\]`)
+
+// Treat each native message/record atomically. Historical credentials need not
+// match the current spec, and a continuation may contain only the secret value.
+func sensitiveGroupRecord(text string) bool {
+	lower := strings.ToLower(text)
+	for _, marker := range []string{"source_", "master_", "password", "passwd", "pwd", "identified", "key", "cert", "-----", "authorization", "bearer"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	words := strings.Join(strings.Fields(strings.NewReplacer("`", "", "'", "", "\"", "").Replace(lower)), " ")
+	return strings.Contains(words, "change replication") || strings.Contains(words, "change master")
+}
+
 // Group diagnostics cross into CP events. Redact before bounding: truncating a
 // quoted credential first can otherwise leave an unrecognizable secret suffix.
 func sanitizeGroupDiagnostic(s myspec.Spec, text string) string {
+	if sensitiveGroupRecord(text) {
+		return "[sensitive diagnostic omitted]"
+	}
 	for _, credential := range []myspec.Credentials{s.Superuser, s.Agent, s.BackupUser, s.Replication, s.Monitor, s.Admin} {
 		if credential.Password != "" {
 			text = strings.ReplaceAll(text, groupQuote(credential.Password), "'[redacted]'")
@@ -62,13 +82,8 @@ func sanitizeGroupDiagnostic(s myspec.Spec, text string) string {
 	}
 	text = redact.Diagnostic(text)
 	var safe strings.Builder
-	for _, line := range strings.Split(text, "\n") {
-		lower := strings.ToLower(line)
-		// Never emit SQL credential statements or PEM material, even when a
-		// native error quotes them without a recognizable key/value delimiter.
-		if strings.Contains(lower, "identified by") || strings.Contains(lower, "private key") || strings.Contains(lower, "authorization") || strings.Contains(lower, "bearer ") || strings.Contains(lower, "start group_replication user=") || strings.Contains(lower, "-----begin") || strings.Contains(lower, "-----end") {
-			line = "[sensitive diagnostic omitted]"
-		}
+	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+		// Sensitive records were omitted as a whole before redaction.
 		if safe.Len() > 0 {
 			safe.WriteString("; ")
 		}
@@ -110,20 +125,33 @@ func recentGroupErrors(d GroupDeps) string {
 		return ""
 	}
 	text := string(data)
-	if offset > 0 {
-		_, text, _ = strings.Cut(text, "\n") // Discard a possibly partial record.
-	}
+	// A bounded window may begin in any continuation, even at a line boundary.
+	// Only timestamp-delimited records are eligible; never classify fragments.
+	starts := groupLogRecordStart.FindAllStringIndex(text, -1)
 	var previous, latest string
-	for _, line := range strings.Split(text, "\n") {
-		lower := strings.ToLower(line)
-		if strings.Contains(lower, "group_replication") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "xcom") {
-			previous, latest = latest, line
+	for i, start := range starts {
+		end := len(text)
+		if i+1 < len(starts) {
+			end = starts[i+1][0]
 		}
+		record := text[start[0]:end]
+		if !strings.HasSuffix(record, "\n") || sensitiveGroupRecord(record) {
+			continue
+		}
+		header, _, _ := strings.Cut(record, "\n")
+		lower := strings.ToLower(header)
+		subsystem := strings.Contains(lower, "[repl]") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "[xcom]") || strings.Contains(lower, "[recovery]") || strings.Contains(lower, "[group_replication]")
+		if !subsystem || !groupLogErrorCode.MatchString(header) || !(strings.Contains(lower, "group_replication") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "xcom") || strings.Contains(lower, "recovery")) {
+			continue
+		}
+		// Sanitize whole records chronologically, before retaining/reordering.
+		safe := sanitizeGroupDiagnostic(d.GroupSpec(), record)
+		previous, latest = latest, safe
 	}
-	if latest == "" {
-		return ""
+	if previous == "" {
+		return latest
 	}
-	return sanitizeGroupDiagnostic(d.GroupSpec(), strings.TrimSpace(latest+"\n"+previous))
+	return latest + "; " + previous
 }
 
 func groupActionDiagnostic(d GroupDeps, action string, err error) string {
