@@ -26,6 +26,8 @@
 // complete native convergence advances the observed cluster generation.
 // Snapshot clones wait for initial healthy native formation before preparation;
 // only prepared snapshot submission/recovery bypasses ordinary unseal convergence.
+// The generic initial-data-source readiness gate observes the durable clone
+// completion receipt, never member health or the observed spec generation.
 //
 // Per-member native observations have bounded deadlines and never borrow stale
 // health after transport failures. Removals persist step-down, remove-peer,

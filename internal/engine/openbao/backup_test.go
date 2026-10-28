@@ -522,6 +522,18 @@ func TestSnapshotCloneResumesAfterProviderReconstruction(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.p = New(ProviderOptions{})
+		var observer engine.InitialDataSourceObserver = f.p
+		applied, err := observer.InitialDataSourceApplied(f.rc.Cluster)
+		if err != nil || applied != (s.CloneRestoreStep == "done") {
+			t.Fatalf("reconstructed provider lost clone outcome: applied=%v step=%q err=%v", applied, s.CloneRestoreStep, err)
+		}
+		status := domain.ClusterStatus{Phase: domain.PhaseReady}
+		if err := engine.ApplyInitialDataSourceStatus(f.p, f.rc.Cluster, &status); err != nil {
+			t.Fatal(err)
+		}
+		if (status.Phase == domain.PhaseReady) != applied {
+			t.Fatalf("generic readiness disagrees with clone receipt: applied=%v status=%+v", applied, status)
+		}
 		if !pending {
 			if f.imports != 1 || !f.force || s.CloneRestoreStep != "done" {
 				t.Fatal("clone did not restore exactly once")
@@ -549,4 +561,40 @@ func TestSnapshotProvenanceRejectsReusedClusterName(t *testing.T) {
 	if err := f.p.prepareSnapshotMaterial(t.Context(), f.rc, f.rc.Cluster.Ref(), "restore", true, f.store.backup); err == nil {
 		t.Fatal("fresh target keys accepted for former incarnation")
 	}
+}
+
+func TestInitialDataSourceAppliedRequiresCompletedClone(t *testing.T) {
+	for _, step := range []string{"", "prepare", "post", "unseal", "management", "complete", "done"} {
+		t.Run("step="+step, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			ready(t, p, rc)
+			rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "source", Backup: "snap"}
+			s := state(t, rc)
+			s.CloneRestoreStep = step
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			p = New(ProviderOptions{})
+			var observer engine.InitialDataSourceObserver = p
+			applied, err := observer.InitialDataSourceApplied(rc.Cluster)
+			if err != nil || applied != (step == "done") {
+				t.Fatalf("healthy formed cluster substituted for clone receipt: applied=%v step=%q err=%v", applied, step, err)
+			}
+			status := domain.ClusterStatus{Phase: domain.PhaseReady}
+			if err := engine.ApplyInitialDataSourceStatus(p, rc.Cluster, &status); err != nil {
+				t.Fatal(err)
+			}
+			if (status.Phase == domain.PhaseReady) != applied {
+				t.Fatalf("generic readiness disagrees with clone receipt: %+v", status)
+			}
+		})
+	}
+	t.Run("invalid state", func(t *testing.T) {
+		p := New(ProviderOptions{})
+		c := &domain.Cluster{Internal: json.RawMessage(`{`)}
+		applied, err := p.InitialDataSourceApplied(c)
+		if err == nil || applied {
+			t.Fatal("invalid state proved initial restore completion", applied, err)
+		}
+	})
 }

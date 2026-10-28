@@ -649,6 +649,16 @@ func (p *Provider) restoreOp(ctx context.Context, rc *engine.Context, op *domain
 	return snapshotResult(cp), err
 }
 
+// InitialDataSourceApplied reports the durable snapshot clone completion receipt.
+// Healthy voters and an observed generation do not establish snapshot import.
+func (*Provider) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := loadState(c)
+	if err != nil {
+		return false, err
+	}
+	return s.CloneRestoreStep == "done", nil
+}
+
 func (p *Provider) restoreDataSource(ctx context.Context, rc *engine.Context, s *internalState) (bool, error) {
 	d := rc.Cluster.Spec.DataSource
 	if d == nil || s.CloneRestoreStep == "done" {
