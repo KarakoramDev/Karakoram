@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
@@ -45,7 +46,13 @@ func (e *Runner) Routes(mux *http.ServeMux, n *agent.Node) {
 				})
 			}
 			if err != nil {
-				http.Error(w, "MySQL "+action+" unavailable", http.StatusServiceUnavailable)
+				if action == myspec.ActionStatus {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_ = json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: startupDiagnostic(e, err)})
+				} else {
+					http.Error(w, "MySQL "+action+" unavailable", http.StatusServiceUnavailable)
+				}
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")

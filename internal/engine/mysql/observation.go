@@ -11,9 +11,10 @@ import (
 )
 
 type memberObservation struct {
-	status myspec.StatusResponse
-	agent  agentapi.Status
-	err    error
+	status        myspec.StatusResponse
+	agent         agentapi.Status
+	agentObserved bool
+	err           error
 }
 
 func live(ctx context.Context, rc *engine.Context, name string) (myspec.StatusResponse, error) {
@@ -73,6 +74,7 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 				out[i].err = err
 				return
 			}
+			out[i].agentObserved = true
 			if m.Role == "proxy" {
 				var healthy bool
 				healthy, err = proxyApplied(probe, rc, m)
@@ -98,20 +100,21 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 	if rc.Agents == nil {
 		return false, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 	defer cancel()
-	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+	a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
 	if err != nil {
 		return false, nil
 	}
-	st, err := a.Status(ctx)
+	st, err := a.Status(probe)
 	if err != nil {
 		return false, nil
 	}
 	if st.ConfigVersion < m.ConfigVersion {
+		cancel() // Applying configuration is an engine action, not an observation.
 		return false, a.Reload(ctx)
 	}
-	native, err := live(ctx, rc, m.Name)
+	native, err := live(probe, rc, m.Name)
 	if err != nil {
 		return false, nil
 	}
@@ -128,17 +131,18 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 }
 
 func configApplied(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
+	probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 	defer cancel()
-	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+	a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
 	if err != nil {
 		return false, err
 	}
-	status, err := a.Status(ctx)
+	status, err := a.Status(probe)
 	if err != nil {
 		return false, err
 	}
 	if status.ConfigVersion < m.ConfigVersion {
+		cancel() // Preserve the caller's action deadline, not the short probe budget.
 		return false, a.Reload(ctx)
 	}
 	return true, nil

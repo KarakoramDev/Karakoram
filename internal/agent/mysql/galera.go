@@ -105,7 +105,7 @@ const galeraUnsyncedMarker = "galera-launch-unsynced"
 
 // The supervised executable consumes its bootstrap claim before exec, including
 // after an agent crash. Supervisor retries always take the ordinary join path.
-// sync -f makes the claim durable before mysqld can form a Primary component.
+// File/directory fsync makes claims durable without requiring syncfs permission.
 func galeraLauncher(s myspec.Spec, p paths) string {
 	base := shellQuote(filepath.Join(s.ServerDir, "bin", "mysqld")) + " " + shellQuote("--defaults-file="+p.config)
 	var b strings.Builder
@@ -127,7 +127,7 @@ func galeraLauncher(s myspec.Spec, p paths) string {
 		if s.Galera.StartPosition != "" {
 			fmt.Fprintf(&b, " recover_position\n [ \"$position\" = %s ] || exit 1\n", shellQuote(s.Galera.StartPosition))
 		}
-		fmt.Fprintf(&b, " mkdir -- %s\n sync -f -- %s\n exec %s --wsrep-new-cluster", shellQuote(receipt), shellQuote(p.root), base)
+		fmt.Fprintf(&b, " mkdir -- %s\n sync -- %s\n sync -- %s\n exec %s --wsrep-new-cluster", shellQuote(receipt), shellQuote(receipt), shellQuote(p.root), base)
 		if s.Galera.StartPosition != "" {
 			b.WriteString(" " + shellQuote("--wsrep-start-position="+s.Galera.StartPosition))
 		}
@@ -140,9 +140,9 @@ func galeraLauncher(s myspec.Spec, p paths) string {
 	unsynced := shellQuote(filepath.Join(p.root, galeraUnsyncedMarker))
 	fmt.Fprintf(&b, "if [ ! -e %s ] && [ -f %s ]; then\n while IFS= read -r line || [ -n \"$line\" ]; do\n  case \"$line\" in uuid:*%s*) echo 'galera state reset outside an unfinished join; explicit recovery required' >&2; exit 1 ;; esac\n done < %s\nfi\n", unsynced, shellQuote(filepath.Join(p.data, "grastate.dat")), galeraTransferRequiredUUID, shellQuote(filepath.Join(p.data, "grastate.dat")))
 	fmt.Fprintf(&b, "if [ -e %s ]; then\n sleep %d &\n recover_pid=$!\n wait \"$recover_pid\"\n recover_pid=''\nfi\n", unsynced, int(galeraTransferHoldoff/time.Second))
-	fmt.Fprintf(&b, ": > %s\nsync -f -- %s\n", unsynced, shellQuote(p.root))
+	fmt.Fprintf(&b, ": > %s\nsync -- %s\nsync -- %s\n", unsynced, unsynced, shellQuote(p.root))
 	b.WriteString("if [ -s \"$state\" ]; then\n recover_position\n")
-	fmt.Fprintf(&b, " mkdir -p -- %s\n sync -f -- %s\n exec %s \"--wsrep-start-position=$position\"\nfi\n", shellQuote(filepath.Join(p.root, "galera-sst-start")), shellQuote(p.root), base)
+	fmt.Fprintf(&b, " mkdir -p -- %s\n sync -- %s\n sync -- %s\n exec %s \"--wsrep-start-position=$position\"\nfi\n", shellQuote(filepath.Join(p.root, "galera-sst-start")), shellQuote(filepath.Join(p.root, "galera-sst-start")), shellQuote(p.root), base)
 	b.WriteString("exec " + base + "\n")
 	return b.String()
 }

@@ -108,6 +108,11 @@ func boundGroupDiagnostic(text string, size int) string {
 // credential-bearing startup SQL. Log lines are explicitly labeled historical;
 // they are evidence, not proof of which statement failed in this request.
 func recentGroupErrors(d GroupDeps) string {
+	return recentNativeErrors(d, false)
+}
+
+// Startup diagnostics also cover Galera and server errors, not just GR.
+func recentNativeErrors(d GroupDeps, startup bool) string {
 	name := filepath.Join(d.GroupReceiptsDir(), "mysql-error.log")
 	info, err := os.Lstat(name)
 	if err != nil || !info.Mode().IsRegular() {
@@ -141,7 +146,11 @@ func recentGroupErrors(d GroupDeps) string {
 		header, _, _ := strings.Cut(record, "\n")
 		lower := strings.ToLower(header)
 		subsystem := strings.Contains(lower, "[repl]") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "[xcom]") || strings.Contains(lower, "[recovery]") || strings.Contains(lower, "[group_replication]")
-		if !subsystem || !groupLogErrorCode.MatchString(header) || !(strings.Contains(lower, "group_replication") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "xcom") || strings.Contains(lower, "recovery")) {
+		relevant := subsystem && groupLogErrorCode.MatchString(header) && (strings.Contains(lower, "group_replication") || strings.Contains(lower, "[gcs]") || strings.Contains(lower, "xcom") || strings.Contains(lower, "recovery"))
+		if startup {
+			relevant = groupLogErrorCode.MatchString(header) && (strings.Contains(lower, "[error]") || strings.Contains(lower, "[wsrep]"))
+		}
+		if !relevant {
 			continue
 		}
 		// Sanitize whole records chronologically, before retaining/reordering.
@@ -165,6 +174,14 @@ func groupActionDiagnostic(d GroupDeps, action string, err error) string {
 	message = prefix + boundGroupDiagnostic(sanitizeGroupDiagnostic(d.GroupSpec(), message), 512)
 	if tail := recentGroupErrors(d); tail != "" {
 		message += "; recent GR log (may predate request): " + tail
+	}
+	return boundGroupDiagnostic(message, groupDiagnosticBytes)
+}
+
+func startupDiagnostic(d GroupDeps, err error) string {
+	message := "MySQL native startup/status unavailable: " + boundGroupDiagnostic(sanitizeGroupDiagnostic(d.GroupSpec(), err.Error()), 512)
+	if tail := recentNativeErrors(d, true); tail != "" {
+		message += "; recent native log (may predate request): " + tail
 	}
 	return boundGroupDiagnostic(message, groupDiagnosticBytes)
 }

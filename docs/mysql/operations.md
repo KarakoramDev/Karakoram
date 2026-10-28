@@ -242,3 +242,33 @@ evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
 agent's durable claim or change its native renderer. MySQL does not support
 `upgrade-agents`.
+
+### Native startup and agent connectivity
+
+MySQL/PXC agent connectivity reports a successful authenticated agent status
+probe independently of native database readiness. A connected agent can still
+have an UNREACHABLE/unhealthy database. `NativeObservationFailed=True` reports
+the first available structured native status failure, including a bounded,
+sanitized recent server/WSREP error-log excerpt on corrected member agents.
+The excerpt can predate the request and is not proof of a particular bootstrap
+attempt. Sensitive records and their continuations are omitted as a whole.
+
+Configuration reload is synchronous and can wait for authenticated local SQL
+and, on PXC, eligible Galera state. A caller deadline can expire before the
+agent's native startup budget; that does not establish a DNS, TCP or TLS failure.
+Preserve the native error log and compare authenticated agent status separately
+from database health before changing listener policy or attempting recovery.
+These diagnostics do not reset bootstrap receipts or authorize re-bootstrap.
+
+Configuration application uses the engine-action request budget rather than
+the four-second status-observation budget, while retaining caller cancellation.
+Galera launchers persist bootstrap/rejoin receipts using ordered file/directory
+`fsync` (`sync PATH`), not filesystem-wide `syncfs` (`sync -f PATH`), which some
+unprivileged volume environments reject. Persistence failure still prevents
+native startup; no receipt or durability check is bypassed.
+
+If an older launcher created a bootstrap receipt and then failed to persist it,
+do not remove that receipt or assume bootstrap is safe to repeat. A disposable,
+never-formed create should be deleted and recreated with corrected member
+artifacts after preserving evidence. Valuable data requires the normal fenced,
+evidence-based recovery procedure.

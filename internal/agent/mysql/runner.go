@@ -256,7 +256,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	}
 	db, err := waitLocal(ctx, s, p)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(startupDiagnostic(e, err))
 	}
 	defer db.Close()
 	if err = recordCredentials(s, p); err != nil {

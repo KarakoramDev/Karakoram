@@ -4,6 +4,9 @@ package mysql
 
 import (
 	"context"
+	"errors"
+
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
@@ -69,6 +72,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	healthy := len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
 	writer := false
 	primary := ""
+	nativeDiagnosticPublished := false
 	for i, m := range s.Members {
 		o := observed[i]
 		member := domain.MemberStatus{Name: m.Name, Set: "mysql", Role: "unknown", State: "UNREACHABLE", Version: m.Version}
@@ -82,10 +86,21 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				status.Version = version
 			}
 		}
-		if o.err == nil {
+		if o.agentObserved {
 			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: now(rc)}
 			member.Uptime = o.agent.UptimeSeconds
 			member.Resources = engine.MemberResources(o.agent.Resources, &m.Resources)
+		}
+		if o.agentObserved && o.err != nil {
+			// Only structured, bounded agent diagnostics cross into public status.
+			// A successful transport probe is not native database readiness.
+			var remote *agentapi.HTTPError
+			if !nativeDiagnosticPublished && errors.As(o.err, &remote) && remote.Message != "" {
+				nativeDiagnosticPublished = true
+				status.Conditions = append(status.Conditions, domain.Condition{Type: "NativeObservationFailed", Status: "True", Reason: "AgentNativeStatusError", Message: m.Name + ": " + remote.Message, LastTransitionTime: now(rc)})
+			}
+		}
+		if o.err == nil {
 			member.State = o.status.MemberState
 			member.Role = o.status.MemberRole
 			if member.State == "" {
