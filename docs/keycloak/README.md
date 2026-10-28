@@ -73,7 +73,24 @@ failed or expired observations withdraw health and connectivity claims. A
 control-plane upgrade repairs missing observation timestamps without replacing
 the serving agent or changing its credentials.
 
-`hostname` accepts an explicit HTTP(S) origin. Omitting it disables strict hostname checks for private development only. `publicHttps` requires an explicit HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure provider must support public HTTPS subdomain routing. Configure DNS and the ingress so the origin matches that routing. **Only trust an ingress that overwrites the selected headers**; otherwise clients can forge their external address/scheme. A private HTTP endpoint is not an Internet-facing production endpoint.
+`hostname` accepts an explicit HTTP(S) origin and sets Keycloak's issuer/front-end
+URL only; it does not create a route for that origin. Omitting it disables strict
+hostname checks for private development only. `publicHttps` requires an explicit
+HTTPS origin and `forwarded` or `xforwarded` proxy headers; the infrastructure
+provider must support public HTTPS subdomain routing.
+
+On Dokploy and Zerops, Karakoram publishes HTTPS only on the platform-generated
+domain, not the configured `hostname`. To serve the configured origin, provide
+your own custom-domain route or reverse proxy forwarding that origin to the
+generated route; DNS alone is not enough. Without that mapping, clients can
+reach discovery through the generated route while the returned issuer remains
+the configured `hostname`; this does not establish reachability at that origin.
+Nomad has no `publicHttps` capability and no generated public HTTPS route;
+operators must supply their own ingress to the private runtime instead.
+
+**Only trust an ingress that overwrites the selected headers**; otherwise clients
+can forge their external address/scheme. A private HTTP endpoint is not an
+Internet-facing production endpoint.
 
 Create, replace and patch admission, including dry runs, reject `publicHttps: true`
 when the namespace provider does not advertise `publicHttps`. This includes [Nomad](https://developer.hashicorp.com/nomad)
