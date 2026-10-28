@@ -104,25 +104,34 @@ func assertRuntimeCredentialContracts(t *testing.T, p *Provider, rc *engine.Cont
 		if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
 			t.Fatal(err)
 		}
-		for _, role := range roleNames {
-			generatedRolePasswordLimit.Assert(t, role, spec.DBRoles[role])
-			if spec.DBRoles[role] != c.Roles[role] {
-				t.Fatal("native role password differs from persisted password")
+		// Each component receives only its consumed secrets. Reconstruct the
+		// persisted credential envelope, then apply the production least-privilege
+		// projection rather than requiring every secret on every component.
+		want := spec
+		want.DBRoles = make(map[string]string, len(c.Roles)+1)
+		for role, password := range c.Roles {
+			want.DBRoles[role] = password
+		}
+		// The core PostgreSQL password has its own engine contract.
+		want.DBRoles["postgres"] = spec.DBRoles["postgres"]
+		want.JWTSecret, want.JWKS, want.JWTKeys = c.Keys.JWTSecret, string(c.Keys.JWKS), string(c.Keys.JWTKeys)
+		want.AnonKey, want.ServiceRoleKey = c.Keys.AnonKey, c.Keys.ServiceRoleKey
+		want.PublishableKey, want.SecretKey = c.Keys.PublishableKey, c.Keys.SecretKey
+		want.AnonAsymmetricJWT, want.ServiceAsymmetricJWT = c.Keys.AnonJWT, c.Keys.ServiceRoleJWT
+		want.SecretKeyBase, want.RealtimeDBEncKey = c.Keys.SecretKeyBase, c.Keys.RealtimeDBEncKey
+		want.VaultEncKey = c.Keys.VaultEncKey
+		want.LogflarePublicToken, want.LogflarePrivateToken = c.Keys.LogflarePublicToken, c.Keys.LogflarePrivateToken
+		want.Studio.DashboardUsername, want.Studio.DashboardPassword = "supabase", c.Keys.DashboardPassword
+		want.Studio.MetaCryptoKey = c.Keys.PGMetaCryptoKey
+		want.RealtimeAdminSecret, want.VectorSinkToken = c.RealtimeAdminSecret, c.VectorToken
+		want = want.ProjectSecrets()
+		if !reflect.DeepEqual(spec, want) {
+			t.Fatalf("%s native component credentials differ from persisted projection", spec.Component)
+		}
+		for role, password := range want.DBRoles {
+			if role != "postgres" {
+				generatedRolePasswordLimit.Assert(t, spec.Component+"/"+role, password)
 			}
-		}
-		if spec.JWTSecret != c.Keys.JWTSecret || spec.JWKS != string(c.Keys.JWKS) ||
-			spec.AnonKey != c.Keys.AnonKey || spec.ServiceRoleKey != c.Keys.ServiceRoleKey ||
-			spec.PublishableKey != c.Keys.PublishableKey || spec.SecretKey != c.Keys.SecretKey ||
-			spec.AnonAsymmetricJWT != c.Keys.AnonJWT || spec.ServiceAsymmetricJWT != c.Keys.ServiceRoleJWT ||
-			spec.SecretKeyBase != c.Keys.SecretKeyBase || spec.RealtimeDBEncKey != c.Keys.RealtimeDBEncKey ||
-			spec.VaultEncKey != c.Keys.VaultEncKey || spec.LogflarePublicToken != c.Keys.LogflarePublicToken ||
-			spec.LogflarePrivateToken != c.Keys.LogflarePrivateToken ||
-			spec.Studio.DashboardPassword != c.Keys.DashboardPassword || spec.Studio.MetaCryptoKey != c.Keys.PGMetaCryptoKey ||
-			spec.RealtimeAdminSecret != c.RealtimeAdminSecret || spec.VectorSinkToken != c.VectorToken {
-			t.Fatal("native component credentials differ from persisted credentials")
-		}
-		if spec.Component == "auth" && spec.JWTKeys != string(c.Keys.JWTKeys) {
-			t.Fatal("native Auth signing keys differ from persisted signing keys")
 		}
 	}
 	return c
