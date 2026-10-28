@@ -30,6 +30,9 @@ Delivery and test requests load the destination and sealed credentials from a si
 Default table output summarizes name, type, enabled state, categories, host and delivery status. JSON/YAML modes expose the API's sanitized configuration/status. `list --limit N --cursor CURSOR` follows paginated inventories; JSON/YAML output preserves `nextCursor` for the next request. Slack has no public host field, so its host column is `-`. `test` reports `Delivered` and `Error`; a test is an immediate delivery check, not proof that future deliveries will succeed.
 
 Test webhook payloads use the normal `operation-failed` category with `severity: info` and `reason: NotificationTest`, keeping the published payload schema valid without reporting a real failed operation. A test bypasses the channel's event filters and does not create an incident in the durable event stream.
+Each test delivery has a fresh negative, non-durable event ID in both the payload
+and `X-Karakoram-Event-Id`. These IDs do not overlap positive durable event IDs;
+receivers can apply the same ID-based deduplication without discarding later tests.
 
 ## Categories and triggers
 

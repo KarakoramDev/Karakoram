@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -74,12 +75,19 @@ func TestNotificationChannelValidation(t *testing.T) {
 }
 func TestNotificationSyntheticUsesSameTransport(t *testing.T) {
 	var seen bool
+	ids := map[string]bool{}
 	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
 		}
 		seen = body["reason"] == "NotificationTest" && body["category"] == "operation-failed" && body["severity"] == "info"
+		id := r.Header.Get("X-Karakoram-Event-Id")
+		value, err := strconv.ParseInt(id, 10, 64)
+		if err != nil || value >= 0 || ids[id] || body["id"] != float64(value) {
+			t.Error("test delivery needs a distinct negative payload/header ID", id, body["id"], err)
+		}
+		ids[id] = true
 		w.WriteHeader(204)
 	}))
 	defer remote.Close()
@@ -94,6 +102,10 @@ func TestNotificationSyntheticUsesSameTransport(t *testing.T) {
 	w = call(s, "POST", "/api/v1/notification-channels/test/test", "", token)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"delivered":true`) || !seen {
 		t.Fatal(w.Code, w.Body.String(), seen)
+	}
+	w = call(s, "POST", "/api/v1/notification-channels/test/test", "", token)
+	if w.Code != 200 || len(ids) != 2 {
+		t.Fatal("test deliveries reused an identity", w.Code, ids)
 	}
 }
 

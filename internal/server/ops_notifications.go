@@ -5,6 +5,8 @@ package server
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -77,7 +79,13 @@ func (s *Server) notificationChannels(ctx context.Context, operation string, in 
 		if err != nil {
 			return s.failure(err)
 		}
-		event := domain.Event{Type: "Normal", Reason: "NotificationTest", Message: "Karakoram notification test", CreatedAt: time.Now().UTC()}
+		var identity [8]byte
+		if _, err := rand.Read(identity[:]); err != nil {
+			return s.failure(err)
+		}
+		// Negative ephemeral IDs cannot collide with positive durable event IDs.
+		id := int64(binary.BigEndian.Uint64(identity[:]) | (1 << 63))
+		event := domain.Event{ID: id, Type: "Normal", Reason: "NotificationTest", Message: "Karakoram notification test", CreatedAt: time.Now().UTC()}
 		err = notify.NewSender().Send(ctx, *channel, event, domain.NotificationOperationFailed)
 		result := map[string]any{"delivered": err == nil}
 		if err != nil {
