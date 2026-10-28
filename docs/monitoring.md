@@ -251,6 +251,21 @@ Optional read/write split rules are deliberately simple and do not guarantee
 causal reads or classify every SQL construct. Native replication, LISTEN/NOTIFY
 and other session-sensitive protocols should connect directly to PostgreSQL.
 
+### Supabase application components
+
+Supabase application agents expose these series with a `component` label
+(in addition to the shared target identity labels):
+
+| Metric | Type | Meaning |
+| --- | --- | --- |
+| `karakoram_supabase_up` | Gauge | 1 when the component's current readiness check succeeds, otherwise 0. This is component readiness, not PostgreSQL quorum, whole-stack health or an end-to-end application probe. |
+| `karakoram_supabase_restarts_total` | Counter | Supervised restarts of the component process. Use reset-aware `rate()` or `increase()`; agent/runtime replacement can reset the counter. |
+
+An agent without a configured component omits both series. A failed scrape is
+missing data, not an emitted zero; correlate with agent connectivity. The
+Supabase dashboard uses these series alongside PostgreSQL core metrics.
+See [Supabase operations](supabase/operations.md#monitoring).
+
 ## Events and event streams
 
 ```sh

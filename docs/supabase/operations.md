@@ -10,6 +10,16 @@ and a request to inspect responsiveness/connectivity; no SQL bootstrap or digest
 acknowledgement follows missing writer evidence. SQL bootstrap mutations retain
 their existing, independent administration budget.
 
+## Monitoring
+
+Application agents emit `karakoram_supabase_up` (readiness gauge, 1/0) and
+`karakoram_supabase_restarts_total` (supervised process restart counter), each
+labelled by `component`. Use reset-aware `rate()`/`increase()` for restarts.
+These are component observations, not whole-stack health or PostgreSQL quorum;
+missing scrapes are not healthy zeroes. PostgreSQL core metrics are separate.
+See the [metric vocabulary](../monitoring.md#supabase-application-components)
+and the bundled Supabase Grafana dashboard.
+
 ## Cluster restart and member software
 
 `karactl clusters restart NAME --wait` first performs the [PostgreSQL](https://www.postgresql.org/)/[ProxySQL](https://proxysql.com/)
