@@ -158,6 +158,95 @@ cluster. A failed destructive restore never opens incomplete data merely
 because a retry budget expires: repair and automatic continuation, or explicit
 target abandonment and new-target recovery, are the supported outcomes.
 
+### PostgreSQL administrator password cannot be rotated yet
+
+**v0.4.1 does not support in-place rotation of the `postgres` administrator
+credential returned by the connection endpoint.** `system-users rotate` returns
+HTTP 409 with an explanation; the other internal PostgreSQL system roles are
+also not rotatable through this command. Native application-role password
+rotation and managed binding rotation do not rotate the administrator.
+In-place administrator rotation is planned for a later release.
+
+If this credential is exposed, restrict access at both private and public
+network boundaries and terminate existing privileged sessions; removing public
+exposure alone does not disconnect them. Treat the exposure as a superuser
+compromise and assess data, schema and role changes. If retaining data, quiesce
+writers and restore or clone trusted data into a **fresh cluster**, which gets
+new system credentials. Verify the recovered data, new authentication and
+rejection of the exposed password on every new client route. Physical recovery
+also carries application identities from the source catalog; inspect them for
+compromise.
+
+Migrate applications and bindings deliberately: binding sources are immutable,
+so bound consumers require recreation and an explicit data migration. Resolve
+deletion guards, retire the compromised source through the normal lifecycle,
+verify its endpoints/runtimes are gone, and securely retire exposed connection
+files. In-place restore, suspension/resume and TLS rotation are not password
+revocation; manual SQL password changes or private rekey calls are not supported
+workarounds. Follow the detailed
+[administrator credential containment procedure](postgres/access-and-tls.md#administrator-credential-containment)
+and [CLI rotation limitations](cli.md#command-groups).
+
+### Citus restores require updated member agents
+
+v0.4.0 Citus restores could stall at credential recovery because system-role
+changes were implicitly propagated to workers whose client access was
+intentionally fenced. v0.4.1 performs node-local, coordinated credential
+recovery on every group primary before releasing access; it does not relax
+client fences to make recovery succeed.
+
+**Both the updated control plane and updated member agents are required.**
+Older agents reject the new local password-recovery request before SQL
+execution; the restore fails closed with recovery holds retained rather than
+downgrading to an unsafe request. Updating the control plane alone does not
+replace member executables. Complete the supported agent rollout on a healthy
+formation before starting a restore.
+
+An already failed v0.4.0 Citus restore keeps its recovery journal and holds:
+neither another in-place restore nor `upgrade-agents` can take ownership.
+Do not cancel recovery, edit HBA rules, clear journals or copy executables into
+running members. Preserve control-plane state, the master key, sealed recovery
+credentials, the retained backup inventory and all group repositories/WAL.
+Recover by abandoning the failed target with backups retained:
+
+```sh
+karactl -n NS clusters delete FAILED_TARGET --keep-backups --yes --wait
+```
+
+Do **not** add `--keep-volumes`. Wait for deletion and verify the original
+runtimes and volumes are gone. Confirm the retained coordinated backup and
+archives still exist, then prepare a complete cluster-create request named
+`citus-recovery.json` for a **new** target with fixed member artifacts,
+source-compatible PostgreSQL version, distributed topology, matching per-group
+replica count, worker-group count, Citus database and profile requirements.
+Configure the target's registered backup storage and resources. Within `spec`,
+select the retained backup by name:
+
+```json
+"dataSource": {
+  "namespace": "NS",
+  "cluster": "FAILED_TARGET",
+  "backup": "RETAINED_BACKUP"
+}
+```
+
+Use backup-name selection, not a timestamp or live-source PITR request: the
+retained aggregate resolves its own coordinated named point after source
+deletion. Submit the new target once:
+
+```sh
+karactl -n NS clusters create -f citus-recovery.json --wait --timeout 30m
+karactl -n NS clusters status NEW_TARGET -o json
+karactl -n NS clusters members NEW_TARGET -o json
+```
+
+Verify every member's fixed build, successful recovery, current Ready status,
+generation convergence, Citus metadata and archive health. Before reopening
+writes, verify recovered application data and authentication through the
+coordinator endpoint. This is **new-target recovery**, not success of the
+original failed restore. See [coordinated Citus recovery](postgres/distributed.md#coordinated-backup-and-pitr)
+and [failed restore and client holds](postgres/backups.md#failed-restore-and-client-holds).
+
 ## Upgrading from v0.3.0 to v0.4.0
 
 **Back up control-plane state and preserve the original `KARAKORAM_MASTER_KEY` before starting v0.4.0.** Use the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup); retain the old binary and state together for recovery. Existing namespaces, clusters, credentials and policies are retained; upgrading does not migrate their provider or opt them into new engine topologies.
