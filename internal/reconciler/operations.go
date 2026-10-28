@@ -216,7 +216,7 @@ func (m *Manager) operationFailure(op *domain.Operation, err error) bool {
 // trackingOperations do not own the imperative queue: ordinary Sync converges
 // desired state while these records observe the target generation. Failed tracking
 // does not discard desired state or stop eventual cleanup.
-func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *domain.Cluster, cause error, convergenceAttempted bool) error {
+func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *domain.Cluster, cause error, convergenceAttempted bool, startedOperation string) error {
 	ops, err := m.opts.Store.ListOperations(ctx, c.Ref(), domain.PhasePending, domain.PhaseRunning)
 	if err != nil {
 		return err
@@ -239,14 +239,13 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			continue
 		}
-		if (op.Kind == domain.OperationUpdate || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationTLS) &&
-			convergenceAttempted && cause == nil && op.TargetGeneration == c.Generation &&
-			c.Status.ObservedGeneration < op.TargetGeneration && maintenance.Waiting(c) &&
-			!op.IgnoreMaintenanceWindow && !op.CancelRequested &&
-			(c.MaintenanceOverrideGeneration == 0 || c.MaintenanceOverrideGeneration != c.Generation) {
-			// Desired-state tracking is not an imperative queue claim. Keep
-			// never-started work Pending, and preserve Running ownership when
-			// an earlier member already crossed its disruption boundary.
+		if convergenceAttempted && cause == nil && desiredGenerationMaintenanceWait(c, op) {
+			// A first evaluation is durably Running before Sync. If that
+			// evaluation only deferred desired work, it has not started a
+			// disruption. Never rewind a receipt from an earlier invocation.
+			if op.ID == startedOperation {
+				op.Phase, op.StartedAt = domain.PhasePending, nil
+			}
 			op.Step = "WaitingForWindow"
 			for _, condition := range c.Status.Conditions {
 				if condition.Type == "MaintenanceWindow" && condition.Reason == "WaitingForWindow" {
@@ -431,4 +430,11 @@ func preserveMaintenance(c *domain.Cluster, status *domain.ClusterStatus) {
 			return
 		}
 	}
+}
+
+func desiredGenerationMaintenanceWait(c *domain.Cluster, op *domain.Operation) bool {
+	return (op.Kind == domain.OperationUpdate || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationTLS) &&
+		op.TargetGeneration == c.Generation && c.Status.ObservedGeneration < op.TargetGeneration &&
+		maintenance.Waiting(c) && !op.IgnoreMaintenanceWindow && !op.CancelRequested &&
+		(c.MaintenanceOverrideGeneration == 0 || c.MaintenanceOverrideGeneration != c.Generation)
 }

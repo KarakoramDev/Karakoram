@@ -302,7 +302,7 @@ func TestDesiredGenerationMaintenanceWaitReceipt(t *testing.T) {
 				}
 			}
 			for range 3 {
-				if err := m.trackingOperations(t.Context(), p, c, nil, true); err != nil {
+				if err := m.trackingOperations(t.Context(), p, c, nil, true, ""); err != nil {
 					t.Fatal(err)
 				}
 				got, err := st.GetOperation(t.Context(), op.ID)
@@ -327,7 +327,7 @@ func TestDesiredGenerationMaintenanceWaitReceipt(t *testing.T) {
 			}
 			c.Status.Conditions = nil
 			c.Status.ObservedGeneration = c.Generation
-			if err := m.trackingOperations(t.Context(), p, c, nil, true); err != nil {
+			if err := m.trackingOperations(t.Context(), p, c, nil, true, ""); err != nil {
 				t.Fatal(err)
 			}
 			got, err := st.GetOperation(t.Context(), op.ID)
@@ -363,5 +363,54 @@ func TestReconcileDoesNotStartDeferredDesiredGeneration(t *testing.T) {
 		if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Elapsed != 0 || got.Step != "WaitingForWindow" {
 			t.Fatal("pre-sync tracking started deferred desired work", got, err)
 		}
+	}
+	m.opts.Context.Clock = fixedClock{now: time.Date(2026, 1, 1, 2, 1, 0, 0, time.UTC)}
+	p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+		got, err := st.GetOperation(t.Context(), op.ID)
+		if err != nil || got.Phase != domain.PhaseRunning || got.StartedAt == nil {
+			t.Fatal("opening window did not durably start deferred work before Sync", got, err)
+		}
+		return rc.WaitForWindow(), nil
+	}
+	if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConvergenceExecutionStartIsDurableBeforeProviderWork(t *testing.T) {
+	for _, kind := range []string{domain.OperationCreate, domain.OperationUpdate, domain.OperationDelete} {
+		t.Run(kind, func(t *testing.T) {
+			p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+			m, st := newTestManager(t, p)
+			c := &domain.Cluster{Name: "demo", Deleting: kind == domain.OperationDelete, Spec: domain.ClusterSpec{
+				Provider: "fake", Maintenance: &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "* * * * *", Duration: "1h"}}},
+			}}
+			op := &domain.Operation{Kind: kind}
+			if err := st.CreateCluster(store.WithOperation(t.Context(), op), c); err != nil {
+				t.Fatal(err)
+			}
+			called := false
+			check := func() {
+				called = true
+				got, err := st.GetOperation(t.Context(), op.ID)
+				if err != nil || got.Phase != domain.PhaseRunning || got.StartedAt == nil {
+					t.Fatal("provider work started before durable Running receipt", got, err)
+				}
+			}
+			p.syncFn = func(*engine.Context) (engine.Result, error) {
+				check()
+				return engine.Result{RequeueAfter: time.Second}, nil
+			}
+			p.cleanupFn = func(*engine.Context) (bool, error) {
+				check()
+				return false, nil
+			}
+			if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			if !called {
+				t.Fatal("execution boundary was not exercised")
+			}
+		})
 	}
 }

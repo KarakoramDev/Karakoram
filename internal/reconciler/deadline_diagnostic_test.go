@@ -42,7 +42,7 @@ func TestTrackingDeadlineUsesCurrentPlacementAndRestoreOutcome(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				if err := m.trackingOperations(ctx, p, c, nil, true); err != nil {
+				if err := m.trackingOperations(ctx, p, c, nil, true, ""); err != nil {
 					t.Fatal(err)
 				}
 				got, err := st.GetOperation(ctx, op.ID)

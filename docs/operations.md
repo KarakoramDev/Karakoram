@@ -48,6 +48,10 @@ next-start message. This includes desired-generation PUT/PATCH receipts when
 convergence defers their disruptive change: a healthy engine's Ready message
 does not replace the operation's `WaitingForWindow` diagnostic. An operation
 already Running retains that phase while waiting for its next member disruption.
+Provider execution is recorded durably before a convergence sweep begins. A
+first sweep that discovers only a window deferral returns its newly evaluated
+receipt to Pending; subsequent known closed-window waits stay Pending until
+opening or override. It never rewinds an operation started by an earlier sweep.
 Engine driver waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
 imperative operation pauses its execution budget only when that invocation
 actually waits at its own next-disruption gate; a stale cluster-wide condition

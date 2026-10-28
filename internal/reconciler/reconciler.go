@@ -470,6 +470,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		return 0, lookupErr
 	}
 	m.retainOperationBudgets(ref, ops)
+	var startedOperation string
 	for i := range ops {
 		op := &ops[i]
 		if !domain.IsConvergenceOperation(op.Kind) || op.TargetGeneration != c.Generation {
@@ -483,8 +484,20 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			continue
 		}
 		operation = op.ID
-		// Persist elapsed observations, but leave Pending work unstarted until
-		// trackingOperations sees whether this sweep reached a maintenance gate.
+		if op.Phase == domain.PhasePending {
+			deferred := op.Step == "WaitingForWindow" && desiredGenerationMaintenanceWait(c, op)
+			if deferred {
+				open, _, _, policyErr := maintenance.Open(c.Spec.Maintenance, m.opts.Context.Clock.Now())
+				deferred = policyErr == nil && !open
+			}
+			if !deferred {
+				now := m.opts.Context.Clock.Now()
+				op.Phase, op.StartedAt = domain.PhaseRunning, &now
+				startedOperation = op.ID
+				m.maintenanceBudget(op, c, false)
+			}
+		}
+		// Persist the execution boundary before provider work can block or crash.
 		if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
 			return 0, err
 		}
@@ -494,7 +507,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	convergenceAttempted := false
 	defer func() {
 		if !errors.Is(err, errClusterGone) {
-			err = errors.Join(err, m.trackingOperations(ctx, p, c, convergenceErr, convergenceAttempted))
+			err = errors.Join(err, m.trackingOperations(ctx, p, c, convergenceErr, convergenceAttempted, startedOperation))
 		}
 	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
