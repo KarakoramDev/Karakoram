@@ -39,7 +39,7 @@ func PublicTCPDeferred(ctx context.Context, rc *Context, member string, desired 
 			continue
 		}
 		count++
-		if desired != nil && route.Port == desired.Port && route.TargetPort == desired.TargetPort && strings.EqualFold(route.Protocol, desired.Protocol) && strings.EqualFold(route.IPType, desired.IPType) && slices.Equal(route.Allowlist, desired.Allowlist) {
+		if desired != nil && route.Port == desired.Port && route.TargetPort == desired.TargetPort && strings.EqualFold(route.Protocol, desired.Protocol) && strings.EqualFold(publicIPFamily(route.IPType), publicIPFamily(desired.IPType)) && slices.Equal(route.Allowlist, desired.Allowlist) {
 			matched = true
 		}
 	}
@@ -47,4 +47,15 @@ func PublicTCPDeferred(ctx context.Context, rc *Context, member string, desired 
 		return false, nil
 	}
 	return rc.WaitForWindow().RequeueAfter > 0, nil
+}
+
+func publicIPFamily(value string) string {
+	switch {
+	case strings.EqualFold(value, "IPV4"), strings.EqualFold(value, "IP_V4"):
+		return "IPV4"
+	case strings.EqualFold(value, "IPV6"), strings.EqualFold(value, "IP_V6"):
+		return "IPV6"
+	default:
+		return value
+	}
 }

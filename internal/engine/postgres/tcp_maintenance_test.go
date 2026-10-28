@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -51,6 +52,54 @@ func TestMaintenanceTCPChangesDoNotMutateRuntime(t *testing.T) {
 			}
 			if reflect.DeepEqual(before, b.routes) {
 				t.Fatal("override did not apply desired route")
+			}
+		})
+	}
+}
+
+type zeropsFamilyExposureBackend struct{ *exposureBackend }
+
+func (b *zeropsFamilyExposureBackend) ListPublicPorts(ctx context.Context) ([]infra.PublicPortRoute, error) {
+	routes, err := b.exposureBackend.ListPublicPorts(ctx)
+	for i := range routes {
+		switch routes[i].IPType {
+		case "IPV4":
+			routes[i].IPType = "IP_V4"
+		case "IPV6":
+			routes[i].IPType = "IP_V6"
+		}
+	}
+	return routes, err
+}
+
+func TestMaintenanceZeropsRouteSpellingDoesNotDeferGeneration(t *testing.T) {
+	for _, family := range []string{"IPV4", "IPV6"} {
+		t.Run(family, func(t *testing.T) {
+			p, rc, base := setup(t, "single")
+			b := &zeropsFamilyExposureBackend{exposureBackend: &exposureBackend{fakeBackend: base, routes: map[string]infra.PublicPort{}}}
+			rc.Backend = b
+			rc.Cluster.Spec.Exposure = domain.Exposure{Public: true, IPType: family}
+			converge(t, p, rc)
+			rc.Cluster.Generation = 2
+			rc.Cluster.Status.ObservedGeneration = 1
+			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
+			// Complete normal configuration-publication checkpoints before
+			// testing the desired generation's final routing barrier.
+			for range 20 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				if rc.Cluster.Status.ObservedGeneration == 2 {
+					break
+				}
+			}
+			if rc.Cluster.Status.ObservedGeneration != 2 {
+				t.Fatal("unchanged Zerops route blocked generation acknowledgement", rc.SyncWait, rc.Cluster.Status.Conditions)
+			}
+			for _, condition := range rc.Cluster.Status.Conditions {
+				if condition.Type == "MaintenanceWindow" && condition.Reason == "WaitingForWindow" {
+					t.Fatal("unchanged Zerops route classified as a new disruption")
+				}
 			}
 		})
 	}

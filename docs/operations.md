@@ -47,7 +47,9 @@ Initial provisioning and deletion remain exempt.
 The same rule covers public TCP publication, withdrawal and allowlist changes
 for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL (including Supabase),
 MySQL/PXC, Neo4j, OpenBao and Weaviate. Existing matching routes remain
-idempotent observations; maintenance does not require restarting them.
+idempotent observations; maintenance does not require restarting them or prevent
+an otherwise converged generation from being acknowledged solely because its
+unchanged public route is still present.
 
 Healing and system lost-volume replacement, delete/suspend/resume, create and
 scale-out, backup/restore/initial restore, credential rotation, agent transport
