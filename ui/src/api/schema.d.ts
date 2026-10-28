@@ -1823,7 +1823,6 @@ export type paths = {
         /**
          * Create RabbitMQ User
          * @description Requires database-users/create on the cluster. Empty tags or management alone need no additional grant. Any administrator, policymaker, monitoring or impersonator tag also requires clusters/update on the same namespace/cluster. Protected system users cannot be created.
-         *
          */
         post: operations["createRabbitMQUser"];
         delete?: never;
@@ -1851,7 +1850,6 @@ export type paths = {
         /**
          * Replace RabbitMQ User
          * @description Requires database-users/update on the cluster. Empty tags or management alone need no additional grant. Any administrator, policymaker, monitoring or impersonator tag in the replacement also requires clusters/update on the same namespace/cluster, even if already present. Protected system users cannot be replaced.
-         *
          */
         put: operations["replaceRabbitMQUser"];
         post?: never;
@@ -2690,7 +2688,6 @@ export type paths = {
          *     namespace for namespace-level entries, and audit:read on "*" for global
          *     entries. Namespace, actor and resource filters compose; actor and resource
          *     filters are exact matches.
-         *
          */
         get: operations["streamEvents"];
         put?: never;
@@ -4026,21 +4023,23 @@ export type components = {
             /** @description Connection URL without a password. */
             url: string;
         };
-        /** @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+        /**
+         * @description Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
          *     `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
          *     `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
          *     `message` is a human-readable explanation that names the rejected field or resource.
-         *      */
+         */
         Error: {
             code: string;
-            /** @description Structured, secret-free context; omitted when there is nothing to add. Validation
+            /**
+             * @description Structured, secret-free context; omitted when there is nothing to add. Validation
              *     errors carry `field` (JSON path such as `spec.components.engine.replicas`, or a
              *     query/path parameter name) and `reason` (`required`, `unknown_field`, `invalid`,
              *     `out_of_range`, `unsupported`, `conflict`, `reused`). Missing or conflicting
              *     resources carry `resource`, `name` and `reason` (`not_found`, `already_exists`,
              *     `invalid_state`, `protected`) and, for `invalid_state`, the current `state`.
              *     Other keys may be added; clients must ignore unknown keys.
-             *      */
+             */
             details?: {
                 [key: string]: unknown;
             };
@@ -5355,14 +5354,15 @@ export type components = {
         };
         UpgradePath: {
             from: string;
-            /** @description Requires a Succeeded backup of this cluster completed within the
+            /**
+             * @description Requires a Succeeded backup of this cluster completed within the
              *     last 24 hours, no earlier than cluster creation or the last known
              *     successful convergence to its current version. Enforced on PUT and
              *     PATCH version changes; missing, stale, unfinished or failed backups
              *     return 409 conflict with reason invalid_state. Create a backup via
              *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
              *     for Succeeded, and retry. There is no bypass flag.
-             *      */
+             */
             requiresBackup?: boolean;
             requiresFCV?: string;
             to: string;
@@ -5493,11 +5493,12 @@ export type components = {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Conflicting resource state, unsafe topology change, unsupported action,
+        /**
+         * @description Conflicting resource state, unsafe topology change, unsupported action,
          *     or unavailable replay cursor. On operations accepting Idempotency-Key,
          *     details.field is Idempotency-Key and details.reason is conflict for a
          *     different request body or invalid_state for an in-flight duplicate.
-         *      */
+         */
         Conflict: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestID"];
@@ -5615,7 +5616,8 @@ export type components = {
         CSRF: string;
         /** @description Opaque cursor returned by the preceding page. */
         Cursor: string;
-        /** @description Optional retry key scoped to the authenticated account's name and creation
+        /**
+         * @description Optional retry key scoped to the authenticated account's name and creation
          *     identity (including OIDC issuer), or the specific bearer token identity,
          *     plus method, route, namespace and path parameters. Deleting and recreating
          *     an account never shares its replays. Retained for 24 hours after
@@ -5628,7 +5630,7 @@ export type components = {
          *     after a crash, an expired reservation can be reclaimed. Only successful
          *     2xx responses are retained for 24 hours. Lease expiry does not prove that
          *     the original mutation failed. Use a fresh key for each intended mutation.
-         *      */
+         */
         IdempotencyKey: string;
         /** @description Explicitly bypass the cluster maintenance window for this request. */
         IgnoreMaintenanceWindow: boolean;
@@ -5690,7 +5692,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -5703,7 +5706,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -5925,7 +5928,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -5938,7 +5942,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6161,13 +6165,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    /** @example {
+                    /**
+                     * @example {
                      *       "code": "rate_limited",
                      *       "message": "Login temporarily throttled; wait before trying again",
                      *       "details": {
                      *         "retryAfterSeconds": 1
                      *       }
-                     *     } */
+                     *     }
+                     */
                     "application/json": components["schemas"]["Error"];
                 };
             };
@@ -6411,7 +6417,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6424,7 +6431,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6505,7 +6512,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6518,7 +6526,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6677,7 +6685,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6690,7 +6699,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6776,7 +6785,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6789,7 +6799,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6824,7 +6834,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             405: components["responses"]["MethodNotAllowed"];
-            /** @description Conflicting cluster state or idempotency key. A version change on a
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
              *     catalog path with requiresBackup needs a Succeeded backup of this
              *     cluster completed within the last 24 hours, no earlier than cluster
              *     creation or the last known successful convergence to its current
@@ -6832,7 +6843,7 @@ export interface operations {
              *     name={cluster}, reason=invalid_state. Create a backup via
              *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
              *     for Succeeded, and retry. There is no bypass flag.
-             *      */
+             */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6898,7 +6909,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6911,7 +6923,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -6946,7 +6958,8 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             405: components["responses"]["MethodNotAllowed"];
-            /** @description Conflicting cluster state or idempotency key. A version change on a
+            /**
+             * @description Conflicting cluster state or idempotency key. A version change on a
              *     catalog path with requiresBackup needs a Succeeded backup of this
              *     cluster completed within the last 24 hours, no earlier than cluster
              *     creation or the last known successful convergence to its current
@@ -6954,7 +6967,7 @@ export interface operations {
              *     name={cluster}, reason=invalid_state. Create a backup via
              *     POST /api/v1/clusters/{cluster}/backups in the same namespace, wait
              *     for Succeeded, and retry. There is no bypass flag.
-             *      */
+             */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6975,7 +6988,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -6988,7 +7002,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7074,7 +7088,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7087,7 +7102,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7212,7 +7227,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7225,7 +7241,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7524,7 +7540,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7537,7 +7554,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7624,7 +7641,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7637,7 +7655,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7767,7 +7785,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7780,7 +7799,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -7867,7 +7886,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -7880,7 +7900,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8004,7 +8024,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8017,7 +8038,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8130,7 +8151,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8143,7 +8165,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8217,7 +8239,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8230,7 +8253,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8342,7 +8365,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8355,7 +8379,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8429,7 +8453,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8442,7 +8467,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8638,7 +8663,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8651,7 +8677,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -8697,7 +8723,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -8710,7 +8737,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9059,7 +9086,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9072,7 +9100,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9154,7 +9182,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9167,7 +9196,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9326,7 +9355,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9339,7 +9369,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9460,7 +9490,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9473,7 +9504,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9554,7 +9585,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9567,7 +9599,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9605,7 +9637,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9618,7 +9651,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -9701,7 +9734,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -9714,7 +9748,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10025,7 +10059,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10038,7 +10073,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10113,7 +10148,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10126,7 +10162,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10276,7 +10312,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10289,7 +10326,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10406,7 +10443,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10419,7 +10457,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10500,7 +10538,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10513,7 +10552,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10593,7 +10632,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10606,7 +10646,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10651,7 +10691,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10664,7 +10705,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10740,7 +10781,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10753,7 +10795,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10829,7 +10871,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10842,7 +10885,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -10954,7 +10997,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -10967,7 +11011,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11043,7 +11087,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11056,7 +11101,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11168,7 +11213,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11181,7 +11227,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11257,7 +11303,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11270,7 +11317,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11382,7 +11429,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11395,7 +11443,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11471,7 +11519,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11484,7 +11533,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11596,7 +11645,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11609,7 +11659,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11683,7 +11733,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11696,7 +11747,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11804,7 +11855,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11817,7 +11869,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11892,7 +11944,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11905,7 +11958,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -11985,7 +12038,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -11998,7 +12052,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12048,7 +12102,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12061,7 +12116,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12145,7 +12200,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12158,7 +12214,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12244,7 +12300,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12257,7 +12314,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12300,7 +12357,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12313,7 +12371,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12357,7 +12415,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12370,7 +12429,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12552,7 +12611,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12565,7 +12625,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12643,7 +12703,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12656,7 +12717,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12695,7 +12756,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12708,7 +12770,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12787,7 +12849,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12800,7 +12863,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -12979,7 +13042,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -12992,7 +13056,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13035,7 +13099,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13048,7 +13113,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13127,7 +13192,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13140,7 +13206,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13214,7 +13280,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13227,7 +13294,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13335,7 +13402,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13348,7 +13416,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13425,7 +13493,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13438,7 +13507,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13512,7 +13581,8 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13525,7 +13595,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13594,7 +13664,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13607,7 +13678,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -13684,7 +13755,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -13697,7 +13769,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -14093,7 +14165,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -14106,7 +14179,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -14371,7 +14444,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -14384,7 +14458,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -14457,7 +14531,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -14470,7 +14545,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -14512,7 +14587,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -14525,7 +14601,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -14561,7 +14637,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -14574,7 +14651,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
@@ -15124,7 +15201,8 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Optional retry key scoped to the authenticated account's name and creation
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
                  *     identity (including OIDC issuer), or the specific bearer token identity,
                  *     plus method, route, namespace and path parameters. Deleting and recreating
                  *     an account never shares its replays. Retained for 24 hours after
@@ -15137,7 +15215,7 @@ export interface operations {
                  *     after a crash, an expired reservation can be reclaimed. Only successful
                  *     2xx responses are retained for 24 hours. Lease expiry does not prove that
                  *     the original mutation failed. Use a fresh key for each intended mutation.
-                 *      */
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
                 /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
                 "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
