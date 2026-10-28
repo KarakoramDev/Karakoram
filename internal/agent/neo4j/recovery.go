@@ -122,5 +122,5 @@ func recoverAdminPassword(ctx context.Context, s neo4jspec.Spec, port int, passw
 	if errors.As(err, &failure) && failure.passwordUnchanged {
 		return nil
 	}
-	return errors.New("Neo4j credential recovery failed")
+	return recoveryFailureDiagnostic(err)
 }

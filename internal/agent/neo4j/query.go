@@ -82,7 +82,7 @@ func request(ctx context.Context, s neo4jspec.Spec, port int, password, method, 
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return errors.New("Neo4j request failed")
+		return classifyTransportError(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -91,20 +91,26 @@ func request(ctx context.Context, s neo4jspec.Spec, port int, password, method, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if _, isQuery := out.(*queryResult); isQuery {
 			data, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+			if readErr != nil {
+				return classifyTransportError(readErr)
+			}
 			var failure queryResult
-			if readErr == nil && len(data) <= 64<<10 && json.Unmarshal(data, &failure) == nil && len(failure.Errors) > 0 {
+			if len(data) <= 64<<10 && json.Unmarshal(data, &failure) == nil && len(failure.Errors) > 0 {
 				return classifyQueryError(failure.Errors[0].Code, failure.Errors[0].Message)
 			}
 		}
-		return errors.New("Neo4j request rejected")
+		return &requestFailure{class: "http-rejected", status: resp.StatusCode}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		return nil
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, (4<<20)+1))
-	if err != nil || len(data) > 4<<20 || json.Unmarshal(data, out) != nil {
-		return errors.New("invalid Neo4j response")
+	if err != nil {
+		return classifyTransportError(err)
+	}
+	if len(data) > 4<<20 || json.Unmarshal(data, out) != nil {
+		return &requestFailure{class: "invalid-response", status: resp.StatusCode}
 	}
 	return nil
 }
