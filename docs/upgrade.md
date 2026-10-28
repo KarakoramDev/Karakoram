@@ -232,7 +232,23 @@ select the retained backup by name:
 
 Use backup-name selection, not a timestamp or live-source PITR request: the
 retained aggregate resolves its own coordinated named point after source
-deletion. Submit the new target once:
+deletion.
+
+The retained PostgreSQL source is identified by its recorded pgBackRest
+repository and backup label, with the aggregate's group repositories, labels,
+named restore point and replay bounds for Citus. It does not require a
+`location` field or a snapshot-time native-binary URL. v0.4.0 incorrectly
+required `location` after source deletion even though coordinated backups do
+not populate it; v0.4.1 accepts their native provenance instead. Existing
+complete retained records need no metadata rewrite or new backup. Incomplete
+records still fail closed; a display location cannot replace missing native
+provenance or sealed recovery credentials.
+
+This admission fix requires only a control-plane update. The **new target**
+must still use the fixed member agents described above; the control-plane fix
+does not make old member executables safe for Citus credential recovery.
+
+Submit the new target once:
 
 ```sh
 karactl -n NS clusters create -f citus-recovery.json --wait --timeout 30m
