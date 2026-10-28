@@ -108,6 +108,11 @@ func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error
 	cfg.ConnectTimeout = 3 * time.Second
 	// Startup settings protect every management statement, including utility SQL.
 	cfg.RuntimeParams = managementParams()
+	if s.Citus != nil {
+		// Citus declares this PGC_SU_BACKEND: primary-only management routing
+		// must be selected at connection startup, never with a later SET.
+		cfg.RuntimeParams["citus.use_secondary_nodes"] = "never"
+	}
 	c, err := pgx.ConnectConfig(ctx, cfg)
 	if err != nil && recoveryCredentialsPending(s, p) && s.Bootstrap.RecoverySuperuser != nil {
 		cfg.User = s.Bootstrap.RecoverySuperuser.Username

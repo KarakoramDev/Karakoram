@@ -180,10 +180,6 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		out := pgspec.CitusStatusResponse{Group: s.Citus.Group, IsCoordinator: s.Citus.Group == 0, Nodes: []pgspec.CitusNode{}}
 		query := "SELECT nodeid, groupid, nodename, nodeport, noderole::text, isactive FROM pg_catalog.pg_dist_node ORDER BY nodeid"
 		if action == pgspec.ActionCitusConnectivity {
-			// Probe primaries even when user configuration prefers secondary reads.
-			if _, err = c.Exec(ctx, "SET citus.use_secondary_nodes = never"); err != nil {
-				return nil, err
-			}
 			// Success reflects actual SQL connectivity, not local catalog health.
 			// Never expose remote diagnostics, which can contain secrets.
 			query = "SELECT n.nodeid,n.groupid,n.nodename,n.nodeport,n.noderole::text,r.success FROM pg_catalog.run_command_on_all_nodes('SELECT 1') r JOIN pg_catalog.pg_dist_node n ON n.nodeid=r.nodeid WHERE n.noderole='primary' ORDER BY n.nodeid"

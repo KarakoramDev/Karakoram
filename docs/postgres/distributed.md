@@ -149,6 +149,10 @@ probe. Clearing the desired client hold does not prove that every member has
 reloaded it: a partially completed release still belongs to that journal.
 Only the restore's explicit final barrier runs after **all** member release
 reloads succeed; ordinary connectivity readiness resumes after ownership clears.
+Agent management connections select primary-only Citus routing in their startup
+parameters. `citus.use_secondary_nodes` is a backend-start setting; changing it
+with a later SQL `SET` would reject the connectivity probe even on a healthy
+formation.
 
 A completed restore affected by stale outbound authentication can be repaired
 without recreating data: deploy matching fixed control-plane/member artifacts,
