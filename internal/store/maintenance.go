@@ -31,6 +31,16 @@ func maintenanceOverride(ctx context.Context) bool {
 	return op != nil && op.IgnoreMaintenanceWindow
 }
 
+// applySpecMaintenanceOverride releases the accepted generation without replacing
+// its convergence receipt when desired state itself is unchanged.
+func applySpecMaintenanceOverride(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef) error {
+	if !maintenanceOverride(ctx) {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE clusters SET maintenance_override_generation=generation WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name)
+	return err
+}
+
 // MaintenanceWindowWait means all otherwise claimable actions await a window.
 // No attempt, StartedAt or execution budget has been consumed.
 type MaintenanceWindowWait struct{ NextStart time.Time }

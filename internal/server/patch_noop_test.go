@@ -42,4 +42,28 @@ func TestIdenticalPatchPreservesInFlightOperation(t *testing.T) {
 			t.Fatal("no-op superseded in-flight work", operations, err)
 		}
 	}
+	spy := s.Trigger.(*triggerSpy)
+	spy.mu.Lock()
+	triggers := len(spy.names)
+	spy.mu.Unlock()
+	for i := range 2 {
+		response := call(s, "PATCH", "/api/v1/clusters/prod?ignoreMaintenanceWindow=true", body, token)
+		if response.Code != 200 {
+			t.Fatal(response.Code, response.Body.String())
+		}
+		after, err := s.Store.GetCluster(t.Context(), ref)
+		if err != nil || after.Generation != before.Generation || after.MaintenanceOverrideGeneration != after.Generation {
+			t.Fatal("unchanged override did not release the accepted generation", after, err)
+		}
+		operations, err := s.Store.ListOperations(t.Context(), ref)
+		if err != nil || len(operations) != 1 || operations[0].ID != id || operations[0].Terminal() {
+			t.Fatal("unchanged override replaced in-flight work", operations, err)
+		}
+		spy.mu.Lock()
+		count := len(spy.names)
+		spy.mu.Unlock()
+		if count != triggers+1 {
+			t.Fatal("new override must trigger exactly once, repeated overrides are no-ops", i, count, triggers)
+		}
+	}
 }

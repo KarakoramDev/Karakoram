@@ -206,6 +206,9 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 		return err
 	}
 	if bytes.Equal(previous, data) {
+		if err = applySpecMaintenanceOverride(ctx, tx, ref); err != nil {
+			return err
+		}
 		return commitSpecAudit(ctx, tx, ref, before, spec, nil)
 	}
 	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, false)

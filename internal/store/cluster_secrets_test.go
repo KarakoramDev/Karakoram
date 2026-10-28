@@ -125,3 +125,38 @@ func TestIdenticalSecretUpdatePreservesOperation(t *testing.T) {
 		t.Fatal("changed secret did not create a new generation operation", changed)
 	}
 }
+
+func TestUnchangedSpecMaintenanceOverridePreservesOperation(t *testing.T) {
+	for _, secrets := range []bool{false, true} {
+		t.Run(map[bool]string{false: "spec", true: "identical-secrets"}[secrets], func(t *testing.T) {
+			s, _ := testStore(t)
+			c := domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}}
+			accepted := domain.Operation{Kind: domain.OperationUpdate}
+			values := map[string][]byte{"input": []byte("unchanged")}
+			if err := s.CreateClusterWithSecrets(WithOperation(t.Context(), &accepted), &c, values); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				override := domain.Operation{Kind: domain.OperationUpdate, IgnoreMaintenanceWindow: true}
+				ctx := WithOperation(t.Context(), &override)
+				var err error
+				if secrets {
+					err = s.UpdateClusterSpecWithSecrets(ctx, c.Ref(), c.Spec, values)
+				} else {
+					err = s.UpdateClusterSpec(ctx, c.Ref(), c.Spec)
+				}
+				if err != nil || override.ID != "" {
+					t.Fatal("override replaced accepted receipt", override, err)
+				}
+				got, err := s.GetCluster(t.Context(), c.Ref())
+				if err != nil || got.Generation != 1 || got.MaintenanceOverrideGeneration != 1 {
+					t.Fatal("unchanged override was not applied to accepted generation", got, err)
+				}
+				operations, err := s.ListOperations(t.Context(), c.Ref())
+				if err != nil || len(operations) != 1 || operations[0].ID != accepted.ID || operations[0].Terminal() {
+					t.Fatal("override superseded accepted work", operations, err)
+				}
+			}
+		})
+	}
+}

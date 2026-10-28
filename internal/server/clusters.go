@@ -468,8 +468,10 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		if op.ID != "" {
+		if op.ID != "" || updated.MaintenanceOverrideGeneration != c.MaintenanceOverrideGeneration {
 			s.trigger(ctx, clusterRef(ctx, c.Name))
+		}
+		if op.ID != "" {
 			updated.OperationID = op.ID
 		}
 		return response{status: 200, body: s.clusterAPI(*updated), operationID: updated.OperationID, auditEvent: audit.Event}

@@ -267,6 +267,10 @@ are unchanged returns HTTP 200 without creating an operation or cancelling
 in-flight work. This no-op behavior does not require an `Idempotency-Key`.
 Changed desired state still creates a superseding operation; keyed retries
 replay their original response as described above.
+An explicit `ignoreMaintenanceWindow=true` still releases the accepted generation
+when the spec is unchanged: it persists that generation's override and triggers
+reconciliation without replacing its in-flight operation. Repeating an already
+applied override does not trigger more work.
 
 ## Pagination and events
 

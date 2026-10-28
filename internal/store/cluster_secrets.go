@@ -166,6 +166,9 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 		return err
 	}
 	if !changed && bytes.Equal(previous, data) {
+		if err = applySpecMaintenanceOverride(ctx, tx, ref); err != nil {
+			return err
+		}
 		return commitSpecAudit(ctx, tx, ref, before, spec, nil)
 	}
 	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, changed)
