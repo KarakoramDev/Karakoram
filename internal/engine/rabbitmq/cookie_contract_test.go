@@ -3,7 +3,6 @@
 package rabbitmq
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -17,8 +16,6 @@ func TestGeneratedCookieNativeContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(value) == 0 || len(value) > 255 || strings.Trim(value, "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
-			t.Fatal("generated cookie violates Erlang length/charset contract")
-		}
+		generatedCookieLimit.Assert(t, "generated cookie", value)
 	}
 }

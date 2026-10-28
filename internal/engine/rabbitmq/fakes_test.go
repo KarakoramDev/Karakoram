@@ -281,6 +281,7 @@ type fakeAgents struct {
 	joinHandler     func(string, string)
 	legacyFormation map[string]bool
 	volumeStatus    func(string) *agentapi.VolumeStatus
+	configObserver  func(agentapi.MemberConfig)
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
@@ -377,6 +378,9 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
+			}
+			if a.configObserver != nil {
+				a.configObserver(cfg)
 			}
 			b.config = cfg.ConfigVersion
 			_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
