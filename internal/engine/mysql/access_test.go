@@ -43,6 +43,7 @@ func TestAccessPassword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	generatedPasswordContract.Assert(t, "standalone generated SQL password", password)
 	if len(password) != 40 || ValidatePassword(password) != nil {
 		t.Fatal("invalid generated password")
 	}
