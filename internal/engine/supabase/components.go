@@ -639,7 +639,9 @@ func (p *Provider) syncGatewayRestrictions(ctx context.Context, rc *engine.Conte
 		return true, nil
 	}
 	if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-		return true, nil
+		// The normal component sweep retains the desired route barrier.
+		// Do not hold core recovery or accepted configuration behind it.
+		return false, nil
 	}
 	access, err := engine.PublicHTTPS(rc.Backend)
 	if err != nil {

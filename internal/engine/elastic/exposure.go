@@ -77,7 +77,9 @@ func (p *Provider) revokeComponentExposure(ctx context.Context, rc *engine.Conte
 		desired := m.Kind == kindKibana && options.Kibana.Public || m.Kind == kindAPM && options.APM.Public
 		if m.Subdomain && !desired {
 			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
+				// Normal exposure reconciliation keeps the desired barrier;
+				// accepted runtime recovery must still run before that point.
+				return false, nil
 			}
 			return true, p.issueAction(ctx, rc, s, &pending{Action: "subdomain-off", Member: m.Name})
 		}

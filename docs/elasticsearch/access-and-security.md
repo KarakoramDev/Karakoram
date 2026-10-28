@@ -86,6 +86,10 @@ Elasticsearch `spec.exposure` explicitly enables public TCP, chooses IPv6 or ded
 Set `engineOptions.kibana.public` or `engineOptions.apm.public` and include the corresponding request-only `allowAllAddresses: true` when creating/enabling that route. An unchanged public route needs no new acknowledgement; disabling/re-enabling does. The acknowledgement is consumed, not persisted or inherited by future PATCH requests. The wizard/topology editor confirms this exposure and Review lists every public route even with private database access.
 
 Setting either public switch to `false` revokes that component's HTTPS route before configuration rolls or component-readiness waits, including an already-running roll. Revocation still waits for any accepted platform operation and uses the normal ownership checks and operation receipt; it does not mark the component ready or acknowledge the new generation. Enabling a route remains part of normal reconciliation.
+On an existing cluster, both route enable and disable still require an open
+[maintenance window](../operations.md#maintenance-windows) or generation
+override: a backend may replace the component task to change ingress. Use the
+override for urgent route withdrawal; readiness is not an additional prerequisite.
 
 These are Zerops shared subdomains, not custom-domain HTTP locations; custom-domain source-IP policies cannot attach to them. Karakoram supplies Kibana's public base URL and secure cookies. Zerops documents a 50-MB upload cap and does not recommend the shared subdomain balancer for production. Custom-domain management is outside this feature; see [Zerops public access](https://docs.zerops.io/references/networking/public-access).
 

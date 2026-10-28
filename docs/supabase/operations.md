@@ -47,8 +47,9 @@ listener remains bound to loopback and must never be reachable.
 Explicitly disabling an existing component can proceed while database readiness
 is failing (including WAL retention caused by that component), but starting
 runtime removal still requires an open maintenance window or an explicit override.
-Public exposure is revoked immediately; already-submitted operations finish even
-after the window closes. Wait for service removal, not just operation success:
+Public exposure withdrawal also needs that permission: backend routing changes
+can replace the serving task. Already-submitted operations finish even after
+the window closes. Wait for service removal, not just operation success:
 the generation remains unacknowledged
 until the database and remaining components are Ready. Re-enabling waits for core
 Ready; it cannot deploy a replacement or expose a new public route during a core
@@ -120,9 +121,10 @@ database readiness. A temporarily unhealthy database core cannot hide a terminal
 component error from the tracking operation's failure budget or prevent submitting
 corrected bounds after a failed/superseded rollout. This does not automatically
 replay an unchanged failed target, and database recovery continues independently.
-Gateway public-exposure revocation takes priority over this failure handling.
-An unrelated terminal component failure cannot prevent revocation or hide its
-accepted receipt; the component error remains visible to bounded tracking.
+Once maintenance permits the route change, gateway public-exposure revocation
+takes priority over this failure handling. An unrelated terminal component
+failure cannot prevent revocation or hide its accepted receipt; the component
+error remains visible to bounded tracking.
 Every accepted corrective receipt records the exact failed operation it corrects
 and its full desired target, whether it changes resources or recovers retained
 allocations. While that receipt owns the same component, failure and target, its
@@ -352,7 +354,8 @@ existing durable member identity and ownership token. Lookup errors do not count
 as absence, and conflicting ownership markers prevent adoption or modification.
 Disabling gateway public HTTPS (or disabling the gateway component) revokes its
 existing public route before database readiness checks, including when a core
-member is unavailable. Pending infrastructure operations still serialize optional
+member is unavailable, once the maintenance window or generation override admits
+the potentially disruptive route update. Pending infrastructure operations still serialize optional
 component changes, but never block PostgreSQL provisioning, replacement or recovery.
 Component polling errors are reported while core reconciliation continues;
 enabling public exposure remains gated on core readiness.
