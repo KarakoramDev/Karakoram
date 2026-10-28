@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -165,17 +166,25 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 	}
 	ctx, cancel := context.WithTimeout(ctx, engine.ObservationSweepTimeout)
 	defer cancel()
-	ready, e := engine.ComponentInstancesHealthy(ctx, rc, m.Name, max(1, m.Replicas), m.ConfigVersion, engine.ComponentProbe{Ready: func(client *agentapi.Client) (bool, error) {
+	inventory := engine.ObserveInstanceInventory(ctx, rc, m.Name)
+	if inventory.Err != nil {
+		return out, inventory.Err
+	}
+	var schemaMu sync.Mutex
+	ready, e := engine.ComponentObservedInstancesHealthy(ctx, rc, m.Name, max(1, m.Replicas), m.ConfigVersion, inventory, engine.ComponentProbe{Ready: func(client *agentapi.Client) (bool, error) {
 		var observed tspec.Status
 		if e := client.Engine(ctx, tspec.Engine, tspec.ActionStatus, struct{}{}, &observed); e != nil {
 			return false, e
 		}
+		schemaMu.Lock()
 		out.SchemaVersion = observed.SchemaVersion
 		out.VisibilitySchemaVersion = observed.VisibilitySchemaVersion
+		schemaMu.Unlock()
 		return observed.Ready && observed.RestartToken == m.ConfigHash && observed.Version == m.Version && observed.Component == m.Component, nil
 	}})
 	out.Ready = ready
-	// Health failures are observations, never secret-bearing remote diagnostics.
+	// Successfully observed missing or unready instances are readiness waits,
+	// unlike a platform inventory read that failed before observing anything.
 	if e != nil {
 		out.Detail = "waiting for all instances to apply the desired configuration and become Ready"
 	}

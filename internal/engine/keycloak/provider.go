@@ -689,8 +689,10 @@ func (*Provider) Status(ctx context.Context, rc *engine.Context) (domain.Cluster
 		out.Message = "Keycloak is ready"
 	} else if err != nil {
 		out.Message = "Keycloak agent or management health unavailable"
+	} else if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {
+		out.Phase = domain.PhaseDegraded
 	}
-	return out, nil
+	return out, err
 }
 func (*Provider) RunOperation(context.Context, *engine.Context, *domain.Operation) (engine.OpResult, error) {
 	return engine.OpResult{}, engine.ErrNotSupported

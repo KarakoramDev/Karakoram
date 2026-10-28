@@ -51,6 +51,7 @@ func TestNativeReadyObservationRenewsAvailabilityLease(t *testing.T) {
 	if got := engine.FreshStatus(status, at.Add(engine.ReadinessMaxAge+time.Second)); got.Members[0].Health || got.Members[0].Agent.Healthy {
 		t.Fatal("expired sample remained available")
 	}
+	rc.Cluster.Status = status
 	nativeReady = false
 	status, err = engine.ObserveStatus(t.Context(), p, rc)
 	if err != nil || status.Phase == domain.PhaseReady || status.Members[0].Health || !status.Members[0].Agent.Healthy {

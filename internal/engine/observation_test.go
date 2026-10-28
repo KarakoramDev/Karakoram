@@ -315,3 +315,39 @@ func TestObservationEpochRequiresSuccessfulCurrentSweep(t *testing.T) {
 		})
 	}
 }
+
+func TestObservationErrorsCannotReplaceLifecycleOrInventory(t *testing.T) {
+	at := time.Now()
+	for _, phase := range []domain.Phase{domain.PhaseReady, domain.PhaseCreating, domain.PhaseInitializing, domain.PhaseUpdating, domain.PhaseRestoring, domain.PhaseDeleting, domain.PhaseSuspended} {
+		t.Run(string(phase), func(t *testing.T) {
+			before := readyObservation(at)
+			before.Phase = phase
+			before.Members = append(before.Members, domain.MemberStatus{Name: "m1", Health: true})
+			rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{Status: before}}
+			p := observationProvider{observe: func(_ context.Context, rc *Context) (domain.ClusterStatus, error) {
+				// Neither partial output nor in-place edits of provider input can
+				// become a new durable observation after a failed read.
+				rc.Cluster.Status.Phase = domain.PhaseCreating
+				rc.Cluster.Status.Members[0].Name = "unpublished"
+				return domain.ClusterStatus{Phase: domain.PhasePending,
+					Conditions: []domain.Condition{{Type: "Storage", Status: "False", Reason: "ReadFailed"}}}, errors.New("platform read failed")
+			}}
+			got, err := ObserveStatus(t.Context(), p, rc)
+			wantPhase := phase
+			if phase == domain.PhaseReady {
+				wantPhase = domain.PhaseDegraded
+			}
+			if err == nil || got.Phase != wantPhase || len(got.Members) != 2 || got.Members[0].Name != "m0" || got.Members[1].Name != "m1" {
+				t.Fatalf("error replaced inspected lifecycle/inventory: %+v %v", got, err)
+			}
+			for _, member := range got.Members {
+				if member.Health || member.Agent.Healthy {
+					t.Fatal("failed observation preserved positive health", member)
+				}
+			}
+			if got.Conditions[0].Reason != "ReadFailed" || !got.ObservedAt.IsZero() || got.ObservationEpoch != "" {
+				t.Fatal("lost fresh failure diagnostic or renewed lease", got)
+			}
+		})
+	}
+}

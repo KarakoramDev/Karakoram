@@ -209,6 +209,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			member.Agent = domain.AgentStatus{Healthy: true, LastSeen: clockNow(rc)}
 			member.State = "Ready"
 		} else {
+			if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {
+				out.Phase = domain.PhaseDegraded
+			}
 			ready = false
 		}
 		out.Members = append(out.Members, member)

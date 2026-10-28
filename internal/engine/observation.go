@@ -259,6 +259,13 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 	if clock == nil {
 		clock = RealClock{}
 	}
+	// Status may return only an early partial result, or mutate its input while
+	// probing. Capture the inspected lifecycle/inventory before either attempt:
+	// an observation error cannot establish new provisioning progress or remove
+	// durable member identities.
+	previous := rc.Cluster.Status
+	previous.Members = slices.Clone(previous.Members)
+	previous.Conditions = slices.Clone(previous.Conditions)
 	for attempt := range 2 {
 		started := clock.Now()
 		probe, cancel := context.WithTimeout(ctx, ObservationSweepTimeout)
@@ -300,8 +307,15 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 			return status, nil
 		}
 		if attempt == 1 || ctx.Err() != nil {
-			if status.Phase == "" {
-				status = rc.Cluster.Status
+			if err != nil {
+				status.Phase = previous.Phase
+				status.Members = previous.Members
+				status.ObservedGeneration = previous.ObservedGeneration
+				if len(status.Conditions) == 0 {
+					status.Conditions = previous.Conditions
+				}
+			} else if status.Phase == "" {
+				status = previous
 			}
 			status = UnknownObservation(status, clock.Now(), "ObservationFailed")
 			// Failed samples never renew a previously successful readiness lease.

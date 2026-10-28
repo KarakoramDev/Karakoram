@@ -115,13 +115,16 @@ Optional [cluster data MCP](data-mcp.md) exposes a separate token-authenticated 
 
 Reconciler-generated `PhaseChanged` events retain the new phase's sanitized user-visible status message and a bounded summary of non-True conditions (`type / status / reason`), so the explanation remains available after recovery, including transitions without a generation change. They do not include cluster specs, internal state or condition message bodies. The admission-time transition to `Deleting` records only the phase arrow.
 
-When an engine returns fresh health observations alongside a secondary error,
-nonempty safety snapshots (for example, a failed quorum condition) are published
-instead of leaving old `Ready` conditions visible. A safe diagnostic for the error
-remains in the cluster message, a partial `Ready` result is reported as `Degraded`, and the
-failed observation does not itself advance `observedGeneration`. An empty
-error-only snapshot retains historical diagnostics, not positive availability:
-`Ready`, `Healthy` and writable-primary claims become unknown/degraded.
+When an engine returns a failed or partial observation, fresh safety conditions
+(for example, a failed quorum condition) and safe error diagnostics remain
+visible, but that error cannot replace the inspected lifecycle phase or durable
+member identities with incomplete provisioning progress. Existing `Ready`
+becomes `Degraded`; pending lifecycle work stays pending. Every retained member's
+health and agent-health claims become unknown/negative, and the failed sweep
+neither renews the observation lease nor advances `observedGeneration`.
+This applies to both ordinary reconciliation and independent availability
+renewal across all registered providers. A complete successful negative
+observation can still report fresh health for reachable siblings.
 
 Formed clusters request health observation at most five seconds after the
 preceding reconciliation. Health is observed before recovery `Sync`; withdrawn
