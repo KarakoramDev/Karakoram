@@ -6,6 +6,9 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -34,7 +37,19 @@ func validateMaintenance(policy *domain.MaintenancePolicy) *response {
 
 func (s *Server) maintenanceStatus(c *domain.Cluster) {
 	c.Status.Maintenance = nil
+	// Conditions are response projections too: clusterAPI receives a shallow
+	// cluster copy, so never replace entries in the persisted observation's slice.
+	conditionIndex := -1
+	for i, condition := range c.Status.Conditions {
+		if condition.Type == "MaintenanceWindow" {
+			conditionIndex = i
+			break
+		}
+	}
 	if c.Spec.Maintenance == nil || len(c.Spec.Maintenance.Windows) == 0 {
+		if conditionIndex >= 0 {
+			c.Status.Conditions = slices.Delete(slices.Clone(c.Status.Conditions), conditionIndex, conditionIndex+1)
+		}
 		return
 	}
 	now := engine.RealClock{}.Now()
@@ -53,4 +68,33 @@ func (s *Server) maintenanceStatus(c *domain.Cluster) {
 		status.NextWindowStart = &next
 	}
 	c.Status.Maintenance = status
+	condition := domain.Condition{
+		Type: "MaintenanceWindow", Status: "True", Reason: "Open",
+		Message: "Maintenance window permits new disruptions", LastTransitionTime: now,
+	}
+	if !open {
+		condition.Status, condition.Reason = "False", "Closed"
+		condition.Message = "Maintenance window is closed; no next start is scheduled"
+		if !next.IsZero() {
+			condition.Message = fmt.Sprintf("Maintenance window is closed; next start %s", next.UTC().Format(time.RFC3339))
+		}
+	}
+	if conditionIndex >= 0 {
+		old := c.Status.Conditions[conditionIndex]
+		// Keep an actual provider wait diagnostic, but not a stale Open receipt.
+		if !open && old.Status == "False" && old.Reason == "WaitingForWindow" {
+			condition.Reason = old.Reason
+			condition.Message = "Waiting for maintenance window; no next start is scheduled"
+			if !next.IsZero() {
+				condition.Message = fmt.Sprintf("Waiting for maintenance window; next start %s", next.UTC().Format(time.RFC3339))
+			}
+		}
+		if old.Status == condition.Status && old.Reason == condition.Reason {
+			condition.LastTransitionTime = old.LastTransitionTime
+		}
+		c.Status.Conditions = slices.Clone(c.Status.Conditions)
+		c.Status.Conditions[conditionIndex] = condition
+	} else {
+		c.Status.Conditions = append(slices.Clone(c.Status.Conditions), condition)
+	}
 }

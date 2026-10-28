@@ -73,7 +73,13 @@ cancellation and failure cleanup continue consuming their applicable budgets,
 and an override does not create a maintenance pause.
 
 Cluster responses calculate `status.maintenance.open`, `currentWindowEnd` and
-`nextWindowStart` at response time. No status is emitted for an empty policy.
+`nextWindowStart` at response time. The `MaintenanceWindow` condition uses that
+same evaluation on every response: `True/Open` while open and `False/Closed`
+while closed, retaining `False/WaitingForWindow` when a provider has reported a
+disruption wait. A policy-only change can succeed while the window is closed;
+closure alone does not mean an operation is waiting. Per-request and generation
+overrides permit their own work without making the policy appear open. No
+maintenance status or condition is emitted for an empty policy.
 An absent current end while open means continuously overlapping weekly coverage.
 The next start is the next cron occurrence, which may lie inside an already open
 merged window.
