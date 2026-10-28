@@ -16,13 +16,32 @@ import (
 	"time"
 )
 
-func phase(s *internalState) domain.Phase {
+func phase(s *internalState, observedGeneration int64) domain.Phase {
 	switch s.Phase {
 	case "ready":
 		return domain.PhaseReady
 	case "import", "deploy", "agents", "secrets":
 		return domain.PhaseCreating
 	case "init", "initialize", "initializing", "bootstrap", "unseal":
+		// Sync also traverses native initialization/unseal checks on formed
+		// clusters. That traversal is not a new initialization lifecycle.
+		if s.Initialized && observedGeneration > 0 {
+			for _, m := range s.Members {
+				if m.Removing {
+					return domain.PhaseScaling
+				}
+				if m.Change != nil {
+					if m.Change.Kind == "deploy" {
+						return domain.PhaseUpgrading
+					}
+					return domain.PhaseUpdating
+				}
+				if m.Stage != "ready" {
+					return domain.PhaseScaling
+				}
+			}
+			return domain.PhaseReady
+		}
 		return domain.PhaseInitializing
 	case "initialization-outcome-lost":
 		return domain.PhaseDegraded
@@ -63,7 +82,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	}
 	view := *rc.Cluster
 	view.Status.Connection = domain.Connection{}
-	status = domain.ClusterStatus{Phase: phase(s), Version: rc.Cluster.Spec.Version, ObservedGeneration: rc.Cluster.Status.ObservedGeneration, ObservedAt: now(rc), Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}, Connection: connection(&view, s), Placement: domain.Placement{Warning: "Best-effort observations only; host separation is not guaranteed.", Groups: map[string][]string{}}}
+	status = domain.ClusterStatus{Phase: phase(s, rc.Cluster.Status.ObservedGeneration), Version: rc.Cluster.Spec.Version, ObservedGeneration: rc.Cluster.Status.ObservedGeneration, ObservedAt: now(rc), Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}, Connection: connection(&view, s), Placement: domain.Placement{Warning: "Best-effort observations only; host separation is not guaranteed.", Groups: map[string][]string{}}}
 	if s.Suspended {
 		status.Phase = domain.PhaseSuspended
 		return status, nil

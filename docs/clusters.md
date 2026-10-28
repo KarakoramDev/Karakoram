@@ -95,6 +95,14 @@ karactl -n <namespace> clusters edit <cluster> --wait
 
 `spec` is desired state; `status` is observation. Accepted changes increment `generation`; `status.observedGeneration` records the generation reconciled. `Ready` alone can describe the previous generation: compare both numbers. `spec.version` is requested; `status.version` is observed, absent when unavailable and the oldest observed member version during a mixed-version rollout.
 
+For OpenBao, `Initializing` describes first-time native formation, not the routine
+initialization/unseal checks on an already formed cluster. A maintenance-deferred
+update with no admitted member change retains `Ready` while healthy, with the
+previous `observedGeneration`. An admitted resource/configuration roll reports
+`Updating`, a version roll `Upgrading`, and native membership changes `Scaling`.
+Restore retains `Restoring`; unavailable or sealed members do not become healthy
+merely because an update is deferred.
+
 PATCH merges only `{spec: {...}}`; arrays replace the whole previous array. Edit replaces the complete specification. The write is conditional on the cluster incarnation and generation that admission inspected: a concurrent edit returns `409` rather than silently erasing another accepted change. Reload the cluster, merge your intended changes, and retry. Queued actions are likewise rejected if that inspected cluster was deleted, replaced, suspended, or changed before admission committed. Omitted create fields select engine driver defaults; explicit zero is not a request for defaults. See [REST API](api.md) for request validation and transport details.
 
 Omitted PATCH collections retain their stored state, including absence; response-only empty arrays do not create a desired-state change. Supply `backup.schedules: []` or `exposure.allowlist: []` explicitly to clear the corresponding list.

@@ -115,8 +115,36 @@ func TestEdgePhaseMapping(t *testing.T) {
 		phase string
 		want  domain.Phase
 	}{{"initializing", domain.PhaseInitializing}, {"initialization-outcome-lost", domain.PhaseDegraded}} {
-		if got := phase(&internalState{Phase: tc.phase}); got != tc.want {
+		if got := phase(&internalState{Phase: tc.phase}, 0); got != tc.want {
 			t.Fatalf("phase %q = %q, want %q", tc.phase, got, tc.want)
 		}
+	}
+}
+
+func TestFormedClusterPhaseMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		internal    string
+		initialized bool
+		observed    int64
+		member      member
+		want        domain.Phase
+	}{
+		{"first initialization", "initializing", false, 0, member{}, domain.PhaseInitializing},
+		{"first formation after sys init", "initializing", true, 0, member{Stage: "ready"}, domain.PhaseInitializing},
+		{"deferred update", "initializing", true, 1, member{Stage: "ready"}, domain.PhaseReady},
+		{"rolling update", "initializing", true, 1, member{Stage: "ready", Change: &memberChange{Kind: "resources"}}, domain.PhaseUpdating},
+		{"version roll", "initializing", true, 1, member{Stage: "ready", Change: &memberChange{Kind: "deploy"}}, domain.PhaseUpgrading},
+		{"joining member", "initializing", true, 1, member{Stage: "configured"}, domain.PhaseScaling},
+		{"removing member", "initializing", true, 1, member{Stage: "ready", Removing: true}, domain.PhaseScaling},
+		{"restore", "restore", true, 1, member{Stage: "ready"}, domain.PhaseRestoring},
+		{"lost initialization receipt", "initialization-outcome-lost", true, 1, member{Stage: "ready"}, domain.PhaseDegraded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &internalState{Phase: tc.internal, Initialized: tc.initialized, Members: []*member{&tc.member}}
+			if got := phase(s, tc.observed); got != tc.want {
+				t.Fatalf("phase = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }

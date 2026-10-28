@@ -36,6 +36,10 @@ func TestMaintenanceResourceChange(t *testing.T) {
 					t.Fatal("closed window persisted an unadmitted resource plan")
 				}
 			}
+			status, err := p.Status(t.Context(), rc)
+			if err != nil || status.Phase != domain.PhaseReady || status.ObservedGeneration >= rc.Cluster.Generation {
+				t.Fatalf("deferred CPU change lost serving phase or advanced generation: %+v %v", status, err)
+			}
 			for range 8 {
 				if _, err := p.Sync(t.Context(), rc); err != nil {
 					t.Fatal(err)
@@ -57,6 +61,25 @@ func TestMaintenanceResourceChange(t *testing.T) {
 				rc.Cluster.MaintenanceOverrideGeneration = rc.Cluster.Generation
 			} else {
 				rc.Cluster.Spec.Maintenance.Windows[0].Schedule = "* * * * *"
+			}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			status, err = p.Status(t.Context(), rc)
+			if err != nil || status.Phase != domain.PhaseUpdating || status.ObservedGeneration >= rc.Cluster.Generation {
+				t.Fatalf("admitted CPU roll lacks updating phase: %+v %v", status, err)
+			}
+			syncUntil(t, p, rc, func(s *internalState) bool {
+				for _, m := range s.Members {
+					if m.Change != nil && m.Change.Started {
+						return true
+					}
+				}
+				return false
+			})
+			status, err = p.Status(t.Context(), rc)
+			if err != nil || status.Phase != domain.PhaseUpdating || status.ObservedGeneration >= rc.Cluster.Generation {
+				t.Fatalf("started CPU roll lacks updating phase: %+v %v", status, err)
 			}
 			ready(t, p, rc)
 			for _, m := range state(t, rc).Members {
