@@ -200,3 +200,32 @@ func TestManifestValidation(t *testing.T) {
 		t.Fatal("duplicate database accepted")
 	}
 }
+
+func TestInitialDataSourceAppliedRequiresCompletedClone(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		want, bad bool
+	}{
+		{"empty", `{}`, false, false},
+		{"queued", `{"neo4j":{"cloneQueued":true}}`, false, false},
+		{"complete", `{"neo4j":{"cloneComplete":true}}`, true, false},
+		{"invalid", `{`, false, true},
+		{"invalid receipt", `{"neo4j":{"cloneComplete":"true"}}`, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &domain.Cluster{Spec: domain.ClusterSpec{DataSource: &domain.DataSource{Cluster: "source", Backup: "base"}}, Internal: json.RawMessage(tc.raw)}
+			c.Status.ObservedGeneration = 1
+			p := &Provider{} // Reconstruct from the persisted receipt, without native calls.
+			var observer engine.InitialDataSourceObserver = p
+			applied, err := observer.InitialDataSourceApplied(c)
+			if applied != tc.want || (err != nil) != tc.bad {
+				t.Fatalf("clone outcome: applied=%v err=%v", applied, err)
+			}
+			status := domain.ClusterStatus{Phase: domain.PhaseReady}
+			err = engine.ApplyInitialDataSourceStatus(p, c, &status)
+			if (err != nil) != tc.bad || (status.Phase == domain.PhaseReady) != tc.want {
+				t.Fatalf("generic readiness: status=%+v err=%v", status, err)
+			}
+		})
+	}
+}

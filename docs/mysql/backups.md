@@ -134,6 +134,8 @@ make a continuity check pass.
 
 ## Offline restore and clone
 
+MySQL and PXC new-cluster readiness requires the persisted initial restore completion receipt. Healthy members and an observed spec generation alone do not prove that the requested source data was imported; completed receipts survive control-plane restarts without replaying the import.
+
 In-place restore is destructive and makes the database unavailable. Take a fresh
 backup if the current state may be needed. Before any member STOP or datadir
 replacement, the recovery operation preflights the physical chain and complete

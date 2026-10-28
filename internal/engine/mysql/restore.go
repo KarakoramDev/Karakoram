@@ -17,6 +17,13 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
+// InitialDataSourceApplied reports the durable initial restore completion receipt.
+// Native health and the observed spec generation do not establish data import.
+func (*Core) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := loadBackupState(c)
+	return s.CloneComplete, err
+}
+
 type restoreSource struct {
 	Namespace string `json:"namespace"`
 	Cluster   string `json:"cluster"`

@@ -21,6 +21,16 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+// InitialDataSourceApplied reports the durable initial restore completion receipt.
+// Native health and the observed spec generation do not establish data import.
+func (*Provider) InitialDataSourceApplied(c *domain.Cluster) (bool, error) {
+	s, err := load(c)
+	if err != nil {
+		return false, err
+	}
+	return s.CloneComplete, nil
+}
+
 func versionParts(v string) ([3]int, error) {
 	var result [3]int
 	parts := strings.Split(v, ".")

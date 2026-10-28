@@ -54,6 +54,8 @@ Cron is UTC; the scheduler has no separate maintenance-window concept. Set the f
 
 An in-place restore replaces the target store and is offline/destructive. A clone creates a new Neo4j cluster from the backup; it is not an additional replica or a continuous copy. Use the shared [restore and clone interfaces](../backups.md), selecting a Neo4j backup and an equal or newer supported target version. Dumps from a newer Neo4j version than the target are rejected; older stores are upgraded on startup. Do not use restore as a downgrade mechanism.
 
+Clone readiness requires the persisted initial restore completion receipt. Healthy members and an observed spec generation alone do not prove that the requested dumps were loaded; completed receipts survive control-plane restarts without replaying the import.
+
 The loader fetches each dump while checking its size and SHA-256, loads both into a staging data directory and swaps only after every load succeeds. The previous store is retained until credential recovery and normal server launch succeed. Interrupted uncommitted swaps roll back; a committed swap retains the replacement.
 
 The `system` dump preserves source application users and their passwords. The managed `neo4j` password is reset to the **target's** managed credential, not the source's, through an authentication-disabled recovery start bound only to loopback on separate ports. The recovery child is stopped before normal authenticated listeners start. Reveal target credentials after recovery; do not expect the source administrator password to authenticate to a clone.

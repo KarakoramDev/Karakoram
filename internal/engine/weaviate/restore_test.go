@@ -331,3 +331,33 @@ func TestRestoreSharedSourceWaitsBeforeClearingOrAdopting(t *testing.T) {
 		t.Fatalf("waiting target status: %+v %v", saved, err)
 	}
 }
+
+func TestInitialDataSourceAppliedRequiresCompletedClone(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw string
+		want, bad bool
+	}{
+		{"empty", `{}`, false, false},
+		{"queued", `{"initialRestore":"initial-restore"}`, false, false},
+		{"other stage", `{"initialRestore":"health"}`, false, false},
+		{"complete", `{"initialRestore":"done"}`, true, false},
+		{"invalid", `{`, false, true},
+		{"invalid receipt", `{"initialRestore":true}`, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &domain.Cluster{Spec: domain.ClusterSpec{DataSource: &domain.DataSource{Cluster: "source", Backup: "base"}}, Internal: json.RawMessage(tc.raw)}
+			c.Status.ObservedGeneration = 1
+			p := &Provider{} // Reconstruct from the persisted receipt, without native calls.
+			var observer engine.InitialDataSourceObserver = p
+			applied, err := observer.InitialDataSourceApplied(c)
+			if applied != tc.want || (err != nil) != tc.bad {
+				t.Fatalf("clone outcome: applied=%v err=%v", applied, err)
+			}
+			status := domain.ClusterStatus{Phase: domain.PhaseReady}
+			err = engine.ApplyInitialDataSourceStatus(p, c, &status)
+			if (err != nil) != tc.bad || (status.Phase == domain.PhaseReady) != tc.want {
+				t.Fatalf("generic readiness: status=%+v err=%v", status, err)
+			}
+		})
+	}
+}

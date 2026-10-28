@@ -65,6 +65,8 @@ karactl -n default restores create vectors clone --backup baseline --into-new co
 
 Follow the returned operation and new cluster until generation/health converge. For a create request, use immutable `spec.dataSource` with `cluster`, `backup` and optional source `namespace`; the target binds the source backup storage. Cross-namespace recovery remains subject to shared [source-export permissions](../backups.md).
 
+New-cluster readiness requires the persisted initial restore completion receipt. Healthy members and an observed spec generation alone do not prove that the requested backup was restored; completed receipts survive control-plane restarts without replaying the import.
+
 Recovery constraints:
 
 - Source must be a succeeded `full` Weaviate backup with complete recorded metadata.
