@@ -180,6 +180,12 @@ func TestRuntimeRoleCredentialContracts(t *testing.T) {
 				for _, recovered := range recoveredVerifiers {
 					assertRecoveryPassword(t, recovered, rotated)
 				}
+				if users, err := p.proxyUsers(ctx, rc); err != nil || len(users) != 0 {
+					t.Fatal("recovery hold exposed native proxy credentials", err)
+				}
+				if err := saveBackupState(rc.Cluster, backupState{ManagedRolesHeld: false}); err != nil {
+					t.Fatal(err)
+				}
 				assertPublished(rotated)
 			})
 		}
@@ -187,6 +193,7 @@ func TestRuntimeRoleCredentialContracts(t *testing.T) {
 }
 
 func TestRuntimeDataMcpCredentialContracts(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
 	for _, options := range []string{"{}", `{"profiles":["timescaledb"]}`} {
 		t.Run(options, func(t *testing.T) {
 			p, rc, _ := setup(t, "single")
