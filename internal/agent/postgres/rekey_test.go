@@ -117,6 +117,9 @@ func TestSystemRekeyNativeFailureClassification(t *testing.T) {
 		if !permanent && status != http.StatusServiceUnavailable {
 			t.Fatalf("SQLSTATE %s: transient failure mislabeled as conflict", code)
 		}
+		if !permanent && strings.Contains(err.Error(), "rejected") {
+			t.Fatal("unavailable or ambiguous transaction claimed definitive rejection")
+		}
 	}
 	if status, _ := rekeyErrorResponse(errors.New("primary not ready")); status != http.StatusServiceUnavailable {
 		t.Fatal("primary readiness must remain retryable")

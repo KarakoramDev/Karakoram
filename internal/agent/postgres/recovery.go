@@ -46,7 +46,12 @@ type systemRoleError struct {
 	permanent bool
 }
 
-func (*systemRoleError) Error() string { return "PostgreSQL system-role transaction rejected" }
+func (e *systemRoleError) Error() string {
+	if e.permanent {
+		return "PostgreSQL system-role transaction rejected"
+	}
+	return "PostgreSQL system-role transaction unavailable"
+}
 
 func systemRoleFailure(err error) error {
 	var native *pgconn.PgError
