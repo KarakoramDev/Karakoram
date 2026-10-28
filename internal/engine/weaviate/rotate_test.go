@@ -26,6 +26,9 @@ func TestRootRotationTwoPhase(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer "+newKey {
 				t.Error("new credential not used")
 			}
+			if newKey != "" {
+				generatedCredentialLimit.Assert(t, "native bearer key", strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+			}
 			verified[strings.Split(r.Host, ":")[0]] = true
 			return true
 		}
@@ -45,6 +48,7 @@ func TestRootRotationTwoPhase(t *testing.T) {
 		next, e := secret(ctx, f.rc, rotationNew)
 		if e == nil {
 			newKey = string(next)
+			generatedCredentialLimit.Assert(t, rotationNew, newKey)
 		}
 		s, _ = load(f.rc.Cluster)
 		for _, m := range s.Members {
@@ -54,6 +58,9 @@ func TestRootRotationTwoPhase(t *testing.T) {
 			}
 			var spec wvspec.MemberSpec
 			json.Unmarshal(cfg.EngineSpec, &spec)
+			for _, key := range spec.AllowedKeys {
+				generatedCredentialLimit.Assert(t, "native allowed key", key)
+			}
 			if len(spec.AllowedKeys) == 2 {
 				if spec.AllowedKeys[0] != string(old) || spec.AllowedKeys[1] != newKey {
 					t.Fatal("bad key pair")
@@ -82,6 +89,10 @@ func TestRootRotationTwoPhase(t *testing.T) {
 		t.Fatal("missing rotation timestamp")
 	}
 	final, _ := secret(ctx, f.rc, secretAdmin)
+	generatedCredentialLimit.Assert(t, secretAdmin, string(final))
+	if string(final) != newKey {
+		t.Fatal("active key differs from staged rotation credential")
+	}
 	if string(final) == string(old) {
 		t.Fatal("credential unchanged")
 	}
@@ -129,6 +140,7 @@ func TestClusterCredentialCoordinatedRestart(t *testing.T) {
 	}
 	s, _ := load(f.rc.Cluster)
 	next, _ := secret(ctx, f.rc, secretClusterPassword)
+	generatedCredentialLimit.Assert(t, secretClusterPassword, string(next))
 	if string(next) == string(old) || s.LastRotated[ClusterUser].IsZero() {
 		t.Fatal("credential or timestamp unchanged")
 	}
@@ -139,6 +151,7 @@ func TestClusterCredentialCoordinatedRestart(t *testing.T) {
 		}
 		var spec wvspec.MemberSpec
 		json.Unmarshal(cfg.EngineSpec, &spec)
+		generatedCredentialLimit.Assert(t, "native cluster password", spec.ClusterPassword)
 		if spec.ClusterPassword != string(next) {
 			t.Fatal("member password mismatch")
 		}

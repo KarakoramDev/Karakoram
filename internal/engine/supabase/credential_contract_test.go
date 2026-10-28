@@ -3,11 +3,17 @@
 package supabase
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
+	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 )
+
+var generatedRolePasswordLimit = enginetest.CredentialLimit{Min: 12, Max: 1024, Alphabet: enginetest.Alphanumeric}
 
 func TestProviderGeneratedCredentialContracts(t *testing.T) {
 	p, rc, _ := setupProvider(t)
@@ -36,7 +42,7 @@ func TestProviderGeneratedCredentialContracts(t *testing.T) {
 		if len(name) > 63 {
 			t.Errorf("role %q exceeds PostgreSQL identifier limit", name)
 		}
-		enginetest.CredentialLimit{Min: 12, Max: 1024, Alphabet: enginetest.Alphanumeric}.Assert(t, name, password)
+		generatedRolePasswordLimit.Assert(t, name, password)
 	}
 	for name := range roles {
 		if _, ok := c.Roles[name]; !ok {
@@ -57,4 +63,105 @@ func TestProviderGeneratedCredentialContracts(t *testing.T) {
 	}
 	delete(recorded.Values, credentialsKey) // Already checked the entire nested credential document above.
 	recorded.Assert(t, map[string]enginetest.CredentialLimit{}, 0)
+}
+
+func assertRuntimeCredentialContracts(t *testing.T, p *Provider, rc *engine.Context) sealedCredentials {
+	t.Helper()
+	c, err := loadCredentials(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enginetest.SupabaseCredentialContracts(t, c.Keys)
+	enginetest.AgentCredential.Assert(t, "RealtimeAdminSecret", c.RealtimeAdminSecret)
+	enginetest.AgentCredential.Assert(t, "VectorToken", c.VectorToken)
+	for _, role := range roleNames {
+		generatedRolePasswordLimit.Assert(t, role, c.Roles[role])
+	}
+	returned, err := p.Credentials(t.Context(), rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Credentials{APIURL: returned.APIURL, StudioURL: returned.StudioURL,
+		AnonKey: c.Keys.AnonKey, ServiceRoleKey: c.Keys.ServiceRoleKey,
+		PublishableKey: c.Keys.PublishableKey, SecretKey: c.Keys.SecretKey,
+		DashboardUsername: "supabase", DashboardPassword: c.Keys.DashboardPassword, JWTSecret: c.Keys.JWTSecret}
+	if returned != want {
+		t.Fatal("returned credentials differ from persisted credentials")
+	}
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Members) == 0 {
+		t.Fatal("no native component configs")
+	}
+	for _, member := range s.Members {
+		config, err := p.MemberConfig(t.Context(), rc, member.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec sbspec.Spec
+		if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		for _, role := range roleNames {
+			generatedRolePasswordLimit.Assert(t, role, spec.DBRoles[role])
+			if spec.DBRoles[role] != c.Roles[role] {
+				t.Fatal("native role password differs from persisted password")
+			}
+		}
+		if spec.JWTSecret != c.Keys.JWTSecret || spec.JWKS != string(c.Keys.JWKS) ||
+			spec.AnonKey != c.Keys.AnonKey || spec.ServiceRoleKey != c.Keys.ServiceRoleKey ||
+			spec.PublishableKey != c.Keys.PublishableKey || spec.SecretKey != c.Keys.SecretKey ||
+			spec.AnonAsymmetricJWT != c.Keys.AnonJWT || spec.ServiceAsymmetricJWT != c.Keys.ServiceRoleJWT ||
+			spec.SecretKeyBase != c.Keys.SecretKeyBase || spec.RealtimeDBEncKey != c.Keys.RealtimeDBEncKey ||
+			spec.VaultEncKey != c.Keys.VaultEncKey || spec.LogflarePublicToken != c.Keys.LogflarePublicToken ||
+			spec.LogflarePrivateToken != c.Keys.LogflarePrivateToken ||
+			spec.Studio.DashboardPassword != c.Keys.DashboardPassword || spec.Studio.MetaCryptoKey != c.Keys.PGMetaCryptoKey ||
+			spec.RealtimeAdminSecret != c.RealtimeAdminSecret || spec.VectorSinkToken != c.VectorToken {
+			t.Fatal("native component credentials differ from persisted credentials")
+		}
+		if spec.Component == "auth" && spec.JWTKeys != string(c.Keys.JWTKeys) {
+			t.Fatal("native Auth signing keys differ from persisted signing keys")
+		}
+	}
+	return c
+}
+
+func TestRuntimeCredentialContracts(t *testing.T) {
+	p, rc, _ := setupProvider(t)
+	convergeProvider(t, p, rc)
+	before := assertRuntimeCredentialContracts(t, p, rc)
+	op := &domain.Operation{ID: "credential-contract-rotation", Kind: "rotate-jwt-secret"}
+	done := false
+	for range 50 {
+		result, err := p.RunOperation(t.Context(), rc, op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Done {
+			done = true
+			break
+		}
+	}
+	if !done {
+		t.Fatal("JWT rotation did not finish")
+	}
+	after := assertRuntimeCredentialContracts(t, p, rc)
+	if after.Keys.JWTSecret == before.Keys.JWTSecret {
+		t.Fatal("JWT rotation did not replace signing credentials")
+	}
+	after.RealtimeAdminSecret = ""
+	if err := storeCredentials(t.Context(), rc, after); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureCredentials(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	convergeProvider(t, p, rc)
+	repaired := assertRuntimeCredentialContracts(t, p, rc)
+	after.RealtimeAdminSecret = repaired.RealtimeAdminSecret
+	if !reflect.DeepEqual(after, repaired) {
+		t.Fatal("legacy realtime credential repair changed unrelated credentials")
+	}
 }
