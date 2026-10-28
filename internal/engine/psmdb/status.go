@@ -187,11 +187,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		return v, errors.Join(inventory.ProjectErr, inventory.ServicesErr)
 	}
 	project := inventory.Project
-	autoscaling := make(map[string]domain.Resources, len(inventory.Services))
+	autoscaling := make(map[string]*domain.Resources, len(inventory.Services))
 	for _, service := range inventory.Services {
-		if service.Resources.CPUMode != "" {
-			autoscaling[service.Hostname] = service.Resources
-		}
+		autoscaling[service.Hostname] = service.Autoscaling
 	}
 	replicationHealthy := true
 	if s.ManagedUsersError != "" {
@@ -213,9 +211,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	allHealthy := len(s.Members) > 0 && replicationHealthy
 	for i, m := range members {
 		ms := domain.MemberStatus{Name: m.Name, Set: m.Set, Role: "unknown", State: "UNKNOWN"}
-		if r, ok := autoscaling[m.Name]; ok {
-			ms.Autoscaling = &r
-		}
+		ms.Autoscaling = autoscaling[m.Name]
 		st, e := samples[i].status, samples[i].err
 		var allocated *agentapi.ContainerResources
 		if e == nil {

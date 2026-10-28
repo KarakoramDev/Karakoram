@@ -100,9 +100,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		})
 	}
 	wg.Wait()
-	resources := map[string]domain.Resources{}
+	autoscaling := make(map[string]*domain.Resources, len(inventory.Services))
 	for _, service := range inventory.Services {
-		resources[service.Hostname] = service.Resources
+		autoscaling[service.Hostname] = service.Autoscaling
 	}
 	allHealthy := len(s.runningMembers()) == rc.Cluster.Spec.Components.Engine.Replicas
 	sealed := false
@@ -110,9 +110,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	for i, m := range members {
 		v := samples[i]
 		ms := domain.MemberStatus{Name: m.Name, Set: "openbao", Role: "unknown", Version: m.Version, State: "UNKNOWN"}
-		if r, ok := resources[m.Name]; ok {
-			ms.Autoscaling = &r
-		}
+		ms.Autoscaling = autoscaling[m.Name]
 		if v.ae == nil {
 			ms.Agent = domain.AgentStatus{Version: v.a.Agent.Version, Commit: v.a.Agent.Commit, Build: v.a.Agent.Build, Healthy: v.a.Processes[baospec.Process].State == "running", ConfigVersion: v.a.ConfigVersion, LastSeen: now(rc)}
 			ms.Uptime = v.a.UptimeSeconds

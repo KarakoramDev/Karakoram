@@ -756,7 +756,7 @@ func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
 		{domain.Resources{CPUMode: "SHARED", MinCPU: 2, MaxCPU: 2, MinRAM: 0.5, MaxRAM: 0.5, MinDisk: 1, MaxDisk: 3}, domain.ObservedResources{CPUCores: 2, MemoryGB: 0.5, DiskGB: 1}},
 		{domain.Resources{CPUMode: "DEDICATED", MinCPU: 1, MaxCPU: 4, MinRAM: 2, MaxRAM: 8, MinDisk: 5, MaxDisk: 10, StartCPU: &start}, domain.ObservedResources{CPUCores: 3, MemoryGB: 2, DiskGB: 5}},
 	} {
-		f.services[name] = &infra.Service{ID: name, Hostname: name, Resources: c.bounds}
+		f.services[name] = &infra.Service{ID: name, Hostname: name, Autoscaling: &c.bounds}
 		m := member()
 		if m.Autoscaling == nil || !reflect.DeepEqual(*m.Autoscaling, c.bounds) {
 			t.Fatalf("autoscaling must read current platform config, not desired/applied state: %+v", m)
@@ -777,7 +777,7 @@ func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
 		t.Fatalf("partial agent reading: %+v", m.Resources)
 	}
 	reported.Store(nil)
-	f.services[name].Resources = domain.Resources{}
+	f.services[name].Autoscaling = nil
 	if m := member(); m.Autoscaling != nil || m.Resources != nil {
 		t.Fatal("unknown platform configuration and agent reading must remain unknown", m)
 	}

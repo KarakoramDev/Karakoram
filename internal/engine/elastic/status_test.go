@@ -462,6 +462,7 @@ func TestStatusReportsAgentResourcesNotPlatformRecords(t *testing.T) {
 	rc.Agents = coreAgentDialer{server.URL, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
 	name := NodeHostname("demo", 0)
 	f.services[name].Resources = domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 2, MinRAM: 2, MaxRAM: 4, MinDisk: 5, MaxDisk: 20}
+	f.services[name].Autoscaling = &f.services[name].Resources
 	member := func() domain.MemberStatus {
 		t.Helper()
 		status, err := p.Status(context.Background(), rc)

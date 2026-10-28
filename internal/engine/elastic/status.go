@@ -422,8 +422,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			}
 		}
 		if service, ok := services[m.Name]; ok {
-			resources := service.Resources
-			ms.Autoscaling = &resources
+			ms.Autoscaling = service.Autoscaling
 		}
 		containers, e := inventory.Members[i].Containers, inventory.Members[i].Err
 		if e != nil || len(containers) == 0 {

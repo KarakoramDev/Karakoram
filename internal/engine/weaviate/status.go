@@ -160,6 +160,12 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	allReady := !s.Suspended && nativeErr == nil && quorumReady && len(s.Members) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
 	for i, m := range s.Members {
 		ms := domain.MemberStatus{Name: m.Name, Role: "non-voter", Version: m.Version, State: "absent"}
+		for _, service := range inventory.Services {
+			if service.Hostname == m.Name {
+				ms.Autoscaling = service.Autoscaling
+				break
+			}
+		}
 		if m.Index < 3 || rc.Cluster.Spec.Topology.Type == "single" {
 			ms.Role = "voter"
 		}
@@ -193,13 +199,6 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 				}
 				if ms.PlacementGroup == "" && rc.Backend.Capabilities().Placement {
 					ms.PlacementGroup = container.PlacementGroup
-				}
-			}
-			for _, service := range inventory.Services {
-				if service.Hostname == m.Name {
-					resources := service.Resources
-					ms.Autoscaling = &resources
-					break
 				}
 			}
 			ms.Resources = engine.MemberResources(sample.status.Resources, ms.Autoscaling)

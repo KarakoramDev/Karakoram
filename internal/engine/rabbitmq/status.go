@@ -141,16 +141,13 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		return v, errors.Join(inventory.ProjectErr, inventory.ServicesErr)
 	}
 	project := inventory.Project
-	resources := map[string]domain.Resources{}
+	autoscaling := make(map[string]*domain.Resources, len(inventory.Services))
 	for _, service := range inventory.Services {
-		resources[service.Hostname] = service.Resources
+		autoscaling[service.Hostname] = service.Autoscaling
 	}
 	for i, m := range members {
 		ms := domain.MemberStatus{Name: m.Name, Set: "rabbitmq", Role: "broker", Version: m.Version, State: "UNKNOWN"}
-		if r, ok := resources[m.Name]; ok {
-			copy := r
-			ms.Autoscaling = &copy
-		}
+		ms.Autoscaling = autoscaling[m.Name]
 		st, e := samples[i].agent, samples[i].agentErr
 		var allocated *agentapi.ContainerResources
 		if e == nil {
