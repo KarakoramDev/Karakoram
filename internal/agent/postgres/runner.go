@@ -37,6 +37,8 @@ type Runner struct {
 	dataAccessHash    [32]byte
 	dataAccessApplied bool
 	dataGrants        dataGrantCache
+	citusAuth         citusAuthConfig
+	citusAuthApplied  bool
 	proxyRestartHash  [32]byte
 	proxyAdmin        pgspec.Credentials
 	configured        bool

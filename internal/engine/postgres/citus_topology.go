@@ -70,7 +70,35 @@ func citusTopology(ctx context.Context, rc *engine.Context, s *state, observatio
 		condition.Message = strings.Join(issues, "; ")
 		return condition
 	}
+	if err := citusConnectivity(ctx, rc, leaders); err != nil {
+		condition.Reason = "ConnectivityFailed"
+		condition.Message = "Coordinator cannot execute SQL on every group primary: " + err.Error()
+		return condition
+	}
 	condition.Status, condition.Reason = "True", "MetadataMatches"
-	condition.Message = "Every group has one primary matching Patroni-managed pg_dist_node"
+	condition.Message = "Every group primary matches Patroni metadata and accepts coordinator SQL"
 	return condition
+}
+
+// Metadata alone does not prove the outbound credential used by Citus works.
+// This read-only probe must run only after restore client fences are released.
+func citusConnectivity(ctx context.Context, rc *engine.Context, leaders map[int]string) error {
+	if leaders[0] == "" {
+		return engine.Invalid("coordinator primary is not observed")
+	}
+	var status pgspec.CitusStatusResponse
+	if err := pgAction(ctx, rc, leaders[0], pgspec.ActionCitusConnectivity, struct{}{}, &status); err != nil {
+		return err
+	}
+	if !status.IsCoordinator || len(status.Nodes) != len(leaders) {
+		return engine.Invalid("Citus connectivity observation omits group primaries")
+	}
+	seen := map[int]bool{}
+	for _, node := range status.Nodes {
+		if seen[node.GroupID] || !node.Active || node.Role != "primary" || node.Port != pgspec.PortPostgres || leaders[node.GroupID] == "" || node.Host != leaders[node.GroupID] {
+			return engine.Invalid("Citus SQL connectivity failed for group %d", node.GroupID)
+		}
+		seen[node.GroupID] = true
+	}
+	return nil
 }

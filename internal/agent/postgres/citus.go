@@ -102,7 +102,7 @@ func validateCitusInput(input any) error {
 }
 
 func (e *Runner) citusRoutes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{pgspec.ActionCitusStatus, pgspec.ActionCitusRebalanceStart, pgspec.ActionCitusRebalanceStatus, pgspec.ActionCitusRebalanceStop, pgspec.ActionCitusDrainNode, pgspec.ActionCitusRemoveNode, pgspec.ActionCitusRestorePoint, pgspec.ActionCitusRestoreMetadata, pgspec.ActionWALSwitch, pgspec.ActionArchiveCovers} {
+	for _, action := range []string{pgspec.ActionCitusStatus, pgspec.ActionCitusConnectivity, pgspec.ActionCitusRebalanceStart, pgspec.ActionCitusRebalanceStatus, pgspec.ActionCitusRebalanceStop, pgspec.ActionCitusDrainNode, pgspec.ActionCitusRemoveNode, pgspec.ActionCitusRestorePoint, pgspec.ActionCitusRestoreMetadata, pgspec.ActionWALSwitch, pgspec.ActionArchiveCovers} {
 		mux.HandleFunc("POST /v1/postgres/"+action, func(w http.ResponseWriter, r *http.Request) {
 			input := citusInput(action)
 			if err := decodeAction(w, r, input); err != nil {
@@ -149,6 +149,9 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 	if !groupAction && (s.Citus == nil || action != pgspec.ActionCitusStatus && action != pgspec.ActionCitusRestoreMetadata && s.Citus.Group != 0) {
 		return nil, errors.New("citus coordinator required")
 	}
+	if action == pgspec.ActionCitusConnectivity && (s.Postgres != nil && s.Postgres.RecoveryClientsHeld || s.Bootstrap != nil && s.Bootstrap.Method == "restore") {
+		return nil, errors.New("Citus connectivity requires released recovery clients")
+	}
 	if usesPatroni(s) {
 		if err := patroniRequest(ctx, s, http.MethodGet, "/primary", nil, nil); err != nil {
 			return nil, err
@@ -173,9 +176,19 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		}
 		err := rewriteCitusRestoreMetadata(ctx, c, s, *input.(*pgspec.CitusRestoreMetadataRequest))
 		return pgspec.ActionResponse{OK: err == nil}, err
-	case pgspec.ActionCitusStatus:
+	case pgspec.ActionCitusStatus, pgspec.ActionCitusConnectivity:
 		out := pgspec.CitusStatusResponse{Group: s.Citus.Group, IsCoordinator: s.Citus.Group == 0, Nodes: []pgspec.CitusNode{}}
-		rows, err := c.Query(ctx, "SELECT nodeid, groupid, nodename, nodeport, noderole::text, isactive FROM pg_catalog.pg_dist_node ORDER BY nodeid")
+		query := "SELECT nodeid, groupid, nodename, nodeport, noderole::text, isactive FROM pg_catalog.pg_dist_node ORDER BY nodeid"
+		if action == pgspec.ActionCitusConnectivity {
+			// Probe primaries even when user configuration prefers secondary reads.
+			if _, err = c.Exec(ctx, "SET citus.use_secondary_nodes = never"); err != nil {
+				return nil, err
+			}
+			// Success reflects actual SQL connectivity, not local catalog health.
+			// Never expose remote diagnostics, which can contain secrets.
+			query = "SELECT n.nodeid,n.groupid,n.nodename,n.nodeport,n.noderole::text,r.success FROM pg_catalog.run_command_on_all_nodes('SELECT 1') r JOIN pg_catalog.pg_dist_node n ON n.nodeid=r.nodeid WHERE n.noderole='primary' ORDER BY n.nodeid"
+		}
+		rows, err := c.Query(ctx, query)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +205,7 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		if err != nil {
 			return nil, err
 		}
-		if out.IsCoordinator {
+		if out.IsCoordinator && action == pgspec.ActionCitusStatus {
 			var job pgspec.CitusRebalanceResponse
 			err = c.QueryRow(ctx, "SELECT job_id, state::text FROM pg_catalog.citus_rebalance_status() WHERE state::text NOT IN ('finished','cancelled','failed')").Scan(&job.JobID, &job.State)
 			if err == nil {

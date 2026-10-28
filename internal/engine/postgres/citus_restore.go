@@ -261,6 +261,20 @@ func (p *Core) runCitusRestore(ctx context.Context, rc *engine.Context, op *doma
 			}
 			cp.Step = "citus-complete"
 		case "citus-complete":
+			if bs.ManagedRolesHeld {
+				return fail(engine.Invalid("Citus connectivity requires released recovery clients"))
+			}
+			leaders := map[int]string{}
+			for _, group := range s.groups() {
+				leader, _, err := group.primary(ctx, rc)
+				if err != nil {
+					return fail(err)
+				}
+				leaders[group.id] = leader.Name
+			}
+			if err = citusConnectivity(ctx, rc, leaders); err != nil {
+				return fail(err)
+			}
 			if rc.Cluster.Spec.Backup.Storage != "" {
 				if err = p.EnsureStanza(ctx, rc, false); err != nil {
 					return fail(err)

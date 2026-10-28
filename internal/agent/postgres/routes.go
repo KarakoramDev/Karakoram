@@ -220,6 +220,11 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 			}
 		}
 		_ = c.QueryRow(ctx, "SELECT timeline_id FROM pg_catalog.pg_control_checkpoint()").Scan(&out.Timeline)
+		if out.Role == "primary" && s.Citus != nil {
+			if err := e.refreshCitusAuthentication(ctx, c, s, p, out.Timeline); err != nil {
+				out.Running = false
+			}
+		}
 		out.ArchiveStatusKnown = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.to_char(last_archived_time AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),''), COALESCE(last_failed_time > last_archived_time, last_failed_time IS NOT NULL) FROM pg_catalog.pg_stat_archiver").Scan(&out.LastArchivedAt, &out.ArchiveFailing) == nil
 		if recovery {
 			_ = c.QueryRow(ctx, "SELECT COALESCE(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_last_wal_receive_lsn(),pg_catalog.pg_last_wal_replay_lsn()),0)::bigint, EXISTS(SELECT FROM pg_catalog.pg_stat_wal_receiver WHERE status='streaming')").Scan(&out.LagBytes, &out.Streaming)

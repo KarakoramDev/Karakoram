@@ -126,6 +126,7 @@ func testCitusRestoreWithSecondaries(t *testing.T, clone bool) {
 	}
 	rewritten, validated := map[string]bool{}, map[string]bool{}
 	loseWorker := true
+	failConnectivity := true
 	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
 		name := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
 		bs, _ := loadBackupState(rc.Cluster)
@@ -168,6 +169,18 @@ func testCitusRestoreWithSecondaries(t *testing.T, clone bool) {
 				return
 			}
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/citus-connectivity":
+			if bs.ManagedRolesHeld || bs.InitialApplied || len(validated) != 3 {
+				t.Error("distributed SQL must follow fence release and precede final application receipt")
+			}
+			var nodes []pgspec.CitusNode
+			for _, member := range s.data() {
+				if !strings.HasSuffix(member.Name, "-replica") {
+					nodes = append(nodes, pgspec.CitusNode{GroupID: member.Group, Host: member.Name, Port: 5432, Role: "primary", Active: !failConnectivity})
+				}
+			}
+			failConnectivity = false
+			json.NewEncoder(w).Encode(pgspec.CitusStatusResponse{IsCoordinator: true, Nodes: nodes})
 		case "/v1/postgres/citus-status":
 			if len(rewritten) != 3 || !bs.ManagedRolesHeld {
 				t.Error("validation preceded whole-formation rewrite or followed access release")
@@ -199,14 +212,23 @@ func testCitusRestoreWithSecondaries(t *testing.T, clone bool) {
 			t.Fatal("unformed initial target admitted unrelated imperative work")
 		}
 	}
-	done, lost := false, false
+	done, lost, disconnected := false, false, false
 	for range 80 {
 		result, err := p.RunOperation(t.Context(), rc, op)
 		if err != nil {
-			if lost || result.Step != "citus-metadata" {
+			switch {
+			case result.Step == "citus-metadata" && !lost:
+				lost = true
+			case result.Step == "citus-complete" && !disconnected:
+				disconnected = true
+				bs, _ := loadBackupState(rc.Cluster)
+				r, readErr := rc.Store.GetRestore(t.Context(), rc.Cluster.Ref(), restoreName)
+				if readErr != nil || bs.InitialApplied || r.Phase == domain.PhaseSucceeded {
+					t.Fatal("failed distributed SQL published restore completion", readErr)
+				}
+			default:
 				t.Fatal(err)
 			}
-			lost = true
 			continue
 		}
 		op.Checkpoint = result.Checkpoint
@@ -215,8 +237,8 @@ func testCitusRestoreWithSecondaries(t *testing.T, clone bool) {
 			break
 		}
 	}
-	if !done || !lost || len(validated) != 3 {
-		t.Fatal("clone did not resume the exact metadata barrier", done, lost, validated)
+	if !done || !lost || !disconnected || len(validated) != 3 {
+		t.Fatal("restore did not resume metadata and connectivity barriers", done, lost, disconnected, validated)
 	}
 	bs, _ := loadBackupState(rc.Cluster)
 	if bs.InitialApplied != clone || !bs.CloneComplete || bs.ManagedRolesHeld || bs.RestoreOperation != "" {
@@ -298,6 +320,12 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 				t.Error("catalog rewrite must follow local rekey under client fences")
 			}
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/citus-connectivity":
+			bs, _ := loadBackupState(rc.Cluster)
+			if bs.ManagedRolesHeld {
+				t.Error("remote SQL attempted under restore client fences")
+			}
+			json.NewEncoder(w).Encode(pgspec.CitusStatusResponse{IsCoordinator: true, Nodes: []pgspec.CitusNode{{GroupID: 0, Host: s.data()[0].Name, Port: 5432, Role: "primary", Active: true}, {GroupID: 1, Host: "worker1", Port: 5432, Role: "primary", Active: true}}})
 		case "/v1/postgres/citus-status":
 			if len(rekeyed) != 2 {
 				t.Error("metadata/access barrier before every group rekey", rekeyed)

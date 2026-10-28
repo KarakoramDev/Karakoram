@@ -126,6 +126,33 @@ are preserved. Group-local physical replication supplies standbys. No later
 remote role re-propagation is needed, and client HBA fences are never relaxed to
 make a credential transaction succeed.
 
+The PostgreSQL role password and Citus's outbound password are separate state.
+Recovery also reconciles the managed superuser's `pg_dist_authinfo` default row
+on every group primary to the target password and that member's local TLS
+certificate/key paths. Stale node-specific and loopback overrides for that
+managed superuser are removed; other roles' authentication entries are retained.
+Patroni still owns initial insertion on a fresh cluster. Writable-member
+readiness repairs inherited authentication after restart, promotion or a target
+credential/path change, caching only successful reconciliation.
+
+Correct node metadata and successful direct logins do **not** prove distributed
+queries work. `CitusTopology` readiness additionally requires coordinator SQL
+(`SELECT 1`) to succeed on every group primary; failed, missing or mismatched
+responses withdraw Ready. A restore performs this remote connectivity barrier
+only **after** the existing access-release/reload stage, never by bypassing the
+earlier client fences. Final restore success, the initial application receipt
+and the fresh-base backup enqueue follow that barrier. Local catalog validation
+still precedes access release.
+
+A completed restore affected by stale outbound authentication can be repaired
+without recreating data: deploy matching fixed control-plane/member artifacts,
+then use the supported `clusters upgrade-agents` rollout after any running
+operation or recovery cleanup releases ownership. Each upgraded primary repairs
+its local authentication before acknowledging readiness. This does not permit
+agent rollout to preempt an active restore journal. A backup already terminal
+Failed remains failed; after repair, submit and verify a new full backup rather
+than replaying or editing an uncertain coordinated-marker receipt.
+
 Managed-password local execution requires a distinct recovery operation that
 explicitly promises all-primary fan-out. Legacy password requests retain normal
 Citus propagation even with client holds, so an older control plane cannot

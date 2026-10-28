@@ -30,6 +30,7 @@ type distributedAgents struct {
 	blocked               map[int]bool
 	calls                 []string
 	loseDrain, loseRemove bool
+	connectivityFailed    bool
 }
 
 func setupDistributed(t *testing.T, replicas int) (*Core, *engine.Context, *fakeBackend, *distributedAgents) {
@@ -91,7 +92,11 @@ func setupDistributed(t *testing.T, replicas int) (*Core, *engine.Context, *fake
 			}
 			options, _ := ParseOptions(m.Options)
 			json.NewEncoder(w).Encode(pgspec.StatusResponse{Role: role, Leader: leader(m.Group), Running: !m.Offline, Streaming: role == "replica", Version: m.Version, SystemID: fmt.Sprintf("group-%d", m.Group), Timeline: 1, WALPosition: "1/100", EtcdHealthy: true, EtcdMemberID: name + "-etcd", CredentialReceipts: true, SlotStatusKnown: true, WALStatusKnown: true, ArchiveStatusKnown: true, SharedMemoryParameters: fakeSharedMemory(options.Parameters), HealthCapabilities: &pgspec.HealthCapabilities{LocalEtcd: true, ReplicationSlots: true, WALArchive: true, ReplicationDistance: true, PatroniPause: true}})
-		case "/v1/postgres/citus-status":
+		case "/v1/postgres/citus-status", "/v1/postgres/citus-connectivity":
+			if r.URL.Path == "/v1/postgres/citus-connectivity" && fake.connectivityFailed {
+				http.Error(w, "worker authentication unavailable", http.StatusServiceUnavailable)
+				return
+			}
 			for _, g := range s.groups() {
 				l := s.find(leader(g.id))
 				if !fake.blocked[g.id] && l != nil && !l.Offline && (l.Stage == "joined" || l.Stage == "deployed") {

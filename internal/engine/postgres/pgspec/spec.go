@@ -260,6 +260,7 @@ const (
 	ActionUpgradeCheck         = "upgrade-check"
 	ActionUpgradeRun           = "upgrade-run"
 	ActionCitusStatus          = "citus-status"
+	ActionCitusConnectivity    = "citus-connectivity"
 	ActionCitusRebalanceStart  = "citus-rebalance-start"
 	ActionCitusRebalanceStatus = "citus-rebalance-status"
 	ActionCitusRebalanceStop   = "citus-rebalance-stop"
