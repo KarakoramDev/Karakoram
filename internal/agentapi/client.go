@@ -228,9 +228,10 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return v, err
 }
 
-// Reload requests an immediate configuration pull.
+// Reload requests an immediate configuration pull. Applying it can include
+// database startup and credential recovery, so it uses the engine-action budget.
 func (c *Client) Reload(ctx context.Context) error {
-	return c.request(ctx, "POST", "/v1/reload", struct{}{}, nil)
+	return c.requestWith(ctx, c.engine, "POST", "/v1/reload", struct{}{}, nil)
 }
 
 // Process executes a whitelisted supervisor process action.

@@ -87,7 +87,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			out.Conditions = append(out.Conditions, domain.Condition{Type: "CredentialMismatch", Status: "True", Reason: "AdminAuthenticationRejected", Message: "Managed administrator credentials do not authenticate; rotate the neo4j system user to repair them (offline recovery causes a database outage)", LastTransitionTime: now(rc)})
 		}
 		if r.ConfigurationError != "" {
-			out.Conditions = append(out.Conditions, domain.Condition{Type: "Ready", Status: "False", Reason: "ConfigurationError", Message: "Neo4j rejected its managed configuration", LastTransitionTime: now(rc)})
+			out.Conditions = append(out.Conditions, domain.Condition{Type: "Ready", Status: "False", Reason: "ConfigurationApplyFailed", Message: "Neo4j managed configuration could not be applied; inspect agent diagnostics", LastTransitionTime: now(rc)})
 		}
 	}
 	if rc.Agents != nil {
