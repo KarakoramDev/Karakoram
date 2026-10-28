@@ -77,7 +77,7 @@ func reconcileCitusAuthentication(ctx context.Context, c *pgx.Conn, s pgspec.Spe
 	}
 	defer func() {
 		if err != nil {
-			err = errors.New("Citus inter-node authentication reconciliation failed")
+			err = errors.New("citus inter-node authentication reconciliation failed")
 		}
 	}()
 	if s.Superuser.Username == "" || s.Superuser.Password == "" {
@@ -104,7 +104,7 @@ func reconcileCitusAuthentication(ctx context.Context, c *pgx.Conn, s pgspec.Spe
 		return err
 	}
 	if updated.RowsAffected() != 1 {
-		return errors.New("Citus system authentication bootstrap is incomplete")
+		return errors.New("citus system authentication bootstrap is incomplete")
 	}
 	// Specific-node and loopback entries override node 0. Remove stale entries
 	// for the managed superuser only, retaining other users' authentication.

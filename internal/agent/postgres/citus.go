@@ -150,7 +150,7 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		return nil, errors.New("citus coordinator required")
 	}
 	if action == pgspec.ActionCitusConnectivity && (s.Postgres != nil && s.Postgres.RecoveryClientsHeld || s.Bootstrap != nil && s.Bootstrap.Method == "restore") {
-		return nil, errors.New("Citus connectivity requires released recovery clients")
+		return nil, errors.New("citus connectivity requires released recovery clients")
 	}
 	if usesPatroni(s) {
 		if err := patroniRequest(ctx, s, http.MethodGet, "/primary", nil, nil); err != nil {
@@ -172,7 +172,7 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 	switch action {
 	case pgspec.ActionCitusRestoreMetadata:
 		if s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
-			return nil, errors.New("Citus restore metadata requires client fences")
+			return nil, errors.New("citus restore metadata requires client fences")
 		}
 		err := rewriteCitusRestoreMetadata(ctx, c, s, *input.(*pgspec.CitusRestoreMetadataRequest))
 		return pgspec.ActionResponse{OK: err == nil}, err

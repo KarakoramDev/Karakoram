@@ -22,7 +22,7 @@ func citusRestoreMetadataSQL(s pgspec.Spec, req pgspec.CitusRestoreMetadataReque
 		return "", err
 	}
 	if s.Citus == nil || s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
-		return "", errors.New("Citus restore metadata requires client fences")
+		return "", errors.New("citus restore metadata requires client fences")
 	}
 	var sql strings.Builder
 	sql.WriteString("BEGIN;\nSET LOCAL synchronous_commit = local;\nSET LOCAL citus.enable_ddl_propagation = off;\nSET LOCAL citus.enable_metadata_sync = off;\nLOCK TABLE pg_catalog.pg_dist_node, pg_catalog.pg_dist_poolinfo IN EXCLUSIVE MODE;\n")

@@ -60,7 +60,7 @@ func TestResourcePlanRejectsBeforeStopping(t *testing.T) {
 					}
 				}
 				if reason == "unavailable" {
-					http.Error(w, "unavailable", 503)
+					http.Error(w, "unavailable", http.StatusServiceUnavailable)
 					return true, nil
 				}
 				if reason == "invalid_json" {

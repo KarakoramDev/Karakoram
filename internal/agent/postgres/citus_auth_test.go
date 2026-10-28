@@ -234,7 +234,7 @@ func TestCitusConnectivityCannotBypassRecoveryClientFences(t *testing.T) {
 			spec.Postgres.RecoveryClientsHeld = true
 		}
 		_, err := runCitusAction(t.Context(), spec, paths{}, pgspec.ActionCitusConnectivity, &struct{}{})
-		if err == nil || err.Error() != "Citus connectivity requires released recovery clients" {
+		if err == nil || err.Error() != "citus connectivity requires released recovery clients" {
 			t.Fatal("remote SQL was attempted before client fence release", err)
 		}
 	}
