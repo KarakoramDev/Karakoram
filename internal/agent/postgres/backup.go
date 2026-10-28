@@ -599,6 +599,11 @@ func (e *Runner) backupRoutes(mux *http.ServeMux, n *agent.Node) {
 				return errors.New("unsupported backup action")
 			})
 			if err != nil {
+				if action == "rekey" {
+					status, message := rekeyErrorResponse(err)
+					http.Error(w, message, status)
+					return
+				}
 				http.Error(w, "PostgreSQL backup action failed", http.StatusConflict)
 				return
 			}

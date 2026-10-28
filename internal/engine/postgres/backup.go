@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
@@ -210,7 +212,13 @@ func pgAction(ctx context.Context, rc *engine.Context, member, action string, re
 	if err != nil {
 		return fmt.Errorf("connect PostgreSQL member: %w", err)
 	}
-	return a.Engine(ctx, "postgres", action, request, response)
+	defer a.Close()
+	err = a.Engine(ctx, "postgres", action, request, response)
+	var rejection *agentapi.HTTPError
+	if action == "rekey" && errors.As(err, &rejection) && rejection.StatusCode == http.StatusUnprocessableEntity {
+		return engine.Invalid("PostgreSQL rejected the system-role rekey transaction on member %s; clients remain held", member)
+	}
+	return err
 }
 
 // EnsureStanza creates the configured repository's stanza, or upgrades its

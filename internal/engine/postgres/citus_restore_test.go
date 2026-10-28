@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
@@ -30,6 +32,7 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 	stopped, wiped, resets, starts := 0, 0, 0, 0
 	stanzas := map[string]bool{}
 	finished := 0
+	rekeyed := map[string]bool{}
 	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/v1/status":
@@ -73,9 +76,18 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 			}
 			finished++
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
-		case "/v1/reload", "/v1/postgres/rekey":
+		case "/v1/postgres/rekey":
+			if starts != 2 {
+				t.Error("rekey before every group seed started")
+			}
+			rekeyed[strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")] = true
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/reload":
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		case "/v1/postgres/citus-status":
+			if len(rekeyed) != 2 {
+				t.Error("metadata/access barrier before every group rekey", rekeyed)
+			}
 			nodes := []pgspec.CitusNode{{NodeID: 1, GroupID: 0, Host: s.data()[0].Name, Port: 5432, Active: true}, {NodeID: 2, GroupID: 1, Host: "worker1", Port: 5432, Active: true}}
 			if !validMetadata {
 				nodes[1].Host = "wrong-worker"
@@ -164,5 +176,76 @@ func TestCitusRestoreRejectsTimestampAndMismatchedClone(t *testing.T) {
 	s, _ := load(rc.Cluster)
 	if err := verifyCitusRestoreMetadata(s, status); err == nil {
 		t.Fatal("foreign metadata admitted")
+	}
+}
+
+func TestCitusRecoveredPasswordsReachEveryPrimaryBeforeRelease(t *testing.T) {
+	p, rc, _ := citusOpsFixture(t)
+	if err := saveBackupState(rc.Cluster, backupState{ManagedRolesHeld: true}); err != nil {
+		t.Fatal(err)
+	}
+	applied := map[string]string{}
+	failWorker := true
+	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/v1/postgres/status":
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "primary", Leader: strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")})
+		case "/v1/postgres/roles":
+			var input pgspec.AccessRequest
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				t.Error(err)
+			}
+			if input.Operation != "password" || input.Role.Password == nil {
+				t.Error("recovery overwrote role attributes")
+			}
+			member := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+			if member == "worker1" && failWorker {
+				http.Error(w, "unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			applied[member] = *input.Role.Password
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		default:
+			t.Error("unexpected action", req.URL.Path)
+		}
+	})
+	verifier := "same-target-verifier"
+	request := pgspec.AccessRequest{Operation: "password", Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: "application"}, Password: &verifier}}
+	if err := p.recoveredRolePassword(t.Context(), rc, request); err == nil {
+		t.Fatal("partial recovery was accepted")
+	}
+	bs, _ := loadBackupState(rc.Cluster)
+	if !bs.ManagedRolesHeld {
+		t.Fatal("failed worker rekey released client fences")
+	}
+	failWorker = false
+	if err := p.recoveredRolePassword(t.Context(), rc, request); err != nil {
+		t.Fatal(err)
+	}
+	if len(applied) != 2 {
+		t.Fatal("not every group received credentials", applied)
+	}
+	for _, value := range applied {
+		if value != verifier {
+			t.Fatal("group credentials differ")
+		}
+	}
+}
+
+func TestRekeyNativeRejectionIsPermanentButUnavailableRetries(t *testing.T) {
+	for _, code := range []int{http.StatusUnprocessableEntity, http.StatusServiceUnavailable, http.StatusConflict} {
+		t.Run(http.StatusText(code), func(t *testing.T) {
+			_, rc, s := citusOpsFixture(t)
+			installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
+				http.Error(w, "private native SQL diagnostic", code)
+			})
+			err := pgAction(t.Context(), rc, s.data()[0].Name, "rekey", struct{}{}, nil)
+			if err == nil || errors.Is(err, engine.ErrInvalid) != (code == http.StatusUnprocessableEntity) {
+				t.Fatalf("incorrect permanent rekey classification: %v", err)
+			}
+			if strings.Contains(err.Error(), "private") {
+				t.Fatal("native diagnostics leaked")
+			}
+		})
 	}
 }

@@ -122,7 +122,7 @@ func (p *Core) reconcileRecoveredRoles(ctx context.Context, rc *engine.Context) 
 		if strings.HasPrefix(name, "kb_") {
 			request.Operation, request.Binding = "recover-password", true
 		}
-		if err = p.accessAction(ctx, rc, "roles", request, nil); err != nil {
+		if err = p.recoveredRolePassword(ctx, rc, request); err != nil {
 			return err
 		}
 		kept = append(kept, name)
@@ -135,4 +135,34 @@ func (p *Core) reconcileRecoveredRoles(ctx context.Context, rc *engine.Context) 
 		return err
 	}
 	return p.bumpAccessRevision(ctx, rc)
+}
+
+func (p *Core) recoveredRolePassword(ctx context.Context, rc *engine.Context, request pgspec.AccessRequest) error {
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return err
+	}
+	if s.Topology != "distributed" {
+		return p.accessAction(ctx, rc, pgspec.ActionRoles, request, nil)
+	}
+	bs, err := loadBackupState(rc.Cluster)
+	if err != nil {
+		return err
+	}
+	if !bs.ManagedRolesHeld {
+		return engine.Invalid("distributed role recovery requires client holds")
+	}
+	// One verifier, all recovered group primaries, before the access-release
+	// checkpoint. Retry is idempotent, including a lost acknowledgement. Physical
+	// replication supplies each group's standbys; no remote DDL is required.
+	for _, group := range s.groups() {
+		m, _, err := group.primary(ctx, rc)
+		if err != nil {
+			return err
+		}
+		if err = pgAction(ctx, rc, m.Name, pgspec.ActionRoles, request, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }

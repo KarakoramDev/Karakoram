@@ -354,10 +354,14 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		}
 	}
 	rolesSQL := strings.Join(statements, ";\n") + ";\n"
-	if s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
-		// The post-bootstrap psql hook must keep the restore-only SET LOCAL
-		// scoped to the same transaction as the recovered identity writes.
-		rolesSQL = "BEGIN;\nSET LOCAL synchronous_commit = local;\n" + rolesSQL + "COMMIT;\n"
+	if s.Citus != nil || s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+		// SET LOCAL must cover the identity writes in the post-bootstrap hook,
+		// just as it does in bootstrapRoles, without changing later sessions.
+		prefix := "BEGIN;\n"
+		if s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+			prefix += "SET LOCAL synchronous_commit = local;\n"
+		}
+		rolesSQL = prefix + rolesSQL + "COMMIT;\n"
 	}
 	files = append(files, renderedFile{"postgresql.conf", renderPostgres(s, p), false}, renderedFile{"pg_hba.conf", strings.Join(hba(s), "\n") + "\n", false}, renderedFile{"roles.sql", rolesSQL, false})
 	pass := strings.NewReplacer(`\`, `\\`, ":", `\:`)
@@ -410,7 +414,13 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		pass := strings.NewReplacer(`\`, `\\`, ":", `\:`).Replace(s.Superuser.Password)
 		files = append(files, renderedFile{"bootstrap.pgpass", "*:5432:*:" + s.Superuser.Username + ":" + pass + "\n", false})
 		marker := filepath.Join(p.root, "initialized.json")
-		script := "#!/bin/sh\nset -eu\numask 077\nprintf 'true\\n' > " + shellQuote(marker+".tmp") + "\nsync " + shellQuote(marker+".tmp") + "\nmv " + shellQuote(marker+".tmp") + " " + shellQuote(marker) + "\nsync " + shellQuote(p.root) + "\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d postgres -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
+		database := "postgres"
+		if s.Citus != nil && s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+			// The recovered Citus database already exists. Use it directly rather
+			// than the non-main-database command forwarding path.
+			database = s.Citus.Database
+		}
+		script := "#!/bin/sh\nset -eu\numask 077\nprintf 'true\\n' > " + shellQuote(marker+".tmp") + "\nsync " + shellQuote(marker+".tmp") + "\nmv " + shellQuote(marker+".tmp") + " " + shellQuote(marker) + "\nsync " + shellQuote(p.root) + "\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d " + shellQuote(database) + " -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
 		files = append(files, renderedFile{"bootstrap-roles.sh", script, true})
 	}
 	return files, nil

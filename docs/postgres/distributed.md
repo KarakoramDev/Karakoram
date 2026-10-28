@@ -90,6 +90,32 @@ PITR uses persisted **named coordinated restore points**, not arbitrary wall-clo
 
 Restore fences the entire formation, restores every group to the same named point, rebuilds replicas and checks Citus metadata before releasing access. A clone must have the source formation's worker-group count. Never mix groups from unrelated backups or restore only one group into a running formation. See [PostgreSQL backups](backups.md) for storage, retention and archive requirements.
 
+System-role bootstrap and rekey are node-local Citus transactions: implicit DDL
+propagation is disabled only for those transactions, not for application DDL.
+During restore and clone, every recovered group primary must acknowledge the
+same target-owned system credentials before replicas and metadata are accepted.
+Managed login passwords are likewise applied with one verifier to every group
+primary before client holds are released; recovered attributes and memberships
+are preserved. Group-local physical replication supplies standbys. No later
+remote role re-propagation is needed, and client HBA fences are never relaxed to
+make a credential transaction succeed.
+
+Definitive native system-role SQL rejections fail the tracking operation with a
+sanitized rekey diagnostic rather than being mislabeled as an HTTP conflict.
+Unavailable primaries, transport failures and retryable SQL failures remain
+retryable. Terminal queue failure still retains the frozen recovery journal and
+client holds; it is not permission to start a different in-place restore.
+
+An agent-side recovery fix requires fixed member executables, not just a
+control-plane redeploy. `upgrade-agents` cannot preempt an active restore or its
+recovery journal. Restore cancellation is not supported; internal failure cleanup
+transfers the same journal rather than releasing it. A failed tracking operation
+therefore does not make `upgrade-agents` or a fresh in-place restore claimable.
+If fixed member executables cannot be deployed while preserving that journal,
+follow [failed restore recovery](backups.md#failed-restore-and-client-holds):
+retain the backup inventory and sealed state, abandon the target with
+`--keep-backups`, and recover into a new target with fixed agents.
+
 Completed marker creation has a durable name receipt and replays its original response. Uncertain partial creation fails closed: retrying the same name never creates duplicate coordinated markers.
 
 ## Failover and limits

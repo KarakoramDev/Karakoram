@@ -153,6 +153,13 @@ func waitLocal(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
 }
 func roleStatements(s pgspec.Spec) ([]string, error) {
 	result := []string{"SET search_path = pg_catalog", "SET log_statement = 'none'", "SET log_min_duration_statement = -1", "SET log_min_duration_sample = -1", "SET log_min_error_statement = 'panic'", "SET log_parameter_max_length = 0", "SET log_parameter_max_length_on_error = 0"}
+	if s.Citus != nil {
+		// Every group primary applies the same target-owned system identities.
+		// Never let Citus turn node-local maintenance into remote DDL, including
+		// when the recovered catalog already marks these roles distributed.
+		// Both callers execute this list inside an explicit transaction.
+		result = append(result, "SET LOCAL citus.enable_ddl_propagation = off")
+	}
 	for _, c := range []pgspec.Credentials{s.Superuser, s.Monitor, s.Replication, s.Rewind} {
 		verifier, err := secrets.SCRAMVerifier(c.Password)
 		if err != nil {
@@ -199,11 +206,11 @@ func bootstrapRoles(ctx context.Context, c *pgx.Conn, s pgspec.Spec) error {
 	}
 	for _, sql := range statements {
 		if _, err = tx.Exec(ctx, sql); err != nil {
-			return errors.New("system role bootstrap failed")
+			return systemRoleFailure(err)
 		}
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return err
+		return systemRoleFailure(err)
 	}
 	return reconcileDataGrants(ctx, c, s.DataAccess)
 }

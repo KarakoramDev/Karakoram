@@ -731,6 +731,14 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if recovery {
 					return &accessError{http.StatusServiceUnavailable, "access action cannot run on a replica"}
 				}
+				if s.Citus != nil && s.Postgres.RecoveryClientsHeld && action == pgspec.ActionRoles &&
+					(req.Operation == "password" || req.Operation == "recover-password") {
+					// Recovery dispatches the same verifier to every group primary.
+					// This short-lived connection must not contact fenced peers.
+					if _, err = c.Exec(ctx, "SET citus.enable_ddl_propagation = off"); err != nil {
+						return err
+					}
+				}
 				result, err = executeAccess(ctx, c, action, req)
 				return err
 			})
