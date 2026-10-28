@@ -145,7 +145,8 @@ func TestCitusOutboundAuthenticationUsesTargetPasswordAndLocalCertificatePaths(t
 			if strings.Contains(sql, "synchronous_commit = local") != restore {
 				t.Fatal("recovery commit policy escaped recovery scope")
 			}
-			if !strings.Contains(sql, "WHERE nodeid=0 AND rolename='postgres'") || !strings.Contains(sql, "WHERE rolename='postgres' AND nodeid<>0") {
+			compact := strings.ReplaceAll(sql, " ", "")
+			if !strings.Contains(compact, "WHEREnodeid=0ANDrolename='postgres'") || !strings.Contains(compact, "WHERErolename='postgres'ANDnodeid<>0") {
 				t.Fatal("managed default or overriding node/loopback credentials were not reconciled")
 			}
 			if !strings.Contains(sql, p.root) || !strings.Contains(sql, "server.pem") || !strings.Contains(sql, "server.key") || !strings.Contains(sql, "commit") {
