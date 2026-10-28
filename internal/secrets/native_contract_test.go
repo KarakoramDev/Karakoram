@@ -4,19 +4,20 @@ package secrets_test
 
 import (
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbkeys"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
-// This matrix tests the shared production generators used by the named engine
-// callsites, not mocks or hand-written example credentials. MySQL's ensureSecrets
-// tests additionally cover selection/persistence of its narrower GR generator.
+// This helper matrix complements TestProviderGeneratedCredentialContracts in
+// every registered engine package: those tests drive real provider seeding and
+// reject unlisted persisted credential keys. Native OpenBao /sys/init outputs
+// and Elasticsearch service-account tokens/API keys are excluded from local
+// generation bounds because the engines, not Karakoram, generate those values.
 // Zero max means the cited native contract specifies no maximum, NOT unlimited
 // acceptance of every possible string. User-configured password policies are not
 // the shipped defaults and cannot be guaranteed by a random generator.
@@ -105,34 +106,5 @@ func TestSupabaseGeneratedServiceKeyContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
-		name, value string
-		length      int
-		hex         bool
-	}{
-		{"jwt secret", k.JWTSecret, 44, false}, // >=32 characters for HS256.
-		{"secret key base", k.SecretKeyBase, 64, false},
-		{"realtime db encryption", k.RealtimeDBEncKey, 16, true}, // AES-128 key string.
-		{"vault encryption", k.VaultEncKey, 32, true},            // 32-byte pgsodium key string.
-		{"pgmeta crypto", k.PGMetaCryptoKey, 32, false},
-		{"logflare public", k.LogflarePublicToken, 32, false},
-		{"logflare private", k.LogflarePrivateToken, 32, false},
-		{"dashboard", k.DashboardPassword, 32, false},
-		{"s3 access id", k.StorageS3AccessKeyID, 32, true},
-		{"s3 access secret", k.StorageS3SecretAccessKey, 64, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if len(tc.value) != tc.length {
-				t.Fatal("generated service key length changed")
-			}
-			if tc.hex {
-				_, err = hex.DecodeString(tc.value)
-			} else {
-				_, err = base64.StdEncoding.DecodeString(tc.value)
-			}
-			if err != nil {
-				t.Fatal("generated service key charset changed")
-			}
-		})
-	}
+	enginetest.SupabaseCredentialContracts(t, k)
 }
