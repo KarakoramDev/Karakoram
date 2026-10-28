@@ -19,8 +19,8 @@ func maintenanceSpecOperation(op string) bool {
 	return op == "createCluster" || op == "replaceCluster" || op == "patchCluster"
 }
 func maintenanceFlags(cmd *cobra.Command, op string) {
-	if maintenanceOverrideOperation(op) && cmd.Flags().Lookup("ignore-maintenance-window") == nil {
-		cmd.Flags().Bool("ignore-maintenance-window", false, "Permit this operation or desired generation outside maintenance windows")
+	if flag := cmd.Flags().Lookup("ignore-maintenance-window"); flag != nil {
+		flag.Usage = "Permit this operation or desired generation outside maintenance windows"
 	}
 	if maintenanceSpecOperation(op) {
 		cmd.Flags().String("maintenance-time-zone", "UTC", "IANA time zone for maintenance window starts")

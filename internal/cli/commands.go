@@ -28,6 +28,11 @@ func (a *app) addCommands(root *cobra.Command) {
 	groups := map[string]*cobra.Command{"": root}
 	for _, spec := range commandSpecs {
 		s := spec
+		// Keep shared API controls in the same query metadata used by request
+		// serialization and the complete-file conflict check.
+		if maintenanceOverrideOperation(s.operation) {
+			s.query = append(s.query, queryFlag{"ignore-maintenance-window", "ignoreMaintenanceWindow", "bool"})
+		}
 		words := strings.Fields(s.path)
 		end := 0
 		for end < len(words) && !strings.HasPrefix(words[end], "<") && !strings.HasPrefix(words[end], "[") {
@@ -133,10 +138,6 @@ func (a *app) run(cmd *cobra.Command, s commandSpec, args []string) error {
 			v, _ := cmd.Flags().GetString(f.name)
 			q[f.key] = v
 		}
-	}
-	if maintenanceOverrideOperation(s.operation) && cmd.Flags().Changed("ignore-maintenance-window") {
-		ignore, _ := cmd.Flags().GetBool("ignore-maintenance-window")
-		q["ignoreMaintenanceWindow"] = ignore
 	}
 	if order, ok := q["order"].(string); ok && order != "asc" && order != "desc" {
 		return usageError("--order must be asc or desc")
