@@ -56,7 +56,7 @@ func (s *Server) maintenanceStatus(c *domain.Cluster) {
 	if s.Context.Clock != nil {
 		now = s.Context.Clock.Now()
 	}
-	open, end, next, err := maintenance.Open(c.Spec.Maintenance, now)
+	open, end, next, since, err := maintenance.Observe(c.Spec.Maintenance, now)
 	if err != nil {
 		return
 	}
@@ -70,7 +70,7 @@ func (s *Server) maintenanceStatus(c *domain.Cluster) {
 	c.Status.Maintenance = status
 	condition := domain.Condition{
 		Type: "MaintenanceWindow", Status: "True", Reason: "Open",
-		Message: "Maintenance window permits new disruptions", LastTransitionTime: now,
+		Message: "Maintenance window permits new disruptions", LastTransitionTime: since,
 	}
 	if !open {
 		condition.Status, condition.Reason = "False", "Closed"
@@ -88,9 +88,6 @@ func (s *Server) maintenanceStatus(c *domain.Cluster) {
 			if !next.IsZero() {
 				condition.Message = fmt.Sprintf("Waiting for maintenance window; next start %s", next.UTC().Format(time.RFC3339))
 			}
-		}
-		if old.Status == condition.Status && old.Reason == condition.Reason {
-			condition.LastTransitionTime = old.LastTransitionTime
 		}
 		c.Status.Conditions = slices.Clone(c.Status.Conditions)
 		c.Status.Conditions[conditionIndex] = condition

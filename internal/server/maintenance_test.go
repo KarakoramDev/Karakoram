@@ -150,6 +150,17 @@ func TestMaintenanceConditionAfterPolicyClose(t *testing.T) {
 				for _, condition := range status.Conditions {
 					if condition.Type == "MaintenanceWindow" {
 						count++
+						wantTransition := time.Date(2026, 1, 1, 0, 15, 0, 0, time.UTC)
+						if open {
+							wantTransition = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+							if s.Context.Clock.Now().Year() == 2026 {
+								// The initial every-minute policy is continuous.
+								wantTransition = time.Time{}
+							}
+						}
+						if !condition.LastTransitionTime.Equal(wantTransition) {
+							t.Fatalf("transition = %s, want %s", condition.LastTransitionTime, wantTransition)
+						}
 						if condition.Status != wantStatus || condition.Reason != wantReason {
 							t.Fatalf("condition = %+v, want %s/%s", condition, wantStatus, wantReason)
 						}
@@ -184,6 +195,10 @@ func TestMaintenanceConditionAfterPolicyClose(t *testing.T) {
 				t.Fatal(w.Code, w.Body.String())
 			}
 			assertStatus(status, false)
+			s.Context.Clock = maintenanceClock{at: at.Add(5 * time.Minute)}
+			readCluster(false)
+			s.Context.Clock = maintenanceClock{at: at.Add(24 * time.Hour)}
+			readCluster(false)
 			// Responses must not rewrite the gate receipt used by reconciliation.
 			stored, err := s.Store.GetCluster(t.Context(), c.Ref())
 			if err != nil {
@@ -193,6 +208,8 @@ func TestMaintenanceConditionAfterPolicyClose(t *testing.T) {
 				t.Fatal("response mutated persisted gate receipt")
 			}
 			s.Context.Clock = maintenanceClock{at: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}
+			readCluster(true)
+			s.Context.Clock = maintenanceClock{at: time.Date(2027, 1, 1, 0, 5, 0, 0, time.UTC)}
 			readCluster(true)
 		})
 	}
@@ -226,7 +243,7 @@ func TestMaintenanceConditionProjection(t *testing.T) {
 				if c.Status.Maintenance.Open || condition.Status != "False" {
 					t.Fatal(c.Status)
 				}
-				if scenario == "waiting" && (condition.Reason != "WaitingForWindow" || !condition.LastTransitionTime.Equal(at.Add(-time.Hour)) || !strings.Contains(condition.Message, "2027-01-01T00:00:00Z")) {
+				if scenario == "waiting" && (condition.Reason != "WaitingForWindow" || !condition.LastTransitionTime.Equal(time.Date(2026, 1, 1, 0, 15, 0, 0, time.UTC)) || !strings.Contains(condition.Message, "2027-01-01T00:00:00Z")) {
 					t.Fatal(condition)
 				}
 			}

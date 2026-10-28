@@ -102,3 +102,36 @@ func TestOpenEmptyPolicyAlwaysOpen(t *testing.T) {
 		t.Fatal(open, end, next, err)
 	}
 }
+
+func TestObserveTransition(t *testing.T) {
+	for _, tt := range []struct {
+		name, zone, now, since string
+		windows                []domain.MaintenanceWindow
+	}{
+		{name: "closed annual", now: "2026-10-28T13:35:00Z", since: "2026-01-01T00:15:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "15m"}}},
+		{name: "annual reopening", now: "2027-01-01T00:05:00Z", since: "2027-01-01T00:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "15m"}}},
+		{name: "overlapping open", now: "2026-01-01T04:45:00Z", since: "2026-01-01T02:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}, {Schedule: "30 2 * * *", Duration: "2h"}, {Schedule: "30 4 * * *", Duration: "1h"}}},
+		{name: "abutting open", now: "2026-01-01T03:30:00Z", since: "2026-01-01T02:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}, {Schedule: "0 3 * * *", Duration: "1h"}}},
+		{name: "exact closing boundary", now: "2026-01-01T03:00:00Z", since: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}},
+		{name: "century leap gap", now: "2103-06-01T00:00:00Z", since: "2096-02-29T01:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 29 2 *", Duration: "1h"}}},
+		{name: "spring elapsed", zone: "America/New_York", now: "2026-03-08T07:30:00Z", since: "2026-03-08T06:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 1 * * *", Duration: "2h"}}},
+		{name: "continuous", now: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "* * * * *", Duration: "168h"}}},
+		{name: "impossible calendar", now: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 30 2 *", Duration: "1h"}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &domain.MaintenancePolicy{TimeZone: tt.zone, Windows: tt.windows}
+			open, end, next, since, err := Observe(p, at(tt.now))
+			wantOpen, wantEnd, wantNext, wantErr := Open(p, at(tt.now))
+			if err != nil || wantErr != nil || open != wantOpen || !end.Equal(wantEnd) || !next.Equal(wantNext) {
+				t.Fatal("observation differs from gate evaluation", open, end, next, err)
+			}
+			if tt.since == "" {
+				if !since.IsZero() {
+					t.Fatal("expected unknown boundary", since)
+				}
+			} else if !since.Equal(at(tt.since)) {
+				t.Fatalf("since=%s, want %s", since, tt.since)
+			}
+		})
+	}
+}

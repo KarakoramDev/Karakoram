@@ -85,6 +85,60 @@ func Open(p *domain.MaintenancePolicy, now time.Time) (open bool, currentEnd, ne
 	return evaluate(windows, now.UTC())
 }
 
+// Observe adds the current policy's most recent merged state boundary to Open's
+// result. The boundary describes the schedule, not when the policy was installed.
+// A zero boundary means continuous coverage or no prior scheduled window.
+func Observe(p *domain.MaintenancePolicy, now time.Time) (open bool, currentEnd, nextStart, since time.Time, err error) {
+	if p == nil || len(p.Windows) == 0 {
+		return true, time.Time{}, time.Time{}, time.Time{}, nil
+	}
+	windows, err := parse(p)
+	if err != nil {
+		return false, time.Time{}, time.Time{}, time.Time{}, err
+	}
+	now = now.UTC()
+	open, currentEnd, nextStart, err = evaluate(windows, now)
+	if err != nil || open && currentEnd.IsZero() {
+		return open, currentEnd, nextStart, time.Time{}, err
+	}
+	if !open {
+		for _, w := range windows {
+			lastEndStart := now.Add(-w.duration)
+			// Calendar schedules have no year field. Eight years includes the
+			// longest leap-day gap across a non-leap century.
+			start := lastStart(w.schedule, lastEndStart.AddDate(-8, 0, 0), lastEndStart)
+			if !start.IsZero() && start.Add(w.duration).After(since) {
+				since = start.Add(w.duration)
+			}
+		}
+		return open, currentEnd, nextStart, since, nil
+	}
+	since = now
+	for _, w := range windows {
+		// Ends are exclusive at now: a window ending exactly now is inactive.
+		start := w.schedule.Next(now.Add(-w.duration))
+		if !start.IsZero() && !start.After(now) && start.Before(since) {
+			since = start
+		}
+	}
+	// Extend backwards over overlapping or abutting intervals, just as evaluate
+	// extends the current end forwards. Earliest starts avoid minute-by-minute
+	// enumeration for dense schedules.
+	for range 524288 {
+		before := since
+		for _, w := range windows {
+			start := w.schedule.Next(since.Add(-w.duration).Add(-time.Nanosecond))
+			if !start.IsZero() && start.Before(since) {
+				since = start
+			}
+		}
+		if since.Equal(before) {
+			return open, currentEnd, nextStart, since, nil
+		}
+	}
+	return false, time.Time{}, nextStart, time.Time{}, fmt.Errorf("maintenance window recurrence exceeds evaluation bound")
+}
+
 func evaluate(windows []window, now time.Time) (open bool, currentEnd, nextStart time.Time, err error) {
 	allWeekly := true
 	for _, w := range windows {
@@ -153,10 +207,7 @@ func lastStart(schedule cron.Schedule, lo, hi time.Time) time.Time {
 		return time.Time{}
 	}
 	left, right := first, hi
-	for range 16 {
-		if right.Sub(left) < time.Minute {
-			break
-		}
+	for right.Sub(left) >= time.Minute {
 		mid := left.Add((right.Sub(left) + 1) / 2)
 		candidate := schedule.Next(mid.Add(-time.Nanosecond))
 		if !candidate.IsZero() && !candidate.After(hi) {

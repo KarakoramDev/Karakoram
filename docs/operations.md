@@ -80,6 +80,12 @@ disruption wait. A policy-only change can succeed while the window is closed;
 closure alone does not mean an operation is waiting. Per-request and generation
 overrides permit their own work without making the policy appear open. No
 maintenance status or condition is emitted for an empty policy.
+Its `lastTransitionTime` is the current policy schedule's most recent merged
+opening or closing boundary, not the request time or a historical disruption
+receipt. It therefore stays stable across reads and advances on reopening.
+Karakoram does not retain a separate policy-installation timestamp; this
+schedule-derived boundary can predate the policy edit. A zero timestamp denotes
+continuous coverage or no prior scheduled window.
 An absent current end while open means continuously overlapping weekly coverage.
 The next start is the next cron occurrence, which may lie inside an already open
 merged window.
