@@ -61,7 +61,7 @@ func TestEdgeStatusNativeMapping(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
 				case "/v1/status":
-					json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 1, HostFingerprint: "host-a", Processes: map[string]agentapi.ProcessStatus{baospec.Process: {State: "running"}}})
+					json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: "agent-build"}, ConfigVersion: 1, HostFingerprint: "host-a", Processes: map[string]agentapi.ProcessStatus{baospec.Process: {State: "running"}}})
 				case "/v1/openbao/status":
 					json.NewEncoder(w).Encode(tc.native)
 				default:
@@ -79,6 +79,9 @@ func TestEdgeStatusNativeMapping(t *testing.T) {
 				t.Fatal(v.Members)
 			}
 			m := v.Members[0]
+			if m.Agent.Version != "agent-version" || m.Agent.Commit != "agent-commit" || m.Agent.Build != "agent-build" {
+				t.Fatalf("agent executable identity lost: %+v", m.Agent)
+			}
 			if m.Role != tc.role || m.State != tc.state || m.Health != tc.healthy || m.Version != "2.7.1" {
 				t.Fatalf("member=%+v", m)
 			}

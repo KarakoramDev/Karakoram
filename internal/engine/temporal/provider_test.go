@@ -183,7 +183,7 @@ func fixture(t *testing.T, topology string) (*Provider, *engine.Context, *fakeBi
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/v1/status") {
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: config.ConfigVersion})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: "agent-build"}, ConfigVersion: config.ConfigVersion})
 			return
 		}
 		var sp tspec.Spec

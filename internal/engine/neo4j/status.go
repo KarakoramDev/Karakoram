@@ -99,8 +99,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			if statusErr != nil {
 				member.Health = false
 				member.Agent.Healthy = false
-			} else if generic.Error != "" {
-				engine.ApplyAgentDiagnostic(&member, "Neo4j agent could not apply its managed configuration")
+			} else {
+				member.Agent.Version, member.Agent.Commit, member.Agent.Build = generic.Agent.Version, generic.Agent.Commit, generic.Agent.Build
+				if generic.Error != "" {
+					engine.ApplyAgentDiagnostic(&member, "Neo4j agent could not apply its managed configuration")
+				}
 			}
 		} else {
 			member.Health = false

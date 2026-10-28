@@ -26,6 +26,9 @@ func TestNativeReadyObservationRenewsAvailabilityLease(t *testing.T) {
 					if !member.Health || !member.Agent.Healthy || !member.Agent.LastSeen.Equal(rc.Clock.Now()) {
 						t.Fatal("positive readiness lacks generic observation evidence", member)
 					}
+					if member.Agent.Version != "agent-version" || member.Agent.Commit != "agent-commit" || member.Agent.Build != "agent-build" {
+						t.Fatalf("agent executable identity lost: %+v", member.Agent)
+					}
 				}
 				rc.Cluster.Status = status
 				rc.Clock.(*testClock).now = rc.Clock.Now().Add(time.Second)

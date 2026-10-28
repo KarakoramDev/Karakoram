@@ -97,7 +97,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState
 			pull()
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/status":
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: a.config.ConfigVersion, Processes: map[string]agentapi.ProcessStatus{"neo4j": {State: "running"}}})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: "agent-build"}, ConfigVersion: a.config.ConfigVersion, Processes: map[string]agentapi.ProcessStatus{"neo4j": {State: "running"}}})
 		case "/v1/neo4j/readiness":
 			json.NewEncoder(w).Encode(neo4jspec.Readiness{Ready: a.config.ConfigVersion > 0, ConfigVersion: a.config.ConfigVersion, Version: a.spec.Version, Edition: "community", AppliedRestartToken: a.spec.RestartToken, CredentialMismatch: a.credentialMismatch || a.password != a.spec.AdminPassword})
 		case "/v1/processes/neo4j/restart", "/v1/processes":

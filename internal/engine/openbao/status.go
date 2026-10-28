@@ -114,7 +114,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			ms.Autoscaling = &r
 		}
 		if v.ae == nil {
-			ms.Agent = domain.AgentStatus{Healthy: v.a.Processes[baospec.Process].State == "running", ConfigVersion: v.a.ConfigVersion, LastSeen: now(rc)}
+			ms.Agent = domain.AgentStatus{Version: v.a.Agent.Version, Commit: v.a.Agent.Commit, Build: v.a.Agent.Build, Healthy: v.a.Processes[baospec.Process].State == "running", ConfigVersion: v.a.ConfigVersion, LastSeen: now(rc)}
 			ms.Uptime = v.a.UptimeSeconds
 			ms.DiskUsage = float64(v.a.Disk.UsedBytes)
 			ms.Resources = engine.MemberResources(v.a.Resources, ms.Autoscaling)

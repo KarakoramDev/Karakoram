@@ -197,7 +197,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			ready = false
 			continue
 		}
-		observed, e := componentStatus(ctx, rc, m)
+		var agent domain.AgentStatus
+		observed, e := componentStatus(ctx, rc, m, &agent)
 		if e != nil {
 			return out, e
 		}
@@ -206,7 +207,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (domain.Clust
 			// componentStatus requires fresh generic status/configuration and
 			// native readiness from every live instance. Publish that evidence
 			// to the shared availability fence, not just member.Health.
-			member.Agent = domain.AgentStatus{Healthy: true, LastSeen: clockNow(rc)}
+			member.Agent = agent
+			member.Agent.Healthy = true
 			member.State = "Ready"
 		} else {
 			if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {

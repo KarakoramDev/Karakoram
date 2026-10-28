@@ -159,7 +159,7 @@ func observePending(ctx context.Context, rc *engine.Context, s *componentState) 
 	return true, nil
 }
 
-func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember) (tspec.Status, error) {
+func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember, agents ...*domain.AgentStatus) (tspec.Status, error) {
 	out := tspec.Status{Component: m.Component, Version: m.Version, RestartToken: m.ConfigHash}
 	if rc.Agents == nil {
 		return out, nil
@@ -181,7 +181,18 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 		out.VisibilitySchemaVersion = observed.VisibilitySchemaVersion
 		schemaMu.Unlock()
 		return observed.Ready && observed.RestartToken == m.ConfigHash && observed.Version == m.Version && observed.Component == m.Component, nil
-	}})
+	}}, func(_ string, status agentapi.Status) {
+		schemaMu.Lock()
+		defer schemaMu.Unlock()
+		for _, agent := range agents {
+			// Preserve a non-current (including legacy/unknown) observation
+			// when replicas disagree; one current replica must not hide it.
+			if agent.LastSeen.IsZero() || agent.Build == engine.CurrentAgentBuild().Build ||
+				(status.Agent.Build != engine.CurrentAgentBuild().Build && status.Agent.Build < agent.Build) {
+				*agent = domain.AgentStatus{Version: status.Agent.Version, Commit: status.Agent.Commit, Build: status.Agent.Build, ConfigVersion: status.ConfigVersion, LastSeen: clockNow(rc)}
+			}
+		}
+	})
 	out.Ready = ready
 	// Successfully observed missing or unready instances are readiness waits,
 	// unlike a platform inventory read that failed before observing anything.
