@@ -338,7 +338,7 @@ Each maximum must remain at least its minimum. Omitted bounds use provider
 defaults, which may be larger. Zerops separately rounds imported persistent
 Local Storage volumes up to its 5-GB minimum; this does not raise the runtime
 disk floor. Nomad host volumes and Dokploy named volumes do not enforce requested
-capacity as a quota, and do not support disk growth. See [backends](backends.md).
+capacity as a quota, and do not support disk growth. See [providers](providers.md#capability-differences).
 These are validation floors, not workload sizing recommendations.
 
 ```sh
