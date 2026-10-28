@@ -65,6 +65,9 @@ Provider execution is recorded durably before a convergence sweep begins. A
 first sweep that discovers only a window deferral returns its newly evaluated
 receipt to Pending; subsequent known closed-window waits stay Pending until
 opening or override. It never rewinds an operation started by an earlier sweep.
+An in-flight sweep of an older generation does not start or consume attempts
+for a PUT/PATCH receipt created concurrently; its first evaluation belongs to a
+sweep that loaded that generation.
 Engine driver waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
 imperative operation pauses its execution budget only when that invocation
 actually waits at its own next-disruption gate; a stale cluster-wide condition

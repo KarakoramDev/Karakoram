@@ -17,8 +17,20 @@ func TestMaintenanceResourceChange(t *testing.T) {
 			old := bindings.backend.service.Resources
 			rc.Cluster.Generation = 2
 			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
-			rc.Cluster.Spec.Components.Engine.Resources.MinRAM++
-			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM++
+			rc.Cluster.Spec.Components.Engine.Resources.MaxCPU++
+			// The first evaluation of this generation must report the wait,
+			// not require a second sweep to discover resource admission.
+			result, err := p.Sync(t.Context(), rc)
+			if err != nil || result.ConvergenceError != nil || result.RequeueAfter <= 0 {
+				t.Fatal("first resource evaluation did not defer successfully", result, err)
+			}
+			waiting := false
+			for _, condition := range rc.Cluster.Status.Conditions {
+				waiting = waiting || condition.Type == "MaintenanceWindow" && condition.Reason == "WaitingForWindow"
+			}
+			if !waiting {
+				t.Fatal("first CPU evaluation did not publish maintenance wait")
+			}
 			converge(t, p, rc)
 			s, _ := load(rc.Cluster)
 			if s.Resources != old || bindings.backend.service.Resources != old || s.Pending != nil {

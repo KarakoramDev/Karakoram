@@ -239,6 +239,12 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			continue
 		}
+		// Receipts are reloaded after Sync, so a concurrent spec update may
+		// target a generation this invocation never evaluated. Leave its
+		// execution boundary and diagnostics to a sweep of that generation.
+		if op.TargetGeneration > c.Generation {
+			continue
+		}
 		if desiredGenerationMaintenanceWait(c, op) &&
 			(convergenceAttempted && cause == nil || op.Phase == domain.PhasePending && op.Step == "WaitingForWindow") {
 			// A first evaluation is durably Running before Sync. If that

@@ -17,9 +17,25 @@ func TestMaintenanceResourceChange(t *testing.T) {
 			old := ordered(state(t, rc))[0].Resources
 			rc.Cluster.Generation++
 			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
-			rc.Cluster.Spec.Components.Engine.Resources.MinRAM++
-			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM++
 			b.log.clear()
+			// A CPU-only PATCH reaches the gate on its first evaluation.
+			rc.Cluster.Spec.Components.Engine.Resources.MaxCPU++
+			result, err := p.Sync(t.Context(), rc)
+			if err != nil || result.ConvergenceError != nil || result.RequeueAfter <= 0 {
+				t.Fatal("first resource evaluation did not defer successfully", result, err)
+			}
+			waiting := false
+			for _, condition := range rc.Cluster.Status.Conditions {
+				waiting = waiting || condition.Type == "MaintenanceWindow" && condition.Reason == "WaitingForWindow"
+			}
+			if !waiting {
+				t.Fatal("first CPU evaluation did not publish maintenance wait")
+			}
+			for _, member := range state(t, rc).Members {
+				if member.Change != nil {
+					t.Fatal("closed window persisted an unadmitted resource plan")
+				}
+			}
 			for range 8 {
 				if _, err := p.Sync(t.Context(), rc); err != nil {
 					t.Fatal(err)

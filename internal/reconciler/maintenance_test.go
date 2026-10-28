@@ -399,6 +399,59 @@ func TestReconcileDoesNotStartDeferredDesiredGeneration(t *testing.T) {
 	}
 }
 
+// A PATCH can arrive while an older generation's provider sweep is in flight.
+// The tracker reloads receipts, but must not attribute that sweep to the PATCH.
+func TestReconcileDefersGenerationCreatedDuringSync(t *testing.T) {
+	for _, cause := range []error{nil, errors.New("old generation observation failed")} {
+		name := "healthy"
+		if cause != nil {
+			name = "failed"
+		}
+		t.Run(name, func(t *testing.T) {
+			p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+			m, st := newTestManager(t, p)
+			m.opts.Context.Clock = fixedClock{now: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)}
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{
+				Provider: "fake", Maintenance: &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}},
+			}, Status: domain.ClusterStatus{Phase: domain.PhaseReady}}
+			if err := st.CreateCluster(t.Context(), c); err != nil {
+				t.Fatal(err)
+			}
+			op := &domain.Operation{Kind: domain.OperationUpdate}
+			p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+				return domain.ClusterStatus{Phase: domain.PhaseReady, Message: "Engine is ready"}, nil
+			}
+			p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+				spec := rc.Cluster.Spec
+				spec.Components.Engine.Resources.MaxCPU++
+				if err := st.UpdateClusterSpec(store.WithOperation(t.Context(), op), c.Ref(), spec); err != nil {
+					t.Fatal(err)
+				}
+				return engine.Result{RequeueAfter: time.Second}, cause
+			}
+			_, _ = m.reconcile(t.Context(), c.Ref())
+			got, err := st.GetOperation(t.Context(), op.ID)
+			if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Failures != 0 || got.Elapsed != 0 {
+				t.Fatal("older sweep claimed a newer desired generation", got, err)
+			}
+			p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+				got, err := st.GetOperation(t.Context(), op.ID)
+				if err != nil || got.Phase != domain.PhaseRunning || got.StartedAt == nil {
+					t.Fatal("first evaluation did not persist execution boundary", got, err)
+				}
+				return rc.WaitForWindow(), nil
+			}
+			if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			got, err = st.GetOperation(t.Context(), op.ID)
+			if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Failures != 0 || got.Elapsed != 0 || got.Step != "WaitingForWindow" {
+				t.Fatal("first window evaluation did not restore Pending receipt", got, err)
+			}
+		})
+	}
+}
+
 func TestConvergenceExecutionStartIsDurableBeforeProviderWork(t *testing.T) {
 	for _, kind := range []string{domain.OperationCreate, domain.OperationUpdate, domain.OperationDelete} {
 		t.Run(kind, func(t *testing.T) {

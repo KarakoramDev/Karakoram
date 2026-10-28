@@ -110,6 +110,12 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 				if !healthy {
 					return true, nil
 				}
+				// Evaluate admission before persisting a new change plan.
+				// Otherwise this sweep starts the desired receipt and only
+				// the next sweep discovers that no disruption was admitted.
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				m.Change = &memberChange{Kind: kind, Version: rc.Cluster.Spec.Version, Fingerprint: fp, Resources: runtimeResources(rc.Cluster.Spec.Components.Engine.Resources), Disk: rc.Cluster.Spec.Components.Engine.Resources}
 				return true, nil
 			}
