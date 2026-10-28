@@ -114,6 +114,7 @@ func TestObserveTransition(t *testing.T) {
 		{name: "abutting open", now: "2026-01-01T03:30:00Z", since: "2026-01-01T02:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}, {Schedule: "0 3 * * *", Duration: "1h"}}},
 		{name: "exact closing boundary", now: "2026-01-01T03:00:00Z", since: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}},
 		{name: "century leap gap", now: "2103-06-01T00:00:00Z", since: "2096-02-29T01:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 29 2 *", Duration: "1h"}}},
+		{name: "after century leap gap", now: "2105-06-01T00:00:00Z", since: "2104-02-29T01:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 29 2 *", Duration: "1h"}}},
 		{name: "spring elapsed", zone: "America/New_York", now: "2026-03-08T07:30:00Z", since: "2026-03-08T06:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 1 * * *", Duration: "2h"}}},
 		{name: "continuous", now: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "* * * * *", Duration: "168h"}}},
 		{name: "impossible calendar", now: "2026-01-01T03:00:00Z", windows: []domain.MaintenanceWindow{{Schedule: "0 0 30 2 *", Duration: "1h"}}},

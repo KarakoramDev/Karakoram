@@ -106,7 +106,18 @@ func Observe(p *domain.MaintenancePolicy, now time.Time) (open bool, currentEnd,
 			lastEndStart := now.Add(-w.duration)
 			// Calendar schedules have no year field. Eight years includes the
 			// longest leap-day gap across a non-leap century.
-			start := lastStart(w.schedule, lastEndStart.AddDate(-8, 0, 0), lastEndStart)
+			// Next stops after five calendar years. Search newest-first in
+			// shorter intervals so an empty early span cannot hide a later start.
+			var start time.Time
+			hi := lastEndStart
+			for range 2 {
+				lo := hi.AddDate(-4, 0, 0)
+				start = lastStart(w.schedule, lo, hi)
+				if !start.IsZero() {
+					break
+				}
+				hi = lo.Add(-time.Nanosecond)
+			}
 			if !start.IsZero() && start.Add(w.duration).After(since) {
 				since = start.Add(w.duration)
 			}
