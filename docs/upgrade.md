@@ -532,11 +532,13 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
-Build inventory is independent of support for `upgrade-agents`: OpenBao,
-Temporal and Neo4j also publish the identity returned by their existing generic
-agent status probes. A healthy native engine is not evidence of a current
-agent executable. Legacy agents without build metadata remain unknown;
-Temporal replicas with mixed identities report a non-current or unknown build
+Build inventory is independent of support for `upgrade-agents`: all registered
+providers publish identities returned by their existing generic agent status
+probes, including MySQL/PXC, Keycloak, OpenBao, Temporal, Neo4j and Weaviate
+whose agent-only rollout is unsupported. A healthy native engine is not evidence
+of a current agent executable. Legacy agents without build metadata remain
+unknown. PostgreSQL proxy, Supabase, Temporal and Keycloak instance observations
+conservatively report a non-current or unknown identity when replicas disagree,
 rather than letting a current replica hide an incomplete rollout.
 
 PostgreSQL proxy members report the identities observed on their live instances,

@@ -38,6 +38,7 @@ type fakeBackend struct {
 	clones            map[string]string
 	leader            string
 	action            func(http.ResponseWriter, *http.Request, string) bool
+	agentBuild        agentapi.AgentBuild
 }
 
 func (*fakeBackend) Name() string { return "fake" }
@@ -183,7 +184,7 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 			rechecks[name] = request.RecheckID
 			json.NewEncoder(w).Encode(myspec.RestoreStatus{Receipt: request.Receipt, State: "prepared", Stage: "ready", PlanDigest: fixtureManifestDigest, RecheckID: request.RecheckID, VerifiedRecheckID: request.RecheckID})
 		case "/v1/status":
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: b.applied[name]})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, ConfigVersion: b.applied[name]})
 		case "/v1/mysql/status":
 			status := b.native[name]
 			for _, member := range b.native {

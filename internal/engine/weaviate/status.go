@@ -170,6 +170,7 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		} else {
 			ms.Agent = domain.AgentStatus{Healthy: sample.err == nil, ConfigVersion: sample.status.ConfigVersion}
 			if sample.err == nil {
+				ms.Agent.Version, ms.Agent.Commit, ms.Agent.Build = sample.status.Agent.Version, sample.status.Agent.Commit, sample.status.Agent.Build
 				ms.Agent.LastSeen = sample.at
 				ms.Uptime = sample.status.UptimeSeconds
 				ms.DiskUsage = float64(sample.status.Disk.UsedBytes)

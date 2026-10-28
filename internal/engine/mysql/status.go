@@ -83,7 +83,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if o.err == nil {
-			member.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: now(rc)}
+			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: now(rc)}
 			member.Uptime = o.agent.UptimeSeconds
 			member.Resources = engine.MemberResources(o.agent.Resources, &m.Resources)
 			member.State = o.status.MemberState

@@ -55,6 +55,7 @@ type coreFixture struct {
 	statusStale    bool
 	readinessStale bool
 	native         *httptest.Server
+	agentBuild     agentapi.AgentBuild
 }
 
 func coreSetup(t *testing.T, replicas int, handlers ...func(http.ResponseWriter, *http.Request) bool) *coreFixture {
@@ -176,7 +177,7 @@ func coreSetup(t *testing.T, replicas int, handlers ...func(http.ResponseWriter,
 			if f.statusStale {
 				version--
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: version, EngineVersion: m.DesiredVersion, Processes: map[string]agentapi.ProcessStatus{"weaviate": {State: "running"}}})
+			_ = json.NewEncoder(w).Encode(agentapi.Status{Agent: f.agentBuild, ConfigVersion: version, EngineVersion: m.DesiredVersion, Processes: map[string]agentapi.ProcessStatus{"weaviate": {State: "running"}}})
 		case "/v1/weaviate/readiness":
 			version := m.ConfigVersion
 			if f.readinessStale {

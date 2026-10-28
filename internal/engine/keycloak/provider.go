@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sync"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -657,11 +658,26 @@ func (*Provider) Status(ctx context.Context, rc *engine.Context) (domain.Cluster
 	if !s.Deployed || s.Pending != nil {
 		return out, nil
 	}
+	var agent domain.AgentStatus
+	var agentMu sync.Mutex
 	ready, count, err := engine.VisitLiveInstancesConcurrent(ctx, rc, s.Member, func(client *agentapi.Client) (bool, error) {
 		applied, e := client.Status(ctx)
 		if e != nil {
 			return false, e
 		}
+		agentMu.Lock()
+		// Prefer a non-current or legacy identity when live instances
+		// disagree, rather than hiding an incomplete replacement.
+		if agent.LastSeen.IsZero() || agent.Build == engine.CurrentAgentBuild().Build ||
+			(applied.Agent.Build != engine.CurrentAgentBuild().Build && applied.Agent.Build < agent.Build) {
+			agent.Version, agent.Commit, agent.Build = applied.Agent.Version, applied.Agent.Commit, applied.Agent.Build
+			agent.ConfigVersion = applied.ConfigVersion
+		}
+		agent.LastSeen = time.Now()
+		if rc.Clock != nil {
+			agent.LastSeen = rc.Clock.Now()
+		}
+		agentMu.Unlock()
 		if applied.ConfigVersion < s.ConfigVersion {
 			return false, nil
 		}
@@ -674,15 +690,7 @@ func (*Provider) Status(ctx context.Context, rc *engine.Context) (domain.Cluster
 		return health.Ready && applied.Error == "", nil
 	})
 	ready = ready && count == 1
-	agent := domain.AgentStatus{Healthy: err == nil && count > 0}
-	if agent.Healthy {
-		// The shared availability fence accepts only samples observed during
-		// this sweep, not merely a positive connectivity flag.
-		agent.LastSeen = time.Now()
-		if rc.Clock != nil {
-			agent.LastSeen = rc.Clock.Now()
-		}
-	}
+	agent.Healthy = err == nil && count > 0
 	out.Members = []domain.MemberStatus{{Name: s.Member, Set: "keycloak", Role: "keycloak", State: "running", Health: ready, Version: kcspec.Version, Agent: agent}}
 	if ready {
 		out.Phase = domain.Phase("Ready")

@@ -26,7 +26,7 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			if b.native[name].MemberState != "ONLINE" {
 				pid = 0
 			}
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
 			return true
 		case "/v1/mysql/galera-status":
 			st := b.native[name]
