@@ -168,6 +168,13 @@ Public TCP requires a nonempty `spec.exposure.allowlist` whose CIDRs match `ipTy
 
 Acknowledgement must be fresh in that request, never inherited from PATCH state. Ordinary reads report whether saved public exposure covers a whole family; this is not a reusable acknowledgement. Private/restricted saves clear that flag. Unchanged exposure, including legacy routing, is preserved on unrelated updates; exposure edits must satisfy current rules. Disabling exposure needs no acknowledgement. Keep TLS/authentication and verify allowed and denied clients independently.
 
+On an existing cluster, route publication, withdrawal and allowlist changes
+respect [maintenance windows](operations.md#maintenance-windows), because a
+backend may replace serving tasks to apply them. For urgent containment during
+a closed window, submit the desired change with `ignoreMaintenanceWindow=true`.
+An accepted spec alone does not prove the old public access was withdrawn;
+observe the operation and effective routes, and verify denied clients.
+
 ## RBAC and credential reveal
 
 Credential reveal requires **`cluster-credentials/read`** on `<namespace>/<cluster>`, separately from cluster read. Ordinary connection data omits passwords. Explicit reveal returns the engine driver-defined credential set and CA with `Cache-Control: no-store`: [MongoDB](https://www.mongodb.com/) `databaseAdmin`, [RabbitMQ](https://www.rabbitmq.com/) `admin`, [Elasticsearch](https://www.elastic.co/elasticsearch) `elastic` and `apm-secret-token`. These are powerful management/intake credentials, not automatically suitable application identities; use engine-specific least-privilege access.

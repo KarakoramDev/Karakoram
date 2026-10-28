@@ -88,6 +88,9 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 			Target   int
 		}{rc.Cluster.Spec.Exposure, target})
 		if m.PublicHash != desired {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			if rc.Cluster.Spec.Exposure.Public {
 				if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
 					return false, err

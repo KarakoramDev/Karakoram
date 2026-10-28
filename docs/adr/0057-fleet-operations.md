@@ -50,6 +50,8 @@ Treat desired public HTTPS enable/disable on an existing runtime as a potential
 disruption on every backend: ingress updates can replace service tasks.
 Provisioning and cleanup retain their exemptions; urgent route revocation uses
 the explicit generation override.
+Public TCP route publication, withdrawal and allowlist changes follow the same
+rule, since Dokploy and Nomad can replace runtime tasks to apply those changes.
 
 Exempt healing and system lost-volume replacement, delete/suspend/resume, create/scale-out, backup/restore/initial restore, credential rotation, agent transport-certificate renewal and certificates within seven days of expiry. Window closure must never interrupt a member already past its stop/drain boundary.
 

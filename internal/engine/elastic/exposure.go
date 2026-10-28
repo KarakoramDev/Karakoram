@@ -98,6 +98,9 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 		}
 		if !rc.Cluster.Spec.Exposure.Public {
 			if m.PublicPort > 0 {
+				if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				if err = rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
 					return true, err
 				}
@@ -124,6 +127,9 @@ func (p *Provider) expose(ctx context.Context, rc *engine.Context, s *state) (bo
 		b, _ := json.Marshal(route)
 		hash := digest(b)
 		if m.ExposureHash != hash {
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
+			}
 			if err = verifyMemberServices(ctx, rc, m); err != nil {
 				return true, err
 			}

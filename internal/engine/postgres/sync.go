@@ -424,7 +424,8 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	// Revocation is infrastructure-only and must not wait on member health,
 	// an in-flight rolling operation, or configuration convergence.
-	if err = p.restrictExposure(ctx, rc, s); err != nil {
+	exposureDeferred, err := p.restrictExposure(ctx, rc, s)
+	if err != nil {
 		return result, err
 	}
 	if s.Topology != rc.Cluster.Spec.Topology.Type {
@@ -1027,9 +1028,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		rc.SyncWait = "reconciling final backup configuration"
 		return result, e
 	}
-	if err = p.reconcileExposure(ctx, rc, s); err != nil {
+	if deferred, e := p.reconcileExposure(ctx, rc, s); e != nil {
 		rc.SyncWait = "reconciling public exposure"
-		return result, err
+		return result, e
+	} else if deferred || exposureDeferred {
+		return rc.WaitForWindow(), nil
 	}
 	// Exposure changes can start an asynchronous runtime rollout after the
 	// earlier readiness pass. This also covers the direct data endpoint when
@@ -1093,52 +1096,78 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	return result, nil
 }
 
-func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state) error {
+func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	target := connectionMember(rc, s)
+	deferred := false
 	for _, m := range s.Members {
 		want := rc.Cluster.Spec.Exposure.Public && m.Name == target
 		if !want {
 			if m.Public {
+				wait, err := engine.PublicTCPDeferred(ctx, rc, m.Name, nil)
+				if err != nil {
+					return deferred, err
+				}
+				if wait {
+					deferred = true
+					continue
+				}
 				if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-					return err
+					return deferred, err
 				}
 				m.Public = false
 			}
 			continue
 		}
 		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
-			return err
+			return deferred, err
 		}
 		e := rc.Cluster.Spec.Exposure
-		if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: 5432, TargetPort: 5432, Protocol: "tcp", IPType: e.IPType, Allowlist: e.Allowlist}); err != nil {
-			return err
+		port := infra.PublicPort{Port: 5432, TargetPort: 5432, Protocol: "tcp", IPType: e.IPType, Allowlist: e.Allowlist}
+		wait, err := engine.PublicTCPDeferred(ctx, rc, m.Name, &port)
+		if err != nil {
+			return deferred, err
+		}
+		if wait {
+			deferred = true
+			continue
+		}
+		if err := rc.Backend.EnsurePublicPort(ctx, m.Name, port); err != nil {
+			return deferred, err
 		}
 		m.Public = true
 	}
-	return nil
+	return deferred, nil
 }
 
 // restrictExposure only removes access. The health-gated reconciler below may
 // later publish a new endpoint or expand the allowlist to the full desired set.
-func (p *Core) restrictExposure(ctx context.Context, rc *engine.Context, s *state) error {
+func (p *Core) restrictExposure(ctx context.Context, rc *engine.Context, s *state) (deferred bool, err error) {
 	target := connectionMember(rc, s)
 	for _, m := range s.Members {
 		if !m.Public {
 			continue
 		}
 		if err := verifyMember(ctx, rc, m); err != nil {
-			return err
+			return deferred, err
 		}
 		if !rc.Cluster.Spec.Exposure.Public || m.Name != target {
+			wait, err := engine.PublicTCPDeferred(ctx, rc, m.Name, nil)
+			if err != nil {
+				return deferred, err
+			}
+			if wait {
+				deferred = true
+				continue
+			}
 			if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-				return err
+				return deferred, err
 			}
 			m.Public = false
 			continue
 		}
 		routes, err := rc.Backend.ListPublicPorts(ctx)
 		if err != nil {
-			return err
+			return deferred, err
 		}
 		for _, route := range routes {
 			if route.Hostname != m.Name || route.TargetPort != 5432 {
@@ -1146,12 +1175,20 @@ func (p *Core) restrictExposure(ctx context.Context, rc *engine.Context, s *stat
 			}
 			allowlist, err := intersectAllowlists(route.Allowlist, rc.Cluster.Spec.Exposure.Allowlist)
 			if err != nil {
-				return err
+				return deferred, err
 			}
 			if len(allowlist) == 0 && len(route.Allowlist) > 0 && len(rc.Cluster.Spec.Exposure.Allowlist) > 0 {
 				// Empty is allow-all to the backend, not deny-all.
+				wait, err := engine.PublicTCPDeferred(ctx, rc, m.Name, nil)
+				if err != nil {
+					return deferred, err
+				}
+				if wait {
+					deferred = true
+					continue
+				}
 				if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-					return err
+					return deferred, err
 				}
 				m.Public = false
 				break
@@ -1159,13 +1196,21 @@ func (p *Core) restrictExposure(ctx context.Context, rc *engine.Context, s *stat
 			if !reflect.DeepEqual(allowlist, route.Allowlist) {
 				port := route.PublicPort
 				port.Allowlist = allowlist
+				wait, err := engine.PublicTCPDeferred(ctx, rc, m.Name, &port)
+				if err != nil {
+					return deferred, err
+				}
+				if wait {
+					deferred = true
+					continue
+				}
 				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, port); err != nil {
-					return err
+					return deferred, err
 				}
 			}
 		}
 	}
-	return nil
+	return deferred, nil
 }
 
 func intersectAllowlists(current, desired []string) ([]string, error) {

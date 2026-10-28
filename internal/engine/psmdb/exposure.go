@@ -13,7 +13,7 @@ import (
 
 // restrictExposure removes owned routes before native health gates. Public
 // endpoint creation remains in the health-gated portion of Sync.
-func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState) error {
+func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState) (deferred bool, err error) {
 	for _, m := range ordered(s) {
 		ex := rc.Cluster.Spec.Exposure
 		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
@@ -25,22 +25,28 @@ func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState)
 		}
 		service, err := rc.Backend.GetService(ctx, m.Name)
 		if err != nil {
-			return err
+			return deferred, err
 		}
 		// Planned members do not have a service yet; positive absence also
 		// proves there is no route to revoke.
 		if service != nil {
+			if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, nil); e != nil {
+				return deferred, e
+			} else if wait {
+				deferred = true
+				continue
+			}
 			if err := verifyServiceOwnership(ctx, rc, m, service, false); err != nil {
-				return err
+				return deferred, err
 			}
 			if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-				return err
+				return deferred, err
 			}
 		}
 		m.PublicPort = 0
 		m.PublicHash = h
 	}
-	return nil
+	return deferred, nil
 }
 
 // allocatePublicPort reserves the first free project-wide TCP port. The mutex

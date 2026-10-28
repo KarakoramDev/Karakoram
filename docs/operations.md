@@ -44,6 +44,10 @@ the window (or a generation override). A backend may replace tasks to change
 ingress networks or service labels, so routing is not a non-disruptive exemption.
 This includes explicit route revocation; for urgent revocation use an override.
 Initial provisioning and deletion remain exempt.
+The same rule covers public TCP publication, withdrawal and allowlist changes
+for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL (including Supabase),
+MySQL/PXC, Neo4j, OpenBao and Weaviate. Existing matching routes remain
+idempotent observations; maintenance does not require restarting them.
 
 Healing and system lost-volume replacement, delete/suspend/resume, create and
 scale-out, backup/restore/initial restore, credential rotation, agent transport

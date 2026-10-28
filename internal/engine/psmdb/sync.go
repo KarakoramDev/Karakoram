@@ -483,7 +483,8 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 	}
 	// Revocation needs ownership evidence, not a writable primary or caught-up
 	// replicas. Keep it serialized with pending platform work above.
-	if err := restrictExposure(ctx, rc, s); err != nil {
+	exposureDeferred, err := restrictExposure(ctx, rc, s)
+	if err != nil {
 		return result, err
 	}
 	if busy, err := p.recoverRuntimes(ctx, rc, s); busy || err != nil {
@@ -1029,6 +1030,9 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 	}
+	if exposureDeferred {
+		return rc.WaitForWindow(), nil
+	}
 	for _, m := range ordered(s) {
 		ex := rc.Cluster.Spec.Exposure
 		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
@@ -1049,7 +1053,13 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			m.PublicPort = port
 			return result, nil
 		}
-		if e = rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: port, TargetPort: 27017, Protocol: "tcp", IPType: ex.IPType, Allowlist: ex.Allowlist}); e != nil {
+		route := infra.PublicPort{Port: port, TargetPort: 27017, Protocol: "tcp", IPType: ex.IPType, Allowlist: ex.Allowlist}
+		if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, &route); e != nil {
+			return result, e
+		} else if wait {
+			return rc.WaitForWindow(), nil
+		}
+		if e = rc.Backend.EnsurePublicPort(ctx, m.Name, route); e != nil {
 			return result, e
 		}
 		m.PublicPort = port

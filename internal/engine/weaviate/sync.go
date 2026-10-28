@@ -336,8 +336,21 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		}
 	}
 	if !rc.Cluster.Spec.Exposure.Public {
-		if busy, e := p.reconcileExposure(ctx, rc, s); busy || e != nil {
-			return result, e
+		allowed, _ := rc.DisruptionAllowed()
+		if allowed || rc.Cluster.Status.ObservedGeneration == 0 {
+			if busy, e := p.reconcileExposure(ctx, rc, s); busy || e != nil {
+				return result, e
+			}
+		} else {
+			// Defer route withdrawal, not accepted runtime recovery or
+			// urgent certificate renewal. The final exposure pass retains
+			// the generation barrier after those exempt paths run.
+			for _, m := range s.Members {
+				if m.PublicHTTPPort > 0 || m.PublicGRPCPort > 0 {
+					rc.WaitForWindow()
+					break
+				}
+			}
 		}
 	}
 	if s.Rolling == nil || s.Rolling.Step == "gate" || s.Rolling.Step == "activate" {

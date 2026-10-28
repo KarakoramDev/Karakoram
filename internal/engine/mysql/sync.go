@@ -217,7 +217,8 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if s.GaleraTLS != nil {
 		return result, nil
 	}
-	if err = p.reconcileExposure(ctx, rc, s, false); err != nil {
+	exposureDeferred, err := p.reconcileExposure(ctx, rc, s, false)
+	if err != nil {
 		return result, err
 	}
 	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
@@ -473,8 +474,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 	}
 	if converged && len(s.Members) > 0 {
-		if err = p.reconcileExposure(ctx, rc, s, true); err != nil {
-			return result, err
+		if deferred, e := p.reconcileExposure(ctx, rc, s, true); e != nil {
+			return result, e
+		} else if deferred || exposureDeferred {
+			return rc.WaitForWindow(), nil
 		}
 		if s.Topology == "single" {
 			s.Formation.State = "formed"
@@ -496,10 +499,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 }
 
 // Revoke changed routes before health gates; publish only after native convergence.
-func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state, publish bool) error {
+func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state, publish bool) (deferred bool, err error) {
 	raw, err := json.Marshal(rc.Cluster.Spec.Exposure)
 	if err != nil {
-		return err
+		return deferred, err
 	}
 	digest := sha256.Sum256(raw)
 	hash := hex.EncodeToString(digest[:])
@@ -507,8 +510,16 @@ func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *sta
 	for _, m := range s.Members {
 		want := rc.Cluster.Spec.Exposure.Public && m.Name == target
 		if m.Public && (!want || m.ExposureHash != hash) {
+			wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, nil)
+			if e != nil {
+				return deferred, e
+			}
+			if wait {
+				deferred = true
+				continue
+			}
 			if err = rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-				return err
+				return deferred, err
 			}
 			m.Public = false
 		}
@@ -516,14 +527,23 @@ func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *sta
 			continue
 		}
 		if err = engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
-			return err
+			return deferred, err
 		}
 		exposure := rc.Cluster.Spec.Exposure
-		if err = rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: 3306, TargetPort: 3306, Protocol: "tcp", IPType: exposure.IPType, Allowlist: exposure.Allowlist}); err != nil {
-			return err
+		port := infra.PublicPort{Port: 3306, TargetPort: 3306, Protocol: "tcp", IPType: exposure.IPType, Allowlist: exposure.Allowlist}
+		wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, &port)
+		if e != nil {
+			return deferred, e
+		}
+		if wait {
+			deferred = true
+			continue
+		}
+		if err = rc.Backend.EnsurePublicPort(ctx, m.Name, port); err != nil {
+			return deferred, err
 		}
 		m.Public = true
 		m.ExposureHash = hash
 	}
-	return nil
+	return deferred, nil
 }

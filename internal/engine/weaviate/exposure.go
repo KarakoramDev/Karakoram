@@ -137,6 +137,9 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 				found = found || route.Hostname == m.Name
 			}
 			if found {
+				if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				if err := verifyMemberServices(ctx, rc, m); err != nil {
 					return false, err
 				}
@@ -184,6 +187,9 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 			}
 			if matched {
 				continue
+			}
+			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
 			}
 			if err := verifyMemberServices(ctx, rc, m); err != nil {
 				return false, err
