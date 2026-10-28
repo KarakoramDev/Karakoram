@@ -96,3 +96,32 @@ func TestClusterAndSecretFailureRollsBackTogether(t *testing.T) {
 		t.Fatal("spec survived rollback", got, err)
 	}
 }
+
+func TestIdenticalSecretUpdatePreservesOperation(t *testing.T) {
+	s, _ := testStore(t)
+	c := domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "psmdb"}}
+	create := domain.Operation{Kind: domain.OperationCreate}
+	values := map[string][]byte{"input": []byte("first")}
+	if err := s.CreateClusterWithSecrets(WithOperation(t.Context(), &create), &c, values); err != nil {
+		t.Fatal(err)
+	}
+	repeat := domain.Operation{Kind: domain.OperationUpdate}
+	if err := s.UpdateClusterSpecWithSecrets(WithOperation(t.Context(), &repeat), c.Ref(), c.Spec, values); err != nil {
+		t.Fatal(err)
+	}
+	if repeat.ID != "" {
+		t.Fatal("identical secret input created an operation", repeat)
+	}
+	operations, err := s.ListOperations(t.Context(), c.Ref())
+	if err != nil || len(operations) != 1 || operations[0].ID != create.ID || operations[0].Terminal() {
+		t.Fatal("identical input superseded accepted work", operations, err)
+	}
+	values["input"] = []byte("second")
+	changed := domain.Operation{Kind: domain.OperationUpdate}
+	if err := s.UpdateClusterSpecWithSecrets(WithOperation(t.Context(), &changed), c.Ref(), c.Spec, values); err != nil {
+		t.Fatal(err)
+	}
+	if changed.ID == "" || changed.TargetGeneration != 2 {
+		t.Fatal("changed secret did not create a new generation operation", changed)
+	}
+}

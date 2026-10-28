@@ -4,6 +4,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -199,6 +200,13 @@ func (s *Store) UpdateClusterSpec(ctx context.Context, ref domain.ClusterRef, sp
 	data, spec, err := preserveRetryEpoch(ctx, tx, ref, spec)
 	if err != nil {
 		return err
+	}
+	previous, err := json.Marshal(before)
+	if err != nil {
+		return err
+	}
+	if bytes.Equal(previous, data) {
+		return commitSpecAudit(ctx, tx, ref, before, spec, nil)
 	}
 	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, false)
 	if err != nil {

@@ -262,6 +262,12 @@ Supply the header only on operations declaring `IdempotencyKey` in [OpenAPI](htt
 
 `karactl` does not send this header and has no flag for it. Raw HTTP clients set `Idempotency-Key`; [Go](https://go.dev/) callers can pass a per-call `client.RequestEditorFn` that sets the header, or configure request editing with `client.WithRequestEditorFn`. Retain each mutation's key across retries; never reuse one fixed key for unrelated writes or log replayed secrets.
 
+A cluster PATCH or PUT whose normalized desired spec and supplied secret values
+are unchanged returns HTTP 200 without creating an operation or cancelling
+in-flight work. This no-op behavior does not require an `Idempotency-Key`.
+Changed desired state still creates a superseding operation; keyed retries
+replay their original response as described above.
+
 ## Pagination and events
 
 Lists return `{items: [...], nextCursor?: "..."}`. `limit` defaults to **100**, range **1–500**. Follow the opaque cursor with the same filters until absent; authorization precedes pagination. Multiple pages are not a transactional snapshot. Specialized status/log responses use their own schemas. Member logs are bounded tails: `process`/`lines` work, but `cursor`/`since` currently do not, and no next cursor is returned.

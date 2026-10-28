@@ -139,10 +139,6 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 	if err != nil {
 		return err
 	}
-	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, len(values) != 0)
-	if err != nil {
-		return err
-	}
 	var secretChanges []SpecSecretChange
 	changed := false
 	for key, value := range values {
@@ -164,6 +160,17 @@ func (s *Store) UpdateClusterSpecWithSecrets(ctx context.Context, ref domain.Clu
 			secretChanges = append(secretChanges, SpecSecretChange{Key: key, WasSet: true})
 			changed = true
 		}
+	}
+	previous, err := json.Marshal(before)
+	if err != nil {
+		return err
+	}
+	if !changed && bytes.Equal(previous, data) {
+		return commitSpecAudit(ctx, tx, ref, before, spec, nil)
+	}
+	ctx, err = admitInitialSpecAmendment(ctx, tx, ref, before, spec, changed)
+	if err != nil {
+		return err
 	}
 	result, err := tx.ExecContext(ctx, "UPDATE clusters SET maintenance_override_generation=CASE WHEN ? THEN generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END ELSE maintenance_override_generation END,generation=generation+CASE WHEN spec<>? OR ? THEN 1 ELSE 0 END,requested_by=CASE WHEN spec<>? OR ? THEN ? ELSE requested_by END,spec=?,updated=? WHERE namespace=? AND name=?", maintenanceOverride(ctx), data, changed, data, changed, data, changed, Actor(ctx), data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(ref.Namespace), ref.Name)
 	if err = affected(result, err); err != nil {

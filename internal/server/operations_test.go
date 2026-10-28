@@ -35,7 +35,7 @@ func TestClusterAcceptanceAndDeleteOperationBodies(t *testing.T) {
 	created := call(s, "POST", "/api/v1/clusters", `{"name":"newdemo","spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"}}}`, token)
 	first := clusterTracking(t, created, 201)
 	for _, method := range []string{"PATCH", "PUT"} {
-		body := `{"spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"tls":{"mode":"preferTLS","ca":"selfSigned"}}}`
+		body := `{"spec":{"provider":"fake","version":"8.0","topology":{"type":"replicaSet"},"tls":{"mode":"preferTLS","ca":"selfSigned"},"engineConfig":"` + method + `"}}`
 		id := clusterTracking(t, call(s, method, "/api/v1/clusters/newdemo", body, token), 200)
 		op, err := s.Store.GetOperation(context.Background(), id)
 		if err != nil || op.Target.Name != "newdemo" || op.TargetGeneration < 1 {

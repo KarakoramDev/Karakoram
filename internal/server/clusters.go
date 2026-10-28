@@ -468,9 +468,11 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		s.trigger(ctx, clusterRef(ctx, c.Name))
-		updated.OperationID = op.ID
-		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
+		if op.ID != "" {
+			s.trigger(ctx, clusterRef(ctx, c.Name))
+			updated.OperationID = op.ID
+		}
+		return response{status: 200, body: s.clusterAPI(*updated), operationID: updated.OperationID, auditEvent: audit.Event}
 	case "DeleteCluster":
 		if failure := s.openbaoDeletionGuard(ctx, c); failure != nil {
 			return *failure

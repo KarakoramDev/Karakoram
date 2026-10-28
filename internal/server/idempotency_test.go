@@ -223,8 +223,8 @@ func TestIdempotentClusterCreatePutPatchAndPathScope(t *testing.T) {
 	triggers := s.Trigger.(*triggerSpy)
 	triggers.mu.Lock()
 	defer triggers.mu.Unlock()
-	if len(triggers.names) != 4 {
-		t.Fatal("replays triggered reconciliation", triggers.names)
+	if len(triggers.names) != 3 {
+		t.Fatal("no-op PUT or keyed replays triggered reconciliation", triggers.names)
 	}
 }
 
