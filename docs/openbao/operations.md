@@ -24,6 +24,10 @@ remains Ready at the previously observed generation. Once a member roll is
 admitted, the public phase stays Updating (Upgrading for a version roll) across
 member boundaries and final convergence checks. Ready returns when the complete
 desired state converges and `observedGeneration` catches up to `generation`.
+A newer desired generation does not inherit admission from an older roll.
+After any already-started member work finishes, the superseded rolling intent
+is retired before checking the newer generation's maintenance window; if that
+new generation is deferred, healthy serving members can again project Ready.
 
 ```sh
 karactl -n NS clusters status secrets -o json

@@ -268,6 +268,12 @@ func TestCleanupKeepsUnsealMaterialWithVolumes(t *testing.T) {
 func TestSuspendedClusterResumesWithoutInitialization(t *testing.T) {
 	p, rc, _, a := setup(t)
 	ready(t, p, rc)
+	// Suspend with durable admitted intent but no remaining member receipt.
+	s := state(t, rc)
+	s.RollingKind, s.RollingGeneration = "resources", rc.Cluster.Generation
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
 	stopped := false
 	for range 100 {
 		done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepVolumes: true})
@@ -282,8 +288,15 @@ func TestSuspendedClusterResumesWithoutInitialization(t *testing.T) {
 	if !stopped {
 		t.Fatal("suspension did not complete")
 	}
+	status, err := p.Status(t.Context(), rc)
+	if err != nil || status.Phase != domain.PhaseSuspended {
+		t.Fatalf("retained roll hid suspension: %+v %v", status, err)
+	}
 	rc.Cluster.Generation++
 	ready(t, p, rc)
+	if s := state(t, rc); s.RollingKind != "" || s.RollingGeneration != 0 {
+		t.Fatalf("resumed convergence retained rolling intent: %q/%d", s.RollingKind, s.RollingGeneration)
+	}
 	if a.member("demom0").initCalls != 1 {
 		t.Fatal("resumption reinitialized data")
 	}

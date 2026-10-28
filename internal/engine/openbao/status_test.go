@@ -160,7 +160,7 @@ func TestFormedClusterPhaseBetweenMembers(t *testing.T) {
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
 			c := &domain.Cluster{}
-			s := &internalState{Phase: "initializing", Initialized: true, RollingKind: tc.kind, Members: []*member{{Stage: "ready"}}}
+			s := &internalState{Phase: "initializing", Initialized: true, RollingKind: tc.kind, RollingGeneration: 10, Members: []*member{{Stage: "ready"}}}
 			if err := s.save(c); err != nil {
 				t.Fatal(err)
 			}
@@ -168,8 +168,32 @@ func TestFormedClusterPhaseBetweenMembers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if s.RollingGeneration != 10 {
+				t.Fatal("admitted generation did not survive reload")
+			}
 			if got := phase(s, 9); got != tc.want {
 				t.Fatalf("receipt-free rolling phase = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRetainedRollPreservesExplicitLifecyclePhases(t *testing.T) {
+	for _, tc := range []struct {
+		internal string
+		member   member
+		want     domain.Phase
+	}{
+		{"restore", member{Stage: "ready"}, domain.PhaseRestoring},
+		{"cleanup", member{Stage: "ready"}, domain.PhaseDeleting},
+		{"initialization-outcome-lost", member{Stage: "ready"}, domain.PhaseDegraded},
+		{"initializing", member{Stage: "configured"}, domain.PhaseScaling},
+		{"initializing", member{Stage: "ready", Removing: true}, domain.PhaseScaling},
+	} {
+		t.Run(tc.internal+"/"+tc.member.Stage, func(t *testing.T) {
+			s := &internalState{Phase: tc.internal, Initialized: true, RollingKind: "resources", RollingGeneration: 10, Members: []*member{&tc.member}}
+			if got := phase(s, 9); got != tc.want {
+				t.Fatalf("retained rolling intent replaced %s with %s", tc.want, got)
 			}
 		})
 	}

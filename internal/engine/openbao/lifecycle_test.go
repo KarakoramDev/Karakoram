@@ -33,6 +33,11 @@ func TestScaleDownHighestFirstAndResume(t *testing.T) {
 			p, rc, f, a := setup(t)
 			rc.Cluster.Spec.Components.Engine.Replicas = n
 			ready(t, p, rc)
+			s := state(t, rc)
+			s.RollingKind, s.RollingGeneration = "resources", rc.Cluster.Generation
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
 			a.member("demom0").active = false
 			a.member(fmt.Sprintf("demom%d", n-1)).active = true
 			rc.Cluster.Spec.Components.Engine.Replicas = n - 2
@@ -41,6 +46,9 @@ func TestScaleDownHighestFirstAndResume(t *testing.T) {
 			p = New(p.options)
 			a.p = p
 			ready(t, p, rc)
+			if s := state(t, rc); s.RollingKind != "" || s.RollingGeneration != 0 {
+				t.Fatal("completed scale retained superseded rolling intent")
+			}
 			calls := f.log.snapshot()
 			first := slices.Index(calls, fmt.Sprintf("remove-peer:demom%d", n-1))
 			second := slices.Index(calls, fmt.Sprintf("remove-peer:demom%d", n-2))

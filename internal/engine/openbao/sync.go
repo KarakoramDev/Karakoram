@@ -443,6 +443,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	}
 	s.Phase = "ready"
 	s.RollingKind = ""
+	s.RollingGeneration = 0
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	result.RequeueAfter = 30 * time.Second
 	return result, nil

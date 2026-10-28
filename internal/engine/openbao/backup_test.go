@@ -363,10 +363,19 @@ func TestSnapshotSameClusterRestoreRecoversManagementToken(t *testing.T) {
 	f := newSnapshotFixture(t)
 	snapshotRun(t, f, &domain.Operation{Kind: domain.OperationBackup, Payload: json.RawMessage(`{"backup":"snap"}`)})
 	f.store.restore = &domain.Restore{Name: "restore", Source: domain.RestoreSource{Backup: "snap"}, Phase: domain.PhasePending}
+	s := state(t, f.rc)
+	s.RollingKind, s.RollingGeneration = "resources", f.rc.Cluster.Generation
+	if err := s.save(f.rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
 	before := f.agents.generated
 	snapshotRun(t, f, &domain.Operation{Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"restore"}`)})
 	if f.imports != 1 || f.force || f.agents.generated != before+1 || f.store.restore.Phase != domain.PhaseSucceeded {
 		t.Fatalf("imports=%d force=%v generated=%d restore=%+v", f.imports, f.force, f.agents.generated, f.store.restore)
+	}
+	ready(t, f.p, f.rc)
+	if s := state(t, f.rc); s.RollingKind != "" || s.RollingGeneration != 0 {
+		t.Fatal("post-restore convergence retained rolling intent")
 	}
 }
 

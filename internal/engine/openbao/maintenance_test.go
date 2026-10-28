@@ -3,8 +3,10 @@
 package openbao
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"testing"
 	"time"
 )
@@ -95,7 +97,7 @@ func TestMaintenanceResourceChange(t *testing.T) {
 					t.Fatal(err)
 				}
 				if status.ObservedGeneration == rc.Cluster.Generation {
-					if status.Phase != domain.PhaseReady || s.RollingKind != "" {
+					if status.Phase != domain.PhaseReady || s.RollingKind != "" || s.RollingGeneration != 0 {
 						t.Fatalf("completed roll retained lifecycle: %+v rolling=%q", status, s.RollingKind)
 					}
 					break
@@ -109,7 +111,7 @@ func TestMaintenanceResourceChange(t *testing.T) {
 				}
 				if !hasChange {
 					gaps++
-					if result.RequeueAfter <= 0 || s.RollingKind != "resources" {
+					if result.RequeueAfter <= 0 || s.RollingKind != "resources" || s.RollingGeneration != rc.Cluster.Generation {
 						t.Fatal("member boundary lost durable rolling intent", result, s.RollingKind)
 					}
 				}
@@ -123,5 +125,98 @@ func TestMaintenanceResourceChange(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMaintenanceSupersedesAdmittedRoll(t *testing.T) {
+	for _, storage := range []string{"raft", "postgresql"} {
+		for _, boundary := range []string{"last-member", "started-member"} {
+			t.Run(storage+"/"+boundary, func(t *testing.T) {
+				p, rc, _, a := setup(t)
+				ready(t, p, rc)
+				if storage == "postgresql" {
+					ca, err := secret(t.Context(), rc, "tls/ca.crt")
+					if err != nil {
+						t.Fatal(err)
+					}
+					p.options.Bindings = &sealBinding{c: pgbinding.Connection{BindingID: "binding", Host: "postgres.internal", Port: 5432, Username: "owner", PasswordSecretRef: "password", TLS: pgbinding.TLS{Mode: pgbinding.TLSVerifyFull, CAPEM: ca}, CredentialGeneration: 1}}
+					rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"storage":{"type":"postgresql","postgresql":{"cluster":"pg"}}}`)
+					rc.Cluster.Generation++
+					ready(t, p, rc)
+				}
+				rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
+				rc.Cluster.Generation++
+				rc.Cluster.Spec.Components.Engine.Resources.MaxCPU++
+				rc.Cluster.MaintenanceOverrideGeneration = rc.Cluster.Generation
+				admitted := rc.Cluster.Generation
+				syncUntil(t, p, rc, func(s *internalState) bool {
+					if s.RollingKind == "" {
+						return false
+					}
+					for _, m := range s.Members {
+						if boundary == "started-member" && m.Change != nil && m.Change.Started {
+							return true
+						}
+						if boundary == "last-member" && (m.Change != nil || m.Resources != runtimeResources(rc.Cluster.Spec.Components.Engine.Resources)) {
+							return false
+						}
+					}
+					return boundary == "last-member"
+				})
+				status, err := p.Status(t.Context(), rc)
+				if err != nil || status.Phase != domain.PhaseUpdating || status.ObservedGeneration >= admitted {
+					t.Fatalf("admitted boundary lost updating: %+v %v", status, err)
+				}
+				rc.Cluster.Generation++
+				rc.Cluster.Spec.Components.Engine.Resources.MaxCPU++
+				// Reconstruct the provider with only durable receipts retained.
+				p = New(p.options)
+				a.p = p
+				if boundary == "started-member" {
+					syncUntil(t, p, rc, func(s *internalState) bool {
+						for _, m := range s.Members {
+							if m.Change != nil {
+								return false
+							}
+						}
+						return true
+					})
+					status, err = p.Status(t.Context(), rc)
+					if err != nil || status.Phase != domain.PhaseUpdating || state(t, rc).RollingGeneration != admitted {
+						t.Fatalf("supersession discarded unfinished admitted work: %+v %v", status, err)
+					}
+				}
+				for range 3 {
+					result, err := p.Sync(t.Context(), rc)
+					if err != nil || result.ConvergenceError != nil || result.RequeueAfter <= 0 {
+						t.Fatal(result, err)
+					}
+					s := state(t, rc)
+					status, err = p.Status(t.Context(), rc)
+					if err != nil || status.Phase != domain.PhaseReady || status.ObservedGeneration >= admitted || s.RollingKind != "" || s.RollingGeneration != 0 {
+						t.Fatalf("new deferred generation inherited old roll: %+v rolling=%q/%d err=%v", status, s.RollingKind, s.RollingGeneration, err)
+					}
+					for _, m := range s.Members {
+						if m.Change != nil {
+							t.Fatal("superseding closed-window generation created a receipt")
+						}
+					}
+				}
+				rc.Cluster.MaintenanceOverrideGeneration = rc.Cluster.Generation
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				status, err = p.Status(t.Context(), rc)
+				if err != nil || status.Phase != domain.PhaseUpdating || state(t, rc).RollingGeneration != rc.Cluster.Generation {
+					t.Fatalf("newly admitted generation lost its roll: %+v %v", status, err)
+				}
+				ready(t, p, rc)
+				status, err = p.Status(t.Context(), rc)
+				s := state(t, rc)
+				if err != nil || status.Phase != domain.PhaseReady || status.ObservedGeneration != rc.Cluster.Generation || s.RollingKind != "" || s.RollingGeneration != 0 {
+					t.Fatalf("released generation did not complete: %+v %v", status, err)
+				}
+			})
+		}
 	}
 }

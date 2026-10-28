@@ -19,8 +19,9 @@ import (
 type internalState struct {
 	UID   string `json:"uid"`
 	Phase string `json:"phase"`
-	// RollingKind spans member receipts until the whole desired state converges.
+	// RollingKind spans member receipts for the admitted desired generation.
 	RollingKind               string                    `json:"rollingKind,omitempty"`
+	RollingGeneration         int64                     `json:"rollingGeneration,omitempty"`
 	Members                   []*member                 `json:"members"`
 	NextIndex                 int                       `json:"nextIndex"`
 	ConfigVersion             int64                     `json:"configVersion"`
