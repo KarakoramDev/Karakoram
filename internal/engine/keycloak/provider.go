@@ -135,8 +135,27 @@ func (*Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Components.Engine.Replicas == 0 {
 		s.Components.Engine.Replicas = 1
 	}
-	if s.Components.Engine.Resources == (domain.Resources{}) {
-		s.Components.Engine.Resources = defaults().Resources
+	r, d := &s.Components.Engine.Resources, defaults().Resources
+	if r.CPUMode == "" {
+		r.CPUMode = d.CPUMode
+	}
+	if r.MinCPU == 0 {
+		r.MinCPU = d.MinCPU
+	}
+	if r.MaxCPU == 0 {
+		r.MaxCPU = max(r.MinCPU, d.MaxCPU)
+	}
+	if r.MinRAM == 0 {
+		r.MinRAM = d.MinRAM
+	}
+	if r.MaxRAM == 0 {
+		r.MaxRAM = max(r.MinRAM, d.MaxRAM)
+	}
+	if r.MinDisk == 0 {
+		r.MinDisk = d.MinDisk
+	}
+	if r.MaxDisk == 0 {
+		r.MaxDisk = max(r.MinDisk, d.MaxDisk)
 	}
 	if s.TLS.Mode == "" {
 		s.TLS.Mode = "requireTLS"

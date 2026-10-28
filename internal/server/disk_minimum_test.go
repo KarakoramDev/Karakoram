@@ -4,7 +4,6 @@
 package server
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -33,7 +32,7 @@ func TestProviderDiskMinimumAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			spec := `{"provider":"` + tc.name + `","components":{"engine":{"resources":{"cpuMode":"SHARED","minCpu":1,"maxCpu":1,"minRam":2,"maxRam":2,"minDisk":1,"maxDisk":1}}}` + tc.options + `}`
+			spec := `{"provider":"` + tc.name + `","components":{"engine":{"resources":{"minDisk":1,"maxDisk":1}}}` + tc.options + `}`
 			create := `{"name":"small","spec":` + spec + `}`
 			for _, prefix := range []string{"/api/v1/dry-run/clusters", "/api/v1/clusters"} {
 				want := 200
@@ -45,19 +44,19 @@ func TestProviderDiskMinimumAdmission(t *testing.T) {
 					t.Fatalf("POST %s: %d %s", prefix, w.Code, w.Body.String())
 				}
 			}
-			// A full replacement copied from returned defaults must not encounter
-			// a stricter disk floor than the provider's accepted explicit input.
+			// A replacement with only disk bounds must default each omitted field,
+			// just like create, while PATCH retains the existing CPU/RAM bounds.
 			c, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "small"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			body, err := json.Marshal(map[string]any{"spec": specAPI(c.Spec)})
-			if err != nil {
-				t.Fatal(err)
+			if c.Spec.Components.Engine.Resources.MinDisk != 1 || c.Spec.Components.Engine.Resources.MaxDisk != 1 {
+				t.Fatal("explicit disk bounds were replaced by defaults")
 			}
+			body := `{"spec":` + spec + `}`
 			for _, prefix := range []string{"/api/v1/dry-run/clusters/", "/api/v1/clusters/"} {
 				for _, method := range []string{"PUT", "PATCH"} {
-					request := string(body)
+					request := body
 					if method == "PATCH" {
 						request = `{"spec":{"components":{"engine":{"resources":{"minDisk":1,"maxDisk":1}}}}}`
 					}

@@ -57,6 +57,67 @@ func TestBuiltInProviderCatalogConforms(t *testing.T) {
 	}
 }
 
+func TestBuiltInProviderPartialResourceDefaults(t *testing.T) {
+	s, _, _ := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	for _, provider := range engineProviders(engineOptions{Store: s.Store, Bindings: bindings}) {
+		for _, topology := range provider.Describe().Topologies {
+			for name, info := range topology.Components {
+				for _, field := range []string{"cpuMode", "minCpu", "maxCpu", "minRam", "maxRam", "minDisk", "maxDisk"} {
+					t.Run(provider.Name()+"/"+topology.Type+"/"+name+"/"+field, func(t *testing.T) {
+						defaults := resourcesAPI(info.Defaults.Resources)
+						encoded, err := json.Marshal(defaults)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var fields map[string]json.RawMessage
+						if err := json.Unmarshal(encoded, &fields); err != nil {
+							t.Fatal(err)
+						}
+						// Supply just one catalog value: all other bounds must
+						// still be filled, including for optional components.
+						partial, err := json.Marshal(map[string]json.RawMessage{field: fields[field]})
+						if err != nil {
+							t.Fatal(err)
+						}
+						var resources api.ResourcesInput
+						if err := json.Unmarshal(partial, &resources); err != nil {
+							t.Fatal(err)
+						}
+						spec := domain.ClusterSpec{Provider: provider.Name(), Topology: domain.Topology{Type: topology.Type}}
+						component := domain.ComponentSpec{Replicas: info.Defaults.Replicas, Resources: resourcesDomain(&resources)}
+						switch name {
+						case "engine":
+							spec.Components.Engine = component
+						case "configServer":
+							spec.Components.ConfigServer = component
+						case "router":
+							spec.Components.Router = component
+						default:
+							spec.Components.Extra = map[string]domain.ComponentSpec{name: component}
+						}
+						provider.ApplyDefaults(&spec)
+						var got domain.Resources
+						switch name {
+						case "engine":
+							got = spec.Components.Engine.Resources
+						case "configServer":
+							got = spec.Components.ConfigServer.Resources
+						case "router":
+							got = spec.Components.Router.Resources
+						default:
+							got = spec.Components.Extra[name].Resources
+						}
+						if !reflect.DeepEqual(got, info.Defaults.Resources) {
+							t.Fatalf("partial %s: got %+v, want catalog defaults %+v", field, got, info.Defaults.Resources)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestKeycloakCatalogWithBindingService(t *testing.T) {
 	s, _, token := testServer(t)
 	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
