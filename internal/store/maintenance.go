@@ -97,16 +97,27 @@ func maintenanceCandidate(ctx context.Context, tx *sql.Tx, cluster string, inclu
 		if err = put(ctx, tx, "operation", cluster, op.ID, op, "", "", string(op.Phase), false); err != nil {
 			return nil, nil, err
 		}
-		var exists bool
-		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM events WHERE namespace=? AND cluster=? AND json_extract(data,'$.operation')=? AND json_extract(data,'$.reason')='MaintenanceWindowWait')", ref.Namespace, ref.Name, op.ID).Scan(&exists); err != nil {
+		if err = recordMaintenanceWait(ctx, tx, op); err != nil {
 			return nil, nil, err
-		}
-		if !exists {
-			event := domain.Event{Namespace: ref.Namespace, Cluster: ref.Name, Operation: op.ID, Actor: op.Actor, Resource: "clusters", Target: ref.Name, Type: "Normal", Reason: "MaintenanceWindowWait", Message: op.Message, CreatedAt: now}
-			if err = appendEvent(ctx, tx, &event); err != nil {
-				return nil, nil, fmt.Errorf("recording maintenance wait: %w", err)
-			}
 		}
 	}
 	return selected, wait, nil
+}
+
+// recordMaintenanceWait shares the durable, per-operation wait receipt between
+// queued imperative actions and desired-generation tracking.
+func recordMaintenanceWait(ctx context.Context, tx *sql.Tx, op *domain.Operation) error {
+	var exists bool
+	ref := domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM events WHERE namespace=? AND cluster=? AND json_extract(data,'$.operation')=? AND json_extract(data,'$.reason')='MaintenanceWindowWait')", domain.NormalizedNamespace(ref.Namespace), ref.Name, op.ID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	event := domain.Event{Namespace: domain.NormalizedNamespace(ref.Namespace), Cluster: ref.Name, Operation: op.ID, Actor: op.Actor, Resource: "clusters", Target: ref.Name, Type: "Normal", Reason: "MaintenanceWindowWait", Message: op.Message, CreatedAt: op.UpdatedAt}
+	if err := appendEvent(ctx, tx, &event); err != nil {
+		return fmt.Errorf("recording maintenance wait: %w", err)
+	}
+	return nil
 }

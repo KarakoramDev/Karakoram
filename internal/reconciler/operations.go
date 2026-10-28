@@ -239,6 +239,27 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			continue
 		}
+		if (op.Kind == domain.OperationUpdate || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationTLS) &&
+			convergenceAttempted && cause == nil && op.TargetGeneration == c.Generation &&
+			c.Status.ObservedGeneration < op.TargetGeneration && maintenance.Waiting(c) &&
+			!op.IgnoreMaintenanceWindow && !op.CancelRequested &&
+			(c.MaintenanceOverrideGeneration == 0 || c.MaintenanceOverrideGeneration != c.Generation) {
+			// Desired-state tracking is not an imperative queue claim. Keep
+			// never-started work Pending, and preserve Running ownership when
+			// an earlier member already crossed its disruption boundary.
+			op.Step = "WaitingForWindow"
+			for _, condition := range c.Status.Conditions {
+				if condition.Type == "MaintenanceWindow" && condition.Reason == "WaitingForWindow" {
+					op.Message = condition.Message
+					break
+				}
+			}
+			m.maintenanceBudget(op, c, true)
+			if err := m.opts.Store.UpdateOperation(ctx, op); err != nil {
+				return err
+			}
+			continue
+		}
 		if op.Phase == domain.PhasePending {
 			op.Phase, op.StartedAt = domain.PhaseRunning, &now
 		}

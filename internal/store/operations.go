@@ -148,6 +148,11 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), false); err != nil {
 		return err
 	}
+	if domain.IsConvergenceOperation(op.Kind) && op.Step == "WaitingForWindow" && !op.Terminal() {
+		if err = recordMaintenanceWait(ctx, tx, op); err != nil {
+			return err
+		}
+	}
 	if err = finalizeOperationRecord(ctx, tx, op); err != nil {
 		return err
 	}

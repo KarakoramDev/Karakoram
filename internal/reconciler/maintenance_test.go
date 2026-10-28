@@ -98,7 +98,11 @@ func TestMaintenanceWaitExcludedFromBudgets(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, err := st.GetOperation(t.Context(), op.ID)
-			if err != nil || got.Elapsed > time.Second || got.Phase != domain.PhaseRunning {
+			wantPhase := domain.PhaseRunning
+			if tracking {
+				wantPhase = domain.PhasePending
+			}
+			if err != nil || got.Elapsed > time.Second || got.Phase != wantPhase {
 				t.Fatal(got, err)
 			}
 			observed, err := st.GetCluster(t.Context(), c.Ref())
@@ -274,5 +278,90 @@ func TestRunningRolloutWaitBudgetResumesForRecovery(t *testing.T) {
 	m.budgets[c.Ref().Key()][op.ID] = budget
 	if elapsed := m.elapsedOperationTime(op, false); elapsed < time.Minute {
 		t.Fatalf("member recovery execution budget did not resume: %s", elapsed)
+	}
+}
+
+func TestDesiredGenerationMaintenanceWaitReceipt(t *testing.T) {
+	for _, started := range []bool{false, true} {
+		t.Run(map[bool]string{false: "pending", true: "already-running"}[started], func(t *testing.T) {
+			p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+			m, st := newTestManager(t, p)
+			now := m.opts.Context.Clock.Now()
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}, Status: domain.ClusterStatus{
+				Phase: domain.PhaseReady, Message: "Temporal is Ready",
+				Conditions: []domain.Condition{{Type: "MaintenanceWindow", Status: "False", Reason: "WaitingForWindow", Message: "Waiting for maintenance window; next start 2026-11-01T02:00:00Z"}},
+			}}
+			op := &domain.Operation{Kind: domain.OperationUpdate}
+			if err := st.CreateCluster(store.WithOperation(t.Context(), op), c); err != nil {
+				t.Fatal(err)
+			}
+			if started {
+				op.Phase, op.StartedAt = domain.PhaseRunning, &now
+				if err := st.UpdateOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for range 3 {
+				if err := m.trackingOperations(t.Context(), p, c, nil, true); err != nil {
+					t.Fatal(err)
+				}
+				got, err := st.GetOperation(t.Context(), op.ID)
+				if err != nil || got.Phase != op.Phase || (got.StartedAt != nil) != started ||
+					got.Attempts != 0 || got.Elapsed != 0 || got.Step != "WaitingForWindow" ||
+					got.Message != c.Status.Conditions[0].Message {
+					t.Fatal("maintenance wait consumed execution or lost diagnostics", got, err)
+				}
+			}
+			events, err := st.ListEvents(t.Context(), store.EventFilter{Cluster: c.Name, Limit: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			waits := 0
+			for _, event := range events {
+				if event.Reason == "MaintenanceWindowWait" && event.Operation == op.ID {
+					waits++
+				}
+			}
+			if waits != 1 {
+				t.Fatal("maintenance event must be durable and deduplicated", waits)
+			}
+			c.Status.Conditions = nil
+			c.Status.ObservedGeneration = c.Generation
+			if err := m.trackingOperations(t.Context(), p, c, nil, true); err != nil {
+				t.Fatal(err)
+			}
+			got, err := st.GetOperation(t.Context(), op.ID)
+			if err != nil || got.Phase != domain.PhaseSucceeded || got.StartedAt == nil {
+				t.Fatal("open-window convergence did not finish the same receipt", got, err)
+			}
+		})
+	}
+}
+
+func TestReconcileDoesNotStartDeferredDesiredGeneration(t *testing.T) {
+	p := &operationProvider{fakeProvider: lifecycleProvider().fakeProvider}
+	p.syncFn = func(rc *engine.Context) (engine.Result, error) {
+		return rc.WaitForWindow(), nil
+	}
+	p.statusFn = func(rc *engine.Context) (domain.ClusterStatus, error) {
+		return domain.ClusterStatus{Phase: domain.PhaseReady, Message: "Temporal is Ready", ObservedGeneration: rc.Cluster.Status.ObservedGeneration}, nil
+	}
+	m, st := newTestManager(t, p)
+	m.opts.Context.Clock = fixedClock{now: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)}
+	c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{
+		Provider: "fake", Maintenance: &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}},
+	}}
+	op := &domain.Operation{Kind: domain.OperationUpdate}
+	if err := st.CreateCluster(store.WithOperation(t.Context(), op), c); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := m.reconcile(t.Context(), c.Ref()); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetOperation(t.Context(), op.ID)
+		if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Elapsed != 0 || got.Step != "WaitingForWindow" {
+			t.Fatal("pre-sync tracking started deferred desired work", got, err)
+		}
 	}
 }

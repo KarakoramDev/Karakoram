@@ -42,8 +42,12 @@ Healing and system lost-volume replacement, delete/suspend/resume, create and
 scale-out, backup/restore/initial restore, credential rotation, agent transport
 certificate renewal, and certificates with at most seven days remaining are
 exempt. A queued disruptive operation does not block exempt queued work behind
-it. Closed-window operations remain Pending without attempts or execution-budget
-consumption, with a durable `MaintenanceWindowWait` event and next-start message.
+it. Never-started closed-window operations remain Pending without attempts or
+execution-budget consumption, with a durable `MaintenanceWindowWait` event and
+next-start message. This includes desired-generation PUT/PATCH receipts when
+convergence defers their disruptive change: a healthy engine's Ready message
+does not replace the operation's `WaitingForWindow` diagnostic. An operation
+already Running retains that phase while waiting for its next member disruption.
 Engine driver waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
 imperative operation pauses its execution budget only when that invocation
 actually waits at its own next-disruption gate; a stale cluster-wide condition

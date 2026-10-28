@@ -483,12 +483,8 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			continue
 		}
 		operation = op.ID
-		if op.Phase == domain.PhasePending {
-			now := m.opts.Context.Clock.Now()
-			op.Phase, op.StartedAt = domain.PhaseRunning, &now
-		}
-		// Persist the observation before trackingOperations reloads this record;
-		// otherwise the interval since the preceding reconciliation is lost.
+		// Persist elapsed observations, but leave Pending work unstarted until
+		// trackingOperations sees whether this sweep reached a maintenance gate.
 		if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
 			return 0, err
 		}
