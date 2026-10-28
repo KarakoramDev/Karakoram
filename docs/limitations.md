@@ -70,6 +70,15 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
+## Known issues in v0.4.1
+
+Fixes for these are planned for v0.4.2; details and workarounds are in [known issues in v0.4.1](upgrade.md#known-issues-in-v041).
+
+- MySQL Group Replication cannot form on any provider: a generated group-recovery credential exceeds MySQL's length limit. Use single-member MySQL, or PXC on Nomad, until v0.4.2.
+- PXC cannot form on Zerops: the platform does not permit the member start-up step, so the first member never starts.
+- OpenBao can briefly report Ready between member replacements during a rolling update (v0.4.1 regression); check that no operation is running before relying on Ready.
+- Clusters created from a backup (clone) for OpenBao, MySQL, PXC, Neo4j and Weaviate restore their data but never report Ready (`RestoreIncomplete`, create operation keeps running); verify the data natively.
+
 ## Engine limits
 
 - [MongoDB limits](mongodb/README.md#limits)

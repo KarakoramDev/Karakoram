@@ -63,8 +63,9 @@ deployment. A RAM-only resize is not proof that a new agent was installed.
 The Group Replication message-cache fix specifically needs new data-member
 agents; the PXC admission floor itself is control-plane-only. See
 [MySQL resource guidance](mysql/configuration.md#mysql-group-replication-only).
-Group Replication and PXC formation on Zerops remain known issues in this
-release; the higher floor is not a bootstrap workaround.
+The higher floor is not a bootstrap workaround: MySQL Group Replication cannot
+form on any provider in this release, and PXC cannot form on Zerops. See
+[known issues in v0.4.1](#known-issues-in-v041).
 
 Explicit 1 GB disks are now admitted for Keycloak, Neo4j and Weaviate, matching
 their engine minimums instead of the old shared 5 GB request floor. This does
@@ -337,6 +338,33 @@ writes, verify recovered application data and authentication through the
 coordinator endpoint. This is **new-target recovery**, not success of the
 original failed restore. See [coordinated Citus recovery](postgres/distributed.md#coordinated-backup-and-pitr)
 and [failed restore and client holds](postgres/backups.md#failed-restore-and-client-holds).
+
+### Known issues in v0.4.1
+
+These issues are present in v0.4.1; fixes are planned for v0.4.2.
+
+- **MySQL Group Replication cannot form on any provider** (v0.4.0 and v0.4.1).
+  A generated internal credential used for group recovery exceeds MySQL's
+  length limit, so the group never completes bootstrap. Do not force bootstrap
+  or edit coordinator state to bypass the failure. Until v0.4.2, use
+  single-member MySQL, or PXC on Nomad, where a 3-member cluster with 2 GiB
+  data members and ProxySQL formed in live checks.
+- **PXC cannot form on Zerops** (v0.4.0 and v0.4.1). The platform does not
+  permit the member start-up step, so the first member never starts.
+- **OpenBao can briefly report Ready during a rolling update** (a v0.4.1
+  regression; v0.4.0 is not affected). Between member replacements the cluster
+  may show Ready while the update operation is still running. Data and the
+  update itself are correct; automation that waits for Ready should also check
+  that no operation is running.
+- **Clusters created from a backup (clone) never report Ready for OpenBao,
+  MySQL, PXC, Neo4j and Weaviate** (also in v0.4.0). The data is restored, but
+  the cluster stays `RestoreIncomplete` and the create operation keeps running.
+  Verify the data with the engine's own tools and treat the cluster as usable
+  once those native checks pass.
+
+The PostgreSQL `postgres` administrator password also cannot be rotated yet; see
+[its containment procedure](#postgresql-administrator-password-cannot-be-rotated-yet).
+Temporal remains unsupported on Zerops.
 
 ## Upgrading from v0.3.0 to v0.4.0
 
