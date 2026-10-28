@@ -50,13 +50,15 @@ func databaseMetrics(ctx context.Context, c *pgx.Conn) []agent.Metric {
 	if c.QueryRow(ctx, "SELECT pg_catalog.pg_is_in_recovery()").Scan(&recovery) == nil {
 		var lag float64
 		name := "replication_lag_bytes"
+		help := "Maximum primary-observed WAL distance to replica replay, including transport and replay lag, in bytes."
 		sql := "SELECT COALESCE(pg_catalog.max(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_current_wal_lsn(),replay_lsn)),0)::double precision FROM pg_catalog.pg_stat_replication"
 		if recovery {
 			name = "replay_backlog_bytes"
+			help = "Replica-local received-but-not-replayed WAL in bytes; excludes transport lag."
 			sql = "SELECT COALESCE(pg_catalog.pg_wal_lsn_diff(pg_catalog.pg_last_wal_receive_lsn(),pg_catalog.pg_last_wal_replay_lsn()),0)::double precision"
 		}
 		if c.QueryRow(ctx, sql).Scan(&lag) == nil {
-			result = append(result, metric(name, "WAL replay distance in bytes; replica-local backlog excludes transport lag.", lag, false, nil))
+			result = append(result, metric(name, help, lag, false, nil))
 		}
 		if !recovery {
 			var slots []pgspec.ReplicationSlot
