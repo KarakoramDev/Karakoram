@@ -66,7 +66,15 @@ func (*Core) ensureSecrets(ctx context.Context, rc *engine.Context, s *state) er
 	}
 	for _, name := range systemNames {
 		if _, e := secret(ctx, rc, "users/"+name); missing(e) {
-			value, e := secrets.Password()
+			// START GROUP_REPLICATION accepts at most 32 recovery-password
+			// characters (ER_GROUP_REPLICATION_PASSWORD_LENGTH, MySQL 3972).
+			// Generate the account credential at that length; never truncate
+			// an existing credential independently of its native SQL account.
+			length := 40
+			if rc.Cluster.Spec.Provider == "mysql" && name == "kk_repl" {
+				length = 32
+			}
+			value, e := secrets.RandomString(length)
 			if e != nil {
 				return e
 			}

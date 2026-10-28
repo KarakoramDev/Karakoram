@@ -170,6 +170,13 @@ func groupActionDiagnostic(d GroupDeps, action string, err error) string {
 	if errors.As(err, &native) {
 		prefix += fmt.Sprintf("MySQL %d: ", native.Number)
 		message = native.Message
+		// ER_GROUP_REPLICATION_PASSWORD_LENGTH has no credential value, but
+		// its native wording contains "password", so the atomic security
+		// filter intentionally rejects it. Render trusted static semantics
+		// by number instead of exempting arbitrary credential-bearing text.
+		if native.Number == 3972 {
+			message = "Group Replication recovery credential exceeds the maximum length of 32 characters"
+		}
 	}
 	message = prefix + boundGroupDiagnostic(sanitizeGroupDiagnostic(d.GroupSpec(), message), 512)
 	if tail := recentGroupErrors(d); tail != "" {

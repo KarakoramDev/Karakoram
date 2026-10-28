@@ -96,3 +96,16 @@ func TestGroupDiagnosticLogRecordsAreAtomic(t *testing.T) {
 		})
 	}
 }
+
+func TestGroupDiagnosticRecoveryPasswordLength(t *testing.T) {
+	d := &rejectedGroupDeps{s: testGroupSpec(), dir: t.TempDir()}
+	for _, message := range []string{
+		"The START GROUP_REPLICATION command failed since the password provided for the recovery channel exceeds the maximum length of 32 characters.",
+		"PASSWORD='historical-value'\n-----BEGIN PRIVATE KEY-----\nhistorical-private-material",
+	} {
+		got := groupActionDiagnostic(d, myspec.ActionBootstrap, &mysqldriver.MySQLError{Number: 3972, Message: message})
+		if !strings.Contains(got, "MySQL 3972: Group Replication recovery credential exceeds the maximum length of 32 characters") || strings.Contains(got, "omitted") || strings.Contains(got, "historical-") {
+			t.Fatal("native error 3972 did not retain only trusted credential-length semantics")
+		}
+	}
+}

@@ -220,7 +220,10 @@ need replacement through supported lifecycle to gain these diagnostics; a
 control-plane-only update cannot add them retroactively.
 Native messages mentioning recovery credentials, password/identity statements or
 key/certificate material are omitted as whole records, including continuations,
-even when the credentials differ from the current configuration. Log excerpts
+even when the credentials differ from the current configuration. Error **3972**
+(`ER_GROUP_REPLICATION_PASSWORD_LENGTH`) instead renders a trusted static
+explanation: the recovery credential exceeds MySQL's **32-character** maximum;
+the raw message is never exempted from credential filtering. Log excerpts
 accept only complete timestamp-delimited GR/GCS/XCom/recovery records carrying a
 MySQL error code; a leading partial record in the bounded file window is skipped.
 
@@ -237,6 +240,17 @@ diagnostics, correct the native startup cause, then use owner-authorized normal
 delete and fresh create with corrected control-plane/member artifacts. This is
 the supported clean recovery, not in-place retry of a consumed epoch. Mere
 deletion/re-creation with unchanged artifacts/configuration is not a native fix.
+
+New MySQL clusters generate a 32-character random `kk_repl` credential, matching
+the native `START GROUP_REPLICATION` recovery-password limit in MySQL 8.0/8.4.
+Older control planes generated 40 characters, causing native error 3972 before
+Group Replication could form. Updating the control plane corrects generation for
+fresh clusters, but deliberately does not truncate stored credentials: those
+must continue matching already-created SQL accounts. A disposable cluster that
+has consumed its epoch with error 3972 therefore needs delete and fresh create
+after the corrected control plane is deployed; updating agents alone is not a
+repair of its existing credential or epoch.
+
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
