@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
@@ -662,7 +663,13 @@ func RegisterGroupRoutes(mux *http.ServeMux, d GroupDeps) {
 				}
 			}
 			if err != nil {
-				http.Error(w, "MySQL group action unavailable", http.StatusServiceUnavailable)
+				if action == myspec.ActionBootstrap || action == myspec.ActionStartGroup {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_ = json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: groupActionDiagnostic(d, action, err)})
+				} else {
+					http.Error(w, "MySQL group action unavailable", http.StatusServiceUnavailable)
+				}
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")

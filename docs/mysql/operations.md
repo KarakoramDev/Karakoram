@@ -209,6 +209,16 @@ does not establish that no group previously formed. Do not retry bootstrap on a
 different member, decrement the identity epoch, edit managed flags, or use the
 PXC-only `recover-quorum` action for this condition.
 
+Corrected data-member agents return a bounded, credential-redacted native error
+on bootstrap and start-group failures. Inspect the `ReconcileError` event for the
+MySQL error number/message and, when available, recent relevant entries from the
+managed `mysql-error.log`. The log excerpt is explicitly historical and may
+predate the request; it is not proof that a particular statement executed.
+Unavailable logs do not suppress the primary error. The safety condition remains
+`BootstrapEpochConsumed`; it does not authorize another attempt. Existing agents
+need replacement through supported lifecycle to gain these diagnostics; a
+control-plane-only update cannot add them retroactively.
+
 Preserve native error logs, effective GR/listener/TLS variables, member identities
 and executed GTIDs before recovery. For a previously formed group, fence/stop all
 members and use the full-outage evidence requirements above; automatic all-offline
