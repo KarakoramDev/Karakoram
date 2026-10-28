@@ -348,6 +348,12 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	if m.Pending != nil && !terminalEndpointRepair(m.Pending) {
 		if m.Pending.Failed && !m.Pending.Uncertain {
 			s.Status = infra.StatusFailed
+			// A failed build is observable state, not a failed identity lookup.
+			// Engines must be able to verify ownership before explicitly deploying
+			// again. Keep the receipt; observation must never resubmit the build.
+			if m.Pending.Action == "deploy" {
+				return s, nil
+			}
 			return s, silentFailure("previous lifecycle operation failed; consult Dokploy deployment logs and explicitly retry the operation")
 		}
 		state, err := b.pollOperation(ctx, encodeOp(*m.Pending))
@@ -356,6 +362,9 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		}
 		if state.Failed && (m.Pending.Action != "endpoint-repair" || state.Status == "stalled") {
 			s.Status = infra.StatusFailed
+			if m.Pending.Action == "deploy" && state.Status != "stalled" {
+				return s, nil
+			}
 			return s, silentFailure(state.Message)
 		}
 		if !state.Done && !state.Failed {
@@ -401,7 +410,7 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	var err error
 	if a.Status == "error" || len(ds) > 0 && (ds[0].Status == "error" || ds[0].Status == "cancelled") {
 		s.Status = infra.StatusFailed
-		return s, silentFailure("Dokploy deployment failed or was cancelled; consult deployment logs and explicitly redeploy after correcting the failure")
+		return s, nil
 	}
 	for _, d := range ds {
 		if d.Status == "running" || d.Status == "queued" {

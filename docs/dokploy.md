@@ -69,10 +69,14 @@ by Karakoram's engine-level convergence gates. See
 
 Synchronous Swarm `application.reload` operations reuse an existing image and do not
 enter Dokploy's build queue, so they do not consume deployment slots. Existing pending
-build/lost-delivery fences still protect lifecycle operations. Failed runtime builds
-already require explicit operator action; a failed volume-wipe deployment/task now
-also remains terminal, retaining the holder, rather than resubmitting on every delete
-reconciliation. Ambiguous wipe submission responses retain their original fence.
+build/lost-delivery fences still protect lifecycle operations. A terminal failed
+runtime build is returned as a service with `Failed` status, not as an identity
+lookup error. Engines can verify ownership and submit a fresh admitted deployment
+within their retry budget; observation alone never retries the build. A stalled
+or unknown-outcome build remains fenced and must not be superseded. A failed
+volume-wipe deployment/task remains terminal, retaining the holder, rather than
+resubmitting on every delete reconciliation. Ambiguous wipe submission responses
+retain their original fence.
 
 Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
 change. A pure count reduction back to an already-running count therefore uses

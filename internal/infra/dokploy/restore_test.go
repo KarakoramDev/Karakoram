@@ -328,6 +328,10 @@ func TestObservationRefusesUnsafeRestoration(t *testing.T) {
 				if err != nil || s.Status != infra.StatusCreating {
 					t.Fatalf("pending: %+v %v", s, err)
 				}
+			} else if variant == "failed-deployment" {
+				if err != nil || s.Status != infra.StatusFailed {
+					t.Fatalf("failed deployment identity unavailable: %+v %v", s, err)
+				}
 			} else if err == nil || s.Status != infra.StatusFailed {
 				t.Fatalf("unsafe variant was not diagnosed: %+v %v", s, err)
 			}
