@@ -192,3 +192,38 @@ After a crash, `grastate.dat` often contains sequence `-1`; `safe_to_bootstrap` 
 PXC state transfer uses upstream SST behavior rather than custom keep-list overrides. Managed data-identity tracking permits UUID regeneration only for an explicitly authorized state transfer and records the accepted identity after Synced state. Re-formation/restoration may explicitly reset a stopped joiner's own dataset for SST; an arbitrary identity mismatch is not permission to erase or initialize it. This is distinct from independent [backup restore](backups.md#offline-restore-and-clone), which creates new replication history.
 
 If recovery is blocked, preserve all remaining data and position evidence, isolate application traffic and resolve the missing observations or recover from a verified backup. Never reset GTIDs, invent a Galera position or edit bootstrap flags across multiple members to force a green status.
+
+### Group Replication bootstrap epoch consumed
+
+`GroupReformationBlocked=True` with reason `BootstrapEpochConsumed` means the
+selected seed durably claimed its bootstrap epoch but is not observed as an
+`ONLINE` primary. The claim is recorded **before** enabling bootstrap or sending
+`START GROUP_REPLICATION`. It is an at-most-once safety receipt, not a successful
+join receipt. Even a rejected enable statement can therefore consume an epoch.
+
+An HTTP 503 from `/v1/mysql/bootstrap` does not prove that Group Replication never
+started. The same response covers native configuration/permission errors, a lost
+START reply, failure to clear the bootstrap flag, and failure while observing or
+recording an ONLINE join. An OFFLINE snapshot or zero currently ONLINE members
+does not establish that no group previously formed. Do not retry bootstrap on a
+different member, decrement the identity epoch, edit managed flags, or use the
+PXC-only `recover-quorum` action for this condition.
+
+Preserve native error logs, effective GR/listener/TLS variables, member identities
+and executed GTIDs before recovery. For a previously formed group, fence/stop all
+members and use the full-outage evidence requirements above; automatic all-offline
+recovery requires the recorded formation to have completed. Retained-volume
+suspend/resume also collects every member's stopped, initialized identity and
+offline GTIDs before selecting a seed. Neither is an unconditional epoch reset.
+Missing observations require resolving the cause or recovering a verified backup.
+
+For a **disposable, never-formed create with no application data**, preserve the
+diagnostics, correct the native startup cause, then use owner-authorized normal
+delete and fresh create with corrected control-plane/member artifacts. This is
+the supported clean recovery, not in-place retry of a consumed epoch. Mere
+deletion/re-creation with unchanged artifacts/configuration is not a native fix.
+If the create may contain valuable data, retain its volumes and seek
+evidence-based recovery instead; there is no public Group Replication
+`reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
+agent's durable claim or change its native renderer. MySQL does not support
+`upgrade-agents`.
