@@ -351,3 +351,38 @@ func TestObservationErrorsCannotReplaceLifecycleOrInventory(t *testing.T) {
 		})
 	}
 }
+
+func TestObservationErrorPreservesAuthoritativeFailure(t *testing.T) {
+	at := time.Now()
+	for _, phase := range []domain.Phase{domain.PhaseFailed, domain.PhaseError} {
+		t.Run(string(phase), func(t *testing.T) {
+			rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{Status: readyObservation(at)}}
+			p := observationProvider{observe: func(context.Context, *Context) (domain.ClusterStatus, error) {
+				return domain.ClusterStatus{Phase: phase,
+					Conditions: []domain.Condition{{Type: "InitialDataSource", Status: "False", Reason: "RestoreAborted"}}}, errors.New("restore aborted")
+			}}
+			got, err := ObserveStatus(t.Context(), p, rc)
+			if err == nil || got.Phase != phase || len(got.Members) != 1 || got.Members[0].Name != "m0" {
+				t.Fatalf("authoritative failure lost: %+v %v", got, err)
+			}
+			if got.Members[0].Health || got.Members[0].Agent.Healthy || !got.ObservedAt.IsZero() || got.ObservationEpoch != "" {
+				t.Fatal("terminal failure retained positive availability", got)
+			}
+			if got.Conditions[0].Reason != "RestoreAborted" {
+				t.Fatal("terminal diagnostic lost", got)
+			}
+		})
+	}
+}
+
+func TestObservationFailureWithoutHistoricalInventoryRetainsObservedIdentities(t *testing.T) {
+	at := time.Now()
+	rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{}}
+	p := observationProvider{observe: func(context.Context, *Context) (domain.ClusterStatus, error) {
+		return readyObservation(at), errors.New("secondary platform read failed")
+	}}
+	got, err := ObserveStatus(t.Context(), p, rc)
+	if err == nil || got.Phase != domain.PhaseDegraded || len(got.Members) != 1 || got.Members[0].Name != "m0" || got.Members[0].Health || got.Members[0].Agent.Healthy {
+		t.Fatalf("first failed observation lost known identity or retained health: %+v %v", got, err)
+	}
+}

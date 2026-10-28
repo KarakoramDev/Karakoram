@@ -139,7 +139,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	defer func() {
 		if statusErr != nil {
-			if rc.Cluster.Status.Phase != "" {
+			if rc.Cluster.Status.Phase != "" && status.Phase != domain.PhaseFailed && status.Phase != domain.PhaseError {
 				status.Phase = rc.Cluster.Status.Phase
 			}
 			status = engine.UnknownObservation(status, now(rc), "ObservationFailed")

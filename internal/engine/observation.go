@@ -308,8 +308,15 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 		}
 		if attempt == 1 || ctx.Err() != nil {
 			if err != nil {
-				status.Phase = previous.Phase
-				status.Members = previous.Members
+				// Failure/abort owners may deliberately publish a terminal
+				// lifecycle with an error. Do not turn that safety fence back
+				// into the previously serving phase.
+				if previous.Phase != "" && status.Phase != domain.PhaseFailed && status.Phase != domain.PhaseError {
+					status.Phase = previous.Phase
+				}
+				if len(previous.Members) > 0 {
+					status.Members = previous.Members
+				}
 				status.ObservedGeneration = previous.ObservedGeneration
 				if len(status.Conditions) == 0 {
 					status.Conditions = previous.Conditions

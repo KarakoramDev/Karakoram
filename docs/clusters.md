@@ -125,6 +125,10 @@ neither renews the observation lease nor advances `observedGeneration`.
 This applies to both ordinary reconciliation and independent availability
 renewal across all registered providers. A complete successful negative
 observation can still report fresh health for reachable siblings.
+An authoritative `Failed` or `Error` result (for example, an aborted initial
+restore) remains terminal even when returned with an error; it must not be
+replaced by the formerly serving phase. If no historical member inventory exists,
+identities from the partial observation remain visible with health withdrawn.
 
 Formed clusters request health observation at most five seconds after the
 preceding reconciliation. Health is observed before recovery `Sync`; withdrawn
