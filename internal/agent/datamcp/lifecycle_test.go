@@ -69,9 +69,9 @@ func TestApplyLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// crypto/rand.Text currently emits 26 unpadded RFC 4648 base32 characters
-	// (128+ bits): https://pkg.go.dev/crypto/rand#Text.
-	if len(secret) != 26 || strings.Trim(string(secret), "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
+	// crypto/rand.Text emits at least 26 unpadded RFC 4648 base32 characters;
+	// Go explicitly permits longer future output: https://pkg.go.dev/crypto/rand#Text.
+	if len(secret) < 26 || strings.Trim(string(secret), "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") != "" {
 		t.Fatalf("upstream credential violates rand.Text length/base32 contract (length %d)", len(secret))
 	}
 	reload(t, a, s)

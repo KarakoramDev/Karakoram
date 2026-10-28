@@ -48,6 +48,7 @@ type agentState struct {
 	credentialMismatch  bool
 	userCode            int
 	users               map[string]neo4jspec.User
+	userPasswords       map[string]string
 	adminErrorCode      int
 	recoveryReceipt     string
 	recoveryPassword    string
@@ -75,7 +76,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState
 	}
 	b := fake.New(fake.Options{})
 	rc := &engine.Context{Cluster: c, Store: st, Secrets: st, Backend: b, Artifact: testArtifact{}}
-	a := &agentState{users: map[string]neo4jspec.User{}}
+	a := &agentState{users: map[string]neo4jspec.User{}, userPasswords: map[string]string{}}
 	pull := func() {
 		s, _ := load(c)
 		if s.Member == nil {
@@ -156,6 +157,9 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState
 			}
 			var req neo4jspec.UserRequest
 			json.NewDecoder(r.Body).Decode(&req)
+			if req.Op == neo4jspec.UserCreate || req.Op == neo4jspec.UserPassword {
+				a.userPasswords[req.Name] = req.Password
+			}
 			out := neo4jspec.UserResponse{}
 			switch req.Op {
 			case neo4jspec.UserList:

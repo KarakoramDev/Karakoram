@@ -41,6 +41,7 @@ func TestDriftedAdministratorRotationRecoversOffline(t *testing.T) {
 	}
 	step() // Stage the next password.
 	next, _ := secret(t.Context(), rc, "operations/"+op.ID+"/password")
+	generatedPasswordContract.Assert(t, "staged offline recovery password", string(next))
 	step() // Explicit authentication rejection; authorize offline recovery.
 	var cp operationCheckpoint
 	json.Unmarshal(op.Checkpoint, &cp)
@@ -63,6 +64,10 @@ func TestDriftedAdministratorRotationRecoversOffline(t *testing.T) {
 	committed, _ := secret(t.Context(), rc, "users/neo4j")
 	if string(committed) != string(next) || a.password != string(next) || a.recoveries != 1 || a.recoveryReceipt != op.ID+"-recover-admin" {
 		t.Fatal("offline repair did not converge idempotently")
+	}
+	generatedPasswordContract.Assert(t, "native offline recovery password", a.recoveryPassword)
+	if a.recoveryPassword != string(next) {
+		t.Fatal("native recovery request differs from staged password")
 	}
 	if len(events.events) != 1 || events.events[0].Reason != "AdministratorCredentialsRecovered" || events.events[0].Operation != op.ID || !strings.Contains(events.events[0].Message, "outage") {
 		t.Fatal(events.events)

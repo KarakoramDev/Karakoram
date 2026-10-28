@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
 func TestLegacyGroupCredentialBlockedCondition(t *testing.T) {
@@ -75,6 +77,7 @@ func TestLegacySingletonCredentialAdoptionCrashReplay(t *testing.T) {
 	if err != nil || len(credential) != 32 {
 		t.Fatal("legacy singleton did not persist a native-compatible credential")
 	}
+	generatedRecoveryPasswordContract.Assert(t, "adopted recovery password", string(credential))
 	// Crash after secret persistence but before the adoption state is saved.
 	rc.Cluster.Internal = before
 	p = New(Options{})
@@ -92,6 +95,18 @@ func TestLegacySingletonCredentialAdoptionCrashReplay(t *testing.T) {
 	after, err := secret(t.Context(), rc, "users/kk_repl")
 	if err != nil || string(after) != string(credential) || !restarted {
 		t.Fatal("adoption replay changed the credential or skipped account rekey")
+	}
+	config, err := p.MemberConfig(t.Context(), rc, s.Members[0].Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native myspec.Spec
+	if err := json.Unmarshal(config.EngineSpec, &native); err != nil {
+		t.Fatal(err)
+	}
+	generatedRecoveryPasswordContract.Assert(t, "native adopted recovery password", native.Replication.Password)
+	if native.Replication.Password != string(credential) {
+		t.Fatal("native adoption credential differs from persisted value")
 	}
 	// Once formed, reconciliation must never migrate its recovery credential.
 	if err := putSecret(t.Context(), rc, "users/kk_repl", []byte(strings.Repeat("b", 40))); err != nil {
