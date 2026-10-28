@@ -32,7 +32,7 @@ func (s *Server) unsupportedClusterAction(name string, p engine.Provider) respon
 	}
 	err := domain.Conflict("operation", action, domain.ReasonUnsupported, engine.ErrNotSupported, "Operation %s is not supported by engine %s", action, p.Name())
 	if action == domain.OperationRotateSystemUser && (p.Name() == "postgres" || p.Name() == "supabase") {
-		err.Message += "; for non-reserved PostgreSQL login roles use POST /api/v1/clusters/{cluster}/postgres/roles/{role}/password. Managed roles such as postgres remain engine-owned"
+		err.Message += "; for non-reserved PostgreSQL login roles use POST /api/v1/clusters/{cluster}/postgres/roles/{role}/password. Managed roles such as postgres remain engine-owned and have no supported in-place password rotation, including the administrator returned by connection reveal. If exposed, isolate access and migrate to a fresh cluster; see docs/postgres/access-and-tls.md#administrator-credential-containment"
 	}
 	return s.failure(err)
 }

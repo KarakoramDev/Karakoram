@@ -13,6 +13,54 @@ karactl -n NS clusters ca appdb > cluster-ca.pem
 
 The ordinary connection summary is password-free. `clusters connection appdb --reveal` explicitly retrieves administrative credentials and CA and requires `cluster-credentials:read`; do not use the administrative identity in applications. Create a restricted login role and use the advertised proxy hostname with the CA and `sslmode=verify-full`. Provider public TCP endpoints can have a different port/address from the private listener: use returned connection details rather than inventing a route.
 
+### Administrator credential containment
+
+The revealed administrator is the generated **`postgres` superuser** (password
+and credential-bearing URI), not a restricted application owner. Downloaded
+connection files contain the same secret; protect them as credentials. Hiding
+system roles from the native role API does **not** mean the administrator is
+never disclosed.
+
+**Known security limitation:** there is no supported in-place password rotation
+for `postgres` or the other engine-owned system identities. This applies to
+v0.2.0, v0.3.0 and v0.4.0. `system-users list` inventories managed identities; it
+does not promise rotation for every entry. For PostgreSQL, `system-users rotate`
+only rotates enabled Data MCP identities, not `postgres`, `kk_replicator`,
+`kk_rewind`, `kk_monitor`, `kk_admin` or `kk_proxy_admin`. The native
+`postgres roles rotate-password` command rejects reserved roles too.
+
+If an administrator credential is exposed:
+
+1. Immediately isolate client access to the affected cluster at **both private
+   and public network boundaries**. Removing public exposure alone does not
+   prevent private access or terminate existing sessions. Treat this as a
+   superuser compromise and assess unauthorized data/schema/role changes.
+2. If data must be retained, plan a controlled migration to a **fresh cluster**
+   with independently generated credentials, using trusted data and the
+   [backup/recovery constraints](backups.md). Quiesce writers for cutover and
+   verify retained data, new authentication, and rejection of the exposed
+   password through every new client route. A physical recovery carries the
+   source catalog/application identities; inspect them for compromise.
+3. Move applications and any bound consumers deliberately; binding sources are
+   immutable, so consumers need recreation and an explicit data migration.
+   Resolve [binding deletion guards](bindings.md) before retiring the source.
+   If no data is needed, delete the affected cluster directly.
+4. Delete the compromised source through the normal lifecycle, verify its
+   endpoints/runtimes are gone, and securely retire exposed connection files.
+   `keepVolumes` suspension/resume and in-place restore preserve the cluster's
+   managed credentials and are **not** credential revocation.
+
+Do not independently run `ALTER ROLE postgres PASSWORD`, edit sealed secrets,
+or invoke private recovery/rekey endpoints as a rotation workaround: the SQL
+catalog, member configuration, Patroni and proxy credentials must agree.
+TLS rotation does not revoke passwords. This limitation remains an open
+capability gap; the containment procedure is not an online rotation feature.
+
+Application/owner roles created through the native role API can rotate through
+`postgres roles rotate-password`; the managed consumer owner login instead
+rotates through `postgres bindings rotate`, whose response never reveals its
+password. See [binding rotation](bindings.md) and the publication barrier below.
+
 The managed [Data MCP companion](../data-mcp.md) instead connects directly to non-removing [PostgreSQL](https://www.postgresql.org/) members on private port 5432, bypassing [ProxySQL](https://proxysql.com/) and (for [Supabase](https://supabase.com/)) [Supavisor](https://github.com/supabase/supavisor). Its multi-host URI uses `target_session_attrs=prefer-standby` for reads and `read-write` for the primary-only write identity, with hostname-verified TLS and the cluster CA when TLS is enabled. This avoids proxy extended-protocol limitations and does not require the optional proxy reader port.
 
 Public exposure is opt-in. [Zerops](https://zerops.io/) can enforce a CIDR allowlist; providers without `tcpAllowlist` require explicit allow-all acknowledgement and an external firewall policy. Only the selected 5432 client service is managed publicly. Disabling the proxy is allowed only in single topology, where that sole data member becomes the client service. Management relay connectivity is not application ingress.
@@ -112,7 +160,7 @@ A non-secret `role.json` can request a generated password:
 
 Creation without a supplied login password returns `generatedPassword` once; rotation also returns a newly generated password. Responses are `no-store`; authorized idempotent retries replay the sealed result. Role reads do not reveal stored passwords. `validUntil` accepts an RFC3339 timestamp. PUT replaces attributes; PATCH changes only supplied fields. Optional `password` belongs only in a protected request document, never command arguments or source control.
 
-Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable; [Supabase](https://supabase.com/) protects its service identities too. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
+Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable **through this native role API**; [Supabase](https://supabase.com/) protects its service identities too. The revealed `postgres` administrator has the [rotation and containment limitation](#administrator-credential-containment) above. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
 
 In-process callers of `postgres.Access.CreateRole` / `UpdateRole` may additionally
 set `Role.MemberOfAdmin` (`memberOfAdmin,omitempty` on the internal agent/journal

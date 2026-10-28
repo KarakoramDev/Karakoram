@@ -125,6 +125,12 @@ This index follows `karactl --help`; key subcommands are illustrative, not an ex
 
 For engine-native payloads and permissions, use [RabbitMQ access](rabbitmq/access-and-tls.md), [Elasticsearch access](elasticsearch/access-and-security.md) and [MongoDB](mongodb/README.md). For orphan inventory and manual cleanup, use [orphaned platform volumes](operations.md#orphaned-platform-volumes). [PostgreSQL](https://www.postgresql.org/) payloads/TLS and proxy compatibility are in [PostgreSQL access](postgres/access-and-tls.md); [Supabase](https://supabase.com/) credentials, SMTP and function constraints are in [Supabase operations](supabase/operations.md).
 [Neo4j](https://neo4j.com/) user commands, CA trust and direct Bolt connection caveats are in [Neo4j access](neo4j/access-and-tls.md); the managed `neo4j` account uses `system-users rotate`, not native user mutations.
+PostgreSQL `system-users rotate` supports enabled Data MCP identities only, not
+the revealed `postgres` administrator or other engine-owned accounts. Native
+role and binding rotations do not rotate that administrator. Read the
+[administrator credential containment limitation](postgres/access-and-tls.md#administrator-credential-containment)
+before revealing or downloading a PostgreSQL connection credential.
+
 
 ## MCP clients
 

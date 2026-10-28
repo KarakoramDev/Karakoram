@@ -139,7 +139,7 @@ var commandDescriptions = map[string]string{
 	"clusters logs":                     "Read a cluster member's process logs",
 	"clusters metrics":                  "Show database metrics for a cluster",
 	"system-users list":                 "List provider-managed database identities",
-	"system-users rotate":               "Rotate a provider-managed database user's credentials",
+	"system-users rotate":               "Rotate credentials only for provider-supported identities (PostgreSQL: enabled Data MCP users, not postgres)",
 	"db-users list":                     "List MongoDB database users",
 	"db-users get":                      "Show a MongoDB database user",
 	"db-users create":                   "Create a MongoDB database user",

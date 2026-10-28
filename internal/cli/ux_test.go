@@ -27,6 +27,18 @@ func runCLI(t *testing.T, server, input string, tty bool, args ...string) (int, 
 	return code, out.String(), stderr.String()
 }
 
+func TestSystemUserRotationHelpStatesPostgresBoundary(t *testing.T) {
+	code, out, stderr := runCLI(t, "", "", false, "system-users", "rotate", "--help")
+	if code != 0 || stderr != "" {
+		t.Fatalf("rotation help failed: code=%d stderr=%q", code, stderr)
+	}
+	for _, detail := range []string{"provider-supported identities", "enabled Data MCP users", "not postgres"} {
+		if !strings.Contains(out, detail) {
+			t.Errorf("rotation help omitted %q: %s", detail, out)
+		}
+	}
+}
+
 func TestUsageExitCodesAndOfflineCompletion(t *testing.T) {
 	t.Setenv("KARAKORAM_SERVER", "")
 	t.Setenv("KARAKORAM_TOKEN", "")
