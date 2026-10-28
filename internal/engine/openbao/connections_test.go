@@ -112,6 +112,8 @@ func TestConnectionPendingCrashResumeConflictAndSecrets(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	connectionPasswordContract.Assert(t, "persisted connection password", cred.Password)
+	connectionUsernameContract.Assert(t, "generated PostgreSQL management username", cred.Username)
 	// A reconstructed provider resumes an ambiguous target create using the sealed
 	// password and deterministic identity; it never allocates another target user.
 	p = New(p.options)
@@ -120,6 +122,14 @@ func TestConnectionPendingCrashResumeConflictAndSecrets(t *testing.T) {
 		t.Fatalf("identity duplicated: %d/%d", len(pg.roles), pg.creates)
 	}
 	for _, r := range pg.roles {
+		connectionUsernameContract.Assert(t, "native target username", r.Name)
+		if r.Password == nil {
+			t.Fatal("native target request omitted generated password")
+		}
+		connectionPasswordContract.Assert(t, "native target password", *r.Password)
+		if *r.Password != cred.Password || r.Name != cred.Username {
+			t.Fatal("native target identity differs from persisted credential")
+		}
 		if !r.Login || !r.Createrole || len(r.MemberOfAdmin) != 2 || strings.HasPrefix(r.Name, "kk_") {
 			t.Fatalf("incorrect grant set: %+v", r)
 		}
