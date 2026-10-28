@@ -33,18 +33,78 @@ func TestCitusInitialRestoreCanClaimBeforeFormationReceipt(t *testing.T) {
 	}
 }
 
+func TestCitusRestoreMetadataAcceptsTargetSecondaries(t *testing.T) {
+	_, rc, s := citusOpsFixture(t)
+	rc.Cluster.Spec.Components.Engine.Replicas = 2
+	var nodes []pgspec.CitusNode
+	for _, primary := range s.data() {
+		replica := *primary
+		replica.Name += "-replica"
+		s.Members = append(s.Members, &replica)
+		nodes = append(nodes,
+			pgspec.CitusNode{GroupID: primary.Group, Host: primary.Name, Port: 5432, Role: "primary", Active: true},
+			pgspec.CitusNode{GroupID: replica.Group, Host: replica.Name, Port: 5432, Role: "secondary", Active: true})
+	}
+	if err := verifyCitusRestoreMetadata(s, pgspec.CitusStatusResponse{Nodes: nodes}); err != nil {
+		t.Fatal("valid target primary/secondary catalog rejected", err)
+	}
+	if err := verifyCitusRestoreMetadata(s, pgspec.CitusStatusResponse{Nodes: []pgspec.CitusNode{nodes[0], nodes[2]}}); err != nil {
+		t.Fatal("primary recovery must allow Patroni to register missing target followers", err)
+	}
+	for _, invalid := range []string{"source-secondary", "duplicate-primary", "missing-primary", "duplicate-member", "unknown-role"} {
+		t.Run(invalid, func(t *testing.T) {
+			bad := append([]pgspec.CitusNode(nil), nodes...)
+			switch invalid {
+			case "source-secondary":
+				bad[1].Host = "source-replica"
+			case "duplicate-primary":
+				bad[1].Role = "primary"
+			case "missing-primary":
+				bad[0].Role = "secondary"
+			case "duplicate-member":
+				bad[1].Host = bad[0].Host
+			case "unknown-role":
+				bad[1].Role = "unknown"
+			}
+			if err := verifyCitusRestoreMetadata(s, pgspec.CitusStatusResponse{Nodes: bad}); err == nil {
+				t.Fatal("accepted invalid restored primary/secondary catalog")
+			}
+		})
+	}
+}
+
 func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *testing.T) {
+	for _, clone := range []bool{true, false} {
+		name := "in-place-with-secondaries"
+		if clone {
+			name = "new-target-with-secondaries"
+		}
+		t.Run(name, func(t *testing.T) { testCitusRestoreWithSecondaries(t, clone) })
+	}
+}
+
+func testCitusRestoreWithSecondaries(t *testing.T, clone bool) {
 	p, rc, s := citusOpsFixture(t)
-	rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "deleted-source", Backup: "base"}
-	s.Formed, s.GroupFormed = false, nil
+	if clone {
+		rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "deleted-source", Backup: "base"}
+		s.Formed, s.GroupFormed = false, nil
+	} else {
+		s.GroupFormed[2] = true
+	}
 	worker := *s.data()[1]
 	worker.Name, worker.Group = "worker2", 2
 	s.Members = append(s.Members, &worker)
 	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
+	rc.Cluster.Spec.Components.Engine.Replicas = 2
+	for _, primary := range s.data() {
+		replica := *primary
+		replica.Name += "-replica"
+		s.Members = append(s.Members, &replica)
+	}
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveBackupState(rc.Cluster, backupState{InitialQueued: true, CloneCredentials: true, ManagedRolesHeld: true}); err != nil {
+	if err := saveBackupState(rc.Cluster, backupState{InitialQueued: clone, CloneCredentials: true, ManagedRolesHeld: true}); err != nil {
 		t.Fatal(err)
 	}
 	b := &domain.Backup{Namespace: rc.Cluster.Namespace, Cluster: "deleted-source", Name: "base", Provider: "postgres", Storage: "archive", Type: "full", SourceVersion: rc.Cluster.Spec.Version, SourceTopology: rc.Cluster.Spec.Topology, Phase: domain.PhaseSucceeded, Postgres: &domain.PostgresBackup{Label: "base", Repository: "source/g0", RestorePoint: "marker"}}
@@ -54,8 +114,13 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
 		t.Fatal(err)
 	}
-	r := &domain.Restore{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: "initial-restore", SourceNamespace: rc.Cluster.Namespace, Source: domain.RestoreSource{SourceCluster: "deleted-source", Backup: "base"}}
-	op := &domain.Operation{ID: "initial-clone", Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"initial-restore"}`)}
+	restoreName := "recover"
+	if clone {
+		restoreName = "initial-restore"
+	}
+	r := &domain.Restore{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: restoreName, SourceNamespace: rc.Cluster.Namespace, Source: domain.RestoreSource{SourceCluster: "deleted-source", Backup: "base"}}
+	payload, _ := json.Marshal(map[string]string{"restore": restoreName})
+	op := &domain.Operation{ID: "restore-with-secondaries", Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: payload}
 	if err := rc.Store.EnqueueRestore(t.Context(), r, op); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +133,11 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 		case "/v1/status":
 			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 100})
 		case "/v1/postgres/status":
-			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "primary", Leader: name, Version: rc.Cluster.Spec.Version})
+			role := "primary"
+			if strings.HasSuffix(name, "-replica") {
+				role = "replica"
+			}
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: role, Streaming: true, Leader: strings.TrimSuffix(name, "-replica"), Version: rc.Cluster.Spec.Version})
 		case "/v1/postgres/citus-restore-metadata":
 			if !bs.ManagedRolesHeld || bs.InitialApplied {
 				t.Error("rewrite ran outside recovery fences")
@@ -77,12 +146,19 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
 				t.Error(err)
 			}
-			if len(input.Nodes) != 3 {
-				t.Error("missing target group mappings", input)
+			if len(input.Nodes) != 6 {
+				t.Error("missing target primary/secondary mappings", input)
 			}
 			for _, node := range input.Nodes {
 				if member := s.find(node.Host); member == nil || member.Group != node.GroupID {
 					t.Error("source hostname or incorrect group in rewrite", node)
+				}
+				expectedRole := "primary"
+				if strings.HasSuffix(node.Host, "-replica") {
+					expectedRole = "secondary"
+				}
+				if node.Role != expectedRole {
+					t.Error("incorrect target member role", node)
 				}
 			}
 			rewritten[name] = true
@@ -98,7 +174,11 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 			}
 			var nodes []pgspec.CitusNode
 			for _, member := range s.data() {
-				nodes = append(nodes, pgspec.CitusNode{GroupID: member.Group, Host: member.Name, Port: 5432, Active: true, Role: "primary"})
+				role := "primary"
+				if strings.HasSuffix(member.Name, "-replica") {
+					role = "secondary"
+				}
+				nodes = append(nodes, pgspec.CitusNode{GroupID: member.Group, Host: member.Name, Port: 5432, Active: true, Role: role})
 			}
 			validated[name] = true
 			json.NewEncoder(w).Encode(pgspec.CitusStatusResponse{Nodes: nodes})
@@ -107,18 +187,20 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 				t.Error("archive/access transition preceded validation")
 			}
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
-		case "/v1/postgres/rekey", "/v1/postgres/stanza-create", "/v1/reload":
+		case "/v1/postgres/rekey", "/v1/postgres/stanza-create", "/v1/reload", "/v1/postgres/prepare-restore", "/v1/postgres/dcs-reset", "/v1/processes/patroni/start":
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		default:
 			t.Error("unexpected clone action", req.URL.Path)
 			http.NotFound(w, req)
 		}
 	})
-	if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{ID: "other", Kind: domain.OperationRestart}); err == nil {
-		t.Fatal("unformed initial target admitted unrelated imperative work")
+	if clone {
+		if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{ID: "other", Kind: domain.OperationRestart}); err == nil {
+			t.Fatal("unformed initial target admitted unrelated imperative work")
+		}
 	}
 	done, lost := false, false
-	for range 40 {
+	for range 80 {
 		result, err := p.RunOperation(t.Context(), rc, op)
 		if err != nil {
 			if lost || result.Step != "citus-metadata" {
@@ -137,7 +219,7 @@ func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *test
 		t.Fatal("clone did not resume the exact metadata barrier", done, lost, validated)
 	}
 	bs, _ := loadBackupState(rc.Cluster)
-	if !bs.InitialApplied || !bs.CloneComplete || bs.ManagedRolesHeld || bs.RestoreOperation != "" {
+	if bs.InitialApplied != clone || !bs.CloneComplete || bs.ManagedRolesHeld || bs.RestoreOperation != "" {
 		t.Fatal("clone did not publish final application receipt after releasing access", bs)
 	}
 }
@@ -220,7 +302,7 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 			if len(rekeyed) != 2 {
 				t.Error("metadata/access barrier before every group rekey", rekeyed)
 			}
-			nodes := []pgspec.CitusNode{{NodeID: 1, GroupID: 0, Host: s.data()[0].Name, Port: 5432, Active: true}, {NodeID: 2, GroupID: 1, Host: "worker1", Port: 5432, Active: true}}
+			nodes := []pgspec.CitusNode{{NodeID: 1, GroupID: 0, Host: s.data()[0].Name, Port: 5432, Active: true, Role: "primary"}, {NodeID: 2, GroupID: 1, Host: "worker1", Port: 5432, Active: true, Role: "primary"}}
 			if !validMetadata {
 				nodes[1].Host = "wrong-worker"
 			}

@@ -310,16 +310,31 @@ func (p *Core) rewriteCitusRestoreMetadata(ctx context.Context, rc *engine.Conte
 		if err != nil {
 			return err
 		}
-		req.Nodes = append(req.Nodes, pgspec.CitusNode{GroupID: group.id, Host: leader.Name, Port: pgspec.PortPostgres})
+		for _, m := range group.data() {
+			if m.Removing {
+				continue
+			}
+			role := "secondary"
+			if m == leader {
+				role = "primary"
+			}
+			req.Nodes = append(req.Nodes, pgspec.CitusNode{GroupID: group.id, Host: m.Name, Port: pgspec.PortPostgres, Role: role})
+		}
 	}
 	// Finish every node-local rewrite before observing any catalog. No remote
 	// metadata-sync UDF is safe while recovery client fences are installed.
 	for _, node := range req.Nodes {
+		if node.Role != "primary" {
+			continue
+		}
 		if err := pgAction(ctx, rc, node.Host, pgspec.ActionCitusRestoreMetadata, req, nil); err != nil {
 			return err
 		}
 	}
 	for _, node := range req.Nodes {
+		if node.Role != "primary" {
+			continue
+		}
 		var status pgspec.CitusStatusResponse
 		if err := pgAction(ctx, rc, node.Host, pgspec.ActionCitusStatus, struct{}{}, &status); err != nil {
 			return err
@@ -330,13 +345,13 @@ func (p *Core) rewriteCitusRestoreMetadata(ctx context.Context, rc *engine.Conte
 		for _, actual := range status.Nodes {
 			matches := false
 			for _, target := range req.Nodes {
-				if actual.GroupID == target.GroupID && actual.Host == target.Host && actual.Port == target.Port {
+				if actual.GroupID == target.GroupID && actual.Host == target.Host && actual.Port == target.Port && actual.Role == target.Role {
 					matches = true
 					break
 				}
 			}
 			if !matches {
-				return engine.Invalid("restored Citus catalog does not match target primary %s", actual.Host)
+				return engine.Invalid("restored Citus catalog does not match target member %s", actual.Host)
 			}
 		}
 	}
@@ -348,9 +363,7 @@ func verifyCitusRestoreMetadata(s *state, status pgspec.CitusStatusResponse) err
 	for _, g := range s.groups() {
 		expected[g.id] = false
 	}
-	if len(status.Nodes) != len(expected) {
-		return engine.Invalid("restored Citus catalog node count does not match formation")
-	}
+	seen := map[string]bool{}
 	for _, node := range status.Nodes {
 		if !node.Active {
 			return engine.Invalid("restored Citus node %d is inactive", node.NodeID)
@@ -359,10 +372,20 @@ func verifyCitusRestoreMetadata(s *state, status pgspec.CitusStatusResponse) err
 		if m == nil || m.Role != "data" || m.Group != node.GroupID || node.Port != 5432 {
 			return engine.Invalid("restored pg_dist_node does not match formation: %s", node.Host)
 		}
-		if expected[node.GroupID] {
-			return engine.Invalid("restored Citus catalog repeats group %d", node.GroupID)
+		if seen[node.Host] {
+			return engine.Invalid("restored Citus catalog repeats member %s", node.Host)
 		}
-		expected[node.GroupID] = true
+		seen[node.Host] = true
+		switch node.Role {
+		case "primary":
+			if expected[node.GroupID] {
+				return engine.Invalid("restored Citus catalog repeats primary for group %d", node.GroupID)
+			}
+			expected[node.GroupID] = true
+		case "secondary":
+		default:
+			return engine.Invalid("restored Citus node %s has invalid role %q", node.Host, node.Role)
+		}
 	}
 	for group, found := range expected {
 		if !found {

@@ -554,6 +554,8 @@ type CitusNodeRequest struct {
 
 // CitusRestoreMetadataRequest remaps existing node identities by replication
 // group without invoking Citus's remote metadata synchronization.
+// Nodes contains every target member, with exactly one primary per group;
+// secondary registrations may be restored or subsequently added by Patroni.
 type CitusRestoreMetadataRequest struct {
 	Nodes []CitusNode `json:"nodes"`
 }

@@ -100,6 +100,15 @@ connection overrides and sets that group's database-level
 sync and DDL propagation locally and keep client fences installed; they do not
 depend on inter-node connections rejected by those fences. Every primary's
 catalog must validate before archiving and managed access are released.
+Patroni-managed standby registrations (`noderole='secondary'`) are not additional
+replication groups. Recovery carries all target member addresses, remaps existing
+secondary rows to target followers, and preserves every primary node/group ID.
+Secondary rows are staged and reinserted within the same transaction to handle
+a target primary that previously had a secondary registration at its address.
+If the target has fewer followers, surplus secondary registrations are removed;
+if it has more, Patroni registers the additional followers normally. Validation
+requires one primary per group and permits target-owned secondary entries, never
+an address left over from the source.
 
 This metadata recovery action requires matching fixed control-plane **and
 member-agent** versions. Older agents reject the action, leaving access held

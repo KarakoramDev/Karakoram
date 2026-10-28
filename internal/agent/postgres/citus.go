@@ -58,13 +58,24 @@ func validateCitusInput(input any) error {
 		groups := map[int]bool{}
 		hosts := map[string]bool{}
 		for _, node := range r.Nodes {
-			if node.GroupID < 0 || groups[node.GroupID] || hosts[node.Host] || !validHost(node.Host) || node.Port != pgspec.PortPostgres {
-				return errors.New("invalid restore target group or address")
+			if node.GroupID < 0 || hosts[node.Host] || !validHost(node.Host) || node.Port != pgspec.PortPostgres || node.Role != "primary" && node.Role != "secondary" {
+				return errors.New("invalid restore target group, role or address")
 			}
-			groups[node.GroupID], hosts[node.Host] = true, true
+			if node.Role == "primary" {
+				if groups[node.GroupID] {
+					return errors.New("duplicate restore target primary")
+				}
+				groups[node.GroupID] = true
+			}
+			hosts[node.Host] = true
 		}
 		if !groups[0] {
 			return errors.New("restore target coordinator required")
+		}
+		for _, node := range r.Nodes {
+			if !groups[node.GroupID] {
+				return errors.New("restore target group primary required")
+			}
 		}
 	case *pgspec.CitusRebalanceStartRequest:
 		if r.Receipt == "" || !safeValue(r.Receipt, 256) || r.Strategy != "" && !identifier.MatchString(r.Strategy) {

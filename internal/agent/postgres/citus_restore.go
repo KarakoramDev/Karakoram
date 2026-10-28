@@ -26,9 +26,18 @@ func citusRestoreMetadataSQL(s pgspec.Spec, req pgspec.CitusRestoreMetadataReque
 	}
 	var sql strings.Builder
 	sql.WriteString("BEGIN;\nSET LOCAL synchronous_commit = local;\nSET LOCAL citus.enable_ddl_propagation = off;\nSET LOCAL citus.enable_metadata_sync = off;\nLOCK TABLE pg_catalog.pg_dist_node, pg_catalog.pg_dist_poolinfo IN EXCLUSIVE MODE;\n")
-	fmt.Fprintf(&sql, "DO $kk$ BEGIN IF (SELECT count(*) FROM pg_catalog.pg_dist_node) <> %d THEN RAISE EXCEPTION 'restored Citus node count differs from target'; END IF; END $kk$;\n", len(req.Nodes))
+	primaries := 0
+	for _, node := range req.Nodes {
+		if node.Role == "primary" {
+			primaries++
+		}
+	}
+	fmt.Fprintf(&sql, "DO $kk$ BEGIN IF (SELECT count(*) FROM pg_catalog.pg_dist_node WHERE noderole='primary') <> %d OR (SELECT count(DISTINCT groupid) FROM pg_catalog.pg_dist_node) <> %d OR EXISTS (SELECT FROM pg_catalog.pg_dist_node WHERE noderole NOT IN ('primary','secondary')) THEN RAISE EXCEPTION 'restored Citus groups differ from target'; END IF; END $kk$;\n", primaries, primaries)
 	local := ""
 	for _, node := range req.Nodes {
+		if node.Role != "primary" {
+			continue
+		}
 		fmt.Fprintf(&sql, "DO $kk$ BEGIN IF (SELECT count(*) FROM pg_catalog.pg_dist_node WHERE groupid=%d AND noderole='primary') <> 1 THEN RAISE EXCEPTION 'restored Citus group differs from target'; END IF; END $kk$;\n", node.GroupID)
 		if node.GroupID == s.Citus.Group {
 			local = node.Host
@@ -37,12 +46,38 @@ func citusRestoreMetadataSQL(s pgspec.Spec, req pgspec.CitusRestoreMetadataReque
 	if local == "" {
 		return "", errors.New("restore target omits local group")
 	}
+	// Stage secondary rows without catalog uniqueness constraints. A promoted
+	// target primary may currently have a secondary entry at the same address.
+	// Remove/reinsert those rows atomically so primary identity is preserved,
+	// with no transient address collision visible outside this transaction.
+	// Drop source pool overrides before removing any referenced node IDs.
+	sql.WriteString("CREATE TEMP TABLE _karakoram_restore_secondaries ON COMMIT DROP AS SELECT * FROM pg_catalog.pg_dist_node WHERE noderole='secondary';\nDELETE FROM pg_catalog.pg_dist_poolinfo;\nDELETE FROM pg_catalog.pg_dist_node WHERE noderole='secondary';\n")
 	for _, node := range req.Nodes {
+		if node.Role != "primary" {
+			continue
+		}
 		fmt.Fprintf(&sql, "UPDATE pg_catalog.pg_dist_node SET nodename=%s, nodeport=%d WHERE groupid=%d AND noderole='primary';\n", sqlQuote(node.Host), node.Port, node.GroupID)
+		var targets strings.Builder
+		replicas := 0
+		for _, replica := range req.Nodes {
+			if replica.GroupID != node.GroupID || replica.Role != "secondary" {
+				continue
+			}
+			if replicas > 0 {
+				targets.WriteByte(',')
+			}
+			replicas++
+			fmt.Fprintf(&targets, "(%d,%s,%d)", replicas, sqlQuote(replica.Host), replica.Port)
+		}
+		// Keep and remap as many source secondary IDs as the target needs.
+		// Patroni registers any additional target followers through its normal
+		// membership loop; a secondary row is not required for primary recovery.
+		fmt.Fprintf(&sql, "DELETE FROM pg_temp._karakoram_restore_secondaries WHERE groupid=%d AND nodeid NOT IN (SELECT nodeid FROM pg_temp._karakoram_restore_secondaries WHERE groupid=%d ORDER BY nodeid LIMIT %d);\n", node.GroupID, node.GroupID, replicas)
+		if replicas > 0 {
+			fmt.Fprintf(&sql, "WITH ranked AS (SELECT nodeid, row_number() OVER (ORDER BY nodeid) AS ordinal FROM pg_temp._karakoram_restore_secondaries WHERE groupid=%d) UPDATE pg_temp._karakoram_restore_secondaries n SET nodename=target.host, nodeport=target.port FROM ranked JOIN (VALUES %s) AS target(ordinal,host,port) ON ranked.ordinal=target.ordinal WHERE n.nodeid=ranked.nodeid;\n", node.GroupID, targets.String())
+		}
 	}
-	// Pool overrides may contain source hosts/ports. The restored target uses
-	// its managed pg_dist_node addresses, not source-specific connection routes.
-	sql.WriteString("DELETE FROM pg_catalog.pg_dist_poolinfo;\n")
+	sql.WriteString("INSERT INTO pg_catalog.pg_dist_node SELECT * FROM pg_temp._karakoram_restore_secondaries;\n")
 	fmt.Fprintf(&sql, "ALTER DATABASE %s SET citus.local_hostname TO %s;\nCOMMIT;\n", sqlIdent(s.Citus.Database), sqlQuote(local))
 	return sql.String(), nil
 }

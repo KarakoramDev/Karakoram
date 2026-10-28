@@ -141,8 +141,10 @@ func TestCitusRestoreMetadataIsLocalAtomicAndTargetOwned(t *testing.T) {
 	s := testSpec()
 	s.Citus = &pgspec.Citus{Group: 1, Database: "application"}
 	req := pgspec.CitusRestoreMetadataRequest{Nodes: []pgspec.CitusNode{
-		{GroupID: 0, Host: "target-coordinator", Port: 5432},
-		{GroupID: 1, Host: "target-worker", Port: 5432},
+		{GroupID: 0, Host: "target-coordinator", Port: 5432, Role: "primary"},
+		{GroupID: 0, Host: "target-coordinator-replica", Port: 5432, Role: "secondary"},
+		{GroupID: 1, Host: "target-worker", Port: 5432, Role: "primary"},
+		{GroupID: 1, Host: "target-worker-replica", Port: 5432, Role: "secondary"},
 	}}
 	if _, err := citusRestoreMetadataSQL(s, req); err == nil {
 		t.Fatal("catalog rewrite accepted without recovery client fences")
@@ -153,7 +155,7 @@ func TestCitusRestoreMetadataIsLocalAtomicAndTargetOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstWrite := strings.Index(sql, "UPDATE pg_catalog.pg_dist_node")
-	for _, guard := range []string{"BEGIN;", "SET LOCAL synchronous_commit = local", "SET LOCAL citus.enable_ddl_propagation = off", "SET LOCAL citus.enable_metadata_sync = off", "LOCK TABLE", "restored Citus node count differs", "restored Citus group differs"} {
+	for _, guard := range []string{"BEGIN;", "SET LOCAL synchronous_commit = local", "SET LOCAL citus.enable_ddl_propagation = off", "SET LOCAL citus.enable_metadata_sync = off", "LOCK TABLE", "restored Citus groups differ", "restored Citus group differs"} {
 		if index := strings.Index(sql, guard); index < 0 || index >= firstWrite {
 			t.Error("local recovery guard missing or too late", guard)
 		}
@@ -163,6 +165,10 @@ func TestCitusRestoreMetadataIsLocalAtomicAndTargetOwned(t *testing.T) {
 		"nodename='target-worker', nodeport=5432 WHERE groupid=1",
 		"DELETE FROM pg_catalog.pg_dist_poolinfo;",
 		`ALTER DATABASE "application" SET citus.local_hostname TO 'target-worker';`,
+		"(1,'target-coordinator-replica',5432)",
+		"(1,'target-worker-replica',5432)",
+		"INSERT INTO pg_catalog.pg_dist_node SELECT * FROM pg_temp._karakoram_restore_secondaries;",
+		"WHERE noderole='primary') <> 2",
 	} {
 		if !strings.Contains(sql, mutation) {
 			t.Error("missing target-owned metadata", mutation)
@@ -171,12 +177,22 @@ func TestCitusRestoreMetadataIsLocalAtomicAndTargetOwned(t *testing.T) {
 	if !strings.HasSuffix(sql, "COMMIT;\n") || strings.Contains(sql, "citus_update_node") || strings.Contains(sql, "SET nodeid=") || strings.Contains(sql, "SET groupid=") {
 		t.Fatal("rewrite can propagate, lose placement identity or commit partially")
 	}
+	removeSecondaries := strings.Index(sql, "DELETE FROM pg_catalog.pg_dist_node WHERE noderole='secondary'")
+	reinsertSecondaries := strings.Index(sql, "INSERT INTO pg_catalog.pg_dist_node")
+	if removeSecondaries < 0 || removeSecondaries >= firstWrite || reinsertSecondaries <= firstWrite {
+		t.Fatal("promoted secondary address can collide with primary remapping")
+	}
+	if strings.Contains(sql, "count(*) FROM pg_catalog.pg_dist_node) <>") {
+		t.Fatal("valid secondary rows counted as extra replication groups")
+	}
 	bad := []pgspec.CitusRestoreMetadataRequest{
 		{},
-		{Nodes: []pgspec.CitusNode{{GroupID: 1, Host: "worker", Port: 5432}}},
-		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432}, {GroupID: 0, Host: "worker", Port: 5432}}},
-		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432}, {GroupID: 1, Host: "coordinator", Port: 5432}}},
-		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "bad'host", Port: 5432}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 1, Host: "worker", Port: 5432, Role: "primary"}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432, Role: "primary"}, {GroupID: 0, Host: "worker", Port: 5432, Role: "primary"}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432, Role: "primary"}, {GroupID: 1, Host: "coordinator", Port: 5432, Role: "primary"}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "bad'host", Port: 5432, Role: "primary"}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432, Role: "primary"}, {GroupID: 1, Host: "worker", Port: 5432, Role: "secondary"}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432, Role: "unknown"}}},
 	}
 	for _, input := range bad {
 		if err := validateCitusInput(&input); err == nil {
