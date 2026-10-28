@@ -118,7 +118,7 @@ func TestGroupDiagnosticLogTailIsBoundedAndOptional(t *testing.T) {
 			case "large", "unrelated":
 				text := strings.Repeat("unrelated native startup line\n", 2000)
 				if mode == "large" {
-					text += "[Repl] group_replication [MY-011735] old failure\n[Repl] group_replication [MY-011735] final failure\n"
+					text += "[Repl] group_replication [MY-011735] old failure " + strings.Repeat("x", 1500) + "\n[Repl] group_replication [MY-011735] final failure\n"
 				}
 				if err := os.WriteFile(logPath, []byte(text), 0600); err != nil {
 					t.Fatal(err)

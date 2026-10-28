@@ -123,7 +123,7 @@ func recentGroupErrors(d GroupDeps) string {
 	if latest == "" {
 		return ""
 	}
-	return sanitizeGroupDiagnostic(d.GroupSpec(), previous+"\n"+latest)
+	return sanitizeGroupDiagnostic(d.GroupSpec(), strings.TrimSpace(latest+"\n"+previous))
 }
 
 func groupActionDiagnostic(d GroupDeps, action string, err error) string {
