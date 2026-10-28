@@ -239,8 +239,8 @@ func (m *Manager) trackingOperations(ctx context.Context, p engine.Provider, c *
 			}
 			continue
 		}
-		if convergenceAttempted && desiredGenerationMaintenanceWait(c, op) &&
-			(cause == nil || op.Phase == domain.PhasePending && op.Step == "WaitingForWindow") {
+		if desiredGenerationMaintenanceWait(c, op) &&
+			(convergenceAttempted && cause == nil || op.Phase == domain.PhasePending && op.Step == "WaitingForWindow") {
 			// A first evaluation is durably Running before Sync. If that
 			// evaluation only deferred desired work, it has not started a
 			// disruption. Never rewind a receipt from an earlier invocation.

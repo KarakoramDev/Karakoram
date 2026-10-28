@@ -669,10 +669,10 @@ func (p *Provider) syncDisabledComponents(ctx context.Context, rc *engine.Contex
 		if m.ImportBatch != nil {
 			return true, importComponent(ctx, rc, s, m, desired)
 		}
-		// Exposure revocation is immediate, but starting removal of the
-		// retained runtime is a new disruption. Pending receipts were observed
-		// by the caller before reaching this admission boundary.
-		if !m.Public && m.ServiceID != "" && rc.WaitForWindow().RequeueAfter > 0 {
+		// Starting route withdrawal or retained-runtime removal is a new
+		// disruption. Pending receipts were observed by the caller before
+		// reaching this admission boundary.
+		if m.ServiceID != "" && rc.WaitForWindow().RequeueAfter > 0 {
 			return true, nil
 		}
 		return true, deleteComponent(ctx, rc, s, m)

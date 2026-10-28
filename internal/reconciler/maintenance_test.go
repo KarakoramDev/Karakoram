@@ -375,6 +375,17 @@ func TestReconcileDoesNotStartDeferredDesiredGeneration(t *testing.T) {
 	if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 || got.Step != "WaitingForWindow" {
 		t.Fatal("health failure started deferred desired work", got, err)
 	}
+	deferredCluster, err := st.GetCluster(t.Context(), c.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = m.trackingOperations(t.Context(), p, deferredCluster, errors.New("namespace unavailable before Sync"), false, ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err = st.GetOperation(t.Context(), op.ID)
+	if err != nil || got.Phase != domain.PhasePending || got.StartedAt != nil || got.Attempts != 0 {
+		t.Fatal("pre-Sync dependency failure started deferred work", got, err)
+	}
 	m.opts.Context.Clock = fixedClock{now: time.Date(2026, 1, 1, 2, 1, 0, 0, time.UTC)}
 	p.syncFn = func(rc *engine.Context) (engine.Result, error) {
 		got, err := st.GetOperation(t.Context(), op.ID)
