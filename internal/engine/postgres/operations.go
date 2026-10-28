@@ -65,12 +65,23 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// Initial recovery is what establishes formation. Requiring Formed here
+	// waits on Sync, which cannot acknowledge formation until that same restore
+	// publishes its application receipt.
+	initialRestore := false
+	if c.Spec.DataSource != nil {
+		bs, err := loadBackupState(c)
+		if err != nil {
+			return false, err
+		}
+		initialRestore = bs.InitialQueued && !bs.InitialApplied
+	}
 	if s.Topology == "distributed" {
 		if s.Pending != nil || len(s.data()) != s.desiredDataCount(&engine.Context{Cluster: c}) {
 			return false, nil
 		}
 		for _, m := range s.data() {
-			if m.Stage != "joined" || !s.group(m.Group).formed() {
+			if m.Stage != "joined" || !initialRestore && !s.group(m.Group).formed() {
 				return false, nil
 			}
 		}
@@ -91,6 +102,21 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 	allowed, err := p.CanClaimOperation(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
+	}
+	if rc.Cluster.Spec.Topology.Type == "distributed" && rc.Cluster.Spec.DataSource != nil && op.Kind != domain.OperationUpgradeAgents {
+		bs, readErr := loadBackupState(rc.Cluster)
+		if readErr != nil {
+			return engine.OpResult{}, readErr
+		}
+		if bs.InitialQueued && !bs.InitialApplied {
+			initial, readErr := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), "initial-restore")
+			if readErr != nil {
+				return engine.OpResult{}, readErr
+			}
+			if !restoreOperation(op) || initial.OperationID != op.ID {
+				return engine.OpResult{}, engine.Invalid("initial PostgreSQL recovery owns the cluster")
+			}
+		}
 	}
 	if !allowed {
 		// Replacement join deliberately runs Sync to provision its new member.

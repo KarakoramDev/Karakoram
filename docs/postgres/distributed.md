@@ -90,6 +90,23 @@ PITR uses persisted **named coordinated restore points**, not arbitrary wall-clo
 
 Restore fences the entire formation, restores every group to the same named point, rebuilds replicas and checks Citus metadata before releasing access. A clone must have the source formation's worker-group count. Never mix groups from unrelated backups or restore only one group into a running formation. See [PostgreSQL backups](backups.md) for storage, retention and archive requirements.
 
+For a new target, the queued initial recovery does not require an already-formed
+cluster: formation acknowledgement follows its native application receipt.
+Before validation or access release, recovery rewrites each group primary's
+local `pg_dist_node` addresses to the target's observed primaries, preserving
+node/group IDs and shard placements. It removes source `pg_dist_poolinfo`
+connection overrides and sets that group's database-level
+`citus.local_hostname` to its target primary. These transactions disable metadata
+sync and DDL propagation locally and keep client fences installed; they do not
+depend on inter-node connections rejected by those fences. Every primary's
+catalog must validate before archiving and managed access are released.
+
+This metadata recovery action requires matching fixed control-plane **and
+member-agent** versions. Older agents reject the action, leaving access held
+rather than accepting stale source addresses. For an already-running recovery
+on older agents, follow the retained-backup/new-target recovery guidance below;
+a control-plane-only upgrade cannot supply the missing member operation.
+
 System-role bootstrap and rekey are node-local Citus transactions: implicit DDL
 propagation is disabled only for those transactions, not for application DDL.
 During restore and clone, every recovered group primary must acknowledge the

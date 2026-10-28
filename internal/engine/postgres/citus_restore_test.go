@@ -16,6 +16,132 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
+func TestCitusInitialRestoreCanClaimBeforeFormationReceipt(t *testing.T) {
+	p, rc, s := citusOpsFixture(t)
+	rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "source", Backup: "base"}
+	s.Formed = false
+	s.GroupFormed = nil
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveBackupState(rc.Cluster, backupState{InitialQueued: true, ManagedRolesHeld: true}); err != nil {
+		t.Fatal(err)
+	}
+	allowed, err := p.CanClaimOperation(rc.Cluster)
+	if err != nil || !allowed {
+		t.Fatalf("queued initial restore cannot run before its own formation/application receipt: allowed=%v err=%v", allowed, err)
+	}
+}
+
+func TestCitusInitialRestoreRewritesEveryGroupBeforeValidationAndRelease(t *testing.T) {
+	p, rc, s := citusOpsFixture(t)
+	rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "deleted-source", Backup: "base"}
+	s.Formed, s.GroupFormed = false, nil
+	worker := *s.data()[1]
+	worker.Name, worker.Group = "worker2", 2
+	s.Members = append(s.Members, &worker)
+	rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"citus":{"workerGroups":2}}`)
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveBackupState(rc.Cluster, backupState{InitialQueued: true, CloneCredentials: true, ManagedRolesHeld: true}); err != nil {
+		t.Fatal(err)
+	}
+	b := &domain.Backup{Namespace: rc.Cluster.Namespace, Cluster: "deleted-source", Name: "base", Provider: "postgres", Storage: "archive", Type: "full", SourceVersion: rc.Cluster.Spec.Version, SourceTopology: rc.Cluster.Spec.Topology, Phase: domain.PhaseSucceeded, Postgres: &domain.PostgresBackup{Label: "base", Repository: "source/g0", RestorePoint: "marker"}}
+	for _, group := range s.groups() {
+		b.Postgres.Groups = append(b.Postgres.Groups, domain.PostgresBackupGroup{Group: group.id, Backup: domain.PostgresBackup{Label: "base", Repository: "source/group"}})
+	}
+	if err := rc.Store.CreateBackup(t.Context(), b); err != nil {
+		t.Fatal(err)
+	}
+	r := &domain.Restore{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Name: "initial-restore", SourceNamespace: rc.Cluster.Namespace, Source: domain.RestoreSource{SourceCluster: "deleted-source", Backup: "base"}}
+	op := &domain.Operation{ID: "initial-clone", Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationRestore, Payload: json.RawMessage(`{"restore":"initial-restore"}`)}
+	if err := rc.Store.EnqueueRestore(t.Context(), r, op); err != nil {
+		t.Fatal(err)
+	}
+	rewritten, validated := map[string]bool{}, map[string]bool{}
+	loseWorker := true
+	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
+		name := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
+		bs, _ := loadBackupState(rc.Cluster)
+		switch req.URL.Path {
+		case "/v1/status":
+			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 100})
+		case "/v1/postgres/status":
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "primary", Leader: name, Version: rc.Cluster.Spec.Version})
+		case "/v1/postgres/citus-restore-metadata":
+			if !bs.ManagedRolesHeld || bs.InitialApplied {
+				t.Error("rewrite ran outside recovery fences")
+			}
+			var input pgspec.CitusRestoreMetadataRequest
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				t.Error(err)
+			}
+			if len(input.Nodes) != 3 {
+				t.Error("missing target group mappings", input)
+			}
+			for _, node := range input.Nodes {
+				if member := s.find(node.Host); member == nil || member.Group != node.GroupID {
+					t.Error("source hostname or incorrect group in rewrite", node)
+				}
+			}
+			rewritten[name] = true
+			if name == "worker2" && loseWorker {
+				loseWorker = false
+				http.Error(w, "response lost after local commit", http.StatusServiceUnavailable)
+				return
+			}
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/citus-status":
+			if len(rewritten) != 3 || !bs.ManagedRolesHeld {
+				t.Error("validation preceded whole-formation rewrite or followed access release")
+			}
+			var nodes []pgspec.CitusNode
+			for _, member := range s.data() {
+				nodes = append(nodes, pgspec.CitusNode{GroupID: member.Group, Host: member.Name, Port: 5432, Active: true, Role: "primary"})
+			}
+			validated[name] = true
+			json.NewEncoder(w).Encode(pgspec.CitusStatusResponse{Nodes: nodes})
+		case "/v1/postgres/finish-restore":
+			if len(validated) != 3 || !bs.ManagedRolesHeld {
+				t.Error("archive/access transition preceded validation")
+			}
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/rekey", "/v1/postgres/stanza-create", "/v1/reload":
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		default:
+			t.Error("unexpected clone action", req.URL.Path)
+			http.NotFound(w, req)
+		}
+	})
+	if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{ID: "other", Kind: domain.OperationRestart}); err == nil {
+		t.Fatal("unformed initial target admitted unrelated imperative work")
+	}
+	done, lost := false, false
+	for range 40 {
+		result, err := p.RunOperation(t.Context(), rc, op)
+		if err != nil {
+			if lost || result.Step != "citus-metadata" {
+				t.Fatal(err)
+			}
+			lost = true
+			continue
+		}
+		op.Checkpoint = result.Checkpoint
+		if result.Done {
+			done = true
+			break
+		}
+	}
+	if !done || !lost || len(validated) != 3 {
+		t.Fatal("clone did not resume the exact metadata barrier", done, lost, validated)
+	}
+	bs, _ := loadBackupState(rc.Cluster)
+	if !bs.InitialApplied || !bs.CloneComplete || bs.ManagedRolesHeld || bs.RestoreOperation != "" {
+		t.Fatal("clone did not publish final application receipt after releasing access", bs)
+	}
+}
+
 func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 	p, rc, s := citusOpsFixture(t)
 	s.Members = append(s.Members, &member{Name: "proxy", Role: "proxy", Stage: "joined"})
@@ -83,6 +209,12 @@ func TestCitusRestoreFencesWholeFormationUntilMetadataBarrier(t *testing.T) {
 			rekeyed[strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")] = true
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		case "/v1/reload":
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/citus-restore-metadata":
+			bs, _ := loadBackupState(rc.Cluster)
+			if !bs.ManagedRolesHeld || len(rekeyed) != 2 {
+				t.Error("catalog rewrite must follow local rekey under client fences")
+			}
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		case "/v1/postgres/citus-status":
 			if len(rekeyed) != 2 {

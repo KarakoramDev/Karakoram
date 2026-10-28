@@ -214,15 +214,7 @@ func (p *Core) runCitusRestore(ctx context.Context, rc *engine.Context, op *doma
 			}
 			cp.Step = "citus-metadata"
 		case "citus-metadata":
-			coordinator, _, err := s.group(0).primary(ctx, rc)
-			if err != nil {
-				return fail(err)
-			}
-			var status pgspec.CitusStatusResponse
-			if err = pgAction(ctx, rc, coordinator.Name, "citus-status", struct{}{}, &status); err != nil {
-				return fail(err)
-			}
-			if err = verifyCitusRestoreMetadata(s, status); err != nil {
+			if err = p.rewriteCitusRestoreMetadata(ctx, rc, s); err != nil {
 				return fail(err)
 			}
 			// Drop every source bootstrap/credential reference before enabling
@@ -285,6 +277,9 @@ func (p *Core) runCitusRestore(ctx context.Context, rc *engine.Context, op *doma
 			}
 			s.CitusOperation = ""
 			bs.RestoreOperation = ""
+			if c.Clone {
+				bs.InitialApplied = true
+			}
 			bs.RestoreCheckpoint = nil
 			if err = save(rc.Cluster, s); err != nil {
 				return fail(err)
@@ -308,10 +303,53 @@ func (p *Core) runCitusRestore(ctx context.Context, rc *engine.Context, op *doma
 	return backupResult(cp, false), nil
 }
 
+func (p *Core) rewriteCitusRestoreMetadata(ctx context.Context, rc *engine.Context, s *state) error {
+	var req pgspec.CitusRestoreMetadataRequest
+	for _, group := range s.groups() {
+		leader, _, err := group.primary(ctx, rc)
+		if err != nil {
+			return err
+		}
+		req.Nodes = append(req.Nodes, pgspec.CitusNode{GroupID: group.id, Host: leader.Name, Port: pgspec.PortPostgres})
+	}
+	// Finish every node-local rewrite before observing any catalog. No remote
+	// metadata-sync UDF is safe while recovery client fences are installed.
+	for _, node := range req.Nodes {
+		if err := pgAction(ctx, rc, node.Host, pgspec.ActionCitusRestoreMetadata, req, nil); err != nil {
+			return err
+		}
+	}
+	for _, node := range req.Nodes {
+		var status pgspec.CitusStatusResponse
+		if err := pgAction(ctx, rc, node.Host, pgspec.ActionCitusStatus, struct{}{}, &status); err != nil {
+			return err
+		}
+		if err := verifyCitusRestoreMetadata(s, status); err != nil {
+			return err
+		}
+		for _, actual := range status.Nodes {
+			matches := false
+			for _, target := range req.Nodes {
+				if actual.GroupID == target.GroupID && actual.Host == target.Host && actual.Port == target.Port {
+					matches = true
+					break
+				}
+			}
+			if !matches {
+				return engine.Invalid("restored Citus catalog does not match target primary %s", actual.Host)
+			}
+		}
+	}
+	return nil
+}
+
 func verifyCitusRestoreMetadata(s *state, status pgspec.CitusStatusResponse) error {
 	expected := map[int]bool{}
 	for _, g := range s.groups() {
 		expected[g.id] = false
+	}
+	if len(status.Nodes) != len(expected) {
+		return engine.Invalid("restored Citus catalog node count does not match formation")
 	}
 	for _, node := range status.Nodes {
 		if !node.Active {
@@ -320,6 +358,9 @@ func verifyCitusRestoreMetadata(s *state, status pgspec.CitusStatusResponse) err
 		m := s.find(node.Host)
 		if m == nil || m.Role != "data" || m.Group != node.GroupID || node.Port != 5432 {
 			return engine.Invalid("restored pg_dist_node does not match formation: %s", node.Host)
+		}
+		if expected[node.GroupID] {
+			return engine.Invalid("restored Citus catalog repeats group %d", node.GroupID)
 		}
 		expected[node.GroupID] = true
 	}

@@ -137,6 +137,58 @@ func TestCitusActionValidation(t *testing.T) {
 	}
 }
 
+func TestCitusRestoreMetadataIsLocalAtomicAndTargetOwned(t *testing.T) {
+	s := testSpec()
+	s.Citus = &pgspec.Citus{Group: 1, Database: "application"}
+	req := pgspec.CitusRestoreMetadataRequest{Nodes: []pgspec.CitusNode{
+		{GroupID: 0, Host: "target-coordinator", Port: 5432},
+		{GroupID: 1, Host: "target-worker", Port: 5432},
+	}}
+	if _, err := citusRestoreMetadataSQL(s, req); err == nil {
+		t.Fatal("catalog rewrite accepted without recovery client fences")
+	}
+	s.Postgres.RecoveryClientsHeld = true
+	sql, err := citusRestoreMetadataSQL(s, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstWrite := strings.Index(sql, "UPDATE pg_catalog.pg_dist_node")
+	for _, guard := range []string{"BEGIN;", "SET LOCAL synchronous_commit = local", "SET LOCAL citus.enable_ddl_propagation = off", "SET LOCAL citus.enable_metadata_sync = off", "LOCK TABLE", "restored Citus node count differs", "restored Citus group differs"} {
+		if index := strings.Index(sql, guard); index < 0 || index >= firstWrite {
+			t.Error("local recovery guard missing or too late", guard)
+		}
+	}
+	for _, mutation := range []string{
+		"nodename='target-coordinator', nodeport=5432 WHERE groupid=0",
+		"nodename='target-worker', nodeport=5432 WHERE groupid=1",
+		"DELETE FROM pg_catalog.pg_dist_poolinfo;",
+		`ALTER DATABASE "application" SET citus.local_hostname TO 'target-worker';`,
+	} {
+		if !strings.Contains(sql, mutation) {
+			t.Error("missing target-owned metadata", mutation)
+		}
+	}
+	if !strings.HasSuffix(sql, "COMMIT;\n") || strings.Contains(sql, "citus_update_node") || strings.Contains(sql, "SET nodeid=") || strings.Contains(sql, "SET groupid=") {
+		t.Fatal("rewrite can propagate, lose placement identity or commit partially")
+	}
+	bad := []pgspec.CitusRestoreMetadataRequest{
+		{},
+		{Nodes: []pgspec.CitusNode{{GroupID: 1, Host: "worker", Port: 5432}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432}, {GroupID: 0, Host: "worker", Port: 5432}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "coordinator", Port: 5432}, {GroupID: 1, Host: "coordinator", Port: 5432}}},
+		{Nodes: []pgspec.CitusNode{{GroupID: 0, Host: "bad'host", Port: 5432}}},
+	}
+	for _, input := range bad {
+		if err := validateCitusInput(&input); err == nil {
+			t.Error("accepted invalid metadata mapping", input)
+		}
+	}
+	s.Citus.Group = 2
+	if _, err := citusRestoreMetadataSQL(s, req); err == nil {
+		t.Fatal("accepted mapping without local group")
+	}
+}
+
 func TestDCSGroupPrefix(t *testing.T) {
 	s := testSpec()
 	if got := dcsPrefix(s); got != "/karakoram/test-scope/" {

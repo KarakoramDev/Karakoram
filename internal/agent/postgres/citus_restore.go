@@ -7,10 +7,54 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/jackc/pgx/v5"
 )
+
+// The restored catalogs must be repaired independently on every group primary:
+// citus_update_node would propagate to peers that are deliberately HBA-fenced.
+// Keep node/group IDs (and therefore shard placements) unchanged.
+func citusRestoreMetadataSQL(s pgspec.Spec, req pgspec.CitusRestoreMetadataRequest) (string, error) {
+	if err := validateCitusInput(&req); err != nil {
+		return "", err
+	}
+	if s.Citus == nil || s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
+		return "", errors.New("Citus restore metadata requires client fences")
+	}
+	var sql strings.Builder
+	sql.WriteString("BEGIN;\nSET LOCAL synchronous_commit = local;\nSET LOCAL citus.enable_ddl_propagation = off;\nSET LOCAL citus.enable_metadata_sync = off;\nLOCK TABLE pg_catalog.pg_dist_node, pg_catalog.pg_dist_poolinfo IN EXCLUSIVE MODE;\n")
+	fmt.Fprintf(&sql, "DO $kk$ BEGIN IF (SELECT count(*) FROM pg_catalog.pg_dist_node) <> %d THEN RAISE EXCEPTION 'restored Citus node count differs from target'; END IF; END $kk$;\n", len(req.Nodes))
+	local := ""
+	for _, node := range req.Nodes {
+		fmt.Fprintf(&sql, "DO $kk$ BEGIN IF (SELECT count(*) FROM pg_catalog.pg_dist_node WHERE groupid=%d AND noderole='primary') <> 1 THEN RAISE EXCEPTION 'restored Citus group differs from target'; END IF; END $kk$;\n", node.GroupID)
+		if node.GroupID == s.Citus.Group {
+			local = node.Host
+		}
+	}
+	if local == "" {
+		return "", errors.New("restore target omits local group")
+	}
+	for _, node := range req.Nodes {
+		fmt.Fprintf(&sql, "UPDATE pg_catalog.pg_dist_node SET nodename=%s, nodeport=%d WHERE groupid=%d AND noderole='primary';\n", sqlQuote(node.Host), node.Port, node.GroupID)
+	}
+	// Pool overrides may contain source hosts/ports. The restored target uses
+	// its managed pg_dist_node addresses, not source-specific connection routes.
+	sql.WriteString("DELETE FROM pg_catalog.pg_dist_poolinfo;\n")
+	fmt.Fprintf(&sql, "ALTER DATABASE %s SET citus.local_hostname TO %s;\nCOMMIT;\n", sqlIdent(s.Citus.Database), sqlQuote(local))
+	return sql.String(), nil
+}
+
+func rewriteCitusRestoreMetadata(ctx context.Context, c *pgx.Conn, s pgspec.Spec, req pgspec.CitusRestoreMetadataRequest) error {
+	sql, err := citusRestoreMetadataSQL(s, req)
+	if err != nil {
+		return err
+	}
+	_, err = c.Exec(ctx, sql)
+	return err
+}
 
 func createCitusRestorePoint(ctx context.Context, c *pgx.Conn, s pgspec.Spec, name string) (pgspec.CitusRestorePointResponse, error) {
 	out := pgspec.CitusRestorePointResponse{Nodes: []pgspec.CitusRestorePoint{}}

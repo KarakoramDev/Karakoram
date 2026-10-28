@@ -40,6 +40,8 @@ func citusInput(action string) any {
 		return &pgspec.CitusNodeRequest{}
 	case pgspec.ActionCitusRestorePoint:
 		return &pgspec.CitusRestorePointRequest{}
+	case pgspec.ActionCitusRestoreMetadata:
+		return &pgspec.CitusRestoreMetadataRequest{}
 	case pgspec.ActionArchiveCovers:
 		return &pgspec.ArchiveCoversRequest{}
 	default:
@@ -49,6 +51,21 @@ func citusInput(action string) any {
 
 func validateCitusInput(input any) error {
 	switch r := input.(type) {
+	case *pgspec.CitusRestoreMetadataRequest:
+		if len(r.Nodes) == 0 || len(r.Nodes) > 1024 {
+			return errors.New("restore target nodes required")
+		}
+		groups := map[int]bool{}
+		hosts := map[string]bool{}
+		for _, node := range r.Nodes {
+			if node.GroupID < 0 || groups[node.GroupID] || hosts[node.Host] || !validHost(node.Host) || node.Port != pgspec.PortPostgres {
+				return errors.New("invalid restore target group or address")
+			}
+			groups[node.GroupID], hosts[node.Host] = true, true
+		}
+		if !groups[0] {
+			return errors.New("restore target coordinator required")
+		}
 	case *pgspec.CitusRebalanceStartRequest:
 		if r.Receipt == "" || !safeValue(r.Receipt, 256) || r.Strategy != "" && !identifier.MatchString(r.Strategy) {
 			return errors.New("invalid rebalance receipt or strategy")
@@ -74,7 +91,7 @@ func validateCitusInput(input any) error {
 }
 
 func (e *Runner) citusRoutes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{pgspec.ActionCitusStatus, pgspec.ActionCitusRebalanceStart, pgspec.ActionCitusRebalanceStatus, pgspec.ActionCitusRebalanceStop, pgspec.ActionCitusDrainNode, pgspec.ActionCitusRemoveNode, pgspec.ActionCitusRestorePoint, pgspec.ActionWALSwitch, pgspec.ActionArchiveCovers} {
+	for _, action := range []string{pgspec.ActionCitusStatus, pgspec.ActionCitusRebalanceStart, pgspec.ActionCitusRebalanceStatus, pgspec.ActionCitusRebalanceStop, pgspec.ActionCitusDrainNode, pgspec.ActionCitusRemoveNode, pgspec.ActionCitusRestorePoint, pgspec.ActionCitusRestoreMetadata, pgspec.ActionWALSwitch, pgspec.ActionArchiveCovers} {
 		mux.HandleFunc("POST /v1/postgres/"+action, func(w http.ResponseWriter, r *http.Request) {
 			input := citusInput(action)
 			if err := decodeAction(w, r, input); err != nil {
@@ -118,7 +135,7 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		return nil, errors.New("data member required")
 	}
 	groupAction := action == pgspec.ActionWALSwitch || action == pgspec.ActionArchiveCovers
-	if !groupAction && (s.Citus == nil || action != pgspec.ActionCitusStatus && s.Citus.Group != 0) {
+	if !groupAction && (s.Citus == nil || action != pgspec.ActionCitusStatus && action != pgspec.ActionCitusRestoreMetadata && s.Citus.Group != 0) {
 		return nil, errors.New("citus coordinator required")
 	}
 	if usesPatroni(s) {
@@ -139,6 +156,12 @@ func runCitusAction(ctx context.Context, s pgspec.Spec, p paths, action string, 
 		return nil, errors.New("primary required")
 	}
 	switch action {
+	case pgspec.ActionCitusRestoreMetadata:
+		if s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
+			return nil, errors.New("Citus restore metadata requires client fences")
+		}
+		err := rewriteCitusRestoreMetadata(ctx, c, s, *input.(*pgspec.CitusRestoreMetadataRequest))
+		return pgspec.ActionResponse{OK: err == nil}, err
 	case pgspec.ActionCitusStatus:
 		out := pgspec.CitusStatusResponse{Group: s.Citus.Group, IsCoordinator: s.Citus.Group == 0, Nodes: []pgspec.CitusNode{}}
 		rows, err := c.Query(ctx, "SELECT nodeid, groupid, nodename, nodeport, noderole::text, isactive FROM pg_catalog.pg_dist_node ORDER BY nodeid")

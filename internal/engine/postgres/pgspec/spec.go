@@ -266,6 +266,7 @@ const (
 	ActionCitusDrainNode       = "citus-drain-node"
 	ActionCitusRemoveNode      = "citus-remove-node"
 	ActionCitusRestorePoint    = "citus-restore-point"
+	ActionCitusRestoreMetadata = "citus-restore-metadata"
 	ActionWALSwitch            = "wal-switch"
 	ActionArchiveCovers        = "archive-covers"
 )
@@ -549,6 +550,12 @@ type CitusRebalanceResponse struct {
 type CitusNodeRequest struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
+}
+
+// CitusRestoreMetadataRequest remaps existing node identities by replication
+// group without invoking Citus's remote metadata synchronization.
+type CitusRestoreMetadataRequest struct {
+	Nodes []CitusNode `json:"nodes"`
 }
 
 type CitusRestorePointRequest struct {
