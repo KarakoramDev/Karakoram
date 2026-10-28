@@ -143,6 +143,12 @@ only **after** the existing access-release/reload stage, never by bypassing the
 earlier client fences. Final restore success, the initial application receipt
 and the fresh-base backup enqueue follow that barrier. Local catalog validation
 still precedes access release.
+While the restore journal owns the formation, ordinary readiness remains
+non-Ready (`CitusTopology=False/RestoreInProgress`) without issuing this remote
+probe. Clearing the desired client hold does not prove that every member has
+reloaded it: a partially completed release still belongs to that journal.
+Only the restore's explicit final barrier runs after **all** member release
+reloads succeed; ordinary connectivity readiness resumes after ownership clears.
 
 A completed restore affected by stale outbound authentication can be repaired
 without recreating data: deploy matching fixed control-plane/member artifacts,

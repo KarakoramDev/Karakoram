@@ -70,6 +70,20 @@ func citusTopology(ctx context.Context, rc *engine.Context, s *state, observatio
 		condition.Message = strings.Join(issues, "; ")
 		return condition
 	}
+	backup, err := loadBackupState(rc.Cluster)
+	if err != nil {
+		condition.Status, condition.Reason = "Unknown", "ObservationFailed"
+		condition.Message = "Cannot observe Citus restore ownership"
+		return condition
+	}
+	if backup.ManagedRolesHeld || backup.RestoreOperation != "" || s.RestoreRecovery != nil && restoreOperation(s.RestoreRecovery) {
+		// Clearing the desired hold is not proof that every agent reloaded it.
+		// The owning restore performs its explicit SQL barrier only after all
+		// release reloads acknowledge success; ordinary Status must not race it.
+		condition.Reason = "RestoreInProgress"
+		condition.Message = "Restore owns the formation; waiting for its all-member access release and SQL barrier"
+		return condition
+	}
 	if err := citusConnectivity(ctx, rc, leaders); err != nil {
 		condition.Reason = "ConnectivityFailed"
 		condition.Message = "Coordinator cannot execute SQL on every group primary: " + err.Error()

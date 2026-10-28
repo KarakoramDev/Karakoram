@@ -85,3 +85,54 @@ func TestDistributedWorkerAuthenticationFailureWithdrawsReady(t *testing.T) {
 		t.Fatal("successful worker SQL did not recover readiness", status, err)
 	}
 }
+
+func TestCitusReadinessDefersRemoteSQLToRestoreOwner(t *testing.T) {
+	for _, owner := range []string{"client-hold", "release-journal", "restore-recovery", "backup-recovery"} {
+		t.Run(owner, func(t *testing.T) {
+			_, rc, s := citusOpsFixture(t)
+			var backup backupState
+			switch owner {
+			case "client-hold":
+				backup.ManagedRolesHeld = true
+			case "release-journal":
+				// Desired holds have cleared, but some members may still have
+				// the old fenced configuration after a partial release reload.
+				backup.RestoreOperation = "restore"
+			case "restore-recovery":
+				s.RestoreRecovery = &domain.Operation{ID: "restore", Kind: domain.OperationRestore}
+			case "backup-recovery":
+				s.RestoreRecovery = &domain.Operation{ID: "backup", Kind: domain.OperationBackup}
+			}
+			if err := saveBackupState(rc.Cluster, backup); err != nil {
+				t.Fatal(err)
+			}
+			observations := map[string]pgspec.StatusResponse{}
+			var nodes []pgspec.CitusNode
+			for _, m := range s.data() {
+				observations[m.Name] = pgspec.StatusResponse{Running: true, Role: "primary", Leader: m.Name}
+				nodes = append(nodes, pgspec.CitusNode{GroupID: m.Group, Host: m.Name, Port: 5432, Role: "primary", Active: true})
+			}
+			probes := 0
+			installBackupAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v1/postgres/citus-status":
+				case "/v1/postgres/citus-connectivity":
+					probes++
+				default:
+					t.Error("unexpected action", r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				json.NewEncoder(w).Encode(pgspec.CitusStatusResponse{IsCoordinator: true, Nodes: nodes})
+			})
+			condition := citusTopology(t.Context(), rc, s, observations)
+			if owner == "backup-recovery" {
+				if condition.Status != "True" || probes != 1 {
+					t.Fatal("backup cleanup incorrectly suppressed ordinary connectivity readiness", condition, probes)
+				}
+			} else if condition.Status != "False" || condition.Reason != "RestoreInProgress" || probes != 0 {
+				t.Fatal("ordinary readiness probed before restore ownership released", condition, probes)
+			}
+		})
+	}
+}
