@@ -176,6 +176,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if err = b.mutationReady(ctx, a, &m); err != nil {
 		return infra.Op{}, err
 	}
+	if err = prepareDeploymentBudget(&m, digest, d.RetryEpoch); err != nil {
+		return infra.Op{}, err
+	}
 	releaseSlot, err := b.deploymentSlot(ctx, a.ID)
 	if err != nil {
 		return infra.Op{}, err
@@ -232,6 +235,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	o.Digest = digest
 	m.Pending = &o
+	m.DeploymentBudget.Attempts++
 	if err = b.update(ctx, a, m, settings); err != nil {
 		return encodeOp(o), err
 	}
@@ -241,6 +245,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 			// An authoritative refusal did not enqueue a build. Retire only this
 			// attempt under target exclusion; transport/5xx ambiguity stays fenced.
 			m.Pending = nil
+			m.DeploymentBudget.Attempts--
 			submitted = false
 			if saveErr := b.update(ctx, a, m, nil); saveErr != nil {
 				return encodeOp(o), errors.Join(err, saveErr)
@@ -361,6 +366,9 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 	if state.Failed {
 		m.Pending.Failed = true
 		m.Pending.Uncertain = state.Status == "stalled"
+		if o.Action == "deploy" && !m.Pending.Uncertain && m.DeploymentBudget != nil && m.DeploymentBudget.Digest == o.Digest {
+			m.DeploymentBudget.LastError = state.Message
+		}
 	} else {
 		m.Pending = nil
 		if o.Action != "stop" && o.Specification != "" {
@@ -368,6 +376,10 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 		}
 		m.MutationUntil = time.Time{}
 		if o.Action == "deploy" {
+			if m.DeploymentBudget != nil && m.DeploymentBudget.Digest == o.Digest {
+				m.DeploymentBudget.Attempts = 0
+				m.DeploymentBudget.LastError = ""
+			}
 			m.Deployed = true
 			m.WriterFenced = o.WriterFenced
 		}

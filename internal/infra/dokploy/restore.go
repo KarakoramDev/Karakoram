@@ -530,6 +530,13 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 	var releaseSlot func(bool)
 	submitted := false
 	if action == "deploy" {
+		epoch := int64(0)
+		if m.DeploymentBudget != nil {
+			epoch = m.DeploymentBudget.RetryEpoch
+		}
+		if err = prepareDeploymentBudget(&m, m.DeploymentDigest, epoch); err != nil {
+			return s, err
+		}
 		releaseSlot, err = b.deploymentSlot(ctx, a.ID)
 		if err != nil {
 			return s, err
@@ -539,6 +546,10 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 	work, cancel := context.WithTimeout(ctx, restoreTimeout)
 	defer cancel()
 	o.WriterFenced = m.WriterFenced
+	if action == "deploy" {
+		o.Digest = m.DeploymentDigest
+		m.DeploymentBudget.Attempts++
+	}
 	m.Pending = &o
 	m.MutationUntil = b.nowTime().Add(restoreFence)
 	if err = b.update(work, &a, m, nil); err != nil {
@@ -555,6 +566,7 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 		if action == "deploy" && enqueueRefused(err) {
 			submitted = false
 			m.Pending = nil
+			m.DeploymentBudget.Attempts--
 			m.MutationUntil = time.Time{}
 			if saveErr := b.update(ctx, &a, m, nil); saveErr != nil {
 				return s, errors.Join(err, saveErr)

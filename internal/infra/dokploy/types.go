@@ -55,6 +55,7 @@ type metadata struct {
 	Deployed               bool               `json:"deployed,omitempty"`
 	AppliedSpecification   string             `json:"appliedSpecification,omitempty"`
 	DeploymentDigest       string             `json:"deploymentDigest,omitempty"`
+	DeploymentBudget       *deploymentBudget  `json:"deploymentBudget,omitempty"`
 	Desired                string             `json:"desired,omitempty"`
 	Pending                *operation         `json:"pending,omitempty"`
 	MutationUntil          time.Time          `json:"mutationUntil,omitempty"`

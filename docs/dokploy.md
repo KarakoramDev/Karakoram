@@ -78,6 +78,17 @@ volume-wipe deployment/task remains terminal, retaining the holder, rather than
 resubmitting on every delete reconciliation. Ambiguous wipe submission responses
 retain their original fence.
 
+Runtime archive uploads and retained-source builds reserve attempts durably in
+the application description before delivery, with at most **four attempts**
+for the same rendered desired deployment and retry epoch. Submission acceptance,
+waiting, control-plane restart and a failed create operation do not reset this
+budget. A successful completed deployment clears the consecutive attempt count;
+a changed rendered runtime/artifact or `clusters retry-deployments` grants a new
+budget. An authoritative enqueue refusal does not consume an attempt. Once
+exhausted, a subsequent deployment request reports `DeploymentRetriesExhausted`;
+the engine retains the failure status and emits a warning with the last safe
+platform error. Fix the platform/build cause before explicitly re-arming.
+
 Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
 change. A pure count reduction back to an already-running count therefore uses
 temporary `stop-first`, `Parallelism=1` when at least two replicas remain running.
