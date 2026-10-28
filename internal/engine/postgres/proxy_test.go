@@ -361,6 +361,65 @@ func TestAccessPublicationReportsConfigurationPending(t *testing.T) {
 	}
 }
 
+func TestConfigurationPendingRequiresOtherwiseReady(t *testing.T) {
+	for _, blocker := range []string{"archive", "disk", "pending", "rolling", "restore", "upgrade", "extensions", "unformed", "version-drift"} {
+		t.Run(blocker, func(t *testing.T) {
+			p, rc, b := setup(t, "ha")
+			s := converge(t, p, rc)
+			s.ConfigVersion++
+			st, err := live(t.Context(), rc, "demop0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch blocker {
+			case "archive":
+				rc.Cluster.Spec.Backup.Storage = "archive-store"
+				st.ArchiveFailing = true
+			case "disk":
+				b.genericOverrides = map[string]agentapi.Status{"demop0": {
+					ConfigVersion: s.find("demop0").ConfigVersion,
+					Disk:          agentapi.DiskUsage{TotalBytes: 100, FreeBytes: 1},
+				}}
+			case "pending":
+				s.Pending = &pending{}
+			case "rolling":
+				s.Rolling = &rollingState{}
+			case "restore":
+				s.RestoreRecovery = &domain.Operation{}
+			case "upgrade":
+				s.Upgrade = &upgradeState{}
+			case "extensions":
+				s.ExtensionsPending = true
+			case "unformed":
+				s.Formed = false
+			case "version-drift":
+				st.Version = "99.1"
+			}
+			b.statusOverrides = map[string]pgspec.StatusResponse{"demop0": st}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			status, err := p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			condition := healthCondition(status, "Ready")
+			if condition.Status != "False" || condition.Reason == "ConfigurationPending" ||
+				strings.Contains(condition.Message, "waiting for member configuration") ||
+				strings.Contains(status.Message, "waiting for member configuration") {
+				t.Fatalf("configuration wait masked %s: %+v", blocker, status)
+			}
+			if blocker == "version-drift" && (condition.Reason != "VersionDrift" ||
+				condition.Message != status.Message || !strings.Contains(condition.Message, "PostgreSQL version drift")) {
+				t.Fatalf("drift reason/message disagree: %+v", status)
+			}
+			if blocker == "archive" && healthCondition(status, "WALArchive").Status != "False" {
+				t.Fatalf("archive failure disappeared: %+v", status)
+			}
+		})
+	}
+}
+
 func TestProxyReadyAndStatusRequireEveryLiveInstance(t *testing.T) {
 	p, rc, b, s, _, late := replicatedProxyFixture(t)
 	m := s.find("demopx")

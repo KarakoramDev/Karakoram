@@ -148,6 +148,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	credentialsPending, err := accessIntentPending(ctx, rc)
 	credentialsKnown := err == nil
 	healthy := credentialsKnown && len(s.data()) == s.desiredDataCount(rc) && len(s.Members) > 0
+	configurationReady := true
 	writer := false
 	quorumHealthy := false
 	quorumRequired := false
@@ -465,7 +466,8 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			(m.Stage != "joined" || member.Agent.ConfigVersion < m.ConfigVersion || m.ConfigVersion != s.ConfigVersion) {
 			configurationPending = append(configurationPending, fmt.Sprintf("%s (stage %s, observed %d, assigned %d, desired %d)", m.Name, m.Stage, member.Agent.ConfigVersion, m.ConfigVersion, s.ConfigVersion))
 		}
-		healthy = healthy && member.Health && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
+		healthy = healthy && member.Health
+		configurationReady = configurationReady && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
 		if observation.inventory.Err != nil {
 			return out, fmt.Errorf("observe PostgreSQL member %s containers: %w", m.Name, observation.inventory.Err)
 		}
@@ -536,7 +538,8 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return out, err
 	}
-	if healthy && !versionRolloutPending && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy) {
+	readyPrerequisites := healthy && !versionRolloutPending && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy)
+	if readyPrerequisites && configurationReady {
 		out.Phase = domain.PhaseReady
 		out.ObservedGeneration = rc.Cluster.Generation
 	} else if rc.Cluster.Status.ObservedGeneration > 0 {
@@ -547,11 +550,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	condition := "False"
 	reason := "MembersStarting"
-	nativeHealthy := len(out.Members) > 0
-	for _, member := range out.Members {
-		nativeHealthy = nativeHealthy && member.Health && member.Agent.Healthy
-	}
-	if out.Phase == domain.PhaseUpdating && s.Formed && nativeHealthy && len(configurationPending) > 0 {
+	if out.Phase == domain.PhaseUpdating && readyPrerequisites && !configurationReady && len(configurationPending) > 0 {
 		reason = "ConfigurationPending"
 	}
 	if len(slotIssues) > 0 {
@@ -603,6 +602,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		})
 		out.Phase, out.Message = domain.PhaseDegraded, message
 		out.Conditions[0].Status, out.Conditions[0].Reason = "False", "VersionDrift"
+		out.Conditions[0].Message = message
 		out.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
 	}
 	if len(observationIssues) > 0 {

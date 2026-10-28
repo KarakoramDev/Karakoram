@@ -217,9 +217,11 @@ configuration publication, not session revocation or future availability.
 Managed access changes also advance the shared member configuration revision.
 The cluster can therefore report phase `Updating` with `Ready=False` even when
 all native members are healthy and the specification generation is already
-observed. In this case the reason is `ConfigurationPending`, and the message
-identifies members awaiting configuration assignment, application or joined-stage
-acknowledgement. This is a configuration-convergence barrier, not evidence that
+observed. When configuration acknowledgements are the only remaining readiness
+prerequisite, the reason is `ConfigurationPending`, and the message identifies
+members awaiting configuration assignment, application or joined-stage
+acknowledgement. Other readiness failures retain their own diagnostics.
+This is a configuration-convergence barrier, not evidence that
 PostgreSQL members are starting or that existing sessions have stopped serving.
 It also retains lifecycle admission gates that require a converged cluster.
 
