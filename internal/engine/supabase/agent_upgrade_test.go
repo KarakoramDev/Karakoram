@@ -319,18 +319,24 @@ func TestDisabledComponentMaintenanceThroughSync(t *testing.T) {
 					t.Fatal(err)
 				}
 				if state.Members[component] == nil || backend.services[member.Name] == nil || state.Pending != nil {
-					// Gateway revocation has its own receipt on the first pass.
-					if component != "gateway" || state.Pending == nil || state.Pending.Action != "public" || backend.services[member.Name] == nil {
-						t.Fatalf("closed window started component removal: %+v", state)
-					}
+					t.Fatalf("closed window started component removal: %+v", state)
 				}
 			}
-			if component == "gateway" && public.enabled {
-				t.Fatal("closed window delayed gateway exposure revocation")
+			if !public.enabled {
+				t.Fatal("closed window changed gateway exposure")
 			}
 			rc.Cluster.Spec.Maintenance = nil
-			if _, err := p.Sync(t.Context(), rc); err != nil {
-				t.Fatal(err)
+			for range 3 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				state, err = loadState(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if state.Pending != nil && state.Pending.Action == "delete" {
+					break
+				}
 			}
 			state, err = loadState(rc.Cluster)
 			if err != nil || state.Pending == nil || state.Pending.Action != "delete" {
