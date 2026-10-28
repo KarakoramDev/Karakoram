@@ -49,8 +49,9 @@ func (p *Core) adoptSingleton(ctx context.Context, rc *engine.Context, s *state)
 	}
 	// No GR exists while this member is still single. Persist the replacement
 	// credential before publishing adoption; replay reuses it after a CP crash.
-	// The mandatory adoption restart applies renderAccounts' ALTER USER from
-	// the acknowledged config before the first START GROUP_REPLICATION.
+	// Applying that config detects the credential hash change and restarts
+	// mysqld with renderAccounts' ALTER USER before acknowledging it. Formation
+	// then performs its adoption restart before the first GR bootstrap.
 	password, err := secret(ctx, rc, "users/kk_repl")
 	if err != nil {
 		return err
