@@ -195,7 +195,7 @@ func TestCitusRecoveredPasswordsReachEveryPrimaryBeforeRelease(t *testing.T) {
 			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
 				t.Error(err)
 			}
-			if input.Operation != "password" || input.Role.Password == nil {
+			if input.Operation != "recover-password-local" || input.Role.Password == nil {
 				t.Error("recovery overwrote role attributes")
 			}
 			member := strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")
@@ -247,5 +247,49 @@ func TestRekeyNativeRejectionIsPermanentButUnavailableRetries(t *testing.T) {
 				t.Fatal("native diagnostics leaked")
 			}
 		})
+	}
+}
+
+func TestCitusRecoveryWithLegacyAgentFailsClosedWithoutDowngrade(t *testing.T) {
+	p, rc, _ := citusOpsFixture(t)
+	if err := saveBackupState(rc.Cluster, backupState{ManagedRolesHeld: true}); err != nil {
+		t.Fatal(err)
+	}
+	requests := 0
+	installBackupAgent(t, rc, func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/v1/postgres/status":
+			json.NewEncoder(w).Encode(pgspec.StatusResponse{Running: true, Role: "primary", Leader: strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer ")})
+		case "/v1/postgres/roles":
+			requests++
+			var input pgspec.AccessRequest
+			if err := json.NewDecoder(req.Body).Decode(&input); err != nil {
+				t.Error(err)
+			}
+			// Model the old agent's strict operation validation: the new
+			// operation is rejected before SQL, rather than ignored.
+			if input.Operation == "recover-password-local" {
+				http.Error(w, "invalid PostgreSQL access action", http.StatusBadRequest)
+				return
+			}
+			t.Error("new control plane downgraded coordinated-local intent")
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		default:
+			t.Error("unexpected action", req.URL.Path)
+		}
+	})
+	verifier := "target-verifier"
+	for _, operation := range []string{"password", "recover-password"} {
+		request := pgspec.AccessRequest{Operation: operation, Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: "application"}, Password: &verifier}}
+		if err := p.recoveredRolePassword(t.Context(), rc, request); err == nil {
+			t.Fatal("old-agent rejection accepted as successful repair")
+		}
+		bs, err := loadBackupState(rc.Cluster)
+		if err != nil || !bs.ManagedRolesHeld {
+			t.Fatal("legacy agent rejection released recovery fences", err)
+		}
+	}
+	if requests != 2 {
+		t.Fatal("unexpected fallback or fan-out after rejection", requests)
 	}
 }

@@ -505,7 +505,7 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 			if managedRole(req.Name) || req.Binding && bindingRole(req.Name) {
 				return nil
 			}
-		case "password", "recover-password":
+		case "password", "recover-password", "recover-password-local":
 			if req.Role != nil && (managedRole(req.Role.Name) || req.Binding && bindingRole(req.Role.Name)) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
 				return nil
 			}
@@ -581,7 +581,7 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			return roles, nil
 		case "create", "update":
 			return struct{}{}, writeRole(ctx, c, req.Operation, *req.Role)
-		case "password", "recover-password":
+		case "password", "recover-password", "recover-password-local":
 			_, err := c.Exec(ctx, "ALTER ROLE "+pgx.Identifier{req.Role.Name}.Sanitize()+" PASSWORD $1", pgx.QueryExecModeSimpleProtocol, *req.Role.Password)
 			return struct{}{}, err
 		case "delete":
@@ -682,6 +682,28 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 	}
 	return nil, invalidAccess("invalid PostgreSQL access action")
 }
+
+// Only the distinct local operation promises coordinated all-primary fan-out.
+// Legacy control planes send password/recover-password only to the coordinator,
+// so those operations must retain Citus propagation even under client holds.
+func recoveryPasswordLocal(s pgspec.Spec, action string, req pgspec.AccessRequest) (bool, error) {
+	if action != pgspec.ActionRoles {
+		return false, nil
+	}
+	if req.Operation == "recover-password" || req.Operation == "recover-password-local" {
+		if s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
+			return false, &accessError{http.StatusConflict, "recovery password action requires client holds"}
+		}
+	}
+	if req.Operation != "recover-password-local" {
+		return false, nil
+	}
+	if s.Citus == nil {
+		return false, invalidAccess("local recovery password action requires Citus")
+	}
+	return true, nil
+}
+
 func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 	for _, action := range []string{pgspec.ActionRoles, pgspec.ActionDatabases, pgspec.ActionGrants, pgspec.ActionUpdateExtensions} {
 		mux.HandleFunc("POST /v1/postgres/"+action, func(w http.ResponseWriter, r *http.Request) {
@@ -706,10 +728,9 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if err != nil {
 					return err
 				}
-				// Recovery may rekey identities from the recovered catalog, but
-				// must never bypass ordinary binding OID fences on an open server.
-				if req.Operation == "recover-password" && (s.Postgres == nil || !s.Postgres.RecoveryClientsHeld) {
-					return &accessError{http.StatusConflict, "recovery password action requires client holds"}
+				localPassword, err := recoveryPasswordLocal(s, action, req)
+				if err != nil {
+					return err
 				}
 				if s.Role != pgspec.RoleData {
 					return &accessError{http.StatusServiceUnavailable, "access action requires a data member"}
@@ -731,9 +752,8 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if recovery {
 					return &accessError{http.StatusServiceUnavailable, "access action cannot run on a replica"}
 				}
-				if s.Citus != nil && s.Postgres.RecoveryClientsHeld && action == pgspec.ActionRoles &&
-					(req.Operation == "password" || req.Operation == "recover-password") {
-					// Recovery dispatches the same verifier to every group primary.
+				if localPassword {
+					// The explicit operation promises fan-out by the caller.
 					// This short-lived connection must not contact fenced peers.
 					if _, err = c.Exec(ctx, "SET citus.enable_ddl_propagation = off"); err != nil {
 						return err

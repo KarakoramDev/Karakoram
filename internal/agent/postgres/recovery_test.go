@@ -98,3 +98,46 @@ func TestRecoveryPasswordBindingValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveryPasswordLocalRequiresExplicitFanout(t *testing.T) {
+	for _, operation := range []string{"password", "recover-password", "recover-password-local"} {
+		for _, citus := range []bool{false, true} {
+			for _, held := range []bool{false, true} {
+				s := testSpec()
+				s.Postgres.RecoveryClientsHeld = held
+				if citus {
+					s.Citus = &pgspec.Citus{Database: "app"}
+				}
+				req := pgspec.AccessRequest{Operation: operation}
+				local, err := recoveryPasswordLocal(s, pgspec.ActionRoles, req)
+				wantLocal := operation == "recover-password-local" && citus && held
+				wantError := operation != "password" && !held || operation == "recover-password-local" && !citus
+				if local != wantLocal || (err != nil) != wantError {
+					t.Fatalf("operation=%s citus=%t held=%t: local=%t err=%v", operation, citus, held, local, err)
+				}
+				// Old control planes only send legacy operations: even with
+				// new agents and held Citus clients they must still propagate.
+				if operation != "recover-password-local" && local {
+					t.Fatal("legacy coordinator-only recovery silently became local")
+				}
+			}
+		}
+	}
+	verifier := testVerifier()
+	for _, binding := range []bool{false, true} {
+		name := "application"
+		if binding {
+			name = "kb_0123456789abcdef0123456789abcdef"
+		}
+		req := pgspec.AccessRequest{Operation: "recover-password-local", Binding: binding, Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: name}, Password: &verifier}}
+		if err := validateAccessRequest(pgspec.ActionRoles, req); err != nil {
+			t.Fatal("explicit local recovery rejected", err)
+		}
+		for _, reserved := range []string{"postgres", "kk_monitor", "pg_monitor"} {
+			req.Role.Name = reserved
+			if err := validateAccessRequest(pgspec.ActionRoles, req); err == nil {
+				t.Fatal("local recovery accepted protected identity", reserved)
+			}
+		}
+	}
+}

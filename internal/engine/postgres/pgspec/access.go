@@ -63,6 +63,9 @@ type Grant struct {
 	Privileges []string `json:"privileges"`
 }
 
+// recover-password-local explicitly promises that the control plane applies
+// one verifier to every Citus group primary before releasing client holds.
+// It must not be substituted with a legacy password operation on old agents.
 type AccessRequest struct {
 	// Journal uses a distinct operation so older agents reject it before SQL.
 	RequestID           string     `json:"requestId,omitempty"`

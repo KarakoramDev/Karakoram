@@ -100,6 +100,13 @@ are preserved. Group-local physical replication supplies standbys. No later
 remote role re-propagation is needed, and client HBA fences are never relaxed to
 make a credential transaction succeed.
 
+Managed-password local execution requires a distinct recovery operation that
+explicitly promises all-primary fan-out. Legacy password requests retain normal
+Citus propagation even with client holds, so an older control plane cannot
+silently repair only the coordinator with newer agents. Older agents reject the
+new local operation before SQL; the new control plane keeps recovery held rather
+than downgrading the request or declaring mixed-version recovery successful.
+
 Definitive native system-role SQL rejections fail the tracking operation with a
 sanitized rekey diagnostic rather than being mislabeled as an HTTP conflict.
 Unavailable primaries, transport failures and retryable SQL failures remain

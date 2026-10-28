@@ -155,6 +155,9 @@ func (p *Core) recoveredRolePassword(ctx context.Context, rc *engine.Context, re
 	// One verifier, all recovered group primaries, before the access-release
 	// checkpoint. Retry is idempotent, including a lost acknowledgement. Physical
 	// replication supplies each group's standbys; no remote DDL is required.
+	// Older agents reject this distinct operation before SQL. Never downgrade to
+	// a legacy request that lacks the caller's coordinated-local intent.
+	request.Operation = "recover-password-local"
 	for _, group := range s.groups() {
 		m, _, err := group.primary(ctx, rc)
 		if err != nil {
