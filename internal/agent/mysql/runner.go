@@ -114,6 +114,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 			return nil, err
 		}
 	}
+	if err = syncDirectoryHierarchy(p.run, n.DataDir()); err != nil {
+		return nil, err
+	}
 	if s.Galera != nil {
 		if err = admitGaleraEpoch(s, p); err != nil {
 			return nil, err
@@ -199,6 +202,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		return nil, err
 	}
 	if err = privateDir(p.data); err != nil {
+		return nil, err
+	}
+	if err = syncDirectoryHierarchy(p.data, n.DataDir()); err != nil {
 		return nil, err
 	}
 	// Config-only/offline observations must never start or initialize data.

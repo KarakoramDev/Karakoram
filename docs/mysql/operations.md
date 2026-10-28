@@ -266,6 +266,13 @@ Galera launchers persist bootstrap/rejoin receipts using ordered file/directory
 `fsync` (`sync PATH`), not filesystem-wide `syncfs` (`sync -f PATH`), which some
 unprivileged volume environments reject. Persistence failure still prevents
 native startup; no receipt or durability check is bypassed.
+Before MySQL/PXC configuration/startup proceeds, every directory from the managed
+configuration/run and native data directories through the mounted volume root is
+fsynced, including existing ancestors. Managed configuration
+and identity files retain their file-fsync, atomic rename and parent-fsync
+publication. Native data-file durability remains the database's initialization,
+transaction/recovery and shutdown contract; receipt persistence is not a
+replacement for database flushing or a filesystem-wide data backup.
 
 If an older launcher created a bootstrap receipt and then failed to persist it,
 do not remove that receipt or assume bootstrap is safe to repeat. A disposable,

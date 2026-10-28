@@ -32,6 +32,33 @@ func privateDir(dir string) error {
 	}
 	return os.Chmod(dir, 0700)
 }
+
+// Persist the complete hierarchy to the mounted volume, including existing
+// ancestors that another startup component may only just have created.
+func syncDirectoryHierarchy(dir, volume string) error {
+	dir, volume = filepath.Clean(dir), filepath.Clean(volume)
+	relative, err := filepath.Rel(volume, dir)
+	if err != nil || relative != "." && !filepath.IsLocal(relative) {
+		return errors.New("MySQL directory must be within its volume")
+	}
+	for current := dir; ; current = filepath.Dir(current) {
+		f, err := os.Open(current)
+		if err != nil {
+			return err
+		}
+		syncErr := f.Sync()
+		closeErr := f.Close()
+		if syncErr != nil {
+			return syncErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if current == volume {
+			return nil
+		}
+	}
+}
 func durableJSON(path string, v any) error {
 	b, err := json.Marshal(v)
 	if err != nil {
