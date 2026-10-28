@@ -187,4 +187,12 @@ func TestPolicyValidation(t *testing.T) {
 	if err := Validate(ctx, c.opts.Store, p); err != nil {
 		t.Fatal(err)
 	}
+	reset := Defaults(domain.ControlPlaneBackupPolicy{})
+	if err := Validate(ctx, c.opts.Store, reset); err != nil {
+		t.Fatal("initial disabled policy must be accepted", err)
+	}
+	reset.Enabled = true
+	if err := Validate(ctx, c.opts.Store, reset); err == nil {
+		t.Fatal("enabled policy accepted without storage")
+	}
 }

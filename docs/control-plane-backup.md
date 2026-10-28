@@ -18,6 +18,12 @@ karactl control-plane backups list --limit 100 -o yaml
 
 `--storage` accepts `[namespace/]name`; without a namespace it uses the selected namespace, or `default`. The storage must already exist and be [S3](https://aws.amazon.com/s3/)-compatible; verification is recommended but not required. A policy-referenced storage cannot be deleted. `set` replaces policy, rather than patching it; defaults are disabled, `0 3 * * *`, and 14 retained successful backups. Supply all desired fields, or use an API-shaped `-f` file. Retention is 1–1000.
 
+To reset to the initial unconfigured state, PUT a policy with `enabled: false`
+and `storage: {"namespace":"default","name":""}` (or use an API-shaped `-f`
+file). An enabled policy always requires an existing S3 storage; a nonempty
+storage reference is validated even when disabled. Resetting the policy does
+not remove existing backup records or artifacts. Manual runs require storage.
+
 Schedules use five-field UTC cron with at most one catch-up. Manual runs use the same controller, storage policy and retention as scheduled runs. Only one backup executes at a time. Records progress through Pending, Running, Succeeded or Failed. Inspect the completed record: acceptance of `run` is not evidence of a usable backup. Failures emit `ControlPlaneBackupFailed` warning events.
 
 A run interrupted while Running is marked Failed after control-plane restart, without automatic retry. Review the record and start a new manual run when needed.

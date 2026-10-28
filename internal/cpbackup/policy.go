@@ -48,6 +48,9 @@ func Validate(ctx context.Context, st *store.Store, p domain.ControlPlaneBackupP
 	if p.RetainCount < 1 || p.RetainCount > 1000 {
 		return errors.New("retainCount must be between 1 and 1000")
 	}
+	if !p.Enabled && p.Storage.Name == "" {
+		return nil
+	}
 	b, err := st.GetBackupStorage(ctx, p.Storage.Namespace, p.Storage.Name)
 	if errors.Is(err, store.ErrNotFound) {
 		return errors.New("storage must reference an existing S3 backup storage")

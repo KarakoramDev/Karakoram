@@ -52,3 +52,28 @@ func TestControlPlaneBackupPolicyAndStorageReference(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }
+
+func TestControlPlaneBackupPolicyReset(t *testing.T) {
+	s, _, token := testServer(t)
+	initial := call(s, "GET", "/api/v1/control-plane/backup-policy", "", token)
+	if initial.Code != 200 {
+		t.Fatal(initial.Code, initial.Body.String())
+	}
+	storage := domain.BackupStorage{Namespace: "default", Name: "archive", Type: "s3", Bucket: "bucket"}
+	if err := s.Store.CreateBackupStorage(t.Context(), &storage); err != nil {
+		t.Fatal(err)
+	}
+	configured := `{"enabled":true,"storage":{"namespace":"default","name":"archive"},"schedule":"0 3 * * *","retainCount":14}`
+	if w := call(s, "PUT", "/api/v1/control-plane/backup-policy", configured, token); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := call(s, "PUT", "/api/v1/control-plane/backup-policy", initial.Body.String(), token); w.Code != 200 {
+		t.Fatal("cannot round-trip initial policy", w.Code, w.Body.String())
+	}
+	if w := call(s, "DELETE", "/api/v1/backup-storages/archive", "", token); w.Code != 204 {
+		t.Fatal("reset policy retained the old storage reference", w.Code, w.Body.String())
+	}
+	if w := call(s, "POST", "/api/v1/control-plane/backups", "", token); w.Code != 422 {
+		t.Fatal("manual run accepted without configured storage", w.Code, w.Body.String())
+	}
+}

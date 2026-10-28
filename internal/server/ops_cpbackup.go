@@ -73,6 +73,9 @@ func (s *Server) controlPlaneBackup(ctx context.Context, name string, in input) 
 		if err != nil {
 			return s.failure(err)
 		}
+		if p.Storage.Name == "" {
+			return fail(422, "validation_failed", "storage must reference an existing S3 backup storage")
+		}
 		if err := cpbackup.Validate(ctx, s.Store, p); err != nil {
 			return fail(422, "validation_failed", err.Error())
 		}
