@@ -207,6 +207,9 @@ func (p *Provider) Validate(_ context.Context, old, next *domain.Cluster) error 
 	if next == nil {
 		return engine.Invalid("cluster is nil")
 	}
+	if next.Spec.DataSource != nil {
+		return engine.Invalid("Temporal does not support dataSource; recovery requires an in-place source PostgreSQL restore")
+	}
 	if _, e := serverArtifact(next.Spec.Version); e != nil {
 		return e
 	}

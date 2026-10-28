@@ -74,6 +74,8 @@ Deleting a Temporal backup removes **only its Temporal inventory record and mani
 
 A Temporal restore is an offline, destructive **in-place source PostgreSQL restore**, not a workflow-only import. It rolls back all databases/consumers covered by that source restore. Temporal requires a recorded, complete manifest with a source backup ID; PITR timestamps are rejected.
 
+Creation with `spec.dataSource` is rejected: Temporal does not implement initial clone recovery. Use the recorded in-place restore workflow below; a healthy new Temporal deployment is not proof that source workflow data was imported.
+
 Compatibility checks require:
 
 - The same Temporal cluster name and `historyShards`.

@@ -299,6 +299,22 @@ func TestDefaultsValidationAndCatalog(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsDataSource(t *testing.T) {
+	for _, topology := range []string{"combined", "split"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, _, _ := fixture(t, topology)
+			old := *rc.Cluster
+			rc.Cluster.Spec.DataSource = &domain.DataSource{Cluster: "source", Backup: "daily"}
+			for _, previous := range []*domain.Cluster{nil, &old} {
+				err := p.Validate(context.Background(), previous, rc.Cluster)
+				if err == nil || !strings.Contains(err.Error(), "Temporal does not support dataSource") {
+					t.Fatalf("unsupported clone admitted: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestOmittedEngineComponentStaysUnused(t *testing.T) {
 	for _, topology := range []string{"combined", "split"} {
 		t.Run(topology, func(t *testing.T) {
