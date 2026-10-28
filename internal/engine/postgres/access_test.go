@@ -145,9 +145,11 @@ func TestManagedRolesSCRAMAndProxyLifecycle(t *testing.T) {
 	if err != nil || password == "" {
 		t.Fatal("create generated role", err)
 	}
+	postgresPasswordLimit.Assert(t, "legacy create returned password", password)
 	if len(verifiers) != 1 || !strings.HasPrefix(verifiers[0], "SCRAM-SHA-256$") || strings.Contains(verifiers[0], password) {
 		t.Fatal("agent must receive only a SCRAM verifier")
 	}
+	assertRecoveryPassword(t, verifiers[0], password)
 	if strings.Contains(string(rc.Cluster.Internal), password) {
 		t.Fatal("password leaked into cluster state")
 	}
@@ -155,6 +157,7 @@ func TestManagedRolesSCRAMAndProxyLifecycle(t *testing.T) {
 	if err != nil || len(proxy) != 1 || proxy[0].Password != password || !proxy[0].RequireTLS {
 		t.Fatal("proxy did not receive managed login", err)
 	}
+	postgresPasswordLimit.Assert(t, "legacy create proxy password", proxy[0].Password)
 	before, err := p.accessRevision(ctx, rc)
 	if err != nil || before == "" {
 		t.Fatal("missing access revision", err)
@@ -164,6 +167,11 @@ func TestManagedRolesSCRAMAndProxyLifecycle(t *testing.T) {
 	if err != nil || rotated == "" || rotated == password {
 		t.Fatal("rotate", err)
 	}
+	postgresPasswordLimit.Assert(t, "legacy rotation returned password", rotated)
+	if len(verifiers) != 2 {
+		t.Fatal("rotation omitted native SCRAM verifier")
+	}
+	assertRecoveryPassword(t, verifiers[1], rotated)
 	if len(mutations) != 2 || mutations[0] != "demop1" || mutations[1] != "demop2" {
 		t.Fatal("access did not re-resolve primary", mutations)
 	}
@@ -171,6 +179,7 @@ func TestManagedRolesSCRAMAndProxyLifecycle(t *testing.T) {
 	if err != nil || proxy[0].Password != rotated {
 		t.Fatal("rotation did not update proxy password", err)
 	}
+	postgresPasswordLimit.Assert(t, "legacy rotation proxy password", proxy[0].Password)
 	after, _ := p.accessRevision(ctx, rc)
 	if before == after {
 		t.Fatal("rotation did not invalidate config")

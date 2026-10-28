@@ -11,6 +11,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 )
 
+// PostgreSQL has no fixed native password maximum; these are the product's
+// validator bounds and the generated password alphabet.
+// https://www.postgresql.org/docs/current/sql-createrole.html
+var postgresPasswordLimit = enginetest.CredentialLimit{Min: 12, Max: 1024, Alphabet: enginetest.Alphanumeric}
+
 func TestProviderGeneratedCredentialContracts(t *testing.T) {
 	for _, tc := range []struct{ name, topology, options string }{{"postgres", "single", "{}"}, {"citus", "distributed", `{"profiles":["citus"]}`}, {"timescale", "single", `{"profiles":["timescaledb"]}`}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -32,7 +37,7 @@ func TestProviderGeneratedCredentialContracts(t *testing.T) {
 			// PostgreSQL has no fixed password maximum here; 12..1024 is the product validator.
 			// https://www.postgresql.org/docs/current/sql-createrole.html
 			// Identifiers are <=63 bytes: https://www.postgresql.org/docs/current/sql-syntax-lexical.html
-			pw := enginetest.CredentialLimit{Min: 12, Max: 1024, Alphabet: enginetest.Alphanumeric}
+			pw := postgresPasswordLimit
 			limits := map[string]enginetest.CredentialLimit{
 				"users/postgres": pw, "users/kk_replicator": pw, "users/kk_rewind": pw,
 				"users/kk_monitor": pw, "users/kk_admin": pw, "users/kk_proxy_admin": pw,
