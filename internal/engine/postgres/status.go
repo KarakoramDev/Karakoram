@@ -126,6 +126,25 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		out.Phase = domain.PhaseSuspended
 		return out, nil
 	}
+	// Platform reads can fail before member reduction completes. Seed identities
+	// from the provider checkpoint, not cached positive health, so a partial
+	// observation cannot erase established members or restart lifecycle status.
+	out.Members = make([]domain.MemberStatus, len(s.Members))
+	for i, m := range s.Members {
+		set, role := "postgres", "unknown"
+		if m.Role == "proxy" {
+			set, role = "proxy", "proxy"
+		}
+		out.Members[i] = domain.MemberStatus{Name: m.Name, Set: set, Role: role, State: "unknown"}
+	}
+	defer func() {
+		if statusErr != nil {
+			if rc.Cluster.Status.Phase != "" {
+				status.Phase = rc.Cluster.Status.Phase
+			}
+			status = engine.UnknownObservation(status, now(rc), "ObservationFailed")
+		}
+	}()
 	credentialsPending, err := accessIntentPending(ctx, rc)
 	credentialsKnown := err == nil
 	healthy := credentialsKnown && len(s.data()) == s.desiredDataCount(rc) && len(s.Members) > 0
@@ -192,7 +211,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			if m.Role == "data" && m.VersionDrift != "" {
 				versionDriftUnknown = append(versionDriftUnknown, fmt.Sprintf("%s: last confirmed mismatch %s, desired %s; fresh matching SQL observation unavailable", m.Name, m.VersionDrift, rc.Cluster.Spec.Version))
 			}
-			out.Members = append(out.Members, member)
+			out.Members[i] = member
 			continue
 		}
 		observation := liveMembers[i]
@@ -450,7 +469,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				member.PlacementGroup = container.PlacementGroup
 			}
 		}
-		out.Members = append(out.Members, member)
+		out.Members[i] = member
 	}
 	if patroniTopology(s.Topology) {
 		primaries := map[int]pgspec.StatusResponse{}

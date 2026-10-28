@@ -67,6 +67,13 @@ primary does not serialize healthy peers behind the engine action timeout.
 Publication still follows the reconcile interval and infrastructure/API latency;
 this is not a failover SLA.
 
+A failed runtime or container-inventory observation retains the member identities
+from the provider checkpoint and withdraws positive availability. An established
+Ready cluster becomes Degraded, not Creating with an empty member list; pending
+lifecycle work remains pending. This observation does not erase provisioning
+checkpoints, recreate services or acknowledge a new generation. Inspect platform
+API reachability and fresh member observations before treating it as database loss.
+
 On IPv6-capable providers, PostgreSQL listens on both available address families
 (`listen_addresses='*'`, including Patroni-managed instances). Service DNS can
 publish both A and AAAA records: a proxy may select either address, while a
