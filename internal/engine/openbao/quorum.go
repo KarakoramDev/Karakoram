@@ -6,17 +6,19 @@ package openbao
 import (
 	"context"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"sync"
 	"time"
 )
 
 // Observation failure is local to a member. Never reuse stale health or seal state.
 func (p *Provider) observeMembers(ctx context.Context, rc *engine.Context, s *internalState) {
+	var probes sync.WaitGroup
 	for _, m := range ordered(s) {
 		m.Observed, m.Healthy, m.Active, m.Standby = false, false, false, false
 		if m.Stage != "configured" && m.Stage != "ready" {
 			continue
 		}
-		func() {
+		probes.Go(func() {
 			bounded, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
 			c, err := p.nativeClient(bounded, rc, m.Name, "")
@@ -36,8 +38,9 @@ func (p *Provider) observeMembers(ctx context.Context, rc *engine.Context, s *in
 				m.Active, m.Standby, m.LeaderAddress = leader.IsSelf, !leader.IsSelf, leader.LeaderAddress
 			}
 			m.Observed = true
-		}()
+		})
 	}
+	probes.Wait()
 }
 
 func removalQuorum(s *internalState, target string) bool {

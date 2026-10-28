@@ -178,19 +178,25 @@ not-yet-deployed agents remain unavailable without replacing deployment progress
 diagnostics or gating recovery/provisioning `Sync`.
 
 While an ordinary reconciliation is busy, an independent five-second availability
-loop can refresh an already Ready/Degraded cluster from an isolated persisted
-snapshot. A slow `Sync` cannot by itself starve publication. Publication compares
-the complete inspected status/provider checkpoint, generation and cluster
-incarnation; concurrent lifecycle changes discard the sample. It writes status
-only, never provider internal state or applied generation. Running imperative
-operations retain their serialized observation/checkpoint ownership; suspended,
-restoring, deleting and not-yet-formed clusters are not promoted by this loop.
+loop can refresh existing members from an isolated persisted snapshot, including
+during Creating, Initializing, Updating, Scaling, Upgrading or a failed lifecycle
+request. Member health does not imply lifecycle completion: these non-Ready phases,
+negative readiness/maintenance fences and the applied generation are preserved.
+A new cluster without members or prior observations has no availability to renew.
+Suspended, restoring and deleting intent excludes independent renewal; running
+imperative operations retain serialized observation/checkpoint ownership.
+Convergence-tracking records (including maintenance-deferred updates) do not own
+native operation receipts and do not block renewal. Publication checks that
+distinction atomically with the complete status/provider checkpoint, generation
+and incarnation; it writes status only, never provider state or applied generation.
+A slow `Sync` cannot by itself starve this publication.
 Ordinary and independent observation paths share a per-cluster publication gate
 from snapshot acquisition through the completed status write. In particular,
 finishing probes does not release the gate: an older delayed positive cannot
 overwrite a newer failure, or replace a newer lease with an older sample.
-The gate is released after pre-Sync publication and held again for the final
-observation/publication, so it does not serialize renewal behind slow Sync.
+Only successful pre-Sync publication releases the gate before Sync; failed writes
+retain it through the caller's fallback state write. Final observation/publication
+reacquires the gate, so renewal is not serialized behind slow Sync.
 Unavailable agents/platform reads still fail closed under the unchanged lease.
 Reconciliation stages emit sanitized monotonic durations at DEBUG, or WARN when
 a stage exceeds the 15-second lease; fields contain cluster identity, stage and

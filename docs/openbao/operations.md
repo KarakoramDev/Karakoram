@@ -12,6 +12,12 @@ The public member role preserves this native observation independently from
 the process state (`RUNNING`). The same primary/secondary mapping applies to
 Raft and PostgreSQL-storage HA peers on every backend. Sealed, uninitialized
 or unavailable native observations do not imply a primary or standby role.
+Existing members continue receiving bounded availability observations while the
+cluster is Initializing or Updating, including maintenance-deferred PostgreSQL
+storage changes. Fresh member health does not complete that lifecycle, open its
+maintenance window or advance `observedGeneration`. Read-only seal/leader queries
+for independent members overlap; initialization, unseal and rollout mutations
+remain serialized. Unreachable/sealed members still withdraw positive health.
 
 ```sh
 karactl -n NS clusters status secrets -o json
@@ -21,7 +27,14 @@ karactl -n NS events list --cluster secrets
 
 ## Automatic re-unseal
 
-With the default Shamir seal, the control plane observes seal status on every sync (normally every 30 seconds once converged) and sends threshold shares directly over the member's verified native API. Shares never enter the agent's cached member configuration. After a process crash, the supervisor restarts OpenBao sealed, and reconciliation unseals it again. A reachable control plane with its original secret store/master key is required; OpenBao does not autonomously retrieve Karakoram-held shares.
+With the default Shamir seal, the control plane observes seal status during Sync
+and bounded availability sweeps; existing member health uses the shared
+five-second scheduling interval and fifteen-second freshness lease. Sync sends
+threshold shares directly over the member's verified native API. Shares never
+enter the agent's cached member configuration. After a process crash, the
+supervisor restarts OpenBao sealed, and reconciliation unseals it again. A
+reachable control plane with its original secret store/master key is required;
+OpenBao does not autonomously retrieve Karakoram-held shares.
 
 Reveal and store recovery material offline using the [explicit reveal procedure](access-and-tls.md#reveal-and-store-recovery-material-offline). Do not put shares in runtime environment variables, manifests, support bundles or logs.
 

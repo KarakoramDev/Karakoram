@@ -96,3 +96,38 @@ func TestClusterObservationFencesRawStatusBeforeReadTimeProjection(t *testing.T)
 		t.Fatal("unchanged raw status prevented fresh publication", published, err)
 	}
 }
+
+func TestClusterObservationAllowsConvergenceButNotImperativeOwners(t *testing.T) {
+	for _, kind := range []string{domain.OperationCreate, domain.OperationUpdate, domain.OperationTLS,
+		domain.OperationUpgrade, domain.OperationDelete, domain.OperationResume,
+		domain.OperationRestore, domain.OperationRestart, domain.OperationBackup, "initial-restore", "future-native-operation"} {
+		t.Run(kind, func(t *testing.T) {
+			st, _ := testStore(t)
+			ctx := t.Context()
+			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"},
+				Status: domain.ClusterStatus{Phase: domain.PhaseInitializing, ObservedGeneration: 0}}
+			if err := st.CreateCluster(ctx, c); err != nil {
+				t.Fatal(err)
+			}
+			before, checkpoint, err := st.GetClusterObservation(ctx, c.Ref())
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Start the record AFTER the snapshot to exercise the publication
+			// transaction's ownership check, not just the caller's preflight.
+			if err := st.EnqueueOperation(ctx, &domain.Operation{Cluster: c.Name, Kind: kind, Phase: domain.PhaseRunning}); err != nil {
+				t.Fatal(err)
+			}
+			status := domain.ClusterStatus{Phase: domain.PhaseInitializing, ObservedAt: time.Now(),
+				ObservationEpoch: "current-process", ObservedGeneration: 99}
+			published, err := st.UpdateClusterObservation(ctx, before, checkpoint, status)
+			if err != nil || published != domain.IsConvergenceOperation(kind) {
+				t.Fatal("incorrect operation ownership classification", kind, published, err)
+			}
+			stored, err := st.GetCluster(ctx, c.Ref())
+			if err != nil || stored.Status.ObservedGeneration != 0 || stored.Status.Phase != domain.PhaseInitializing {
+				t.Fatal("observation advanced generation or lifecycle", stored, err)
+			}
+		})
+	}
+}

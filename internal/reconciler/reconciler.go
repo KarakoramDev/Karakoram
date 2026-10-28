@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -339,11 +340,8 @@ func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRe
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(c.Status.Conditions, &status)
 	preserveMaintenance(c, &status)
+	preserveAvailabilityLifecycle(c.Status, &status, rc.Clock.Now())
 	preserveTransitions(c.Status.Conditions, status.Conditions)
-	// Observing old healthy processes cannot finish restore/provisioning.
-	if c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded {
-		status.Phase, status.Message = c.Status.Phase, c.Status.Message
-	}
 	if restoring {
 		restoreStatus(&status, domain.PhaseRestoring, "Restoring", c.Status.Message, rc.Clock.Now())
 	}
@@ -779,12 +777,15 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	}
 	// Publish health before any recovery/platform work can block. This runs on
 	// the existing per-cluster worker/operation lease, not a second observer.
-	if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {
+	if canObserveAvailability(rc.Cluster) {
+		before := rc.Cluster.Status
+		before.Conditions = slices.Clone(before.Conditions)
 		status, _ := m.observeStatus(ctx, p, rc)
 		status.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
 		preservePublishedEndpointFailure(rc.Cluster.Status.Conditions, &status)
 		preserveMaintenance(rc.Cluster, &status)
+		preserveAvailabilityLifecycle(before, &status, rc.Clock.Now())
 		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
 		rc.Cluster.Status = status
 		// This is a distinct completed health sample, not the final Sync
@@ -945,7 +946,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		}
 	}
-	if (rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded) && (result.RequeueAfter <= 0 || result.RequeueAfter > engine.ReadinessInterval) {
+	if canObserveAvailability(rc.Cluster) && (result.RequeueAfter <= 0 || result.RequeueAfter > engine.ReadinessInterval) {
 		result.RequeueAfter = engine.ReadinessInterval
 	}
 	if len(rc.Cluster.Status.DeploymentFailures) > 0 && !rc.Cluster.Deleting {

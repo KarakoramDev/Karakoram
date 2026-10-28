@@ -14,14 +14,20 @@ Represent imperative backup, deletion of backups, restore, FCV raise, rolling re
 
 Persist step intent and known platform/[PBM](https://docs.percona.com/percona-backup-mongodb/) identifiers, poll completion without blocking a worker indefinitely, and checkpoint observed results. After a crash or uncertain submission, inspect stable service identities and engine/PBM state before resubmitting. No exactly-once claim is made across [SQLite](https://sqlite.org) and external systems. Preserve deletion intent until cleanup or explicit retention is complete.
 
-An already Ready/Degraded cluster also has a bounded read-only availability loop
-while its ordinary reconciliation is busy. It loads an isolated durable snapshot
-instead of sharing the lifecycle worker's mutable state. Its status-only update
-compares the inspected status, provider state, generation and incarnation and
-refuses publication once an imperative operation is Running. It never persists
-provider changes from Status or acknowledges desired generations. Lifecycle
-mutations, operation checkpoints and restore/deletion fences remain serialized;
-this separate availability publisher cannot complete or resume them.
+Existing member availability also has a bounded read-only loop while ordinary
+reconciliation is busy, independent of lifecycle phase. It loads an isolated
+durable snapshot instead of sharing the lifecycle worker's mutable state. Its
+status-only update compares the inspected status, provider state, generation and
+incarnation. Running imperative operations exclude independent publication, but
+ordinary desired-state convergence trackers do not; the distinction is checked
+under the same writer transaction using the domain operation classification.
+Availability never advances applied generation or completes a non-Ready lifecycle
+phase/negative readiness fence, including during deferred maintenance. New clusters
+without members or prior observations have no availability to renew. Suspended
+and deleting workloads must remain stopped; restoring state/native receipts retain
+serialized ownership, so those intents exclude the independent loop. Creating
+with existing members, Initializing, Updating, Scaling, Upgrading and failed
+requests can still report fresh member health without being promoted to Ready.
 Both paths arbitrate each complete observation through its publication using a
 shared per-worker gate; a completed probe alone does not release publication
 ownership. This prevents the ordinary writer from replaying an older healthy

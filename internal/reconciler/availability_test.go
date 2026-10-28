@@ -31,6 +31,7 @@ type blockedSyncProvider struct {
 	*fakeProvider
 	started      chan struct{}
 	startOnce    sync.Once
+	duration     time.Duration
 	unavailable  atomic.Bool
 	observations atomic.Int32
 }
@@ -40,10 +41,14 @@ func (p *blockedSyncProvider) Sync(ctx context.Context, rc *engine.Context) (eng
 	// snapshot, not copy this concurrently mutated lifecycle context.
 	rc.Cluster.Internal = json.RawMessage(`{"sync":"unpublished"}`)
 	p.startOnce.Do(func() { close(p.started) })
+	duration := p.duration
+	if duration == 0 {
+		duration = 20 * time.Second
+	}
 	select {
 	case <-ctx.Done():
 		return engine.Result{}, ctx.Err()
-	case <-time.After(20 * time.Second):
+	case <-time.After(duration):
 	}
 	return engine.Result{RequeueAfter: time.Minute}, nil
 }
@@ -154,14 +159,14 @@ func TestStageTimingUsesMonotonicDurationAndSanitizedFields(t *testing.T) {
 }
 
 func TestIndependentAvailabilityRetainsLifecycleOwnership(t *testing.T) {
-	for _, scenario := range []string{"creating", "restoring", "suspended", "deleting", "running-operation", "operation-starts-during-probe", "missing-namespace"} {
+	for _, scenario := range []string{"creating-without-members", "restoring", "suspended", "deleting", "running-operation", "operation-starts-during-probe", "missing-namespace"} {
 		t.Run(scenario, func(t *testing.T) {
 			p := &operationProvider{fakeProvider: &fakeProvider{}}
 			m, st := newTestManager(t, p)
 			c := &domain.Cluster{Name: "demo", Spec: domain.ClusterSpec{Provider: "fake"}, Internal: json.RawMessage(`{"checkpoint":true}`),
 				Status: domain.ClusterStatus{Phase: domain.PhaseReady, ObservedGeneration: 1}}
 			switch scenario {
-			case "creating":
+			case "creating-without-members":
 				c.Status.Phase = domain.PhaseCreating
 			case "restoring":
 				c.Status.Phase = domain.PhaseRestoring

@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -43,15 +44,52 @@ func (s *Store) UpdateClusterObservation(ctx context.Context, before *domain.Clu
 	if len(internal) == 0 {
 		internal = json.RawMessage(`{}`)
 	}
-	result, err := s.writer.ExecContext(ctx, `UPDATE clusters SET status=?,updated=?
+	tx, err := s.writer.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	blocked, err := runningImperativeObservationOwner(ctx, tx, before.Ref())
+	if err != nil || blocked {
+		return false, err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE clusters SET status=?,updated=?
 WHERE namespace=? AND name=? AND created=? AND generation=? AND deleting=0
-AND updated=? AND internal=? AND status=?
-AND NOT EXISTS (SELECT 1 FROM records WHERE kind='operation' AND scope=? AND phase='Running')`,
+AND updated=? AND internal=? AND status=?`,
 		data, time.Now().UTC().UnixNano(), domain.NormalizedNamespace(before.Namespace), before.Name,
-		before.CreatedAt.UnixNano(), before.Generation, before.UpdatedAt.UnixNano(), []byte(internal), previousStatus, before.Ref().Key())
+		before.CreatedAt.UnixNano(), before.Generation, before.UpdatedAt.UnixNano(), []byte(internal), previousStatus)
 	if err != nil {
 		return false, err
 	}
 	n, err := result.RowsAffected()
-	return n == 1, err
+	if err != nil || n != 1 {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// Convergence records track ordinary Sync; they do not own a native operation
+// receipt. Only imperative Running work excludes independent observation. Inspect
+// this under the same writer transaction as publication so operation admission
+// cannot race the check, and reuse the domain classification rather than a SQL
+// copy of its operation-kind list.
+func runningImperativeObservationOwner(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef) (bool, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT json_extract(data,'$.kind') FROM records WHERE kind='operation' AND scope=? AND phase='Running'", ref.Key())
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind string
+		if err := rows.Scan(&kind); err != nil {
+			return false, err
+		}
+		if !domain.IsConvergenceOperation(kind) {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
