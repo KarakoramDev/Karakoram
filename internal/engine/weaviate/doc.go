@@ -42,4 +42,9 @@
 // supersedes obsolete deployment waits before infrastructure-only retirement.
 // Public listener allocations precede publication, survive uncertain replies,
 // and are reconstructed from current durable membership after retirement.
+// Admitted exposure policy is persisted separately from listener allocations.
+// Suspension and runtime recovery restore that policy outside maintenance windows;
+// deferred policy changes retain the desired-generation acknowledgement barrier.
+// Legacy checkpoints seed policy from retained routes or acknowledged desired
+// state; without either, recovery defaults private until admission is permitted.
 package weaviate

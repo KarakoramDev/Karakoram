@@ -16,21 +16,22 @@ import (
 // state contains receipts and non-secret intent only. Backup and access workflows
 // add separately owned fields; save preserves fields unknown to this slice.
 type state struct {
-	UID            string               `json:"uid"`
-	Phase          string               `json:"phase"`
-	Members        []*member            `json:"members"`
-	NextIndex      int                  `json:"nextIndex"`
-	ConfigVersion  int64                `json:"configVersion"`
-	Voters         []string             `json:"voters"`
-	Bootstrapped   bool                 `json:"bootstrapped"`
-	Pending        *pending             `json:"pending,omitempty"`
-	Rolling        *rolling             `json:"rolling,omitempty"`
-	Suspended      bool                 `json:"suspended,omitempty"`
-	CleanupSecrets bool                 `json:"cleanupSecrets,omitempty"`
-	InitialRestore string               `json:"initialRestore,omitempty"`
-	ScaleDown      *scaleDown           `json:"scaleDown,omitempty"`
-	Rotation       *rotation            `json:"rotation,omitempty"`
-	LastRotated    map[string]time.Time `json:"lastRotated,omitempty"`
+	UID               string                   `json:"uid"`
+	Phase             string                   `json:"phase"`
+	Members           []*member                `json:"members"`
+	NextIndex         int                      `json:"nextIndex"`
+	ConfigVersion     int64                    `json:"configVersion"`
+	Voters            []string                 `json:"voters"`
+	Bootstrapped      bool                     `json:"bootstrapped"`
+	Pending           *pending                 `json:"pending,omitempty"`
+	Rolling           *rolling                 `json:"rolling,omitempty"`
+	Suspended         bool                     `json:"suspended,omitempty"`
+	CleanupSecrets    bool                     `json:"cleanupSecrets,omitempty"`
+	InitialRestore    string                   `json:"initialRestore,omitempty"`
+	ScaleDown         *scaleDown               `json:"scaleDown,omitempty"`
+	Rotation          *rotation                `json:"rotation,omitempty"`
+	LastRotated       map[string]time.Time     `json:"lastRotated,omitempty"`
+	ExposureAdmission engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
 }
 
 // member stores runtime ownership, active configuration identity and recovery.

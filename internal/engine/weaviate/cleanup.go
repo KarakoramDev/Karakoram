@@ -57,6 +57,12 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			err = e
 		}
 	}()
+	if e := s.seedExposure(ctx, rc); e != nil {
+		return false, e
+	}
+	if e := s.save(rc.Cluster); e != nil {
+		return false, e
+	}
 	// This phase is committed before removing any ownership credential.
 	// Replays must not revisit service verification with partially deleted tokens.
 	if s.Phase == "cleanup-secrets" {

@@ -5,6 +5,7 @@ package weaviate
 import (
 	"context"
 	"encoding/json"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"slices"
@@ -110,17 +111,56 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	return 0, invalid("no project TCP ports remain")
 }
 
+// seedExposure retains legacy applied policy before runtime routes disappear.
+// Allocated ports alone are intent, not evidence of publication.
+func (s *state) seedExposure(ctx context.Context, rc *engine.Context) error {
+	if s.ExposureAdmission.Admitted != nil {
+		return nil
+	}
+	routes, err := rc.Backend.ListPublicPorts(ctx)
+	if err != nil {
+		return err
+	}
+	for _, route := range routes {
+		if m := s.find(route.Hostname); m != nil && !m.Removing {
+			applied := domain.Exposure{Public: true, IPType: route.IPType, Allowlist: route.Allowlist}
+			switch applied.IPType {
+			case "IP_V4":
+				applied.IPType = "IPV4"
+			case "IP_V6":
+				applied.IPType = "IPV6"
+			}
+			// Preserve the acknowledged unrestricted policy represented by
+			// this retained route, including its address family.
+			applied.AllowAllAddresses = domain.ExposureCoversFamily(applied)
+			s.ExposureAdmission.Seed(applied)
+			return nil
+		}
+	}
+	if rc.Cluster.Status.ObservedGeneration != 0 && rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+		s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+	}
+	return nil
+}
+
 // reconcileExposure performs at most one backend mutation per reconciliation.
 // Port assignments are saved before publication, making uncertain replies safe
 // to resolve from observed routes rather than allocating replacement ports.
 func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
-	if !rc.Cluster.Spec.Exposure.Public {
+	if err := s.seedExposure(ctx, rc); err != nil {
+		return false, err
+	}
+	exposure, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	if err := s.save(rc.Cluster); err != nil {
+		return false, err
+	}
+	if !exposure.Public {
 		assigned := false
 		for _, m := range s.Members {
 			assigned = assigned || m.PublicHTTPPort > 0 || m.PublicGRPCPort > 0
 		}
 		if !assigned {
-			return false, nil
+			return deferred, nil
 		}
 	}
 	routes, err := rc.Backend.ListPublicPorts(ctx)
@@ -131,15 +171,12 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 		if m.Removing {
 			continue
 		}
-		if !rc.Cluster.Spec.Exposure.Public {
+		if !exposure.Public {
 			found := false
 			for _, route := range routes {
 				found = found || route.Hostname == m.Name
 			}
 			if found {
-				if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-					return true, nil
-				}
 				if err := verifyMemberServices(ctx, rc, m); err != nil {
 					return false, err
 				}
@@ -158,7 +195,7 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 		if rc.Cluster.Spec.TLS.Mode != "requireTLS" {
 			return false, invalid("public exposure requires requireTLS")
 		}
-		if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
+		if err := engine.RequirePublicTCP(rc.Backend, exposure); err != nil {
 			return false, err
 		}
 		for _, listener := range []struct {
@@ -175,7 +212,7 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 					return false, err
 				}
 			}
-			desired := infra.PublicPort{Port: *listener.port, TargetPort: listener.target, Protocol: "tcp", IPType: rc.Cluster.Spec.Exposure.IPType, Allowlist: rc.Cluster.Spec.Exposure.Allowlist}
+			desired := infra.PublicPort{Port: *listener.port, TargetPort: listener.target, Protocol: "tcp", IPType: exposure.IPType, Allowlist: exposure.Allowlist}
 			matched := false
 			for _, route := range routes {
 				if route.Port == desired.Port {
@@ -188,9 +225,6 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 			if matched {
 				continue
 			}
-			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
-			}
 			if err := verifyMemberServices(ctx, rc, m); err != nil {
 				return false, err
 			}
@@ -200,5 +234,5 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 			return true, nil
 		}
 	}
-	return false, nil
+	return deferred, nil
 }
