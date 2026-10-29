@@ -51,6 +51,16 @@ idempotent observations; maintenance does not require restarting them or prevent
 an otherwise converged generation from being acknowledged solely because its
 unchanged public route is still present.
 
+Exposure recovery uses a durable admitted-policy receipt separate from runtime
+route application. Resume and lost-runtime recovery restore that policy even
+outside a window; a newer desired exposure still waits for admission and keeps
+its generation unacknowledged. Legacy recovery first uses retained applied or
+acknowledged exposure evidence. If none remains, it conservatively restores
+private access rather than guessing that current desired public access was
+admitted. To authorize the desired public policy in that case, wait for/open the
+maintenance window or explicitly submit the desired-state action with
+`--ignore-maintenance-window`; do not edit internal receipts.
+
 Healing and system lost-volume replacement, delete/suspend/resume, create and
 scale-out, backup/restore/initial restore, credential rotation, agent transport
 certificate renewal, and certificates with at most seven days remaining are

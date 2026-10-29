@@ -9,6 +9,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"testing"
 	"time"
+
+	"encoding/json"
+	"fmt"
+	"reflect"
 )
 
 type windowRouteBackend struct {
@@ -88,5 +92,64 @@ func TestPublicTCPDeferredZeropsIPFamilySpellings(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestExposureAdmissionSurvivesLostApplicationState(t *testing.T) {
+	for _, change := range []string{"enable", "allowlist", "family"} {
+		t.Run(change, func(t *testing.T) {
+			rc := &Context{Clock: fixedRouteClock{}, Cluster: &domain.Cluster{Generation: 1}}
+			applied := domain.Exposure{Public: change != "enable", IPType: "IPV4", Allowlist: []string{"192.0.2.0/24"}}
+			var admission ExposureAdmission
+			if effective, deferred := admission.Resolve(rc, applied); deferred || !reflect.DeepEqual(effective, applied) {
+				t.Fatal("initial provisioning did not admit exposure", effective, deferred)
+			}
+			rc.Cluster.Status.ObservedGeneration = 1
+			rc.Cluster.Generation++
+			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}}
+			desired := applied
+			switch change {
+			case "enable":
+				desired.Public = true
+			case "allowlist":
+				desired.Allowlist = []string{"0.0.0.0/0"}
+			case "family":
+				desired.IPType = "IPV6"
+			}
+			// Runtime hashes/routes are deliberately absent. Only the durable
+			// policy receipt may authorize their restoration after CP restart.
+			raw, err := json.Marshal(admission)
+			if err != nil {
+				t.Fatal(err)
+			}
+			admission = ExposureAdmission{}
+			if err := json.Unmarshal(raw, &admission); err != nil {
+				t.Fatal(err)
+			}
+			if effective, deferred := admission.Resolve(rc, desired); !deferred || !reflect.DeepEqual(effective, applied) {
+				t.Fatal("lost runtime receipt admitted desired exposure", effective, deferred)
+			}
+			rc.Cluster.MaintenanceOverrideGeneration = rc.Cluster.Generation
+			if effective, deferred := admission.Resolve(rc, desired); deferred || !reflect.DeepEqual(effective, desired) {
+				t.Fatal("override did not admit desired exposure", effective, deferred)
+			}
+		})
+	}
+}
+
+func TestExposureAdmissionLegacyBaseline(t *testing.T) {
+	for _, known := range []bool{false, true} {
+		t.Run(fmt.Sprint(known), func(t *testing.T) {
+			rc := &Context{Clock: fixedRouteClock{}, Cluster: &domain.Cluster{Generation: 2, Status: domain.ClusterStatus{ObservedGeneration: 1}, Spec: domain.ClusterSpec{Maintenance: &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}}}}}
+			prior := domain.Exposure{Public: true, IPType: "IPV4", Allowlist: []string{"192.0.2.0/24"}}
+			var admission ExposureAdmission
+			if known {
+				admission.Seed(prior)
+			}
+			effective, deferred := admission.Resolve(rc, prior)
+			if deferred == known || effective.Public != known {
+				t.Fatal("legacy admission guessed unrecorded access", effective, deferred)
+			}
+		})
 	}
 }
