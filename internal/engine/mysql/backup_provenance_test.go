@@ -107,7 +107,7 @@ func TestDesiredMajorUpgradeBackupUsesRunningVersion(t *testing.T) {
 			json.NewEncoder(w).Encode(myspec.BackupResponse{State: "running"})
 			return true
 		case "/v1/mysql/backup-info":
-			json.NewEncoder(w).Encode(myspec.BackupResponse{State: "done", Result: &myspec.BackupResult{ManifestDigest: fixtureManifestDigest, ManifestSize: 1, BackupType: request.Type, ServerVersion: running, ToolVersion: "8.0.35-36", ToLSN: 10, EndTime: time.Now().UTC(), ObjectPrefix: request.ObjectPrefix, PhysicalIdentity: request.PhysicalIdentity}})
+			json.NewEncoder(w).Encode(myspec.BackupResponse{State: "done", Result: &myspec.BackupResult{ManifestDigest: fixtureManifestDigest, ManifestSize: 1, BackupType: "full-backuped", ServerVersion: running, ToolVersion: "8.0.35-36", ToLSN: 10, EndTime: time.Now().UTC(), ObjectPrefix: request.ObjectPrefix, PhysicalIdentity: request.PhysicalIdentity}})
 			return true
 		}
 		return false

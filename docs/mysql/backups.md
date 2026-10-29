@@ -18,6 +18,11 @@ karactl -n NS backups get CLUSTER baseline -o json
 
 Creation returns an operation; observe that existing operation and terminal backup inventory rather than submitting again after a timeout. A streaming backup is not complete merely because one side of the upload finished. Interrupted backups are reported as failed, not silently repeated. Backups use DDL locking; schedule with DDL contention, donor load and available capacity in mind. Group Replication normally prefers an online secondary; when binary-log PITR is enabled, the backup must anchor the current archive writer instead.
 
+Full backup receipts report XtraBackup's native checkpoint type
+`full-backuped`; the control plane validates it against the requested API type
+`full`. Incremental receipts report `incremental`. Metadata validation failures
+identify the inconsistent field without including its value.
+
 Provenance includes engine driver, source version/topology, cluster incarnation, repository, tool/server versions, GTID set, LSN range, chain dependencies and completion time. MySQL repositories use `<storage-prefix>/mysql/<namespace>/<cluster>-<uid>`; PXC uses the corresponding **`pxc`** prefix. They share a subtree structure, not an interchangeable backup identity:
 
 - `base/<label>`: streamed physical backup.

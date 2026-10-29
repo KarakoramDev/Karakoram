@@ -70,7 +70,11 @@ func TestBackupSecondaryReceiptAndIncrementalChain(t *testing.T) {
 			json.NewEncoder(w).Encode(myspec.BackupResponse{Receipt: dispatched.Receipt, State: "running"})
 			return true
 		case "/v1/mysql/backup-info":
-			json.NewEncoder(w).Encode(myspec.BackupResponse{Receipt: dispatched.Receipt, State: "done", Result: &myspec.BackupResult{ManifestDigest: fixtureManifestDigest, ManifestSize: 1, BackupType: dispatched.Type, ServerVersion: b.native[name].Version, PhysicalIdentity: dispatched.PhysicalIdentity, ToolVersion: "8.4.0-7", FromLSN: dispatched.BaseLSN, ToLSN: dispatched.BaseLSN + 10, EndTime: time.Now().UTC(), ObjectPrefix: dispatched.ObjectPrefix}})
+			backupType := "incremental"
+			if dispatched.Type == "full" {
+				backupType = "full-backuped"
+			}
+			json.NewEncoder(w).Encode(myspec.BackupResponse{Receipt: dispatched.Receipt, State: "done", Result: &myspec.BackupResult{ManifestDigest: fixtureManifestDigest, ManifestSize: 1, BackupType: backupType, ServerVersion: b.native[name].Version, PhysicalIdentity: dispatched.PhysicalIdentity, ToolVersion: "8.4.0-7", FromLSN: dispatched.BaseLSN, ToLSN: dispatched.BaseLSN + 10, EndTime: time.Now().UTC(), ObjectPrefix: dispatched.ObjectPrefix}})
 			return true
 		}
 		return false

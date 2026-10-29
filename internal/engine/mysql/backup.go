@@ -363,8 +363,8 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 		return backupResult(cp, false), nil
 	}
 	r := response.Result
-	if r == nil || r.EndTime.IsZero() || r.ToLSN == 0 || r.ToLSN < r.FromLSN || r.ToolVersion == "" || major(r.ServerVersion) != major(b.SourceVersion) || r.ObjectPrefix != b.MySQL.ObjectPaths[0] || r.BackupType != b.Type || r.FromLSN != b.MySQL.FromLSN || b.MySQL.PhysicalIdentity != "" && r.PhysicalIdentity != b.MySQL.PhysicalIdentity {
-		return backupResult(cp, false), engine.Invalid("agent returned inconsistent XtraBackup metadata")
+	if field := backupMetadataMismatch(b, r); field != "" {
+		return backupResult(cp, false), engine.Invalid("agent returned inconsistent XtraBackup metadata: %s", field)
 	}
 	if err = sealBackupManifest(ctx, rc, b, r.ManifestDigest, r.ManifestSize); err != nil {
 		return backupResult(cp, false), err
@@ -389,6 +389,36 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	}
 	cp.Step = "done"
 	return backupResult(cp, true), nil
+}
+
+func backupMetadataMismatch(b *domain.Backup, r *myspec.BackupResult) string {
+	// The receipt preserves XtraBackup checkpoint types, not API backup types.
+	expectedType := "incremental"
+	if b.Type == "full" {
+		expectedType = "full-backuped"
+	}
+	switch {
+	case r == nil:
+		return "result"
+	case r.EndTime.IsZero():
+		return "endTime"
+	case r.ToLSN == 0 || r.ToLSN < r.FromLSN:
+		return "toLSN"
+	case r.ToolVersion == "":
+		return "toolVersion"
+	case major(r.ServerVersion) != major(b.SourceVersion):
+		return "serverVersion"
+	case r.ObjectPrefix != b.MySQL.ObjectPaths[0]:
+		return "objectPrefix"
+	case r.BackupType != expectedType:
+		return "backupType"
+	case r.FromLSN != b.MySQL.FromLSN:
+		return "fromLSN"
+	case b.MySQL.PhysicalIdentity != "" && r.PhysicalIdentity != b.MySQL.PhysicalIdentity:
+		return "physicalIdentity"
+	default:
+		return ""
+	}
 }
 
 func (p *Core) rememberRepository(ctx context.Context, rc *engine.Context, s *state) error {
