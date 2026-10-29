@@ -351,6 +351,13 @@ These issues are present in v0.4.1; fixes are planned for v0.4.2.
   data members and ProxySQL formed in live checks.
 - **PXC cannot form on Zerops** (v0.4.0 and v0.4.1). The platform does not
   permit the member start-up step, so the first member never starts.
+- **MySQL and Percona XtraDB Cluster full backups fail on every provider**
+  (v0.4.0 and v0.4.1) with `agent returned inconsistent XtraBackup metadata`.
+  Full backups, and therefore restore, clone and point-in-time recovery
+  baselines, are unavailable for MySQL/PXC. Existing clusters keep running
+  normally. There is no workaround in v0.4.1 other than taking backups with
+  your own tooling. A control-plane-only fix is planned for v0.4.2; no member
+  agent update will be needed.
 - **OpenBao can briefly report Ready during a rolling update** (a v0.4.1
   regression; v0.4.0 is not affected). Between member replacements the cluster
   may show Ready while the update operation is still running. Data and the
