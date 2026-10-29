@@ -418,17 +418,25 @@ func verifyCloneCompletion(record cloneReceipt, current cloneNativeStatus) error
 	return nil
 }
 
-func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
+func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) (err error) {
+	stage := "request"
+	defer func() {
+		if err != nil {
+			err = &cloneActionError{stage: stage, cause: err}
+		}
+	}()
 	groupActionMu.Lock()
 	defer groupActionMu.Unlock()
 	if err := r.Validate(); err != nil {
 		return err
 	}
 	s := d.GroupSpec()
+	stage = "authorization"
 	if err := authorizeClone(s, r); err != nil {
 		return err
 	}
 	record := cloneReceipt{Request: r}
+	stage = "receipt"
 	// The intent is serialized only after its native baseline has been captured.
 	receipt := filepath.Join(d.GroupReceiptsDir(), "clone-"+r.Receipt)
 	if old, err := os.ReadFile(receipt); err == nil {
@@ -441,6 +449,7 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 		if record.Completed {
 			return nil
 		}
+		stage = "receipt-recovery"
 		db, err := d.LocalAccessDB(ctx)
 		// A failed SQL probe is not evidence that CLONE stopped copying.
 		if err == nil {
@@ -462,6 +471,7 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
+	stage = "recipient-preflight"
 	db, err := d.LocalAccessDB(ctx)
 	if err != nil {
 		return err
@@ -491,6 +501,7 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 		}
 	}
 	// Probe donor over verified TLS with the same recovery identity before destructive clone.
+	stage = "donor-probe"
 	pool := x509Pool(s.CAPEM)
 	if pool == nil {
 		return errors.New("invalid clone CA")
@@ -515,6 +526,7 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 	if donorVersion != actual {
 		return errors.New("donor clone version mismatch")
 	}
+	stage = "native-baseline"
 	baseline, err := readCloneStatus(ctx, db)
 	if err != nil {
 		return err
@@ -527,12 +539,15 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 	if err != nil {
 		return err
 	}
+	stage = "donor-configuration"
 	if _, err = db.ExecContext(ctx, "SET GLOBAL clone_valid_donor_list="+groupQuote(cfg.Addr)); err != nil {
 		return err
 	}
+	stage = "receipt-write"
 	if err = durableGroupFile(receipt, request); err != nil {
 		return err
 	}
+	stage = "native-clone"
 	_, err = db.ExecContext(ctx, "CLONE INSTANCE FROM "+groupQuote(s.Replication.Username)+"@"+groupQuote(r.Donor.Host)+":"+strconv.Itoa(r.Donor.Port)+" IDENTIFIED BY "+groupQuote(s.Replication.Password)+" REQUIRE SSL")
 	// Native mysqld has no service manager: 3707 requests a restart. If the
 	// server closes the connection before replying, the driver deliberately
@@ -541,11 +556,13 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) error {
 	// correlated native restart readiness before restarting the recipient.
 	var native *mysqldriver.MySQLError
 	if errors.Is(err, mysqldriver.ErrInvalidConn) {
+		stage = "completion"
 		return recoverCloneReply(ctx, d, receipt, record)
 	}
 	if err != nil && !(errors.As(err, &native) && native.Number == 3707) {
 		return err
 	}
+	stage = "completion"
 	return finishClone(ctx, d, receipt, record)
 }
 
@@ -666,7 +683,11 @@ func RegisterGroupRoutes(mux *http.ServeMux, d GroupDeps) {
 				}
 			}
 			if err != nil {
-				if action == myspec.ActionBootstrap || action == myspec.ActionStartGroup || action == myspec.ActionSwitchover {
+				if action == myspec.ActionClone {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusServiceUnavailable)
+					_ = json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: cloneActionDiagnostic(err)})
+				} else if action == myspec.ActionBootstrap || action == myspec.ActionStartGroup || action == myspec.ActionSwitchover {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusServiceUnavailable)
 					_ = json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: groupActionDiagnostic(d, action, err)})

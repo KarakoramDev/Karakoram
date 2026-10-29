@@ -147,6 +147,15 @@ Group clone intents are bound to the configured donor, version and recovery rece
 
 Pending-receipt replay treats a failed SQL probe as unavailable evidence, not proof that the recipient process exited. Recovery may start an unreachable recipient only when its supervisor has confirmed process exit; otherwise the operation remains pending without stopping a potentially active clone.
 
+Clone failures from updated agents include a fixed stage category in operation
+errors/events, such as `stage=authorization`, `stage=donor-probe`,
+`stage=native-clone` or `stage=receipt-recovery`, plus the native MySQL error
+number when available. Native message text, SQL, credentials, paths, peer
+addresses and log tails are not included. A stage identifies where this request
+failed, not whether an earlier CLONE was applied; preserve native receipt and
+progress evidence before recovery. Existing agents need an updated executable
+to emit these diagnostics; a control-plane-only update cannot add them.
+
 ## Upgrade
 
 The **Upgrades** tab selects the current engine driver's offered paths; MySQL and PXC have separate version/artifact catalogs. Minor upgrades use the managed rolling order. The supported 8.0→8.4 major path requires a recent successful **current-version** backup validated by the provider. Test that backup and review schema/application compatibility before starting. An arbitrary old successful backup shown in the UI is not proof of eligibility.
