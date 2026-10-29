@@ -280,7 +280,15 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		condition.Status = "Unknown"
 		condition.Reason = "ObservationUnavailable"
 	} else if len(windows) > 0 {
-		status.Backup.PITRWindow = &windows[0]
+		// Match the PITR endpoint: expose the newest contiguous window,
+		// rather than the oldest (possibly snapshot-only) recovery point.
+		latest := windows[0]
+		for _, w := range windows[1:] {
+			if w.End.After(latest.End) {
+				latest = w
+			}
+		}
+		status.Backup.PITRWindow = &latest
 		condition.Status = "True"
 		condition.Reason = "WindowAvailable"
 	}
@@ -290,9 +298,18 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		writer, e := archiveWriter(ctx, rc, s)
 		if e == nil {
 			var a myspec.BinlogArchiveStatus
-			if mysqlAction(ctx, rc, writer, myspec.ActionArchiveStatus, struct{}{}, &a) == nil {
-				status.Conditions = append(status.Conditions, domain.Condition{Type: "BinlogArchive", Status: boolCondition(!a.Gap), Reason: "ArchiveObservation", Message: fmt.Sprintf("Archive lag %.0f seconds; %s", a.LagSeconds, a.GapReason), LastTransitionTime: now(rc)})
+			condition := domain.Condition{Type: "BinlogArchive", Status: "Unknown", Reason: "ObservationUnavailable", Message: "Binlog archive observation unavailable", LastTransitionTime: now(rc)}
+			if err := mysqlAction(ctx, rc, writer, myspec.ActionArchiveStatus, struct{}{}, &a); err == nil {
+				condition.Reason = "ArchiveObservation"
+				condition.Status = boolCondition(!a.Gap)
+				condition.Message = fmt.Sprintf("Archive lag %.0f seconds; %s", a.LagSeconds, a.GapReason)
+				if a.LastArchivedFile == "" || a.LastEventTime.IsZero() {
+					condition.Status = "False"
+					condition.Reason = "ArchivePending"
+					condition.Message = "No binlog transaction has been archived"
+				}
 			}
+			status.Conditions = append(status.Conditions, condition)
 		}
 	}
 	return nil

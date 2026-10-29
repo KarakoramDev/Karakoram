@@ -71,8 +71,8 @@ func readArchiveIndex(name string) (archiveIndex, error) {
 }
 func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	s, p := e.state()
-	if s.Backup == nil {
-		return myspec.BinlogArchiveStatus{}, nil
+	if s.Backup == nil || !s.Backup.Binlog.Enabled {
+		return myspec.BinlogArchiveStatus{}, errors.New("binlog_archiving_disabled")
 	}
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
@@ -89,11 +89,25 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	return idx.Status, nil
 }
 
-// resetArchiveLoop cancels the previous configuration's loop. Each iteration
-// rechecks the live role and the intentional-stop fence before issuing SQL.
+func archiveConfigChanged(previous, current *myspec.Backup) bool {
+	return previous == nil || current == nil ||
+		previous.Repository != current.Repository ||
+		previous.Binlog.RotateIntervalSeconds != current.Binlog.RotateIntervalSeconds
+}
+
+// resetArchiveLoop preserves deadlines across unchanged configuration pulls.
+// Interval/repository changes cancel the old wait or attempt and start anew.
+// Each iteration rechecks the live role and intentional-stop fence before SQL.
 func (e *Runner) resetArchiveLoop(enabled bool) {
+	e.configureArchiveLoop(enabled, e.archiveBinlogs)
+}
+
+func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context) error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if enabled && e.archiveCancel != nil && !archiveConfigChanged(&e.archiveBackup, e.current.Backup) {
+		return
+	}
 	if e.archiveCancel != nil {
 		e.archiveCancel()
 		e.archiveCancel = nil
@@ -103,6 +117,7 @@ func (e *Runner) resetArchiveLoop(enabled bool) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	e.archiveCancel = cancel
+	e.archiveBackup = *e.current.Backup
 	go func() {
 		for {
 			s, _ := e.state()
@@ -116,7 +131,7 @@ func (e *Runner) resetArchiveLoop(enabled bool) {
 			case <-time.After(interval):
 			}
 			run, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			_ = e.archiveBinlogs(run)
+			_ = archive(run)
 			cancel()
 		}
 	}()

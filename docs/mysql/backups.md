@@ -70,6 +70,16 @@ Enable `spec.backup.pitr.enabled` and retain binary logs longer than the archive
 
 PITR requires a completed restorable full backup, its required chain and continuous archive coverage beyond it. The displayed window ends at the last safely archived contiguous transaction—not the latest application commit, upload time or requested target. Rotation bounds eligibility for upload; storage failure can still increase archive lag. Local log expiry is independent of upload success. Archiving does not delete local logs.
 
+Unchanged configuration refreshes do not restart the archive interval. Changing
+the interval reschedules the deadline; replacing repository configuration cancels
+the previous attempt before starting the replacement loop. After a clone or
+restore completes, archiving resumes in the independent target repository.
+Until the writer has archived a transaction, **BinlogArchive** reports
+`False/ArchivePending`, not healthy zero lag. A disabled or unavailable archive
+observation reports `Unknown/ObservationUnavailable`. A full-backup-only
+zero-width window is a snapshot recovery point, not evidence of continuous
+archiving; verify that the endpoint advances after post-backup writes.
+
 Live coverage admission and backup selection use each full backup root's own
 GTID-bounded coverage. When live coverage is unavailable, the remembered-window
 fallback retains newest-safe backup selection; a newer incompatible root does

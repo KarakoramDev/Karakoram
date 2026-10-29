@@ -193,3 +193,74 @@ func captureFixtureBackupAccess(ctx context.Context, rc *engine.Context, backup 
 	}
 	return sealBackupManifest(ctx, rc, backup, fixtureManifestDigest, 1)
 }
+
+func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		archive myspec.BinlogArchiveStatus
+		fail    bool
+		want    string
+		reason  string
+	}{
+		{name: "empty", want: "False", reason: "ArchivePending"},
+		{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable"},
+		{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation"},
+		{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc, b := backupFixture(t, "single")
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+				if r.URL.Path != "/v1/mysql/archive-status" {
+					return false
+				}
+				if tc.fail {
+					http.Error(w, "binlog_archiving_disabled", http.StatusConflict)
+				} else {
+					json.NewEncoder(w).Encode(tc.archive)
+				}
+				return true
+			}
+			var status domain.ClusterStatus
+			if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+				t.Fatal(err)
+			}
+			for _, condition := range status.Conditions {
+				if condition.Type == "BinlogArchive" {
+					if condition.Status != tc.want || condition.Reason != tc.reason {
+						t.Fatal(condition)
+					}
+					return
+				}
+			}
+			t.Fatal("missing archive condition")
+		})
+	}
+}
+
+func TestBackupStatusSelectsNewestPITRWindow(t *testing.T) {
+	p, rc, b := backupFixture(t, "single")
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
+	b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+		if r.URL.Path == "/v1/mysql/archive-status" {
+			json.NewEncoder(w).Encode(myspec.BinlogArchiveStatus{})
+			return true
+		}
+		if r.URL.Path != "/v1/mysql/pitr-coverage" {
+			return false
+		}
+		json.NewEncoder(w).Encode(myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{
+			{Start: time.Unix(10, 0), End: time.Unix(10, 0)},
+			{Start: time.Unix(30, 0), End: time.Unix(30, 0)},
+		}})
+		return true
+	}
+	var status domain.ClusterStatus
+	if err := p.backupStatus(t.Context(), rc, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Backup.PITRWindow == nil || !status.Backup.PITRWindow.End.Equal(time.Unix(30, 0)) {
+		t.Fatal("status selected an older snapshot-only window", status.Backup.PITRWindow)
+	}
+}
