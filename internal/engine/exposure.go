@@ -3,13 +3,10 @@
 package engine
 
 import (
-	"context"
-	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
-	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // ExposureAdmission is a durable cluster/component policy receipt, independent
@@ -46,7 +43,11 @@ func (a *ExposureAdmission) Resolve(rc *Context, desired domain.Exposure) (effec
 		}
 	}
 	// Private policy has no route whose IP family or allowlist can change.
-	equal := !a.Admitted.Public && !desired.Public || reflect.DeepEqual(*a.Admitted, desired)
+	equal := !a.Admitted.Public && !desired.Public ||
+		a.Admitted.Public == desired.Public &&
+			publicIPFamily(a.Admitted.IPType) == publicIPFamily(desired.IPType) &&
+			slices.Equal(a.Admitted.Allowlist, desired.Allowlist) &&
+			a.Admitted.AllowAllAddresses == desired.AllowAllAddresses
 	if !equal {
 		if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
 			return *a.Admitted, true
@@ -56,45 +57,6 @@ func (a *ExposureAdmission) Resolve(rc *Context, desired domain.Exposure) (effec
 		a.Admitted = &v
 	}
 	return *a.Admitted, false
-}
-
-// PublicTCPDeferred gates an actual route mutation, not an idempotent routing
-// observation. Nil desired means withdraw every route for this runtime. Initial
-// provisioning remains exempt. Callers continue recovery but must not acknowledge
-// their desired generation while this returns true.
-func PublicTCPDeferred(ctx context.Context, rc *Context, member string, desired *infra.PublicPort) (bool, error) {
-	if rc.Cluster.Status.ObservedGeneration == 0 {
-		return false, nil
-	}
-	// Open windows and overrides need no extra platform inventory read on the
-	// idle ensure path. Clear a prior wait when permission has changed.
-	if allowed, _ := rc.DisruptionAllowed(); allowed {
-		for _, condition := range rc.Cluster.Status.Conditions {
-			if condition.Type == "MaintenanceWindow" && condition.Status == "False" {
-				rc.WaitForWindow()
-				break
-			}
-		}
-		return false, nil
-	}
-	routes, err := rc.Backend.ListPublicPorts(ctx)
-	if err != nil {
-		return false, err
-	}
-	matched, count := false, 0
-	for _, route := range routes {
-		if route.Hostname != member {
-			continue
-		}
-		count++
-		if desired != nil && route.Port == desired.Port && route.TargetPort == desired.TargetPort && strings.EqualFold(route.Protocol, desired.Protocol) && strings.EqualFold(publicIPFamily(route.IPType), publicIPFamily(desired.IPType)) && slices.Equal(route.Allowlist, desired.Allowlist) {
-			matched = true
-		}
-	}
-	if desired == nil && count == 0 || desired != nil && matched {
-		return false, nil
-	}
-	return rc.WaitForWindow().RequeueAfter > 0, nil
 }
 
 func publicIPFamily(value string) string {
