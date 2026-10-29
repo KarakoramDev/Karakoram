@@ -70,16 +70,21 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Result/rate/concurrency bounds are not query-cost guarantees. Stored data can inject prompts; confirmations do not provide rollback. RabbitMQ peeking consumes/requeues and therefore needs write access. Elasticsearch hidden/system/dot indices and streams backed by them are refused.
 - PostgreSQL's companion connects to the first scoped database (default `postgres`); existing PUBLIC grants are not revoked and can weaken scope isolation. See [scope and identity caveats](data-mcp.md#managed-identities-and-rotation).
 
-## Known issues in v0.4.1
+## Known issues in v0.4.2
 
-Fixes for these are planned for v0.4.2; details and workarounds are in [known issues in v0.4.1](upgrade.md#known-issues-in-v041).
+- PostgreSQL's `postgres` administrator password cannot be rotated in place;
+  follow [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
+- After a PXC in-place full or PITR restore on Zerops, a member can be flagged
+  GTID-history-diverged and the cluster Degraded despite correct checked data
+  and writes; incremental backups/PITR continuity can be blocked. Investigation
+  continues; verify data natively. This was not reproduced on Dokploy.
+- Nomad live coverage of the new engines remains incomplete; EXPERIMENTAL
+  status remains unchanged.
+- Temporal remains unsupported on Zerops because it requires private IPv4.
 
-- MySQL Group Replication cannot form on any provider: a generated group-recovery credential exceeds MySQL's length limit. Use single-member MySQL, or PXC on Nomad, until v0.4.2.
-- PXC cannot form on Zerops: the platform does not permit the member start-up step, so the first member never starts.
-- MySQL and Percona XtraDB Cluster full backups fail on every provider with `agent returned inconsistent XtraBackup metadata` (v0.4.0 and v0.4.1). Full backups, and therefore restore, clone and point-in-time recovery baselines, are unavailable for MySQL/PXC; existing clusters keep running normally. There is no workaround in v0.4.1 other than taking backups with your own tooling. A control-plane-only fix is planned for v0.4.2; no member agent update will be needed.
-- OpenBao can briefly report Ready between member replacements during a rolling update (v0.4.1 regression); check that no operation is running before relying on Ready.
-- Clusters created from a backup (clone) for OpenBao, MySQL, PXC, Neo4j and Weaviate restore their data but never report Ready (`RestoreIncomplete`, create operation keeps running); verify the data natively.
-- Resuming a suspended cluster or recovering a member may not restore public TCP or HTTPS exposure while the maintenance window is closed, and a resume operation can stay running until it opens (v0.4.1 regression; v0.4.0 is not affected). Workaround: open the [maintenance window](operations.md#maintenance-windows), or re-apply the change with `karactl clusters patch CLUSTER -f change.yaml --ignore-maintenance-window` (not `clusters resume`). A fix is planned for v0.4.2.
+See [known issues in v0.4.2](upgrade.md#known-issues-in-v042) for details.
+The formation, full-backup, rolling-status, clone-readiness and resume/exposure
+issues previously listed for v0.4.1 are [fixed in v0.4.2](upgrade.md#fixed-in-v042).
 
 ## Engine limits
 

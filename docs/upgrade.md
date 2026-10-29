@@ -4,6 +4,152 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.2
+
+Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),
+preserve the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
+executable with its pre-upgrade state before deploying v0.4.2.
+
+```sh
+git fetch origin --tags && git checkout v0.4.2
+zcli service push karakoram -P "$PROJECT_ID" --setup karakoram \
+  --zerops-yaml-path zerops.yaml --workspace-state clean --disable-logs
+```
+
+There are **no new SQLite migrations** from v0.4.1 to v0.4.2; the inventory
+in `internal/store/migrations` still ends at `017_backup_drills.sql`.
+There are no new engine resource minimums, Go dependency changes or native
+artifact lock changes in this release. The v0.4.1 memory floors still apply.
+Control-plane rollback does not undo engine or infrastructure changes.
+
+### Changed behavior
+
+- Dokploy retains a maximum of four build attempts per rendered deployment
+  content/retry epoch across control-plane restarts. Exhausting this budget
+  reports `DeploymentRetriesExhausted`; inspect deployment logs and correct
+  the failed deployment rather than expecting indefinite retries.
+- Temporal rejects an initial data source at admission because it does not
+  support create-from-backup. This does not remove its separate restore support.
+- Keycloak fills each omitted resource field independently from catalog defaults,
+  including disk-only requests; it does not resize existing clusters automatically.
+- Resume and recovery restore only previously admitted exposure during a closed
+  maintenance window. Deferred exposure changes remain deferred and unacknowledged.
+
+### Fixed in v0.4.2
+
+Unless noted otherwise, the following issues affected both v0.4.0 and v0.4.1:
+
+- **MySQL Group Replication formation:** generated recovery credentials now fit
+  MySQL's limit, with sanitized startup diagnostics. Delete and re-create
+  never-formed legacy groups; do not force bootstrap or edit coordinator state.
+  Existing single-member clusters receive compatible recovery credentials before
+  their first adoption into a group.
+- **PXC formation on Zerops:** startup persists the required files and directory
+  chain without a filesystem-wide sync that the platform rejects.
+- **OpenBao rolling status:** Updating or Upgrading remains visible between
+  member replacements until convergence completes. This was a v0.4.1 regression;
+  v0.4.0 was not affected by the intermediate Ready status.
+- **Clone readiness:** OpenBao, MySQL, PXC, Neo4j and Weaviate now acknowledge
+  completed initial restores so clone creation can finish and report Ready.
+  Temporal now rejects unsupported initial data sources rather than accepting
+  a clone request it cannot complete.
+- **Keycloak resource defaults:** omitted CPU, memory and disk fields receive
+  their catalog defaults independently, including requests supplying only disk.
+- **Dokploy deployment retries:** failed initial builds remain observable and
+  retryable, with a bounded build-attempt budget retained across control-plane
+  restarts, rather than leaving creation blocked behind a failed build.
+- **MySQL Group Replication primary handoff:** restart, replacement and rolling
+  maintenance can select a new primary using the native MySQL function.
+- **Resume and exposure recovery:** already-admitted TCP and HTTPS exposure can
+  recover during a closed maintenance window without admitting deferred exposure
+  changes. This covers the affected database and service engines, including
+  OpenBao resume and Supabase gateway recovery. This was a v0.4.1 regression;
+  v0.4.0 was not affected.
+- **MySQL and PXC full backups:** the control plane recognizes XtraBackup's
+  native full-backup checkpoint type, allowing full backups and their dependent
+  restore, clone and point-in-time recovery baselines. This fix needs only a
+  control-plane upgrade, not a member-agent update. Take and verify a new full
+  backup; a previously failed backup is not a recovery baseline.
+- **MySQL and PXC in-place restore:** the restore operation now releases the
+  server stop holds during re-formation so the restored seed and followers can
+  start and restore can complete. This affected v0.4.0 and v0.4.1 but was
+  previously masked by the full-backup metadata defect described above.
+- **MySQL Group Replication restore follower re-clone:** in-place recovery can
+  re-clone followers after restoring the seed. Clone recipients fence clients
+  while preparing old data for replacement, and rejected native starts can be
+  retried only when copying never began. PXC uses its own Galera recovery path.
+- **MySQL and PXC point-in-time recovery:** binlog archiving now preserves its
+  deadline across configuration refreshes instead of being postponed
+  indefinitely. Archive lag and recovery-window status now reflect the
+  completed archive rather than configuration refresh timing.
+- **ProxySQL configuration reloads:** the ProxySQL agent no longer reloads
+  unchanged configuration every minute, which briefly routed writes to
+  replicas and caused occasional failed writes.
+- **MySQL clone failure diagnostics:** operation events now report the clone
+  stage and, when available, the MySQL error number without exposing SQL,
+  credentials or raw server error messages.
+
+### Existing MySQL and PXC agents
+
+The MySQL Group Replication clustered-restart/primary-handoff, in-place restore
+follower re-clone, MySQL/PXC PITR binlog archiving and ProxySQL reload fixes are
+**agent-side**, as are the new clone diagnostics. Existing MySQL and PXC
+clusters receive these fixes **only by being re-created with v0.4.2 agents**.
+For example, take and verify a backup, clone or restore it into a new cluster
+on v0.4.2, verify the new member builds and recovered data, then switch clients.
+Back up and verify an independent recovery path before deleting any cluster;
+preserve application data when planning re-creation.
+
+`upgrade-agents` covers **PostgreSQL, Supabase, MongoDB, RabbitMQ and
+Elasticsearch only**; it does not cover MySQL or PXC. Upgrading only the
+control plane or restarting the native database process does not replace
+agent code. The separate in-place restore **stop-hold release** fix is
+control-plane-side and does not itself need an agent upgrade; successful
+follower re-clone still requires the updated agents described above.
+
+### Other engine agents
+
+For an upgrade **from v0.4.1**, the v0.4.2 fixes for **OpenBao** (rolling status,
+clone readiness and exposure recovery), **Neo4j** and **Weaviate** (clone readiness
+and exposure recovery), **Keycloak** (resource defaults and exposure recovery),
+and **Temporal** (initial-data-source rejection) are **control-plane-side**.
+Upgrading the control plane is enough for these fixes; these engines do not
+need re-creation for a v0.4.1 → v0.4.2 upgrade. Dokploy initial-build retry and
+shared exposure-recovery fixes also run in the control plane.
+The v0.4.2 exposure-recovery fixes for **PostgreSQL (including Citus), Supabase,
+MongoDB, RabbitMQ and Elasticsearch** are also control-plane-side; these fixes
+do not themselves require an agent rollout.
+
+OpenBao, Neo4j, Weaviate, Keycloak and Temporal still do **not** support `upgrade-agents`. This statement
+does not install agent-side fixes from older releases: when upgrading from
+v0.4.0, also follow the separate v0.4.1 agent guidance below. MySQL/PXC formation
+durability and sanitized startup/clone diagnostics include agent-side changes;
+use new v0.4.2 members, not merely a database-process restart.
+
+### Known issues in v0.4.2
+
+- **PostgreSQL administrator password rotation remains unavailable.** The
+  revealed `postgres` password cannot be rotated in place. Follow
+  [administrator credential containment](#postgresql-administrator-password-cannot-be-rotated-yet).
+- **PXC after an in-place restore on Zerops:** after either a full or PITR
+  restore, one member can be flagged `GTIDHistoryDiverged` and the cluster
+  reports Degraded even though the checked data and writes are correct.
+  Investigation is ongoing; verify recovered data and replication with native
+  SQL rather than treating the operation's success as complete acceptance.
+  The flag can block incremental backups and PITR continuity, and taking a new
+  full backup has not reliably cleared it. This was not reproduced on Dokploy.
+- **Nomad live coverage of the new engines is incomplete.** Implemented
+  capabilities do not establish full lifecycle/recovery acceptance. OpenBao,
+  Temporal, MySQL/PXC, Neo4j, Weaviate, Keycloak and Citus remain EXPERIMENTAL,
+  as does Data MCP; see [engine availability](providers.md#engine-availability).
+- **Temporal is not supported on Zerops:** membership requires private IPv4
+  networking, while Zerops private networking is IPv6. Use Dokploy or Nomad
+  within their documented capability limits.
+
+Other continuing limitations include [empty Docker volume objects after
+Dokploy deletion](dokploy.md) and PostgreSQL's configuration acknowledgement
+wait after binding/access changes; backups still require readiness.
+
 ## Upgrading from v0.4.0 to v0.4.1
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup)
@@ -341,42 +487,13 @@ and [failed restore and client holds](postgres/backups.md#failed-restore-and-cli
 
 ### Known issues in v0.4.1
 
-These issues are present in v0.4.1; fixes are planned for v0.4.2.
-
-- **MySQL Group Replication cannot form on any provider** (v0.4.0 and v0.4.1).
-  A generated internal credential used for group recovery exceeds MySQL's
-  length limit, so the group never completes bootstrap. Do not force bootstrap
-  or edit coordinator state to bypass the failure. Until v0.4.2, use
-  single-member MySQL, or PXC on Nomad, where a 3-member cluster with 2 GiB
-  data members and ProxySQL formed in live checks.
-- **PXC cannot form on Zerops** (v0.4.0 and v0.4.1). The platform does not
-  permit the member start-up step, so the first member never starts.
-- **MySQL and Percona XtraDB Cluster full backups fail on every provider**
-  (v0.4.0 and v0.4.1) with `agent returned inconsistent XtraBackup metadata`.
-  Full backups, and therefore restore, clone and point-in-time recovery
-  baselines, are unavailable for MySQL/PXC. Existing clusters keep running
-  normally. There is no workaround in v0.4.1 other than taking backups with
-  your own tooling. A control-plane-only fix is planned for v0.4.2; no member
-  agent update will be needed.
-- **OpenBao can briefly report Ready during a rolling update** (a v0.4.1
-  regression; v0.4.0 is not affected). Between member replacements the cluster
-  may show Ready while the update operation is still running. Data and the
-  update itself are correct; automation that waits for Ready should also check
-  that no operation is running.
-- **Clusters created from a backup (clone) never report Ready for OpenBao,
-  MySQL, PXC, Neo4j and Weaviate** (also in v0.4.0). The data is restored, but
-  the cluster stays `RestoreIncomplete` and the create operation keeps running.
-  Verify the data with the engine's own tools and treat the cluster as usable
-  once those native checks pass.
-- **Resuming a suspended cluster or recovering a member may not restore public
-  exposure while the maintenance window is closed** (a v0.4.1 regression;
-  v0.4.0 is not affected). Public TCP or HTTPS access may remain unavailable
-  until the window opens; a resume operation can stay running until then.
-  Workaround: open the [maintenance window](operations.md#maintenance-windows),
-  or re-apply the change with
-  `karactl clusters patch CLUSTER -f change.yaml --ignore-maintenance-window`.
-  The override is supported on cluster patch/edit commands, not on
-  `clusters resume`. A fix is planned for v0.4.2.
+The following issues published for v0.4.1 are **fixed in v0.4.2**: MySQL Group
+Replication formation on every provider; PXC formation on Zerops; MySQL/PXC
+full-backup failures; OpenBao briefly reporting Ready during rolling updates;
+OpenBao/MySQL/PXC/Neo4j/Weaviate clones never reporting Ready; and delayed
+resume/public-exposure recovery under a closed maintenance window. See the
+[v0.4.2 upgrade guidance](#upgrading-to-v042) for affected versions and required
+re-creation of existing MySQL/PXC clusters for agent-side fixes.
 
 The PostgreSQL `postgres` administrator password also cannot be rotated yet; see
 [its containment procedure](#postgresql-administrator-password-cannot-be-rotated-yet).
