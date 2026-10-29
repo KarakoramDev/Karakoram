@@ -2,6 +2,9 @@
 // Copyright 2026 The Karakoram Authors
 
 // Package keycloak reconciles an independent PostgreSQL binding consumer.
+// Admitted HTTPS policy survives cleanup and runtime recovery independently of
+// route receipts, so recovery restores admitted access outside maintenance windows
+// without acknowledging a deferred exposure change.
 package keycloak
 
 import (
@@ -206,17 +209,66 @@ func (p *Provider) Validate(_ context.Context, old, c *domain.Cluster) error {
 }
 
 type state struct {
-	Member        string                 `json:"member"`
-	ServiceID     string                 `json:"serviceId,omitempty"`
-	Import        *engine.ImportPlan     `json:"import,omitempty"`
-	Pending       *pending               `json:"pending,omitempty"`
-	Deployed      bool                   `json:"deployed,omitempty"`
-	Public        bool                   `json:"public,omitempty"`
-	Resources     domain.Resources       `json:"resources"`
-	ConfigVersion int64                  `json:"configVersion"`
-	ConfigHash    string                 `json:"configHash,omitempty"`
-	Recovery      engine.RuntimeRecovery `json:"recovery,omitempty"`
+	Member            string                   `json:"member"`
+	ServiceID         string                   `json:"serviceId,omitempty"`
+	Import            *engine.ImportPlan       `json:"import,omitempty"`
+	Pending           *pending                 `json:"pending,omitempty"`
+	Deployed          bool                     `json:"deployed,omitempty"`
+	Public            bool                     `json:"public,omitempty"`
+	ExposureAdmission engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
+	Application       *applicationSettings     `json:"application,omitempty"`
+	Resources         domain.Resources         `json:"resources"`
+	ConfigVersion     int64                    `json:"configVersion"`
+	ConfigHash        string                   `json:"configHash,omitempty"`
+	Recovery          engine.RuntimeRecovery   `json:"recovery,omitempty"`
 }
+
+// applicationSettings retains admitted user settings independently of the
+// disposable member configuration (which also contains binding credentials).
+type applicationSettings struct {
+	Hostname     string `json:"hostname,omitempty"`
+	ProxyHeaders string `json:"proxyHeaders,omitempty"`
+}
+
+// retainApplication migrates only settings still backed by a legacy config.
+// Missing secrets are unknown admission, not permission and not a store failure.
+func retainApplication(ctx context.Context, rc *engine.Context, s *state) error {
+	if s.Application != nil || s.ConfigHash == "" {
+		return nil
+	}
+	raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "keycloak/config/"+s.Member)
+	if missing(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var config agentapi.MemberConfig
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return err
+	}
+	var previous kcspec.Spec
+	if err := json.Unmarshal(config.EngineSpec, &previous); err != nil {
+		return err
+	}
+	s.Application = &applicationSettings{Hostname: previous.Hostname, ProxyHeaders: previous.ProxyHeaders}
+	return nil
+}
+
+func (p *Provider) seedApplication(ctx context.Context, rc *engine.Context, s *state, desired EngineOptions) error {
+	if err := retainApplication(ctx, rc, s); err != nil {
+		return err
+	}
+	if s.Application != nil {
+		return nil
+	}
+	if rc.Cluster.Status.ObservedGeneration != 0 && rc.Cluster.Status.ObservedGeneration != rc.Cluster.Generation && rc.WaitForWindow().RequeueAfter > 0 {
+		return engine.Invalid("Keycloak admitted hostname/proxy settings are unavailable; open a maintenance window or use a desired-state maintenance override")
+	}
+	s.Application = &applicationSettings{Hostname: desired.Hostname, ProxyHeaders: desired.ProxyHeaders}
+	return nil
+}
+
 type pending struct {
 	Op        infra.Op         `json:"op"`
 	Action    string           `json:"action"`
@@ -383,6 +435,17 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err != nil {
 		return result, err
 	}
+	if err = p.seedApplication(ctx, rc, s, o); err != nil {
+		return result, err
+	}
+	// Migrate retained route policy before recovery can discard its receipt.
+	if s.Public || s.Deployed {
+		s.ExposureAdmission.Seed(domain.Exposure{Public: s.Public})
+	}
+	exposure, exposureDeferred := s.ExposureAdmission.Resolve(rc, domain.Exposure{Public: o.PublicHTTPS})
+	if err = save(rc.Cluster, s); err != nil {
+		return result, err
+	}
 	conn, err := p.options.Bindings.Ensure(ctx, request(rc.Cluster, o))
 	if err != nil {
 		return result, err
@@ -416,6 +479,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		recovery, e := engine.ReconcileRuntime(ctx, rc, s.runtimeMember(rc, t.Token))
 		if recovery.Imported {
 			s.Deployed = false
+			s.Public = false
 		}
 		if e != nil || recovery.Busy {
 			return result, e
@@ -423,6 +487,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	}
 	if v == nil {
 		s.Deployed = false
+		s.Public = false
 		if s.Import == nil {
 			s.Import = engine.NewImportPlan([]infra.ServiceSpec{engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: s.Member, Token: t.Token, Containers: 1, Resources: rc.Cluster.Spec.Components.Engine.Resources})})
 			s.Resources = rc.Cluster.Spec.Components.Engine.Resources
@@ -447,25 +512,19 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		return result, nil
 	}
 	configurationDeferred := false
-	if s.ConfigHash != "" {
-		config, e := p.MemberConfig(ctx, rc, s.Member)
-		if e != nil {
-			return result, e
+	desiredApplication := applicationSettings{Hostname: o.Hostname, ProxyHeaders: o.ProxyHeaders}
+	if *s.Application != desiredApplication {
+		// User application settings need admission, even when recovery cleared
+		// the old runtime config. Credential/TLS renewal remains exempt.
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			o.Hostname, o.ProxyHeaders = s.Application.Hostname, s.Application.ProxyHeaders
+			configurationDeferred = true
+		} else {
+			s.Application = &desiredApplication
 		}
-		var previous kcspec.Spec
-		if e = json.Unmarshal(config.EngineSpec, &previous); e != nil {
-			return result, e
-		}
-		// Binding credential-generation rolls and agent TLS renewal are
-		// exempt, but user-requested application configuration is not.
-		if previous.Hostname != o.Hostname || previous.ProxyHeaders != o.ProxyHeaders {
-			if rc.WaitForWindow().RequeueAfter > 0 {
-				// Defer only the application change. Rotated binding credentials
-				// and renewed agent transport material must still be published.
-				o.Hostname, o.ProxyHeaders = previous.Hostname, previous.ProxyHeaders
-				configurationDeferred = true
-			}
-		}
+	}
+	if err = save(rc.Cluster, s); err != nil {
+		return result, err
 	}
 	if err = p.publish(ctx, rc, s, conn, o); err != nil {
 		return result, err
@@ -512,24 +571,19 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Pending = &pending{Op: op, Action: "resize", Resources: r}
 		return result, nil
 	}
-	if s.Public != o.PublicHTTPS {
-		if rc.Cluster.Status.ObservedGeneration != 0 {
-			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
-				return wait, nil
-			}
-		}
+	if s.Public != exposure.Public {
 		access, e := engine.PublicHTTPS(rc.Backend)
 		if e != nil {
 			return result, e
 		}
-		op, e := access.SetSubdomainAccess(ctx, s.Member, o.PublicHTTPS)
+		op, e := access.SetSubdomainAccess(ctx, s.Member, exposure.Public)
 		if e != nil {
 			return result, e
 		}
-		s.Pending = &pending{Op: op, Action: "public", Public: o.PublicHTTPS}
+		s.Pending = &pending{Op: op, Action: "public", Public: exposure.Public}
 		return result, nil
 	}
-	if configApplied && !configurationDeferred {
+	if configApplied && !configurationDeferred && !exposureDeferred {
 		// Periodic health requeues do not mean the desired generation is still
 		// pending. Only acknowledge after the live agent accepted configuration
 		// and every provider mutation above has completed.
@@ -739,6 +793,26 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			err = e
 		}
 	}()
+	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return false, err
+	}
+	// Migrate application admission before cleanup deletes its old config.
+	if opts.KeepVolumes {
+		if err = retainApplication(ctx, rc, s); err != nil {
+			return false, err
+		}
+		if s.Application == nil && rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+			s.Application = &applicationSettings{Hostname: o.Hostname, ProxyHeaders: o.ProxyHeaders}
+		}
+	}
+	// Cleanup removes runtime routes, not their durable maintenance admission.
+	if s.Public || s.Deployed {
+		s.ExposureAdmission.Seed(domain.Exposure{Public: s.Public})
+	}
+	if err = save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	if s.Recovery.Op != nil || s.Recovery.ImportPlan != nil {
 		t, e := token(ctx, rc, s)
 		if e != nil {
@@ -804,13 +878,12 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	if p.options.Bindings == nil {
 		return false, engine.ErrUnavailable
 	}
-	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
-	if err != nil {
-		return false, err
-	}
 	if err = p.options.Bindings.Release(ctx, pgbinding.BindingID(request(rc.Cluster, o)), opts.KeepVolumes); err != nil {
 		return false, err
 	}
+	// The configuration below is a runtime receipt too: resume must publish a
+	// fresh one instead of trying to load a secret that cleanup has removed.
+	s.ConfigHash = ""
 	for _, key := range []string{"keycloak/config/" + s.Member, "keycloak/admin", "keycloak/agent-ca", "tls/ca.crt"} {
 		if err = rc.Secrets.DeleteClusterSecret(ctx, rc.Cluster.Ref(), key); err != nil && !missing(err) {
 			return false, err

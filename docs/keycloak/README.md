@@ -100,6 +100,24 @@ On an existing runtime, changes to `hostname`, `proxyHeaders` and `publicHttps`
 respect the maintenance window. Public routing can replace the backend service's
 task even though application settings are delivered separately in sealed agent
 configuration. A closed window defers both changes, not just the agent reload.
+The last admitted HTTPS policy is retained separately from runtime route receipts.
+Resume and runtime recovery restore that policy even while the window is closed;
+a deferred `publicHttps` change remains unpublished and its desired generation
+is not acknowledged until the window opens or the operation override admits it.
+The admitted `hostname` and `proxyHeaders` settings are also retained independently
+of disposable member configuration, so resume cannot publish a previously
+deferred application change when recreating that configuration. Retained legacy
+member configuration is migrated before suspension deletes it. If both that
+configuration and the admitted-settings receipt are already absent on a legacy
+resume, the control plane cannot infer old settings from a newer desired spec:
+an open window or desired-state maintenance override is required to admit them.
+A stale configuration hash without its secret is also unknown admission: it
+does not block finishing interrupted suspension, and the window/override path
+can admit the desired settings on resume. Actual secret-store failures and
+malformed saved configuration remain errors rather than admission fallbacks.
+Older state migrates retained applied routing before cleanup. If no applied
+policy survives and the desired generation is unacknowledged, recovery defaults
+to private access rather than publishing an unadmitted route.
 
 Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this engine driver; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
 
