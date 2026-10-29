@@ -183,6 +183,9 @@ func (b *testBackend) Containers(_ context.Context, name string) ([]infra.Contai
 	return instances, nil
 }
 func (*testBackend) DeletePublicPorts(context.Context, string) error { return nil }
+func (*testBackend) ListPublicPorts(context.Context) ([]infra.PublicPortRoute, error) {
+	return nil, nil
+}
 func (b *testBackend) DeleteServiceByID(_ context.Context, name, id string) (infra.Op, error) {
 	if s := b.services[name]; s != nil && s.ID != id {
 		return infra.Op{}, infra.ErrConflict

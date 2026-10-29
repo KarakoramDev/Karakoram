@@ -83,6 +83,19 @@ initial provisioning/scale-out and agent transport-certificate renewal do not
 wait. See [PostgreSQL operations](../postgres/operations.md#agent-rollout-and-maintenance-windows)
 for database leaf renewal's seven-day emergency exception and policy overrides.
 
+Gateway HTTPS admission is retained separately from runtime route receipts.
+Resume and missing-runtime recovery restore the previously admitted public or
+private policy even while the maintenance window is closed. A deferred HTTPS
+policy change is not published or generation-acknowledged until a window or
+generation override admits it. Legacy applied gateway receipts seed admission;
+if no applied policy survives and a newer generation is pending, recovery stays
+private rather than assuming the current desired public policy was admitted.
+The applied canonical HTTPS URL is retained with that policy so recovered
+components keep their admitted URL configuration instead of needing a second
+maintenance-gated configuration change after routing returns. Final Supabase
+acknowledgement also requires PostgreSQL core generation acknowledgement;
+optional-component readiness cannot bypass a deferred database exposure change.
+
 ## Components and health
 
 Change desired replicas/resources under `spec.components.extra` and follow operation/generation convergence. Explicit zero disables a service, subject to dependency validation. Component application readiness is separate from database readiness. In member status, application releases use `componentVersion`; their database `version` is intentionally empty. Aggregate resource requirements include every enabled service, proxy and data member.

@@ -35,24 +35,76 @@ func (p *Provider) apiURL(ctx context.Context, rc *engine.Context) (string, erro
 	if rc.Cluster.Spec.Components.Extra["gateway"].Replicas == 0 {
 		return "", nil
 	}
-	if o.Gateway.PublicHTTPS {
-		access, err := engine.PublicHTTPS(rc.Backend)
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		return "", err
+	}
+	public := o.Gateway.PublicHTTPS
+	if s.GatewayAdmission.Admitted != nil {
+		public = s.GatewayAdmission.Admitted.Public
+	}
+	if public {
+		endpoint, err := gatewayPublicURL(ctx, rc)
 		if err != nil {
 			return "", err
 		}
-		urls, err := access.SubdomainURLs(ctx, rc.Cluster.Name+"gw")
-		if err != nil {
-			return "", err
+		if endpoint != "" {
+			return endpoint, nil
 		}
-		for _, raw := range urls {
-			u, e := url.Parse(raw)
-			if e == nil && u.Scheme == "https" && u.Host != "" {
-				return strings.TrimRight(raw, "/"), nil
-			}
+		if s.GatewayURL != "" {
+			return s.GatewayURL, nil
 		}
 		return "", engine.ErrUnavailable
 	}
 	return "http://" + rc.Cluster.Name + "gw:8000", nil
+}
+
+func gatewayPublicURL(ctx context.Context, rc *engine.Context) (string, error) {
+	access, err := engine.PublicHTTPS(rc.Backend)
+	if err != nil {
+		return "", err
+	}
+	urls, err := access.SubdomainURLs(ctx, rc.Cluster.Name+"gw")
+	if err != nil {
+		return "", err
+	}
+	for _, raw := range urls {
+		u, err := url.Parse(raw)
+		if err == nil && u.Scheme == "https" && u.Host != "" {
+			return strings.TrimRight(raw, "/"), nil
+		}
+	}
+	return "", nil
+}
+
+// Retain the applied canonical URL before legacy recovery or suspension removes
+// the runtime/config receipt. Reusing it avoids a public-to-private bootstrap
+// config transition that would otherwise need a window to reverse after healing.
+func retainGatewayURL(ctx context.Context, rc *engine.Context, s *componentState) error {
+	m := s.Members["gateway"]
+	if s.GatewayURL != "" || m == nil || s.GatewayAdmission.Admitted == nil || !s.GatewayAdmission.Admitted.Public {
+		return nil
+	}
+	raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/config/"+m.Name)
+	if missing(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var config agentapi.MemberConfig
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return err
+	}
+	var spec sbspec.Spec
+	if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+		return err
+	}
+	u, err := url.Parse(spec.APIExternalURL)
+	if err == nil && u.Scheme == "https" && u.Host != "" {
+		s.GatewayURL = strings.TrimRight(spec.APIExternalURL, "/")
+	}
+	return nil
 }
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *componentMember) (sbspec.Spec, error) {
 	var out sbspec.Spec
@@ -81,7 +133,11 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 	api := private
 	// A gateway must first deploy its HTTP port before the backend can publish
 	// HTTPS routing. Other components are provisioned only after that transition.
-	if m.Component != "gateway" || m.Public {
+	state, err := loadState(rc.Cluster)
+	if err != nil {
+		return out, err
+	}
+	if m.Component != "gateway" || m.Public || state.GatewayURL != "" {
 		api, err = p.apiURL(ctx, rc)
 		if err != nil {
 			return out, err

@@ -24,6 +24,10 @@ import (
 type componentState struct {
 	Members map[string]*componentMember `json:"members"`
 	Pending *componentPending           `json:"pending,omitempty"`
+	// GatewayAdmission survives optional-runtime removal, including suspension.
+	// Public on a member is only the current runtime's application receipt.
+	GatewayAdmission engine.ExposureAdmission `json:"gatewayAdmission,omitempty"`
+	GatewayURL       string                   `json:"gatewayUrl,omitempty"`
 }
 type componentMember struct {
 	Name            string                 `json:"name"`
@@ -147,6 +151,9 @@ func loadState(c *domain.Cluster) (*componentState, error) {
 			return nil, err
 		}
 	}
+	if m := s.Members["gateway"]; m != nil && (m.Public || m.Stage == engine.ComponentJoined) {
+		s.GatewayAdmission.Seed(domain.Exposure{Public: m.Public})
+	}
 	return s, nil
 }
 func saveState(c *domain.Cluster, s *componentState) error {
@@ -163,6 +170,33 @@ func saveState(c *domain.Cluster, s *componentState) error {
 	root["supabase"] = raw
 	c.Internal, err = json.Marshal(root)
 	return err
+}
+
+func resolveGatewayExposure(ctx context.Context, rc *engine.Context, s *componentState) (bool, bool, error) {
+	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return false, false, err
+	}
+	effective, deferred := s.GatewayAdmission.Resolve(rc, domain.Exposure{
+		Public: o.Gateway.PublicHTTPS && rc.Cluster.Spec.Components.Extra["gateway"].Replicas > 0,
+	})
+	if !effective.Public {
+		s.GatewayURL = ""
+	} else if m := s.Members["gateway"]; m != nil && m.Public {
+		if endpoint, err := gatewayPublicURL(ctx, rc); err != nil {
+			return false, false, err
+		} else if endpoint != "" {
+			s.GatewayURL = endpoint
+		}
+	}
+	if err := retainGatewayURL(ctx, rc, s); err != nil {
+		return false, false, err
+	}
+	// Admission must be durable before recovery or route submission.
+	if err := saveState(rc.Cluster, s); err != nil {
+		return false, false, err
+	}
+	return effective.Public, deferred, nil
 }
 func verifyComponent(ctx context.Context, rc *engine.Context, m *componentMember) (*infra.Service, error) {
 	service, err := rc.Backend.GetService(ctx, m.Name)
@@ -553,6 +587,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	busy, componentErr := p.syncGatewayRestrictions(ctx, rc)
 	observed := rc.Cluster.Status.ObservedGeneration
 	result, err = p.Core.Sync(ctx, rc)
+	coreAcknowledged := rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation
 	// The core's applied generation does not include the Supabase services.
 	rc.Cluster.Status.ObservedGeneration = observed
 	if busy || componentErr != nil {
@@ -586,7 +621,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	busy, err = p.syncComponents(ctx, rc)
 	if err == nil && !busy {
 		status, err = p.Status(ctx, rc)
-		if err == nil && status.Phase == domain.PhaseReady {
+		if err == nil && status.Phase == domain.PhaseReady && coreAcknowledged {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		} else if err == nil {
 			// Final gateway DNS convergence needs another observation even when
@@ -619,15 +654,12 @@ func (p *Provider) syncGatewayRestrictions(ctx context.Context, rc *engine.Conte
 	if busy, e := p.observeComponent(ctx, rc, s); busy || e != nil {
 		return true, e
 	}
-	m := s.Members["gateway"]
-	if m == nil || !m.Public {
-		return p.syncDisabledComponents(ctx, rc, s)
-	}
-	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	effectivePublic, _, err := resolveGatewayExposure(ctx, rc, s)
 	if err != nil {
 		return false, err
 	}
-	if o.Gateway.PublicHTTPS && rc.Cluster.Spec.Components.Extra["gateway"].Replicas > 0 {
+	m := s.Members["gateway"]
+	if m == nil || !m.Public || effectivePublic {
 		return p.syncDisabledComponents(ctx, rc, s)
 	}
 	service, err := verifyComponent(ctx, rc, m)
@@ -637,11 +669,6 @@ func (p *Provider) syncGatewayRestrictions(ctx context.Context, rc *engine.Conte
 	if service == nil {
 		m.Public = false
 		return true, nil
-	}
-	if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-		// The normal component sweep retains the desired route barrier.
-		// Do not hold core recovery or accepted configuration behind it.
-		return false, nil
 	}
 	access, err := engine.PublicHTTPS(rc.Backend)
 	if err != nil {
@@ -696,6 +723,10 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 	if busy, e := p.reconcileComponentRuntimeFailures(ctx, rc, s, true); busy || e != nil {
 		return true, e
 	}
+	effectivePublic, exposureDeferred, err := resolveGatewayExposure(ctx, rc, s)
+	if err != nil {
+		return true, err
+	}
 	for _, def := range stackComponents {
 		m := s.Members[def.Name]
 		desired := rc.Cluster.Spec.Components.Extra[def.Name]
@@ -740,23 +771,16 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			}
 		}
 		if m != nil && desired.Replicas > 0 && m.Stage == engine.ComponentJoined {
-			o, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
-			if e != nil {
-				return true, e
-			}
-			if def.Name == "gateway" && m.Public != o.Gateway.PublicHTTPS {
-				if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-					return true, nil
-				}
+			if def.Name == "gateway" && m.Public != effectivePublic {
 				access, e := engine.PublicHTTPS(rc.Backend)
 				if e != nil {
 					return true, e
 				}
-				op, e := access.SetSubdomainAccess(ctx, m.Name, o.Gateway.PublicHTTPS)
+				op, e := access.SetSubdomainAccess(ctx, m.Name, effectivePublic)
 				if e != nil {
 					return true, e
 				}
-				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "public", Public: o.Gateway.PublicHTTPS}
+				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "public", Public: effectivePublic}
 				return true, nil
 			}
 			// Previous Studio runtimes exposed raw port 3000. A config reload
@@ -891,7 +915,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			return handled, e
 		}
 	}
-	return false, nil
+	return exposureDeferred, nil
 }
 
 func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember, sp sbspec.Spec) error {
@@ -1075,6 +1099,12 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	if err != nil {
 		return false, err
 	}
+	if err := retainGatewayURL(ctx, rc, s); err != nil {
+		return false, err
+	}
+	if err := saveState(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	rc.Cluster.Status.Message = "Removing Supabase component services and PostgreSQL infrastructure"
 	defer func() {
 		if e := saveState(rc.Cluster, s); err == nil {
@@ -1134,5 +1164,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, err
 		}
 	}
+	s.GatewayAdmission = engine.ExposureAdmission{}
+	s.GatewayURL = ""
 	return true, nil
 }
