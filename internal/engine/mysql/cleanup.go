@@ -18,6 +18,12 @@ func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.Dele
 	if err != nil {
 		return false, err
 	}
+	if err = seedExposure(rc, s); err != nil {
+		return false, err
+	}
+	if err = save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	defer func() {
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
@@ -136,5 +142,6 @@ func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.Dele
 			return false, e
 		}
 	}
+	s.ExposureAdmission = engine.ExposureAdmission{}
 	return true, nil
 }

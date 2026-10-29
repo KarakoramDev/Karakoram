@@ -148,6 +148,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if err != nil {
 		return result, err
 	}
+	if err = seedExposure(rc, s); err != nil {
+		return result, err
+	}
 	defer func() {
 		if e := save(rc.Cluster, s); err == nil {
 			err = e
@@ -498,9 +501,42 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	return result, nil
 }
 
-// Revoke changed routes before health gates; publish only after native convergence.
-func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state, publish bool) (deferred bool, err error) {
+// seedExposure migrates only acknowledged policy or a matching retained route
+// receipt. A legacy hash cannot reconstruct a superseded allowlist or IP family.
+func seedExposure(rc *engine.Context, s *state) error {
+	if s.ExposureAdmission.Admitted != nil {
+		return nil
+	}
+	if rc.Cluster.Status.ObservedGeneration > 0 && rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+		s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+		return nil
+	}
 	raw, err := json.Marshal(rc.Cluster.Spec.Exposure)
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(raw)
+	hash := hex.EncodeToString(digest[:])
+	for _, m := range s.Members {
+		if m.Public && m.ExposureHash == hash {
+			s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+			break
+		}
+	}
+	return nil
+}
+
+// Revoke changed routes before health gates; publish only after native convergence.
+// Recovery restores admitted policy without a second maintenance admission.
+func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state, publish bool) (deferred bool, err error) {
+	if err = seedExposure(rc, s); err != nil {
+		return false, err
+	}
+	exposure, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	if err = save(rc.Cluster, s); err != nil {
+		return deferred, err
+	}
+	raw, err := json.Marshal(exposure)
 	if err != nil {
 		return deferred, err
 	}
@@ -508,16 +544,8 @@ func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *sta
 	hash := hex.EncodeToString(digest[:])
 	target := connectionMember(rc, s)
 	for _, m := range s.Members {
-		want := rc.Cluster.Spec.Exposure.Public && m.Name == target
+		want := exposure.Public && m.Name == target
 		if m.Public && (!want || m.ExposureHash != hash) {
-			wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, nil)
-			if e != nil {
-				return deferred, e
-			}
-			if wait {
-				deferred = true
-				continue
-			}
 			if err = rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
 				return deferred, err
 			}
@@ -526,19 +554,10 @@ func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *sta
 		if !publish || !want || m.Public {
 			continue
 		}
-		if err = engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
+		if err = engine.RequirePublicTCP(rc.Backend, exposure); err != nil {
 			return deferred, err
 		}
-		exposure := rc.Cluster.Spec.Exposure
 		port := infra.PublicPort{Port: 3306, TargetPort: 3306, Protocol: "tcp", IPType: exposure.IPType, Allowlist: exposure.Allowlist}
-		wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, &port)
-		if e != nil {
-			return deferred, e
-		}
-		if wait {
-			deferred = true
-			continue
-		}
 		if err = rc.Backend.EnsurePublicPort(ctx, m.Name, port); err != nil {
 			return deferred, err
 		}

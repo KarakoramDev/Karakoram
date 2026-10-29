@@ -17,6 +17,16 @@ type maintenanceRouteBackend struct {
 	mutations int
 }
 
+func (b *maintenanceRouteBackend) Capabilities() infra.Capabilities {
+	c := b.fakeBackend.Capabilities()
+	c.TCPAllowlist = true
+	return c
+}
+
+func (b *maintenanceRouteBackend) ProjectInfo(context.Context) (infra.Project, error) {
+	return infra.Project{PublicIPv4: "192.0.2.1", PublicIPv6: "2001:db8::1"}, nil
+}
+
 func (b *maintenanceRouteBackend) ListPublicPorts(context.Context) ([]infra.PublicPortRoute, error) {
 	return b.routes, nil
 }
