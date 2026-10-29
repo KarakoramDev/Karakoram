@@ -25,6 +25,12 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	if m == nil {
 		return true, nil
 	}
+	if m.Public || m.Exposure.Public {
+		s.ExposureAdmission.Seed(m.Exposure)
+	}
+	if err = save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	if m.Pending != nil && engine.CleanupSupersedesDeployment(rc.Backend, *m.Pending) {
 		m.Pending = nil
 	}
@@ -128,5 +134,6 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, err
 		}
 	}
+	s.ExposureAdmission = engine.ExposureAdmission{}
 	return true, nil
 }

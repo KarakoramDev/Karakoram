@@ -182,6 +182,14 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		s.Member = &member{Name: rc.Cluster.Name + "n0", Volume: rc.Cluster.Name + "n0v", Stage: "planned", Resources: rc.Cluster.Spec.Components.Engine.Resources, Disk: rc.Cluster.Spec.Components.Engine.Resources}
 	}
 	m := s.Member
+	// Migrate the retained applied policy before recovery clears runtime receipts.
+	if m.Public || m.Exposure.Public {
+		s.ExposureAdmission.Seed(m.Exposure)
+	}
+	exposure, exposureDeferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	if err = save(rc.Cluster, s); err != nil {
+		return result, err
+	}
 	// Runtime resource changes may restart the member. Refuse unsupported
 	// volume growth before submitting those changes or publishing new config.
 	if m.VolumeID != "" && m.ImportBatch == nil {
@@ -192,7 +200,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 		m.Disk.MinDisk, m.Disk.MaxDisk = disk.MinDisk, disk.MaxDisk
 	}
 	s.Suspended = false
-	exposureDeferred, err := restrictExposure(ctx, rc, m)
+	err = restrictExposure(ctx, rc, m, exposure)
 	if err != nil {
 		return result, err
 	}
@@ -363,25 +371,20 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if rc.Cluster.Spec.DataSource != nil && !s.CloneComplete {
 		return result, nil
 	}
-	if exposureDeferred {
-		return rc.WaitForWindow(), nil
-	}
-	if rc.Cluster.Spec.Exposure.Public {
-		if e = engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); e != nil {
+	if exposure.Public {
+		if e = engine.RequirePublicTCP(rc.Backend, exposure); e != nil {
 			return result, e
 		}
-		x := rc.Cluster.Spec.Exposure
+		x := exposure
 		port := infra.PublicPort{Port: 7687, TargetPort: 7687, Protocol: "tcp", IPType: x.IPType, Allowlist: x.Allowlist}
-		if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, &port); e != nil {
-			return result, e
-		} else if wait {
-			return rc.WaitForWindow(), nil
-		}
 		if e = rc.Backend.EnsurePublicPort(ctx, m.Name, port); e != nil {
 			return result, e
 		}
 		m.Public = true
-		m.Exposure = x
+	}
+	m.Exposure = exposure
+	if exposureDeferred {
+		return rc.WaitForWindow(), nil
 	}
 	rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 	result.RequeueAfter = 10 * time.Second
@@ -390,12 +393,11 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 
 // Restrictions use observed routes, not only the last saved publication flag:
 // a crash after publishing must not leave an unrecorded endpoint unrestricted.
-func restrictExposure(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+func restrictExposure(ctx context.Context, rc *engine.Context, m *member, e domain.Exposure) error {
 	routes, err := rc.Backend.ListPublicPorts(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
-	e := rc.Cluster.Spec.Exposure
 	for _, route := range routes {
 		if route.Hostname != m.Name {
 			continue
@@ -403,21 +405,16 @@ func restrictExposure(ctx context.Context, rc *engine.Context, m *member) (bool,
 		if e.Public && route.Port == 7687 && route.TargetPort == 7687 && route.Protocol == "tcp" && route.IPType == e.IPType && reflect.DeepEqual(route.Allowlist, e.Allowlist) {
 			continue
 		}
-		if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, nil); e != nil {
-			return false, e
-		} else if wait {
-			return true, nil
-		}
 		if err = verify(ctx, rc, m); err != nil {
-			return false, err
+			return err
 		}
 		if err = rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
-			return false, err
+			return err
 		}
 		m.Public = false
-		return false, nil
+		return nil
 	}
-	return false, nil
+	return nil
 }
 
 func (p *Provider) deployMember(ctx context.Context, rc *engine.Context, s *state, version string) error {

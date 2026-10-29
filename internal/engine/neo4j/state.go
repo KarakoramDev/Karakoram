@@ -12,18 +12,19 @@ import (
 // state contains no credentials. Maintenance is an operation ID, so later
 // offline workflows can fence config pulls and ordinary convergence durably.
 type state struct {
-	UID                string            `json:"uid"`
-	ConfigVersion      int64             `json:"configVersion"`
-	ConfigHash         string            `json:"configHash,omitempty"`
-	ConfigOptions      *EngineOptions    `json:"configOptions,omitempty"`
-	Member             *member           `json:"member,omitempty"`
-	Maintenance        string            `json:"maintenance,omitempty"`
-	RestoreRecovery    *domain.Operation `json:"restoreRecovery,omitempty"`
-	Suspended          bool              `json:"suspended,omitempty"`
-	TLSRotationID      string            `json:"tlsRotationId,omitempty"`
-	PasswordRotationID string            `json:"passwordRotationId,omitempty"`
-	CloneQueued        bool              `json:"cloneQueued,omitempty"`
-	CloneComplete      bool              `json:"cloneComplete,omitempty"`
+	UID                string                   `json:"uid"`
+	ConfigVersion      int64                    `json:"configVersion"`
+	ConfigHash         string                   `json:"configHash,omitempty"`
+	ConfigOptions      *EngineOptions           `json:"configOptions,omitempty"`
+	Member             *member                  `json:"member,omitempty"`
+	ExposureAdmission  engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
+	Maintenance        string                   `json:"maintenance,omitempty"`
+	RestoreRecovery    *domain.Operation        `json:"restoreRecovery,omitempty"`
+	Suspended          bool                     `json:"suspended,omitempty"`
+	TLSRotationID      string                   `json:"tlsRotationId,omitempty"`
+	PasswordRotationID string                   `json:"passwordRotationId,omitempty"`
+	CloneQueued        bool                     `json:"cloneQueued,omitempty"`
+	CloneComplete      bool                     `json:"cloneComplete,omitempty"`
 }
 type member struct {
 	Name             string                 `json:"name"`

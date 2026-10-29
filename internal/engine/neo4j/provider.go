@@ -2,6 +2,9 @@
 // Copyright 2026 The Karakoram Authors
 
 // Package neo4j reconciles a TLS-only Neo4j Community singleton.
+// Admitted exposure is retained independently of runtime routes so suspension
+// and runtime recovery restore accepted access even outside maintenance windows.
+// Deferred exposure edits do not acknowledge their desired generation.
 package neo4j
 
 import (
