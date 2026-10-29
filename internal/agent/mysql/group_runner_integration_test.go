@@ -276,6 +276,31 @@ func TestNativeGroupRunner(t *testing.T) {
 	if p < 0 {
 		t.Fatal("no primary")
 	}
+	target := (p + 1) % 3
+	targetStatus, err := observe(nodes[target])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Preparing the old parameterized statement must fail without executing
+	// an election: the UDF initializer requires a concrete UUID immediately.
+	admin, err := nodes[p].runner.LocalAccessDB(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stmt, prepareErr := admin.PrepareContext(ctx, "SELECT group_replication_set_as_primary(?)")
+	if stmt != nil {
+		_ = stmt.Close()
+	}
+	var native *mysqldriver.MySQLError
+	if !errors.As(prepareErr, &native) || !strings.Contains(native.Message, "You need to specify a server uuid") {
+		t.Fatalf("expected native UUID initialization rejection, got %v", prepareErr)
+	}
+	t.Logf("parameterized UDF rejected before execution: MySQL %d: %s", native.Number, native.Message)
+	nodes[p].action(ctx, myspec.ActionSwitchover, myspec.SwitchoverRequest{TargetUUID: targetStatus.ServerUUID}, nil)
+	nativeGroupPoll(t, 40*time.Second, "requested primary after production switchover", func() bool {
+		return primary() == target && online(3)
+	})
+	p = target
 	db, e := nodes[p].runner.LocalAccessDB(ctx)
 	if e != nil {
 		t.Fatal(e)

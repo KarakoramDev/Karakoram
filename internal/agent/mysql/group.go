@@ -294,7 +294,10 @@ func SwitchoverGroup(ctx context.Context, d GroupDeps, r myspec.SwitchoverReques
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, "SELECT group_replication_set_as_primary(?)", r.TargetUUID)
+	// GR validates the UUID in the UDF initializer, before prepared-statement
+	// parameters have values. Validate above, then send a literal UUID so the
+	// initializer sees the actual argument instead of rejecting an empty one.
+	_, err = db.ExecContext(ctx, "SELECT group_replication_set_as_primary("+groupQuote(r.TargetUUID)+")")
 	return err
 }
 
@@ -663,7 +666,7 @@ func RegisterGroupRoutes(mux *http.ServeMux, d GroupDeps) {
 				}
 			}
 			if err != nil {
-				if action == myspec.ActionBootstrap || action == myspec.ActionStartGroup {
+				if action == myspec.ActionBootstrap || action == myspec.ActionStartGroup || action == myspec.ActionSwitchover {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusServiceUnavailable)
 					_ = json.NewEncoder(w).Encode(agentapi.ErrorResponse{Error: groupActionDiagnostic(d, action, err)})

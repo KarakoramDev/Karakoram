@@ -68,6 +68,37 @@ func TestGroupNativeDiagnosticReachesClient(t *testing.T) {
 	}
 }
 
+func TestSwitchoverDiagnosticReachesClient(t *testing.T) {
+	s := testGroupSpec()
+	s.Agent.Password = "private-agent-credential"
+	c := &switchoverConnector{groupTestConnector: groupTestConnector{t: t}, err: &mysqldriver.MySQLError{Number: 3910, Message: "primary election rejected; " + s.Agent.Password}}
+	d := &cloneTestDeps{rejectedGroupDeps: rejectedGroupDeps{s: s, dir: t.TempDir()}, db: sql.OpenDB(c)}
+	t.Cleanup(func() { _ = d.db.Close() })
+	mux := http.NewServeMux()
+	RegisterGroupRoutes(mux, d)
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	client, err := agentapi.NewClient(agentapi.ClientOptions{BaseURL: server.URL, Token: "diagnostic-agent-token", CAPEM: ca})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	err = client.Engine(t.Context(), "mysql", myspec.ActionSwitchover, myspec.SwitchoverRequest{TargetUUID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}, nil)
+	var remote *agentapi.HTTPError
+	if !errors.As(err, &remote) || remote.StatusCode != http.StatusServiceUnavailable {
+		t.Fatal("missing structured switchover error")
+	}
+	for _, want := range []string{"switchover failed", "MySQL 3910", "primary election rejected"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("diagnosis lost: %s", want)
+		}
+	}
+	if strings.Contains(err.Error(), s.Agent.Password) || len(remote.Message) > groupDiagnosticBytes || strings.ContainsAny(remote.Message, "\n\r\x00") {
+		t.Fatal("unsafe switchover diagnosis")
+	}
+}
+
 func TestGroupDiagnosticRedactsBeforeBounding(t *testing.T) {
 	s := testGroupSpec()
 	s.Replication.Password = "quote'and\\escape-recovery-credential"
