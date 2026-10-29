@@ -22,6 +22,13 @@
 // preserves the import, deploy, readiness and scale stages; Elasticsearch keeps
 // ownership checks, durable operation tracking and database safety decisions.
 //
+// TCP and Kibana/APM HTTPS admission is persisted independently of runtime
+// route receipts. Resume and runtime repair restore admitted access even outside
+// maintenance windows; deferred policy changes still prevent generation
+// acknowledgement until a window opens or its override is accepted. Legacy
+// TCP digests seed admission only when the applied policy is recoverable;
+// otherwise an unacknowledged legacy generation falls back to private access.
+//
 // Agent connectivity means a successful status response, independently of child
 // health. Node and pinned component observations retain paused/error diagnostics
 // as Process conditions without losing native roles. Every live component must

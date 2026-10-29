@@ -13,6 +13,10 @@ func (p *Provider) recoverRuntimes(ctx context.Context, rc *engine.Context, s *s
 	if s.Suspended || s.RestoreActive || rc.Cluster.Deleting {
 		return false, nil
 	}
+	seedExposure(rc, s)
+	if err := save(rc.Cluster, s); err != nil {
+		return true, err
+	}
 	for _, m := range s.Members {
 		if m.Removing || (m.Stage == stagePlanned || m.Stage == stageImported) && !m.RuntimeRecovery.Initialized {
 			continue

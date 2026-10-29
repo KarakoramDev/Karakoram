@@ -44,6 +44,10 @@ type state struct {
 	UID                string `json:"uid"`
 	Phase              string `json:"phase"`
 	ReplacementFailure string `json:"replacementFailure,omitempty"`
+	// Admission survives runtime receipts, recovery and retained-volume suspension.
+	NodeExposure   engine.ExposureAdmission `json:"nodeExposure,omitempty"`
+	KibanaExposure engine.ExposureAdmission `json:"kibanaExposure,omitempty"`
+	APMExposure    engine.ExposureAdmission `json:"apmExposure,omitempty"`
 	// ConfigVersion increments whenever any member configuration changes.
 	ConfigVersion int64     `json:"configVersion"`
 	Members       []*member `json:"members"`
