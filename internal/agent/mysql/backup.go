@@ -98,7 +98,10 @@ func metadataValues(b []byte) map[string]string {
 	}
 	return m
 }
-func parseBackupMetadata(dir string) (myspec.BackupResult, error) {
+
+// ParseBackupMetadata reads native XtraBackup checkpoint, tool and binlog metadata.
+// BackupType retains XtraBackup's checkpoint vocabulary, including full-backuped.
+func ParseBackupMetadata(dir string) (myspec.BackupResult, error) {
 	var out myspec.BackupResult
 	checkpoints, err := os.ReadFile(filepath.Join(dir, "xtrabackup_checkpoints"))
 	if err != nil {
@@ -309,7 +312,7 @@ func runBackup(ctx context.Context, s myspec.Spec, p paths, r myspec.BackupReque
 	if err != nil {
 		return out, errors.New("metadata_extract_failed")
 	}
-	out, err = parseBackupMetadata(metadataDir)
+	out, err = ParseBackupMetadata(metadataDir)
 	if err != nil {
 		return out, err
 	}

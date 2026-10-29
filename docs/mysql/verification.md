@@ -6,6 +6,14 @@
 
 These are procedures, not a claim that a checkout or deployment passed. Missing prerequisites and skipped tests mean **unverified**, not successful. Use disposable data and storage, no production credentials, and record redacted terminal results and recovered contents.
 
+The ordinary engine package test
+`TestBackupOperationAdmitsAgentParsedCheckpoints` passes on-disk native full and
+incremental checkpoint fixtures through the production agent metadata parser,
+then through control-plane backup dispatch, polling and successful inventory
+admission. It requires no native binaries. Native agent-only recovery cases below
+exercise real subprocesses and storage, but do not themselves prove control-plane
+receipt admission; retain both layers of coverage.
+
 ## Native prerequisites
 
 Use checksum-verified native [Percona](https://www.percona.com/) artifacts compatible with the machine and all required runtime libraries. No [Docker](https://www.docker.com/), privileged package installation or global service changes are needed for these cases. Extract prerequisites into locations selected by your environment; do not assume a checkout-relative cache or a particular workstation filesystem.

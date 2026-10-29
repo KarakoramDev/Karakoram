@@ -106,7 +106,7 @@ func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspe
 	if err = extractVerifiedBackup(ctx, s, request.Source, last, metadata, []string{"xtrabackup_checkpoints", "xtrabackup_binlog_info", "xtrabackup_info", "backup-my.cnf"}); err != nil {
 		return empty, err
 	}
-	baseline, err := parseBackupMetadata(metadata)
+	baseline, err := ParseBackupMetadata(metadata)
 	if err != nil {
 		return empty, err
 	}

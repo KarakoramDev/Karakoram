@@ -366,7 +366,7 @@ func (e *Runner) restore(ctx context.Context, n *agent.Node, req myspec.RestoreR
 			// Capture metadata before prepare mutates the full checkpoint. The
 			// source UUID comes from the same stream as the binlog coordinates.
 			last := filepath.Join(stageDir, fmt.Sprint(len(r.ObjectPaths)-1))
-			receipt.Backup, err = parseBackupMetadata(last)
+			receipt.Backup, err = ParseBackupMetadata(last)
 			if err != nil {
 				return fail("metadata_invalid")
 			}

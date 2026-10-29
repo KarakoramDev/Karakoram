@@ -40,7 +40,7 @@ func TestBackupMetadata(t *testing.T) {
 		{"unknown_type", "backup_type = prepared\nfrom_lsn = 0\nto_lsn = 99\n", 0, 0, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := parseBackupMetadata(metadataFixture(t, test.checkpoints))
+			result, err := ParseBackupMetadata(metadataFixture(t, test.checkpoints))
 			if test.invalid {
 				if err == nil {
 					t.Fatal("accepted invalid checkpoint")
@@ -203,7 +203,7 @@ func TestBackupMetadataRequiresRealBinlogCoordinates(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "xtrabackup_binlog_info"), []byte(coordinate+" aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:1-10\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := parseBackupMetadata(dir); err == nil {
+			if _, err := ParseBackupMetadata(dir); err == nil {
 				t.Fatal("unanchored backup metadata accepted")
 			}
 		})
