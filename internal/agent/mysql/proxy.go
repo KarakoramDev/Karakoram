@@ -70,7 +70,11 @@ func RenderProxyConfig(s myspec.Spec, configDir, dataDir string) (string, error)
 		if i > 0 {
 			b.WriteString(",\n")
 		}
-		fmt.Fprintf(&b, " {address=%s,port=%d,hostgroup=10,use_ssl=1,max_connections=%d}", proxyConfigQuote(peer.Host), peer.Port, p.MaxConnections)
+		group := 20
+		if s.Topology == myspec.TopologySingle && p.Mode != "galera" {
+			group = 10
+		}
+		fmt.Fprintf(&b, " {address=%s,port=%d,hostgroup=%d,use_ssl=1,max_connections=%d}", proxyConfigQuote(peer.Host), peer.Port, group, p.MaxConnections)
 		if s.Topology == myspec.TopologySingle && (p.ReadWriteSplit || p.ReaderPort) {
 			fmt.Fprintf(&b, ",\n {address=%s,port=%d,hostgroup=20,use_ssl=1,max_connections=%d}", proxyConfigQuote(peer.Host), peer.Port, p.MaxConnections)
 		}
@@ -206,50 +210,51 @@ func (e *Runner) ProxyTLSReloadFallback() bool {
 	return e.proxyTLSReloadFallback
 }
 func applyProxySQL(ctx context.Context, db *sql.DB, s myspec.Spec) error {
-	p := s.Proxy
 	c, err := db.Conn(ctx)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
+	image := proxyConfigImage(s)
+	equal, err := proxyConfigMatches(ctx, c, s, image)
+	if err != nil {
+		return err
+	}
+	if equal {
+		return nil
+	}
+	if proxyCluster(s) {
+		// ProxySQL materializes runtime tables on SELECT. Refresh the server
+		// snapshot even when comparison stopped at an earlier differing table.
+		var count int
+		if err = c.QueryRowContext(ctx, "SELECT COUNT(*) FROM runtime_mysql_servers").Scan(&count); err != nil {
+			return err
+		}
+	}
 	// Keep each configuration image atomic in the admin SQLite database; runtime
 	// loads are ordered only after the entire image has committed.
 	if _, err = c.ExecContext(ctx, "BEGIN"); err != nil {
 		return err
 	}
 	defer c.ExecContext(context.Background(), "ROLLBACK")
-	statements := []string{"DELETE FROM mysql_group_replication_hostgroups", "DELETE FROM mysql_galera_hostgroups", "DELETE FROM mysql_servers", "DELETE FROM mysql_users", "DELETE FROM mysql_query_rules"}
-	if p.Mode == "galera" {
-		statements = append(statements, "INSERT INTO mysql_galera_hostgroups(writer_hostgroup,backup_writer_hostgroup,reader_hostgroup,offline_hostgroup,active,max_writers,writer_is_also_reader,max_transactions_behind) VALUES(10,11,20,30,1,1,2,100)")
-	} else if s.Topology != myspec.TopologySingle {
-		statements = append(statements, "INSERT INTO mysql_group_replication_hostgroups(writer_hostgroup,backup_writer_hostgroup,reader_hostgroup,offline_hostgroup,active,max_writers,writer_is_also_reader,max_transactions_behind) VALUES(10,11,20,30,1,1,0,100)")
-	}
-	for _, peer := range p.Backends {
-		statements = append(statements, fmt.Sprintf("INSERT INTO mysql_servers(hostgroup_id,hostname,port,use_ssl,max_connections) VALUES(10,%s,%d,1,%d)", proxyQuote(peer.Host), peer.Port, p.MaxConnections))
-		if s.Topology == myspec.TopologySingle && (p.ReadWriteSplit || p.ReaderPort) {
-			statements = append(statements, fmt.Sprintf("INSERT INTO mysql_servers(hostgroup_id,hostname,port,use_ssl,max_connections) VALUES(20,%s,%d,1,%d)", proxyQuote(peer.Host), peer.Port, p.MaxConnections))
+	var statements []string
+	for _, table := range image {
+		if table.name == "global_variables" {
+			for _, row := range table.rows {
+				statements = append(statements, "INSERT OR REPLACE INTO global_variables("+table.columns+") VALUES("+row+")")
+			}
+			continue
+		}
+		statements = append(statements, "DELETE FROM "+table.name)
+		for _, row := range table.rows {
+			statements = append(statements, "INSERT INTO "+table.name+"("+table.columns+") VALUES("+row+")")
 		}
 	}
-	for _, u := range p.Users {
-		ssl := 0
-		if u.RequireTLS {
-			ssl = 1
-		}
-		statements = append(statements, fmt.Sprintf("INSERT INTO mysql_users(username,password,active,default_hostgroup,use_ssl,transaction_persistent) VALUES(%s,%s,1,10,%d,1)", proxyQuote(u.Username), proxyQuote(u.Password), ssl))
-	}
-	for _, r := range proxyRules(p) {
-		pattern := "NULL"
-		if r.pattern != "" {
-			pattern = proxyQuote(r.pattern)
-		}
-		port := "NULL"
-		if r.port > 0 {
-			port = strconv.Itoa(r.port)
-		}
-		statements = append(statements, fmt.Sprintf("INSERT INTO mysql_query_rules(rule_id,active,match_digest,proxy_port,destination_hostgroup,apply) VALUES(%d,1,%s,%s,%d,1)", r.id, pattern, port, r.group))
-	}
-	for key, value := range map[string]string{"mysql-monitor_username": p.Monitor.Username, "mysql-monitor_password": p.Monitor.Password, "mysql-max_connections": strconv.Itoa(p.MaxConnections)} {
-		statements = append(statements, "UPDATE global_variables SET variable_value="+proxyQuote(value)+" WHERE variable_name="+proxyQuote(key))
+	// Preserve the monitor's placement on real changes. New cluster members
+	// start in the reader group, never optimistically in the writer group.
+	if proxyCluster(s) {
+		statements = append(statements, "UPDATE mysql_servers SET hostgroup_id=COALESCE((SELECT MIN(r.hostgroup_id) FROM runtime_mysql_servers r WHERE r.hostname=mysql_servers.hostname AND r.port=mysql_servers.port AND r.hostgroup_id IN (10,11,20,30)),20)")
+		statements = append(statements, "UPDATE mysql_servers SET status=COALESCE((SELECT r.status FROM runtime_mysql_servers r WHERE r.hostname=mysql_servers.hostname AND r.port=mysql_servers.port AND r.hostgroup_id=mysql_servers.hostgroup_id),'ONLINE')")
 	}
 	for _, q := range statements {
 		if _, err = c.ExecContext(ctx, q); err != nil {

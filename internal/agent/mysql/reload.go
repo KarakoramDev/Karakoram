@@ -12,9 +12,22 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
+func dataTLSChanged(previous, current myspec.Spec) bool {
+	return previous.ServerCert == nil || current.ServerCert == nil || previous.CAPEM != current.CAPEM || *previous.ServerCert != *current.ServerCert
+}
+
 func (e *Runner) reload(ctx context.Context, db *sql.DB, s, previous myspec.Spec) error {
-	if _, err := db.ExecContext(ctx, "ALTER INSTANCE RELOAD TLS"); err != nil {
-		return errors.New("MySQL TLS reload failed")
+	e.mu.Lock()
+	tlsChanged := e.dataTLSReloadPending || dataTLSChanged(previous, s)
+	e.dataTLSReloadPending = tlsChanged
+	e.mu.Unlock()
+	if tlsChanged {
+		if _, err := db.ExecContext(ctx, "ALTER INSTANCE RELOAD TLS"); err != nil {
+			return errors.New("MySQL TLS reload failed")
+		}
+		e.mu.Lock()
+		e.dataTLSReloadPending = false
+		e.mu.Unlock()
 	}
 	parameters := make(map[string]string, len(s.Parameters)+2)
 	parameters["max_connections"] = strconv.Itoa(s.MaxConnections)

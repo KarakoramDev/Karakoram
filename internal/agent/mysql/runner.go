@@ -3,6 +3,7 @@
 package mysql
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -36,6 +37,7 @@ type Runner struct {
 	archiveCancel          context.CancelFunc
 	archiveBackup          myspec.Backup
 	proxyTLSReloadFallback bool
+	dataTLSReloadPending   bool
 }
 
 func New() *Runner                  { return &Runner{} }
@@ -127,11 +129,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 			return nil, err
 		}
 	}
-	e.mu.Lock()
-	previous := e.current
-	e.current = s
-	e.dir = n.DataDir()
-	e.mu.Unlock()
+	previous := e.setApplyState(s, n.DataDir())
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || archiveConfigChanged(previous.Backup, s.Backup) {
 		e.resetArchiveLoop(false)
 	}
@@ -313,8 +311,27 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		if err = e.reload(ctx, db, s, previous); err != nil {
 			return nil, err
 		}
+	} else {
+		// waitLocal confirmed startup with the rendered TLS material.
+		e.mu.Lock()
+		e.dataTLSReloadPending = false
+		e.mu.Unlock()
 	}
 	return []string{"my.cnf"}, nil
+}
+
+// setApplyState records TLS activation work before any subsequent file write,
+// startup check, or other fallible apply step can advance desired state alone.
+func (e *Runner) setApplyState(s myspec.Spec, dir string) myspec.Spec {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	previous := e.current
+	if s.Role == myspec.RoleData && dataTLSChanged(previous, s) {
+		e.dataTLSReloadPending = true
+	}
+	e.current = s
+	e.dir = dir
+	return previous
 }
 func stopConfigured(ctx context.Context, n *agent.Node, name string) error {
 	states, _ := n.Snapshot()
@@ -324,10 +341,25 @@ func stopConfigured(ctx context.Context, n *agent.Node, name string) error {
 	return n.Action(ctx, name, "stop")
 }
 func (e *Runner) writeConfig(n *agent.Node, s myspec.Spec, p paths, rekey bool) error {
-	if err := n.WriteFile("mysql/startup.sql", []byte(renderStartup(s, p, rekey)), 0600); err != nil {
-		return err
+	for name, text := range map[string]string{"startup.sql": renderStartup(s, p, rekey), "my.cnf": renderConfig(s, p)} {
+		path := filepath.Join(p.root, name)
+		if unchangedConfigFile(path, []byte(text)) {
+			continue
+		}
+		if err := n.WriteFile("mysql/"+name, []byte(text), 0600); err != nil {
+			return err
+		}
 	}
-	return n.WriteFile("mysql/my.cnf", []byte(renderConfig(s, p)), 0600)
+	return nil
+}
+
+func unchangedConfigFile(path string, desired []byte) bool {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		return false
+	}
+	actual, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(actual, desired)
 }
 func (e *Runner) RefreshGroupConfig(ctx context.Context) error {
 	e.mu.RLock()
