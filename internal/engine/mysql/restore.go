@@ -556,6 +556,31 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 				}
 			}
 		}
+		// Fencing creates durable process-stop holds. Reloading desired-running
+		// configuration cannot release them. Start only members admitted by the
+		// restored formation: the seed first, then followers after it forms.
+		for _, m := range s.data() {
+			if m.Offline {
+				continue
+			}
+			ok, e := configApplied(ctx, rc, m)
+			if e != nil || !ok {
+				return backupResult(cp, false), e
+			}
+			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+			if e != nil {
+				return backupResult(cp, false), e
+			}
+			status, e := a.Status(ctx)
+			if e != nil {
+				return backupResult(cp, false), e
+			}
+			if status.Processes["mysqld"].PID == 0 {
+				if e = a.Process(ctx, agentapi.ProcessAction{Process: "mysqld", Action: "start", RequestID: op.ID + "/start/" + m.Name}); e != nil {
+					return backupResult(cp, false), e
+				}
+			}
+		}
 		if clustered(s.Topology) {
 			_, e := p.reconcileFormation(ctx, rc, s)
 			if err = save(rc.Cluster, s); err != nil {

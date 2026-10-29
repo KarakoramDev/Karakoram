@@ -159,6 +159,13 @@ as a partial history. Do not reset GTID history as a routine restore step.
 
 A restored server gets a **new `server_uuid`** while keeping recovered GTID history. Restored Group Replication uses a **new group UUID**, and other members clone from the restored seed. PXC starts a **new Galera history**, with no predecessor peer list, and the other members join by SST. Prepared `xtrabackup_galera_info` can contain a zero UUID and sequence `-1`; file presence is not a trustworthy bootstrap position. Do not use backup coordinates to rank crashed live members.
 
+Restore owns the process-stop holds created while fencing the target. During
+re-formation it explicitly starts the restored seed only after the new
+configuration is acknowledged, then releases follower holds after the seed has
+formed. Configuration reloads alone never release durable process-stop holds.
+Follow the existing restore operation after a control-plane restart; do not
+manually start fenced followers or submit a second restore to bypass a wait.
+
 The UI offers **Restore in place** and **Restore into new cluster**. New-cluster recovery keeps the source unchanged but still requires matching engine driver and major. Target system credentials are re-keyed; source endpoints, writer identity and replication history must not be reused. Target archiving stays inactive until its own repository is active. Follow the target operation, member state, observed generation, recovered data and application authentication before reopening traffic. Never make a restored copy a member of the still-running predecessor cluster.
 
 ## Accounts after recovery
