@@ -68,6 +68,11 @@
 // Whole-cluster suspension stops reachable local processes before deleting any
 // runtime and preserves volumes, CA, member tokens and initialization material.
 // Runtime deletion must become terminal before a volume is retained or deleted.
+// Resume and runtime recovery restore admitted exposure without a new window.
+// The durable policy receipt is separate from per-runtime application hashes;
+// newer desired exposure still waits for admission before generation completion.
+// Legacy applied hashes seed the receipt; unknown legacy policy stays private
+// until a window or explicit desired-state maintenance override admits access.
 // Lost volumes are never silently initialized or reconstructed from hostnames.
 //
 // The package's extension boundaries are deliberately native: rolling workflows

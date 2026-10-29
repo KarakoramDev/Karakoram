@@ -195,7 +195,11 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		}
 		if m.PublicPort > 0 {
 			ip := inventory.Project.PublicIPv6
-			if rc.Cluster.Spec.Exposure.IPType == "IPV4" {
+			exposure := rc.Cluster.Spec.Exposure
+			if s.ExposureAdmission.Admitted != nil {
+				exposure = *s.ExposureAdmission.Admitted
+			}
+			if exposure.IPType == "IPV4" {
 				ip = inventory.Project.PublicIPv4
 			}
 			if ip != "" {

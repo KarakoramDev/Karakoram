@@ -17,8 +17,9 @@ import (
 
 // internalState contains observations and receipts, never native credentials.
 type internalState struct {
-	UID   string `json:"uid"`
-	Phase string `json:"phase"`
+	UID               string                   `json:"uid"`
+	Phase             string                   `json:"phase"`
+	ExposureAdmission engine.ExposureAdmission `json:"exposureAdmission"`
 	// RollingKind spans member receipts for the admitted desired generation.
 	RollingKind               string                    `json:"rollingKind,omitempty"`
 	RollingGeneration         int64                     `json:"rollingGeneration,omitempty"`
@@ -112,6 +113,21 @@ func loadState(c *domain.Cluster) (*internalState, error) {
 	}
 	if s.ConfigVersion == 0 {
 		s.ConfigVersion = 1
+	}
+	if s.ExposureAdmission.Admitted == nil {
+		for _, m := range s.Members {
+			if m.PublicHash == "" {
+				continue
+			}
+			var applied struct {
+				Exposure domain.Exposure
+			}
+			if err := json.Unmarshal([]byte(m.PublicHash), &applied); err != nil {
+				return nil, fmt.Errorf("decode OpenBao applied exposure: %w", err)
+			}
+			s.ExposureAdmission.Seed(applied.Exposure)
+			break
+		}
 	}
 	return s, nil
 }

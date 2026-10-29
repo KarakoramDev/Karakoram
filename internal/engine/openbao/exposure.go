@@ -75,6 +75,12 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	return 0, engine.Invalid("no project TCP ports remain")
 }
 func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s *internalState) (bool, error) {
+	effective, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	// Commit policy admission before any platform write. Runtime hashes below
+	// describe application only and may be lost independently during recovery.
+	if err := s.save(rc.Cluster); err != nil {
+		return false, err
+	}
 	for _, m := range s.runningMembers() {
 		if err := verifyMemberServices(ctx, rc, m); err != nil {
 			return false, err
@@ -83,14 +89,11 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 		desiredBytes, _ := json.Marshal(struct {
 			Exposure any
 			Target   int
-		}{rc.Cluster.Spec.Exposure, target})
+		}{effective, target})
 		desired := string(desiredBytes)
 		if m.PublicHash != desired {
-			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
-			}
-			if rc.Cluster.Spec.Exposure.Public {
-				if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
+			if effective.Public {
+				if err := engine.RequirePublicTCP(rc.Backend, effective); err != nil {
 					return false, err
 				}
 				if m.PublicPort == 0 {
@@ -108,14 +111,14 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 					return false, err
 				}
 				for _, route := range routes {
-					if route.Hostname == m.Name && route.Port == m.PublicPort && route.TargetPort != target {
+					if route.Hostname == m.Name && route.Port == m.PublicPort && (route.TargetPort != target || route.IPType != effective.IPType) {
 						if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
 							return false, err
 						}
 						break
 					}
 				}
-				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: m.PublicPort, TargetPort: target, Protocol: "tcp", IPType: rc.Cluster.Spec.Exposure.IPType, Allowlist: rc.Cluster.Spec.Exposure.Allowlist}); err != nil {
+				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: m.PublicPort, TargetPort: target, Protocol: "tcp", IPType: effective.IPType, Allowlist: effective.Allowlist}); err != nil {
 					return false, err
 				}
 			} else {
@@ -132,5 +135,5 @@ func (p *Provider) reconcileExposure(ctx context.Context, rc *engine.Context, s 
 		}
 
 	}
-	return false, nil
+	return deferred, nil
 }
