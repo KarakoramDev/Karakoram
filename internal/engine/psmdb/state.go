@@ -31,6 +31,7 @@ type internalState struct {
 	PlatformRetries          map[string]*platformRetry   `json:"platformRetries,omitempty"`
 	ConfigHash               string                      `json:"configHash"`
 	PBMHash                  string                      `json:"pbmHash"`
+	ExposureAdmission        engine.ExposureAdmission    `json:"exposureAdmission"`
 	PBMStorage               string                      `json:"pbmStorage"`
 	UsedStorages             []string                    `json:"usedStorages,omitempty"`
 	CloneQueued              bool                        `json:"cloneQueued"`

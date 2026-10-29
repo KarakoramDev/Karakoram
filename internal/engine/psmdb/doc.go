@@ -32,6 +32,12 @@ versions; individually activated configVersion/TLS/config/cache/ConfigDB; comple
 applied runtime resources, volume bounds and router count; removal/replacement
 flags; and a stable public-port reservation and exposure hash. Each replica
 set records bootstrap/users/ready stage and whether mongos registered it.
+Exposure admission is persisted separately from member route hashes and retained
+across suspension and runtime recovery. Closed maintenance windows defer policy
+changes, not restoration of admitted routes; deferred generations remain
+unacknowledged until admission or override. Legacy receipts seed admission only
+when they prove the desired policy; otherwise unknown legacy exposure defaults
+to private until maintenance admission.
 Pending stores the infrastructure operation ID, action, member and proposed
 version/resources/count. Proposed settings become applied only after an
 observed terminal successful infrastructure operation. Failed and canceled

@@ -5,6 +5,7 @@ package psmdb
 import (
 	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"testing"
 	"time"
@@ -19,6 +20,8 @@ func TestMaintenanceTCPChangesDoNotMutateRuntime(t *testing.T) {
 	}
 	public := rc.Cluster.Spec.Exposure
 	public.Public = true
+	s.ExposureAdmission = engine.ExposureAdmission{}
+	s.ExposureAdmission.Seed(public)
 	for i, m := range s.Members {
 		m.PublicPort, m.PublicHash = 27017+i, hash(public)
 		b.publicPorts = append(b.publicPorts, infra.PublicPortRoute{Hostname: m.Name, PublicPort: infra.PublicPort{Port: m.PublicPort, TargetPort: 27017, Protocol: "tcp"}})

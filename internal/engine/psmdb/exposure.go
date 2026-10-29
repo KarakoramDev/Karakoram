@@ -8,14 +8,40 @@ import (
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 )
+
+// seedExposure migrates only a policy proven by a retained application receipt.
+// Unknown legacy hashes cannot recover an old allowlist and remain private.
+func seedExposure(rc *engine.Context, s *internalState) {
+	for _, m := range s.Members {
+		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
+			continue
+		}
+		if m.PublicHash != "" && m.PublicHash == hash(rc.Cluster.Spec.Exposure) {
+			s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+			return
+		}
+	}
+}
+
+func resolveExposure(rc *engine.Context, s *internalState) (domain.Exposure, bool, error) {
+	seedExposure(rc, s)
+	effective, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	// Persist policy separately from runtime receipts before any platform change.
+	return effective, deferred, save(rc.Cluster, s)
+}
 
 // restrictExposure removes owned routes before native health gates. Public
 // endpoint creation remains in the health-gated portion of Sync.
 func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState) (deferred bool, err error) {
+	effective, deferred, err := resolveExposure(rc, s)
+	if err != nil {
+		return deferred, err
+	}
 	for _, m := range ordered(s) {
-		ex := rc.Cluster.Spec.Exposure
+		ex := effective
 		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
 			ex.Public = false
 		}
@@ -30,12 +56,6 @@ func restrictExposure(ctx context.Context, rc *engine.Context, s *internalState)
 		// Planned members do not have a service yet; positive absence also
 		// proves there is no route to revoke.
 		if service != nil {
-			if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, nil); e != nil {
-				return deferred, e
-			} else if wait {
-				deferred = true
-				continue
-			}
 			if err := verifyServiceOwnership(ctx, rc, m, service, false); err != nil {
 				return deferred, err
 			}

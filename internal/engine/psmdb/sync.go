@@ -385,6 +385,10 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			err = e
 		}
 	}()
+	effectiveExposure, _, e := resolveExposure(rc, s)
+	if e != nil {
+		return result, e
+	}
 	if busy, e := p.retireUnplacedScaleDown(ctx, rc, s); busy || e != nil {
 		// Retirement checkpoints still persist independently, including the
 		// exact-ID deletion receipt and positive runtime absence before storage
@@ -1030,11 +1034,8 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 	}
-	if exposureDeferred {
-		return rc.WaitForWindow(), nil
-	}
 	for _, m := range ordered(s) {
-		ex := rc.Cluster.Spec.Exposure
+		ex := effectiveExposure
 		if rc.Cluster.Spec.Topology.Type == "sharded" && m.Role != agentapi.RoleRouter {
 			ex.Public = false
 		}
@@ -1054,17 +1055,15 @@ func (p *Provider) sync(ctx context.Context, rc *engine.Context,
 			return result, nil
 		}
 		route := infra.PublicPort{Port: port, TargetPort: 27017, Protocol: "tcp", IPType: ex.IPType, Allowlist: ex.Allowlist}
-		if wait, e := engine.PublicTCPDeferred(ctx, rc, m.Name, &route); e != nil {
-			return result, e
-		} else if wait {
-			return rc.WaitForWindow(), nil
-		}
 		if e = rc.Backend.EnsurePublicPort(ctx, m.Name, route); e != nil {
 			return result, e
 		}
 		m.PublicPort = port
 		m.PublicHash = h
 		return result, nil
+	}
+	if exposureDeferred {
+		return rc.WaitForWindow(), nil
 	}
 	if complete, err := reconcileInitialRestore(ctx, rc, s); err != nil {
 		return result, err
