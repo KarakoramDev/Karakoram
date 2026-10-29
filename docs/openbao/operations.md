@@ -184,3 +184,20 @@ Transport errors do not preserve stale healthy observations. Inspect cluster con
 ## Suspend, resume and deletion
 
 `keepVolumes` deletion suspends the cluster: reachable native processes are stopped before runtime deletion; volumes, CA, member authentication and initialization material are retained for resume. Runtime deletion must finish before volumes are retained or removed. Use [shared lifecycle procedures](../clusters.md) and observe the existing operation rather than recreating the name. Retained volumes consume storage. Lost volumes are not permission to silently initialize a new secrets store; recover surviving quorum or restore a snapshot.
+
+Resume and lost-runtime recovery restore the last admitted exposure policy even
+when the maintenance window is closed. The control plane retains that policy
+separately from per-runtime route receipts: clearing a runtime receipt does not
+admit a deferred private-to-public, allowlist or IP-family change. Recovery can
+finish while the newer desired exposure remains deferred; that desired generation
+is acknowledged only after its own window or override admits the change.
+
+For legacy clusters, retained applied exposure receipts are migrated before
+runtime cleanup. A fully acknowledged current spec is also valid admission
+evidence. If neither survives (for example, an older control plane already
+cleared all receipts during resume), unknown exposure conservatively defaults to
+private. A private cluster can complete resume without a window; a desired public
+cluster needs an open window or an explicit desired-state action with
+`--ignore-maintenance-window`. Do not edit internal state or issue duplicate
+resume operations to force completion. This fallback never reconstructs an old
+allowlist or IP family from a newer unadmitted spec.

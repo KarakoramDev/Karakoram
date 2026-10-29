@@ -153,3 +153,13 @@ func TestExposureAdmissionLegacyBaseline(t *testing.T) {
 		})
 	}
 }
+
+func TestExposureAdmissionProvisioningChangeRemainsExempt(t *testing.T) {
+	rc := &Context{Clock: fixedRouteClock{}, Cluster: &domain.Cluster{Generation: 2, Spec: domain.ClusterSpec{Maintenance: &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 2 * * *", Duration: "1h"}}}}}}
+	var admission ExposureAdmission
+	admission.Seed(domain.Exposure{})
+	effective, deferred := admission.Resolve(rc, domain.Exposure{Public: true, IPType: "IPV4"})
+	if deferred || !effective.Public {
+		t.Fatal("initial provisioning inherited desired-update maintenance gate", effective, deferred)
+	}
+}

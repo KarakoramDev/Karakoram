@@ -48,7 +48,7 @@ func (a *ExposureAdmission) Resolve(rc *Context, desired domain.Exposure) (effec
 	// Private policy has no route whose IP family or allowlist can change.
 	equal := !a.Admitted.Public && !desired.Public || reflect.DeepEqual(*a.Admitted, desired)
 	if !equal {
-		if rc.WaitForWindow().RequeueAfter > 0 {
+		if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
 			return *a.Admitted, true
 		}
 		v := desired
