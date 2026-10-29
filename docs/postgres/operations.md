@@ -34,6 +34,14 @@ waiting does not consume the operation budget. No configured windows means
 always open. The shared [operations guide](../operations.md) describes policy
 syntax and `--ignore-maintenance-window` overrides.
 
+Exposure admission is retained separately from runtime routes. Resume and runtime
+recovery restore the previously admitted TCP exposure even when the maintenance
+window is closed, including Citus, Timescale profiles and the Supabase PostgreSQL
+core. A pending exposure change restores only that admitted policy and does not
+acknowledge the new generation until a window or override admits it. Legacy state
+is migrated from retained routes or an acknowledged spec; when neither proves the
+previous policy, recovery stays private until admission.
+
 ## Health and configuration
 
 ```sh

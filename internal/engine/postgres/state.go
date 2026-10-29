@@ -14,6 +14,7 @@ import (
 )
 
 type state struct {
+	ExposureAdmission            engine.ExposureAdmission  `json:"exposureAdmission,omitempty"`
 	ExtensionsPending            bool                      `json:"extensionsPending,omitempty"`
 	UID                          string                    `json:"uid"`
 	NextIndex                    int                       `json:"nextIndex"`
