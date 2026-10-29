@@ -361,6 +361,15 @@ These issues are present in v0.4.1; fixes are planned for v0.4.2.
   the cluster stays `RestoreIncomplete` and the create operation keeps running.
   Verify the data with the engine's own tools and treat the cluster as usable
   once those native checks pass.
+- **Resuming a suspended cluster or recovering a member may not restore public
+  exposure while the maintenance window is closed** (a v0.4.1 regression;
+  v0.4.0 is not affected). Public TCP or HTTPS access may remain unavailable
+  until the window opens; a resume operation can stay running until then.
+  Workaround: open the [maintenance window](operations.md#maintenance-windows),
+  or re-apply the change with
+  `karactl clusters patch CLUSTER -f change.yaml --ignore-maintenance-window`.
+  The override is supported on cluster patch/edit commands, not on
+  `clusters resume`. A fix is planned for v0.4.2.
 
 The PostgreSQL `postgres` administrator password also cannot be rotated yet; see
 [its containment procedure](#postgresql-administrator-password-cannot-be-rotated-yet).

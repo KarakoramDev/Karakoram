@@ -78,6 +78,7 @@ Fixes for these are planned for v0.4.2; details and workarounds are in [known is
 - PXC cannot form on Zerops: the platform does not permit the member start-up step, so the first member never starts.
 - OpenBao can briefly report Ready between member replacements during a rolling update (v0.4.1 regression); check that no operation is running before relying on Ready.
 - Clusters created from a backup (clone) for OpenBao, MySQL, PXC, Neo4j and Weaviate restore their data but never report Ready (`RestoreIncomplete`, create operation keeps running); verify the data natively.
+- Resuming a suspended cluster or recovering a member may not restore public TCP or HTTPS exposure while the maintenance window is closed, and a resume operation can stay running until it opens (v0.4.1 regression; v0.4.0 is not affected). Workaround: open the [maintenance window](operations.md#maintenance-windows), or re-apply the change with `karactl clusters patch CLUSTER -f change.yaml --ignore-maintenance-window` (not `clusters resume`). A fix is planned for v0.4.2.
 
 ## Engine limits
 
