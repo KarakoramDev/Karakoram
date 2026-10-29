@@ -467,7 +467,12 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) (err er
 				return err
 			}
 		}
-		return resumeClone(ctx, d, db, receipt, record)
+		err = resumeClone(ctx, d, db, receipt, record)
+		if !errors.Is(err, errCloneNotStarted) {
+			return err
+		}
+		// A correlated failed native start with no copying may be retried,
+		// but must repeat every preflight and capture a fresh baseline.
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -548,7 +553,7 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) (err er
 		return err
 	}
 	stage = "native-clone"
-	_, err = db.ExecContext(ctx, "CLONE INSTANCE FROM "+groupQuote(s.Replication.Username)+"@"+groupQuote(r.Donor.Host)+":"+strconv.Itoa(r.Donor.Port)+" IDENTIFIED BY "+groupQuote(s.Replication.Password)+" REQUIRE SSL")
+	_, err = executeNativeClone(ctx, db, s, r)
 	// Native mysqld has no service manager: 3707 requests a restart. If the
 	// server closes the connection before replying, the driver deliberately
 	// returns ErrInvalidConn (not retryable driver.ErrBadConn): CLONE may have
@@ -566,6 +571,49 @@ func CloneGroup(ctx context.Context, d GroupDeps, r myspec.CloneRequest) (err er
 	return finishClone(ctx, d, receipt, record)
 }
 
+// An unchanged/stale receipt is never enough to authorize another destructive
+// statement. Only a newer, matching Failed operation with positive native
+// evidence that FILE COPY never started can return this internal signal.
+var errCloneNotStarted = errors.New("clone failed before file copy")
+var errCloneCopyStarted = errors.New("clone failed after file copy may have started")
+
+func executeNativeClone(ctx context.Context, db *sql.DB, s myspec.Spec, r myspec.CloneRequest) (_ sql.Result, err error) {
+	var offline bool
+	if err = db.QueryRowContext(ctx, "SELECT @@GLOBAL.offline_mode").Scan(&offline); err != nil {
+		return nil, err
+	}
+	// Like GR distributed recovery, cloning must lift super_read_only so
+	// native clone can drop existing user data. Fence ordinary client
+	// connections first; read_only remains ON throughout.
+	if _, err = db.ExecContext(ctx, "SET GLOBAL offline_mode=ON"); err != nil {
+		return nil, err
+	}
+	submitted := false
+	defer func() {
+		var native *mysqldriver.MySQLError
+		if submitted && (err == nil || !errors.As(err, &native) || native.Number == 3707) {
+			// Successful/ambiguous copies retain the offline fence until
+			// the supervised restart reinstalls the startup write fence.
+			return
+		}
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, fenceErr := db.ExecContext(cleanup, "SET GLOBAL super_read_only=ON"); fenceErr != nil {
+			err = errors.Join(err, fenceErr)
+			return // Never admit clients if the write fence was not restored.
+		}
+		if !offline {
+			_, fenceErr := db.ExecContext(cleanup, "SET GLOBAL offline_mode=OFF")
+			err = errors.Join(err, fenceErr)
+		}
+	}()
+	if _, err = db.ExecContext(ctx, "SET GLOBAL super_read_only=OFF"); err != nil {
+		return nil, err
+	}
+	submitted = true
+	return db.ExecContext(ctx, "CLONE INSTANCE FROM "+groupQuote(s.Replication.Username)+"@"+groupQuote(r.Donor.Host)+":"+strconv.Itoa(r.Donor.Port)+" IDENTIFIED BY "+groupQuote(s.Replication.Password)+" REQUIRE SSL")
+}
+
 func recoverCloneReply(ctx context.Context, d GroupDeps, receipt string, record cloneReceipt) error {
 	db, err := d.LocalAccessDB(ctx)
 	if err != nil {
@@ -581,6 +629,18 @@ func resumeClone(ctx context.Context, d GroupDeps, db *sql.DB, receipt string, r
 	}
 	if err = verifyCloneOperation(record, current); err != nil {
 		return err
+	}
+	if current.State == "Failed" {
+		var notStarted bool
+		// Require the FILE COPY row, rather than treating absent progress
+		// as evidence. A partial/active copy must never be restarted.
+		if err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM performance_schema.clone_progress WHERE ID=? AND STAGE='FILE COPY' AND STATE='Not Started') AND NOT EXISTS(SELECT 1 FROM performance_schema.clone_progress WHERE ID=? AND STAGE IN ('FILE COPY','PAGE COPY','REDO COPY') AND STATE<>'Not Started')", current.ID, current.ID).Scan(&notStarted); err != nil {
+			return err
+		}
+		if notStarted {
+			return errCloneNotStarted
+		}
+		return errCloneCopyStarted
 	}
 	if current.State != "Completed" {
 		// A recipient can still answer SQL after returning native 3707.

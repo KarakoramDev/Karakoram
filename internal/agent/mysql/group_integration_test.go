@@ -326,6 +326,35 @@ func TestNativeMySQLGroupFailover(t *testing.T) {
 			// A separately authorized actual recovery operation must remain usable.
 			recovery.Receipt = "authorized-actual-recovery"
 			nodes[i].s.GroupReplication.RecloneReceipt = recovery.Receipt
+			// Match restore-time followers: existing user data and the
+			// startup super_read_only fence. Native clone must drop that
+			// data, unlike the empty initial formation recipient.
+			for _, q := range []string{"CREATE DATABASE clone_recipient", "CREATE TABLE clone_recipient.old_data(id INT)", "SET GLOBAL super_read_only=ON"} {
+				if _, err = nodes[i].db.ExecContext(ctx, q); err != nil {
+					t.Fatal(err)
+				}
+			}
+			baseline, err = readCloneStatus(ctx, nodes[i].db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err = json.Marshal(cloneReceipt{Request: recovery, Baseline: &baseline})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = durableGroupFile(filepath.Join(nodes[i].GroupReceiptsDir(), "clone-"+recovery.Receipt), b); err != nil {
+				t.Fatal(err)
+			}
+			// The preceding clone restart discarded the runtime allowlist.
+			// Restore it so this probe reaches recipient data removal.
+			if _, err = nodes[i].db.ExecContext(ctx, "SET GLOBAL clone_valid_donor_list="+groupQuote(net.JoinHostPort(recovery.Donor.Host, strconv.Itoa(recovery.Donor.Port)))); err != nil {
+				t.Fatal(err)
+			}
+			_, err = nodes[i].db.ExecContext(ctx, "CLONE INSTANCE FROM "+groupQuote(nodes[i].s.Replication.Username)+"@"+groupQuote(recovery.Donor.Host)+":"+strconv.Itoa(recovery.Donor.Port)+" IDENTIFIED BY "+groupQuote(nodes[i].s.Replication.Password)+" REQUIRE SSL")
+			var native *mysqldriver.MySQLError
+			if !errors.As(err, &native) || native.Number != 1290 {
+				t.Fatalf("populated fenced recipient did not reproduce native 1290: %v", err)
+			}
 			nativeGroupCloneReplay(t, ctx, nodes[i], recovery, nil)
 			nodes[i].s.GroupReplication.Reclone = false
 			nodes[i].s.GroupReplication.RecloneReceipt = ""

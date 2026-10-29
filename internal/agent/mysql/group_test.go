@@ -328,7 +328,11 @@ func TestPendingCloneRequiresNewMatchingNativeOperation(t *testing.T) {
 			queries := []groupQuery{nativeRow}
 			valid := mode == "matching completion" || mode == "recovery completion" || mode == "restart ready" || mode == "stopped recipient"
 			if current.State != "Completed" {
-				queries = append(queries, groupQuery{contains: "FROM performance_schema.clone_progress", values: []driver.Value{mode == "restart ready"}})
+				check := "FROM performance_schema.clone_progress"
+				if current.State == "Failed" {
+					check = "STAGE='FILE COPY' AND STATE='Not Started'"
+				}
+				queries = append(queries, groupQuery{contains: check, values: []driver.Value{mode == "restart ready"}})
 			}
 			if valid {
 				completedRow := groupQuery{contains: "FROM performance_schema.clone_status", values: []driver.Value{int64(current.ID), current.BeginTime, current.Source, "Completed"}}

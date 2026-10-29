@@ -166,6 +166,18 @@ formed. Configuration reloads alone never release durable process-stop holds.
 Follow the existing restore operation after a control-plane restart; do not
 manually start fenced followers or submit a second restore to bypass a wait.
 
+Group Replication recipients fence client connections with `offline_mode` before
+temporarily lifting `super_read_only` for native clone's removal of old user
+data. A rejected clone restores the write fence before admitting clients again;
+an ambiguous or successful copy remains offline until its supervised restart.
+Recovery retries a failed native start only when its matching native progress
+positively shows that file copying never started. Stale receipts, missing
+progress and active or partially completed copies never authorize another clone.
+This behavior requires updated data-member agents, not just a control-plane
+update. MySQL does not support `upgrade-agents`; use supported agent/member
+replacement on a healthy group or re-create disposable clusters with the updated
+agent build before testing in-place recovery.
+
 The UI offers **Restore in place** and **Restore into new cluster**. New-cluster recovery keeps the source unchanged but still requires matching engine driver and major. Target system credentials are re-keyed; source endpoints, writer identity and replication history must not be reused. Target archiving stays inactive until its own repository is active. Follow the target operation, member state, observed generation, recovered data and application authentication before reopening traffic. Never make a restored copy a member of the still-running predecessor cluster.
 
 ## Accounts after recovery

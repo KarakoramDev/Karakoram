@@ -79,6 +79,7 @@ func TestCloneDiagnosticNeverIncludesUntrustedText(t *testing.T) {
 	}{
 		{context.DeadlineExceeded, "deadline exceeded"},
 		{context.Canceled, "canceled"},
+		{errCloneCopyStarted, "native clone failed; file copy is not proven unstarted"},
 	} {
 		err := &cloneActionError{stage: "completion", cause: fmt.Errorf("%s: %w", secret, test.err)}
 		if !errors.Is(err, test.err) || cloneActionDiagnostic(err) != "MySQL clone failed: stage=completion; "+test.want {

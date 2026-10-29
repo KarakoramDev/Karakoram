@@ -42,6 +42,9 @@ func cloneActionDiagnostic(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return message + "; canceled"
 	}
+	if errors.Is(err, errCloneCopyStarted) {
+		return message + "; native clone failed; file copy is not proven unstarted"
+	}
 	// Do not include driver messages, SQL, receipt paths, peer addresses or log
 	// tails: any can contain credentials, including obsolete/unknown passwords.
 	return message
