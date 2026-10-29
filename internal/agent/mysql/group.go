@@ -294,9 +294,9 @@ func SwitchoverGroup(ctx context.Context, d GroupDeps, r myspec.SwitchoverReques
 	if err != nil {
 		return err
 	}
-	// GR validates the UUID in the UDF initializer, before prepared-statement
-	// parameters have values. Validate above, then send a literal UUID so the
-	// initializer sees the actual argument instead of rejecting an empty one.
+	// GR rejects parameterized execution in its UDF initializer even for a
+	// valid bound UUID. Validate above, then send a literal so initialization
+	// sees the concrete string argument.
 	_, err = db.ExecContext(ctx, "SELECT group_replication_set_as_primary("+groupQuote(r.TargetUUID)+")")
 	return err
 }
