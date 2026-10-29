@@ -5,6 +5,7 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"strings"
@@ -74,8 +75,27 @@ func (p *Provider) allocatePublicPort(ctx context.Context, rc *engine.Context, s
 	}
 	return 0, invalid("no project TCP ports remain")
 }
+func exposureHash(exposure domain.Exposure, target int) string {
+	return hash(struct {
+		Exposure any
+		Target   int
+	}{exposure, target})
+}
 func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *internalState) (bool, error) {
-	for _, m := range s.runningMembers() {
+	effective, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	members := s.runningMembers()
+	for _, m := range members {
+		o, err := parseOptions(m.EngineOptions)
+		if err != nil {
+			return false, err
+		}
+		_, waiting := m.ManagementAdmission.Resolve(rc, domain.Exposure{Public: o.ManagementUI.Public})
+		deferred = deferred || waiting
+	}
+	if err := s.save(rc.Cluster); err != nil {
+		return false, err
+	}
+	for _, m := range members {
 		if err := verifyMemberServices(ctx, rc, m); err != nil {
 			return false, err
 		}
@@ -83,16 +103,10 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 		if m.TLSMode == "disabled" {
 			target = 5672
 		}
-		desired := hash(struct {
-			Exposure any
-			Target   int
-		}{rc.Cluster.Spec.Exposure, target})
+		desired := exposureHash(effective, target)
 		if m.PublicHash != desired {
-			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
-			}
-			if rc.Cluster.Spec.Exposure.Public {
-				if err := engine.RequirePublicTCP(rc.Backend, rc.Cluster.Spec.Exposure); err != nil {
+			if effective.Public {
+				if err := engine.RequirePublicTCP(rc.Backend, effective); err != nil {
 					return false, err
 				}
 				if m.PublicPort == 0 {
@@ -110,14 +124,14 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 					return false, err
 				}
 				for _, route := range routes {
-					if route.Hostname == m.Name && route.Port == m.PublicPort && route.TargetPort != target {
+					if route.Hostname == m.Name && route.Port == m.PublicPort && (route.TargetPort != target || !strings.EqualFold(route.IPType, effective.IPType)) {
 						if err := rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
 							return false, err
 						}
 						break
 					}
 				}
-				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: m.PublicPort, TargetPort: target, Protocol: "tcp", IPType: rc.Cluster.Spec.Exposure.IPType, Allowlist: rc.Cluster.Spec.Exposure.Allowlist}); err != nil {
+				if err := rc.Backend.EnsurePublicPort(ctx, m.Name, infra.PublicPort{Port: m.PublicPort, TargetPort: target, Protocol: "tcp", IPType: effective.IPType, Allowlist: effective.Allowlist}); err != nil {
 					return false, err
 				}
 			} else {
@@ -132,16 +146,10 @@ func (p *Provider) syncExposure(ctx context.Context, rc *engine.Context, s *inte
 			m.PublicHash = desired
 			return true, nil
 		}
-		o, err := parseOptions(m.EngineOptions)
-		if err != nil {
-			return false, err
-		}
-		if m.ManagementPublic != o.ManagementUI.Public {
-			if rc.Cluster.Status.ObservedGeneration != 0 && rc.WaitForWindow().RequeueAfter > 0 {
-				return true, nil
-			}
-			return true, p.submit(ctx, rc, s, &pending{Action: "management", Member: m.Name})
+		management := m.ManagementAdmission.Admitted
+		if m.ManagementPublic != management.Public {
+			return true, p.submit(ctx, rc, s, &pending{Action: "management", Member: m.Name, ManagementPublic: &management.Public})
 		}
 	}
-	return false, nil
+	return deferred, nil
 }

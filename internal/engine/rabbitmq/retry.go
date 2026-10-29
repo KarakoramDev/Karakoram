@@ -123,6 +123,9 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 		if e != nil {
 			return e
 		}
+		if v.ManagementPublic != nil {
+			o.ManagementUI.Public = *v.ManagementPublic
+		}
 		if v.Action == "cleanup-management" {
 			o.ManagementUI.Public = false
 		}
@@ -295,6 +298,9 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			return true, err
 		}
 		m.ManagementPublic = o.ManagementUI.Public
+		if v.ManagementPublic != nil {
+			m.ManagementPublic = *v.ManagementPublic
+		}
 	case "cleanup-management":
 		m.ManagementPublic = false
 	case "delete-runtime":

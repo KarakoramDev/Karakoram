@@ -91,6 +91,13 @@
 // Whole-cluster suspension stops every reachable broker locally before removing
 // any runtime, without drain, forget, shrink or reset. Queue replicas, metadata,
 // volumes and credentials are preserved even without a running quorum.
+// Admitted TCP and management HTTPS exposure are retained separately from
+// runtime route receipts; management mutations checkpoint their effective target.
+// Resume and runtime recovery restore that policy without a maintenance wait,
+// including private exposure. Deferred policy edits restore only admitted
+// routes and cannot acknowledge the desired generation until admission.
+// Legacy acknowledged policy or matching retained hashes seed admission;
+// otherwise unknown legacy exposure defaults to private until admission.
 // Unreachable broker shutdowns are recorded and delegated to terminal platform
 // runtime deletion before volume retention. Full deletion skips broker RPCs:
 // no leadership transfer is useful when every replica is being discarded.

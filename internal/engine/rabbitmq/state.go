@@ -18,16 +18,17 @@ import (
 
 // internalState checkpoints each observed lifecycle transition. Unknown fields belong to other durable workflows.
 type internalState struct {
-	UID             string                    `json:"uid"`
-	Phase           string                    `json:"phase"`
-	Members         []*member                 `json:"members"`
-	NextIndex       int                       `json:"nextIndex"`
-	ConfigVersion   int64                     `json:"configVersion"`
-	Pending         *pending                  `json:"pending,omitempty"`
-	Retry           *pending                  `json:"retry,omitempty"`
-	PlatformRetries map[string]*platformRetry `json:"platformRetries,omitempty"`
-	CloneImported   bool                      `json:"cloneImported,omitempty"`
-	Bootstrapped    bool                      `json:"bootstrapped"`
+	UID               string                    `json:"uid"`
+	Phase             string                    `json:"phase"`
+	Members           []*member                 `json:"members"`
+	ExposureAdmission engine.ExposureAdmission  `json:"exposureAdmission,omitempty"`
+	NextIndex         int                       `json:"nextIndex"`
+	ConfigVersion     int64                     `json:"configVersion"`
+	Pending           *pending                  `json:"pending,omitempty"`
+	Retry             *pending                  `json:"retry,omitempty"`
+	PlatformRetries   map[string]*platformRetry `json:"platformRetries,omitempty"`
+	CloneImported     bool                      `json:"cloneImported,omitempty"`
+	Bootstrapped      bool                      `json:"bootstrapped"`
 	// CreationSeed is elected before peer deployment; capability gates native start.
 	CreationSeed            string    `json:"creationSeed,omitempty"`
 	CreationGateChecked     bool      `json:"creationGateChecked,omitempty"`
@@ -69,49 +70,51 @@ type member struct {
 	InitialFormation bool     `json:"initialFormation,omitempty"`
 	// FormationVerified records native bootstrap/seed membership, not merely
 	// a mounted volume or an exec'd supervisor child.
-	FormationVerified       bool                    `json:"formationVerified,omitempty"`
-	FormationChecked        bool                    `json:"formationChecked,omitempty"`
-	FormationGate           bool                    `json:"formationGate,omitempty"`
-	FormationLegacyRelease  bool                    `json:"formationLegacyRelease,omitempty"`
-	Version                 string                  `json:"version"`
-	DesiredVersion          string                  `json:"desiredVersion"`
-	ConfigVersion           int64                   `json:"configVersion"`
-	TLSMode                 string                  `json:"tlsMode"`
-	ProvidedCertificateHash string                  `json:"providedCertificateHash,omitempty"`
-	EngineConfig            string                  `json:"engineConfig"`
-	EngineOptions           json.RawMessage         `json:"engineOptions,omitempty"`
-	Resources               domain.Resources        `json:"resources"`
-	Disk                    domain.Resources        `json:"disk"`
-	ConfigResources         domain.Resources        `json:"configResources"`
-	ConfigDisk              domain.Resources        `json:"configDisk"`
-	CPUModeChangedAt        time.Time               `json:"cpuModeChangedAt,omitempty"`
-	Removing                bool                    `json:"removing"`
-	PublicPort              int                     `json:"publicPort,omitempty"`
-	PublicHash              string                  `json:"publicHash"`
-	ManagementPublic        bool                    `json:"managementPublic"`
-	RemoveStep              string                  `json:"removeStep,omitempty"`
-	CleanupStopReason       string                  `json:"cleanupStopReason,omitempty"`
-	GrowIndex               int                     `json:"growIndex"`
-	Lost                    bool                    `json:"lost,omitempty"`
-	RemovalBlocked          string                  `json:"removalBlocked,omitempty"`
-	ChangeAction            string                  `json:"changeAction,omitempty"`
-	QuorumBlockers          []rmqspec.QuorumBlocker `json:"quorumBlockers,omitempty"`
-	QuorumBlockerCount      int                     `json:"quorumBlockerCount,omitempty"`
-	ChangeStep              string                  `json:"changeStep,omitempty"`
-	ChangeDisruptedAt       time.Time               `json:"changeDisruptedAt,omitempty"`
-	ChangeStartupMessage    string                  `json:"changeStartupMessage,omitempty"`
-	TargetVersion           string                  `json:"targetVersion,omitempty"`
-	TargetResources         domain.Resources        `json:"targetResources"`
-	TargetTLS               string                  `json:"targetTLS,omitempty"`
-	TargetConfig            string                  `json:"targetConfig,omitempty"`
-	TargetOptions           json.RawMessage         `json:"targetOptions,omitempty"`
+	FormationVerified       bool                     `json:"formationVerified,omitempty"`
+	FormationChecked        bool                     `json:"formationChecked,omitempty"`
+	FormationGate           bool                     `json:"formationGate,omitempty"`
+	FormationLegacyRelease  bool                     `json:"formationLegacyRelease,omitempty"`
+	Version                 string                   `json:"version"`
+	DesiredVersion          string                   `json:"desiredVersion"`
+	ConfigVersion           int64                    `json:"configVersion"`
+	TLSMode                 string                   `json:"tlsMode"`
+	ProvidedCertificateHash string                   `json:"providedCertificateHash,omitempty"`
+	EngineConfig            string                   `json:"engineConfig"`
+	EngineOptions           json.RawMessage          `json:"engineOptions,omitempty"`
+	Resources               domain.Resources         `json:"resources"`
+	Disk                    domain.Resources         `json:"disk"`
+	ConfigResources         domain.Resources         `json:"configResources"`
+	ConfigDisk              domain.Resources         `json:"configDisk"`
+	CPUModeChangedAt        time.Time                `json:"cpuModeChangedAt,omitempty"`
+	Removing                bool                     `json:"removing"`
+	PublicPort              int                      `json:"publicPort,omitempty"`
+	PublicHash              string                   `json:"publicHash"`
+	ManagementPublic        bool                     `json:"managementPublic"`
+	ManagementAdmission     engine.ExposureAdmission `json:"managementAdmission,omitempty"`
+	RemoveStep              string                   `json:"removeStep,omitempty"`
+	CleanupStopReason       string                   `json:"cleanupStopReason,omitempty"`
+	GrowIndex               int                      `json:"growIndex"`
+	Lost                    bool                     `json:"lost,omitempty"`
+	RemovalBlocked          string                   `json:"removalBlocked,omitempty"`
+	ChangeAction            string                   `json:"changeAction,omitempty"`
+	QuorumBlockers          []rmqspec.QuorumBlocker  `json:"quorumBlockers,omitempty"`
+	QuorumBlockerCount      int                      `json:"quorumBlockerCount,omitempty"`
+	ChangeStep              string                   `json:"changeStep,omitempty"`
+	ChangeDisruptedAt       time.Time                `json:"changeDisruptedAt,omitempty"`
+	ChangeStartupMessage    string                   `json:"changeStartupMessage,omitempty"`
+	TargetVersion           string                   `json:"targetVersion,omitempty"`
+	TargetResources         domain.Resources         `json:"targetResources"`
+	TargetTLS               string                   `json:"targetTLS,omitempty"`
+	TargetConfig            string                   `json:"targetConfig,omitempty"`
+	TargetOptions           json.RawMessage          `json:"targetOptions,omitempty"`
 }
 type pending struct {
-	Op        infra.Op         `json:"op"`
-	Action    string           `json:"action"`
-	Member    string           `json:"member"`
-	Version   string           `json:"version,omitempty"`
-	Resources domain.Resources `json:"resources"`
+	Op               infra.Op         `json:"op"`
+	Action           string           `json:"action"`
+	Member           string           `json:"member"`
+	Version          string           `json:"version,omitempty"`
+	Resources        domain.Resources `json:"resources"`
+	ManagementPublic *bool            `json:"managementPublic,omitempty"`
 }
 type platformRetry struct {
 	engine.RetrySchedule
@@ -139,6 +142,30 @@ func loadState(c *domain.Cluster) (*internalState, error) {
 	if !s.DistributionSet {
 		s.InterNodeTLS = c.Spec.TLS.Mode == "requireTLS"
 		s.DistributionSet = true
+	}
+	if c.Status.ObservedGeneration > 0 {
+		for _, m := range s.Members {
+			m.ManagementAdmission.Seed(domain.Exposure{Public: m.ManagementPublic})
+		}
+	}
+	// Migrate acknowledged policy before resume/recovery can erase runtime
+	// receipts. A matching retained hash also proves this policy was applied
+	// when a newer generation has not yet been acknowledged.
+	if s.ExposureAdmission.Admitted == nil {
+		if c.Status.ObservedGeneration > 0 && c.Status.ObservedGeneration == c.Generation {
+			s.ExposureAdmission.Seed(c.Spec.Exposure)
+		} else {
+			for _, m := range s.Members {
+				target := 5671
+				if m.TLSMode == "disabled" {
+					target = 5672
+				}
+				if !m.Removing && m.PublicHash == exposureHash(c.Spec.Exposure, target) {
+					s.ExposureAdmission.Seed(c.Spec.Exposure)
+					break
+				}
+			}
+		}
 	}
 	return s, nil
 }
