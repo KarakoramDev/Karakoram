@@ -18,6 +18,16 @@ karactl -n NS backups get CLUSTER baseline -o json
 
 Creation returns an operation; observe that existing operation and terminal backup inventory rather than submitting again after a timeout. A streaming backup is not complete merely because one side of the upload finished. Interrupted backups are reported as failed, not silently repeated. Backups use DDL locking; schedule with DDL contention, donor load and available capacity in mind. Group Replication normally prefers an online secondary; when binary-log PITR is enabled, the backup must anchor the current archive writer instead.
 
+Streaming backups explicitly use one XtraBackup copy thread and 1 MiB read/chunk
+buffers, with two concurrent xbcloud uploads. The server's default buffer-pool
+sizing reserves non-pool and backup headroom, including for 1 GiB singletons;
+custom buffers and workload concurrency still need capacity planning.
+`--use-memory` is a prepare-phase setting, not a backup-time RSS limit.
+The bounded streaming options require the corrected member agent; a control-plane
+upgrade alone only updates server sizing. MySQL/PXC do not support `upgrade-agents`,
+so replace agents through a supported healthy-member lifecycle or re-create the
+deployment to obtain the new backup command.
+
 Full backup receipts report XtraBackup's native checkpoint type
 `full-backuped`; the control plane validates it against the requested API type
 `full`. Incremental receipts report `incremental`. Metadata validation failures

@@ -259,7 +259,11 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 					t.Fatal(err)
 				}
 				limit := int64(ram * (1 << 30))
-				if spec.BufferPoolBytes != limit/2 || spec.MaxConnections != 200 {
+				wantPool := limit / 2
+				if topology == "single" && ram == 1 {
+					wantPool = 256 << 20
+				}
+				if spec.BufferPoolBytes != wantPool || spec.MaxConnections != 200 {
 					t.Fatalf("%s RAM %g: unexpected memory defaults: %+v", topology, ram, spec)
 				}
 				// This is explicit cache headroom, not a bound on native RSS:

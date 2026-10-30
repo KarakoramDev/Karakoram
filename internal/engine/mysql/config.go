@@ -142,10 +142,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if ram <= 0 {
 		ram = rc.Cluster.Spec.Components.Engine.Resources.MinRAM
 	}
-	buffer := int64(ram * float64(1<<30) / 2)
-	if buffer < 128<<20 {
-		buffer = 128 << 20
-	}
+	// Leave a fixed floor for mysqld's non-pool allocations, the agent and
+	// concurrent physical-backup processes, including on 1 GiB singletons.
+	memory := int64(ram * float64(1<<30))
+	buffer := max(int64(128<<20), min(memory/2, memory-(768<<20)))
 	o.Parameters = memberParameters(m, o.Parameters)
 	sp := myspec.Spec{Member: name, Role: m.Role, Topology: s.Topology, Ordinal: m.Index, Version: version, ServerDir: serverDir, XtraBackupDir: backupDir, BufferPoolBytes: buffer, MaxConnections: 200, Parameters: o.Parameters, CAPEM: get("tls/ca.crt"), ServerCert: cert("servers"), Superuser: credential("root"), Agent: credential("kk_agent"), Replication: credential("kk_repl"), Monitor: credential("kk_monitor"), BackupUser: credential("kk_backup"), AllowInitialize: m.Role == "data" && !m.Initialized && !m.CloneReplacesData && !s.Formation.reforming()}
 	if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {

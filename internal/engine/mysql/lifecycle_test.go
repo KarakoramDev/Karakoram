@@ -41,6 +41,47 @@ func TestCreateSingleConnection(t *testing.T) {
 	}
 }
 
+func TestMemberConfigReservesBackupMemory(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		min, max   float64
+		bufferPool int64
+	}{
+		{"one-gib", 1, 1, 256 << 20},
+		{"one-gib-elastic", 1, 4, 256 << 20},
+		{"two-gib", 2, 2, 1 << 30},
+		{"four-gib", 4, 4, 2 << 30},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, rc, backend := setup(t, "single")
+			rc.Cluster.Spec.Components.Engine.Resources.MinRAM = tc.min
+			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = tc.max
+			converge(t, p, rc, backend)
+			state, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config, err := p.MemberConfig(t.Context(), rc, state.data()[0].Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec myspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if spec.BufferPoolBytes != tc.bufferPool {
+				t.Fatalf("buffer pool=%d, want %d", spec.BufferPoolBytes, tc.bufferPool)
+			}
+			if int64(tc.min*float64(1<<30))-spec.BufferPoolBytes < 768<<20 {
+				t.Fatal("member has no physical-backup headroom")
+			}
+			if spec.MaxConnections != 200 {
+				t.Fatal("memory sizing changed the connection contract")
+			}
+		})
+	}
+}
+
 func TestGroupPeerAddressesMatchIssuedSQLIdentities(t *testing.T) {
 	p, rc, b := setup(t, "group")
 	converge(t, p, rc, b)

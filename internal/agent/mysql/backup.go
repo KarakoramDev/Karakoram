@@ -277,7 +277,9 @@ func runBackup(ctx context.Context, s myspec.Spec, p paths, r myspec.BackupReque
 		return out, errors.New("repository_invalid")
 	}
 	defer removeCloudConfig(cloud)
-	args := []string{"--defaults-extra-file=" + defaults, "--backup", "--stream=xbstream", "--lock-ddl", "--extra-lsndir=" + dir, "--target-dir=" + filepath.Join(dir, "target"), "--datadir=" + p.data}
+	// Bound copy concurrency and stream chunks independently of native defaults.
+	// --use-memory only controls prepare; it cannot budget a running backup.
+	args := []string{"--defaults-extra-file=" + defaults, "--backup", "--stream=xbstream", "--parallel=1", "--read-buffer-size=1M", "--lock-ddl", "--extra-lsndir=" + dir, "--target-dir=" + filepath.Join(dir, "target"), "--datadir=" + p.data}
 	if r.Type == "incremental" {
 		args = append(args, "--incremental-lsn="+strconv.FormatUint(r.BaseLSN, 10))
 	}
