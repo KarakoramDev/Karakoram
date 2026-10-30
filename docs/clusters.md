@@ -10,6 +10,27 @@ Each cluster selects an immutable engine driver/engine. Data-bearing members are
 
 The engine driver catalog advertises versions, upgrade paths, topology/component limits, backup types and operations. Query `karactl providers list` or `karactl providers get <provider> -o yaml`. Supported does not mean disruption-free: follow the linked engine's prerequisites and limits.
 
+Native network listeners must match the backend's private address family.
+IPv6-capable wildcard binds (`::`, or the database's dual-stack `*`) are distinct
+from advertised member identities: peers use routable private hostnames/IPs,
+never `::` or `0.0.0.0`. Literal IPv6 endpoints use `[address]:port`; bare-IP
+native settings must not include brackets. Local-only administration, metrics,
+recovery and credential bridges intentionally retain loopback listeners.
+The v0.4.3 runtime corrects IPv4-only Neo4j, Keycloak, RabbitMQ management and
+Supabase component listeners. Install corrected member artifacts, not only the
+control-plane binary, for existing deployments. Temporal still explicitly
+requires a private IPv4 backend; this does not extend its backend support.
+Keycloak carries its family choice in the member configuration:
+IPv4 backends bind `0.0.0.0`, IPv6 backends bind `::`; an IPv4-only host need not
+enable IPv6. Elastic's Elasticsearch/Kibana/APM/default Logstash listeners also
+select the declared family rather than assuming `::` is available everywhere.
+Neo4j selects its listener agent-locally on its first native configuration apply: it uses `::`
+when a local IPv6 socket can be opened, otherwise `0.0.0.0`. Its recovery
+connectors remain loopback-only. This policy adds no member wire field and does
+not change the control-plane payload or restart token, so strict legacy
+decoders and capability-free reconciliation/status/operations remain consistent.
+
+
 | Capability | [MongoDB](mongodb/README.md) (`psmdb`) | [RabbitMQ](rabbitmq/README.md) | [Elasticsearch](elasticsearch/README.md) | [PostgreSQL](postgres/README.md) / [Supabase](supabase/README.md) | [Temporal](temporal/README.md) |  [Neo4j Community](neo4j/README.md) | [Weaviate](weaviate/README.md) |
 | --- | --- | --- | --- | --- | --- |  --- | --- |
 | Create | Yes | Yes | Yes | Yes; Supabase artifact availability gates components | Requires PostgreSQL source and binding service |  Yes; single member | Yes |

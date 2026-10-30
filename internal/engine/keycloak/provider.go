@@ -622,6 +622,7 @@ func (p *Provider) publish(ctx context.Context, rc *engine.Context, s *state, c 
 		return e
 	}
 	spec := kcspec.Spec{Version: kcspec.Version, Host: c.Host, Port: c.Port, Database: o.Database.Name, Username: c.Username, Password: password, CAPEM: string(c.TLS.CAPEM), Hostname: o.Hostname, ProxyHeaders: o.ProxyHeaders, AdminPassword: string(admin), CredentialGeneration: c.CredentialGeneration}
+	spec.IPv6 = rc.Backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv4
 	if e = spec.Validate(); e != nil {
 		return e
 	}

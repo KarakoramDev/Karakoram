@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/agentspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func isES(m *member) bool { return m.Kind == kindNode || m.Kind == kindMaster }
@@ -223,6 +224,7 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state
 		return agentspec.Spec{}, err
 	}
 	v := agentspec.Spec{Component: product(m), Version: version}
+	v.IPv4 = rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4
 	ram := component(rc.Cluster.Spec, m).Resources.MinRAM
 	if isES(m) {
 		settings, secure, err := p.staticSettings(ctx, rc, s)
@@ -239,6 +241,9 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, s *state
 		v.HeapMB = ElasticsearchHeapMB(ram)
 		v.Elasticsearch = &agentspec.ElasticsearchSpec{ClusterName: rc.Cluster.Name, NodeName: m.Name, Roles: roles(rc.Cluster.Spec, m), Settings: settings, SecureSettings: secure}
 		v.RestartToken, err = NodeRestartToken(version, v.HeapMB, v.Elasticsearch.Roles, settings, nil)
+		if v.IPv4 {
+			v.RestartToken = digest([]byte(v.RestartToken + "/ipv4"))
+		}
 		return v, err
 	}
 	hosts := []string{}

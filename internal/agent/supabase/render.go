@@ -138,7 +138,7 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		files["supabase/envoy.json"] = config
 		p.Args = []string{"-c", filepath.Join(dir, "supabase/envoy.json"), "--concurrency", "1", "--log-level", "warning"}
 	case "auth":
-		set(map[string]string{"GOTRUE_API_HOST": "0.0.0.0", "GOTRUE_API_PORT": "9999", "API_EXTERNAL_URL": s.APIExternalURL, "GOTRUE_DB_DRIVER": "postgres", "GOTRUE_DB_DATABASE_URL": roleURL("postgres", "supabase_auth_admin", s.Database), "GOTRUE_DB_MIGRATIONS_PATH": filepath.Join(s.InstallDir, "migrations"), "GOTRUE_SITE_URL": s.SiteURL, "GOTRUE_URI_ALLOW_LIST": strings.Join(s.Auth.AdditionalRedirectURLs, ","), "GOTRUE_DISABLE_SIGNUP": boolstr(s.Auth.DisableSignup), "GOTRUE_JWT_ADMIN_ROLES": "service_role", "GOTRUE_JWT_AUD": "authenticated", "GOTRUE_JWT_DEFAULT_GROUP_NAME": "authenticated", "GOTRUE_JWT_EXP": num(expiry), "GOTRUE_JWT_SECRET": s.JWTSecret, "GOTRUE_JWT_ISSUER": s.APIExternalURL, "GOTRUE_EXTERNAL_EMAIL_ENABLED": "true", "GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED": "false", "GOTRUE_MAILER_AUTOCONFIRM": boolstr(s.Auth.Autoconfirm), "GOTRUE_SMTP_ADMIN_EMAIL": s.Auth.SMTP.AdminEmail, "GOTRUE_SMTP_HOST": s.Auth.SMTP.Host, "GOTRUE_SMTP_PORT": num(s.Auth.SMTP.Port), "GOTRUE_SMTP_USER": s.Auth.SMTP.User, "GOTRUE_SMTP_PASS": s.Auth.SMTP.Password, "GOTRUE_SMTP_SENDER_NAME": s.Auth.SMTP.SenderName, "GOTRUE_EXTERNAL_PHONE_ENABLED": "false", "GOTRUE_SMS_AUTOCONFIRM": "false"})
+		set(map[string]string{"GOTRUE_API_HOST": serviceHost, "GOTRUE_API_PORT": "9999", "API_EXTERNAL_URL": s.APIExternalURL, "GOTRUE_DB_DRIVER": "postgres", "GOTRUE_DB_DATABASE_URL": roleURL("postgres", "supabase_auth_admin", s.Database), "GOTRUE_DB_MIGRATIONS_PATH": filepath.Join(s.InstallDir, "migrations"), "GOTRUE_SITE_URL": s.SiteURL, "GOTRUE_URI_ALLOW_LIST": strings.Join(s.Auth.AdditionalRedirectURLs, ","), "GOTRUE_DISABLE_SIGNUP": boolstr(s.Auth.DisableSignup), "GOTRUE_JWT_ADMIN_ROLES": "service_role", "GOTRUE_JWT_AUD": "authenticated", "GOTRUE_JWT_DEFAULT_GROUP_NAME": "authenticated", "GOTRUE_JWT_EXP": num(expiry), "GOTRUE_JWT_SECRET": s.JWTSecret, "GOTRUE_JWT_ISSUER": s.APIExternalURL, "GOTRUE_EXTERNAL_EMAIL_ENABLED": "true", "GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED": "false", "GOTRUE_MAILER_AUTOCONFIRM": boolstr(s.Auth.Autoconfirm), "GOTRUE_SMTP_ADMIN_EMAIL": s.Auth.SMTP.AdminEmail, "GOTRUE_SMTP_HOST": s.Auth.SMTP.Host, "GOTRUE_SMTP_PORT": num(s.Auth.SMTP.Port), "GOTRUE_SMTP_USER": s.Auth.SMTP.User, "GOTRUE_SMTP_PASS": s.Auth.SMTP.Password, "GOTRUE_SMTP_SENDER_NAME": s.Auth.SMTP.SenderName, "GOTRUE_EXTERNAL_PHONE_ENABLED": "false", "GOTRUE_SMS_AUTOCONFIRM": "false"})
 		for _, name := range []string{"INVITE", "CONFIRMATION", "RECOVERY", "EMAIL_CHANGE"} {
 			env["GOTRUE_MAILER_URLPATHS_"+name] = "/auth/v1/verify"
 		}
@@ -148,6 +148,10 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 	case "rest":
 		set(map[string]string{"PGRST_SERVER_HOST": serviceHost, "PGRST_SERVER_PORT": "3000", "PGRST_DB_URI": roleURL("postgres", "authenticator", s.Database), "PGRST_DB_SCHEMAS": strings.Join(schemas, ","), "PGRST_DB_MAX_ROWS": num(maxrows), "PGRST_DB_EXTRA_SEARCH_PATH": "public,extensions", "PGRST_DB_ANON_ROLE": "anon", "PGRST_ADMIN_SERVER_PORT": "3001", "PGRST_ADMIN_SERVER_HOST": "127.0.0.1", "PGRST_JWT_SECRET": jwt, "PGRST_DB_USE_LEGACY_GUCS": "false", "PGRST_APP_SETTINGS_JWT_EXP": num(expiry)})
 	case "realtime":
+		env["REALTIME_IP_VERSION"] = "ipv4"
+		if s.DatabaseIPv6 {
+			env["REALTIME_IP_VERSION"] = "ipv6"
+		}
 		set(map[string]string{"PORT": "4000", "DB_HOST": dbhost, "DB_PORT": dbport, "DB_USER": "supabase_admin", "DB_PASSWORD": s.DBRoles["supabase_admin"], "DB_NAME": s.Database, "DB_AFTER_CONNECT_QUERY": "SET search_path TO _realtime", "DB_ENC_KEY": s.RealtimeDBEncKey, "API_JWT_SECRET": s.JWTSecret, "SECRET_KEY_BASE": s.SecretKeyBase, "METRICS_JWT_SECRET": s.JWTSecret, "ERL_AFLAGS": "-proto_dist inet_tcp +S 2:2 +SDcpu 1 +SDio 1", "RLIMIT_NOFILE": "10000", "APP_NAME": "realtime", "SEED_SELF_HOST": "true", "RUN_JANITOR": "true", "DISABLE_HEALTHCHECK_LOGGING": "true"})
 		// Only singleton Realtime is admitted: the native release has no
 		// configured inter-member distribution network. Its default POSTGRES
@@ -203,7 +207,7 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 		if s.JWKS != "" {
 			env["SUPABASE_JWKS"] = s.JWKS
 		}
-		p.Args = []string{"start", "--user-worker-request-idle-timeout", "150000", "--main-service", filepath.Join(s.InstallDir, "app/main")}
+		p.Args = []string{"start", "--ip", serviceHost, "--user-worker-request-idle-timeout", "150000", "--main-service", filepath.Join(s.InstallDir, "app/main")}
 		files["functions/deno.jsonc"] = []byte("{\"imports\":{}}\n")
 		for name, entries := range s.Functions {
 			for file, source := range entries {
@@ -211,6 +215,10 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 			}
 		}
 	case "pooler":
+		env["ADDR_TYPE"] = "inet"
+		if s.DatabaseIPv6 {
+			env["ADDR_TYPE"] = "inet6"
+		}
 		pool := s.Pooler.DefaultPoolSize
 		if pool == 0 {
 			pool = 20
@@ -232,6 +240,7 @@ func Render(s sbspec.Spec, dataDir string) (agent.ProcessSpec, map[string][]byte
 			env["GLOBAL_UPSTREAM_CA_PATH"] = filepath.Join(dir, "supabase/ca.pem")
 		}
 	case "analytics":
+		env["PHX_HTTP_IP"] = serviceHost
 		set(map[string]string{"PORT": "4000", "LOGFLARE_NODE_HOST": "127.0.0.1", "DB_USERNAME": "supabase_admin", "DB_DATABASE": "_supabase", "DB_HOSTNAME": dbhost, "DB_PORT": dbport, "DB_PASSWORD": s.DBRoles["supabase_admin"], "DB_SCHEMA": "_analytics", "LOGFLARE_SINGLE_TENANT": "true", "LOGFLARE_SUPABASE_MODE": "true", "LOGFLARE_PUBLIC_ACCESS_TOKEN": s.LogflarePublicToken, "LOGFLARE_PRIVATE_ACCESS_TOKEN": s.LogflarePrivateToken, "LOGFLARE_FEATURE_FLAG_OVERRIDE": "multibackend=true", "POSTGRES_BACKEND_URL": roleURL("postgresql", "supabase_admin", "_supabase"), "POSTGRES_BACKEND_SCHEMA": "_analytics", "ERL_AFLAGS": "-proto_dist inet_tcp +S 2:2 +SDcpu 1 +SDio 1"})
 		env["DB_URL"] = roleURL("ecto", "supabase_admin", "_supabase")
 		if s.DatabaseTLS {

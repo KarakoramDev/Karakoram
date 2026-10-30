@@ -40,21 +40,21 @@ func (a testAgents) Dial(context.Context, domain.ClusterRef, string) (*agentapi.
 }
 
 type agentState struct {
-	config              agentapi.MemberConfig
-	spec                neo4jspec.Spec
-	password            string
-	rotations, restarts int
-	failPasswordReply   bool
-	credentialMismatch  bool
-	userCode            int
-	users               map[string]neo4jspec.User
-	userPasswords       map[string]string
-	adminErrorCode      int
-	recoveryReceipt     string
-	recoveryPassword    string
-	recoveries          int
-	failRecoveryReply   bool
-	failRecoveryJob     bool
+	config                       agentapi.MemberConfig
+	spec                         neo4jspec.Spec
+	password                     string
+	rotations, restarts, reloads int
+	failPasswordReply            bool
+	credentialMismatch           bool
+	userCode                     int
+	users                        map[string]neo4jspec.User
+	userPasswords                map[string]string
+	adminErrorCode               int
+	recoveryReceipt              string
+	recoveryPassword             string
+	recoveries                   int
+	failRecoveryReply            bool
+	failRecoveryJob              bool
 }
 
 func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState) {
@@ -95,6 +95,7 @@ func setup(t *testing.T) (*Provider, *engine.Context, *fake.Backend, *agentState
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/reload":
+			a.reloads++
 			pull()
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/status":

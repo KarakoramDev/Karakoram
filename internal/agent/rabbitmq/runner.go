@@ -193,11 +193,17 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 			line("ssl_options.fail_if_no_peer_cert", "false")
 		}
 	}
+	managementHost := "::"
+	if s.IPv4Distribution {
+		managementHost = "0.0.0.0"
+	}
 	if s.ManagementPort > 0 {
 		line("management.tcp.port", s.ManagementPort)
+		line("management.tcp.ip", managementHost)
 	}
 	if s.ManagementTLSPort > 0 {
 		line("management.ssl.port", s.ManagementTLSPort)
+		line("management.ssl.ip", managementHost)
 	}
 	if s.PrometheusPort > 0 {
 		line("prometheus.tcp.port", s.PrometheusPort)
