@@ -90,9 +90,51 @@ when shared by every eligible member and the direct SID is absent. If both
 namespaces exist, neither is exempted without an explicit full acknowledgement.
 All other namespaces must agree, apart from previously acknowledged member
 differences. Equal counts and Galera sequence numbers do not prove equivalence.
-Restore completion checks the restored quorum's shared history as its baseline;
-there is no pre-restore executed-set cache. Restore never clears an existing
-incident automatically, even if the current histories agree.
+Before acquiring certification fences or proxy holds, restore negotiates the
+optional agent status capability `mysqlRestoreCertification` on every deployed
+data member and proxy. With support on all participants, restore certifies a
+replicated managed-schema probe before activating the new backup generation.
+Capability negotiation itself owns no controls. Client-fence ownership is
+recorded only when the post-installation fencing window begins. Preflight
+rejection releases untouched restore ownership; native restore polling failure
+retains its frozen checkpoint and original mysqld holds. Failures before
+certification starts release any acquired client controls and resume that
+original recovery path instead of inventing a certification failure.
+ProxySQL processes receive durable restore-owned
+stop holds before native re-formation/certification; ordinary direct SQL is
+fenced with `offline_mode` from restored startup. The privileged local agent can
+still execute the probe. Each member must actually advance the same direct or
+inverse namespace as the restored seed, not merely contain an SST-copied SID.
+A disagreeing follower is quarantined and re-provisioned by SST from that seed,
+with a new formation epoch and at most two attempts per member. Probe histories,
+mapping evidence and remedy progress are checkpointed for crash recovery.
+Persistent mixed mapping blocks activation and reports
+`RestoreGTIDCertified=False/GTIDMappingCertificationBlocked` with operator
+guidance. Success, blocked failure and terminal cleanup release the native fence
+and explicitly release/start every held proxy; reload alone never clears a hold.
+Cleanup attempts all proxy releases even if a data agent is unavailable.
+Terminal-cleanup-pending is checkpointed before release. Normal restore recovery,
+including initial-restore Sync and control-plane restart, retries every owned
+release until cleanup completes; failed certification then settles blocked
+without activating. Pre-certification cleanup preserves its original checkpoint.
+Existing GTID incidents are never silently cleared. There is no pre-restore
+executed-set cache.
+
+If any deployed agent lacks the capability, restore follows the legacy path
+without new certification fences, proxy holds or probe endpoints. It reports
+`RestoreGTIDCertified=Unknown/RestoreCertificationUnavailable`: agents are
+outdated/incompatible; re-create the cluster to get certified restores.
+The post-restore history comparator remains fully active: real mixed accounting
+still records a durable latch and Degraded status, never a silently cleared
+incident. The automatic full after an uncertified restore cannot acknowledge
+that incident; operator-requested fresh full acknowledgement still requires its
+normal complete identity proof.
+
+Automatic re-provisioning is limited to an in-progress restore that already
+authorizes replacing follower data from its restored seed. A live re-formation,
+rolling restart or full-cluster bootstrap does not authorize discarding member
+data; these retain the continuity guard and require explicit trusted-source
+replacement if histories conflict.
 
 `GTIDHistorySafe=False` / `GTIDHistoryDiscontinuityLatched` records a durable divergence
 boundary, the detection time and affected members. The condition appears in the
@@ -103,6 +145,12 @@ cannot currently be established.
 The safe watermark advances only when every configured member is successfully
 observed eligible in the same component. An available majority with an unseen
 member does not certify that unseen member's intervening history.
+An active-SID prefix difference at identical `wsrep_last_committed` positions
+on all Synced members is held as a possible in-flight observation race. If it
+persists in at least two independent complete samples across five seconds, it
+latches as divergence, even after a full acknowledged earlier frozen differences.
+The safe watermark does not advance while that suspicion is unresolved. A cache
+hit is not another independent sample.
 
 The guard does **not** stop database service or prohibit full backups. It blocks
 operations that would claim GTID continuity across the unsafe interval:
@@ -110,6 +158,11 @@ incremental backup chains and PITR/binlog replay spanning it. An independently
 valid backup and archived target before the recorded safe boundary remain
 restorable. Do not equate the detection timestamp with the first unsafe
 transaction: an IST can replay an older transaction under a different GTID.
+For PXC-4493 mixed accounting after activation, re-provision the affected member
+from trusted history using managed replacement/SST, then take the fresh full.
+A mysqld restart is **not** a repair: it may change the mapping for future
+transactions while retaining incompatible old namespaces and restarting numbering
+inside the direct SID. Do not mistake that permanent prefix offset for write lag.
 
 Preserve logs, executed GTID sets and application evidence. Identify the trusted
 quorum and use managed member replacement to provision fresh data from it;

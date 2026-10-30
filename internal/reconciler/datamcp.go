@@ -9,6 +9,9 @@ import (
 )
 
 func (m *Manager) observeStatus(ctx context.Context, p engine.Provider, rc *engine.Context) (domain.ClusterStatus, error) {
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
 	// Publication owners release this gate only after their state write, not
 	// when probes return: a delayed positive sample must not overwrite a
 	// newer failed renewal. Sync runs outside this observation gate.

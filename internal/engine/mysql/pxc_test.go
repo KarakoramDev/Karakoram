@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
@@ -19,6 +20,8 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 	_, rc, b := setup(t, "group")
 	p := New(Options{Provider: "pxc"})
 	rc.Cluster.Spec.Provider, rc.Cluster.Spec.Version, rc.Cluster.Spec.Topology.Type = "pxc", pxcCatalog[0].Version, "cluster"
+	probeSequence := int64(1000000)
+	probeReceipts := map[string]myspec.GaleraStatusResponse{}
 	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 		switch r.URL.Path {
 		case "/v1/status":
@@ -26,7 +29,7 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			if b.native[name].MemberState != "ONLINE" {
 				pid = 0
 			}
-			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: b.agentBuild, MySQLRestoreCertification: true, ConfigVersion: b.applied[name], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
 			return true
 		case "/v1/mysql/galera-status":
 			st := b.native[name]
@@ -38,10 +41,41 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			}
 			out := myspec.GaleraStatusResponse{ClusterStatus: "non-Primary", StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: 10, ClusterSize: size, GTIDExecuted: st.GTIDExecuted}
 			out.ServerUUID = st.ServerUUID
+			cfg, err := p.MemberConfig(r.Context(), rc, name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec myspec.Spec
+			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			out.OfflineMode = spec.Galera != nil && spec.Galera.RestoreFence
+			out.LastCommitted = probeSequence
 			if st.MemberState == "ONLINE" {
 				out.ClusterStatus, out.LocalStateComment, out.Ready, out.Connected = "Primary", "Synced", true, true
 			}
 			json.NewEncoder(w).Encode(out)
+			return true
+		case "/v1/mysql/galera-history-probe":
+			var req myspec.GaleraHistoryProbeRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatal(err)
+			}
+			if saved, ok := probeReceipts[req.Receipt]; ok {
+				_ = json.NewEncoder(w).Encode(saved)
+				return true
+			}
+			probeSequence++
+			for peer, status := range b.native {
+				if status.GTIDExecuted != "" {
+					status.GTIDExecuted += ","
+				}
+				status.GTIDExecuted += fmt.Sprintf("11111111-2222-3333-4444-555555555555:%d", probeSequence)
+				b.native[peer] = status
+			}
+			out := myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: probeSequence, GTIDExecuted: b.native[name].GTIDExecuted, ServerUUID: b.native[name].ServerUUID, OfflineMode: true}
+			probeReceipts[req.Receipt] = out
+			_ = json.NewEncoder(w).Encode(out)
 			return true
 		case "/v1/mysql/proxy-status":
 			cfg, err := p.MemberConfig(r.Context(), rc, name)
@@ -362,6 +396,7 @@ func TestPXCRestorePreparesSSTJoinersBeforeBootstrap(t *testing.T) {
 	s.Formation.GroupName = "aaaaaaaabbbb4ccc8dddeeeeeeeeeeee"
 	s.Formation.State = "bootstrapping"
 	s.Formation.Reformation = &reformation{State: "bootstrapping"}
+	s.RestoreGTIDFence = "pxc-restore" // Restored startup already published the client fence.
 	for _, m := range s.data() {
 		m.Offline = m.Name != s.Formation.Seed
 		m.Initialized = false

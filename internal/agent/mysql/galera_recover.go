@@ -238,7 +238,7 @@ func (e *Runner) galeraForcePrimary(ctx context.Context, req myspec.GaleraForceP
 	return err
 }
 func (e *Runner) galeraRoutes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{myspec.ActionGaleraStatus, myspec.ActionWSRepRecover, myspec.ActionGaleraBootstrap, myspec.ActionGaleraForcePrimary, myspec.ActionGaleraPrepareJoin} {
+	for _, action := range []string{myspec.ActionGaleraStatus, myspec.ActionWSRepRecover, myspec.ActionGaleraBootstrap, myspec.ActionGaleraForcePrimary, myspec.ActionGaleraPrepareJoin, myspec.ActionGaleraHistoryProbe} {
 		mux.HandleFunc("POST /v1/mysql/"+action, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-store")
 			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
@@ -249,6 +249,11 @@ func (e *Runner) galeraRoutes(mux *http.ServeMux, n *agent.Node) {
 				switch action {
 				case myspec.ActionGaleraStatus:
 					result, err = e.galeraStatus(ctx)
+				case myspec.ActionGaleraHistoryProbe:
+					var req myspec.GaleraHistoryProbeRequest
+					if err = decodeGroupRequest(w, r, &req); err == nil {
+						result, err = e.galeraHistoryProbe(ctx, req)
+					}
 				case myspec.ActionWSRepRecover:
 					result, err = e.wsrepRecover(ctx, locked)
 				case myspec.ActionGaleraPrepareJoin:

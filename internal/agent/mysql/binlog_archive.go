@@ -71,7 +71,7 @@ func readArchiveIndex(name string) (archiveIndex, error) {
 }
 func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	s, p := e.state()
-	if s.Backup == nil || !s.Backup.Binlog.Enabled {
+	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 		return myspec.BinlogArchiveStatus{}, errors.New("binlog_archiving_disabled")
 	}
 	archiveMu.Lock()
@@ -99,6 +99,9 @@ func archiveConfigChanged(previous, current *myspec.Backup) bool {
 // Interval/repository changes cancel the old wait or attempt and start anew.
 // Each iteration rechecks the live role and intentional-stop fence before SQL.
 func (e *Runner) resetArchiveLoop(enabled bool) {
+	if e.AccessRestoreFenced() {
+		enabled = false
+	}
 	e.configureArchiveLoop(enabled, e.archiveBinlogs)
 }
 
@@ -121,7 +124,7 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 	go func() {
 		for {
 			s, _ := e.state()
-			if s.Backup == nil || !s.Backup.Binlog.Enabled {
+			if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 				return
 			}
 			interval := time.Duration(s.Backup.Binlog.RotateIntervalSeconds) * time.Second
@@ -167,7 +170,7 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
 	s, p := e.state()
-	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData {
+	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || s.Galera != nil && s.Galera.RestoreFence {
 		return nil
 	}
 	st, err := e.status(ctx)

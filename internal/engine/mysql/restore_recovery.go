@@ -28,7 +28,7 @@ func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
 // CancelOperation is also invoked for terminal queue failure. The saved source,
 // group UUID and receipt remain owned by reconciliation rather than un-fencing
 // partially restored data or choosing another source after a crash.
-func (p *Core) CancelOperation(_ context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
 	if op.Kind == domain.OperationReplaceMember {
 		return cancelReplacement(rc, op)
 	}
@@ -48,6 +48,33 @@ func (p *Core) CancelOperation(_ context.Context, rc *engine.Context, op *domain
 	var cp backupCheckpoint
 	if err := json.Unmarshal(bs.RestoreOperation.Checkpoint, &cp); err != nil {
 		return engine.OpResult{}, err
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return engine.OpResult{}, err
+	}
+	certification := cp.GTIDCertification
+	owned := s.RestoreGTIDFence == op.ID || certification != nil && (certification.FencesOwned || certification.CleanupPending || certification.RecoveryCleanupPending || certification.LegacyCleanupPending)
+	if owned {
+		// A negotiation checkpoint owns no controls. Before actual certification
+		// starts, retain the native restore checkpoint and its recovery ownership.
+		certifying := certification != nil && certification.Phase != "negotiated" && (cp.Step == "certify" || cp.Step == "certify-cleanup" || cp.Step == "certify-blocked")
+		if certifying && !certification.Certified && !certification.Legacy {
+			s.RestoreGTIDBlocked = "PXC restore GTID certification interrupted; preserve evidence and repair from the restored seed under operator control before a new full backup; never reset or inject GTIDs"
+			if err = save(rc.Cluster, s); err != nil {
+				return engine.OpResult{}, err
+			}
+			if err = completeRestoreGTIDCleanup(ctx, rc, s, op, &cp); err != nil {
+				return engine.OpResult{}, err
+			}
+		} else if err = completeRestoreGTIDRecoveryCleanup(ctx, rc, s, op, &cp); err != nil {
+			return engine.OpResult{}, err
+		}
+		// persistRestore replaces the saved operation checkpoint.
+		bs, err = loadBackupState(rc.Cluster)
+		if err != nil {
+			return engine.OpResult{}, err
+		}
 	}
 	// Failure before the first fence has no data recovery ownership to retain.
 	// Releasing it permits a new request using a fresh, provable full baseline.
@@ -123,4 +150,34 @@ func (*Core) SyncDuringOperation(op *domain.Operation) bool {
 }
 func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
 	return restoreOperation(op) || op.Kind == domain.OperationReplaceMember
+}
+
+// Terminal hold release is independent of journal availability, audit delivery
+// and fresh history comparison. Run it before ordinary Sync observations.
+func (p *Core) reconcilePendingRestoreGTIDCleanup(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if rc.Cluster.Spec.Provider != "pxc" {
+		return false, nil
+	}
+	bs, err := loadBackupState(rc.Cluster)
+	if err != nil {
+		return true, err
+	}
+	if bs.RestoreOperation == nil {
+		return false, nil
+	}
+	var cp backupCheckpoint
+	if err = json.Unmarshal(bs.RestoreOperation.Checkpoint, &cp); err != nil {
+		return true, err
+	}
+	pending := cp.Step == "certify-cleanup" || cp.GTIDCertification != nil && (cp.GTIDCertification.LegacyCleanupPending || cp.GTIDCertification.RecoveryCleanupPending) || cp.Step == "certify-blocked" && (cp.GTIDCertification == nil || cp.GTIDCertification.CleanupPending || !cp.GTIDCertification.CleanupComplete)
+	if !pending {
+		return false, nil
+	}
+	_, err = p.runRestore(ctx, rc, bs.RestoreOperation, cp)
+	current, loadErr := load(rc.Cluster)
+	if loadErr != nil {
+		return true, loadErr
+	}
+	*s = *current
+	return true, err
 }

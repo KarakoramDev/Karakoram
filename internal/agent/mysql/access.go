@@ -25,11 +25,17 @@ import (
 type AccessDependencies interface {
 	LocalAccessDB(context.Context) (*sql.DB, error)
 	GaleraAccess() bool
+	AccessRestoreFenced() bool
 }
 
 func (e *Runner) GaleraAccess() bool {
 	s, _ := e.state()
 	return s.Galera != nil
+}
+
+func (e *Runner) AccessRestoreFenced() bool {
+	s, _ := e.state()
+	return s.Galera != nil && s.Galera.RestoreFence
 }
 
 type accessError struct {
@@ -93,6 +99,10 @@ func RegisterAccessRoutes(mux *http.ServeMux, deps AccessDependencies) {
 			if action == myspec.ActionAccessCapabilities {
 				result = myspec.AccessCapabilities{CredentialReceipts: true}
 			} else {
+				if deps.AccessRestoreFenced() {
+					http.Error(w, "MySQL account operations are fenced during restore certification", http.StatusServiceUnavailable)
+					return
+				}
 				var db *sql.DB
 				db, err = deps.LocalAccessDB(ctx)
 				if err == nil && db == nil {

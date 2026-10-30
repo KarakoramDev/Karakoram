@@ -137,6 +137,20 @@ safe: only the recorded safe boundary and independently verified archive
 coverage establish that. Pre-boundary recovery remains available from its
 original backup chain.
 
+Quorum GTID sampling probes data members concurrently, retaining the normal
+per-agent timeout. Read-only Sync, Status and PITR checks share one successful
+sample within each reconcile pass (including the Degraded status retry), never
+across clusters or passes. Membership, formation, generation and restore
+checkpoint changes invalidate that sample. Full-backup acknowledgement, restore
+certification/activation request fresh observations under the same per-cluster
+observation/commit lock. Incident creation invalidates the prior sample; failed
+agent reads are not cached.
+Read-only sweeps share a total four-second sampling budget per cluster/pass,
+including unsuccessful attempts. Exhaustion leaves GTID comparison unavailable
+without issuing more agent actions or declaring unsampled members unhealthy.
+Fast failed sweeps may retry within the remaining budget; mandatory fresh
+write-transition samples are exempt from that read-only budget.
+
 Normal database service and **full backups remain available**. After preserving
 evidence and repairing/replacing affected members from a trusted source, take a
 new full backup. A successfully completed full backup started after detection
@@ -151,9 +165,50 @@ invalidates them. New/growing or reversed differences latch again. This does not
 repair member data, certify asynchronous replicas, make an old incremental chain
 continuous, or authorize replay through the old interval. Older journals without
 identity-bound narrowing allowances remain readable and grant no exceptions.
-Shared restored historical namespaces are a valid new comparison baseline.
-Restore checks this baseline but never clears an existing incident automatically.
-Equal histories after SST or re-formation do not clear the latch by themselves.
+A completed native full is not failed by a later GTID observation, journal or
+audit outage. Its operation completes with `done-baseline-pending` and an
+explicit message if acknowledgement could not finish; the active latch or
+pending audit remains durable. Verify `GTIDHistorySafe` and agent compatibility,
+then take a fresh full after repair if still latched. Native full-backup polling
+does not repeatedly sample quorum histories; successful fulls with no incident
+need no extra GTID sweep.
+Shared restored historical namespaces are legitimate. Before any new client
+fence/hold, PXC restore negotiates `mysqlRestoreCertification` through agent
+status on all deployed data members/proxies. With complete support it durably
+holds ProxySQL processes and fences ordinary direct SQL with `offline_mode`,
+then certifies an ordinary replicated managed-schema probe.
+Negotiating capability is planning only, not acquisition of a certification
+fence. A rejected preflight still releases untouched recovery ownership, while
+native restore polling failures retain the frozen native checkpoint and its
+original mysqld holds. If client fencing was acquired before certification
+began, terminal cleanup releases those client controls without replacing the
+native recovery checkpoint or declaring certification blocked.
+Followers whose advancing SID mapping differs from the restored seed are
+re-provisioned by SST from that seed, at most twice per member; persistent
+disagreement blocks activation with checkpointed evidence. Terminal cleanup and
+successful activation release the native fence and explicitly restart every
+held proxy; terminal cleanup does not leave healthy proxies held merely because
+a data agent is unavailable. This restore-only authorization never silently
+clears an existing incident.
+Terminal cleanup has its own durable pending checkpoint: every recovery pass,
+including initial-restore Sync after CP restart, retries release until done
+before settling failed certification blocked. Pre-certification cleanup instead
+resumes its original checkpoint. GTID journal/audit outages do not gate cleanup.
+After activation, use explicit
+trusted-source replacement/SST followed by a fresh full; a mysqld restart cannot
+repair incompatible GTID numbering. A persistent prefix difference at equal
+Synced wsrep positions is also fenced after independent confirmation beyond the
+in-flight observation window. Equal histories after SST or re-formation do not
+clear the latch by themselves.
+
+Agents from v0.4.2 that omit the optional capability use legacy restore/PITR
+without new certification holds, native fence fields or probe endpoints.
+`RestoreCertificationUnavailable` explains the limitation and recommends
+re-creating the cluster for certified restores. This compatibility path does
+not relax post-restore GTID comparison: real divergence remains latched and
+Degraded. Its automatic post-restore full cannot silently acknowledge that
+incident; explicit fresh-full acknowledgement still requires complete native
+member identity observations.
 See the [operator procedure](operations.md#pxc-gtid-history-safety). Never reset
 GTIDs, inject empty transactions or attach an asynchronous replica merely to
 make a continuity check pass.
@@ -177,6 +232,16 @@ remain, merges them in LSN order, and completes preparation before installation.
 PITR replays only the verified prefix up to the chosen boundary. A time cutoff
 or explicit GTID target that omits an earlier dependency is refused, not applied
 as a partial history. Do not reset GTID history as a routine restore step.
+
+Do not write through privileged direct sessions during PXC restore, including
+external SQL runners. `CONNECTION_ADMIN`/`SUPER` can bypass `offline_mode`; the
+managed administrator intentionally retains its privileges. ProxySQL itself is
+held stopped during certification so proxy administrator sessions cannot bypass
+that window. Ordinary managed application grants do not include those global
+privileges. Managed account actions are refused while restore owns the cluster,
+and archival loops are disabled/cancelled until activation and native fence
+release. Startup account recovery is local, non-wsrep and non-binlogged; the
+explicit replicated certification probe is the intentional exception.
 
 A restored server gets a **new `server_uuid`** while keeping recovered GTID history. Restored Group Replication uses a **new group UUID**, and other members clone from the restored seed. PXC starts a **new Galera history**, with no predecessor peer list, and the other members join by SST. Prepared `xtrabackup_galera_info` can contain a zero UUID and sequence `-1`; file presence is not a trustworthy bootstrap position. Do not use backup coordinates to rank crashed live members.
 

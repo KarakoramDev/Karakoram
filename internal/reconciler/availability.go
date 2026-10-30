@@ -18,6 +18,7 @@ import (
 // only a fenced availability sample can be published. Imperative operations
 // retain their existing serialized observation/checkpoint ownership.
 func (m *Manager) renewAvailability(ctx context.Context, ref domain.ClusterRef) error {
+	ctx = engine.WithObservationPass(ctx)
 	if err := holdObservation(ctx); err != nil {
 		return err
 	}

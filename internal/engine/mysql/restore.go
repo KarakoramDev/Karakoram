@@ -241,6 +241,9 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			return backupResult(cp, false), engine.ErrConflict
 		}
 		if len(bs.RestoreOperation.Checkpoint) > 0 {
+			// A checkpoint is a complete snapshot, not a JSON merge patch:
+			// omitted optional flags must not retain caller-local stale values.
+			cp = backupCheckpoint{}
 			if err = json.Unmarshal(bs.RestoreOperation.Checkpoint, &cp); err != nil {
 				return backupResult(cp, false), err
 			}
@@ -291,13 +294,25 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		cp.Generation = bs.Generation + 1
 		cp.Step = "preflight"
+		if err = negotiatePXCRestoreCertification(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
 		if err = persistRestore(rc, op, cp); err != nil {
 			return backupResult(cp, false), err
 		}
 		return backupResult(cp, false), nil
 	}
-	if cp.Request == nil {
+	if cp.GTIDCertification != nil && cp.GTIDCertification.RecoveryCleanupPending {
+		err = completeRestoreGTIDRecoveryCleanup(ctx, rc, s, op, &cp)
+		return backupResult(cp, false), err
+	}
+	if cp.Request == nil && cp.Step != "certify-cleanup" && cp.Step != "certify-blocked" {
 		return backupResult(cp, false), engine.Invalid("restore checkpoint lacks frozen source")
+	}
+	if cp.Step != "certify-cleanup" && cp.Step != "certify-blocked" {
+		if err = negotiatePXCRestoreCertification(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
 	}
 	switch cp.Step {
 	case "preflight":
@@ -498,6 +513,14 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		seed.Initialized = true
 		seed.Stage = "deployed"
 		seed.Offline = false
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			// Fence client sessions before any restored mysqld is started.
+			s.RestoreGTIDFence, s.RestoreGTIDBlocked = op.ID, ""
+			cp.GTIDCertification.FencesOwned = true
+		}
+		if rc.Cluster.Spec.Provider == "pxc" {
+			s.RestoreGTIDBlocked = ""
+		}
 		s.Formation.Seed = cp.Member
 		s.Formation.Blocked = ""
 		s.Formation.FormationEpoch++
@@ -533,6 +556,11 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			return backupResult(cp, false), err
 		}
 	case "reform":
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			if fenced, e := acquirePXCRestoreFences(ctx, rc, s, op, &cp); e != nil || !fenced {
+				return backupResult(cp, false), e
+			}
+		}
 		for _, m := range s.data() {
 			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {
@@ -605,11 +633,53 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			return backupResult(cp, false), err
 		}
 		cp.Step = "activate"
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			cp.Step = "certify"
+		}
+	case "certify":
+		if legacyPXCRestore(cp) {
+			cp.Step = "activate"
+			break
+		}
+		if err = certifyPXCRestore(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
+	case "certify-cleanup":
+		if err = completeRestoreGTIDCleanup(ctx, rc, s, op, &cp); err != nil {
+			return backupResult(cp, false), err
+		}
+		return backupResult(cp, false), engine.Invalid("%s", s.RestoreGTIDBlocked)
+	case "certify-blocked":
+		if cp.GTIDCertification == nil || cp.GTIDCertification.CleanupPending || !cp.GTIDCertification.CleanupComplete {
+			if err = completeRestoreGTIDCleanup(ctx, rc, s, op, &cp); err != nil {
+				return backupResult(cp, false), err
+			}
+		}
+		return backupResult(cp, false), engine.Invalid("%s", s.RestoreGTIDBlocked)
 	case "activate":
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) && (cp.GTIDCertification == nil || !cp.GTIDCertification.Certified) {
+			cp.Step = "certify"
+			break
+		}
 		// Certify the restored quorum's shared history, not a pre-restore GTID
 		// snapshot. Existing incidents remain durable until an explicit full.
 		if rc.Cluster.Spec.Provider == "pxc" {
 			if err = checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
+				if _, observation := err.(*myspec.GTIDQuorumError); !legacyPXCRestore(cp) || !observation {
+					return backupResult(cp, false), err
+				}
+			}
+		}
+		if rc.Cluster.Spec.Provider == "pxc" && !legacyPXCRestore(cp) {
+			if err = releaseRestoreGTIDFence(ctx, rc, s, op.ID, false); err != nil {
+				return backupResult(cp, false), err
+			}
+			cp.GTIDCertification.FencesOwned = false
+			if err = persistRestore(rc, op, cp); err != nil {
+				return backupResult(cp, false), err
+			}
+			bs, err = loadBackupState(rc.Cluster)
+			if err != nil {
 				return backupResult(cp, false), err
 			}
 		}

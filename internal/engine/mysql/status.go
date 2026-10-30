@@ -167,6 +167,15 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			condition.Status, condition.Reason, condition.Message = "False", "GTIDHistoryDiscontinuityLatched", incident.message()
 		}
 		status.Conditions = append(status.Conditions, condition)
+		if s.RestoreGTIDBlocked != "" {
+			healthy = false
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "False", Reason: "GTIDMappingCertificationBlocked", Message: s.RestoreGTIDBlocked, LastTransitionTime: now(rc)})
+		} else if s.RestoreGTIDUnavailable != "" {
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "Unknown", Reason: "RestoreCertificationUnavailable", Message: s.RestoreGTIDUnavailable, LastTransitionTime: now(rc)})
+		} else if s.RestoreGTIDFence != "" {
+			healthy = false
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "Unknown", Reason: "GTIDMappingCertificationInProgress", Message: "Client SQL is fenced while the restored PXC formation certifies replicated GTID mapping", LastTransitionTime: now(rc)})
+		}
 	}
 	if r := s.Formation.Reformation; r != nil && r.Blocked != "" {
 		healthy = false

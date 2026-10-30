@@ -210,3 +210,105 @@ func frozenDeltasContained(a, b, ackA, ackB map[string][]gtidInterval, active st
 	}
 	return true
 }
+
+// PXCActiveSIDAdvance identifies the namespace that actually gained GTIDs
+// across a fenced replicated probe. Presence alone cannot distinguish SST-copied
+// historical namespaces from this process's cached native assignment.
+func PXCActiveSIDAdvance(before, after, state string) (string, error) {
+	if !ValidUUID(state) {
+		return "", fmt.Errorf("invalid Galera state UUID")
+	}
+	a, err := gtidIntervals(before)
+	if err != nil {
+		return "", err
+	}
+	b, err := gtidIntervals(after)
+	if err != nil {
+		return "", err
+	}
+	if !gtidContains(b, a) {
+		return "", fmt.Errorf("executed history shrank during certification")
+	}
+	direct := strings.ToLower(state)
+	inverse := inverseUUID(direct)
+	directAdvanced := !gtidDifferenceContained(b[direct], a[direct], nil, nil)
+	inverseAdvanced := !gtidDifferenceContained(b[inverse], a[inverse], nil, nil)
+	if directAdvanced && inverseAdvanced {
+		return "", fmt.Errorf("both cluster SID mappings advanced")
+	}
+	if directAdvanced {
+		return direct, nil
+	}
+	if inverseAdvanced {
+		return inverse, nil
+	}
+	return "", nil
+}
+
+// PXCEqualPositionPrefixDifferences is a fail-safe suspicion, not an immediate
+// divergence verdict. A caller must confirm it in independent observations:
+// wsrep status and executed GTIDs are separate reads and may briefly disagree.
+func PXCEqualPositionPrefixDifferences(observations map[string]GaleraStatusResponse) (string, []string) {
+	names := make([]string, 0, len(observations))
+	for name := range observations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	if len(names) < 2 {
+		return "", nil
+	}
+	first := observations[names[0]]
+	state := strings.ToLower(first.StateUUID)
+	if !ValidUUID(state) {
+		return "", nil
+	}
+	inverse := inverseUUID(state)
+	sets := make([]map[string][]gtidInterval, len(names))
+	directPresent, inversePresent := 0, 0
+	for i, name := range names {
+		status := observations[name]
+		if !status.Eligible() || !strings.EqualFold(status.StateUUID, state) || status.LastCommitted != first.LastCommitted || status.LastCommitted < 0 {
+			return "", nil
+		}
+		set, err := gtidIntervals(status.GTIDExecuted)
+		if err != nil {
+			return "", nil
+		}
+		sets[i] = set
+		if len(set[state]) > 0 {
+			directPresent++
+		}
+		if len(set[inverse]) > 0 {
+			inversePresent++
+		}
+	}
+	sid := state
+	if directPresent < len(names)/2+1 {
+		if directPresent != 0 || inversePresent != len(names) {
+			return "", nil
+		}
+		sid = inverse
+	}
+	best, bestCount := 0, 0
+	for i := range names {
+		count := 0
+		for j := range names {
+			if gtidPrefix(sets[i][sid], sets[j][sid]) && gtidPrefix(sets[j][sid], sets[i][sid]) {
+				count++
+			}
+		}
+		if count > bestCount {
+			best, bestCount = i, count
+		}
+	}
+	if bestCount == len(names) {
+		return "", nil
+	}
+	var affected []string
+	for i, name := range names {
+		if bestCount < len(names)/2+1 || !gtidPrefix(sets[i][sid], sets[best][sid]) || !gtidPrefix(sets[best][sid], sets[i][sid]) {
+			affected = append(affected, name)
+		}
+	}
+	return sid, affected
+}

@@ -86,7 +86,7 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 				s.Galera = &myspec.Galera{}
 				state, role = "Synced", "PRIMARY"
 				c.galeraRows = [][]driver.Value{{"wsrep_cluster_status", "Primary"}, {"wsrep_local_state_comment", "Synced"}, {"wsrep_ready", "ON"}, {"wsrep_connected", "ON"}, {"wsrep_cluster_size", "3"}, {"wsrep_cluster_state_uuid", uuid}, {"wsrep_last_committed", "10"}}
-				c.queries = append(c.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10", uuid}})
+				c.queries = append(c.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10", uuid, false}})
 			}
 			count := int64(0)
 			if mode == "group online" {

@@ -181,6 +181,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	if m.Role == "data" && s.Topology == "cluster" {
 		g := &myspec.Galera{ClusterName: s.Formation.GroupName, FormationEpoch: s.Formation.FormationEpoch, GaleraPort: myspec.PortGalera, ISTPort: myspec.PortGaleraIST, SSTPort: myspec.PortGaleraSST, GCacheSize: "128M"}
+		g.RestoreFence, g.SSTDonor = s.RestoreGTIDFence != "", m.GaleraSSTDonor
 		if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityGaleraListenHost) {
 			g.ListenHost = "::"
 			if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
@@ -244,10 +245,13 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			}
 			activeRepository = cp.Step == "activate" && cp.Generation == bs.Generation
 		}
-		enabled := rc.Cluster.Spec.Backup.PITR.Enabled && activeRepository && (rc.Cluster.Spec.DataSource == nil || bs.CloneComplete)
+		enabled := rc.Cluster.Spec.Backup.PITR.Enabled && activeRepository && s.RestoreGTIDFence == "" && (rc.Cluster.Spec.DataSource == nil || bs.CloneComplete)
 		sp.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: enabled, RotateIntervalSeconds: o.Binlog.ArchiveInterval, ExpireSeconds: o.Binlog.ExpireSeconds}}
 	}
 	if m.Offline {
+		desired = []string{}
+	}
+	if m.Role == "proxy" && s.RestoreGTIDFence != "" {
 		desired = []string{}
 	}
 	agentCert := cert("agents")

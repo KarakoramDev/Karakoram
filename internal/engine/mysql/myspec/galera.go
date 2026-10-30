@@ -22,10 +22,17 @@ const (
 	ActionGaleraBootstrap    = "galera-bootstrap"
 	ActionGaleraForcePrimary = "galera-force-primary"
 	ActionGaleraPrepareJoin  = "galera-prepare-join"
+	ActionGaleraHistoryProbe = "galera-history-probe"
 	// This token acknowledges that all absent members have been fenced. The
 	// control plane must expose this operation only to an explicit operator.
 	GaleraForcePrimaryConfirmation = "all-absent-members-fenced"
 )
+
+type GaleraHistoryProbeRequest struct {
+	Receipt        string `json:"receipt"`
+	ClusterName    string `json:"clusterName"`
+	FormationEpoch uint64 `json:"formationEpoch"`
+}
 
 var galeraVersion = regexp.MustCompile(`^8\.(0|4)\.[0-9]+-[0-9]+\.[0-9]+$`)
 var galeraClusterName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
@@ -51,6 +58,8 @@ type Galera struct {
 	// TrafficCert is identical on all members and separate from client SQL TLS.
 	TrafficCert  *Certificate `json:"trafficCert"`
 	TrafficCAPEM string       `json:"trafficCAPEM"`
+	RestoreFence bool         `json:"restoreFence,omitempty"`
+	SSTDonor     string       `json:"sstDonor,omitempty"`
 }
 
 type GaleraStatusResponse struct {
@@ -63,6 +72,7 @@ type GaleraStatusResponse struct {
 	LastCommitted     int64  `json:"lastCommitted"`
 	GTIDExecuted      string `json:"gtidExecuted"`
 	ServerUUID        string `json:"serverUUID,omitempty"`
+	OfflineMode       bool   `json:"offlineMode,omitempty"`
 }
 
 func (s GaleraStatusResponse) Eligible() bool {
@@ -126,6 +136,9 @@ func (g Galera) Validate() error {
 			return fmt.Errorf("duplicate Galera peer")
 		}
 		seen[p.Name] = true
+	}
+	if g.SSTDonor != "" && (!g.RestoreFence || !seen[g.SSTDonor]) {
+		return fmt.Errorf("restore SST donor must be a configured peer under the client fence")
 	}
 	if g.StartPosition != "" {
 		if _, _, err := ParseGaleraPosition(g.StartPosition); err != nil {

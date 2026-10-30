@@ -40,9 +40,10 @@ type Runner struct {
 	dataTLSReloadPending   bool
 }
 
-func New() *Runner                  { return &Runner{} }
-func (*Runner) Name() string        { return myspec.Engine }
-func (*Runner) Processes() []string { return []string{"mysqld", "proxysql"} }
+func New() *Runner                                      { return &Runner{} }
+func (*Runner) Name() string                            { return myspec.Engine }
+func (*Runner) Processes() []string                     { return []string{"mysqld", "proxysql"} }
+func (*Runner) SupportsMySQLRestoreCertification() bool { return true }
 func (e *Runner) state() (myspec.Spec, paths) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -130,7 +131,7 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 		}
 	}
 	previous := e.setApplyState(s, n.DataDir())
-	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || archiveConfigChanged(previous.Backup, s.Backup) {
+	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || s.Galera != nil && s.Galera.RestoreFence || archiveConfigChanged(previous.Backup, s.Backup) {
 		e.resetArchiveLoop(false)
 	}
 	for name, text := range map[string]string{"ca.pem": s.CAPEM, "server-cert.pem": s.ServerCert.CertPEM, "server-key.pem": s.ServerCert.KeyPEM} {

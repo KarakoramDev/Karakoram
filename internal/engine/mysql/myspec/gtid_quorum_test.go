@@ -108,3 +108,43 @@ func TestRestoredInverseSIDLag(t *testing.T) {
 		}
 	}
 }
+
+func TestNativePostBootstrapGTIDMappings(t *testing.T) {
+	t.Run("consistent inverse mapping", func(t *testing.T) {
+		const state = "8248544b-d3a9-11f1-86a2-b7f81642a5d4"
+		const active = "7db7abb4-2c56-ee0e-795d-4807e9bd5a2b"
+		const frozen = "90685df7-d39f-11f1-9568-8a2644f1f160:1-11"
+		healthy := GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: state, GTIDExecuted: active + ":1-300," + frozen}
+		observed := map[string]GaleraStatusResponse{"a": healthy, "b": healthy, "c": healthy}
+		if err := CheckGTIDQuorum(observed); err != nil {
+			t.Fatalf("identical native inverse histories rejected: %v", err)
+		}
+		healthy.GTIDExecuted = active + ":1-301," + frozen
+		observed["c"] = healthy
+		if err := CheckGTIDQuorum(observed); err != nil {
+			t.Fatalf("nested native inverse prefixes rejected: %v", err)
+		}
+	})
+	t.Run("mixed mapping is real divergence", func(t *testing.T) {
+		const state = "d5aeb882-d447-11f1-96e2-f732d65208d9"
+		const inverse = "2a51477d-2bb8-ee0e-691d-08cd29adf726"
+		const frozen = "e419e04e-d43f-11f1-835a-d377c0fbcfd8:1-227"
+		direct := GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: state, GTIDExecuted: state + ":1-366," + frozen}
+		complemented := direct
+		complemented.GTIDExecuted = inverse + ":1-368," + frozen
+		observed := map[string]GaleraStatusResponse{"a": direct, "b": direct, "c": complemented}
+		var conflict *GTIDQuorumError
+		if err := CheckGTIDQuorum(observed); !errors.As(err, &conflict) || !conflict.Diverged || len(conflict.Members) != 1 || conflict.Members[0] != "c" {
+			t.Fatalf("mixed native accounting not fenced: %v", err)
+		}
+		acknowledged := map[string]GaleraStatusResponse{"a": direct, "b": direct, "c": complemented}
+		if err := CheckGTIDQuorumBaseline(observed, acknowledged); err != nil {
+			t.Fatalf("unchanged acknowledged mixed accounting rejected: %v", err)
+		}
+		complemented.GTIDExecuted = inverse + ":1-369," + frozen
+		observed["c"] = complemented
+		if err := CheckGTIDQuorumBaseline(observed, acknowledged); !errors.As(err, &conflict) || !conflict.Diverged {
+			t.Fatalf("new mixed accounting silently acknowledged: %v", err)
+		}
+	})
+}

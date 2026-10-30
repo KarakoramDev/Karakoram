@@ -100,15 +100,16 @@ func mysqlAction(ctx context.Context, rc *engine.Context, member, action string,
 }
 
 type backupCheckpoint struct {
-	Step           string          `json:"step"`
-	Member         string          `json:"member,omitempty"`
-	Source         *restoreSource  `json:"source,omitempty"`
-	Request        *myspec.Restore `json:"request,omitempty"`
-	Generation     int             `json:"generation,omitempty"`
-	RecoveredUsers []string        `json:"recoveredUsers,omitempty"`
-	Preflighted    bool            `json:"preflighted,omitempty"`
-	PlanDigest     string          `json:"planDigest,omitempty"`
-	RecheckID      string          `json:"recheckID,omitempty"`
+	Step              string                   `json:"step"`
+	Member            string                   `json:"member,omitempty"`
+	Source            *restoreSource           `json:"source,omitempty"`
+	Request           *myspec.Restore          `json:"request,omitempty"`
+	Generation        int                      `json:"generation,omitempty"`
+	RecoveredUsers    []string                 `json:"recoveredUsers,omitempty"`
+	Preflighted       bool                     `json:"preflighted,omitempty"`
+	PlanDigest        string                   `json:"planDigest,omitempty"`
+	RecheckID         string                   `json:"recheckID,omitempty"`
+	GTIDCertification *pxcRestoreCertification `json:"gtidCertification,omitempty"`
 }
 
 func backupResult(cp backupCheckpoint, done bool) engine.OpResult {
@@ -200,12 +201,9 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if b.Phase == domain.PhaseSucceeded {
 		s, e := load(rc.Cluster)
 		if e != nil {
-			return backupResult(cp, false), e
+			return completedBackupResult(e), nil
 		}
-		if e = establishGTIDBaseline(ctx, rc, s, b); e != nil {
-			return backupResult(cp, false), e
-		}
-		return backupResult(backupCheckpoint{Step: "done"}, true), nil
+		return completedBackupResult(establishGTIDBaseline(ctx, rc, s, b)), nil
 	}
 	if b.Type != "full" && b.Type != "incremental" {
 		return backupResult(cp, false), engine.Invalid("MySQL backup type must be full or incremental")
@@ -214,13 +212,16 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if err != nil {
 		return backupResult(cp, false), err
 	}
-	observationErr := checkPXCQuorumGTIDs(ctx, rc, s)
-	if observationErr != nil {
-		if _, observation := observationErr.(*myspec.GTIDQuorumError); !observation {
-			return backupResult(cp, false), observationErr
-		}
-	}
+	// A full is an independent snapshot, not a continuity claim. Do not put
+	// every native poll behind a quorum read; acknowledgement samples freshly
+	// after success and can report a separate non-retry completion outcome.
 	if b.Type == "incremental" {
+		observationErr := checkPXCQuorumGTIDs(ctx, rc, s)
+		if observationErr != nil {
+			if _, observation := observationErr.(*myspec.GTIDQuorumError); !observation {
+				return backupResult(cp, false), observationErr
+			}
+		}
 		if incident := activeGTIDIncident(s); incident != nil {
 			return backupResult(cp, false), engine.Invalid("%s", incident.message())
 		}
@@ -384,11 +385,20 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if err = rc.Store.UpdateBackup(ctx, b); err != nil {
 		return backupResult(cp, false), err
 	}
-	if err = establishGTIDBaseline(ctx, rc, s, b); err != nil {
-		return backupResult(cp, false), err
+	return completedBackupResult(establishGTIDBaseline(ctx, rc, s, b)), nil
+}
+
+// A native backup already recorded Succeeded is not an initiation failure.
+// Baseline acknowledgement is independently fenced and may be unavailable on
+// old agents or during observation/audit outages. Surface that outcome once
+// instead of exhausting operation retries for an immutable successful backup.
+func completedBackupResult(baselineErr error) engine.OpResult {
+	if baselineErr == nil {
+		return backupResult(backupCheckpoint{Step: "done"}, true)
 	}
-	cp.Step = "done"
-	return backupResult(cp, true), nil
+	result := backupResult(backupCheckpoint{Step: "done-baseline-pending"}, true)
+	result.Message = "Backup succeeded; GTID baseline acknowledgement or its audit could not complete. Check GTIDHistorySafe, member availability and agent compatibility; preserve existing continuity boundaries and take a fresh full after verified repair if still latched."
+	return result
 }
 
 func backupMetadataMismatch(b *domain.Backup, r *myspec.BackupResult) string {

@@ -15,26 +15,30 @@ import (
 
 // state contains only durable intent and receipts; credentials are sealed separately.
 type state struct {
-	UID                  string                   `json:"uid"`
-	NextIndex            int                      `json:"nextIndex"`
-	ConfigVersion        int64                    `json:"configVersion"`
-	ConfigHash           string                   `json:"configHash,omitempty"`
-	Topology             string                   `json:"topology"`
-	Members              []*member                `json:"members"`
-	Pending              *pending                 `json:"pending,omitempty"`
-	Suspended            bool                     `json:"suspended,omitempty"`
-	ExposureAdmission    engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
-	Formation            formation                `json:"formation"`
-	Rolling              *rollingState            `json:"rolling,omitempty"`
-	Replacement          *replacementState        `json:"replacement,omitempty"`
-	TLSRotation          *tlsRotationState        `json:"tlsRotation,omitempty"`
-	GaleraTLS            *galeraTLSRotation       `json:"galeraTLS,omitempty"`
-	LastReplacement      string                   `json:"lastReplacement,omitempty"`
-	LastTLSRotation      string                   `json:"lastTLSRotation,omitempty"`
-	GTIDIncidents        []gtidIncident           `json:"gtidIncidents,omitempty"`
-	LastGTIDSafeAt       time.Time                `json:"lastGTIDSafeAt,omitempty"`
-	GTIDWindows          []domain.TimeWindow      `json:"gtidWindows,omitempty"`
-	GTIDWindowGeneration int                      `json:"gtidWindowGeneration,omitempty"`
+	UID                    string                   `json:"uid"`
+	NextIndex              int                      `json:"nextIndex"`
+	ConfigVersion          int64                    `json:"configVersion"`
+	ConfigHash             string                   `json:"configHash,omitempty"`
+	Topology               string                   `json:"topology"`
+	Members                []*member                `json:"members"`
+	Pending                *pending                 `json:"pending,omitempty"`
+	Suspended              bool                     `json:"suspended,omitempty"`
+	ExposureAdmission      engine.ExposureAdmission `json:"exposureAdmission,omitempty"`
+	Formation              formation                `json:"formation"`
+	Rolling                *rollingState            `json:"rolling,omitempty"`
+	Replacement            *replacementState        `json:"replacement,omitempty"`
+	TLSRotation            *tlsRotationState        `json:"tlsRotation,omitempty"`
+	GaleraTLS              *galeraTLSRotation       `json:"galeraTLS,omitempty"`
+	LastReplacement        string                   `json:"lastReplacement,omitempty"`
+	LastTLSRotation        string                   `json:"lastTLSRotation,omitempty"`
+	GTIDIncidents          []gtidIncident           `json:"gtidIncidents,omitempty"`
+	LastGTIDSafeAt         time.Time                `json:"lastGTIDSafeAt,omitempty"`
+	GTIDWindows            []domain.TimeWindow      `json:"gtidWindows,omitempty"`
+	GTIDWindowGeneration   int                      `json:"gtidWindowGeneration,omitempty"`
+	RestoreGTIDFence       string                   `json:"restoreGTIDFence,omitempty"`
+	RestoreGTIDBlocked     string                   `json:"restoreGTIDBlocked,omitempty"`
+	RestoreGTIDUnavailable string                   `json:"restoreGTIDUnavailable,omitempty"`
+	GTIDPrefixLag          *gtidPrefixLag           `json:"gtidPrefixLag,omitempty"`
 }
 
 // Incidents are retained after a fresh full baseline so old chains can never
@@ -115,6 +119,7 @@ type member struct {
 	SlowShutdown      bool                 `json:"slowShutdown,omitempty"`
 	RetirementOp      *infra.Op            `json:"retirementOp,omitempty"`
 	Parameters        map[string]string    `json:"restartParameters,omitempty"`
+	GaleraSSTDonor    string               `json:"galeraSSTDonor,omitempty"`
 }
 type pending struct {
 	Op     infra.Op `json:"op"`

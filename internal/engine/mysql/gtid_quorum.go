@@ -39,6 +39,7 @@ type gtidJournal struct {
 	Windows            []domain.TimeWindow `json:"windows,omitempty"`
 	Generation         int                 `json:"generation,omitempty"`
 	WindowProofVersion int                 `json:"windowProofVersion,omitempty"`
+	PrefixLag          *gtidPrefixLag      `json:"prefixLag,omitempty"`
 }
 
 func loadGTIDJournal(ctx context.Context, rc *engine.Context, s *state) error {
@@ -49,6 +50,7 @@ func loadGTIDJournal(ctx context.Context, rc *engine.Context, s *state) error {
 	if missing(err) {
 		s.GTIDWindows, s.GTIDWindowGeneration = nil, 0
 		s.LastGTIDSafeAt = time.Time{}
+		s.GTIDPrefixLag = nil
 		return nil
 	}
 	if err != nil {
@@ -59,6 +61,7 @@ func loadGTIDJournal(ctx context.Context, rc *engine.Context, s *state) error {
 		return err
 	}
 	s.GTIDIncidents, s.LastGTIDSafeAt = journal.Incidents, journal.SafeAt
+	s.GTIDPrefixLag = journal.PrefixLag
 	s.GTIDWindows, s.GTIDWindowGeneration = nil, 0
 	if journal.WindowProofVersion == gtidWindowProofVersion {
 		s.GTIDWindows, s.GTIDWindowGeneration = journal.Windows, journal.Generation
@@ -67,7 +70,7 @@ func loadGTIDJournal(ctx context.Context, rc *engine.Context, s *state) error {
 }
 
 func persistGTIDHistory(ctx context.Context, rc *engine.Context, s *state) error {
-	raw, err := json.Marshal(gtidJournal{Incidents: s.GTIDIncidents, SafeAt: s.LastGTIDSafeAt, Windows: s.GTIDWindows, Generation: s.GTIDWindowGeneration, WindowProofVersion: gtidWindowProofVersion})
+	raw, err := json.Marshal(gtidJournal{Incidents: s.GTIDIncidents, SafeAt: s.LastGTIDSafeAt, Windows: s.GTIDWindows, Generation: s.GTIDWindowGeneration, WindowProofVersion: gtidWindowProofVersion, PrefixLag: s.GTIDPrefixLag})
 	if err != nil {
 		return err
 	}
@@ -84,8 +87,7 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	observationMu := gtidObservationMutex(rc)
 	observationMu.Lock()
 	defer observationMu.Unlock()
-	observations := observePXCQuorumGTIDs(ctx, rc, s)
-	sampleAt := now(rc)
+	observations, sampleAt := samplePXCQuorumGTIDs(ctx, rc, s, s.RestoreGTIDFence != "" || rc.Operation != nil)
 	err := myspec.CheckGTIDQuorum(observations)
 	complete := completeGTIDObservation(observations)
 	gtidJournalMu.Lock()
@@ -105,12 +107,22 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 			err = myspec.CheckGTIDQuorumBaseline(observations, incident.Allowance.Histories)
 		}
 	}
+	prefixConflict, prefixSuspected, prefixChanged := observePXCEqualPositionLag(s, observations, sampleAt, err == nil && complete)
+	if prefixConflict != nil {
+		err = prefixConflict
+	}
+	if prefixChanged {
+		if e := persistGTIDHistory(ctx, rc, s); e != nil {
+			return e
+		}
+	}
 	if conflict, ok := err.(*myspec.GTIDQuorumError); ok && conflict.Diverged && activeGTIDIncident(s) == nil {
 		incident := gtidIncident{DetectedAt: now(rc), SafeThrough: s.LastGTIDSafeAt, Members: append([]string{}, conflict.Members...)}
 		s.GTIDIncidents = append(s.GTIDIncidents, incident)
 		if e := persistGTIDHistory(ctx, rc, s); e != nil {
 			return e
 		}
+		invalidatePXCQuorumObservation(ctx, rc)
 	}
 	if err == nil && complete && activeGTIDIncident(s) == nil {
 		if n := len(s.GTIDIncidents); n > 0 && s.GTIDIncidents[n-1].Allowance != nil {
@@ -119,7 +131,7 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 			// differences permanently, including after a controller restart.
 			s.GTIDIncidents[n-1].Allowance.Histories = observations
 		}
-		if sampleAt.After(s.LastGTIDSafeAt) {
+		if !prefixSuspected && sampleAt.After(s.LastGTIDSafeAt) {
 			s.LastGTIDSafeAt = sampleAt
 		}
 		if e := persistGTIDHistory(ctx, rc, s); e != nil {
@@ -149,18 +161,17 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 }
 
 func observePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) map[string]myspec.GaleraStatusResponse {
-	members := s.data()
-	observations := make(map[string]myspec.GaleraStatusResponse, len(members))
-	for _, m := range members {
-		status := myspec.GaleraStatusResponse{}
-		if rc.Agents != nil && m.ServiceID != "" && m.Stage != "planned" && m.Stage != "imported" {
-			if observed, err := galeraStatus(ctx, rc, m.Name); err == nil {
-				status = observed
-			}
-		}
-		observations[m.Name] = status
-	}
+	observationMu := gtidObservationMutex(rc)
+	observationMu.Lock()
+	defer observationMu.Unlock()
+	observations, _ := samplePXCQuorumGTIDs(ctx, rc, s, true)
 	return observations
+}
+
+func invalidatePXCQuorumObservation(ctx context.Context, rc *engine.Context) {
+	if cache := engine.ObservationPassCache(ctx); cache != nil {
+		cache.Delete(gtidObservationKey{rc.Cluster.Namespace, rc.Cluster.Name})
+	}
 }
 
 func completeGTIDObservation(observations map[string]myspec.GaleraStatusResponse) bool {
@@ -256,8 +267,31 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 	observationMu := gtidObservationMutex(rc)
 	observationMu.Lock()
 	defer observationMu.Unlock()
+	// Ordinary successful fulls with no incident need no agent sweep. Inspect
+	// the journal briefly, then release the shared lock before any network I/O.
+	gtidJournalMu.Lock()
+	if err := loadGTIDJournal(ctx, rc, s); err != nil {
+		gtidJournalMu.Unlock()
+		return err
+	}
+	pending := activeGTIDIncident(s)
+	if pending == nil {
+		err := auditGTIDBaselines(ctx, rc, s)
+		gtidJournalMu.Unlock()
+		return err
+	}
+	eligible := b.Type == "full" && b.Phase == domain.PhaseSucceeded && b.MySQL != nil && b.StartedAt != nil && b.StartedAt.After(pending.DetectedAt)
+	gtidJournalMu.Unlock()
+	if !eligible {
+		return nil
+	}
+	// Legacy restore does not certify a replacement history. Its automatic
+	// post-restore full cannot silently acknowledge an existing incident.
+	if s.RestoreGTIDUnavailable != "" && b.Trigger == "restore" {
+		return engine.ErrUnavailable
+	}
 	// Acknowledge complete member histories, never just the backup source.
-	observations := observePXCQuorumGTIDs(ctx, rc, s)
+	observations, _ := samplePXCQuorumGTIDs(ctx, rc, s, true)
 	gtidJournalMu.Lock()
 	defer gtidJournalMu.Unlock()
 	if err := loadGTIDJournal(ctx, rc, s); err != nil {
@@ -280,12 +314,14 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 	}
 	incident.BaselineAt, incident.Backup = b.MySQL.EndTime, b.Name
 	incident.Acknowledged = observations
+	s.GTIDPrefixLag = nil
 	incident.Allowance = &gtidAllowance{Epoch: s.Formation.FormationEpoch, Group: s.Formation.GroupName, Members: gtidMemberIdentities(s, observations), Histories: observations}
 	incident.BaselineAuditPending, incident.BaselineOperation = true, b.OperationID
 	// The transition must be durable before its event claims a new baseline.
 	if err := persistGTIDHistory(ctx, rc, s); err != nil {
 		return err
 	}
+	invalidatePXCQuorumObservation(ctx, rc)
 	return auditGTIDBaselines(ctx, rc, s)
 }
 

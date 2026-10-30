@@ -413,7 +413,7 @@ func TestPXCRestoreActivationCertifiesSharedInverseHistory(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: stateUUID, GTIDExecuted: set})
 		return true
 	}
-	cp := backupCheckpoint{Step: "activate", Generation: 1, Request: &myspec.Restore{}}
+	cp := backupCheckpoint{Step: "activate", Generation: 1, Request: &myspec.Restore{}, GTIDCertification: &pxcRestoreCertification{Certified: true}}
 	op := &domain.Operation{ID: "restored", Kind: "initial-restore"}
 	if _, err := p.runRestore(t.Context(), rc, op, cp); err != nil {
 		t.Fatal(err)

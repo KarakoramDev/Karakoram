@@ -21,7 +21,7 @@ func accessFence(ctx context.Context, rc *engine.Context) error {
 	if err != nil {
 		return err
 	}
-	if rc.Cluster.Deleting || s.Suspended || s.Pending != nil || s.GaleraTLS != nil || s.Formation.State != "formed" || s.Formation.reforming() {
+	if rc.Cluster.Deleting || s.Suspended || s.Pending != nil || s.GaleraTLS != nil || s.RestoreGTIDFence != "" || s.Formation.State != "formed" || s.Formation.reforming() {
 		return engine.ErrUnavailable
 	}
 	switch rc.Cluster.Status.Phase {

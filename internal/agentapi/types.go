@@ -93,6 +93,9 @@ type Status struct {
 	PBMRestoreIdentity bool `json:"pbmRestoreIdentity,omitempty"`
 	// CertificateReloadOnly advertises reload-only native certificate application.
 	CertificateReloadOnly bool `json:"certificateReloadOnly,omitempty"`
+	// MySQLRestoreCertification advertises native fencing, history probes and
+	// durable ProxySQL hold/release support as one negotiated restore feature.
+	MySQLRestoreCertification bool `json:"mysqlRestoreCertification,omitempty"`
 	// Error explains a blocked local recovery without making status unreachable.
 	Error string `json:"error,omitempty"`
 	// MongoReady observes authenticated router access to config-server metadata.

@@ -54,7 +54,7 @@ func TestRestoreReformReleasesOwnedStopHolds(t *testing.T) {
 					if held[member] {
 						pid = 0
 					}
-					json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: backend.applied[member], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
+					json.NewEncoder(w).Encode(agentapi.Status{MySQLRestoreCertification: true, ConfigVersion: backend.applied[member], Processes: map[string]agentapi.ProcessStatus{"mysqld": {PID: pid}}})
 					return true
 				}
 				if strings.HasPrefix(r.URL.Path, "/v1/processes/") && strings.HasSuffix(r.URL.Path, "/start") {

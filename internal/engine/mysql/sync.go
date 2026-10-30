@@ -156,6 +156,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			err = e
 		}
 	}()
+	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	// Observation records discontinuities without fencing normal service.
 	if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
 		if _, observation := e.(*myspec.GTIDQuorumError); !observation {

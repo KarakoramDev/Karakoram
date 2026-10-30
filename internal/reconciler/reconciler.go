@@ -443,6 +443,7 @@ func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.
 	return nil
 }
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	ctx = engine.WithObservationPass(ctx)
 	started := time.Now()
 	defer m.logStage(ref, "reconcile", started)
 	if err := holdObservation(ctx); err != nil {
