@@ -100,6 +100,32 @@ EOF
 
 
 class NativeBuilder(unittest.TestCase):
+    def test_supavisor_smoke_checks_both_ipv6_sql_listeners(self):
+        tree = ast.parse((build.HERE/'smoke.py').read_text())
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'supavisor_sql_smoke')
+        for family, ports in [('inet', ['6543']), ('inet6', ['6543', '6543', '5432']),
+                              ('inet6', ['7654', '7654', '5433'])]:
+            with self.subTest(family=family, ports=ports):
+                runner = MagicMock()
+                runner.check_output.return_value = 't\n'
+                namespace = {'subprocess': runner, 'print': MagicMock()}
+                exec(compile(ast.Module(body=[function], type_ignores=[]), 'smoke.py', 'exec'), namespace)
+                env = {'ADDR_TYPE': family, 'NATIVE_POOL_PASSWORD': 'fixture-password'}
+                if ports[-1] == '5433':
+                    env |= {'PROXY_PORT_TRANSACTION': '7654', 'PROXY_PORT_SESSION': '5433'}
+                namespace['supavisor_sql_smoke']('/pg/', env)
+                calls = runner.check_output.call_args_list
+                self.assertEqual(len(calls), len(ports))
+                for index, (call, port) in enumerate(zip(calls, ports)):
+                    host = '127.0.0.1' if index == 0 else '[::1]'
+                    self.assertIn(f'postgres://native_pool.native-smoke@{host}:{port}/smoke?sslmode=disable',
+                                  call.args[0])
+                    self.assertEqual(call.kwargs['env']['PGPASSWORD'], 'fixture-password')
+                runner.check_output.return_value = 'f\n'
+                with self.assertRaises(AssertionError):
+                    namespace['supavisor_sql_smoke']('/pg/', env)
+
     def test_supavisor_sql_listener_patch_uses_rendered_address_family(self):
         text = (build.HERE/'patches/supabase-supavisor.patch').read_text()
         marker = 'diff --git a/lib/supavisor/application.ex'

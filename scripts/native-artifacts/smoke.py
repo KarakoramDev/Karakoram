@@ -22,6 +22,24 @@ def jwt(role, secret):
     message = encode({'alg':'HS256','typ':'JWT'})+b'.'+encode({'role':role,'iss':'supabase','exp':int(time.time())+3600})
     return (message+b'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),message,hashlib.sha256).digest()).rstrip(b'=')).decode()
 
+def supavisor_sql_smoke(pg, env):
+    # Preserve the transaction IPv4 proof and additionally exercise both SQL
+    # listeners in inet6 mode. HTTP health alone cannot prove the Ranch patch.
+    endpoints = [('127.0.0.1', env.get('PROXY_PORT_TRANSACTION', '6543'))]
+    if env.get('ADDR_TYPE') == 'inet6':
+        endpoints += [('::1', env.get('PROXY_PORT_TRANSACTION', '6543')),
+                      ('::1', env.get('PROXY_PORT_SESSION', '5432'))]
+    for host, port in endpoints:
+        authority = f'[{host}]' if ':' in host else host
+        proof = subprocess.check_output(
+            [pg+'psql', '-At', f'postgres://native_pool.native-smoke@{authority}:{port}/smoke?sslmode=disable',
+             '-c', 'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'],
+            env=env | {'PGPASSWORD': env['NATIVE_POOL_PASSWORD']}, text=True, timeout=30)
+        assert proof.strip() == 't', f'Pooler upstream session is not TLS on {authority}:{port}'
+    print('NATIVE_POOLER_TENANT_TLS_OK')
+    if env.get('ADDR_TYPE') == 'inet6':
+        print('NATIVE_POOLER_IPV6_SQL_OK')
+
 
 name, health = sys.argv[1:]
 if name == 'mongodb-mcp-server':
@@ -219,6 +237,7 @@ if name == 'supabase-realtime':
     subprocess.run(['/opt/artifact/bin/pgdelta','schema','lint','--dir',str(lint)],env=env,check=True)
 if name == 'supabase-supavisor':
     env |= {'PORT':'4000','PROXY_PORT_SESSION':'5433','PROXY_PORT_TRANSACTION':'6543','REGION':'local','NODE_IP':'127.0.0.1','CLUSTER_POSTGRES':'true','VAULT_ENC_KEY':secrets.token_urlsafe(24)}
+    env.setdefault('ADDR_TYPE', 'inet6')
     env['NATIVE_POOL_PASSWORD'] = secrets.token_hex(16)
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke'],input="CREATE ROLE native_pool LOGIN PASSWORD '"+env['NATIVE_POOL_PASSWORD']+"';",text=True,check=True,stdout=subprocess.DEVNULL)
 if name == 'supabase-logflare':
@@ -311,9 +330,7 @@ try:
                         assert int(proof.strip()) > 0, 'No live TLS database connection'
                         print('NATIVE_TLS_HANDSHAKE_OK '+name)
                     if name == 'supabase-supavisor':
-                        proof = subprocess.check_output([pg+'psql','-At','postgres://native_pool.native-smoke@127.0.0.1:6543/smoke?sslmode=disable','-c','SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'],env=env | {'PGPASSWORD':env['NATIVE_POOL_PASSWORD']},text=True,timeout=30)
-                        assert proof.strip() == 't', 'Pooler upstream session is not TLS'
-                        print('NATIVE_POOLER_TENANT_TLS_OK')
+                        supavisor_sql_smoke(pg, env)
                         rejected_ca = """
                         config = Supavisor.Repo.config()
                         :verify_peer = config[:ssl_opts][:verify]

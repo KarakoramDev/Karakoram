@@ -948,6 +948,7 @@ Retain the archive, master key and previous revision until the upgrade and agent
 - Control-plane backup policy, durable notification deliveries and backup-drill reports add forward-only [SQLite](https://sqlite.org/) migrations. Preserve a consistent pre-upgrade snapshot and the original master key; an older binary must not open newer state.
 - State snapshots do not contain the operator master key or external provider credentials. Rebuild with the original key, endpoint identity and valid credentials; review external changes since the snapshot before resuming reconciliation.
 - Import the [Grafana dashboards and Prometheus rules](monitoring.md) and configure [notification channels](notifications.md) deliberately. Existing installations retain their RBAC policy; installation-wide settings still require explicit settings access.
+- Native configuration qualification now gates every registered engine/component on IPv6-only member rendering, with explicit local-only socket exceptions. Temporal still rejects IPv6-only backends. Supavisor artifact smoke checks both SQL listeners over IPv6 as well as the existing IPv4 transaction path; the SQL family patch still requires a rebuilt and published artifact.
 
 ### v0.1.2
 
