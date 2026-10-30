@@ -33,6 +33,14 @@ Full backup receipts report XtraBackup's native checkpoint type
 `full`. Incremental receipts report `incremental`. Metadata validation failures
 identify the inconsistent field without including its value.
 
+Pipeline failures retain their reason-code prefix (for example,
+`pipeline_stream_failed`) and include XtraBackup/xbcloud exit statuses or signals.
+SIGKILL is reported as possible OOM, not proof of it; pipeline cleanup can also
+kill children after a stream failure. Bounded native stderr tails are normalized
+to secret-free error summaries such as connection loss, upload failure or disk
+exhaustion. Arbitrary native text, credentials and URL query keys are omitted.
+An unclassified tail is explicitly reported as omitted rather than echoed.
+
 Provenance includes engine driver, source version/topology, cluster incarnation, repository, tool/server versions, GTID set, LSN range, chain dependencies and completion time. MySQL repositories use `<storage-prefix>/mysql/<namespace>/<cluster>-<uid>`; PXC uses the corresponding **`pxc`** prefix. They share a subtree structure, not an interchangeable backup identity:
 
 - `base/<label>`: streamed physical backup.
