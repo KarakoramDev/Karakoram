@@ -22,6 +22,17 @@ Component versions are locked to the Karakoram release. The current lock supplie
 
 The internal leader forwarder uses the provider's declared private IPv4 or IPv6 family for database connections and [Patroni](https://patroni.readthedocs.io/) probes, matching the PostgreSQL member's client-access rules. It does not fall back to a different address family when a member hostname resolves to both.
 
+On IPv6 private networks, runtime configuration selects IPv6 for GoTrue,
+PostgREST, Storage, Realtime HTTP, Edge Runtime, Logflare HTTP and the Supavisor
+HTTP endpoint, as well as Envoy and the agent's private ingress bridges.
+BEAM distribution/epmd and database-forwarder hops remain local-only IPv4 by
+design; they are not inter-member peer transports. Supavisor's SQL listeners
+also require the v0.4.3 native artifact built with the managed address-family
+patch. Release qualification must rebuild/publish that artifact, update its lock
+digest and verify the pooler's SQL ports over the private IPv6 network; a Go
+environment change alone does not retrofit the old Supavisor binary.
+
+
 ## Create
 
 Inspect `karactl providers get supabase -o json`. Save `supabase.yaml`:

@@ -100,6 +100,30 @@ EOF
 
 
 class NativeBuilder(unittest.TestCase):
+    def test_supavisor_sql_listener_patch_uses_rendered_address_family(self):
+        text = (build.HERE/'patches/supabase-supavisor.patch').read_text()
+        marker = 'diff --git a/lib/supavisor/application.ex'
+        listener_patch = marker + text.split(marker, 1)[1]
+        original = '\n' * 87 + (
+            '              end,\n'
+            '            num_acceptors: String.to_integer(System.get_env("NUM_ACCEPTORS") || "100"),\n'
+            '            socket_opts: [port: port, keepalive: true]\n'
+            '          },\n'
+            '          handler,\n'
+            '          opts\n')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root/'lib/supavisor/application.ex'
+            source.parent.mkdir(parents=True)
+            source.write_text(original)
+            subprocess.run(['git', 'apply', '--check', '-'], input=listener_patch,
+                           cwd=root, text=True, check=True)
+            subprocess.run(['git', 'apply', '-'], input=listener_patch,
+                           cwd=root, text=True, check=True)
+            updated = source.read_text()
+            self.assertIn('String.to_existing_atom(System.get_env("ADDR_TYPE", "inet"))', updated)
+            self.assertIn('{:port, port}, {:keepalive, true}', updated)
+
     def test_toolchain_pins_complete(self):
         for recipe in build.RECIPES.values():
             keys = [kind+'-'+recipe[kind] for kind in ('node','go','rust','otp','bun') if kind in recipe]
