@@ -138,6 +138,11 @@ use new v0.4.2 members, not merely a database-process restart.
   SQL rather than treating the operation's success as complete acceptance.
   The flag can block incremental backups and PITR continuity, and taking a new
   full backup has not reliably cleared it. This was not reproduced on Dokploy.
+- **Full backups can run out of memory on single-member MySQL clusters with
+  1 GiB of memory** (also present in v0.4.0 and v0.4.1). The kernel can kill
+  `mysqld`, causing the member to restart and the backup to fail.
+  Workaround: give MySQL members at least 2 GiB of memory before taking full
+  backups. A fix is planned for v0.4.3.
 - **Nomad live coverage of the new engines is incomplete.** Implemented
   capabilities do not establish full lifecycle/recovery acceptance. OpenBao,
   Temporal, MySQL/PXC, Neo4j, Weaviate, Keycloak and Citus remain EXPERIMENTAL,

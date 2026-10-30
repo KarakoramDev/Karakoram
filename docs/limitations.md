@@ -78,6 +78,10 @@ These cross-engine constraints define the operating model; engine-specific limit
   GTID-history-diverged and the cluster Degraded despite correct checked data
   and writes; incremental backups/PITR continuity can be blocked. Investigation
   continues; verify data natively. This was not reproduced on Dokploy.
+- Full backups can run out of memory on single-member MySQL clusters with
+  1 GiB of memory (also in v0.4.0 and v0.4.1): the kernel can kill `mysqld`,
+  causing the member to restart and the backup to fail. Give MySQL members at
+  least 2 GiB of memory before taking full backups. A fix is planned for v0.4.3.
 - Nomad live coverage of the new engines remains incomplete; EXPERIMENTAL
   status remains unchanged.
 - Temporal remains unsupported on Zerops because it requires private IPv4.
