@@ -19,6 +19,11 @@ func TestIPv6NativeConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			configtest.CheckIPv6Rendered(t, files, process.Args, process.Env, map[string]string{
+				"MDB_MCP_HTTP_HOST=127.0.0.1": "authenticated node-local MCP HTTP",
+				"address: 127.0.0.1:9000":     "authenticated node-local MCP HTTP",
+				"127.0.0.1:9000":              "standalone -addr argument for node-local MCP HTTP",
+			})
 			c := configtest.NetworkConfig{AdvertisedEndpoints: []string{}}
 			if upstream == companionspec.UpstreamMongoDB {
 				v := configtest.Settings(strings.Join(process.Env, "\n"), "=")

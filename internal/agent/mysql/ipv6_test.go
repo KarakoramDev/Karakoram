@@ -22,8 +22,19 @@ func TestIPv6NativeConfig(t *testing.T) {
 			s.Member = configtest.Member
 			s.ListenHost = "::"
 			s.Peers = []myspec.Peer{{Name: configtest.Member, Host: configtest.IPv6, Port: 3306}, {Name: configtest.Peer, Host: configtest.PeerIPv6, Port: 3306}}
+			// Populate all nested peer fixtures before rendering the complete file.
+			if s.GroupReplication != nil {
+				s.GroupReplication.Seeds = s.Peers
+			}
+			if s.Galera != nil {
+				s.Galera.ListenHost, s.Galera.Peers = "::", append([]myspec.Peer(nil), s.Peers...)
+				for i := range s.Galera.Peers {
+					s.Galera.Peers[i].Port = s.Galera.GaleraPort
+				}
+			}
 			p := dataPaths(t.TempDir())
 			v := configtest.Settings(renderConfig(s, p), "=")
+			configtest.CheckIPv6Rendered(t, map[string][]byte{"my.cnf": []byte(renderConfig(s, p))}, nil, nil, nil)
 			configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{strings.Trim(v["bind_address"], `"`)}, AdvertisedHosts: []string{strings.Trim(v["report_host"], `"`)}})
 			if s.GroupReplication != nil {
 				s.GroupReplication.Seeds = s.Peers
@@ -54,6 +65,11 @@ func TestIPv6NativeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configtest.CheckIPv6Rendered(t, map[string][]byte{"proxysql.cnf": []byte(text)}, nil, nil, map[string]string{
+		`mysql_ifaces="127.0.0.1:6032"`: "node-local ProxySQL administration",
+		"0.0.0.0:3306;[::]:3306":        "deliberate IPv4 companion to asserted v6-only writer socket",
+		"0.0.0.0:3307;[::]:3307":        "deliberate IPv4 companion to asserted v6-only reader socket",
+	})
 	for _, port := range []int{3306, 3307} {
 		endpoint := net.JoinHostPort("::", strconv.Itoa(port))
 		if !strings.Contains(text, endpoint) {

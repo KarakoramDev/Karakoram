@@ -20,6 +20,12 @@ func TestIPv6NativeConfig(t *testing.T) {
 				s.ManagementTLSPort = 15671
 			}
 			files, env := render(t.TempDir(), s, memberConfig(s))
+			for _, file := range files {
+				configtest.CheckIPv6Rendered(t, map[string][]byte{file.name: []byte(file.content)}, nil, nil, map[string]string{
+					"prometheus.tcp.ip = 127.0.0.1": "node-local metrics endpoint",
+				})
+			}
+			configtest.CheckIPv6Rendered(t, nil, nil, env, nil)
 			values := configtest.Settings(strings.Join(env, "\n"), "=")
 			want := "inet6_tcp"
 			if tls {

@@ -18,10 +18,13 @@ func TestIPv6NativeConfig(t *testing.T) {
 			s.Component = role
 			s.Persistence.Host = configtest.PeerIPv6
 			s.FrontendAddress = "[" + configtest.IPv6 + "]:7233"
-			_, files, err := render(s, t.TempDir(), configtest.IPv6, "::", s.InstallDir)
+			p, files, err := render(s, t.TempDir(), configtest.IPv6, "::", s.InstallDir)
 			if err != nil {
 				t.Fatal(err)
 			}
+			configtest.CheckIPv6Rendered(t, files, p.Args, p.Env, map[string]string{
+				"listenAddress: 127.0.0.1:9090": "node-local metrics endpoint; IPv6 admission remains rejected",
+			})
 			var v struct {
 				Host   string
 				Global struct {

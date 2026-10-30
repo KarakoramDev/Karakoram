@@ -9,6 +9,7 @@ package configtest
 import (
 	"net"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -119,3 +120,36 @@ func Settings(text, separator string) map[string]string {
 	}
 	return out
 }
+
+// CheckIPv6Rendered scans every rendered file, argument and environment entry,
+// including fields not selected by the structured listener/advertise adapter.
+// Exceptions must name the exact legitimate fragment and explain why it is local
+// or a deliberate dual-stack companion; never allow an IPv4 address globally.
+func CheckIPv6Rendered(t *testing.T, files map[string][]byte, args, env []string, allowed map[string]string) {
+	t.Helper()
+	for fragment, reason := range allowed {
+		if fragment == "" || reason == "" {
+			t.Fatal("IPv4 exception requires an exact fragment and reason")
+		}
+	}
+	check := func(name, text string) {
+		t.Helper()
+		for fragment := range allowed {
+			text = strings.ReplaceAll(text, fragment, "")
+		}
+		if literal := ipv4Only.FindString(text); literal != "" {
+			t.Errorf("%s contains unqualified IPv4-only setting %q", name, literal)
+		}
+	}
+	for name, data := range files {
+		check(name, string(data))
+	}
+	for _, arg := range args {
+		check("argument", arg)
+	}
+	for _, entry := range env {
+		check("environment", entry)
+	}
+}
+
+var ipv4Only = regexp.MustCompile(`\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b|\btcp4\b`)

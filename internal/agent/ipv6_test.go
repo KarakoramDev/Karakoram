@@ -19,6 +19,7 @@ func TestIPv6NativeConfig(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			configtest.CheckIPv6Rendered(t, map[string][]byte{"mongod.yaml": data}, nil, nil, nil)
 			var v struct {
 				Net struct {
 					BindAll bool `yaml:"bindIpAll"`

@@ -14,10 +14,11 @@ func TestIPv6NativeConfig(t *testing.T) {
 	s := esSpec()
 	s.Elasticsearch.NodeName = configtest.Member
 	s.Elasticsearch.SeedHosts = []string{"[" + configtest.IPv6 + "]:9300", "[" + configtest.PeerIPv6 + "]:9300"}
-	files, _, err := render(s, t.TempDir(), "/opt/elasticsearch", "test", configtest.Member)
+	files, process, err := render(s, t.TempDir(), "/opt/elasticsearch", "test", configtest.Member)
 	if err != nil {
 		t.Fatal(err)
 	}
+	configtest.CheckIPv6Rendered(t, files, process.Args, process.Env, nil)
 	var v map[string]any
 	if err := yaml.Unmarshal(files["config/elasticsearch.yml"], &v); err != nil {
 		t.Fatal(err)
@@ -34,10 +35,14 @@ func TestIPv6NativeConfig(t *testing.T) {
 			case agentspec.ComponentLogstash:
 				spec.Logstash = &agentspec.LogstashSpec{ESHosts: []string{"https://[" + configtest.IPv6 + "]:9200"}}
 			}
-			files, _, err := render(spec, t.TempDir(), "/opt/elastic", "test", configtest.Member)
+			files, process, err := render(spec, t.TempDir(), "/opt/elastic", "test", configtest.Member)
 			if err != nil {
 				t.Fatal(err)
 			}
+			configtest.CheckIPv6Rendered(t, files, process.Args, process.Env, map[string]string{
+				"http.host: 127.0.0.1":     "APM node-local monitoring API",
+				"api.http.host: 127.0.0.1": "Logstash node-local monitoring API",
+			})
 			if len(files) == 0 {
 				t.Fatal("no native component config")
 			}

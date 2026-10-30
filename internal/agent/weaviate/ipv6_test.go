@@ -25,7 +25,8 @@ func TestIPv6NativeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, _ := render(t.TempDir(), s, config(s), ip)
+	p, files := render(t.TempDir(), s, config(s), ip)
+	configtest.CheckIPv6Rendered(t, files, p.Args, p.Env, nil)
 	v := configtest.Settings(strings.Join(p.Env, "\n"), "=")
 	configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{v["CLUSTER_BIND_ADDR"]}, AdvertisedHosts: []string{v["CLUSTER_ADVERTISE_ADDR"]}, AdvertisedEndpoints: append(strings.Split(v["RAFT_JOIN"], ","), strings.Split(v["CLUSTER_JOIN"], ",")...)})
 }

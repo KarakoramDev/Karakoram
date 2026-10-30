@@ -52,6 +52,7 @@ func TestIPv6NativeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configtest.CheckIPv6Rendered(t, files, nil, nil, nil)
 	v := configtest.Settings(string(files["neo4j/conf/neo4j.conf"]), "=")
 	configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{v["server.default_listen_address"], v["server.bolt.listen_address"], v["server.https.listen_address"]}, AdvertisedHosts: []string{v["server.default_advertised_address"]}, AdvertisedEndpoints: []string{v["server.bolt.advertised_address"], v["server.https.advertised_address"]}})
 }

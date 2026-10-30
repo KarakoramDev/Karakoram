@@ -18,6 +18,10 @@ func TestIPv6NativeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configtest.CheckIPv6Rendered(t, files, nil, nil, map[string]string{
+		`"address": "127.0.0.1:8210"`:      "node-local metrics endpoint",
+		`"cluster_address": "127.0.0.1:0"`: "disabled cluster transport for metrics/recovery",
+	})
 	var v struct {
 		APIAddr     string `json:"api_addr"`
 		ClusterAddr string `json:"cluster_addr"`

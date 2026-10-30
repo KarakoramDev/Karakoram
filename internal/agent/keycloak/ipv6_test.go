@@ -12,10 +12,13 @@ func TestIPv6NativeConfig(t *testing.T) {
 	s := validSpec()
 	s.IPv6 = true
 	s.Host = configtest.IPv6
-	_, files, err := Render(s, t.TempDir())
+	p, files, err := Render(s, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	configtest.CheckIPv6Rendered(t, files, p.Args, p.Env, map[string]string{
+		"http-management-host=127.0.0.1": "node-local management endpoint",
+	})
 	values := configtest.Settings(string(files["keycloak/keycloak.conf"]), "=")
 	configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{strings.ReplaceAll(values["http-host"], `\:`, ":")}, AdvertisedEndpoints: []string{strings.TrimPrefix(strings.ReplaceAll(values["db-url"], `\:`, ":"), "jdbc:")}})
 	if values["http-management-host"] != "127.0.0.1" {

@@ -18,17 +18,24 @@ func TestIPv6NativeConfig(t *testing.T) {
 			s.Topology = topology
 			s.Member = configtest.Member
 			s.ListenHost = "::"
+			s.Postgres.ClientCIDRs = []string{"::/0"}
 			s.Peers = []pgspec.Peer{{Name: configtest.Member, Host: configtest.IPv6}, {Name: configtest.Peer, Host: configtest.PeerIPv6}}
 			if topology == pgspec.TopologyDistributed {
 				s.Citus = &pgspec.Citus{Group: 0, Database: "postgres"}
 			}
 			p := dataPaths(t.TempDir())
 			values := configtest.Settings(renderPostgres(s, p), "=")
+			pg := postgresProcess(s, p)
+			configtest.CheckIPv6Rendered(t, map[string][]byte{"postgresql.conf": []byte(renderPostgres(s, p))}, pg.Args, pg.Env, nil)
 			configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{strings.Trim(values["listen_addresses"], "'")}})
 			text, err := renderPatroni(s, p)
 			if err != nil {
 				t.Fatal(err)
 			}
+			patroni := patroniProcess(p)
+			configtest.CheckIPv6Rendered(t, map[string][]byte{"patroni.yaml": []byte(text)}, patroni.Args, patroni.Env, map[string]string{
+				"127.0.0.1/32 scram-sha-256": "HBA local replication access rule, not a listener; ::1 rule is also rendered",
+			})
 			var v struct {
 				Rest struct {
 					Listen  string `yaml:"listen"`
@@ -47,6 +54,15 @@ func TestIPv6NativeConfig(t *testing.T) {
 			}
 			configtest.CheckIPv6NativeConfig(t, configtest.NetworkConfig{Listeners: []string{v.Rest.Listen, v.PG.Listen}, AdvertisedEndpoints: append([]string{v.Rest.Connect, v.PG.Connect}, v.Etcd.Hosts...)})
 			s.Etcd = &pgspec.Etcd{InitialCluster: configtest.Member + "=https://" + net.JoinHostPort(configtest.IPv6, "2380"), State: "new", Token: "test"}
+			process := etcdProcess(s, p)
+			configtest.CheckIPv6Rendered(t, nil, process.Args, process.Env, nil)
+			proxy := &pgspec.Proxy{ReaderPort: true, Servers: []string{configtest.IPv6, configtest.PeerIPv6}}
+			configtest.CheckIPv6Rendered(t, map[string][]byte{"proxysql.cnf": []byte(renderProxy(proxy, p, "::"))}, nil, nil, map[string]string{
+				"0.0.0.0:5432;[::]:5432":        "deliberate IPv4 companion to asserted v6-only ProxySQL writer socket",
+				"[::]:5433;0.0.0.0:5433":        "deliberate IPv4 companion to asserted v6-only ProxySQL reader socket",
+				`mysql_ifaces="127.0.0.1:6032"`: "node-local ProxySQL administration",
+				`pgsql_ifaces="127.0.0.1:6132"`: "node-local ProxySQL administration",
+			})
 			listeners, endpoints := []string{}, []string{}
 			for _, arg := range etcdProcess(s, p).Args {
 				k, value, ok := strings.Cut(arg, "=")
