@@ -81,6 +81,10 @@ These cross-engine constraints define the operating model; engine-specific limit
 - Nomad live coverage of the new engines remains incomplete; EXPERIMENTAL
   status remains unchanged.
 - Temporal remains unsupported on Zerops because it requires private IPv4.
+- Weaviate cannot start on Zerops: members never become Ready because Zerops
+  private networking is IPv6-only and Weaviate's cluster address is not
+  advertised for IPv6 (also in v0.4.0 and v0.4.1). Nomad and Dokploy are not
+  affected; use Weaviate there until the next release.
 
 See [known issues in v0.4.2](upgrade.md#known-issues-in-v042) for details.
 The formation, full-backup, rolling-status, clone-readiness and resume/exposure

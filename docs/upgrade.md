@@ -145,6 +145,10 @@ use new v0.4.2 members, not merely a database-process restart.
 - **Temporal is not supported on Zerops:** membership requires private IPv4
   networking, while Zerops private networking is IPv6. Use Dokploy or Nomad
   within their documented capability limits.
+- **Weaviate cannot start on Zerops** (also present in v0.4.0 and v0.4.1):
+  members never become Ready because Zerops private networking is IPv6-only
+  and Weaviate's cluster address is not advertised for IPv6. Nomad and Dokploy
+  are not affected. Use Weaviate on Dokploy or Nomad until the next release.
 
 Other continuing limitations include [empty Docker volume objects after
 Dokploy deletion](dokploy.md) and PostgreSQL's configuration acknowledgement
