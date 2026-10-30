@@ -142,7 +142,8 @@ use new v0.4.2 members, not merely a database-process restart.
   1 GiB of memory** (also present in v0.4.0 and v0.4.1). The kernel can kill
   `mysqld`, causing the member to restart and the backup to fail.
   Workaround: give MySQL members at least 2 GiB of memory before taking full
-  backups. A fix is planned for v0.4.3.
+  backups (3 GiB recommended for Group Replication members), plus headroom for
+  your workload. A fix is planned for v0.4.3.
 - **Nomad live coverage of the new engines is incomplete.** Implemented
   capabilities do not establish full lifecycle/recovery acceptance. OpenBao,
   Temporal, MySQL/PXC, Neo4j, Weaviate, Keycloak and Citus remain EXPERIMENTAL,
