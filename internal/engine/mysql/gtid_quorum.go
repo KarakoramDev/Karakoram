@@ -84,36 +84,26 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	observationMu := gtidObservationMutex(rc)
 	observationMu.Lock()
 	defer observationMu.Unlock()
-	members := s.data()
-	observations := make(map[string]myspec.GaleraStatusResponse, len(members))
+	observations := observePXCQuorumGTIDs(ctx, rc, s)
 	sampleAt := now(rc)
-	for _, m := range members {
-		// Keep unavailable identities in the quorum denominator, but never
-		// resolve a name before its runtime has been deployed.
-		if rc.Agents == nil || m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
-			observations[m.Name] = myspec.GaleraStatusResponse{}
-			continue
-		}
-		status, err := galeraStatus(ctx, rc, m.Name)
-		if err != nil {
-			status = myspec.GaleraStatusResponse{}
-		}
-		observations[m.Name] = status
-	}
 	err := myspec.CheckGTIDQuorum(observations)
-	complete := len(observations) > 0
-	stateUUID := ""
-	for _, status := range observations {
-		if !status.Eligible() || !myspec.ValidUUID(status.StateUUID) || status.ClusterSize != len(observations) || stateUUID != "" && status.StateUUID != stateUUID {
-			complete = false
-			break
-		}
-		stateUUID = status.StateUUID
-	}
+	complete := completeGTIDObservation(observations)
 	gtidJournalMu.Lock()
 	defer gtidJournalMu.Unlock()
 	if e := loadGTIDJournal(ctx, rc, s); e != nil {
 		return e
+	}
+	if n := len(s.GTIDIncidents); n > 0 && !s.GTIDIncidents[n-1].BaselineAt.IsZero() {
+		incident := &s.GTIDIncidents[n-1]
+		if incident.Allowance != nil && !incident.Allowance.matches(s, observations) {
+			incident.Allowance = nil
+			if e := persistGTIDHistory(ctx, rc, s); e != nil {
+				return e
+			}
+		}
+		if incident.Allowance != nil {
+			err = myspec.CheckGTIDQuorumBaseline(observations, incident.Allowance.Histories)
+		}
 	}
 	if conflict, ok := err.(*myspec.GTIDQuorumError); ok && conflict.Diverged && activeGTIDIncident(s) == nil {
 		incident := gtidIncident{DetectedAt: now(rc), SafeThrough: s.LastGTIDSafeAt, Members: append([]string{}, conflict.Members...)}
@@ -121,6 +111,25 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 		if e := persistGTIDHistory(ctx, rc, s); e != nil {
 			return e
 		}
+	}
+	if err == nil && complete && activeGTIDIncident(s) == nil {
+		if n := len(s.GTIDIncidents); n > 0 && s.GTIDIncidents[n-1].Allowance != nil {
+			// The comparison bounded every directed difference by the previous
+			// allowance. Replacing it with this complete sample retires healed
+			// differences permanently, including after a controller restart.
+			s.GTIDIncidents[n-1].Allowance.Histories = observations
+		}
+		if sampleAt.After(s.LastGTIDSafeAt) {
+			s.LastGTIDSafeAt = sampleAt
+		}
+		if e := persistGTIDHistory(ctx, rc, s); e != nil {
+			return e
+		}
+	}
+	// Commit this observation's safety transitions before any recorder call.
+	// Older baseline events remain retryable after a new incident is appended.
+	if e := auditGTIDBaselines(ctx, rc, s); e != nil {
+		return e
 	}
 	// The safety latch is durable before recording its audit event. A recorder
 	// outage must not erase evidence; the unrecorded transition retries later.
@@ -133,18 +142,67 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 			return e
 		}
 	}
-	if err == nil && complete && activeGTIDIncident(s) == nil {
-		if sampleAt.After(s.LastGTIDSafeAt) {
-			s.LastGTIDSafeAt = sampleAt
-		}
-		if e := persistGTIDHistory(ctx, rc, s); e != nil {
-			return e
-		}
-	}
 	if e := save(rc.Cluster, s); e != nil {
 		return e
 	}
 	return err
+}
+
+func observePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) map[string]myspec.GaleraStatusResponse {
+	members := s.data()
+	observations := make(map[string]myspec.GaleraStatusResponse, len(members))
+	for _, m := range members {
+		status := myspec.GaleraStatusResponse{}
+		if rc.Agents != nil && m.ServiceID != "" && m.Stage != "planned" && m.Stage != "imported" {
+			if observed, err := galeraStatus(ctx, rc, m.Name); err == nil {
+				status = observed
+			}
+		}
+		observations[m.Name] = status
+	}
+	return observations
+}
+
+func completeGTIDObservation(observations map[string]myspec.GaleraStatusResponse) bool {
+	if len(observations) == 0 {
+		return false
+	}
+	stateUUID := ""
+	for _, status := range observations {
+		if !status.Eligible() || !myspec.ValidUUID(status.StateUUID) || status.ClusterSize != len(observations) || stateUUID != "" && status.StateUUID != stateUUID {
+			return false
+		}
+		if _, err := myspec.GTIDContains(status.GTIDExecuted, status.GTIDExecuted); err != nil {
+			return false
+		}
+		stateUUID = status.StateUUID
+	}
+	return true
+}
+
+func gtidMemberIdentities(s *state, observations map[string]myspec.GaleraStatusResponse) map[string]gtidMemberIdentity {
+	members := s.data()
+	identities := make(map[string]gtidMemberIdentity, len(members))
+	for _, m := range members {
+		identities[m.Name] = gtidMemberIdentity{ServerUUID: m.ServerUUID, ServiceID: m.ServiceID, VolumeID: m.VolumeID, NativeUUID: observations[m.Name].ServerUUID}
+	}
+	return identities
+}
+
+func (a *gtidAllowance) matches(s *state, observations map[string]myspec.GaleraStatusResponse) bool {
+	if a.Epoch != s.Formation.FormationEpoch || a.Group != s.Formation.GroupName || len(a.Members) != len(s.data()) {
+		return false
+	}
+	for _, m := range s.data() {
+		identity, ok := a.Members[m.Name]
+		if !ok || identity.ServiceID == "" || identity.ServerUUID != m.ServerUUID || identity.ServiceID != m.ServiceID || identity.VolumeID != m.VolumeID {
+			return false
+		}
+		if status := observations[m.Name]; status.Eligible() && (!myspec.ValidUUID(status.ServerUUID) || identity.NativeUUID != status.ServerUUID) {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateBackup performs fresh admission independently of cached cluster phase.
@@ -198,22 +256,57 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 	observationMu := gtidObservationMutex(rc)
 	observationMu.Lock()
 	defer observationMu.Unlock()
+	// Acknowledge complete member histories, never just the backup source.
+	observations := observePXCQuorumGTIDs(ctx, rc, s)
 	gtidJournalMu.Lock()
 	defer gtidJournalMu.Unlock()
 	if err := loadGTIDJournal(ctx, rc, s); err != nil {
 		return err
 	}
 	incident := activeGTIDIncident(s)
-	if incident == nil || b.Type != "full" || b.Phase != domain.PhaseSucceeded || b.MySQL == nil || b.StartedAt == nil || !b.StartedAt.After(incident.DetectedAt) {
+	if incident == nil {
+		return auditGTIDBaselines(ctx, rc, s)
+	}
+	if b.Type != "full" || b.Phase != domain.PhaseSucceeded || b.MySQL == nil || b.StartedAt == nil || !b.StartedAt.After(incident.DetectedAt) {
 		return nil
 	}
-	if rc.Events != nil {
-		if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Operation: b.OperationID, Type: "Normal", Reason: "GTIDHistoryBaselineEstablished", Message: fmt.Sprintf("Successful full backup %s establishes a new GTID/PITR baseline after discontinuity at %s; older chains remain bounded by that point", b.Name, incident.DetectedAt.UTC().Format(time.RFC3339Nano)), CreatedAt: now(rc)}); err != nil {
-			return err
+	if !completeGTIDObservation(observations) {
+		return engine.ErrUnavailable
+	}
+	for _, status := range observations {
+		if !myspec.ValidUUID(status.ServerUUID) {
+			return engine.ErrUnavailable
 		}
 	}
 	incident.BaselineAt, incident.Backup = b.MySQL.EndTime, b.Name
+	incident.Acknowledged = observations
+	incident.Allowance = &gtidAllowance{Epoch: s.Formation.FormationEpoch, Group: s.Formation.GroupName, Members: gtidMemberIdentities(s, observations), Histories: observations}
+	incident.BaselineAuditPending, incident.BaselineOperation = true, b.OperationID
+	// The transition must be durable before its event claims a new baseline.
+	if err := persistGTIDHistory(ctx, rc, s); err != nil {
+		return err
+	}
+	return auditGTIDBaselines(ctx, rc, s)
+}
+
+func auditGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, incident *gtidIncident) error {
+	if !incident.BaselineAuditPending || incident.BaselineAt.IsZero() || rc.Events == nil {
+		return nil
+	}
+	if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Operation: incident.BaselineOperation, Type: "Normal", Reason: "GTIDHistoryBaselineEstablished", Message: fmt.Sprintf("Successful full backup %s establishes a new GTID/PITR baseline after discontinuity at %s; older chains remain bounded by that point", incident.Backup, incident.DetectedAt.UTC().Format(time.RFC3339Nano)), CreatedAt: now(rc)}); err != nil {
+		return err
+	}
+	incident.BaselineAuditPending = false
 	return persistGTIDHistory(ctx, rc, s)
+}
+
+func auditGTIDBaselines(ctx context.Context, rc *engine.Context, s *state) error {
+	for i := range s.GTIDIncidents {
+		if err := auditGTIDBaseline(ctx, rc, s, &s.GTIDIncidents[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func gtidWindowEnd(s *state, base, end time.Time) time.Time {

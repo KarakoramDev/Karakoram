@@ -606,6 +606,13 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		cp.Step = "activate"
 	case "activate":
+		// Certify the restored quorum's shared history, not a pre-restore GTID
+		// snapshot. Existing incidents remain durable until an explicit full.
+		if rc.Cluster.Spec.Provider == "pxc" {
+			if err = checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
+				return backupResult(cp, false), err
+			}
+		}
 		bs.Generation = cp.Generation
 		bs.CloneComplete = true
 		// The independent target repository becomes active only after all

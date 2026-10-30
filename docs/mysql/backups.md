@@ -140,8 +140,19 @@ original backup chain.
 Normal database service and **full backups remain available**. After preserving
 evidence and repairing/replacing affected members from a trusted source, take a
 new full backup. A successfully completed full backup started after detection
-establishes a new PITR baseline and clears the active latch; it does not make an
-old incremental chain continuous or authorize replay through the old interval.
+establishes a new PITR baseline and clears the active latch after a complete
+healthy same-component member observation. Its per-member frozen differences
+are acknowledged durably. Complete successful observations permanently retire
+healed or shrinking differences; later regrowth is new divergence, including
+after SST or controller restart. The original sample remains immutable evidence.
+Usable allowances are scoped to formation epoch/group, managed data/runtime
+identities and the observed native server UUID; replacement/re-formation
+invalidates them. New/growing or reversed differences latch again. This does not
+repair member data, certify asynchronous replicas, make an old incremental chain
+continuous, or authorize replay through the old interval. Older journals without
+identity-bound narrowing allowances remain readable and grant no exceptions.
+Shared restored historical namespaces are a valid new comparison baseline.
+Restore checks this baseline but never clears an existing incident automatically.
 Equal histories after SST or re-formation do not clear the latch by themselves.
 See the [operator procedure](operations.md#pxc-gtid-history-safety). Never reset
 GTIDs, inject empty transactions or attach an asynchronous replica merely to

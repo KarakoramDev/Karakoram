@@ -23,7 +23,7 @@ func TestCheckGTIDQuorum(t *testing.T) {
 		{name: "shared hole with prefix lag", sets: []string{sid + ":1-4:6-7", sid + ":1-4:6-8", sid + ":1-4:6-9"}},
 		{name: "inverse mapping", sets: []string{sid + ":1-7", sid + ":1-7", sid + ":1-6," + inverse + ":1"}, diverged: true},
 		{name: "inverse only", sets: []string{sid + ":1-7", sid + ":1-7", inverse + ":1"}, diverged: true},
-		{name: "legitimate restored namespaces", sets: []string{restored + ":1-9," + inverse + ":1," + sid + ":1-6", restored + ":1-9," + inverse + ":1," + sid + ":1-7", restored + ":1-9," + inverse + ":1," + sid + ":1-8"}},
+		{name: "ambiguous direct and inverse lag", sets: []string{restored + ":1-9," + inverse + ":1," + sid + ":1-6", restored + ":1-9," + inverse + ":1," + sid + ":1-7", restored + ":1-9," + inverse + ":1," + sid + ":1-8"}, unavailable: true},
 		{name: "different restored history", sets: []string{restored + ":1-9," + sid + ":1-7", restored + ":1-9," + sid + ":1-7", sid + ":1-8"}, diverged: true},
 		{name: "no majority chain", sets: []string{sid + ":1", restored + ":1", inverse + ":1"}, unavailable: true},
 		{name: "singleton baseline", sets: []string{restored + ":1-9," + inverse + ":1"}},
@@ -83,6 +83,28 @@ func TestCheckGTIDQuorumRejectsNodeLocalSuperset(t *testing.T) {
 		err := CheckGTIDQuorum(map[string]GaleraStatusResponse{"a": healthy, "b": healthy, "c": localExtra})
 		if !errors.As(err, &conflict) || !conflict.Diverged || len(conflict.Members) != 1 || conflict.Members[0] != "c" {
 			t.Fatalf("local superset not rejected: %v", err)
+		}
+	}
+}
+
+func TestRestoredInverseSIDLag(t *testing.T) {
+	const state = "60dbb8ee-d39a-11f1-928e-f3cac64ca389"
+	const active = "9f244711-2c65-ee0e-6d71-0c3539b35c76"
+	const frozen = "de66497c-d38f-11f1-b461-b39f3845b42b"
+	for _, last := range []string{"205", "207"} {
+		healthy := GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: state, GTIDExecuted: active + ":1-206," + frozen + ":1-165"}
+		lag := healthy
+		lag.GTIDExecuted = active + ":1-" + last + "," + frozen + ":1-165"
+		observations := map[string]GaleraStatusResponse{"a": healthy, "b": healthy, "c": lag}
+		if err := CheckGTIDQuorum(observations); err != nil {
+			t.Fatalf("nested inverse prefix %s: %v", last, err)
+		}
+		for _, bad := range []string{active + ":1-200:202-207," + frozen + ":1-165", active + ":1-207," + frozen + ":1-166", healthy.GTIDExecuted + ",aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:1"} {
+			lag.GTIDExecuted = bad
+			observations["c"] = lag
+			if err := CheckGTIDQuorum(observations); err == nil {
+				t.Fatalf("unsafe history accepted: %s", bad)
+			}
 		}
 	}
 }

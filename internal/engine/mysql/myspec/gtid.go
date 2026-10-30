@@ -100,3 +100,53 @@ func gtidIntervals(raw string) (map[string][]gtidInterval, error) {
 	}
 	return out, nil
 }
+
+// gtidDifferenceContained checks (a - b) ⊆ (ackA - ackB) without
+// materializing differences or enumerating transaction numbers.
+func gtidDifferenceContained(a, b, ackA, ackB []gtidInterval) bool {
+	j := 0
+	for _, r := range a {
+		lo := r.lo
+		for j < len(b) && b[j].hi < lo {
+			j++
+		}
+		for k := j; k < len(b) && b[k].lo <= r.hi; k++ {
+			if b[k].lo > lo && !gtidRangeInDifference(gtidInterval{lo, b[k].lo - 1}, ackA, ackB) {
+				return false
+			}
+			if b[k].hi >= r.hi {
+				lo = r.hi + 1
+				break
+			}
+			if b[k].hi >= lo {
+				lo = b[k].hi + 1
+			}
+		}
+		if lo <= r.hi && !gtidRangeInDifference(gtidInterval{lo, r.hi}, ackA, ackB) {
+			return false
+		}
+	}
+	return true
+}
+
+func gtidRangeInDifference(r gtidInterval, a, b []gtidInterval) bool {
+	contained := false
+	for _, available := range a {
+		if available.lo <= r.lo && available.hi >= r.hi {
+			contained = true
+			break
+		}
+	}
+	if !contained {
+		return false
+	}
+	for _, excluded := range b {
+		if excluded.lo > r.hi {
+			break
+		}
+		if excluded.hi >= r.lo {
+			return false
+		}
+	}
+	return true
+}

@@ -83,12 +83,16 @@ Monitor connections versus limits, running threads, query/network rates, replica
 ### PXC GTID history safety
 
 `GTIDHistorySafe=True` means a freshly observed healthy, same-Galera-history
-majority agrees on historical SID components, differs only by nested
-current-state SID prefixes, and has no active continuity latch. Normal
-active-write lag is accepted; equal counts, SID spelling and Galera sequence
-numbers alone do not establish GTID equivalence. Restored historical namespaces
-are legitimate when shared by the quorum; an unshared extra namespace is not
-treated as ordinary replication lag.
+majority has compatible executed histories and no active continuity latch.
+Nested prefixes in the active cluster SID are ordinary write lag. PXC may use
+the state UUID directly or its bitwise inverse: the inverse is accepted only
+when shared by every eligible member and the direct SID is absent. If both
+namespaces exist, neither is exempted without an explicit full acknowledgement.
+All other namespaces must agree, apart from previously acknowledged member
+differences. Equal counts and Galera sequence numbers do not prove equivalence.
+Restore completion checks the restored quorum's shared history as its baseline;
+there is no pre-restore executed-set cache. Restore never clears an existing
+incident automatically, even if the current histories agree.
 
 `GTIDHistorySafe=False` / `GTIDHistoryDiscontinuityLatched` records a durable divergence
 boundary, the detection time and affected members. The condition appears in the
@@ -112,10 +116,23 @@ quorum and use managed member replacement to provision fresh data from it;
 verify both application contents and GTID history. Take a **new full backup**
 after detection to establish a fresh PITR baseline. That explicit, successful
 full backup is the operator acknowledgement: no flag, restart or status edit
-clears the latch. Successful completion records the new baseline and clears the
-active continuity latch; old chains retain their unsafe boundary. A failed,
-cancelled or already-running old full backup cannot clear it. A new conflict
-creates a new latch.
+clears the latch. Successful completion requires a complete healthy same-component
+member sample and records its directed frozen-SID differences in the sealed
+journal. The same acknowledged differences do not immediately re-latch; new,
+growing or reversed differences do. This acknowledges history, not data repair
+or asynchronous-replica safety. Old chains retain their unsafe boundary. A failed,
+cancelled or already-running old full backup cannot clear it. Missing members
+cannot authorize an acknowledgement. Each complete successful comparison durably
+narrows the usable allowance: healed or removed differences are retired and
+regrowth latches again, even after restart or SST. Original acknowledgement
+evidence remains immutable. Allowances are bound to formation epoch/group,
+managed service/volume/server identities and the server UUID read with executed
+history; replacement or re-formation invalidates them. Agents must report that
+native UUID to establish an acknowledgement. The journal transition is durable
+before `GTIDHistoryBaselineEstablished` is emitted; recorder failures retry.
+Recorder outages never prevent committing a newly observed divergence or retiring
+healed allowances. Pending baseline events remain retryable even after a newer
+incident is recorded; equal histories cannot erase that newer latch.
 
 Both transitions are audited as cluster events: `GTIDHistoryDiverged`
 (Warning; boundary, detection time and affected members) when the latch is

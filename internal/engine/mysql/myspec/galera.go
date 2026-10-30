@@ -62,6 +62,7 @@ type GaleraStatusResponse struct {
 	StateUUID         string `json:"stateUUID"`
 	LastCommitted     int64  `json:"lastCommitted"`
 	GTIDExecuted      string `json:"gtidExecuted"`
+	ServerUUID        string `json:"serverUUID,omitempty"`
 }
 
 func (s GaleraStatusResponse) Eligible() bool {

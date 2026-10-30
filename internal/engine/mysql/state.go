@@ -40,12 +40,32 @@ type state struct {
 // Incidents are retained after a fresh full baseline so old chains can never
 // silently cross a previously observed discontinuity.
 type gtidIncident struct {
-	DetectedAt  time.Time `json:"detectedAt"`
-	SafeThrough time.Time `json:"safeThrough,omitempty"`
-	Members     []string  `json:"members"`
-	BaselineAt  time.Time `json:"baselineAt,omitempty"`
-	Backup      string    `json:"backup,omitempty"`
-	Audited     bool      `json:"audited,omitempty"`
+	DetectedAt           time.Time                              `json:"detectedAt"`
+	SafeThrough          time.Time                              `json:"safeThrough,omitempty"`
+	Members              []string                               `json:"members"`
+	BaselineAt           time.Time                              `json:"baselineAt,omitempty"`
+	Backup               string                                 `json:"backup,omitempty"`
+	Audited              bool                                   `json:"audited,omitempty"`
+	Acknowledged         map[string]myspec.GaleraStatusResponse `json:"acknowledged,omitempty"`
+	Allowance            *gtidAllowance                         `json:"allowance,omitempty"`
+	BaselineAuditPending bool                                   `json:"baselineAuditPending,omitempty"`
+	BaselineOperation    string                                 `json:"baselineOperation,omitempty"`
+}
+
+// Acknowledged is immutable evidence; Allowance is the monotonically narrowing
+// exception, scoped to the formation and the managed data/server incarnations.
+type gtidAllowance struct {
+	Epoch     uint64                                 `json:"epoch"`
+	Group     string                                 `json:"group"`
+	Members   map[string]gtidMemberIdentity          `json:"members"`
+	Histories map[string]myspec.GaleraStatusResponse `json:"histories"`
+}
+
+type gtidMemberIdentity struct {
+	ServerUUID string `json:"serverUUID"`
+	ServiceID  string `json:"serviceID"`
+	VolumeID   string `json:"volumeID"`
+	NativeUUID string `json:"nativeUUID"`
 }
 type formation struct {
 	GroupName      string       `json:"groupName"`

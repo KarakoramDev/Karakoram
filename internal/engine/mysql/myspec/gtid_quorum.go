@@ -28,6 +28,13 @@ func (e *GTIDQuorumError) Error() string {
 // A singleton establishes its own baseline.
 // Observations must include every configured member, using zero values on errors.
 func CheckGTIDQuorum(observations map[string]GaleraStatusResponse) error {
+	return CheckGTIDQuorumBaseline(observations, nil)
+}
+
+// CheckGTIDQuorumBaseline permits only the frozen, directed member differences
+// explicitly acknowledged by a full backup. Missing/changed identities fail
+// closed; an acknowledgement never permits a new or growing difference.
+func CheckGTIDQuorumBaseline(observations, acknowledged map[string]GaleraStatusResponse) error {
 	names := make([]string, 0, len(observations))
 	for name := range observations {
 		names = append(names, name)
@@ -37,18 +44,28 @@ func CheckGTIDQuorum(observations map[string]GaleraStatusResponse) error {
 	contains := make([][]bool, n)
 	sets := make([]map[string][]gtidInterval, n)
 	valid := make([]bool, n)
+	ackSets := make([]map[string][]gtidInterval, n)
 	for i, name := range names {
 		s := observations[name]
 		set, err := gtidIntervals(s.GTIDExecuted)
 		sets[i] = set
 		valid[i] = s.Eligible() && ValidUUID(s.StateUUID) && err == nil
 		contains[i] = make([]bool, n)
+		if ack, ok := acknowledged[name]; ok && ack.StateUUID == s.StateUUID {
+			ackSets[i], _ = gtidIntervals(ack.GTIDExecuted)
+		}
 	}
 	for i, name := range names {
-		current := strings.ToLower(observations[name].StateUUID)
+		current := activeClusterSID(observations, names, sets, valid, observations[name].StateUUID)
 		for j, other := range names {
 			if valid[i] && valid[j] && observations[name].StateUUID == observations[other].StateUUID {
-				contains[i][j] = frozenGTIDsEqual(sets[i], sets[j], current) && gtidPrefix(sets[i][current], sets[j][current])
+				frozenEqual := frozenGTIDsEqual(sets[i], sets[j], current)
+				if !frozenEqual {
+					if ackSets[i] != nil && ackSets[j] != nil {
+						frozenEqual = frozenDeltasContained(sets[i], sets[j], ackSets[i], ackSets[j], current) && frozenDeltasContained(sets[j], sets[i], ackSets[j], ackSets[i], current)
+					}
+				}
+				contains[i][j] = frozenEqual && gtidPrefix(sets[i][current], sets[j][current])
 			}
 		}
 	}
@@ -135,6 +152,59 @@ func gtidPrefix(longer, shorter []gtidInterval) bool {
 	}
 	for i, r := range shorter {
 		if r.lo != longer[i].lo || r.hi > longer[i].hi || i < len(shorter)-1 && r.hi != longer[i].hi {
+			return false
+		}
+	}
+	return true
+}
+
+// PXC can use the group UUID or its bytewise complement. Select the inverse
+// only when it is shared by every eligible member and the direct namespace is
+// absent. If both exist, neither is proven active: do not exempt frozen history.
+func activeClusterSID(observations map[string]GaleraStatusResponse, names []string, sets []map[string][]gtidInterval, valid []bool, state string) string {
+	direct := strings.ToLower(state)
+	inverse := inverseUUID(direct)
+	directSeen, inverseSeen, eligible := false, 0, 0
+	for i, name := range names {
+		s := observations[name]
+		if !valid[i] || !strings.EqualFold(s.StateUUID, state) {
+			continue
+		}
+		set := sets[i]
+		eligible++
+		directSeen = directSeen || len(set[direct]) > 0
+		if len(set[inverse]) > 0 {
+			inverseSeen++
+		}
+	}
+	if !directSeen && inverseSeen == eligible && eligible > 0 {
+		return inverse
+	}
+	if inverseSeen == 0 {
+		return direct
+	}
+	return ""
+}
+
+func inverseUUID(uuid string) string {
+	const hex = "0123456789abcdef"
+	out := []byte(strings.ToLower(uuid))
+	for i, c := range out {
+		if n := strings.IndexByte(hex, c); n >= 0 {
+			out[i] = hex[15-n]
+		}
+	}
+	return string(out)
+}
+
+func frozenDeltasContained(a, b, ackA, ackB map[string][]gtidInterval, active string) bool {
+	for sid, ranges := range a {
+		if sid == active {
+			continue
+		}
+		// Compare directed differences, not full sets: shared history can grow
+		// or be replaced by a restore without acknowledging an unsafe delta.
+		if !gtidDifferenceContained(ranges, b[sid], ackA[sid], ackB[sid]) {
 			return false
 		}
 	}

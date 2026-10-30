@@ -37,6 +37,7 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 				}
 			}
 			out := myspec.GaleraStatusResponse{ClusterStatus: "non-Primary", StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: 10, ClusterSize: size, GTIDExecuted: st.GTIDExecuted}
+			out.ServerUUID = st.ServerUUID
 			if st.MemberState == "ONLINE" {
 				out.ClusterStatus, out.LocalStateComment, out.Ready, out.Connected = "Primary", "Synced", true, true
 			}

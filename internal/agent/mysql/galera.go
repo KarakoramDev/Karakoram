@@ -198,7 +198,7 @@ func galeraStatusDB(ctx context.Context, db *sql.DB) (myspec.GaleraStatusRespons
 	if count != 7 {
 		return out, errors.New("galera status incomplete")
 	}
-	if err = db.QueryRowContext(ctx, "SELECT @@GLOBAL.gtid_executed").Scan(&out.GTIDExecuted); err != nil {
+	if err = db.QueryRowContext(ctx, "SELECT @@GLOBAL.gtid_executed,@@GLOBAL.server_uuid").Scan(&out.GTIDExecuted, &out.ServerUUID); err != nil {
 		return out, err
 	}
 	return out, nil
