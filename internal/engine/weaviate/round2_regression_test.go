@@ -39,22 +39,31 @@ func TestRound2BindHostBackendFamilies(t *testing.T) {
 		{"dokploy", (&dokploy.Backend{}).Layout(), "0.0.0.0"},
 		{"default", infra.Layout{}, "::"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := coreSetup(t, 1)
-			s := coreConverge(t, f)
-			f.rc.Backend = fake.New(fake.Options{Layout: tc.layout})
-			cfg, err := f.p.desiredConfig(context.Background(), f.rc, s, s.Members[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			var spec wvspec.MemberSpec
-			if err = json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
-				t.Fatal(err)
-			}
-			if spec.BindHost != tc.want {
-				t.Fatalf("bind host %q, want %q", spec.BindHost, tc.want)
-			}
-		})
+		for _, replicas := range []int{1, 3} {
+			t.Run(fmt.Sprintf("%s/%d", tc.name, replicas), func(t *testing.T) {
+				f := coreSetup(t, replicas)
+				s := coreConverge(t, f)
+				f.rc.Backend = fake.New(fake.Options{Layout: tc.layout})
+				for _, m := range s.Members {
+					cfg, err := f.p.desiredConfig(context.Background(), f.rc, s, m)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var spec wvspec.MemberSpec
+					if err = json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+						t.Fatal(err)
+					}
+					if spec.BindHost != tc.want || spec.NodeName != m.Name || spec.BootstrapExpect != replicas {
+						t.Fatalf("wrong private identity/bind: node=%q bind=%q voters=%d", spec.NodeName, spec.BindHost, spec.BootstrapExpect)
+					}
+					for _, peer := range s.Voters {
+						if !slices.Contains(spec.RaftJoin, peer+":8301") || !slices.Contains(spec.GossipJoin, peer+":7946") {
+							t.Fatal("private member identity differs from peer discovery")
+						}
+					}
+				}
+			})
+		}
 	}
 }
 

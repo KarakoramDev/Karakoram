@@ -19,7 +19,7 @@ func TestClusterRenderEnvironment(t *testing.T) {
 	s.RaftJoin = []string{"node00:8301", "node01:8301", "node02:8301"}
 	s.GossipJoin = []string{"node00:7946", "node01:7946", "node02:7946"}
 	s.ReplicationMinimumFactor = 3
-	p, _ := render("/data", s, config(s))
+	p, _ := render("/data", s, config(s), "127.0.0.1")
 	expected := strings.Split(`API_BASED_MODULES_DISABLED=true
 AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=false
 AUTHENTICATION_APIKEY_ALLOWED_KEYS=root-secret
@@ -29,6 +29,7 @@ AUTHENTICATION_DB_USERS_ENABLED=true
 AUTHORIZATION_RBAC_ENABLED=true
 AUTHORIZATION_RBAC_ROOT_USERS=root
 BACKUP_DEDUPE_ENABLED=false
+CLUSTER_ADVERTISE_ADDR=127.0.0.1
 CLUSTER_ADVERTISE_PORT=27946
 CLUSTER_BASIC_AUTH_PASSWORD=cluster-secret
 CLUSTER_BASIC_AUTH_USERNAME=cluster
@@ -69,13 +70,13 @@ func TestLocalClusterRenderHook(t *testing.T) {
 	s := testSpec()
 	s.RaftJoin = []string{"node00:28301", "node01:28401", "node02:28501"}
 	t.Setenv("KARAKORAM_WEAVIATE_LOCAL_CLUSTER", "true")
-	p, _ := render("/data", s, config(s))
+	p, _ := render("/data", s, config(s), "127.0.0.1")
 	env := strings.Join(p.Env, "\n")
 	if !strings.Contains(env, "CLUSTER_IN_LOCALHOST=true") || !strings.Contains(env, "RAFT_JOIN=node00:28300,node01:28400,node02:28500") {
 		t.Fatal(env)
 	}
 	t.Setenv("KARAKORAM_WEAVIATE_LOCAL_CLUSTER", "")
-	p, _ = render("/data", s, config(s))
+	p, _ = render("/data", s, config(s), "127.0.0.1")
 	env = strings.Join(p.Env, "\n")
 	if strings.Contains(env, "CLUSTER_IN_LOCALHOST") || !strings.Contains(env, "RAFT_JOIN=node00:28301,node01:28401,node02:28501") {
 		t.Fatal(env)
@@ -89,7 +90,7 @@ func TestRenderBindHostAddressFamilies(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/TLS=%t", bindHost, tls), func(t *testing.T) {
 				s := testSpec()
 				s.BindHost, s.TLS = bindHost, tls
-				process, _ := render("/data", s, config(s))
+				process, _ := render("/data", s, config(s), "127.0.0.1")
 				wantArgs := []string{"--host", bindHost, "--port", "28080", "--scheme", "http"}
 				if tls {
 					wantArgs = []string{"--scheme", "https", "--tls-host", bindHost, "--tls-port", "28080", "--tls-certificate", "/data/karakoram/tls/weaviate.crt", "--tls-key", "/data/karakoram/tls/weaviate.key"}

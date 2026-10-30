@@ -94,6 +94,7 @@ type nodeAgent struct {
 	startupErr      error
 	acceptedVersion int64
 	volume          *agentapi.VolumeStatus
+	applyRetry      *agentapi.MemberConfig
 }
 
 func (a *nodeAgent) config() agentapi.MemberConfig { a.mu.RLock(); defer a.mu.RUnlock(); return a.c }
@@ -148,6 +149,7 @@ func (a *nodeAgent) apply(ctx context.Context, c agentapi.MemberConfig) (changes
 		a.cert = &cert
 	}
 	a.mu.Unlock()
+	defer func() { a.retainApplyRetry(c, applyErr) }()
 	a.acceptedVersion = c.ConfigVersion
 	if err := a.volumeSafety(ctx, c); err != nil {
 		return nil, err
@@ -346,6 +348,16 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 		return fmt.Errorf("agent startup listener: %w", err)
 	}
 	defer startup.Close()
+	retryCtx, cancelRetries := context.WithCancel(ctx)
+	retriesDone := make(chan struct{})
+	go func() {
+		defer close(retriesDone)
+		a.retryApplies(retryCtx)
+	}()
+	defer func() {
+		cancelRetries()
+		<-retriesDone
+	}()
 	data, err := os.ReadFile(filepath.Join(o.DataDir, "karakoram", "config.json"))
 	if err == nil {
 		var c agentapi.MemberConfig

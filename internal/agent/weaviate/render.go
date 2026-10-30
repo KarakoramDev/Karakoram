@@ -29,13 +29,15 @@ func binary(version string) string {
 	return wvspec.BinaryPath(version)
 }
 
-func render(dir string, s wvspec.MemberSpec, c agentapi.MemberConfig) (agent.ProcessSpec, map[string][]byte) {
+func render(dir string, s wvspec.MemberSpec, c agentapi.MemberConfig, advertiseAddr string) (agent.ProcessSpec, map[string][]byte) {
 	tlsDir := filepath.Join(dir, "karakoram", "tls")
 	files := map[string][]byte{}
 	args := []string{"--host", s.BindHost, "--port", strconv.Itoa(s.Ports.HTTP), "--scheme", "http"}
 	env := map[string]string{
 		"PERSISTENCE_DATA_PATH": filepath.Join(dir, "weaviate"),
 		"CLUSTER_HOSTNAME":      s.NodeName, "CLUSTER_BIND_ADDR": s.BindHost,
+		// Upstream uses this IP for both memberlist and the Raft transport.
+		"CLUSTER_ADVERTISE_ADDR":   advertiseAddr,
 		"CLUSTER_GOSSIP_BIND_PORT": strconv.Itoa(s.Ports.Gossip), "CLUSTER_DATA_BIND_PORT": strconv.Itoa(s.Ports.Data),
 		"CLUSTER_JOIN": strings.Join(s.GossipJoin, ","), "RAFT_JOIN": strings.Join(s.RaftJoin, ","),
 		"RAFT_BOOTSTRAP_EXPECT": strconv.Itoa(s.BootstrapExpect), "RAFT_PORT": strconv.Itoa(s.Ports.Raft), "RAFT_INTERNAL_RPC_PORT": strconv.Itoa(s.Ports.RaftRPC),

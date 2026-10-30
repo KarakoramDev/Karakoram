@@ -11,10 +11,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"sync"
 
 	"github.com/KarakoramDev/Karakoram/internal/agent"
@@ -23,9 +23,10 @@ import (
 )
 
 type Engine struct {
-	mu      sync.RWMutex
-	config  agentapi.MemberConfig
-	applied bool
+	mu             sync.RWMutex
+	config         agentapi.MemberConfig
+	applied        bool
+	prepareOnStart bool
 }
 
 var _ agent.Engine = (*Engine)(nil)
@@ -71,6 +72,10 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	if err != nil {
 		return nil, err
 	}
+	_, maintenance := n.Snapshot()
+	e.mu.Lock()
+	e.prepareOnStart = maintenance || c.Maintenance || n.Stopped(wvspec.Process)
+	e.mu.Unlock()
 	changes, err := apply(ctx, n, c, s)
 	if err != nil {
 		return changes, err
@@ -81,11 +86,64 @@ func (e *Engine) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	e.mu.Unlock()
 	return changes, nil
 }
+
+// BeforeStart prepares a process whose retained configuration was applied under
+// a durable stop/maintenance hold. Admission runs this before releasing the hold.
+func (e *Engine) BeforeStart(ctx context.Context, n *agent.Node, name string) error {
+	if name != wvspec.Process {
+		return nil
+	}
+	e.mu.RLock()
+	needed := e.prepareOnStart
+	e.mu.RUnlock()
+	if !needed {
+		return nil
+	}
+	c := n.Config()
+	s, err := spec(c)
+	if err != nil {
+		return err
+	}
+	prepared, err := prepare(ctx, n, c, s)
+	if err != nil {
+		return err
+	}
+	// Record the inputs prepared for admission. If start subsequently fails,
+	// PID remains zero and a later apply still issues start rather than restart.
+	data, err := json.Marshal(struct {
+		Fingerprint string `json:"fingerprint"`
+	}{
+		Fingerprint: fingerprint(s, prepared.process, prepared.files),
+	})
+	if err != nil {
+		return err
+	}
+	if err := n.WriteFile("weaviate-applied.json", data, 0600); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	e.prepareOnStart = false
+	e.mu.Unlock()
+	return nil
+}
+
 func apply(ctx context.Context, n host, c agentapi.MemberConfig, s wvspec.MemberSpec) ([]string, error) {
-	p, files := render(n.DataDir(), s, c)
-	info, err := os.Stat(p.Binary)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
-		return nil, fmt.Errorf("executable for Weaviate %s unavailable at %s", s.Version, p.Binary)
+	current, maintenance := n.Snapshot()
+	if c.DesiredProcesses != nil && !slices.Contains(c.DesiredProcesses, wvspec.Process) {
+		if _, configured := current[wvspec.Process]; !configured {
+			return nil, nil
+		}
+		return nil, n.Action(ctx, wvspec.Process, "stop")
+	}
+	if maintenance || c.Maintenance || n.Stopped(wvspec.Process) {
+		// Maintenance release can resume a desired child directly in the
+		// supervisor. Preserve its already-valid spec for that path.
+		if _, configured := current[wvspec.Process]; configured {
+			return nil, nil
+		}
+		// Register a non-startable placeholder. BeforeStart replaces it with the
+		// fully resolved configuration before an explicit start can be admitted.
+		return nil, n.Configure(wvspec.Process, agent.ProcessSpec{})
 	}
 	statePath := filepath.Join(n.DataDir(), "karakoram", "weaviate-applied.json")
 	var state struct {
@@ -99,39 +157,12 @@ func apply(ctx context.Context, n host, c agentapi.MemberConfig, s wvspec.Member
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	dir := filepath.Join(n.DataDir(), "weaviate")
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return nil, err
-	}
-	if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
-		return nil, errors.New("native Weaviate data path must be a directory, not a symlink")
-	}
-	if err = os.Chmod(dir, 0700); err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	changes := []string{}
-	for _, name := range names {
-		existing, e := os.ReadFile(filepath.Join(n.DataDir(), "karakoram", name))
-		if e != nil && !os.IsNotExist(e) {
-			return changes, e
-		}
-		info, statErr := os.Lstat(filepath.Join(n.DataDir(), "karakoram", name))
-		private := statErr == nil && info.Mode().IsRegular() && info.Mode().Perm() == 0600
-		if !bytes.Equal(existing, files[name]) || !private {
-			if e = n.WriteFile(name, files[name], 0600); e != nil {
-				return changes, e
-			}
-			changes = append(changes, name)
-		}
-	}
-	if err = n.Configure(wvspec.Process, p); err != nil {
+	prepared, err := prepare(ctx, n, c, s)
+	changes := prepared.changes
+	if err != nil {
 		return changes, err
 	}
+	p, files := prepared.process, prepared.files
 	states, maintenance := n.Snapshot()
 	desired := c.DesiredProcesses == nil || slices.Contains(c.DesiredProcesses, wvspec.Process)
 	if !desired {
@@ -157,6 +188,33 @@ func apply(ctx context.Context, n host, c agentapi.MemberConfig, s wvspec.Member
 		changes = append(changes, "weaviate-applied.json")
 	}
 	return changes, nil
+}
+
+// Resolve the member's private service identity in the runtime network, not in
+// the control plane's network. Memberlist requires a bare IP, not a DNS name or
+// bracketed IPv6 literal. Raft adds its port with net.JoinHostPort upstream.
+func resolveAdvertiseAddr(ctx context.Context, s wvspec.MemberSpec, lookup func(context.Context, string, string) ([]net.IP, error)) (string, error) {
+	bind := net.ParseIP(s.BindHost)
+	if bind != nil && !bind.IsUnspecified() {
+		return bind.String(), nil
+	}
+	network := "ip6"
+	if bind.To4() != nil {
+		network = "ip4"
+	}
+	addresses, err := lookup(ctx, network, s.NodeName)
+	if err != nil {
+		return "", fmt.Errorf("resolve Weaviate private member address: %w", err)
+	}
+	for _, ip := range addresses {
+		if ip == nil || ip.IsUnspecified() || ip.IsMulticast() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			continue
+		}
+		if (ip.To4() != nil) == (network == "ip4") {
+			return ip.String(), nil
+		}
+	}
+	return "", errors.New("Weaviate private member identity has no advertisable address in the bind address family")
 }
 func (e *Engine) Version(ctx context.Context) string {
 	e.mu.RLock()

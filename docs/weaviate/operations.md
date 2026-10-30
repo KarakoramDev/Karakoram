@@ -21,6 +21,56 @@ If an older control plane reports false Raft quorum after a restart despite thos
 
 Logs are bounded process tails, not durable archives. Use process `agent` for management diagnosis; never publish keys, signed URLs, object contents or raw secret-bearing native responses.
 
+### Startup fails with an unspecified Raft advertise address
+
+The v0.4.3 member runtime explicitly advertises the member's private IP for both
+memberlist and Raft. It resolves the existing private member hostname from inside
+the runtime, selecting IPv6 for an IPv6 bind and IPv4 for an IPv4 bind. Listener
+wildcards remain `::` or `0.0.0.0`; they are not peer addresses. The
+`CLUSTER_ADVERTISE_ADDR` environment value is a bare IP (no IPv6 brackets or port).
+Upstream formats Raft endpoints with brackets around IPv6 as needed.
+If private DNS is temporarily unavailable, the agent retains the accepted
+configuration and retries its apply with cancellation-aware backoff (one second,
+doubling to at most 30 seconds), independently of control-plane fetches. A newer
+accepted configuration supersedes the retained retry. Explicit stop intent and
+local maintenance/stop holds do not require DNS resolution.
+After an agent restart under a durable operator stop hold, the process remains
+registered but cannot start with unresolved runtime settings. Explicit start
+resolves the current member address and prepares the protected files/process
+configuration before admission releases the hold. DNS failure refuses that
+start without dropping the hold; retry start once private DNS is available.
+Maintenance-period applies preserve an already configured process specification
+rather than replacing it with unresolved settings. If that native process exits
+while maintenance suppresses restart, releasing maintenance can resume it from
+the retained valid specification even while the control plane is unavailable.
+
+
+On older runtimes, IPv6-only deployments can repeatedly exit with
+`local bind address is not advertisable` and `tcpAddress=[::]:8300`. This also
+affects single-node deployments: a singleton still opens a Raft transport.
+IPv4 backends normally auto-select a private interface, but explicit member
+advertisement removes that dependency.
+
+**Upgrading only the control plane does not update an already deployed agent
+binary.** Deliver the corrected v0.4.3 member runtime through the backend's
+authorized deployment procedure, preserving each original member identity,
+credentials, volume attachment and data. The corrected agent accepts retained
+member configurations unchanged; its next apply resolves the address and starts
+the native process with the corrected environment. For a never-ready cluster,
+do not rely on ordinary restart/upgrade operations: their native-health/quorum
+gates cannot pass before startup is repaired. Do not clear Raft data, delete
+voter volumes, or force one-node recovery. An empty failed initial provisioning
+may instead be deleted and recreated after installing the corrected artifacts,
+but only when its data is confirmed disposable.
+
+After recovery, each member's `memberlist_config` log must show its own nonempty
+private `advertise_addr` and gossip port 7946. Raft's advertised TCP endpoint
+must use that same IP with port 8300, not an unspecified address. Require stable
+processes, all expected members, a leader from the fixed voter set, synchronized
+Raft statistics, successful configuration acknowledgements and `Ready` status
+with `ClusterHealth`/`Quorum` true before declaring recovery.
+
+
 ## Restart and upgrade
 
 ```sh
