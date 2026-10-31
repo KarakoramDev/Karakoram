@@ -308,3 +308,41 @@ func verifyPXCJoinRetirementIdentity(ctx context.Context, rc *engine.Context, m 
 	}
 	return nil
 }
+
+func pxcReplacementRetirementPending(s *state, c *pxcFormationCertification) bool {
+	replacement := s.Replacement
+	if !c.JoinOnly || c.Legacy || replacement == nil || replacement.Recovery == "rollback" ||
+		(replacement.Stage != "retire" && replacement.Stage != "done") ||
+		!c.EmptyMembers[replacement.New] || c.EmptyMembers[replacement.Old] {
+		return false
+	}
+	old := s.find(replacement.Old)
+	return old == nil || old.Removing
+}
+
+func resumePXCReplacementAdmission(ctx context.Context, rc *engine.Context, s *state, c *pxcFormationCertification) (bool, error) {
+	if c.CompletingReplacement == "" || s.Replacement != nil || s.LastReplacement != c.CompletingReplacement {
+		return false, nil
+	}
+	proof := c.Checkpoint.GTIDCertification
+	if proof == nil {
+		return true, engine.Invalid("completed PXC replacement lacks its empty-member certification checkpoint")
+	}
+	if proof.CleanupPending {
+		return true, formationMappingOwner(c).cleanup(freshMySQLReads(ctx), rc, s, &c.Checkpoint)
+	}
+	// Membership retirement is concrete lifecycle progress, not permission to
+	// route the joiner or acknowledge history. Reuse its durable admission and
+	// bounded remedy counters, retaining every previous probe round.
+	if proof.Probe != nil && (len(proof.Evidence) == 0 || proof.Evidence[len(proof.Evidence)-1].Round != proof.Round) {
+		proof.Evidence = append(proof.Evidence, pxcRestoreGTIDEvidence{Round: proof.Round, Epoch: c.Epoch, Before: proof.Before, Probe: *proof.Probe})
+	}
+	proof.Phase, c.Checkpoint.Step = "fence", "certify"
+	proof.Certified, proof.CleanupComplete = false, false
+	c.CompletedReplacement = c.CompletingReplacement
+	c.HistoryDiagnostic = false
+	c.Blocked, c.CompletingReplacement = "", ""
+	c.LastProgressAt, c.ProgressPhase = now(rc), ""
+	invalidateMySQLReadObservation(ctx, rc)
+	return true, save(rc.Cluster, s)
+}

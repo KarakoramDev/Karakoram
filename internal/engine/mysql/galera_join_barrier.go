@@ -75,7 +75,7 @@ func pxcJoinAllowed(s *state, m *member) bool {
 // Desired fence removal precedes native acknowledgement. Do not publish a
 // joining member to clients until its durable release proof also completes.
 func pxcJoinRoutingFenced(s *state, m *member) bool {
-	if m.GaleraJoinFence {
+	if m.GaleraJoinFence || m.GaleraHistoryBlocked {
 		return true
 	}
 	certification := s.Formation.GTIDCertification

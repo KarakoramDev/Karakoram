@@ -190,8 +190,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 		}
 		g.TrafficCert = &myspec.Certificate{CertPEM: get(galeraTrafficBase + ".crt"), KeyPEM: get(galeraTrafficBase + ".key")}
 		g.TrafficCAPEM = get(galeraTrafficCA + ".crt")
+		// Retirement still reloads the stopped member's local identity. Keep
+		// that entry in its own config, but not in other members' join peers.
 		for _, peer := range s.data() {
-			if !peer.Removing {
+			if !peer.Removing || peer.Name == name {
 				g.Peers = append(g.Peers, myspec.Peer{Name: peer.Name, Host: peer.Name, Port: myspec.PortGalera})
 			}
 		}

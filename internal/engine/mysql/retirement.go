@@ -88,6 +88,11 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 	}
+	if s.Topology == "cluster" && m.Removing {
+		if err := moveRetiringPXCSeed(ctx, rc, s, m.Name); err != nil {
+			return false, err
+		}
+	}
 	switch m.Retirement {
 	case "handoff":
 		if s.Replacement == nil && rc.WaitForWindow().RequeueAfter > 0 {
@@ -102,6 +107,11 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		}
 		if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
 			return false, err
+		}
+		if s.Topology == "cluster" {
+			if err := moveRetiringPXCSeed(ctx, rc, s, m.Name); err != nil {
+				return false, err
+			}
 		}
 		m.Removing = true
 		m.Retirement = "drain"
@@ -323,4 +333,49 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 		}
 	}
 	return nil
+}
+
+// Move live donor references before excluding the retiree from other members'
+// peer lists. An unadmitted joiner is never promoted to authoritative donor.
+// The same repair applies when upgrading an already-stopped leave checkpoint.
+func moveRetiringPXCSeed(ctx context.Context, rc *engine.Context, s *state, old string) error {
+	needed := s.Formation.Seed == old
+	for _, m := range s.Members {
+		needed = needed || m.GaleraSSTDonor == old
+	}
+	if !needed {
+		return nil
+	}
+	seed := s.find(s.Formation.Seed)
+	if !pxcRetirementSeedOnline(ctx, rc, s, seed, old) {
+		seed = nil
+		for _, peer := range s.Members {
+			if peer.Name == s.Formation.Seed {
+				continue
+			}
+			if pxcRetirementSeedOnline(ctx, rc, s, peer, old) {
+				seed = peer
+				break
+			}
+		}
+	}
+	if seed == nil {
+		return engine.ErrUnavailable
+	}
+	s.Formation.Seed = seed.Name
+	for _, m := range s.Members {
+		if m.GaleraSSTDonor == old {
+			m.GaleraSSTDonor = seed.Name
+		}
+	}
+	publishRevision(s)
+	return nil
+}
+
+func pxcRetirementSeedOnline(ctx context.Context, rc *engine.Context, s *state, m *member, old string) bool {
+	if m == nil || m.Role != "data" || m.Name == old || m.Removing || m.Offline || m.Stage != "joined" || pxcJoinRoutingFenced(s, m) {
+		return false
+	}
+	status, err := live(ctx, rc, m.Name)
+	return err == nil && status.MemberState == "ONLINE"
 }

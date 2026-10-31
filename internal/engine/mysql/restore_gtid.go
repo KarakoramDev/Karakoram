@@ -283,6 +283,13 @@ func certifyPXCMapping(ctx context.Context, rc *engine.Context, s *state, cp *ba
 		}
 		if target == "" {
 			if err := myspec.CheckGTIDQuorum(observed); err != nil {
+				if owner.Formation != nil && owner.Formation.JoinOnly && owner.Formation.CompletedReplacement != "" &&
+					myspec.PXCCurrentSIDMappingCompatible(observed) {
+					// The irreversible old-member retirement is complete and
+					// this probe agrees on current SID assignment. Preserve
+					// unique frozen history without locking its explicit exits.
+					owner.Formation.HistoryDiagnostic = true
+				}
 				return owner.block(ctx, rc, s, cp, "members share an active SID mapping but their frozen executed histories differ")
 			}
 			if historyConflict {

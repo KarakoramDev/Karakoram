@@ -283,6 +283,29 @@ history with quorum. See [backup continuity boundaries](backups.md#pxc-gtid-cont
 - Suspension with retained volumes preserves the dataset and identities. Resume after all members stop uses the full-outage recovery rules below; it is not an unconditional restart into a writable cluster.
 - Resume and runtime recovery restore the previously admitted public TCP policy even while the maintenance window is closed. A pending exposure or allowlist/IP-family change remains deferred and its generation is not acknowledged until the window opens or the generation receives a maintenance override. Admission survives control-plane restarts separately from runtime route receipts. Legacy state migrates acknowledged policy or a matching retained exposure hash; if neither identifies the old policy, recovery stays private until admission.
 
+During PXC replacement or scale-in, a retiring member retains its own local
+Galera peer identity in its configuration until resource cleanup completes,
+including reloads after mysqld stops. It is excluded from other members' Galera
+join peers and from proxy routing. This keeps strict agent validation valid
+without re-admitting the retiring member. A control-plane update can resume
+an older in-flight retirement blocked by a missing local peer; no member-agent
+upgrade or validator relaxation is required.
+Before a donor/seed retires, its logical donor references move to a healthy
+already-admitted survivor, never to an unproven joiner. This also repairs stale
+donor references in an existing stopped-retirement checkpoint.
+
+A timed-out or blocked empty-join certificate cannot starve an already
+irreversible old-member retirement, including after the queue operation fails.
+The native retirement resumes under its original durable ownership; the historical
+queue result remains unchanged. The joining member stays unrouted while final
+membership is re-probed using the same admission, evidence and bounded remedies.
+If the probe agrees on current SID mapping but copied unique frozen history
+remains, certification stays blocked and that member remains unrouted. Cleanup
+releases its owned controls and leaves explicit full acknowledgement, trusted-source
+restore and deletion available. A full may acknowledge the history under the
+current-accounting rules; it does not silently certify or route that member,
+erase its unique data, or repair mixed native mapping.
+
 PXC cluster-traffic certificate rotation is an **offline exception** to normal rolling maintenance: all data members stop, replace the dedicated traffic CA and shared traffic leaf/key, and recover using the full-outage position rules below. Reformed members reject credentials signed by the old traffic root. Plan database downtime and verify recovery readiness first. SQL and agent trust remain separate from the traffic CA. Fence a compromised member's secret/network access before distributing replacements; shared traffic trust has no independent per-member revocation. Ordinary membership changes do not rotate the traffic identity or require this TLS outage.
 
 Retry a wait/observation, not an already accepted mutation. Inspect the operation ID and conditions after interruption. A cancelled or failed operation does not necessarily undo data or desired-state changes.

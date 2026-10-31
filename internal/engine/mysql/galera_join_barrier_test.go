@@ -430,3 +430,26 @@ func TestPXCJoinOnlyConfigFencesNewMemberWithoutStoppingProxy(t *testing.T) {
 		}
 	}
 }
+
+func TestPXCHistoryRoutingHoldSurvivesAdmissionOwnerChange(t *testing.T) {
+	s := joinBarrierState()
+	s.find("m1").GaleraHistoryBlocked = true
+	raw, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored state
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	// Starting a different empty join must not route a previously unproven
+	// member merely because its original admission owner was superseded.
+	restored.Formation.GTIDCertification = &pxcFormationCertification{JoinOnly: true, FencedMembers: map[string]bool{"m2": true}}
+	if !pxcJoinRoutingFenced(&restored, restored.find("m1")) {
+		t.Fatal("a new admission owner erased the persisted unique-history route hold")
+	}
+	clearPXCBlockedHistoryRouting(&restored)
+	if pxcJoinRoutingFenced(&restored, restored.find("m1")) {
+		t.Fatal("successful full-membership certification could not retire the route hold")
+	}
+}
