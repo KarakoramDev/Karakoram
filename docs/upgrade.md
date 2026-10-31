@@ -138,6 +138,13 @@ use new v0.4.2 members, not merely a database-process restart.
   SQL rather than treating the operation's success as complete acceptance.
   The flag can block incremental backups and PITR continuity, and taking a new
   full backup has not reliably cleared it. This was not reproduced on Dokploy.
+- **Despite the clone fix above, creating a multi-member Percona XtraDB Cluster
+  from a backup never completes** (also present in v0.4.1). This applies to
+  clones from full, incremental and point-in-time backups on every provider.
+  The create operation fails after about 20 minutes; the new cluster stays not
+  Ready with all members unreachable and no proxy. Your source cluster and its
+  backups are not affected. Delete the failed cluster. A fix is planned for
+  v0.4.3.
 - **Replacing a Percona XtraDB Cluster member or scaling PXC in never completes**
   (also present in v0.4.0 and v0.4.1). Automatic healing of PXC members
   (restart or rejoin of the same member) is not affected. The new member joins, but the old
