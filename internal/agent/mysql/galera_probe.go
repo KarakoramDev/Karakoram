@@ -19,13 +19,18 @@ import (
 // the same probe. A crash between DDL commit and receipt persistence can repeat
 // only this idempotent managed-schema DDL, never an application transaction.
 func (e *Runner) galeraHistoryProbe(ctx context.Context, req myspec.GaleraHistoryProbeRequest) (myspec.GaleraStatusResponse, error) {
-	s, p := e.state()
+	return probeGaleraHistory(ctx, e, req)
+}
+
+func probeGaleraHistory(ctx context.Context, deps GroupDeps, req myspec.GaleraHistoryProbeRequest) (myspec.GaleraStatusResponse, error) {
+	s := deps.GroupSpec()
+	root := deps.GroupReceiptsDir()
 	var out myspec.GaleraStatusResponse
 	if s.Galera == nil || !s.Galera.RestoreFence || req.Receipt == "" || len(req.Receipt) > 256 || req.ClusterName != s.Galera.ClusterName || req.FormationEpoch != s.Galera.FormationEpoch {
 		return out, errors.New("restore GTID probe authorization mismatch")
 	}
 	digest := sha256.Sum256([]byte(req.Receipt))
-	name := filepath.Join(p.root, fmt.Sprintf("galera-history-probe-%x.json", digest))
+	name := filepath.Join(root, fmt.Sprintf("galera-history-probe-%x.json", digest))
 	var receipt struct {
 		Request myspec.GaleraHistoryProbeRequest `json:"request"`
 		Result  myspec.GaleraStatusResponse      `json:"result"`
@@ -43,11 +48,10 @@ func (e *Runner) galeraHistoryProbe(ctx context.Context, req myspec.GaleraHistor
 	if !os.IsNotExist(err) {
 		return out, err
 	}
-	db, err := e.LocalAccessDB(ctx)
+	db, err := deps.LocalAccessDB(ctx)
 	if err != nil {
 		return out, err
 	}
-	defer db.Close()
 	out, err = executeGaleraHistoryProbe(ctx, db)
 	if err != nil {
 		return out, err

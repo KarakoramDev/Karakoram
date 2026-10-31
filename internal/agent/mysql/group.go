@@ -27,6 +27,7 @@ import (
 // GroupDeps binds bounded group actions to the agent-owned identity and supervisor.
 // Identity writes must be durable and receipts must live outside the cloned datadir.
 type GroupDeps interface {
+	// LocalAccessDB lends an agent-owned pool; borrowers must not close it.
 	LocalAccessDB(context.Context) (*sql.DB, error)
 	GroupSpec() myspec.Spec
 	GroupReceiptsDir() string

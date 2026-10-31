@@ -14,6 +14,13 @@ admission. It requires no native binaries. Native agent-only recovery cases belo
 exercise real subprocesses and storage, but do not themselves prove control-plane
 receipt admission; retain both layers of coverage.
 
+`TestGaleraHistoryProbePreservesBorrowedPool` uses a real `database/sql` pool
+with a deterministic SQL driver to check administration-pool ownership after
+certification success, durable replay, SQL failure and receipt-write failure.
+Subsequent native-status SQL must work through the same borrowed pool; opening a
+separate SQL-status connection would not detect a closed cached administration
+pool. This regression checks lifecycle ownership, not native Galera consensus.
+
 ## Native prerequisites
 
 Use checksum-verified native [Percona](https://www.percona.com/) artifacts compatible with the machine and all required runtime libraries. No [Docker](https://www.docker.com/), privileged package installation or global service changes are needed for these cases. Extract prerequisites into locations selected by your environment; do not assume a checkout-relative cache or a particular workstation filesystem.

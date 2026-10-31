@@ -404,3 +404,102 @@ func TestPXCRestoreNegotiationFailurePreservesLegacyRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestPXCTerminalRestoreCleanupAfterAgentPoolRecoveryLatchesMixedMapping(t *testing.T) {
+	const stateUUID = "eb63b3dd-d491-11f1-a8d0-67a34b155cc2"
+	const inverse = "149c4c22-2b6e-ee0e-572f-985cb4eaa33d"
+	const frozen = "bac91544-d464-11f1-a1f6-8b04c1d7e37c:1-711"
+	for _, step := range []string{"reform", "certify-cleanup"} {
+		t.Run(step, func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			converge(t, p, rc, b)
+			s, _ := load(rc.Cluster)
+			failedAt := time.Now()
+			op := &domain.Operation{ID: "failed-restore-with-owned-controls", Kind: domain.OperationRestore, Phase: domain.PhaseFailed, FailureCleanupStartedAt: &failedAt}
+			s.RestoreGTIDFence = op.ID
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			cp := backupCheckpoint{Step: step, Member: s.Formation.Seed, Request: &myspec.Restore{}, GTIDCertification: &pxcRestoreCertification{Negotiated: true, FencesOwned: true}}
+			if step == "reform" {
+				cp.GTIDCertification.Phase, cp.GTIDCertification.RecoveryCleanupPending = "negotiated", true
+			} else {
+				cp.GTIDCertification.Phase, cp.GTIDCertification.CleanupPending = "cleanup", true
+				s.RestoreGTIDBlocked = "Interrupted certification; preserve restored seed history"
+				if err := save(rc.Cluster, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := persistRestore(rc, op, cp); err != nil {
+				t.Fatal(err)
+			}
+			seed, minority := s.Formation.Seed, s.data()[2].Name
+			unavailable, proxyStarts := true, 0
+			prior := b.action
+			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+				if r.URL.Path == "/v1/mysql/"+myspec.ActionGaleraStatus {
+					if name == seed && unavailable {
+						http.Error(w, "sql: database is closed", http.StatusServiceUnavailable)
+						return true
+					}
+					sid := stateUUID
+					if name == minority {
+						sid = inverse
+					}
+					_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{
+						ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true,
+						ClusterSize: 3, StateUUID: stateUUID, GTIDExecuted: frozen + "," + sid + ":1", ServerUUID: b.native[name].ServerUUID,
+					})
+					return true
+				}
+				if strings.HasPrefix(r.URL.Path, "/v1/processes/proxysql/start") {
+					proxyStarts++
+					_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
+					return true
+				}
+				return prior != nil && prior(w, r, name)
+			}
+			// No active operation is supplied: ordinary Sync owns terminal
+			// cleanup and must release proxies even while seed SQL is poisoned.
+			if _, err := p.Sync(t.Context(), rc); err == nil {
+				t.Fatal("unavailable seed did not retain pending cleanup")
+			}
+			current, _ := load(rc.Cluster)
+			if current.RestoreGTIDFence != "" || proxyStarts == 0 {
+				t.Fatal("data observation failure retained desired client fence or skipped proxy release")
+			}
+
+			// A repaired agent has a usable borrowed pool. Recreating the CP is
+			// not a new restore or permission to erase the mixed SID evidence.
+			unavailable = false
+			p = New(Options{Provider: "pxc"})
+			_, cleanupErr := p.Sync(t.Context(), rc)
+			if step == "reform" && cleanupErr != nil {
+				t.Fatal(cleanupErr)
+			}
+			bs, _ := loadBackupState(rc.Cluster)
+			var recovered backupCheckpoint
+			if err := json.Unmarshal(bs.RestoreOperation.Checkpoint, &recovered); err != nil {
+				t.Fatal(err)
+			}
+			if bs.RestoreOperation.Phase != domain.PhaseFailed || recovered.GTIDCertification.FencesOwned || recovered.GTIDCertification.RecoveryCleanupPending || recovered.GTIDCertification.CleanupPending {
+				t.Fatal("terminal recovery lost failure ownership or retained cleanup holds")
+			}
+			status, err := p.Status(t.Context(), rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			current, _ = load(rc.Cluster)
+			if err := loadGTIDJournal(t.Context(), rc, current); err != nil {
+				t.Fatal(err)
+			}
+			latched := false
+			for _, condition := range status.Conditions {
+				latched = latched || condition.Type == "GTIDHistorySafe" && condition.Status == "False" && condition.Reason == "GTIDHistoryDiscontinuityLatched"
+			}
+			if current.RestoreGTIDFence != "" || activeGTIDIncident(current) == nil || !latched {
+				t.Fatal("released terminal controls hid mixed direct/inverse history")
+			}
+		})
+	}
+}

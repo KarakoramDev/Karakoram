@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,6 +22,7 @@ import (
 type galeraProbeConnector struct {
 	groupTestConnector
 	executed []string
+	exec     func(string) error
 }
 
 func (c *galeraProbeConnector) Connect(context.Context) (driver.Conn, error) { return c, nil }
@@ -31,6 +34,11 @@ func (c *galeraProbeConnector) QueryContext(ctx context.Context, query string, a
 }
 func (c *galeraProbeConnector) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
 	c.executed = append(c.executed, query)
+	if c.exec != nil {
+		if err := c.exec(query); err != nil {
+			return nil, err
+		}
+	}
 	return driver.RowsAffected(1), nil
 }
 
@@ -179,5 +187,85 @@ func TestGaleraRestoreFenceQuiescesManagedWriters(t *testing.T) {
 				t.Fatalf("startup %s preceded isolated session fencing", mutation)
 			}
 		}
+	}
+}
+
+func TestGaleraHistoryProbePreservesBorrowedPool(t *testing.T) {
+	const uuid = "11111111-2222-3333-4444-555555555555"
+	for _, scenario := range []string{"success and replay", "unfenced SQL", "statement failure", "receipt failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			p := dataPaths(t.TempDir())
+			for _, dir := range []string{p.root, p.data} {
+				if err := privateDir(dir); err != nil {
+					t.Fatal(err)
+				}
+			}
+			spec := myspec.Spec{Role: myspec.RoleData, Topology: "cluster", Galera: &myspec.Galera{ClusterName: "restored", FormationEpoch: 2, RestoreFence: true}}
+			request := myspec.GaleraHistoryProbeRequest{Receipt: "restore/probe/shared-pool", ClusterName: "restored", FormationEpoch: 2}
+			fenced := scenario != "unfenced SQL"
+			connector := &galeraProbeConnector{groupTestConnector: groupTestConnector{t: t}}
+			connector.queries = []groupQuery{{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10", uuid, fenced}}}
+			if fenced {
+				connector.queries = append(connector.queries, groupQuery{contains: "SELECT @@SESSION.wsrep_on,@@SESSION.sql_log_bin", values: []driver.Value{true, true}})
+			}
+			expectedGTID := uuid + ":1-10"
+			if scenario == "success and replay" || scenario == "receipt failure" {
+				expectedGTID = uuid + ":1-11"
+				connector.queries = append(connector.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{expectedGTID, uuid, true}})
+			}
+			statementErr := errors.New("managed DDL unavailable")
+			if scenario == "statement failure" {
+				connector.exec = func(string) error { return statementErr }
+			}
+			if scenario == "receipt failure" {
+				// The first read sees no receipt. Only after SQL runs, occupy
+				// its destination with a directory so durable rename fails
+				// deterministically, including when tests run as root.
+				digest := sha256.Sum256([]byte(request.Receipt))
+				connector.exec = func(string) error {
+					return os.Mkdir(filepath.Join(p.root, fmt.Sprintf("galera-history-probe-%x.json", digest)), 0700)
+				}
+			}
+			pool := sql.OpenDB(connector)
+			defer pool.Close()
+			deps := &cloneTestDeps{rejectedGroupDeps: rejectedGroupDeps{s: spec, dir: p.root}, db: pool}
+			result, err := probeGaleraHistory(t.Context(), deps, request)
+			if scenario == "success and replay" {
+				if err != nil || result.GTIDExecuted != expectedGTID {
+					t.Fatalf("probe failed: %+v %v", result, err)
+				}
+				replayed, err := probeGaleraHistory(t.Context(), deps, request)
+				if err != nil || replayed != result || len(connector.executed) != 1 {
+					t.Fatalf("durable replay changed result or repeated SQL: %+v %v", replayed, err)
+				}
+			} else if err == nil {
+				t.Fatal("failed proof or receipt was accepted")
+			} else if scenario == "statement failure" && !errors.Is(err, statementErr) {
+				t.Fatalf("SQL failure was hidden: %v", err)
+			}
+			borrowed, err := deps.LocalAccessDB(t.Context())
+			if err != nil || borrowed != pool {
+				t.Fatal("probe replaced the agent-owned administration pool")
+			}
+			if err := borrowed.PingContext(t.Context()); err != nil {
+				t.Fatalf("probe poisoned subsequent cached DB access: %v", err)
+			}
+			// Exercise the actual native-status SQL path used by CP polling,
+			// not merely a separate fresh connection like /sql/status.
+			connector.queries = append(connector.queries,
+				groupQuery{contains: "SELECT @@server_uuid", values: []driver.Value{uuid, expectedGTID, true, true, "8.4.11-11.1"}},
+				groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{expectedGTID, uuid, fenced}},
+			)
+			var status myspec.StatusResponse
+			if err := observeNativeStatus(t.Context(), borrowed, spec, p, &status); err != nil {
+				t.Fatalf("native status failed after %s: %v", scenario, err)
+			}
+			if status.ServerUUID != uuid || status.GTIDExecuted != expectedGTID || status.GroupMembers != 3 || !status.Online(true) {
+				t.Fatalf("native status lost the live formation after probe: %+v", status)
+			}
+			if len(connector.queries) != 0 {
+				t.Fatal("probe or subsequent native status skipped required SQL")
+			}
+		})
 	}
 }

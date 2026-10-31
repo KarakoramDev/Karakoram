@@ -126,6 +126,20 @@ without activating. Pre-certification cleanup preserves its original checkpoint.
 Existing GTID incidents are never silently cleared. There is no pre-restore
 executed-set cache.
 
+Terminal recovery is independent of whether the original queue operation is still
+Running: the persisted restore checkpoint owns pending releases. Native-status
+failure must not prevent attempts to release every proxy hold. A controller
+restart alone cannot repair a member agent whose native status reports
+`sql: database is closed` while independent privileged SQL still succeeds:
+older certification probes incorrectly closed the agent's shared SQL pool.
+MySQL/PXC does not support automatic agent rollout. For an affected disposable
+test deployment, preserve evidence and re-create it with corrected agents;
+valuable data requires an explicit verified recovery plan. Updated agents retain
+ownership of their shared SQL pool and reopen a confirmed closed pool. Recovery
+then retries its checkpointed releases and compares actual member histories.
+A direct/inverse mismatch remains a durable GTID incident; repair the
+minority from trusted history before acknowledging it with a fresh full.
+
 If any deployed agent lacks the capability, restore follows the legacy path
 without new certification fences, proxy holds or probe endpoints. It reports
 `RestoreGTIDCertified=Unknown/RestoreCertificationUnavailable`: agents are
