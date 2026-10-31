@@ -86,6 +86,26 @@ func replayCoverageWindows(logs []archivedBinlog, backup myspec.BackupResult) ([
 	return windows, nil
 }
 
+func replayCoverage(logs []archivedBinlog, baseline myspec.BackupResult) (myspec.PITRCoverageResponse, error) {
+	windows, err := replayCoverageWindows(logs, baseline)
+	if err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	coverage := myspec.PITRCoverageResponse{Windows: windows}
+	for _, log := range logs {
+		if baseline.SourceUUID == "" || log.meta.ServerUUID == baseline.SourceUUID {
+			continue
+		}
+		for _, tx := range log.meta.Transactions {
+			stamp := time.UnixMicro(tx.OriginalCommitTimestamp).UTC()
+			if stamp.After(coverage.LatestForeignEventTime) {
+				coverage.LatestForeignEventTime = stamp
+			}
+		}
+	}
+	return coverage, nil
+}
+
 func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspec.PITRCoverageRequest) (myspec.BackupResult, error) {
 	var empty myspec.BackupResult
 	intent := myspec.Restore{Source: request.Source, BackupID: "coverage", Label: "coverage", ObjectPaths: request.ObjectPaths, ObjectManifests: request.ObjectManifests}
@@ -130,6 +150,5 @@ func (e *Runner) pitrCoverage(ctx context.Context, request myspec.PITRCoverageRe
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	windows, err := replayCoverageWindows(logs, baseline)
-	return myspec.PITRCoverageResponse{Windows: windows}, err
+	return replayCoverage(logs, baseline)
 }

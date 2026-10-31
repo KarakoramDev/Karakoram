@@ -140,6 +140,17 @@ func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.Tim
 // are available. A non-nil map contains the live, GTID-bounded coverage of each
 // full backup, keyed by backup name.
 func (p *Core) pitrWindowsByFull(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
+	return p.observePITRWindowsByFull(ctx, rc, nil)
+}
+
+// pitrWindowObservation describes only the newest live window. A historical
+// baseline's foreign uploads must not override coverage proven by a newer full.
+type pitrWindowObservation struct {
+	end           time.Time
+	writerChanged bool
+}
+
+func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context, observation *pitrWindowObservation) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
 	if !rc.Cluster.Spec.Backup.PITR.Enabled || rc.Cluster.Spec.Backup.Storage == "" {
 		return nil, nil, nil
 	}
@@ -215,6 +226,14 @@ func (p *Core) pitrWindowsByFull(ctx context.Context, rc *engine.Context) ([]dom
 				bounded := domain.TimeWindow{Start: w.Start, End: boundedEnd}
 				windows = append(windows, bounded)
 				byFull[b.Name] = append(byFull[b.Name], bounded)
+				if observation != nil {
+					// A separate GTID incident cap is not proof of a writer-change cap.
+					frozen := boundedEnd.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
+					if boundedEnd.After(observation.end) || boundedEnd.Equal(observation.end) && !frozen {
+						observation.end = boundedEnd
+						observation.writerChanged = frozen
+					}
+				}
 			}
 		}
 	}
@@ -274,7 +293,8 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 	if !rc.Cluster.Spec.Backup.PITR.Enabled {
 		return nil
 	}
-	windows, err := p.PITRWindow(ctx, rc)
+	var observation pitrWindowObservation
+	windows, _, err := p.observePITRWindowsByFull(ctx, rc, &observation)
 	condition := domain.Condition{Type: "PITR", Status: "False", Reason: "WindowUnavailable", LastTransitionTime: now(rc)}
 	if err != nil {
 		condition.Status = "Unknown"
@@ -291,6 +311,10 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		status.Backup.PITRWindow = &latest
 		condition.Status = "True"
 		condition.Reason = "WindowAvailable"
+		if observation.writerChanged && observation.end.Equal(latest.End) {
+			condition.Reason = "WindowFrozenWriterChanged"
+			condition.Message = fmt.Sprintf("Recovery window ends at %s because the archive writer changed; take a full backup to extend point-in-time recovery", latest.End.UTC().Format(time.RFC3339Nano))
+		}
 	}
 	status.Conditions = append(status.Conditions, condition)
 	s, e := load(rc.Cluster)
@@ -303,6 +327,9 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 				condition.Reason = "ArchiveObservation"
 				condition.Status = boolCondition(!a.Gap)
 				condition.Message = fmt.Sprintf("Archive lag %.0f seconds; %s", a.LagSeconds, a.GapReason)
+				if observation.writerChanged && status.Backup.PITRWindow != nil && observation.end.Equal(status.Backup.PITRWindow.End) {
+					condition.Message = fmt.Sprintf("Writer archive lag %.0f seconds; recoverable window ends at %s after an archive writer change; take a full backup to extend point-in-time recovery; %s", a.LagSeconds, observation.end.UTC().Format(time.RFC3339Nano), a.GapReason)
+				}
 				if a.LastArchivedFile == "" || a.LastEventTime.IsZero() {
 					condition.Status = "False"
 					condition.Reason = "ArchivePending"

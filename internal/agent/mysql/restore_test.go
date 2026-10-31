@@ -299,6 +299,41 @@ func TestPITRForeignSameSIDAliasDoesNotExtendCoverage(t *testing.T) {
 	}
 }
 
+func TestPITRCoverageWriterChangeDiagnostic(t *testing.T) {
+	const writer2 = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	const writer3 = "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee"
+	baseline := myspec.BackupResult{GTIDSet: recoverySID + ":1-10", EndTime: time.UnixMicro(100), SourceUUID: recoverySID, BinlogFile: "binlog.000007", BinlogPosition: 500}
+	logs := []archivedBinlog{
+		{"original", binlogSidecar{ServerUUID: recoverySID, File: "binlog.000007", PreviousGTIDSet: baseline.GTIDSet, GTIDSet: recoverySID + ":11", Transactions: []binlogTransaction{{GTID: recoverySID + ":11", OriginalCommitTimestamp: 200, EndPosition: 600}}}},
+	}
+	coverage, err := replayCoverage(logs, baseline)
+	if err != nil || len(coverage.Windows) != 1 || !coverage.Windows[0].End.Equal(time.UnixMicro(200)) || !coverage.LatestForeignEventTime.IsZero() {
+		t.Fatalf("same-writer coverage changed: %+v %v", coverage, err)
+	}
+	for i, writer := range []string{writer2, writer3} {
+		logs = append(logs, archivedBinlog{"foreign", binlogSidecar{ServerUUID: writer, File: "binlog.000008", PreviousGTIDSet: recoverySID + ":1-11", GTIDSet: recoverySID + ":12", Transactions: []binlogTransaction{{GTID: recoverySID + ":12", OriginalCommitTimestamp: int64(300 + i*100), EndPosition: 600}}}})
+	}
+	coverage, err = replayCoverage(logs, baseline)
+	if err != nil || len(coverage.Windows) != 1 || !coverage.Windows[0].End.Equal(time.UnixMicro(200)) || !coverage.LatestForeignEventTime.Equal(time.UnixMicro(400)) {
+		t.Fatalf("writer change lost safe cap or foreign diagnostic: %+v %v", coverage, err)
+	}
+	for _, target := range []string{time.UnixMicro(300).UTC().Format(time.RFC3339Nano), time.UnixMicro(400).UTC().Format(time.RFC3339Nano)} {
+		if _, _, err := selectBinlogs(logs, baseline, "", target); err == nil {
+			t.Fatal("foreign writer became replayable", target)
+		}
+	}
+	baseline.SourceUUID = writer3
+	baseline.GTIDSet = recoverySID + ":1-11"
+	baseline.EndTime = time.UnixMicro(350)
+	coverage, err = replayCoverage(logs, baseline)
+	if err != nil || len(coverage.Windows) != 1 || !coverage.Windows[0].End.Equal(time.UnixMicro(400)) || !coverage.LatestForeignEventTime.Equal(time.UnixMicro(300)) {
+		t.Fatalf("fresh full did not establish new writer coverage: %+v %v", coverage, err)
+	}
+	if _, _, err := selectBinlogs(logs, baseline, "", time.UnixMicro(400).UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal("fresh full failed to admit new writer", err)
+	}
+}
+
 func TestRestorePreflightPlanFailureLeavesLiveDataUntouched(t *testing.T) {
 	dir := t.TempDir()
 	e := &Runner{dir: dir, current: myspec.Spec{Role: myspec.RoleData, Topology: myspec.TopologySingle}}
