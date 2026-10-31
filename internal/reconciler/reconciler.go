@@ -868,6 +868,9 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			}
 		}
 	}
+	// Providers may replace or mutate cluster status while synchronizing.
+	// Preserve transition times against the last observation, not that mutation.
+	previousConditions := slices.Clone(rc.Cluster.Status.Conditions)
 	if syncErr == nil {
 		started := time.Now()
 		result, syncErr = p.Sync(ctx, rc)
@@ -958,7 +961,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		if status.Message == "" && status.Phase != domain.PhaseReady && status.Phase != domain.PhaseDegraded {
 			status.Message = fmt.Sprintf("%s: observing platform services and member formation", status.Phase)
 		}
-		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
+		preserveTransitions(previousConditions, status.Conditions)
 		if status.Phase == domain.PhaseDegraded && status.Message == "" {
 			status.Message = "Member health is degraded; inspect conditions and member observations"
 		}

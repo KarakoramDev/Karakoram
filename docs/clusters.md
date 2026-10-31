@@ -144,6 +144,13 @@ Optional [cluster data MCP](data-mcp.md) exposes a separate token-authenticated 
 
 Reconciler-generated `PhaseChanged` events retain the new phase's sanitized user-visible status message and a bounded summary of non-True conditions (`type / status / reason`), so the explanation remains available after recovery, including transitions without a generation change. They do not include cluster specs, internal state or condition message bodies. The admission-time transition to `Deleting` records only the phase arrow.
 
+Condition `lastTransitionTime` records the observed status/reason transition,
+not the time of every healthy poll or the completion of a native engine probe.
+An unchanged condition keeps that timestamp even when a provider refreshes its
+status during synchronization; its message and other current observation content
+may still change. Use the observation timestamps for sample freshness and the
+engine's durable operation/certification evidence for native completion ordering.
+
 When an engine returns a failed or partial observation, fresh safety conditions
 (for example, a failed quorum condition) and safe error diagnostics remain
 visible, but that error cannot replace the inspected lifecycle phase or durable
