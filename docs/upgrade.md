@@ -131,6 +131,15 @@ use new v0.4.2 members, not merely a database-process restart.
 - **PostgreSQL administrator password rotation remains unavailable.** The
   revealed `postgres` password cannot be rotated in place. Follow
   [administrator credential containment](#postgresql-administrator-password-cannot-be-rotated-yet).
+- **ProxySQL can treat a healthy MySQL Group Replication member as offline**
+  (also present in v0.4.0 and v0.4.1). The proxy's health monitor can connect to
+  a member without TLS, which the member rejects; ProxySQL then logs
+  `Access denied for user 'kk_monitor'` and `Assuming offline` for that member
+  and sends it no traffic, although the member is ONLINE in the group.
+  If Group Replication elects that member primary, writes through the proxy
+  can fail. Seen on Zerops; other providers may be affected. Don't disable TLS
+  or change the monitor account to work around it. A fix is planned for
+  v0.4.3; existing clusters will need their proxy redeployed to pick it up.
 - **PXC after an in-place restore on Zerops:** after either a full or PITR
   restore, one member can be flagged `GTIDHistoryDiverged` and the cluster
   reports Degraded even though the checked data and writes are correct.
