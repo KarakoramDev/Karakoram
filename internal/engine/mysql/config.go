@@ -218,6 +218,22 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 				sp.Proxy.Backends = append(sp.Proxy.Backends, myspec.Peer{Name: peer.Name, Host: peer.Name, Port: 3306})
 			}
 		}
+		if len(sp.Proxy.Backends) == 0 && s.Topology == "cluster" {
+			bs, e := loadBackupState(rc.Cluster)
+			if e != nil {
+				return agentapi.MemberConfig{}, e
+			}
+			seed := s.find(s.Formation.Seed)
+			// Restore temporarily returns all members to deployed. Its initialized,
+			// admitted seed remains a valid routing candidate even before joined:
+			// the proxy is held stopped, and native monitoring still owns readiness.
+			// Keep the image valid during both fence acquisition and release/recovery.
+			if bs.RestoreOperation != nil && restoreOperation(bs.RestoreOperation) &&
+				seed != nil && seed.Role == "data" && seed.ServiceID != "" &&
+				seed.Initialized && seed.Stage == "deployed" && !seed.Removing {
+				sp.Proxy.Backends = append(sp.Proxy.Backends, myspec.Peer{Name: seed.Name, Host: seed.Name, Port: 3306})
+			}
+		}
 		users, e := p.proxyUsers(ctx, rc)
 		if e != nil {
 			return agentapi.MemberConfig{}, e

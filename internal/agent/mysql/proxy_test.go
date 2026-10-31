@@ -3,6 +3,8 @@
 package mysql
 
 import (
+	"encoding/json"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"strings"
 	"testing"
@@ -108,5 +110,36 @@ func TestProxyTLSReloadStatements(t *testing.T) {
 	}
 	if statements[3] != "LOAD MYSQL VARIABLES TO RUNTIME" || statements[4] != "SAVE MYSQL VARIABLES TO DISK" || statements[5] != "PROXYSQL RELOAD TLS" {
 		t.Fatalf("TLS reload order: %v", statements)
+	}
+}
+
+func TestRestoreProxyCandidateUsesStrictAgentDecoder(t *testing.T) {
+	s := coreTestSpec()
+	s.Member, s.Role, s.Topology, s.Version, s.AllowInitialize = "proxy1", myspec.RoleProxy, myspec.TopologyCluster, "8.4.11-11.1", false
+	s.Proxy = testProxySpec().Proxy
+	s.Proxy.Mode = "galera"
+	s.Proxy.Backends = []myspec.Peer{{Name: "seed1", Host: "seed1", Port: 3306}}
+	for _, desired := range [][]string{{}, {"proxysql"}} {
+		raw, err := json.Marshal(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := agentapi.MemberConfig{Engine: myspec.Engine, Member: s.Member, Role: s.Role, EngineSpec: raw, DesiredProcesses: desired}
+		if _, err := decodeSpec(config); err != nil {
+			t.Fatalf("valid restored seed candidate rejected: %v", err)
+		}
+		empty := s
+		proxy := *s.Proxy
+		proxy.Backends = nil
+		empty.Proxy = &proxy
+		config.EngineSpec, _ = json.Marshal(empty)
+		if _, err := decodeSpec(config); err == nil || !strings.Contains(err.Error(), "proxy backends and positive connection limit required") {
+			t.Fatalf("empty backend config bypassed real agent validation: %v", err)
+		}
+		proxy.Backends, proxy.MaxConnections = s.Proxy.Backends, 0
+		config.EngineSpec, _ = json.Marshal(empty)
+		if _, err := decodeSpec(config); err == nil {
+			t.Fatal("zero proxy connection limit bypassed real validation")
+		}
 	}
 }

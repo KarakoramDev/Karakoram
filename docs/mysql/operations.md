@@ -105,6 +105,12 @@ stop holds before native re-formation/certification; ordinary direct SQL is
 fenced with `offline_mode` from restored startup. The privileged local agent can
 still execute the probe. Each member must actually advance the same direct or
 inverse namespace as the restored seed, not merely contain an SST-copied SID.
+While all restored members are temporarily `deployed` rather than `joined`, the
+proxy configuration retains the initialized, admitted restored seed as its sole
+candidate if no joined backend exists. This keeps strict agent validation valid
+during fence acquisition and release/recovery; it does not start a held proxy or
+claim the seed is ready. Native monitoring still decides backend eligibility.
+Unowned restores and uninitialized/unadmitted seeds receive no such candidate.
 A disagreeing follower is quarantined and re-provisioned by SST from that seed,
 with a new formation epoch and at most two attempts per member. Probe histories,
 mapping evidence and remedy progress are checkpointed for crash recovery.
