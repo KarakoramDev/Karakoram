@@ -46,7 +46,7 @@ func TestGaleraPreparePristineRestoreFollowers(t *testing.T) {
 }
 
 func TestGaleraPreparePristineRefusesAmbiguousData(t *testing.T) {
-	for _, name := range []string{"nonempty", "identity", "start", "bootstrap", "previous join", "malformed receipt", "symlink"} {
+	for _, name := range []string{"nonempty", "identity", "start", "launch", "bootstrap", "previous join", "malformed receipt", "symlink"} {
 		t.Run(name, func(t *testing.T) {
 			s := testGaleraSpec()
 			s.Galera.Bootstrap = false
@@ -65,6 +65,8 @@ func TestGaleraPreparePristineRefusesAmbiguousData(t *testing.T) {
 				file = filepath.Join(p.root, "initialized.json")
 			case "start":
 				file = filepath.Join(p.root, "galera-sst-start")
+			case "launch":
+				file = filepath.Join(p.root, galeraUnsyncedMarker)
 			case "bootstrap":
 				file = filepath.Join(p.root, "galera-bootstrap-1")
 			case "previous join":

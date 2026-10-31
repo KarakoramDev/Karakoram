@@ -170,7 +170,7 @@ func pristineGaleraJoin(p paths, intentPath string) error {
 			continue
 		}
 		if name == "initialized.json" || name == "initialize-attempt.json" ||
-			name == "galera-state-uuid" || name == "galera-sst-start" ||
+			name == "galera-state-uuid" || name == "galera-sst-start" || name == galeraUnsyncedMarker ||
 			strings.HasPrefix(name, "galera-bootstrap-") || strings.HasPrefix(name, "galera-join-") {
 			return errors.New("pristine SST admission refuses prior identity or launch evidence")
 		}
