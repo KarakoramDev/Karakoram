@@ -78,6 +78,20 @@ These cross-engine constraints define the operating model; engine-specific limit
   GTID-history-diverged and the cluster Degraded despite correct checked data
   and writes; incremental backups/PITR continuity can be blocked. Investigation
   continues; verify data natively. This was not reproduced on Dokploy.
+- **Replacing a Percona XtraDB Cluster member or scaling PXC in never completes**
+  (also present in v0.4.0 and v0.4.1). This includes replacements started
+  automatically to heal a failed member. The new member joins, but the old
+  member's retirement is rejected repeatedly; the operation stays Updating or
+  Scaling and fails after about 20 retries, the old member stays in Removing,
+  and further operations on the cluster are blocked. The remaining members keep
+  serving reads and writes with reduced redundancy. Cancelling only helps
+  before the old member starts retiring. Workaround: don't replace PXC members
+  or scale PXC in until the fix. If an operation is already stuck, leave the
+  remaining members alone (don't retry, restart, scale back or remove volumes),
+  keep a validated backup, and upgrade the control plane once the fix is
+  released — it is control-plane-only and completes the stuck retirement
+  without new member agents. Group Replication and other engines are not
+  affected. A fix is planned for v0.4.3.
 - **Full backups can run out of memory on single-member MySQL clusters with
   1 GiB of memory** (also present in v0.4.0 and v0.4.1). The kernel can kill
   `mysqld`, causing the member to restart and the backup to fail.
