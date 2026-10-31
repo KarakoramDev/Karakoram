@@ -61,14 +61,15 @@ func proxyCluster(s myspec.Spec) bool {
 func proxyConfigImage(s myspec.Spec) []proxyTable {
 	p := s.Proxy
 	groups := "writer_hostgroup,backup_writer_hostgroup,reader_hostgroup,offline_hostgroup,active,max_writers,writer_is_also_reader,max_transactions_behind"
-	image := []proxyTable{
-		{name: "mysql_group_replication_hostgroups", columns: groups},
-		{name: "mysql_galera_hostgroups", columns: groups},
-		{name: "mysql_servers", columns: "hostgroup_id,hostname,port,use_ssl,max_connections,status"},
-		{name: "mysql_users", columns: "username,password,active,default_hostgroup,use_ssl,transaction_persistent,frontend,backend"},
-		{name: "mysql_query_rules", columns: "rule_id,active,match_digest,proxy_port,destination_hostgroup,apply"},
-		{name: "global_variables", columns: "variable_name,variable_value"},
-	}
+	image := make([]proxyTable, 0, 7)
+	image = append(image,
+		proxyTable{name: "mysql_group_replication_hostgroups", columns: groups},
+		proxyTable{name: "mysql_galera_hostgroups", columns: groups},
+		proxyTable{name: "mysql_servers", columns: "hostgroup_id,hostname,port,use_ssl,max_connections,status"},
+		proxyTable{name: "mysql_users", columns: "username,password,active,default_hostgroup,use_ssl,transaction_persistent,frontend,backend"},
+		proxyTable{name: "mysql_query_rules", columns: "rule_id,active,match_digest,proxy_port,destination_hostgroup,apply"},
+		proxyTable{name: "global_variables", columns: "variable_name,variable_value"},
+	)
 	// Rules are agent-owned in full: altered match filters, flag chains or
 	// actions must not silently disable the locking-SELECT safeguard.
 	var defaultColumns, defaultValues strings.Builder
@@ -83,6 +84,14 @@ func proxyConfigImage(s myspec.Spec) []proxyTable {
 		image[1].rows = []string{"10,11,20,30,1,1,2,100"}
 	} else if proxyCluster(s) {
 		image[0].rows = []string{"10,11,20,30,1,1,0,100"}
+	}
+	if proxyCluster(s) {
+		attributes := proxyTable{name: "mysql_hostgroup_attributes", columns: "hostgroup_id,servers_defaults", rows: make([]string, 0, len(proxyManagedHostgroups))}
+		defaults := proxyQuote(proxyBackendDefaults(p))
+		for _, group := range proxyManagedHostgroups {
+			attributes.rows = append(attributes.rows, strconv.Itoa(group)+","+defaults)
+		}
+		image = append(image, attributes)
 	}
 	group := 10
 	if proxyCluster(s) {

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -140,6 +142,67 @@ func TestRestoreProxyCandidateUsesStrictAgentDecoder(t *testing.T) {
 		config.EngineSpec, _ = json.Marshal(empty)
 		if _, err := decodeSpec(config); err == nil {
 			t.Fatal("zero proxy connection limit bypassed real validation")
+		}
+	}
+}
+
+func assertProxyBackendDefaultJSON(t *testing.T, raw string, maxConnections int) {
+	t.Helper()
+	var defaults map[string]int
+	if err := json.Unmarshal([]byte(raw), &defaults); err != nil {
+		t.Fatal("hostgroup backend defaults are not valid numeric JSON", raw, err)
+	}
+	if len(defaults) != 3 || defaults["weight"] != 1 || defaults["max_connections"] != maxConnections || defaults["use_ssl"] != 1 {
+		t.Fatal("monitor-discovered backend defaults lost TLS, capacity or weight", defaults)
+	}
+}
+
+func TestRenderProxyManagedHostgroupsCarryTLSBackendDefaults(t *testing.T) {
+	rows := regexp.MustCompile(`hostgroup_id\s*=\s*([0-9]+)\s*,\s*servers_defaults\s*=\s*("(?:\\.|[^"\\])*")`)
+	for _, mode := range []string{"gr", "galera", "single"} {
+		for _, maxConnections := range []int{100, 731} {
+			t.Run(mode+"/"+strconv.Itoa(maxConnections), func(t *testing.T) {
+				s := testProxySpec()
+				s.Proxy.MaxConnections = maxConnections
+				if mode == "galera" {
+					s.Proxy.Mode = mode
+				}
+				if mode == "single" {
+					s.Topology = myspec.TopologySingle
+				}
+				text, err := RenderProxyConfig(s, "/config", "/data")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if mode == "single" {
+					if strings.Contains(text, "mysql_hostgroup_attributes") {
+						t.Fatal("singleton cold config unexpectedly manages monitor hostgroup attributes")
+					}
+					return
+				}
+				if !strings.Contains(text, "mysql_hostgroup_attributes") {
+					t.Fatal("cluster cold config omitted monitor-discovered server defaults")
+				}
+				found := map[int]bool{}
+				for _, match := range rows.FindAllStringSubmatch(text, -1) {
+					group, err := strconv.Atoi(match[1])
+					if err != nil {
+						t.Fatal(err)
+					}
+					if found[group] {
+						t.Fatal("duplicate managed hostgroup defaults", group)
+					}
+					found[group] = true
+					raw, err := strconv.Unquote(match[2])
+					if err != nil {
+						t.Fatal("backend defaults were not safely quoted in the cold config", err)
+					}
+					assertProxyBackendDefaultJSON(t, raw, maxConnections)
+				}
+				if len(found) != 4 || !found[10] || !found[11] || !found[20] || !found[30] {
+					t.Fatal("cold configuration did not protect every monitor-managed hostgroup", found)
+				}
+			})
 		}
 	}
 }

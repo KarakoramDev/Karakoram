@@ -91,7 +91,22 @@ join checkpoint, so its first configuration contains an eligible backend.
 A pending proxy deployment does not block that initial data join, including
 when reconciliation resumes a proxy deployment accepted by an earlier version.
 
+For Group Replication and Galera, managed ProxySQL hostgroups also enforce TLS
+in `mysql_hostgroup_attributes.servers_defaults`, with the same weight and backend
+connection limit as explicit server rows. Native discovery or revival of a
+previously offline member must not fall back to a plaintext monitor connection.
+A native `Access denied` monitor error can represent rejection of an account's
+`REQUIRE SSL` policy, not only an incorrect password; inspect the native SSL/auth
+counters before changing credentials.
+
+This policy is rendered and applied by the **proxy member agent**. Updating only
+the control plane or restarting an old ProxySQL process does not install it.
+Existing MySQL/PXC agents have no automatic rollout: plan a verified proxy-agent
+redeployment/re-provisioning, or recreate a disposable test cluster with corrected
+agents. Preserve data identities and availability evidence for valuable clusters.
+Do not disable TLS or blindly rotate the shared monitor credential as a workaround.
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
+
 
 ### PXC GTID history safety
 

@@ -34,6 +34,12 @@ func tlsConfig(p *x509.CertPool, host string) *tls.Config {
 }
 func proxyConfigQuote(s string) string { return strconv.Quote(s) }
 
+var proxyManagedHostgroups = [...]int{myspec.ProxyWriterGroup, myspec.ProxyBackupWriterGroup, myspec.ProxyReaderGroup, myspec.ProxyOfflineGroup}
+
+func proxyBackendDefaults(p *myspec.Proxy) string {
+	return fmt.Sprintf(`{"weight":1,"max_connections":%d,"use_ssl":1}`, p.MaxConnections)
+}
+
 // RenderProxyConfig produces the cold-start config. The caller writes it 0600;
 // credentials come from sealed member configuration, never argv or SQL hashes.
 func RenderProxyConfig(s myspec.Spec, configDir, dataDir string) (string, error) {
@@ -64,6 +70,19 @@ func RenderProxyConfig(s myspec.Spec, configDir, dataDir string) (string, error)
 		b.WriteString("mysql_galera_hostgroups=(\n {writer_hostgroup=10,backup_writer_hostgroup=11,reader_hostgroup=20,offline_hostgroup=30,active=1,max_writers=1,writer_is_also_reader=2,max_transactions_behind=100}\n)\n")
 	} else if s.Topology != myspec.TopologySingle {
 		b.WriteString("mysql_group_replication_hostgroups=(\n {writer_hostgroup=10,backup_writer_hostgroup=11,reader_hostgroup=20,offline_hostgroup=30,active=1,max_writers=1,writer_is_also_reader=0,max_transactions_behind=100}\n)\n")
+	}
+	if proxyCluster(s) {
+		// Native discovery and OFFLINE_HARD revival use hostgroup defaults,
+		// not the explicit mysql_servers rows. They must inherit TLS too.
+		defaults := proxyConfigQuote(proxyBackendDefaults(p))
+		b.WriteString("mysql_hostgroup_attributes=(\n")
+		for i, group := range proxyManagedHostgroups {
+			if i > 0 {
+				b.WriteString(",\n")
+			}
+			fmt.Fprintf(&b, " {hostgroup_id=%d,servers_defaults=%s}", group, defaults)
+		}
+		b.WriteString("\n)\n")
 	}
 	b.WriteString("mysql_servers=(\n")
 	for i, peer := range p.Backends {

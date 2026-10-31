@@ -52,7 +52,7 @@ func (c *proxyTestConn) ExecContext(ctx context.Context, q string, args []driver
 	if strings.HasPrefix(q, "LOAD ") {
 		tables := map[string][]string{
 			"LOAD MYSQL VARIABLES TO RUNTIME":   {"global_variables"},
-			"LOAD MYSQL SERVERS TO RUNTIME":     {"mysql_group_replication_hostgroups", "mysql_galera_hostgroups", "mysql_servers"},
+			"LOAD MYSQL SERVERS TO RUNTIME":     {"mysql_group_replication_hostgroups", "mysql_galera_hostgroups", "mysql_servers", "mysql_hostgroup_attributes"},
 			"LOAD MYSQL USERS TO RUNTIME":       {"mysql_users"},
 			"LOAD MYSQL QUERY RULES TO RUNTIME": {"mysql_query_rules"},
 		}
@@ -85,6 +85,15 @@ func proxyTestDB(t *testing.T, s myspec.Spec) (*sql.DB, *[]string) {
 				columns = "variable_name PRIMARY KEY,variable_value"
 			}
 			if _, err := db.Exec("CREATE TABLE " + prefix + table.name + "(" + columns + ")"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if !proxyCluster(s) {
+		// These native admin tables exist even when the singleton desired
+		// image does not own them. LOAD MYSQL SERVERS also loads their rows.
+		for _, prefix := range []string{"", "runtime_"} {
+			if _, err := db.Exec("CREATE TABLE " + prefix + "mysql_hostgroup_attributes(hostgroup_id PRIMARY KEY,servers_defaults)"); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -399,5 +408,238 @@ func TestSingletonAdministrativeStatusDrift(t *testing.T) {
 	apply()
 	if len(*statements) != 0 {
 		t.Fatal("transient singleton shunning triggered a reload")
+	}
+}
+
+func assertProxyHostgroupDefaults(t *testing.T, db *sql.DB, prefix string, maxConnections int) {
+	t.Helper()
+	rows, err := db.Query("SELECT hostgroup_id,servers_defaults FROM " + prefix + "mysql_hostgroup_attributes ORDER BY hostgroup_id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	found := map[int]bool{}
+	for rows.Next() {
+		var group int
+		var defaults string
+		if err := rows.Scan(&group, &defaults); err != nil {
+			t.Fatal(err)
+		}
+		if found[group] {
+			t.Fatal("duplicate managed hostgroup defaults", prefix, group)
+		}
+		found[group] = true
+		assertProxyBackendDefaultJSON(t, defaults, maxConnections)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 4 || !found[10] || !found[11] || !found[20] || !found[30] {
+		t.Fatal("memory/runtime defaults do not cover every managed hostgroup", prefix, found)
+	}
+}
+
+func assertProxyDefaultsRepairCommittedBeforeRuntimeLoad(t *testing.T, statements []string) {
+	t.Helper()
+	begin, commit, load, attributeWrites := -1, -1, -1, 0
+	for i, statement := range statements {
+		switch statement {
+		case "BEGIN":
+			begin = i
+		case "COMMIT":
+			commit = i
+		case "LOAD MYSQL SERVERS TO RUNTIME":
+			load = i
+		}
+		if strings.HasPrefix(statement, "DELETE FROM mysql_hostgroup_attributes") || strings.HasPrefix(statement, "INSERT INTO mysql_hostgroup_attributes") {
+			attributeWrites++
+			if begin < 0 || commit >= 0 {
+				t.Fatal("backend defaults were changed outside the atomic memory-image transaction", statements)
+			}
+		}
+		if strings.HasPrefix(statement, "LOAD ") && commit < 0 {
+			t.Fatal("runtime was loaded before the repaired image committed", statements)
+		}
+	}
+	if begin < 0 || commit <= begin || load <= commit || attributeWrites != 5 {
+		t.Fatal("defaults repair did not atomically replace four rows and load MYSQL SERVERS afterward", statements)
+	}
+}
+
+func TestProxyHostgroupDefaultsRepairMemoryAndRuntimeDrift(t *testing.T) {
+	for _, mode := range []string{"gr", "galera"} {
+		t.Run(mode, func(t *testing.T) {
+			s := testProxySpec()
+			s.Proxy.MaxConnections = 731
+			if mode == "galera" {
+				s.Proxy.Mode = mode
+			}
+			image := proxyConfigImage(s)
+			names := []string{"mysql_group_replication_hostgroups", "mysql_galera_hostgroups", "mysql_servers", "mysql_users", "mysql_query_rules", "global_variables", "mysql_hostgroup_attributes"}
+			if len(image) != len(names) {
+				t.Fatal("cluster image did not append exactly one defaults table", len(image))
+			}
+			for i, name := range names {
+				if image[i].name != name {
+					t.Fatal("adding hostgroup defaults changed an existing image index", i, image[i].name, name)
+				}
+			}
+			db, statements := proxyTestDB(t, s)
+			apply := func() {
+				t.Helper()
+				if err := applyProxySQL(t.Context(), db, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			apply()
+			assertProxyDefaultsRepairCommittedBeforeRuntimeLoad(t, *statements)
+			for _, prefix := range []string{"", "runtime_"} {
+				assertProxyHostgroupDefaults(t, db, prefix, s.Proxy.MaxConnections)
+			}
+			// D087's monitor-owned writer/status movement remains read-only.
+			if _, err := db.Exec("UPDATE runtime_mysql_servers SET hostgroup_id=10,status='SHUNNED'"); err != nil {
+				t.Fatal(err)
+			}
+			*statements = nil
+			apply()
+			if len(*statements) != 0 {
+				t.Fatal("unchanged defaults or normal monitor placement caused SQL writes", *statements)
+			}
+			for _, prefix := range []string{"", "runtime_"} {
+				for _, drift := range []string{
+					"UPDATE " + prefix + "mysql_hostgroup_attributes SET servers_defaults=" + proxyQuote(`{"weight":1,"max_connections":731,"use_ssl":0}`) + " WHERE hostgroup_id=10",
+					"DELETE FROM " + prefix + "mysql_hostgroup_attributes WHERE hostgroup_id=11",
+					"UPDATE " + prefix + "mysql_hostgroup_attributes SET servers_defaults=" + proxyQuote(`{"weight":1,"max_connections":17,"use_ssl":1}`) + " WHERE hostgroup_id=20",
+					"UPDATE " + prefix + "mysql_hostgroup_attributes SET servers_defaults=" + proxyQuote(`{"weight":9,"max_connections":731,"use_ssl":1}`) + " WHERE hostgroup_id=30",
+				} {
+					if _, err := db.Exec(drift); err != nil {
+						t.Fatal(err)
+					}
+					*statements = nil
+					apply()
+					assertProxyDefaultsRepairCommittedBeforeRuntimeLoad(t, *statements)
+					for _, tablePrefix := range []string{"", "runtime_"} {
+						assertProxyHostgroupDefaults(t, db, tablePrefix, s.Proxy.MaxConnections)
+					}
+					var group int
+					var status string
+					if err := db.QueryRow("SELECT hostgroup_id,status FROM runtime_mysql_servers").Scan(&group, &status); err != nil || group != 10 || status != "SHUNNED" {
+						t.Fatal("repair changed the monitor's writer placement or outage status", group, status, err)
+					}
+					*statements = nil
+					apply()
+					if len(*statements) != 0 {
+						t.Fatal("repaired defaults did not converge to a zero-write reload", drift, *statements)
+					}
+				}
+			}
+			s.Proxy.MaxConnections = 977
+			*statements = nil
+			apply()
+			assertProxyDefaultsRepairCommittedBeforeRuntimeLoad(t, *statements)
+			assertProxyHostgroupDefaults(t, db, "", 977)
+			assertProxyHostgroupDefaults(t, db, "runtime_", 977)
+			*statements = nil
+			apply()
+			if len(*statements) != 0 {
+				t.Fatal("changed nondefault connection limit failed to converge", *statements)
+			}
+		})
+	}
+}
+
+func TestProxyHostgroupDefaultsRepairRollsBackAtomically(t *testing.T) {
+	for _, mode := range []string{"gr", "galera"} {
+		t.Run(mode, func(t *testing.T) {
+			s := testProxySpec()
+			s.Proxy.MaxConnections = 731
+			if mode == "galera" {
+				s.Proxy.Mode = mode
+			}
+			db, statements := proxyTestDB(t, s)
+			if err := applyProxySQL(t.Context(), db, s); err != nil {
+				t.Fatal(err)
+			}
+			drift := `{"weight":1,"max_connections":17,"use_ssl":0}`
+			for _, q := range []string{
+				"UPDATE mysql_servers SET max_connections=17",
+				"UPDATE mysql_hostgroup_attributes SET servers_defaults=" + proxyQuote(drift) + " WHERE hostgroup_id=20",
+				"CREATE TRIGGER fail_hostgroup_defaults BEFORE INSERT ON mysql_hostgroup_attributes WHEN NEW.hostgroup_id=20 BEGIN SELECT RAISE(ABORT,'injected defaults write failure'); END",
+			} {
+				if _, err := db.Exec(q); err != nil {
+					t.Fatal(err)
+				}
+			}
+			*statements = nil
+			if err := applyProxySQL(t.Context(), db, s); err == nil || !strings.Contains(err.Error(), "injected defaults write failure") {
+				t.Fatal("atomic repair did not surface the native SQLite write failure", err)
+			}
+			for _, statement := range *statements {
+				if statement == "COMMIT" || strings.HasPrefix(statement, "LOAD ") {
+					t.Fatal("failed attribute write committed or loaded a partial server image", *statements)
+				}
+			}
+			var maxConnections int
+			if err := db.QueryRow("SELECT max_connections FROM mysql_servers").Scan(&maxConnections); err != nil || maxConnections != 17 {
+				t.Fatal("failed late-table repair did not roll back earlier mysql_servers writes", maxConnections, err)
+			}
+			var defaults string
+			if err := db.QueryRow("SELECT servers_defaults FROM mysql_hostgroup_attributes WHERE hostgroup_id=20").Scan(&defaults); err != nil || defaults != drift {
+				t.Fatal("failed repair did not restore the original memory defaults row", defaults, err)
+			}
+			assertProxyHostgroupDefaults(t, db, "runtime_", 731)
+			if _, err := db.Exec("DROP TRIGGER fail_hostgroup_defaults"); err != nil {
+				t.Fatal(err)
+			}
+			*statements = nil
+			if err := applyProxySQL(t.Context(), db, s); err != nil {
+				t.Fatal(err)
+			}
+			assertProxyDefaultsRepairCommittedBeforeRuntimeLoad(t, *statements)
+			assertProxyHostgroupDefaults(t, db, "", 731)
+			assertProxyHostgroupDefaults(t, db, "runtime_", 731)
+			*statements = nil
+			if err := applyProxySQL(t.Context(), db, s); err != nil || len(*statements) != 0 {
+				t.Fatal("successful retry did not restore read-only convergence", err, *statements)
+			}
+		})
+	}
+}
+
+func TestSingletonProxyLeavesHostgroupAttributesUnmanaged(t *testing.T) {
+	s := testProxySpec()
+	s.Topology = myspec.TopologySingle
+	image := proxyConfigImage(s)
+	if len(image) != 6 {
+		t.Fatal("singleton desired table image changed", len(image))
+	}
+	for _, table := range image {
+		if table.name == "mysql_hostgroup_attributes" {
+			t.Fatal("singleton claimed unrelated hostgroup defaults")
+		}
+	}
+	db, statements := proxyTestDB(t, s)
+	if err := applyProxySQL(t.Context(), db, s); err != nil {
+		t.Fatal(err)
+	}
+	unmanaged := `{"weight":3,"max_connections":17,"use_ssl":0}`
+	for _, prefix := range []string{"", "runtime_"} {
+		if _, err := db.Exec("INSERT INTO " + prefix + "mysql_hostgroup_attributes(hostgroup_id,servers_defaults) VALUES(999," + proxyQuote(unmanaged) + ")"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	*statements = nil
+	if err := applyProxySQL(t.Context(), db, s); err != nil || len(*statements) != 0 {
+		t.Fatal("unmanaged singleton attributes triggered writes", err, *statements)
+	}
+	s.Proxy.MaxConnections++
+	if err := applyProxySQL(t.Context(), db, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, prefix := range []string{"", "runtime_"} {
+		var defaults string
+		if err := db.QueryRow("SELECT servers_defaults FROM " + prefix + "mysql_hostgroup_attributes WHERE hostgroup_id=999").Scan(&defaults); err != nil || defaults != unmanaged {
+			t.Fatal("singleton repair deleted or rewrote unrelated defaults", prefix, defaults, err)
+		}
 	}
 }
