@@ -28,6 +28,26 @@ func GTIDContains(have, want string) (bool, error) {
 	return gtidContains(a, b), nil
 }
 
+// PXCFrozenHistoryContained proves a joining member has no unique transactions
+// outside the two native namespaces for this Galera state. Lifecycle admission
+// must separately authorize discarding that member's copied cluster accounting.
+func PXCFrozenHistoryContained(seed, member, state string) (bool, error) {
+	if !ValidUUID(state) {
+		return false, fmt.Errorf("invalid Galera state UUID")
+	}
+	have, err := gtidIntervals(seed)
+	if err != nil {
+		return false, err
+	}
+	want, err := gtidIntervals(member)
+	if err != nil {
+		return false, err
+	}
+	delete(want, strings.ToLower(state))
+	delete(want, inverseUUID(state))
+	return gtidContains(have, want), nil
+}
+
 func gtidContains(a, b map[string][]gtidInterval) bool {
 	for sid, ranges := range b {
 		available := a[sid]

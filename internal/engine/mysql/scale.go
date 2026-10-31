@@ -18,6 +18,9 @@ func maintenanceAllowed(ctx context.Context, rc *engine.Context, s *state) error
 	if bs.RestoreOperation != nil || s.RestoreGTIDBlocked != "" || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Formation.Reformation != nil && s.Formation.Reformation.State != "formed" {
 		return engine.ErrUnavailable
 	}
+	if mapping := s.Formation.GTIDCertification; mapping != nil && pxcFormationMappingPending(s) {
+		return engine.ErrUnavailable
+	}
 	if rc.Store != nil {
 		backups, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
 		if err != nil {

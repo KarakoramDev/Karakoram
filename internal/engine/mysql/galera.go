@@ -136,6 +136,11 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 		r.State, r.Blocked = "bootstrapping", ""
 		for _, m := range s.data() {
 			m.Offline = m.Name != seed
+			// Recovered followers are confirmed stopped above; historical joined
+			// receipts cannot admit several new-epoch joiners simultaneously.
+			if m.Name != seed {
+				m.Stage = "deployed"
+			}
 		}
 		publishRevision(s)
 		return true, nil
@@ -180,6 +185,9 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 		if err != nil || !applied {
 			return true, err
 		}
+		if !pxcJoinAllowed(s, seed) {
+			return true, nil
+		}
 		// The native route durably claims each epoch before starting mysqld. Replay
 		// observes that receipt; it must never generate another bootstrap epoch.
 		err = mysqlAction(ctx, rc, seed.Name, myspec.ActionGaleraBootstrap, myspec.GaleraBootstrapRequest{ClusterName: f.GroupName, FormationEpoch: f.FormationEpoch, StartPosition: f.StartPosition}, nil)
@@ -193,11 +201,19 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 			}
 			st, err := live(ctx, rc, m.Name)
 			if err == nil && st.MemberState == "ONLINE" {
+				if m.Stage != "joined" {
+					m.Stage, m.Initialized, m.ServerUUID = "joined", true, st.ServerUUID
+					publishRevision(s)
+					return true, nil
+				}
 				continue
 			}
 			applied, err := configApplied(ctx, rc, m)
 			if err != nil || !applied {
 				return true, err
+			}
+			if !pxcJoinAllowed(s, m) {
+				continue
 			}
 			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if err != nil {

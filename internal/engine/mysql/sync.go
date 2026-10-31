@@ -162,6 +162,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	// Collect independent native/agent/platform reads together before optional
 	// history checks. Subsequent formation/readiness scans reuse this pass.
 	observeStatusMembers(ctx, rc, s.Members)
@@ -223,6 +226,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, e
 	}
 	s.allocate(rc.Cluster)
+	if rc.Cluster.Spec.Provider == "pxc" {
+		preparePXCFormationCertification(s)
+	}
 	if err = p.ensureSecrets(ctx, rc, s); err != nil {
 		return result, err
 	}
@@ -321,6 +327,10 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 					}
 					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
 				} else {
+					if mapping := s.Formation.GTIDCertification; mapping != nil {
+						// Existing storage is not proof of empty data.
+						delete(mapping.EmptyMembers, m.Name)
+					}
 					if v.Importing {
 						return result, engine.Invalid("incomplete import has no frozen batch for %s", m.Name)
 					}
@@ -445,6 +455,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.syncInitialRestore(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	if e := beginPXCFormationCertification(ctx, rc, s); e != nil {
+		return result, e
+	}
 	if changed, e := p.reconcileFormation(ctx, rc, s); changed || e != nil {
 		return result, e
 	}
@@ -484,6 +497,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 			return result, nil
 		}
+	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
 	}
 	if converged && len(s.Members) > 0 {
 		if deferred, e := p.reconcileExposure(ctx, rc, s, true); e != nil {

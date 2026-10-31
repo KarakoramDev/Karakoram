@@ -97,6 +97,7 @@ func TestPXCRestorePersistedReformRecoversWithRealProxyValidation(t *testing.T) 
 			converge(t, p, rc, b)
 			rc.Cluster.Spec.Backup.Storage = ""
 			s, _ := load(rc.Cluster)
+			s.Formation.GTIDCertification = nil // Model native restore.install, not the old formation's proof.
 			op := &domain.Operation{ID: "persisted-reform", Kind: "initial-restore"}
 			dataHeld, proxyHeld := map[string]bool{}, map[string]bool{}
 			s.Formation.FormationEpoch++

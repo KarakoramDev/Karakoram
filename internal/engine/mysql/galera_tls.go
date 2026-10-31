@@ -181,6 +181,19 @@ func (p *Core) reconcileGaleraTrafficRotation(ctx context.Context, rc *engine.Co
 		s.Formation.Reformation = &reformation{State: "observing"}
 		q.Stage = "reform"
 	case "reform":
+		// Explicit TLS operations drive this controller without ordinary Sync.
+		// Advance both the new-epoch receipt (before bootstrap admission) and
+		// its certification/release (after native joins), never native readiness
+		// alone. The formation controller still owns serialized native joins.
+		if busy, err := reconcilePXCFormationCertification(ctx, rc, s); err != nil || busy {
+			return true, err
+		}
+		// This recovery path returns before ordinary Sync's formation hook.
+		// Acquire the new epoch's client fence before its bootstrap gate can
+		// release a seed; never bypass the gate using a completed old receipt.
+		if err := beginPXCFormationCertification(ctx, rc, s); err != nil {
+			return true, err
+		}
 		busy, err := p.reconcileGaleraFormation(ctx, rc, s)
 		if err != nil || busy {
 			return true, err

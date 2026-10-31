@@ -574,6 +574,12 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		if rc.Cluster.Spec.Provider == "pxc" {
 			s.RestoreGTIDBlocked = ""
+			// The restored epoch has its own certification owner; a previous
+			// formation's retired fence cannot authorize or block this seed.
+			s.Formation.GTIDCertification = nil
+			for _, m := range s.data() {
+				m.GaleraJoinFence = false
+			}
 		}
 		s.Formation.Seed = cp.Member
 		s.Formation.Blocked = ""
@@ -642,7 +648,7 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		// configuration cannot release them. Start only members admitted by the
 		// restored formation: the seed first, then followers after it forms.
 		for _, m := range s.data() {
-			if m.Offline {
+			if m.Offline || s.Topology == "cluster" && !pxcJoinAllowed(s, m) {
 				continue
 			}
 			ok, e := configApplied(ctx, rc, m)
@@ -729,6 +735,7 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 				return backupResult(cp, false), err
 			}
 			cp.GTIDCertification.FencesOwned = false
+			recordRestoredPXCMapping(s, cp.GTIDCertification)
 			if err = persistRestore(rc, op, cp); err != nil {
 				return backupResult(cp, false), err
 			}
@@ -736,6 +743,9 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 			if err != nil {
 				return backupResult(cp, false), err
 			}
+		}
+		if rc.Cluster.Spec.Provider == "pxc" && legacyPXCRestore(cp) {
+			recordRestoredPXCMapping(s, cp.GTIDCertification)
 		}
 		bs.Generation = cp.Generation
 		bs.CloneComplete = true

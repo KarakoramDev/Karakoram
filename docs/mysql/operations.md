@@ -46,8 +46,11 @@ internal state to bypass observation.
 PXC deployment initially starts only the agent. All data runtimes must deploy
 before the control plane publishes the seed's bootstrap epoch; only that seed
 may start mysqld until it forms a Primary component. Remaining members then start
-as SST/IST joiners. A runtime deployment is not permission to launch an
-uninitialized seed as an ordinary joiner.
+as SST/IST joiners **one at a time**: a current-formation Synced receipt for the
+previous joiner releases the next identity. The same barrier covers scale-up
+and restored/recovered follower cohorts, including legacy agents. A runtime
+deployment or reachable agent is not native Synced proof or permission to launch
+an uninitialized seed as an ordinary joiner.
 
 Galera's local bind address is distinct from its advertised member names.
 For agents advertising `capability=mysql-galera-listen-host` on their
@@ -150,11 +153,39 @@ incident. The automatic full after an uncertified restore cannot acknowledge
 that incident; operator-requested fresh full acknowledgement still requires its
 normal complete identity proof.
 
-Automatic re-provisioning is limited to an in-progress restore that already
-authorizes replacing follower data from its restored seed. A live re-formation,
-rolling restart or full-cluster bootstrap does not authorize discarding member
-data; these retain the continuity guard and require explicit trusted-source
-replacement if histories conflict.
+Automatic re-provisioning requires either explicit in-progress restore ownership
+or a durable empty-member admission captured before a new managed volume is
+initialized. Birth formation negotiates agent capability and fences client SQL/
+proxies before certifying a replicated probe SID mapping. Empty scale/replace
+joins fence and unroute only the new members: existing writers and ProxySQL keep
+running, and the privileged probe executes on a fenced joiner while the seed
+remains authoritative. Certification is required before Ready. A disagreeing
+empty member may receive at most two seed-pinned SST
+remedies, and only if it has no unique frozen/local GTID history beyond the seed.
+Unique data or unproven lifecycle permission fails closed without SST. Legacy
+agents acquire no new holds and report `GTIDMappingCertified=Unknown` /
+`CertificationUnavailable`; native history comparison remains active.
+Admission records native Synced/phase progress durably. Five minutes without
+progress fails closed with an explicit stalled-join diagnostic and retryable
+member/proxy fence cleanup; it cannot leave later joiners or client holds waiting
+silently forever. Legacy restore follower starts use the same launch barrier.
+
+Successful certification retires the empty-member erase permission before client
+fence release. New incarnation/epoch/history evidence requires re-certification,
+never automatic erasure of already admitted live data. A pre-existing latched
+formation without saved empty-member provenance reports an explicit trusted-source
+restore or delete/re-create action. A rolling restart is not data repair.
+The certificate and any original GTID incident are separate: SST, consistent
+mapping and equal histories never silently acknowledge a real incident.
+
+There is no separate retry-certification API. For a blocked birth with no user
+data, delete/re-create; a blocked restore permits a new restore. A blocked empty
+scale join can be withdrawn by scaling back to the previously admitted member
+count; a pending replacement can be cancelled before retirement. These exits
+retire only the unadmitted cohort and release its owned fences, preserving the
+existing cluster and any prior GTID latch. A Synced replacement waiting for its
+maintenance window is not a stalled join. Neither exit grants data-discard
+permission over old admitted members or acknowledges a real incident.
 
 `GTIDHistorySafe=False` / `GTIDHistoryDiscontinuityLatched` records a durable divergence
 boundary, the detection time and affected members. The condition appears in the

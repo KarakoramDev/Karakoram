@@ -61,7 +61,7 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old string) error {
 	writer := false
 	for _, m := range s.data() {
-		if m.Name == old {
+		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
@@ -297,8 +297,14 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 	if err := survivorsOnline(ctx, rc, s, old); err != nil {
 		return err
 	}
+	expected := 0
+	for _, m := range s.Members {
+		if m.Role == "data" && m.Name != old && pxcRetirementSurvivor(ctx, s, old, m.Name) {
+			expected++
+		}
+	}
 	for _, m := range s.data() {
-		if m.Name == old {
+		if m.Name == old || !pxcRetirementSurvivor(ctx, s, old, m.Name) {
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
@@ -312,7 +318,7 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 			}
 			st.GroupMembers = native.ClusterSize
 		}
-		if err != nil || st.GroupMembers != len(s.data())-1 {
+		if err != nil || st.GroupMembers != expected {
 			return engine.ErrUnavailable
 		}
 	}

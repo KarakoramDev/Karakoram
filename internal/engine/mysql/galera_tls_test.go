@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -95,6 +96,24 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 	sqlBefore, _ := secret(t.Context(), rc, "tls/servers/demom0.crt")
 	s, _ := load(rc.Cluster)
 	history, epoch := s.Formation.GroupName, s.Formation.FormationEpoch
+	prior := b.action
+	bootstraps := 0
+	b.action = func(w http.ResponseWriter, r *http.Request, member string) bool {
+		if r.URL.Path == "/v1/mysql/"+myspec.ActionGaleraBootstrap {
+			current, err := load(rc.Cluster)
+			if err != nil {
+				t.Error(err)
+				return true
+			}
+			receipt := current.Formation.GTIDCertification
+			if receipt == nil || receipt.Epoch != current.Formation.FormationEpoch || receipt.Owner == "" ||
+				current.RestoreGTIDFence != receipt.Owner || receipt.Checkpoint.GTIDCertification == nil || !receipt.Checkpoint.GTIDCertification.FencesOwned {
+				t.Error("traffic TLS recovery attempted native bootstrap without the new epoch's published client fence")
+			}
+			bootstraps++
+		}
+		return prior != nil && prior(w, r, member)
+	}
 	if err := requestGaleraTrafficRotation(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +146,12 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 	if !changed || !done || s.Formation.GroupName != history || s.Formation.FormationEpoch != epoch+1 {
 		t.Fatal("traffic TLS recovery did not preserve history with new bootstrap epoch", changed, done, s.Formation)
 	}
+	b.mu.Lock()
+	bootstrapCalls := bootstraps
+	b.mu.Unlock()
+	if bootstrapCalls == 0 {
+		t.Fatal("traffic TLS recovery did not exercise native bootstrap")
+	}
 	afterCA, _ := secret(t.Context(), rc, galeraTrafficCA+".crt")
 	if bytes.Equal(beforeCA, afterCA) {
 		t.Fatal("rotation did not replace compromised traffic trust")
@@ -145,6 +170,54 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 			t.Fatal("rotation staging retained", file.suffix, err)
 		}
 	}
+}
+
+func TestPXCFiveMemberTrafficTLSReformCertifiesWithoutOrdinarySync(t *testing.T) {
+	p, rc, b := setupPXC(t)
+	converge(t, p, rc, b)
+	rc.Cluster.Generation++
+	rc.Cluster.Spec.Components.Engine.Replicas = 5
+	day2Ticks(t, rc, b, func(s *state) bool {
+		return len(s.data()) == 5 && !pxcFormationMappingPending(s)
+	})
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch, group := s.Formation.FormationEpoch, s.Formation.GroupName
+	if err := requestGaleraTrafficRotation(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	for range 120 {
+		s, err = load(rc.Cluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p = New(Options{Provider: "pxc"})
+		if _, err := p.reconcileGaleraTrafficRotation(t.Context(), rc, s); err != nil {
+			t.Fatal(err)
+		}
+		if err := save(rc.Cluster, s); err != nil {
+			t.Fatal(err)
+		}
+		b.apply(t, p, rc)
+		if s.GaleraTLS != nil {
+			continue
+		}
+		if s.Formation.FormationEpoch != epoch+1 || s.Formation.GroupName != group || pxcFormationMappingPending(s) || s.RestoreGTIDFence != "" {
+			t.Fatal("TLS completion skipped the new epoch's mapping certification", s.Formation)
+		}
+		for _, member := range s.data() {
+			if member.Stage != "joined" || pxcJoinRoutingFenced(s, member) {
+				t.Fatal("TLS completion retained an unadmitted or fenced member", member.Name)
+			}
+		}
+		return
+	}
+	t.Fatalf("direct TLS reform stalled: rotation=%+v formation=%+v", s.GaleraTLS, s.Formation)
 }
 
 type trafficRenewalClock struct{ at time.Time }

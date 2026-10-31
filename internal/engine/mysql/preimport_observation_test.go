@@ -179,8 +179,6 @@ func TestGaleraStatusBoundsNativeRequest(t *testing.T) {
 
 func TestPXCInitialProcessAdmissionFollowsFormation(t *testing.T) {
 	p, rc, _ := setupPXC(t)
-	// Allocate, seal credentials and freeze the first import plan, as a new
-	// create does before any member can pull its initial configuration.
 	if _, err := p.Sync(t.Context(), rc); err != nil {
 		t.Fatal(err)
 	}
@@ -188,15 +186,47 @@ func TestPXCInitialProcessAdmissionFollowsFormation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, stage := range []string{"unformed", "bootstrapping", "formed"} {
-		s.Formation.State = stage
-		if stage == "bootstrapping" {
-			s.Formation.FormationEpoch++
+	receipt := s.Formation.GTIDCertification
+	if receipt == nil {
+		t.Fatal("formation did not capture empty identities before deployment")
+	}
+	data := s.data()
+	for _, m := range data {
+		m.ServiceID, m.Stage = m.Name+"-id", "deployed"
+	}
+	phases := []struct {
+		name, state     string
+		published       bool
+		joined, running int
+	}{
+		{"unformed", "unformed", false, 0, 0},
+		{"bootstrap-intent-only", "bootstrapping", false, 0, 0},
+		{"bootstrap-published", "bootstrapping", true, 0, 1},
+		{"formed-first-follower", "formed", true, 1, 2},
+		{"formed-next-follower", "formed", true, 2, 3},
+		{"formed-all-synced", "formed", true, 3, 3},
+	}
+	for _, phase := range phases {
+		s.Formation.State = phase.state
+		receipt.Checkpoint.GTIDCertification = &pxcRestoreCertification{Negotiated: true, FencesOwned: true}
+		s.RestoreGTIDFence = ""
+		if phase.published {
+			s.RestoreGTIDFence = receipt.Owner
+		}
+		for i, m := range data {
+			m.Stage, m.Initialized = "deployed", false
+			if i < phase.joined {
+				m.Stage, m.Initialized = "joined", true
+			}
+			m.GaleraSSTDonor = ""
+			if phase.published && m.Name != s.Formation.Seed {
+				m.GaleraSSTDonor = s.Formation.Seed
+			}
 		}
 		if err := save(rc.Cluster, s); err != nil {
 			t.Fatal(err)
 		}
-		for _, m := range s.data() {
+		for i, m := range data {
 			cfg, err := p.MemberConfig(t.Context(), rc, m.Name)
 			if err != nil {
 				t.Fatal(err)
@@ -205,14 +235,16 @@ func TestPXCInitialProcessAdmissionFollowsFormation(t *testing.T) {
 			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
 				t.Fatal(err)
 			}
-			wantRunning := stage == "formed" || stage == "bootstrapping" && m.Name == s.Formation.Seed
-			if got := len(cfg.DesiredProcesses) > 0; got != wantRunning {
-				t.Fatalf("%s member %s desired processes=%v", stage, m.Name, cfg.DesiredProcesses)
+			if err := spec.Validate(); err != nil {
+				t.Fatalf("%s real member validator: %v", phase.name, err)
 			}
-			if want := stage == "bootstrapping" && m.Name == s.Formation.Seed; spec.Galera.Bootstrap != want {
-				t.Fatalf("%s member %s bootstrap=%v", stage, m.Name, spec.Galera.Bootstrap)
+			if running := len(cfg.DesiredProcesses) > 0; running != (i < phase.running) {
+				t.Fatalf("%s member %s desired processes=%v", phase.name, m.Name, cfg.DesiredProcesses)
 			}
-			if stage == "unformed" && cfg.DesiredProcesses == nil {
+			if want := phase.state == "bootstrapping" && m.Name == s.Formation.Seed; spec.Galera.Bootstrap != want {
+				t.Fatalf("%s member %s bootstrap=%v", phase.name, m.Name, spec.Galera.Bootstrap)
+			}
+			if len(cfg.DesiredProcesses) == 0 && cfg.DesiredProcesses == nil {
 				t.Fatal("nil desired processes would allow implicit startup")
 			}
 		}

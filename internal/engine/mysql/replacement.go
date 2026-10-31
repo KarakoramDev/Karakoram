@@ -71,6 +71,9 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		name := fmt.Sprintf("%sm%d", rc.Cluster.Name, index)
 		s.Members = append(s.Members, &member{Name: name, Index: index, Role: "data", Volume: name + "v", Stage: "planned", ConfigVersion: s.ConfigVersion})
 		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: name, Stage: "join"}
+		if rc.Cluster.Spec.Provider == "pxc" {
+			preparePXCFormationCertification(s)
+		}
 		publishRevision(s)
 	}
 	if s.Replacement.Operation != op.ID {
@@ -85,6 +88,12 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 	case "join":
 		next := s.find(cp.New)
 		if next == nil {
+			if cp.Recovery == "rollback" {
+				// The formation lifecycle may already have retired the entire
+				// unadmitted cohort before this replacement can resume.
+				cp.Stage = "done"
+				return replacementResult(cp), nil
+			}
 			return engine.OpResult{}, engine.ErrNotFound
 		}
 		if cp.Recovery == "rollback" {

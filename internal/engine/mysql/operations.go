@@ -25,6 +25,9 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if bs.RestoreOperation != nil || s.RestoreGTIDBlocked != "" {
 		return false, nil
 	}
+	if mapping := s.Formation.GTIDCertification; mapping != nil && pxcFormationMappingPending(s) {
+		return false, nil
+	}
 	if s.Pending != nil || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Replacement != nil || s.TLSRotation != nil || s.Rolling != nil && s.Rolling.Stage != "backup" {
 		return false, nil
 	}
@@ -97,6 +100,9 @@ func (*Core) RecoveryOperationKind(ctx context.Context, rc *engine.Context) (str
 		s, err := load(rc.Cluster)
 		if err != nil {
 			return "", err
+		}
+		if mapping := s.Formation.GTIDCertification; mapping != nil && mapping.JoinOnly && mapping.Blocked != "" && pxcFormationCleanupComplete(s, mapping) {
+			return domain.OperationRestore, nil
 		}
 		if s.RestoreGTIDBlocked != "" && s.RestoreGTIDFence == "" {
 			return domain.OperationRestore, nil

@@ -72,14 +72,15 @@ type gtidMemberIdentity struct {
 	NativeUUID string `json:"nativeUUID"`
 }
 type formation struct {
-	GroupName      string       `json:"groupName"`
-	FormationEpoch uint64       `json:"formationEpoch"`
-	Seed           string       `json:"seed"`
-	State          string       `json:"state"`
-	Blocked        string       `json:"blocked,omitempty"`
-	Reformation    *reformation `json:"reformation,omitempty"`
-	Adopting       bool         `json:"adopting,omitempty"`
-	StartPosition  string       `json:"startPosition,omitempty"`
+	GroupName         string                     `json:"groupName"`
+	FormationEpoch    uint64                     `json:"formationEpoch"`
+	Seed              string                     `json:"seed"`
+	State             string                     `json:"state"`
+	Blocked           string                     `json:"blocked,omitempty"`
+	Reformation       *reformation               `json:"reformation,omitempty"`
+	Adopting          bool                       `json:"adopting,omitempty"`
+	StartPosition     string                     `json:"startPosition,omitempty"`
+	GTIDCertification *pxcFormationCertification `json:"gtidCertification,omitempty"`
 }
 type reformation struct {
 	State              string                                 `json:"state"`
@@ -119,6 +120,7 @@ type member struct {
 	SlowShutdown      bool                 `json:"slowShutdown,omitempty"`
 	RetirementOp      *infra.Op            `json:"retirementOp,omitempty"`
 	Parameters        map[string]string    `json:"restartParameters,omitempty"`
+	GaleraJoinFence   bool                 `json:"galeraJoinFence,omitempty"`
 	GaleraSSTDonor    string               `json:"galeraSSTDonor,omitempty"`
 }
 type pending struct {

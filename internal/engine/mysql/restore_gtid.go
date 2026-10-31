@@ -33,12 +33,13 @@ type pxcRestoreCertification struct {
 }
 
 type pxcRestoreGTIDEvidence struct {
-	Round   int                                    `json:"round"`
-	Epoch   uint64                                 `json:"epoch"`
-	Before  map[string]myspec.GaleraStatusResponse `json:"before"`
-	After   map[string]myspec.GaleraStatusResponse `json:"after"`
-	Probe   myspec.GaleraStatusResponse            `json:"probe"`
-	Mapping map[string]string                      `json:"mapping"`
+	Round        int                                    `json:"round"`
+	Epoch        uint64                                 `json:"epoch"`
+	Before       map[string]myspec.GaleraStatusResponse `json:"before"`
+	After        map[string]myspec.GaleraStatusResponse `json:"after"`
+	Probe        myspec.GaleraStatusResponse            `json:"probe"`
+	Mapping      map[string]string                      `json:"mapping"`
+	CertifiedCut map[string]myspec.GaleraStatusResponse `json:"certifiedCut,omitempty"`
 }
 
 func reloadRestoreGTIDMembers(ctx context.Context, rc *engine.Context, s *state) error {
@@ -179,6 +180,13 @@ func blockRestoreGTID(ctx context.Context, rc *engine.Context, s *state, op *dom
 // This path is restore-only: the explicit restore already authorizes replacing
 // follower data, while arbitrary live re-formations do not grant that authority.
 func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation, cp *backupCheckpoint) error {
+	return certifyPXCMapping(ctx, rc, s, cp, pxcMappingOwner{Operation: op})
+}
+
+// One controller certifies both explicitly restored history and admitted empty
+// formation members. Ownership decides persistence and data-discard permission.
+func certifyPXCMapping(ctx context.Context, rc *engine.Context, s *state, cp *backupCheckpoint, owner pxcMappingOwner) error {
+	op := owner.Operation
 	if cp.GTIDCertification == nil {
 		cp.GTIDCertification = &pxcRestoreCertification{Phase: "fence", Attempts: map[string]int{}}
 	}
@@ -190,7 +198,7 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		c.Attempts = map[string]int{}
 	}
 	if c.Phase == "blocked" {
-		return engine.Invalid("%s", s.RestoreGTIDBlocked)
+		return engine.Invalid("%s", owner.blockedReason(s))
 	}
 	seed := s.find(s.Formation.Seed)
 	if seed == nil {
@@ -198,7 +206,7 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 	}
 	// Recovery after a cancelled/failed operation must reacquire its client fence
 	// before any further probe or replacement. Native observations verify it below.
-	if fenced, err := acquirePXCRestoreFences(ctx, rc, s, op, cp); err != nil || !fenced {
+	if fenced, err := owner.acquire(ctx, rc, s, cp); err != nil || !fenced {
 		return err
 	}
 	switch c.Phase {
@@ -210,8 +218,8 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		if !completeGTIDObservation(observed) {
 			return nil
 		}
-		for _, status := range observed {
-			if !status.OfflineMode {
+		for name, status := range observed {
+			if owner.requiresFence(name) && !status.OfflineMode {
 				return nil
 			}
 		}
@@ -220,11 +228,12 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		c.Phase = "probe"
 	case "probe":
 		var probe myspec.GaleraStatusResponse
+		probeMember := owner.probeMember(s)
 		req := myspec.GaleraHistoryProbeRequest{Receipt: fmt.Sprintf("%s/gtid-probe/%d", op.ID, c.Round), ClusterName: s.Formation.GroupName, FormationEpoch: s.Formation.FormationEpoch}
-		if err := mysqlAction(ctx, rc, seed.Name, myspec.ActionGaleraHistoryProbe, req, &probe); err != nil {
+		if err := mysqlAction(ctx, rc, probeMember, myspec.ActionGaleraHistoryProbe, req, &probe); err != nil {
 			return err
 		}
-		if !probe.Eligible() || !probe.OfflineMode || probe.StateUUID != c.Before[seed.Name].StateUUID {
+		if !probe.Eligible() || !probe.OfflineMode || probe.StateUUID != c.Before[probeMember].StateUUID {
 			return engine.ErrUnavailable
 		}
 		c.Probe, c.Phase = &probe, "compare"
@@ -239,12 +248,12 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		mappings := make(map[string]string, len(observed))
 		for _, m := range s.data() {
 			status := observed[m.Name]
-			if !status.OfflineMode || status.StateUUID != c.Probe.StateUUID || status.ServerUUID != c.Before[m.Name].ServerUUID || status.LastCommitted < c.Probe.LastCommitted {
+			if owner.requiresFence(m.Name) && !status.OfflineMode || status.StateUUID != c.Probe.StateUUID || status.ServerUUID != c.Before[m.Name].ServerUUID || status.LastCommitted < c.Probe.LastCommitted {
 				return nil
 			}
 			sid, err := myspec.PXCActiveSIDAdvance(c.Before[m.Name].GTIDExecuted, status.GTIDExecuted, status.StateUUID)
 			if err != nil {
-				return blockRestoreGTID(ctx, rc, s, op, cp, err.Error())
+				return owner.block(ctx, rc, s, cp, err.Error())
 			}
 			if sid == "" {
 				return nil
@@ -253,7 +262,7 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		}
 		if len(c.Evidence) == 0 || c.Evidence[len(c.Evidence)-1].Round != c.Round {
 			c.Evidence = append(c.Evidence, pxcRestoreGTIDEvidence{Round: c.Round, Epoch: s.Formation.FormationEpoch, Before: c.Before, After: observed, Probe: *c.Probe, Mapping: mappings})
-			if err := persistRestore(rc, op, *cp); err != nil {
+			if err := owner.persist(rc, s, cp); err != nil {
 				return err
 			}
 		}
@@ -274,24 +283,35 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 		}
 		if target == "" {
 			if err := myspec.CheckGTIDQuorum(observed); err != nil {
-				return blockRestoreGTID(ctx, rc, s, op, cp, "members share an active SID mapping but their frozen executed histories differ")
+				return owner.block(ctx, rc, s, cp, "members share an active SID mapping but their frozen executed histories differ")
 			}
 			if historyConflict {
-				return blockRestoreGTID(ctx, rc, s, op, cp, "equal-position active GTID prefixes do not converge to the restored seed")
+				return owner.block(ctx, rc, s, cp, "equal-position active GTID prefixes do not converge to the trusted seed")
 			}
-			for _, status := range observed {
-				if status.LastCommitted != observed[seed.Name].LastCommitted {
-					return nil
-				}
+			cutReady, cutErr := owner.mappingCutReady(s, observed)
+			if cutErr != nil {
+				return owner.block(ctx, rc, s, cp, "cannot establish the trusted seed GTID cut")
+			}
+			if !cutReady {
+				return nil
 			}
 			if s.GTIDPrefixLag != nil {
 				return nil
 			}
+			if len(c.Evidence) > 0 {
+				c.Evidence[len(c.Evidence)-1].CertifiedCut = observed
+			}
 			c.Certified, c.Phase, cp.Step = true, "certified", "activate"
 			return nil
 		}
+		if owner.Formation != nil && owner.Formation.JoinOnly && observed[target].LastCommitted > observed[seed.Name].LastCommitted {
+			return nil
+		}
+		if reason := owner.remedyRefusal(s, target, observed); reason != "" {
+			return owner.block(ctx, rc, s, cp, reason)
+		}
 		if c.Attempts[target] >= 2 {
-			return blockRestoreGTID(ctx, rc, s, op, cp, "member "+target+" still disagrees with the restored seed after two SST remedies")
+			return owner.block(ctx, rc, s, cp, "member "+target+" still disagrees with the trusted seed after two SST remedies")
 		}
 		c.Attempts[target]++
 		c.Target, c.Phase = target, "stop"
@@ -367,7 +387,9 @@ func certifyPXCRestore(ctx context.Context, rc *engine.Context, s *state, op *do
 			return nil
 		}
 		target.Initialized, target.Stage, target.ServerUUID = true, "joined", status.ServerUUID
-		target.GaleraSSTDonor = ""
+		if owner.Formation == nil || !owner.Formation.JoinOnly {
+			target.GaleraSSTDonor = ""
+		}
 		c.Target, c.Phase = "", "observe"
 		publishRevision(s)
 		return save(rc.Cluster, s)
@@ -384,6 +406,11 @@ const restoreCertificationUnavailable = "Agents do not all advertise PXC restore
 // Negotiate before any certification hold or native client fence is acquired.
 // An absent optional flag means legacy compatibility, not a failed restoration.
 func negotiatePXCRestoreCertification(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation, cp *backupCheckpoint) error {
+	return negotiatePXCMapping(ctx, rc, s, cp, pxcMappingOwner{Operation: op})
+}
+
+func negotiatePXCMapping(ctx context.Context, rc *engine.Context, s *state, cp *backupCheckpoint, owner pxcMappingOwner) error {
+	op := owner.Operation
 	if rc.Cluster.Spec.Provider != "pxc" {
 		return nil
 	}
@@ -444,15 +471,22 @@ func negotiatePXCRestoreCertification(ctx context.Context, rc *engine.Context, s
 		}
 		c.Negotiated, c.Legacy = true, len(missing) != 0
 		if c.Legacy {
-			s.RestoreGTIDUnavailable = restoreCertificationUnavailable + " Affected members: " + strings.Join(missing, ", ")
+			if owner.Formation == nil {
+				s.RestoreGTIDUnavailable = restoreCertificationUnavailable + " Affected members: " + strings.Join(missing, ", ")
+			}
 			c.LegacyCleanupPending = s.RestoreGTIDFence == op.ID
 		} else {
-			s.RestoreGTIDUnavailable = ""
+			if owner.Formation == nil {
+				s.RestoreGTIDUnavailable = ""
+			}
+		}
+		if owner.Formation != nil {
+			owner.Formation.Legacy = c.Legacy
 		}
 		if err := save(rc.Cluster, s); err != nil {
 			return err
 		}
-		if err := persistRestore(rc, op, *cp); err != nil {
+		if err := owner.persist(rc, s, cp); err != nil {
 			return err
 		}
 	}
@@ -461,7 +495,7 @@ func negotiatePXCRestoreCertification(ctx context.Context, rc *engine.Context, s
 			return err
 		}
 		c.LegacyCleanupPending, c.FencesOwned = false, false
-		if err := persistRestore(rc, op, *cp); err != nil {
+		if err := owner.persist(rc, s, cp); err != nil {
 			return err
 		}
 	}
@@ -502,13 +536,7 @@ func acquirePXCRestoreFences(ctx context.Context, rc *engine.Context, s *state, 
 	if cp.GTIDCertification == nil {
 		return false, engine.Invalid("restore fencing lacks negotiated ownership")
 	}
-	if !cp.GTIDCertification.FencesOwned {
-		cp.GTIDCertification.FencesOwned = true
-		if err := persistRestore(rc, op, *cp); err != nil {
-			return false, err
-		}
-	}
-	return fencePXCRestoreClients(ctx, rc, s, op.ID)
+	return (pxcMappingOwner{Operation: op}).acquire(ctx, rc, s, cp)
 }
 
 // Before certification begins, terminal queue cleanup must release its client

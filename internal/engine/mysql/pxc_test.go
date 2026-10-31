@@ -22,6 +22,7 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 	rc.Cluster.Spec.Provider, rc.Cluster.Spec.Version, rc.Cluster.Spec.Topology.Type = "pxc", pxcCatalog[0].Version, "cluster"
 	probeSequence := int64(1000000)
 	probeReceipts := map[string]myspec.GaleraStatusResponse{}
+	sstCopied := map[string]bool{}
 	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 		switch r.URL.Path {
 		case "/v1/status":
@@ -49,6 +50,15 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
 				t.Fatal(err)
 			}
+			current, _ := load(rc.Cluster)
+			if member := current.find(name); member != nil && !member.Initialized && st.MemberState == "ONLINE" && spec.Galera != nil && spec.Galera.SSTDonor != "" && !sstCopied[name] {
+				// A real initial SST copies executed history, including earlier
+				// certification probes; the receiver is not a blank GTID set.
+				st.GTIDExecuted = b.native[spec.Galera.SSTDonor].GTIDExecuted
+				b.native[name] = st
+				out.GTIDExecuted = st.GTIDExecuted
+				sstCopied[name] = true
+			}
 			out.OfflineMode = spec.Galera != nil && spec.Galera.RestoreFence
 			out.LastCommitted = probeSequence
 			if st.MemberState == "ONLINE" {
@@ -66,14 +76,18 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 				return true
 			}
 			probeSequence++
+			size := 0
 			for peer, status := range b.native {
+				if status.MemberState == "ONLINE" {
+					size++
+				}
 				if status.GTIDExecuted != "" {
 					status.GTIDExecuted += ","
 				}
 				status.GTIDExecuted += fmt.Sprintf("11111111-2222-3333-4444-555555555555:%d", probeSequence)
 				b.native[peer] = status
 			}
-			out := myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: probeSequence, GTIDExecuted: b.native[name].GTIDExecuted, ServerUUID: b.native[name].ServerUUID, OfflineMode: true}
+			out := myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: size, StateUUID: "11111111-2222-3333-4444-555555555555", LastCommitted: probeSequence, GTIDExecuted: b.native[name].GTIDExecuted, ServerUUID: b.native[name].ServerUUID, OfflineMode: true}
 			probeReceipts[req.Receipt] = out
 			_ = json.NewEncoder(w).Encode(out)
 			return true
@@ -343,7 +357,7 @@ func TestPXCScaleOutUsesSSTAndTLSRotation(t *testing.T) {
 				return false
 			}
 		}
-		return true
+		return !pxcFormationMappingPending(s)
 	})
 	if len(b.clones) != 0 {
 		t.Fatal("PXC cloned through GR", b.clones)
@@ -396,6 +410,7 @@ func TestPXCRestorePreparesSSTJoinersBeforeBootstrap(t *testing.T) {
 	p, rc, b := setupPXC(t)
 	converge(t, p, rc, b)
 	s, _ := load(rc.Cluster)
+	s.Formation.GTIDCertification = nil // Native restore.install retires the prior formation receipt.
 	s.Formation.FormationEpoch++
 	s.Formation.GroupName = "aaaaaaaabbbb4ccc8dddeeeeeeeeeeee"
 	s.Formation.State = "bootstrapping"
@@ -504,7 +519,7 @@ func TestPXCScaleInReplacementAndResourceRollAvoidGR(t *testing.T) {
 	converge(t, p, rc, b)
 	rc.Cluster.Generation++
 	rc.Cluster.Spec.Components.Engine.Replicas = 3
-	day2Ticks(t, rc, b, func(s *state) bool { return len(s.data()) == 3 && s.Pending == nil })
+	day2Ticks(t, rc, b, func(s *state) bool { return len(s.data()) == 3 && s.Pending == nil && !pxcFormationMappingPending(s) })
 	old := b.leader
 	runDay2Operation(t, rc, b, &domain.Operation{ID: "pxc-replace", Kind: domain.OperationReplaceMember, Payload: json.RawMessage(`{"member":"` + old + `"}`)})
 	s, _ := load(rc.Cluster)

@@ -133,6 +133,22 @@ karactl -n NS backups pitr-window CLUSTER -o json
 
 ## PXC GTID continuity
 
+The same mapping defect can occur at first formation or concurrent SST/IST joins,
+not just after restore. PXC follower admission is serialized until each preceding
+joiner is Synced. Updated agents additionally certify a replicated probe before
+the admitted formation becomes Ready; only lifecycle-proven empty joiners with no
+unique frozen history can receive bounded seed-pinned SST remedies. A unique-data
+or unproven member fails closed with operator guidance. Legacy agents report
+`CertificationUnavailable` and retain the comparator without acquiring new holds.
+Neither this certificate nor SST clears an existing GTID incident. A fresh full
+acknowledges history differences; it does not repair native SID selection.
+No separate retry API is needed for a withdrawn empty join: scale back to the
+previously admitted count or cancel the not-yet-retired replacement. Only the
+unadmitted cohort is removed; its controls are released and prior member/history
+proofs are preserved. A prior real latch remains Degraded. Blocked birth can be
+deleted/re-created, while a blocked restore admits a new trusted-source restore.
+
+
 [Galera](https://galeracluster.com/) `Synced` and matching rows are not sufficient proof of MySQL GTID
 continuity. On the pinned PXC 8.0.46-38.1 and 8.4.11-11.1 releases, a missing-write
 IST rejoin can assign a replicated application row a different GTID on the
