@@ -36,6 +36,9 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 
 // RunOperation's closed dispatch prevents unsupported maintenance from mutating data.
 func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	previousOperation := rc.Operation
 	rc.Operation = op
 	defer func() { rc.Operation = previousOperation }()

@@ -135,6 +135,9 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	return true, nil
 }
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
 	p.accessMu.Lock()
 	defer p.accessMu.Unlock()
 	if intent, e := loadAccessIntent(ctx, rc); e != nil || intent != nil {
@@ -159,6 +162,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	// Collect independent native/agent/platform reads together before optional
+	// history checks. Subsequent formation/readiness scans reuse this pass.
+	observeStatusMembers(ctx, rc, s.Members)
 	// Observation records discontinuities without fencing normal service.
 	if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
 		if _, observation := e.(*myspec.GTIDQuorumError); !observation {

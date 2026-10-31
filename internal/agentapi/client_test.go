@@ -235,6 +235,9 @@ func TestInstanceClientPinsTransportWithoutChangingTrust(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if instance.ObservationInstance() != host || client.ObservationInstance() != "" {
+			t.Fatal("observation reuse lost pinned replica isolation")
+		}
 		status, err := instance.Status(t.Context())
 		if err != nil || status.ConfigVersion != 7 {
 			t.Fatalf("pinned status failed: %+v %v", status, err)

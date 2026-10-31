@@ -228,6 +228,9 @@ func persistRestore(rc *engine.Context, op *domain.Operation, cp backupCheckpoin
 	return saveBackupState(rc.Cluster, bs)
 }
 func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return backupResult(cp, false), err

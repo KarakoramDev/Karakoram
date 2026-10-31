@@ -214,7 +214,7 @@ func resolveAdvertiseAddr(ctx context.Context, s wvspec.MemberSpec, lookup func(
 			return ip.String(), nil
 		}
 	}
-	return "", errors.New("Weaviate private member identity has no advertisable address in the bind address family")
+	return "", errors.New("weaviate private member identity has no advertisable address in the bind address family")
 }
 func (e *Engine) Version(ctx context.Context) string {
 	e.mu.RLock()

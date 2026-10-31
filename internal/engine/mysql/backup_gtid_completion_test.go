@@ -101,9 +101,9 @@ func TestPXCCompletedFullNeverRetriesBaselineObservation(t *testing.T) {
 }
 
 func TestPXCFullBackupPollDoesNotWaitForGTIDObservation(t *testing.T) {
-	p, rc, b := backupFixture(t, "single")
+	_, rc, b := backupFixture(t, "single")
 	rc.Cluster.Spec.Provider = "pxc"
-	p = New(Options{Provider: "pxc"})
+	p := New(Options{Provider: "pxc"})
 	full := inventoryBackup(t, rc, "running-full", "full", "", 10, time.Now())
 	full.Phase = domain.PhaseRunning
 	if err := rc.Store.UpdateBackup(t.Context(), &full); err != nil {

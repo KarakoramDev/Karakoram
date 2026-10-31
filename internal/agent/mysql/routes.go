@@ -89,6 +89,7 @@ func observeNativeStatus(ctx context.Context, db *sql.DB, s myspec.Spec, p paths
 			return err
 		}
 		out.MemberState = status.LocalStateComment
+		out.GroupMembers = status.ClusterSize
 		if status.Eligible() {
 			out.MemberRole = "PRIMARY"
 		}

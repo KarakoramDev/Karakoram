@@ -22,13 +22,41 @@ import (
 var gtidJournalMu sync.Mutex
 var gtidObservationLocks sync.Map
 
-func gtidObservationMutex(rc *engine.Context) *sync.Mutex {
+type gtidObservationLock struct{ held chan struct{} }
+
+func (m *gtidObservationLock) Lock()   { m.held <- struct{}{} }
+func (m *gtidObservationLock) Unlock() { <-m.held }
+func (m *gtidObservationLock) TryLock() bool {
+	select {
+	case m.held <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+func (m *gtidObservationLock) LockContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.held <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func gtidObservationMutex(rc *engine.Context) *gtidObservationLock {
 	key := [2]string{rc.Cluster.Namespace, rc.Cluster.Name}
 	if cached, ok := gtidObservationLocks.Load(key); ok {
-		return cached.(*sync.Mutex)
+		return cached.(*gtidObservationLock)
 	}
-	actual, _ := gtidObservationLocks.LoadOrStore(key, new(sync.Mutex))
-	return actual.(*sync.Mutex)
+	actual, _ := gtidObservationLocks.LoadOrStore(key, &gtidObservationLock{held: make(chan struct{}, 1)})
+	return actual.(*gtidObservationLock)
 }
 
 const gtidWindowProofVersion = 2
@@ -84,10 +112,26 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	if rc.Cluster.Spec.Provider != "pxc" {
 		return nil
 	}
+	probe, cancel := mysqlReadContext(ctx, rc)
+	defer cancel()
+	if !mysqlReadsFresh(ctx) {
+		optional, stop := context.WithTimeout(probe, time.Second)
+		defer stop()
+		probe = optional
+	}
 	observationMu := gtidObservationMutex(rc)
-	observationMu.Lock()
+	if err := observationMu.LockContext(probe); err != nil {
+		if mysqlReadsFresh(ctx) {
+			return err
+		}
+		unavailable := make(map[string]myspec.GaleraStatusResponse, len(s.data()))
+		for _, m := range s.data() {
+			unavailable[m.Name] = myspec.GaleraStatusResponse{}
+		}
+		return myspec.CheckGTIDQuorum(unavailable)
+	}
 	defer observationMu.Unlock()
-	observations, sampleAt := samplePXCQuorumGTIDs(ctx, rc, s, s.RestoreGTIDFence != "" || rc.Operation != nil)
+	observations, sampleAt := samplePXCQuorumGTIDs(probe, rc, s, mysqlReadsFresh(ctx))
 	err := myspec.CheckGTIDQuorum(observations)
 	complete := completeGTIDObservation(observations)
 	gtidJournalMu.Lock()
@@ -161,17 +205,20 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 }
 
 func observePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) map[string]myspec.GaleraStatusResponse {
+	ctx = freshMySQLReads(ctx)
+	probe, cancel := mysqlReadContext(ctx, rc)
+	defer cancel()
 	observationMu := gtidObservationMutex(rc)
-	observationMu.Lock()
+	if err := observationMu.LockContext(probe); err != nil {
+		return nil
+	}
 	defer observationMu.Unlock()
-	observations, _ := samplePXCQuorumGTIDs(ctx, rc, s, true)
+	observations, _ := samplePXCQuorumGTIDs(probe, rc, s, true)
 	return observations
 }
 
 func invalidatePXCQuorumObservation(ctx context.Context, rc *engine.Context) {
-	if cache := engine.ObservationPassCache(ctx); cache != nil {
-		cache.Delete(gtidObservationKey{rc.Cluster.Namespace, rc.Cluster.Name})
-	}
+	invalidateMySQLReadObservation(ctx, rc)
 }
 
 func completeGTIDObservation(observations map[string]myspec.GaleraStatusResponse) bool {
@@ -264,8 +311,12 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 	if rc.Cluster.Spec.Provider != "pxc" {
 		return nil
 	}
+	probe, cancel := mysqlReadContext(freshMySQLReads(ctx), rc)
+	defer cancel()
 	observationMu := gtidObservationMutex(rc)
-	observationMu.Lock()
+	if err := observationMu.LockContext(probe); err != nil {
+		return err
+	}
 	defer observationMu.Unlock()
 	// Ordinary successful fulls with no incident need no agent sweep. Inspect
 	// the journal briefly, then release the shared lock before any network I/O.

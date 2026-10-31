@@ -136,6 +136,12 @@ func publishRevision(s *state) {
 	}
 }
 func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	changing := s.Formation.State != "formed" || s.Formation.Reformation != nil && s.Formation.Reformation.State != "formed"
+	if changing {
+		ctx = freshMySQLReads(ctx)
+		invalidateMySQLReadObservation(ctx, rc)
+		defer invalidateMySQLReadObservation(ctx, rc)
+	}
 	if s.Topology == "cluster" {
 		return p.reconcileGaleraFormation(ctx, rc, s)
 	}

@@ -26,11 +26,12 @@ import (
 
 // Client performs bearer-authenticated requests over pinned-CA HTTPS.
 type Client struct {
-	base         *url.URL
-	token        string
-	http         *http.Client
-	engine       *http.Client
-	dialInstance func(context.Context, string, string, string) (net.Conn, error)
+	base                *url.URL
+	token               string
+	http                *http.Client
+	engine              *http.Client
+	dialInstance        func(context.Context, string, string, string) (net.Conn, error)
+	observationInstance string
 }
 
 // HTTPError exposes the response status for protocol capability negotiation.
@@ -125,8 +126,12 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 		client.Transport = transport
 		return &client
 	}
-	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine)}, nil
+	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine), observationInstance: host}, nil
 }
+
+// ObservationInstance distinguishes pinned replicas when read-only results are
+// reused within one observation pass. The logical unpinned member returns "".
+func (c *Client) ObservationInstance() string { return c.observationInstance }
 
 // DialContext uses this client's namespace transport and instance pin for a
 // native application probe. The caller retains the logical host for TLS.

@@ -19,7 +19,6 @@ import (
 
 type galeraProbeConnector struct {
 	groupTestConnector
-	fence    bool
 	executed []string
 }
 

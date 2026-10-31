@@ -9,24 +9,29 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"sort"
+	"time"
 )
 
 func galeraStatus(ctx context.Context, rc *engine.Context, name string) (myspec.GaleraStatusResponse, error) {
+	st, _, err := galeraStatusAt(ctx, rc, name)
+	return st, err
+}
+
+func galeraStatusAt(ctx context.Context, rc *engine.Context, name string) (myspec.GaleraStatusResponse, time.Time, error) {
 	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 	defer cancel()
 	var st myspec.GaleraStatusResponse
-	err := mysqlAction(ctx, rc, name, myspec.ActionGaleraStatus, struct{}{}, &st)
-	return st, err
+	at, err := mysqlReadActionAt(ctx, rc, name, myspec.ActionGaleraStatus, struct{}{}, &st)
+	return st, at, err
 }
 
 // ProxySQL, not wsrep's multi-primary role, owns the client writer designation.
 func observeGalera(ctx context.Context, rc *engine.Context, name string, out *myspec.StatusResponse) error {
-	st, err := galeraStatus(ctx, rc, name)
-	if err != nil {
-		return err
-	}
-	out.MemberState, out.MemberRole, out.GroupMembers = "OFFLINE", "SECONDARY", st.ClusterSize
-	if !st.Eligible() {
+	// The agent's mysql/status already verifies Primary/Synced/ready/connected
+	// before assigning PRIMARY. Do not repeat a Galera SQL sweep for readiness.
+	online := out.Online(true)
+	out.MemberState, out.MemberRole = "OFFLINE", "SECONDARY"
+	if !online {
 		return nil
 	}
 	out.MemberState = "ONLINE"
@@ -207,14 +212,7 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 }
 
 func galeraStopped(ctx context.Context, rc *engine.Context, name string) bool {
-	if rc.Agents == nil {
-		return false
-	}
-	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), name)
-	if err != nil {
-		return false
-	}
-	status, err := a.Status(ctx)
+	status, _, err := mysqlAgentStatus(ctx, rc, name)
 	if err != nil {
 		return false
 	}

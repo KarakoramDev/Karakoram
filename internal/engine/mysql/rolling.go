@@ -60,6 +60,11 @@ func rollingNeedsWindow(m *member, version string, target domain.ComponentSpec, 
 }
 
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if s.Rolling != nil {
+		ctx = freshMySQLReads(ctx)
+		invalidateMySQLReadObservation(ctx, rc)
+		defer invalidateMySQLReadObservation(ctx, rc)
+	}
 	options, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
 	if err != nil {
 		return true, err

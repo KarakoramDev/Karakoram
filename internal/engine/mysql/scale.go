@@ -33,6 +33,9 @@ func maintenanceAllowed(ctx context.Context, rc *engine.Context, s *state) error
 }
 
 func (p *Core) adoptSingleton(ctx context.Context, rc *engine.Context, s *state) error {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	if s.Topology != "single" || rc.Cluster.Spec.Topology.Type != "group" || len(s.data()) != 1 || rc.Cluster.Spec.Components.Extra["proxy"].Replicas < 1 {
 		return engine.ErrNotSupported
 	}

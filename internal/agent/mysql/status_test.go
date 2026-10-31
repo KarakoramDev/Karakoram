@@ -89,7 +89,7 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 				c.queries = append(c.queries, groupQuery{contains: "SELECT @@GLOBAL.gtid_executed", values: []driver.Value{uuid + ":1-10", uuid, false}})
 			}
 			count := int64(0)
-			if mode == "group online" {
+			if mode == "group online" || mode == "pxc" {
 				count = 3
 			}
 			if s.Galera == nil && s.Topology == myspec.TopologyGroup && c.memberErr == nil && c.countErr == nil {

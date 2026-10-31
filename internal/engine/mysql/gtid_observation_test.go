@@ -17,6 +17,8 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
+type quorumObservationContextKey struct{}
+
 func quorumObservationFixture(t *testing.T, handler http.HandlerFunc) (*engine.Context, *state) {
 	t.Helper()
 	server := httptest.NewTLSServer(handler)
@@ -55,7 +57,7 @@ func TestPXCQuorumObservationPassAndFresh(t *testing.T) {
 	version.Store(2)
 	// Sync, Status, PITRWindow and the Degraded retry all use this entry point.
 	for range 9 {
-		got, sampledAt := lockedQuorumSample(context.WithValue(ctx, struct{}{}, true), rc, s, false)
+		got, sampledAt := lockedQuorumSample(context.WithValue(ctx, quorumObservationContextKey{}, true), rc, s, false)
 		if got["mysql0"].ClusterSize != 1 || !sampledAt.Equal(at) {
 			t.Fatal("cache hit changed sample or timestamp")
 		}
@@ -169,7 +171,7 @@ func TestPXCQuorumObservationConcurrentTimeout(t *testing.T) {
 	}
 	started = time.Now()
 	for range 9 {
-		got, _ = lockedQuorumSample(ctx, rc, s, false)
+		lockedQuorumSample(ctx, rc, s, false)
 	}
 	if calls.Load() != 3 || time.Since(started) > 300*time.Millisecond {
 		t.Fatal("exhausted read budget issued more actions or waited")
@@ -274,5 +276,66 @@ func TestPXCQuorumObservationFastFailureCanRetry(t *testing.T) {
 	lockedQuorumSample(ctx, rc, s, false)
 	if calls.Load() != 6 {
 		t.Fatal("recovered sample was not memoized")
+	}
+}
+
+func TestPXCQuorumObservationRetryRetainsEarliestSafeBoundary(t *testing.T) {
+	const sid = "11111111-2222-3333-4444-555555555555"
+	const extra = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	var calls atomic.Int32
+	var recovered, diverged atomic.Bool
+	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		minority := r.Header.Get("Authorization") == "Bearer mysql2"
+		if minority && !recovered.Load() {
+			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		status := myspec.GaleraStatusResponse{
+			ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true,
+			ClusterSize: 3, StateUUID: sid, GTIDExecuted: sid + ":1-7",
+		}
+		if minority && diverged.Load() {
+			status.GTIDExecuted += "," + extra + ":1"
+		}
+		_ = json.NewEncoder(w).Encode(status)
+	})
+	_, rc, _ := setup(t, "cluster")
+	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
+	// Start with the actual persisted member/formation identity. Saving the
+	// first journal must not itself change identity and force all reads fresh.
+	s.UID, s.ConfigVersion, s.Topology = "quorum", 1, myspec.TopologyCluster
+	s.Formation = formation{State: "formed", FormationEpoch: 1, GroupName: sid}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().UTC()
+	rc.Clock = trafficRenewalClock{at: base}
+	ctx := engine.WithObservationPass(t.Context())
+	_ = checkPXCQuorumGTIDs(ctx, rc, s)
+	if calls.Load() != 3 || !s.LastGTIDSafeAt.IsZero() {
+		t.Fatal("incomplete initial sweep established a safety boundary")
+	}
+
+	// Only the failed member is retried. Two successful payloads still prove
+	// the old instant, not the newer clock at the start of this retry.
+	recovered.Store(true)
+	rc.Clock = trafficRenewalClock{at: base.Add(time.Minute)}
+	if err := checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 4 || !s.LastGTIDSafeAt.Equal(base) {
+		t.Fatalf("mixed-age quorum advanced safety: calls=%d safe=%s want=%s", calls.Load(), s.LastGTIDSafeAt, base)
+	}
+
+	// A subsequent real incident must inherit that conservative boundary; PITR
+	// must not gain the minute between the old responses and the retry.
+	diverged.Store(true)
+	rc.Clock = trafficRenewalClock{at: base.Add(2 * time.Minute)}
+	if err := checkPXCQuorumGTIDs(engine.WithObservationPass(ctx), rc, s); err == nil {
+		t.Fatal("new unshared SID did not latch divergence")
+	}
+	if incident := activeGTIDIncident(s); incident == nil || !incident.SafeThrough.Equal(base) {
+		t.Fatalf("incident lost original sampling boundary: %+v", incident)
 	}
 }

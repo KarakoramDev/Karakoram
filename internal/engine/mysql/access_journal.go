@@ -102,6 +102,9 @@ func accessResultError(result myspec.AccessResult) error {
 	}
 }
 func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, intent *accessIntent) error {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	if err := accessFence(ctx, rc); err != nil {
 		return err
 	}

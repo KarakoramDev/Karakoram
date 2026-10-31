@@ -92,6 +92,14 @@ func (p *Core) backupStorage(ctx context.Context, rc *engine.Context, name, name
 	return store.GetBackupStorage(ctx, namespace, name)
 }
 func mysqlAction(ctx context.Context, rc *engine.Context, member, action string, request, response any) error {
+	switch action {
+	case myspec.ActionStatus, myspec.ActionGaleraStatus, myspec.ActionProxyStatus, myspec.ActionArchiveStatus:
+		return mysqlReadAction(ctx, rc, member, action, request, response)
+	case myspec.ActionBackupInfo, myspec.ActionPITRCoverage, myspec.ActionRestoreStatus, myspec.ActionOfflineGTID:
+		// Request-bearing reads are not memoized, but are not mutations.
+	default:
+		invalidateMySQLReadObservation(ctx, rc)
+	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), member)
 	if err != nil {
 		return err
@@ -190,6 +198,9 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	return primary, nil
 }
 func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	name, err := operationResource(op, "backup")
 	if err != nil {
 		return backupResult(cp, false), err

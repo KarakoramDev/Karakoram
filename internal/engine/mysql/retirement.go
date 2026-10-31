@@ -77,6 +77,9 @@ func survivorsOnline(ctx context.Context, rc *engine.Context, s *state, old stri
 }
 
 func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m *member) (bool, error) {
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
 		return false, err
 	}
@@ -299,6 +302,16 @@ func membershipRemoved(ctx context.Context, rc *engine.Context, s *state, old st
 			continue
 		}
 		st, err := live(ctx, rc, m.Name)
+		// Old PXC agents do not include wsrep_cluster_size in mysql/status.
+		// Retirement is a write-relevant transition, so its fallback is fresh
+		// and cannot consume a read-only quorum memo as removal proof.
+		if err == nil && rc.Cluster.Spec.Provider == "pxc" && st.GroupMembers == 0 {
+			native, observeErr := galeraStatus(freshMySQLReads(ctx), rc, m.Name)
+			if observeErr != nil || !native.Eligible() {
+				return engine.ErrUnavailable
+			}
+			st.GroupMembers = native.ClusterSize
+		}
 		if err != nil || st.GroupMembers != len(s.data())-1 {
 			return engine.ErrUnavailable
 		}

@@ -58,6 +58,10 @@ func publicConnection(ctx context.Context, rc *engine.Context, conn domain.Conne
 	return conn, nil
 }
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, err error) {
+	ctx = normalMySQLReads(ctx)
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
 	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -69,6 +73,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		return status, nil
 	}
 	observed := observeStatusMembers(ctx, rc, s.Members)
+	if deferred, deferredErr, ok := deferredMySQLObservation(rc, s, observed); ok {
+		return deferred, deferredErr
+	}
 	healthy := len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
 	writer := false
 	primary := ""
@@ -87,7 +94,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if o.agentObserved {
-			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: now(rc)}
+			member.Agent = domain.AgentStatus{Version: o.agent.Agent.Version, Commit: o.agent.Agent.Commit, Build: o.agent.Agent.Build, Healthy: true, ConfigVersion: o.agent.ConfigVersion, LastSeen: o.agentAt}
 			member.Uptime = o.agent.UptimeSeconds
 			member.Resources = engine.MemberResources(o.agent.Resources, &m.Resources)
 		}
@@ -117,9 +124,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				primary = m.Name
 			}
 		}
-		service, e := rc.Backend.GetService(ctx, m.Name)
-		if e != nil {
-			return status, e
+		service := o.infrastructure.service
+		if o.infrastructureErr != nil {
+			return status, o.infrastructureErr
 		}
 		if service == nil || service.Status != infra.StatusRunning && service.Status != infra.StatusActive {
 			member.Health = false
@@ -128,10 +135,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		// have no infrastructure identity yet. Observe them as unavailable
 		// without asking the backend for containers of a nonexistent service.
 		if service != nil {
-			containers, e := rc.Backend.Containers(ctx, m.Name)
-			if e != nil {
-				return status, e
-			}
+			containers := o.infrastructure.containers
 			for _, container := range containers {
 				if container.PlacementGroup != "" {
 					member.PlacementGroup = container.PlacementGroup
@@ -216,4 +220,90 @@ func boolCondition(v bool) string {
 		return "True"
 	}
 	return "False"
+}
+
+func deferredMySQLObservation(rc *engine.Context, s *state, observed []memberObservation) (domain.ClusterStatus, error, bool) {
+	deferred := false
+	for _, observation := range observed {
+		deferred = deferred || errors.Is(observation.err, engine.ErrObservationBudgetExhausted) || errors.Is(observation.infrastructureErr, engine.ErrObservationBudgetExhausted)
+	}
+	if !deferred {
+		return domain.ClusterStatus{}, nil, false
+	}
+	status := engine.DeferredObservation(rc.Cluster.Status, now(rc))
+	result := &engine.ObservationBudgetError{}
+	var causes []error
+	for i, observation := range observed {
+		metadataCause := observedFailureCause(observation.metadataErr)
+		nativeCause := observedFailureCause(observation.nativeErr)
+		platformCause := observedFailureCause(observation.infrastructureErr)
+		metadataFailure := metadataCause != nil
+		nativeFailure := nativeCause != nil
+		platformFailure := platformCause != nil
+		for _, err := range [3]error{metadataCause, nativeCause, platformCause} {
+			if err != nil {
+				causes = append(causes, err)
+			}
+		}
+		negative := metadataFailure || nativeFailure || platformFailure
+		if observation.nativeObserved && s.Members[i].Role != "proxy" && observation.status.MemberState != "ONLINE" {
+			negative = true
+		}
+		if observation.agentObserved && observation.agent.ConfigVersion < s.Members[i].ConfigVersion {
+			negative = true
+		}
+		if observation.infrastructureObserved {
+			service := observation.infrastructure.service
+			negative = negative || service == nil || service.Status != infra.StatusRunning && service.Status != infra.StatusActive
+		}
+		if negative {
+			result.Failures = append(result.Failures, engine.ObservationFailure{Member: s.Members[i].Name, Agent: metadataFailure})
+		}
+	}
+	for _, failure := range result.Failures {
+		for i := range status.Members {
+			if status.Members[i].Name == failure.Member {
+				status.Members[i].Health = false
+				if failure.Agent {
+					status.Members[i].Agent.Healthy = false
+				}
+			}
+		}
+	}
+	result.Cause = errors.Join(causes...)
+	if incident := activeGTIDIncident(s); incident != nil {
+		condition := domain.Condition{Type: "GTIDHistorySafe", Status: "False", Reason: "GTIDHistoryDiscontinuityLatched", Message: incident.message(), LastTransitionTime: now(rc)}
+		replaced := false
+		for i := range status.Conditions {
+			if status.Conditions[i].Type == condition.Type {
+				status.Conditions[i] = condition
+				replaced = true
+			}
+		}
+		if !replaced {
+			status.Conditions = append(status.Conditions, condition)
+		}
+	}
+	return status, result, true
+}
+
+// Strip only budget deferrals from joined failures; a concurrent HTTP/platform
+// failure must not disappear merely because another component ran out of time.
+func observedFailureCause(err error) error {
+	if err == nil || err == engine.ErrObservationBudgetExhausted {
+		return nil
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var causes []error
+		for _, cause := range joined.Unwrap() {
+			if actual := observedFailureCause(cause); actual != nil {
+				causes = append(causes, actual)
+			}
+		}
+		return errors.Join(causes...)
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok && errors.Is(err, engine.ErrObservationBudgetExhausted) {
+		return observedFailureCause(wrapped.Unwrap())
+	}
+	return err
 }

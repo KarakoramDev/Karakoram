@@ -4,31 +4,38 @@ package mysql
 
 import (
 	"context"
+	"errors"
+	"sync"
+	"time"
+
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
-	"sync"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 type memberObservation struct {
-	status        myspec.StatusResponse
-	agent         agentapi.Status
-	agentObserved bool
-	err           error
+	status                 myspec.StatusResponse
+	agent                  agentapi.Status
+	agentAt                time.Time
+	agentObserved          bool
+	err                    error
+	metadataErr            error
+	nativeErr              error
+	nativeObserved         bool
+	infrastructure         memberInfrastructure
+	infrastructureErr      error
+	infrastructureObserved bool
+}
+
+type memberInfrastructure struct {
+	service    *infra.Service
+	containers []infra.Container
 }
 
 func live(ctx context.Context, rc *engine.Context, name string) (myspec.StatusResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-	defer cancel()
 	var out myspec.StatusResponse
-	if rc.Agents == nil {
-		return out, engine.ErrUnavailable
-	}
-	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), name)
-	if err != nil {
-		return out, err
-	}
-	err = a.Engine(ctx, "mysql", myspec.ActionStatus, struct{}{}, &out)
+	err := mysqlAction(ctx, rc, name, myspec.ActionStatus, struct{}{}, &out)
 	if err == nil && rc.Cluster.Spec.Provider == "pxc" {
 		err = observeGalera(ctx, rc, name, &out)
 	}
@@ -40,10 +47,8 @@ func onlinePrimary(st myspec.StatusResponse) bool {
 func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*member) []memberObservation {
 	out := make([]memberObservation, len(members))
 	var wg sync.WaitGroup
-	limit := make(chan struct{}, 8)
+	limit := make(chan struct{}, infra.ObservationConcurrency)
 	for i, m := range members {
-		// Import/deployment is infrastructure work, not an agent health probe.
-		// Planned names need not resolve, and imported runtimes may not run yet.
 		if m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
 			out[i].err = engine.ErrUnavailable
 			continue
@@ -58,36 +63,44 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 				return
 			}
 			defer func() { <-limit }()
-			probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-			defer cancel()
-			if rc.Agents == nil {
-				out[i].err = engine.ErrUnavailable
-				return
-			}
-			a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
-			if err != nil {
-				out[i].err = err
-				return
-			}
-			out[i].agent, err = a.Status(probe)
-			if err != nil {
-				out[i].err = err
-				return
-			}
-			out[i].agentObserved = true
-			if m.Role == "proxy" {
-				var healthy bool
-				healthy, err = proxyApplied(probe, rc, m)
-				if err == nil && !healthy {
-					err = engine.ErrUnavailable
+			var batch sync.WaitGroup
+			var metadataErr, nativeErr error
+			batch.Add(3)
+			go func() {
+				defer batch.Done()
+				out[i].agent, out[i].agentAt, metadataErr = mysqlAgentStatus(ctx, rc, m.Name)
+				out[i].agentObserved = metadataErr == nil
+			}()
+			go func() {
+				defer batch.Done()
+				if m.Role == "proxy" {
+					var healthy bool
+					healthy, nativeErr = proxyApplied(ctx, rc, m)
+					if nativeErr == nil && !healthy {
+						nativeErr = engine.ErrUnavailable
+					}
+				} else {
+					out[i].status, nativeErr = live(ctx, rc, m.Name)
 				}
-			} else {
-				err = a.Engine(probe, "mysql", myspec.ActionStatus, struct{}{}, &out[i].status)
-				if err == nil && rc.Cluster.Spec.Provider == "pxc" {
-					err = observeGalera(probe, rc, m.Name, &out[i].status)
-				}
-			}
-			out[i].err = err
+				out[i].nativeObserved = nativeErr == nil
+			}()
+			go func() {
+				defer batch.Done()
+				out[i].infrastructure, _, out[i].infrastructureErr = mysqlReadValue(ctx, rc, m.Name, "platform-status", func(probe context.Context) (memberInfrastructure, error) {
+					var value memberInfrastructure
+					var err error
+					value.service, err = rc.Backend.GetService(probe, m.Name)
+					if err != nil || value.service == nil {
+						return value, err
+					}
+					value.containers, err = rc.Backend.Containers(probe, m.Name)
+					return value, err
+				})
+				out[i].infrastructureObserved = out[i].infrastructureErr == nil
+			}()
+			batch.Wait()
+			out[i].metadataErr, out[i].nativeErr = metadataErr, nativeErr
+			out[i].err = errors.Join(metadataErr, nativeErr)
 		}()
 	}
 	wg.Wait()
@@ -95,34 +108,41 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 }
 func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 	if m.Role == "proxy" {
-		return proxyApplied(ctx, rc, m)
+		applied, err := proxyApplied(ctx, rc, m)
+		if errors.Is(err, errProxyConfigPending) {
+			_, _, err = engine.VisitLiveInstancesConcurrent(ctx, rc, m.Name, func(a *agentapi.Client) (bool, error) {
+				status, _, e := mysqlReadClientStatus(ctx, rc, m.Name, a)
+				if e != nil {
+					return false, e
+				}
+				if status.ConfigVersion < m.ConfigVersion {
+					invalidateMySQLReadObservation(ctx, rc)
+					return false, a.Reload(ctx)
+				}
+				return true, nil
+			})
+			return false, err
+		}
+		return applied, err
 	}
-	if rc.Agents == nil {
-		return false, nil
-	}
-	probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-	defer cancel()
-	a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
-	if err != nil {
-		return false, nil
-	}
-	st, err := a.Status(probe)
+	st, _, err := mysqlAgentStatus(ctx, rc, m.Name)
 	if err != nil {
 		return false, nil
 	}
 	if st.ConfigVersion < m.ConfigVersion {
-		cancel() // Applying configuration is an engine action, not an observation.
+		invalidateMySQLReadObservation(ctx, rc)
+		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			return false, err
+		}
 		return false, a.Reload(ctx)
 	}
-	native, err := live(probe, rc, m.Name)
-	if err != nil {
+	native, err := live(ctx, rc, m.Name)
+	if err != nil || native.MemberState != "ONLINE" {
 		return false, nil
 	}
 	if native.ServerUUID != "" {
 		m.ServerUUID = native.ServerUUID
-	}
-	if native.MemberState != "ONLINE" {
-		return false, nil
 	}
 	if native.DataIdentity.Initialized {
 		m.Initialized = true
@@ -131,18 +151,16 @@ func ready(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 }
 
 func configApplied(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-	defer cancel()
-	a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
-	if err != nil {
-		return false, err
-	}
-	status, err := a.Status(probe)
+	status, _, err := mysqlAgentStatus(ctx, rc, m.Name)
 	if err != nil {
 		return false, err
 	}
 	if status.ConfigVersion < m.ConfigVersion {
-		cancel() // Preserve the caller's action deadline, not the short probe budget.
+		invalidateMySQLReadObservation(ctx, rc)
+		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			return false, err
+		}
 		return false, a.Reload(ctx)
 	}
 	return true, nil

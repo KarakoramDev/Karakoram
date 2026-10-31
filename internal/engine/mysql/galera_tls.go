@@ -123,6 +123,9 @@ func (p *Core) reconcileGaleraTrafficRotation(ctx context.Context, rc *engine.Co
 	if q == nil {
 		return false, nil
 	}
+	ctx = freshMySQLReads(ctx)
+	invalidateMySQLReadObservation(ctx, rc)
+	defer invalidateMySQLReadObservation(ctx, rc)
 	switch q.Stage {
 	case "fence":
 		for _, name := range q.Members {

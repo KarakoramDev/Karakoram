@@ -155,19 +155,28 @@ safe: only the recorded safe boundary and independently verified archive
 coverage establish that. Pre-boundary recovery remains available from its
 original backup chain.
 
-Quorum GTID sampling probes data members concurrently, retaining the normal
-per-agent timeout. Read-only Sync, Status and PITR checks share one successful
-sample within each reconcile pass (including the Degraded status retry), never
-across clusters or passes. Membership, formation, generation and restore
-checkpoint changes invalidate that sample. Full-backup acknowledgement, restore
-certification/activation request fresh observations under the same per-cluster
-observation/commit lock. Incident creation invalidates the prior sample; failed
-agent reads are not cached.
-Read-only sweeps share a total four-second sampling budget per cluster/pass,
-including unsuccessful attempts. Exhaustion leaves GTID comparison unavailable
-without issuing more agent actions or declaring unsampled members unhealthy.
-Fast failed sweeps may retry within the remaining budget; mandatory fresh
-write-transition samples are exempt from that read-only budget.
+Availability probes agent metadata, native MySQL state and platform inventory in
+parallel. Successful reads are immutable and shared by Sync, Status and PITR
+within one reconcile pass, including the Degraded retry. Proxy instance reads
+retain their individual runtime identities; neither payloads nor timestamps are
+shared across clusters or passes. Membership, formation, generation, configuration
+and restore checkpoint changes invalidate samples. Reuse retains the original
+sample boundary: a retry cannot renew availability by relabelling cached metadata.
+
+Read-only work shares one absolute four-second deadline per cluster/pass,
+including agent dialing and GTID observation-lock waits. Optional quorum GTID
+sampling probes data members concurrently and has at most one second per sweep;
+an unsupported or failing member endpoint may be retried once within the pass.
+Budget exhaustion after identity invalidation is an unknown observation, not
+evidence that every member failed: last-published health keeps its original
+timestamps and epoch, cannot establish readiness or renew availability, and does
+not mask genuine observed failures. A quorum assembled from individually cached
+responses uses the oldest member sample as its safety boundary, never the later
+retry's start time.
+Transport failures are not cached. Full-backup acknowledgement and restore
+certification/activation use explicit fresh observations under the same
+per-cluster observation/commit lock, outside the read-only budget. Native mutation
+boundaries and incident creation invalidate prior observations.
 
 Normal database service and **full backups remain available**. After preserving
 evidence and repairing/replacing affected members from a trusted source, take a

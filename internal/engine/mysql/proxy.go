@@ -5,6 +5,9 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"sync"
+
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
@@ -54,22 +57,34 @@ func proxyWriterHealthy(st myspec.ProxyStatusResponse) bool {
 	return false
 }
 
+var errProxyConfigPending = errors.New("proxy configuration has not been applied")
+
 func proxyApplied(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
-	all, count, err := engine.VisitLiveInstancesConcurrent(ctx, rc, m.Name, func(a *agentapi.Client) (bool, error) {
-		probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
-		defer cancel()
-		status, err := a.Status(probe)
-		if err != nil {
-			return false, err
-		}
-		if status.ConfigVersion < m.ConfigVersion {
-			return false, a.Reload(probe)
-		}
-		var native myspec.ProxyStatusResponse
-		if err = a.Engine(probe, "mysql", myspec.ActionProxyStatus, struct{}{}, &native); err != nil {
-			return false, err
-		}
-		return proxyWriterHealthy(native), nil
+	ready, _, err := mysqlReadValue(ctx, rc, m.Name, "proxy-applied", func(probe context.Context) (bool, error) {
+		all, count, err := engine.VisitLiveInstancesConcurrent(probe, rc, m.Name, func(a *agentapi.Client) (bool, error) {
+			var metadata agentapi.Status
+			var native myspec.ProxyStatusResponse
+			var metadataErr, nativeErr error
+			var batch sync.WaitGroup
+			batch.Add(2)
+			go func() {
+				defer batch.Done()
+				metadata, _, metadataErr = mysqlReadClientStatus(probe, rc, m.Name, a)
+			}()
+			go func() {
+				defer batch.Done()
+				nativeErr = mysqlReadClientAction(probe, rc, m.Name, a, myspec.ActionProxyStatus, struct{}{}, &native)
+			}()
+			batch.Wait()
+			if err := errors.Join(metadataErr, nativeErr); err != nil {
+				return false, err
+			}
+			if metadata.ConfigVersion < m.ConfigVersion {
+				return false, errProxyConfigPending
+			}
+			return proxyWriterHealthy(native), nil
+		})
+		return all && count >= m.Replicas, err
 	})
-	return all && count >= m.Replicas, err
+	return ready, err
 }
