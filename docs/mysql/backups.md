@@ -221,6 +221,31 @@ Terminal cleanup has its own durable pending checkpoint: every recovery pass,
 including initial-restore Sync after CP restart, retries release until done
 before settling failed certification blocked. Pre-certification cleanup instead
 resumes its original checkpoint. GTID journal/audit outages do not gate cleanup.
+
+A fully cleaned `certify-blocked` restore whose queue operation is terminal
+Failed/Cancelled is not an eternal maintenance owner. Its only non-delete remedy
+is an explicitly requested **new restore**: a kind-filtered queue claim may pass
+older blocked backup/restart requests, then ownership transfers only after the
+new Running restore resolves a valid frozen source. The new restore negotiates
+and performs certification again, including its bounded SST remedy; it does not
+inherit the failed certification or clear the sealed GTID incident. The old
+failed operation remains auditable. Backup, restart and replace-member remain
+blocked until certification; the condition says **restore again or delete**.
+Cluster deletion follows its existing teardown ownership path.
+A remedy that fails before acquiring ownership finishes its queue cleanup without
+touching the previous blocked owner. If a handed-off remedy is rejected before
+native installation, cleanup retains the unresolved certification restriction:
+another new restore may proceed, but backup/restart/replace do not become safe
+merely because that remedy failed preflight.
+Every new restore records its own stop intent before changing data runtime.
+An inherited Offline flag or an earlier SST stop hold does not prove that the
+new request crossed that boundary. Once its own stop intent is committed, cleanup
+cannot roll back to the predecessor; older checkpoints without that receipt keep
+their conservative recovery rules.
+An active Running restore, unfinished cleanup, or a pre-certification native
+recovery checkpoint cannot authorize this handoff and retains its original
+exclusive frozen recovery path.
+
 After activation, use explicit
 trusted-source replacement/SST followed by a fresh full; a mysqld restart cannot
 repair incompatible GTID numbering. A persistent prefix difference at equal

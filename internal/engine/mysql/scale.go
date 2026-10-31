@@ -15,7 +15,7 @@ func maintenanceAllowed(ctx context.Context, rc *engine.Context, s *state) error
 	if err != nil {
 		return err
 	}
-	if bs.RestoreOperation != nil || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Formation.Reformation != nil && s.Formation.Reformation.State != "formed" {
+	if bs.RestoreOperation != nil || s.RestoreGTIDBlocked != "" || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Formation.Reformation != nil && s.Formation.Reformation.State != "formed" {
 		return engine.ErrUnavailable
 	}
 	if rc.Store != nil {

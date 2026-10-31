@@ -227,6 +227,34 @@ func persistRestore(rc *engine.Context, op *domain.Operation, cp backupCheckpoin
 	bs.RestoreOperation = &copy
 	return saveBackupState(rc.Cluster, bs)
 }
+
+func stopRestoreDataMembers(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation) error {
+	for _, m := range s.Members {
+		if m.Role == "data" {
+			m.Offline = true
+		}
+	}
+	publishRevision(s)
+	if err := save(rc.Cluster, s); err != nil {
+		return err
+	}
+	for _, m := range s.Members {
+		if m.Role != "data" {
+			continue
+		}
+		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
+		if err != nil {
+			return err
+		}
+		if err := a.Reload(ctx); err != nil {
+			return err
+		}
+		if err := a.Process(ctx, agentapi.ProcessAction{Process: "mysqld", Action: "stop", RequestID: op.ID + "/stop/" + m.Name}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
@@ -239,10 +267,18 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 	if err != nil {
 		return backupResult(cp, false), err
 	}
-	if bs.RestoreOperation != nil {
-		if bs.RestoreOperation.ID != op.ID {
+	handoff := bs.RestoreOperation != nil && bs.RestoreOperation.ID != op.ID
+	if handoff {
+		owner, e := terminalBlockedRestore(ctx, rc, bs)
+		if e != nil {
+			return backupResult(cp, false), e
+		}
+		if owner == nil || op.Kind != domain.OperationRestore {
 			return backupResult(cp, false), engine.ErrConflict
 		}
+		cp = backupCheckpoint{}
+	}
+	if bs.RestoreOperation != nil && !handoff {
 		if len(bs.RestoreOperation.Checkpoint) > 0 {
 			// A checkpoint is a complete snapshot, not a JSON merge patch:
 			// omitted optional flags must not retain caller-local stale values.
@@ -253,6 +289,7 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 	}
 	if cp.Step == "" {
+		cp.StopBoundary = restoreStopUntouched
 		if len(s.data()) == 0 {
 			return backupResult(cp, false), engine.ErrUnavailable
 		}
@@ -297,6 +334,11 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		}
 		cp.Generation = bs.Generation + 1
 		cp.Step = "preflight"
+		if handoff {
+			if err = handoffBlockedRestore(ctx, rc, op, &cp); err != nil {
+				return backupResult(cp, false), err
+			}
+		}
 		if err = negotiatePXCRestoreCertification(ctx, rc, s, op, &cp); err != nil {
 			return backupResult(cp, false), err
 		}
@@ -426,27 +468,36 @@ func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Op
 		if proof.State != "prepared" || proof.Stage != "ready" || proof.VerifiedRecheckID != cp.RecheckID {
 			return backupResult(cp, false), nil
 		}
-		for _, m := range s.data() {
-			m.Offline = true
+		if cp.StopBoundary == restoreStopUntouched {
+			// Return this intent before changing even desired Offline flags.
+			// The Manager atomically commits the checkpoint before another
+			// pass can issue the first physical stop for this restore.
+			cp.StopBoundary, cp.Step = restoreStopStarted, "stop"
+			if err := persistRestore(rc, op, cp); err != nil {
+				return backupResult(cp, false), err
+			}
+			return backupResult(cp, false), nil
 		}
-		publishRevision(s)
-		if err = save(rc.Cluster, s); err != nil {
+		if cp.StopBoundary != "" && cp.StopBoundary != restoreStopStarted {
+			return backupResult(cp, false), engine.Invalid("restore checkpoint has an unknown stop boundary")
+		}
+		// Older checkpoints retain their existing verified-stop path.
+		if err := stopRestoreDataMembers(ctx, rc, s, op); err != nil {
 			return backupResult(cp, false), err
 		}
-		for _, m := range s.data() {
-			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if e != nil {
-				return backupResult(cp, false), e
-			}
-			if e = a.Reload(ctx); e != nil {
-				return backupResult(cp, false), e
-			}
-			if e = a.Process(ctx, agentapi.ProcessAction{Process: "mysqld", Action: "stop", RequestID: op.ID + "/stop/" + m.Name}); e != nil {
-				return backupResult(cp, false), e
-			}
+		cp.Step = "stopped"
+	case "stop":
+		if cp.StopBoundary != restoreStopStarted || !cp.Preflighted || !myspec.ValidDigest(cp.PlanDigest) || cp.RecheckID == "" {
+			return backupResult(cp, false), engine.Invalid("restore stop lacks its committed verification intent")
+		}
+		if err := stopRestoreDataMembers(ctx, rc, s, op); err != nil {
+			return backupResult(cp, false), err
 		}
 		cp.Step = "stopped"
 	case "stopped":
+		// Native stop intent now owns this frozen source. A later failure must
+		// resume it, not revive a previous blocked restore or nest its history.
+		cp.PreviousBlockedRestore = nil
 		for _, m := range s.data() {
 			a, e := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 			if e != nil {

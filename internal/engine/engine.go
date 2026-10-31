@@ -65,6 +65,12 @@ type OperationClaimPolicy interface {
 	CanClaimOperation(*domain.Cluster) (bool, error)
 }
 
+// RecoveryOperationClaimPolicy may admit one narrowly scoped Pending remedy
+// while ordinary convergence owns maintenance. Running work always resumes first.
+type RecoveryOperationClaimPolicy interface {
+	RecoveryOperationKind(context.Context, *Context) (string, error)
+}
+
 // OperationObservationInvalidator discards transient observation windows before
 // an attempt, including failures resolving dependencies before provider entry.
 // Only a successful fresh provider observation may renew the prior checkpoint.

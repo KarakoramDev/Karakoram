@@ -280,6 +280,18 @@ func (s *Store) ClaimAgentUpgrade(ctx context.Context, ref domain.ClusterRef) (*
 	return s.claimOperation(ctx, ref.Key(), true, domain.OperationUpgradeAgents)
 }
 
+// ClaimRecoveryOperation claims only the provider's explicit recovery kind.
+// Running ownership must already have been checked by the reconciler.
+func (s *Store) ClaimRecoveryOperation(ctx context.Context, ref domain.ClusterRef, kind string) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	if kind == "" {
+		return nil, ErrNotFound
+	}
+	return s.claimOperation(ctx, ref.Key(), true, kind)
+}
+
 // ClaimBackupDeletion permits retained-object cleanup without starting unrelated
 // runtime work while a cluster is suspended.
 func (s *Store) ClaimBackupDeletion(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {

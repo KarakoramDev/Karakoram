@@ -173,7 +173,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		status.Conditions = append(status.Conditions, condition)
 		if s.RestoreGTIDBlocked != "" {
 			healthy = false
-			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "False", Reason: "GTIDMappingCertificationBlocked", Message: s.RestoreGTIDBlocked, LastTransitionTime: now(rc)})
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "False", Reason: "GTIDMappingCertificationBlocked", Message: s.RestoreGTIDBlocked + "; restore again or delete; restart/backup blocked until certified", LastTransitionTime: now(rc)})
 		} else if s.RestoreGTIDUnavailable != "" {
 			status.Conditions = append(status.Conditions, domain.Condition{Type: "RestoreGTIDCertified", Status: "Unknown", Reason: "RestoreCertificationUnavailable", Message: s.RestoreGTIDUnavailable, LastTransitionTime: now(rc)})
 		} else if s.RestoreGTIDFence != "" {

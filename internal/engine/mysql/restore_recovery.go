@@ -43,6 +43,37 @@ func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *doma
 		return engine.OpResult{Done: true}, nil
 	}
 	if bs.RestoreOperation.ID != op.ID {
+		// A source-resolution failure precedes handoff and owns no controls.
+		// Complete only that new request's failure cleanup; the qualified old
+		// blocked owner and its exact checkpoint remain untouched.
+		if op.Kind == domain.OperationRestore && op.FailureCleanupStartedAt != nil {
+			owner, err := terminalBlockedRestore(ctx, rc, bs)
+			if err != nil {
+				return engine.OpResult{}, err
+			}
+			if owner != nil {
+				var unowned backupCheckpoint
+				if len(op.Checkpoint) > 0 {
+					if err := json.Unmarshal(op.Checkpoint, &unowned); err != nil {
+						return engine.OpResult{}, err
+					}
+				}
+				queued, err := rc.Store.GetOperation(ctx, op.ID)
+				if err != nil {
+					return engine.OpResult{}, err
+				}
+				matching := queued.Kind == domain.OperationRestore && queued.Cluster == rc.Cluster.Name &&
+					domain.NormalizedNamespace(queued.Namespace) == domain.NormalizedNamespace(rc.Cluster.Namespace) &&
+					(queued.Phase == domain.PhaseRunning || queued.Phase == domain.PhaseFailed || queued.Phase == domain.PhaseCancelled)
+				untouched := unowned.Step == "" && unowned.Member == "" && unowned.Request == nil && unowned.Generation == 0 &&
+					!unowned.Preflighted && unowned.PlanDigest == "" && unowned.RecheckID == "" &&
+					(unowned.StopBoundary == "" || unowned.StopBoundary == restoreStopUntouched) &&
+					len(unowned.RecoveredUsers) == 0 && unowned.GTIDCertification == nil && unowned.PreviousBlockedRestore == nil
+				if matching && untouched {
+					return engine.OpResult{Done: true, Step: "restore-preflight-aborted"}, nil
+				}
+			}
+		}
 		return engine.OpResult{}, engine.ErrConflict
 	}
 	var cp backupCheckpoint
@@ -76,19 +107,44 @@ func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *doma
 			return engine.OpResult{}, err
 		}
 	}
-	// Failure before the first fence has no data recovery ownership to retain.
-	// Releasing it permits a new request using a fresh, provable full baseline.
+	// An untouched failed remedy must restore its prior blocked owner, not
+	// acknowledge unresolved certification. Ordinary preflight owners can be
+	// released; the durable certification latch still gates all other work.
 	untouched := cp.Step == "preflight" || cp.Step == "preflight-poll" || cp.Step == "fence" || cp.Step == "fence-recheck" || cp.Step == "fence-recheck-poll"
 	if untouched && op.FailureCleanupStartedAt != nil {
 		s, err := load(rc.Cluster)
 		if err != nil {
 			return engine.OpResult{}, err
 		}
-		for _, m := range s.data() {
-			untouched = untouched && !m.Offline
+		switch cp.StopBoundary {
+		case restoreStopUntouched:
+			// Existing Offline/stop holds may belong to the prior failed
+			// certification. This restore has not acquired its own stop.
+		case restoreStopStarted:
+			untouched = false
+		case "":
+			for _, m := range s.data() {
+				untouched = untouched && !m.Offline
+			}
+		default:
+			return engine.OpResult{}, engine.Invalid("restore checkpoint has an unknown stop boundary")
 		}
 		if untouched {
-			bs.RestoreOperation = nil
+			if cp.PreviousBlockedRestore != nil {
+				previous := bs
+				previous.RestoreOperation = cp.PreviousBlockedRestore
+				owner, err := terminalBlockedRestore(ctx, rc, previous)
+				if err != nil {
+					return engine.OpResult{}, err
+				}
+				if owner == nil {
+					return engine.OpResult{}, engine.ErrConflict
+				}
+				bs.RestoreOperation = owner
+			} else {
+				bs.RestoreOperation = nil
+			}
+			invalidateMySQLReadObservation(ctx, rc)
 			if err := saveBackupState(rc.Cluster, bs); err != nil {
 				return engine.OpResult{}, err
 			}

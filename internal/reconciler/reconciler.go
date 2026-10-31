@@ -672,6 +672,25 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 			return 0, err
 		}
 		if !allowed {
+			if recovery, ok := p.(engine.RecoveryOperationClaimPolicy); ok {
+				kind, policyErr := recovery.RecoveryOperationKind(ctx, &rc)
+				if policyErr != nil {
+					return 0, policyErr
+				}
+				if kind != "" {
+					remedy, claimErr := m.opts.Store.ClaimRecoveryOperation(store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now()), ref, kind)
+					if claimErr == nil {
+						actor, operation = remedy.Actor, remedy.ID
+						if actor == "" {
+							actor = "reconciler"
+						}
+						return m.runOperation(ctx, p, &rc, remedy)
+					}
+					if !errors.Is(claimErr, store.ErrNotFound) {
+						return 0, claimErr
+					}
+				}
+			}
 			return result.RequeueAfter, syncErr
 		}
 	}

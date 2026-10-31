@@ -5,9 +5,11 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 	"time"
 )
 
@@ -20,7 +22,7 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if bs.RestoreOperation != nil {
+	if bs.RestoreOperation != nil || s.RestoreGTIDBlocked != "" {
 		return false, nil
 	}
 	if s.Pending != nil || s.GaleraTLS != nil || s.Suspended || s.Formation.State != "formed" || s.Replacement != nil || s.TLSRotation != nil || s.Rolling != nil && s.Rolling.Stage != "backup" {
@@ -32,6 +34,108 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// A fully cleaned, terminal certification failure has completed native restore.
+// It is not the pre-certification frozen recovery owner, which remains exclusive.
+func terminalBlockedRestore(ctx context.Context, rc *engine.Context, bs backupState) (*domain.Operation, error) {
+	if rc.Cluster.Spec.Provider != "pxc" || rc.Store == nil {
+		return nil, nil
+	}
+	if bs.RestoreOperation == nil {
+		return nil, nil
+	}
+	var cp backupCheckpoint
+	if err := json.Unmarshal(bs.RestoreOperation.Checkpoint, &cp); err != nil {
+		return nil, err
+	}
+	c := cp.GTIDCertification
+	if cp.Step != "certify-blocked" || c == nil || !c.CleanupComplete || c.CleanupPending || c.RecoveryCleanupPending || c.LegacyCleanupPending || c.FencesOwned {
+		return nil, nil
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return nil, err
+	}
+	if s.RestoreGTIDFence != "" {
+		return nil, nil
+	}
+	queued, err := rc.Store.GetOperation(ctx, bs.RestoreOperation.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if queued.Kind != domain.OperationRestore || queued.Cluster != rc.Cluster.Name || domain.NormalizedNamespace(queued.Namespace) != domain.NormalizedNamespace(rc.Cluster.Namespace) {
+		return nil, nil
+	}
+	if queued.Phase != domain.PhaseFailed && queued.Phase != domain.PhaseCancelled {
+		return nil, nil
+	}
+	return bs.RestoreOperation, nil
+}
+
+func (*Core) RecoveryOperationKind(ctx context.Context, rc *engine.Context) (string, error) {
+	if rc.Cluster.Spec.Provider != "pxc" || rc.Store == nil {
+		return "", nil
+	}
+	bs, err := loadBackupState(rc.Cluster)
+	if err != nil {
+		return "", err
+	}
+	owner, err := terminalBlockedRestore(ctx, rc, bs)
+	if err != nil {
+		return "", err
+	}
+	if owner != nil {
+		return domain.OperationRestore, nil
+	}
+	// An untouched rejected remedy can have no native recovery checkpoint.
+	// The durable unresolved-certification latch still admits restore only.
+	if bs.RestoreOperation == nil {
+		s, err := load(rc.Cluster)
+		if err != nil {
+			return "", err
+		}
+		if s.RestoreGTIDBlocked != "" && s.RestoreGTIDFence == "" {
+			return domain.OperationRestore, nil
+		}
+	}
+	return "", nil
+}
+
+// Hand off only after the new Running restore has resolved its immutable source.
+// Replace the backup-state owner atomically; retain both the old queue record
+// and the sealed GTID incident rather than acknowledging or erasing evidence.
+func handoffBlockedRestore(ctx context.Context, rc *engine.Context, op *domain.Operation, cp *backupCheckpoint) error {
+	bs, err := loadBackupState(rc.Cluster)
+	if err != nil {
+		return err
+	}
+	owner, err := terminalBlockedRestore(ctx, rc, bs)
+	if err != nil {
+		return err
+	}
+	if owner == nil || owner.ID == op.ID || op.Kind != domain.OperationRestore || cp.Step != "preflight" || cp.Source == nil || cp.Request == nil ||
+		cp.StopBoundary != "" && cp.StopBoundary != restoreStopUntouched {
+		return engine.ErrConflict
+	}
+	queued, err := rc.Store.GetOperation(ctx, op.ID)
+	if err != nil {
+		return err
+	}
+	if queued.Phase != domain.PhaseRunning || queued.Kind != domain.OperationRestore || queued.Cluster != rc.Cluster.Name || domain.NormalizedNamespace(queued.Namespace) != domain.NormalizedNamespace(rc.Cluster.Namespace) {
+		return engine.ErrConflict
+	}
+	previous := *owner
+	cp.StopBoundary = restoreStopUntouched
+	cp.PreviousBlockedRestore = &previous
+	copy := *op
+	copy.Checkpoint, copy.Step = backupResult(*cp, false).Checkpoint, cp.Step
+	bs.RestoreOperation = &copy
+	invalidateMySQLReadObservation(ctx, rc)
+	return saveBackupState(rc.Cluster, bs)
 }
 
 // RunOperation's closed dispatch prevents unsupported maintenance from mutating data.

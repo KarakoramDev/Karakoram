@@ -107,17 +107,28 @@ func mysqlAction(ctx context.Context, rc *engine.Context, member, action string,
 	return a.Engine(ctx, "mysql", action, request, response)
 }
 
+const (
+	restoreStopUntouched = "untouched"
+	restoreStopStarted   = "started"
+)
+
 type backupCheckpoint struct {
-	Step              string                   `json:"step"`
-	Member            string                   `json:"member,omitempty"`
-	Source            *restoreSource           `json:"source,omitempty"`
-	Request           *myspec.Restore          `json:"request,omitempty"`
-	Generation        int                      `json:"generation,omitempty"`
-	RecoveredUsers    []string                 `json:"recoveredUsers,omitempty"`
-	Preflighted       bool                     `json:"preflighted,omitempty"`
-	PlanDigest        string                   `json:"planDigest,omitempty"`
-	RecheckID         string                   `json:"recheckID,omitempty"`
+	Step           string          `json:"step"`
+	Member         string          `json:"member,omitempty"`
+	Source         *restoreSource  `json:"source,omitempty"`
+	Request        *myspec.Restore `json:"request,omitempty"`
+	Generation     int             `json:"generation,omitempty"`
+	RecoveredUsers []string        `json:"recoveredUsers,omitempty"`
+	Preflighted    bool            `json:"preflighted,omitempty"`
+	PlanDigest     string          `json:"planDigest,omitempty"`
+	RecheckID      string          `json:"recheckID,omitempty"`
+	// Empty belongs to older checkpoints and retains conservative Offline
+	// inference. New restores persist untouched/started intent explicitly.
+	StopBoundary      string                   `json:"stopBoundary,omitempty"`
 	GTIDCertification *pxcRestoreCertification `json:"gtidCertification,omitempty"`
+	// Retain the exact terminal blocked owner only until replacement preflight
+	// crosses the native-stop boundary; an untouched failure must restore it.
+	PreviousBlockedRestore *domain.Operation `json:"previousBlockedRestore,omitempty"`
 }
 
 func backupResult(cp backupCheckpoint, done bool) engine.OpResult {
