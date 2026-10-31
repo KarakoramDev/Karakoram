@@ -79,8 +79,8 @@ These cross-engine constraints define the operating model; engine-specific limit
   and writes; incremental backups/PITR continuity can be blocked. Investigation
   continues; verify data natively. This was not reproduced on Dokploy.
 - **Replacing a Percona XtraDB Cluster member or scaling PXC in never completes**
-  (also present in v0.4.0 and v0.4.1). This includes replacements started
-  automatically to heal a failed member. The new member joins, but the old
+  (also present in v0.4.0 and v0.4.1). Automatic healing of PXC members
+  (restart or rejoin of the same member) is not affected. The new member joins, but the old
   member's retirement is rejected repeatedly; the operation stays Updating or
   Scaling and fails after about 20 retries, the old member stays in Removing,
   and further operations on the cluster are blocked. The remaining members keep

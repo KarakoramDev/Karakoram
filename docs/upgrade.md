@@ -139,8 +139,8 @@ use new v0.4.2 members, not merely a database-process restart.
   The flag can block incremental backups and PITR continuity, and taking a new
   full backup has not reliably cleared it. This was not reproduced on Dokploy.
 - **Replacing a Percona XtraDB Cluster member or scaling PXC in never completes**
-  (also present in v0.4.0 and v0.4.1). This includes replacements started
-  automatically to heal a failed member. The new member joins, but the old
+  (also present in v0.4.0 and v0.4.1). Automatic healing of PXC members
+  (restart or rejoin of the same member) is not affected. The new member joins, but the old
   member's retirement is rejected repeatedly; the operation stays Updating or
   Scaling and fails after about 20 retries, the old member stays in Removing,
   and further operations on the cluster are blocked. The remaining members keep
