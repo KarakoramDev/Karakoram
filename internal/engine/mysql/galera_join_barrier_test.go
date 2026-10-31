@@ -33,6 +33,10 @@ func TestPXCJoinBarrierUsesDeterministicSyncedReceipts(t *testing.T) {
 		{"unformed holds data", func(s *state) { s.Formation.State = "unformed" }, nil},
 		{"bootstrap seed only", func(s *state) { s.Formation.State = "bootstrapping" }, []string{"m0"}},
 		{"arbitrary bootstrap seed", func(s *state) { s.Formation.State, s.Formation.Seed = "bootstrapping", "m2" }, []string{"m2"}},
+		{"historical certified bootstrap needs no new client fence", func(s *state) {
+			s.Formation.State, s.Formation.FormationEpoch = "bootstrapping", 2
+			s.Formation.GTIDCertification = &pxcFormationCertification{Owner: "already-admitted", Epoch: 1, Checkpoint: backupCheckpoint{GTIDCertification: &pxcRestoreCertification{Certified: true}}}
+		}, []string{"m0"}},
 		{"arbitrary seed follower order", func(s *state) {
 			s.Formation.Seed = "m2"
 			s.find("m0").Stage = "deployed"

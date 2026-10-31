@@ -312,3 +312,62 @@ func PXCEqualPositionPrefixDifferences(observations map[string]GaleraStatusRespo
 	}
 	return sid, affected
 }
+
+// PXCCurrentSIDMappingCompatible bounds what a non-fencing executed-set sample
+// can prove before acknowledging history. Every member must share the current
+// direct/inverse namespace presence, and at most one of those namespaces may
+// differ by nested prefixes; the other must be identical frozen history.
+// This does not certify native future assignment or supersede mixed probe
+// evidence. In particular, identical copied histories are not a new probe.
+func PXCCurrentSIDMappingCompatible(observations map[string]GaleraStatusResponse) bool {
+	if len(observations) == 0 {
+		return false
+	}
+	var state, direct, inverse string
+	var baseDirect, baseInverse, longestDirect, longestInverse []gtidInterval
+	directEqual, inverseEqual, directPrefix, inversePrefix := true, true, true, true
+	for _, status := range observations {
+		if !status.Eligible() || !ValidUUID(status.StateUUID) {
+			return false
+		}
+		set, err := gtidIntervals(status.GTIDExecuted)
+		if err != nil {
+			return false
+		}
+		if state == "" {
+			state = strings.ToLower(status.StateUUID)
+			direct, inverse = state, inverseUUID(state)
+			baseDirect, baseInverse = set[direct], set[inverse]
+			longestDirect, longestInverse = baseDirect, baseInverse
+			if len(baseDirect) == 0 && len(baseInverse) == 0 {
+				return false
+			}
+			continue
+		}
+		if !strings.EqualFold(status.StateUUID, state) {
+			return false
+		}
+		currentDirect, currentInverse := set[direct], set[inverse]
+		if (len(currentDirect) == 0) != (len(baseDirect) == 0) || (len(currentInverse) == 0) != (len(baseInverse) == 0) {
+			return false
+		}
+		directEqual = directEqual && gtidPrefix(baseDirect, currentDirect) && gtidPrefix(currentDirect, baseDirect)
+		inverseEqual = inverseEqual && gtidPrefix(baseInverse, currentInverse) && gtidPrefix(currentInverse, baseInverse)
+		if !gtidPrefix(longestDirect, currentDirect) {
+			if gtidPrefix(currentDirect, longestDirect) {
+				longestDirect = currentDirect
+			} else {
+				directPrefix = false
+			}
+		}
+		if !gtidPrefix(longestInverse, currentInverse) {
+			if gtidPrefix(currentInverse, longestInverse) {
+				longestInverse = currentInverse
+			} else {
+				inversePrefix = false
+			}
+		}
+	}
+	return len(baseDirect) > 0 && directPrefix && inverseEqual ||
+		len(baseInverse) > 0 && inversePrefix && directEqual
+}

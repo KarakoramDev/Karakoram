@@ -336,6 +336,12 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 	if !eligible {
 		return nil
 	}
+	// A history acknowledgement is not a repair of native SID assignment.
+	// Retired post-admission owners retain probe evidence even after releasing
+	// unauthorized client holds; only a later lifecycle certificate supersedes it.
+	if pxcUnrepairedMixedMapping(s) {
+		return engine.Invalid("PXC members have an observed mixed GTID SID mapping; replace from trusted history or restore before acknowledging with a fresh full backup")
+	}
 	// Legacy restore does not certify a replacement history. Its automatic
 	// post-restore full cannot silently acknowledge an existing incident.
 	if s.RestoreGTIDUnavailable != "" && b.Trigger == "restore" {
@@ -362,6 +368,9 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 		if !myspec.ValidUUID(status.ServerUUID) {
 			return engine.ErrUnavailable
 		}
+	}
+	if !myspec.PXCCurrentSIDMappingCompatible(observations) {
+		return engine.Invalid("PXC current direct/inverse GTID accounting is incompatible or unproven; preserve history and replace from a trusted donor or restore before full acknowledgement")
 	}
 	incident.BaselineAt, incident.Backup = b.MySQL.EndTime, b.Name
 	incident.Acknowledged = observations

@@ -235,12 +235,15 @@ func TestPXCExistingLatchedFormationHasExplicitRecoveryAction(t *testing.T) {
 	}
 	current, _ := load(rc.Cluster)
 	condition, ready := pxcFormationMappingCondition(current)
-	if ready || condition.Status != "False" || !strings.Contains(condition.Message, "restore") || current.RestoreGTIDFence != "" {
-		t.Fatal("existing latched data was silently erased, unfenced without guidance or claimed Ready")
+	if !ready || condition.Status != "Unknown" || current.Formation.GTIDCertification != nil || pxcFormationMappingPending(current) || current.RestoreGTIDFence != "" {
+		t.Fatal("ownerless historical diagnostic created certification authority or client holds")
 	}
 	if activeGTIDIncident(current) == nil {
 		t.Fatal("existing incident silently cleared")
 	}
+	assertPXCHistoryClientsServing(t, p, rc, current)
+	assertPXCHistoryLatchCondition(t, p, rc)
+	assertPXCHistoryExitAdmission(t, p, rc)
 }
 
 func TestPXCScaleJoinStallBlocksWithoutStoppingExistingClients(t *testing.T) {

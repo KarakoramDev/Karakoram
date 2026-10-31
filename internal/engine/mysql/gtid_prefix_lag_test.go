@@ -42,7 +42,21 @@ func TestPXCRestartedMixedAccountingCannotBecomePermanentLag(t *testing.T) {
 	}
 	start := activeGTIDIncident(s).DetectedAt.Add(time.Second)
 	full := &domain.Backup{Name: "ack", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
-	if err := establishGTIDBaseline(t.Context(), rc, s, full); err != nil {
+	if err := establishGTIDBaseline(t.Context(), rc, s, full); err == nil {
+		t.Fatal("fresh full acknowledged the native mixed accounting")
+	}
+	if activeGTIDIncident(s) == nil {
+		t.Fatal("rejected acknowledgement erased the incident")
+	}
+	// Older controllers could already have persisted this unsafe allowance.
+	// Load that historical state explicitly: the current acknowledgement path
+	// must reject it, while legacy records still require the prefix-offset guard.
+	observations := observePXCQuorumGTIDs(t.Context(), rc, s)
+	incident := activeGTIDIncident(s)
+	incident.BaselineAt, incident.Backup = full.MySQL.EndTime, "legacy-ack"
+	incident.Acknowledged = observations
+	incident.Allowance = &gtidAllowance{Epoch: s.Formation.FormationEpoch, Group: s.Formation.GroupName, Members: gtidMemberIdentities(s, observations), Histories: observations}
+	if err := persistGTIDHistory(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
 	}
 	rc.Clock = trafficRenewalClock{at: start.Add(2 * time.Second)}

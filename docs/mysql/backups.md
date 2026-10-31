@@ -140,13 +140,23 @@ the admitted formation becomes Ready; only lifecycle-proven empty joiners with n
 unique frozen history can receive bounded seed-pinned SST remedies. A unique-data
 or unproven member fails closed with operator guidance. Legacy agents report
 `CertificationUnavailable` and retain the comparator without acquiring new holds.
-Neither this certificate nor SST clears an existing GTID incident. A fresh full
-acknowledges history differences; it does not repair native SID selection.
+Neither this certificate nor SST clears an existing GTID incident. Once members
+are admitted, a history/epoch change does not re-enter formation certification
+or stop service. Managed replacement, full acknowledgement, restore and deletion
+remain available with the history latch set. A fresh full acknowledges history
+differences; it does not repair native SID selection. Acknowledgement separately
+checks current direct/inverse namespace compatibility without client holds:
+members must share namespace presence, with at most one namespace differing by
+nested prefixes and the other identical frozen history. Current incompatible
+accounting or retained mixed probe evidence refuses acknowledgement even if the
+old birth certificate was consistent. The full artifact can still succeed while
+the history latch remains set.
 No separate retry API is needed for a withdrawn empty join: scale back to the
 previously admitted count or cancel the not-yet-retired replacement. Only the
 unadmitted cohort is removed; its controls are released and prior member/history
-proofs are preserved. A prior real latch remains Degraded. Blocked birth can be
-deleted/re-created, while a blocked restore admits a new trusted-source restore.
+proofs are preserved. A prior real latch remains Degraded. A cleanup-complete
+blocked formation or restore admits a new trusted-source restore; a disposable
+blocked birth may instead be deleted/re-created.
 
 
 [Galera](https://galeracluster.com/) `Synced` and matching rows are not sufficient proof of MySQL GTID

@@ -171,15 +171,19 @@ member/proxy fence cleanup; it cannot leave later joiners or client holds waitin
 silently forever. Legacy restore follower starts use the same launch barrier.
 
 Successful certification retires the empty-member erase permission before client
-fence release. New incarnation/epoch/history evidence requires re-certification,
-never automatic erasure of already admitted live data. A pre-existing latched
-formation without saved empty-member provenance reports an explicit trusted-source
-restore or delete/re-create action. A rolling restart is not data repair.
+fence release. Formation certification belongs only to birth, lifecycle-proven
+empty joins, or explicit restore. A new history incident or changed epoch on
+already admitted members never creates a new certification owner or client hold.
+An older certificate is reported as historical/unavailable if its epoch or
+incarnations no longer match; serialized native join admission still applies.
+Already initialized data never gains automatic erase permission from a history
+incident. A rolling restart is not data repair.
 The certificate and any original GTID incident are separate: SST, consistent
 mapping and equal histories never silently acknowledge a real incident.
 
-There is no separate retry-certification API. For a blocked birth with no user
-data, delete/re-create; a blocked restore permits a new restore. A blocked empty
+There is no separate retry-certification API. A cleanup-complete blocked birth
+or restore permits a new trusted-source restore; a disposable blocked birth can
+also be deleted/re-created. A blocked empty
 scale join can be withdrawn by scaling back to the previously admitted member
 count; a pending replacement can be cancelled before retirement. These exits
 retire only the unadmitted cohort and release its owned fences, preserving the
@@ -214,6 +218,25 @@ from trusted history using managed replacement/SST, then take the fresh full.
 A mysqld restart is **not** a repair: it may change the mapping for future
 transactions while retaining incompatible old namespaces and restarting numbering
 inside the direct SID. Do not mistake that permanent prefix offset for write lag.
+The history latch leaves managed replacement, explicit full acknowledgement,
+trusted-source restore and deletion available. Replacement fences only its new
+joiner; restore and deletion retain their own explicit lifecycle disruptions.
+Acknowledgement checks current direct/inverse SID accounting without fencing
+clients; an old consistent birth certificate is not proof that a later mixed
+mapping was repaired. Incompatible namespace presence, non-prefix differences,
+or differences in both current namespaces refuse acknowledgement. One shared
+namespace may have ordinary nested-prefix write lag only when its complement is
+identical frozen history across all members. Existing mixed probe evidence must
+also be repaired. While an incident is active, the saved mapping certificate is
+reported as unproven rather than certifying current assignment. Full backup
+artifacts remain available if acknowledgement is refused; the latch stays set.
+
+Control-plane upgrade also retires an obsolete post-admission whole-cluster
+certification owner when it had no new empty-member admission. Its owned native
+fences and every proxy hold are released retryably before restoring the previous
+historical certificate. Probe evidence and the real GTID incident are retained;
+the cluster stays Degraded-latched until explicit acknowledgement, without
+requiring a member-agent upgrade or erasing any member's data.
 
 Preserve logs, executed GTID sets and application evidence. Identify the trusted
 quorum and use managed member replacement to provision fresh data from it;

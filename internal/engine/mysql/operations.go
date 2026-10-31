@@ -101,7 +101,7 @@ func (*Core) RecoveryOperationKind(ctx context.Context, rc *engine.Context) (str
 		if err != nil {
 			return "", err
 		}
-		if mapping := s.Formation.GTIDCertification; mapping != nil && mapping.JoinOnly && mapping.Blocked != "" && pxcFormationCleanupComplete(s, mapping) {
+		if mapping := s.Formation.GTIDCertification; mapping != nil && mapping.Blocked != "" && pxcFormationCleanupComplete(s, mapping) {
 			return domain.OperationRestore, nil
 		}
 		if s.RestoreGTIDBlocked != "" && s.RestoreGTIDFence == "" {

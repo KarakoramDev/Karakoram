@@ -137,6 +137,9 @@ func TestNativePostBootstrapGTIDMappings(t *testing.T) {
 		if err := CheckGTIDQuorum(observed); !errors.As(err, &conflict) || !conflict.Diverged || len(conflict.Members) != 1 || conflict.Members[0] != "c" {
 			t.Fatalf("mixed native accounting not fenced: %v", err)
 		}
+		// Comparing a historical allowance is not permission to create one.
+		// Current acknowledgement separately rejects this mixed observation;
+		// legacy persisted allowances remain subject to the prefix-offset guard.
 		acknowledged := map[string]GaleraStatusResponse{"a": direct, "b": direct, "c": complemented}
 		if err := CheckGTIDQuorumBaseline(observed, acknowledged); err != nil {
 			t.Fatalf("unchanged acknowledged mixed accounting rejected: %v", err)
@@ -147,4 +150,48 @@ func TestNativePostBootstrapGTIDMappings(t *testing.T) {
 			t.Fatalf("new mixed accounting silently acknowledged: %v", err)
 		}
 	})
+}
+
+func TestPXCCurrentSIDMappingCompatibilityBeforeAcknowledgement(t *testing.T) {
+	const direct = "d5aeb882-d447-11f1-96e2-f732d65208d9"
+	const inverse = "2a51477d-2bb8-ee0e-691d-08cd29adf726"
+	const local = "e419e04e-d43f-11f1-835a-d377c0fbcfd8"
+	for _, tc := range []struct {
+		name string
+		sets []string
+		want bool
+	}{
+		{"direct prefixes", []string{direct + ":1-6", direct + ":1-7", direct + ":1-8"}, true},
+		{"inverse prefixes", []string{inverse + ":1-6", inverse + ":1-7", inverse + ":1-8"}, true},
+		{"unrelated local history remains acknowledgeable", []string{direct + ":1-7", direct + ":1-7," + local + ":2", direct + ":1-8"}, true},
+		{"shared frozen inverse and direct prefixes", []string{direct + ":1-6," + inverse + ":1-3", direct + ":1-7," + inverse + ":1-3", direct + ":1-8," + inverse + ":1-3"}, true},
+		{"shared frozen direct and inverse prefixes", []string{direct + ":1-3," + inverse + ":1-6", direct + ":1-3," + inverse + ":1-7", direct + ":1-3," + inverse + ":1-8"}, true},
+		{"identical shared namespaces", []string{direct + ":1-7," + inverse + ":1-3", direct + ":1-7," + inverse + ":1-3", direct + ":1-7," + inverse + ":1-3"}, true},
+		{"new mixed mapping", []string{direct + ":1-366", direct + ":1-366", inverse + ":1-368"}, false},
+		{"restart retains native mixed accounting", []string{direct + ":1-1134," + local + ":1-227", direct + ":1-1134," + local + ":1-227", inverse + ":1-534," + direct + ":1-600," + local + ":1-227"}, false},
+		{"both shared namespaces differ", []string{direct + ":1-7," + inverse + ":1-3", direct + ":1-8," + inverse + ":1-4", direct + ":1-9," + inverse + ":1-5"}, false},
+		{"active interior omission", []string{direct + ":1-7", direct + ":1-4:6-7", direct + ":1-7"}, false},
+		{"branches beyond a shared short prefix", []string{direct + ":1-5", direct + ":1-8", direct + ":1-6:8-9"}, false},
+		{"no current namespace", []string{local + ":1", local + ":1", local + ":1"}, false},
+		{"invalid history", []string{direct + ":1", "invalid", direct + ":1"}, false},
+		{"empty observation", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := make(map[string]GaleraStatusResponse, len(tc.sets))
+			for i, set := range tc.sets {
+				observed[string(rune('a'+i))] = GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: direct, GTIDExecuted: set}
+			}
+			if got := PXCCurrentSIDMappingCompatible(observed); got != tc.want {
+				t.Fatalf("current SID compatibility=%t, want %t", got, tc.want)
+			}
+			if tc.want {
+				status := observed["b"]
+				status.Ready = false
+				observed["b"] = status
+				if PXCCurrentSIDMappingCompatible(observed) {
+					t.Fatal("ineligible member authorized acknowledgement")
+				}
+			}
+		})
+	}
 }

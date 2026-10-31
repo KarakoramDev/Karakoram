@@ -96,6 +96,7 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 	sqlBefore, _ := secret(t.Context(), rc, "tls/servers/demom0.crt")
 	s, _ := load(rc.Cluster)
 	history, epoch := s.Formation.GroupName, s.Formation.FormationEpoch
+	certifiedOwner := s.Formation.GTIDCertification.Owner
 	prior := b.action
 	bootstraps := 0
 	b.action = func(w http.ResponseWriter, r *http.Request, member string) bool {
@@ -106,9 +107,12 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 				return true
 			}
 			receipt := current.Formation.GTIDCertification
-			if receipt == nil || receipt.Epoch != current.Formation.FormationEpoch || receipt.Owner == "" ||
-				current.RestoreGTIDFence != receipt.Owner || receipt.Checkpoint.GTIDCertification == nil || !receipt.Checkpoint.GTIDCertification.FencesOwned {
-				t.Error("traffic TLS recovery attempted native bootstrap without the new epoch's published client fence")
+			if receipt == nil || receipt.Owner != certifiedOwner || receipt.Epoch != epoch ||
+				current.RestoreGTIDFence != "" || receipt.Checkpoint.GTIDCertification == nil || !receipt.Checkpoint.GTIDCertification.Certified || receipt.Checkpoint.GTIDCertification.FencesOwned {
+				t.Error("traffic TLS recovery re-entered whole-cluster certification for already admitted data")
+			}
+			if condition, _ := pxcFormationMappingCondition(current); condition.Status != "Unknown" {
+				t.Error("new native bootstrap epoch falsely claimed a fresh mapping proof", condition)
 			}
 			bootstraps++
 		}
@@ -172,7 +176,7 @@ func TestPXCTrafficTLSRotationStopsAllMembersBeforeRootReplacement(t *testing.T)
 	}
 }
 
-func TestPXCFiveMemberTrafficTLSReformCertifiesWithoutOrdinarySync(t *testing.T) {
+func TestPXCFiveMemberTrafficTLSReformPreservesHistoricalProofWithoutOrdinarySync(t *testing.T) {
 	p, rc, b := setupPXC(t)
 	converge(t, p, rc, b)
 	rc.Cluster.Generation++
@@ -185,6 +189,7 @@ func TestPXCFiveMemberTrafficTLSReformCertifiesWithoutOrdinarySync(t *testing.T)
 		t.Fatal(err)
 	}
 	epoch, group := s.Formation.FormationEpoch, s.Formation.GroupName
+	certifiedOwner := s.Formation.GTIDCertification.Owner
 	if err := requestGaleraTrafficRotation(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +213,13 @@ func TestPXCFiveMemberTrafficTLSReformCertifiesWithoutOrdinarySync(t *testing.T)
 			continue
 		}
 		if s.Formation.FormationEpoch != epoch+1 || s.Formation.GroupName != group || pxcFormationMappingPending(s) || s.RestoreGTIDFence != "" {
-			t.Fatal("TLS completion skipped the new epoch's mapping certification", s.Formation)
+			t.Fatal("TLS reform did not complete its native epoch without certification holds", s.Formation)
+		}
+		if receipt := s.Formation.GTIDCertification; receipt.Owner != certifiedOwner || receipt.Epoch != epoch {
+			t.Fatal("TLS reform replaced a serving cluster's historical certification", receipt)
+		}
+		if condition, _ := pxcFormationMappingCondition(s); condition.Status != "Unknown" {
+			t.Fatal("TLS reform claimed an unperformed new-epoch mapping certification", condition)
 		}
 		for _, member := range s.data() {
 			if member.Stage != "joined" || pxcJoinRoutingFenced(s, member) {

@@ -17,11 +17,13 @@ func pxcJoinAllowed(s *state, m *member) bool {
 	}
 	// FencesOwned is an acquisition intent, not fence publication. Empty
 	// joiners need both the published owner and the pinned seed donor. A new
-	// bootstrap also needs that fence, even when its seed was joined before.
+	// birth bootstrap needs that fence too; a historical serving certificate
+	// never acquires a new hold just because the cluster is re-bootstrapping.
 	certification := s.Formation.GTIDCertification
 	if certification != nil && !certification.Legacy &&
 		(m.Stage != "joined" && certification.EmptyMembers[m.Name] ||
-			s.Formation.State == "bootstrapping" && m.Name == s.Formation.Seed) {
+			s.Formation.State == "bootstrapping" && m.Name == s.Formation.Seed &&
+				(certification.Checkpoint.GTIDCertification == nil || !certification.Checkpoint.GTIDCertification.Certified)) {
 		proof := certification.Checkpoint.GTIDCertification
 		if certification.Owner == "" || proof == nil || !proof.FencesOwned {
 			return false

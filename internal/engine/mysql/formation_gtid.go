@@ -26,7 +26,6 @@ type pxcFormationCertification struct {
 	Members         map[string]gtidMemberIdentity `json:"members,omitempty"`
 	Blocked         string                        `json:"blocked,omitempty"`
 	Legacy          bool                          `json:"legacy,omitempty"`
-	IncidentCount   int                           `json:"incidentCount,omitempty"`
 	JoinOnly        bool                          `json:"joinOnly,omitempty"`
 	StartedAt       time.Time                     `json:"startedAt,omitempty"`
 	LastProgressAt  time.Time                     `json:"lastProgressAt,omitempty"`
@@ -34,6 +33,9 @@ type pxcFormationCertification struct {
 	ProgressPhase   string                        `json:"progressPhase,omitempty"`
 	FencedMembers   map[string]bool               `json:"fencedMembers,omitempty"`
 	PreviousMapping *pxcFormationCertification    `json:"previousMapping,omitempty"`
+	// Retain evidence from obsolete post-admission certification without
+	// retaining its lifecycle authority or client holds.
+	RetiredCertification *pxcRestoreCertification `json:"retiredCertification,omitempty"`
 }
 
 type pxcMappingOwner struct {
@@ -319,7 +321,7 @@ func beginPXCFormationCertification(ctx context.Context, rc *engine.Context, s *
 		return nil
 	}
 	c := s.Formation.GTIDCertification
-	if c == nil || c.Blocked != "" || c.Legacy || c.Checkpoint.GTIDCertification != nil && c.Checkpoint.GTIDCertification.Certified {
+	if c == nil || c.Blocked != "" || c.Legacy || pxcServingRecertification(c) || c.Checkpoint.GTIDCertification != nil && c.Checkpoint.GTIDCertification.Certified {
 		return nil
 	}
 	for _, m := range s.data() {
@@ -353,17 +355,11 @@ func reconcilePXCFormationCertification(ctx context.Context, rc *engine.Context,
 	}
 	c := s.Formation.GTIDCertification
 	if c == nil {
-		if activeGTIDIncident(s) == nil {
-			return false, nil
-		}
-		c = &pxcFormationCertification{Blocked: "Existing latched PXC mapping has no durable empty-join admission; preserve evidence and restore from a trusted source or delete/re-create; restart or a full backup cannot repair mapping"}
-		s.Formation.GTIDCertification = c
-		if err := save(rc.Cluster, s); err != nil {
-			return true, err
-		}
-		// This is a diagnostic, not an acquired native formation owner.
-		// Keep ordinary observation/join bookkeeping available to old clusters.
+		// A history incident is not a birth/empty-join admission.
 		return false, nil
+	}
+	if pxcServingRecertification(c) {
+		return true, retirePXCServingCertification(ctx, rc, s, c)
 	}
 	cp := &c.Checkpoint
 	owner := formationMappingOwner(c)
@@ -374,30 +370,13 @@ func reconcilePXCFormationCertification(ctx context.Context, rc *engine.Context,
 		return false, nil
 	}
 	if cp.GTIDCertification != nil && cp.GTIDCertification.Certified {
-		if pxcFormationMembersMatch(s, c) && len(s.GTIDIncidents) <= c.IncidentCount {
-			if cp.GTIDCertification.FencesOwned || s.RestoreGTIDFence == c.Owner {
-				return true, activatePXCFormationMapping(ctx, rc, s, c)
-			}
-			return false, nil
+		if cp.GTIDCertification.FencesOwned || s.RestoreGTIDFence == c.Owner {
+			return true, activatePXCFormationMapping(ctx, rc, s, c)
 		}
-		// Re-certification may probe existing data but never invents permission to
-		// replace a previously initialized member after an identity/history change.
-		empty := map[string]bool{}
-		for _, m := range s.data() {
-			if freshPXCEmptyJoin(m) {
-				empty[m.Name] = true
-			}
-		}
-		sequence := c.Sequence + 1
-		s.Formation.GTIDCertification = &pxcFormationCertification{
-			Owner: fmt.Sprintf("formation-gtid/%s/%d/%d", s.UID, s.Formation.FormationEpoch, sequence), Sequence: sequence,
-			Epoch: s.Formation.FormationEpoch, Group: s.Formation.GroupName, EmptyMembers: empty,
-			FencedMembers:   maps.Clone(empty),
-			JoinOnly:        s.Formation.State == "formed" && len(empty) > 0,
-			Checkpoint:      backupCheckpoint{Step: "certify"},
-			PreviousMapping: previousPXCMapping(c),
-		}
-		return true, save(rc.Cluster, s)
+		// Already admitted members never gain another formation owner merely
+		// because their epoch, identity or history changed. New empty joins
+		// acquire their own admission before native initialization.
+		return false, nil
 	}
 	if c.Blocked != "" {
 		if c.Owner == "" && cp.GTIDCertification == nil {
@@ -452,7 +431,6 @@ func activatePXCFormationMapping(ctx context.Context, rc *engine.Context, s *sta
 	// Retire empty-member erase authority before clients can write again.
 	c.EmptyMembers = nil
 	c.Members = gtidMemberIdentities(s, cp.GTIDCertification.Before)
-	c.IncidentCount = len(s.GTIDIncidents)
 	c.PreviousMapping = nil
 	if err := owner.persist(rc, s, cp); err != nil {
 		return err
@@ -466,7 +444,21 @@ func activatePXCFormationMapping(ctx context.Context, rc *engine.Context, s *sta
 
 func pxcFormationMappingPending(s *state) bool {
 	c := s.Formation.GTIDCertification
-	return c != nil && !c.Legacy && (c.Blocked != "" || c.Checkpoint.GTIDCertification == nil || !c.Checkpoint.GTIDCertification.Certified || c.Checkpoint.GTIDCertification.FencesOwned || !pxcFormationMembersMatch(s, c) || len(s.GTIDIncidents) > c.IncidentCount)
+	if c == nil || c.Legacy {
+		return false
+	}
+	if !(c.Owner == "" && c.Checkpoint.GTIDCertification == nil) && (c.Blocked != "" || c.Checkpoint.GTIDCertification == nil || !c.Checkpoint.GTIDCertification.Certified || c.Checkpoint.GTIDCertification.FencesOwned) {
+		return true
+	}
+	// Planning a new empty member precedes persisting its certification owner.
+	// Keep that admission pending without treating history/epoch changes in
+	// already initialized members as another lifecycle.
+	for _, m := range s.Members {
+		if m.Role == "data" && freshPXCEmptyJoin(m) {
+			return true
+		}
+	}
+	return false
 }
 
 const pxcFormationAdmissionTimeout = 5 * time.Minute
@@ -502,20 +494,16 @@ func recordRestoredPXCMapping(s *state, c *pxcRestoreCertification) {
 	s.Formation.GTIDCertification = &pxcFormationCertification{
 		Owner: fmt.Sprintf("restored-mapping/%s/%d/%d", s.UID, s.Formation.FormationEpoch, sequence), Sequence: sequence, Epoch: s.Formation.FormationEpoch, Group: s.Formation.GroupName,
 		Checkpoint: backupCheckpoint{Step: "activate", GTIDCertification: c}, Members: gtidMemberIdentities(s, c.Before),
-		IncidentCount: len(s.GTIDIncidents),
-		Legacy:        c.Legacy,
+		Legacy: c.Legacy,
 	}
 }
 
 func pxcFormationMappingCondition(s *state) (domain.Condition, bool) {
 	condition := domain.Condition{Type: "GTIDMappingCertified", Status: "Unknown", Reason: "CertificationUnavailable", Message: "This existing formation has no durable empty-join certification admission"}
 	c := s.Formation.GTIDCertification
-	if c == nil {
-		if activeGTIDIncident(s) != nil {
-			condition.Status, condition.Reason = "False", "UnprovenFormationMapping"
-			condition.Message = "Existing latched PXC mapping has no empty-join replacement authorization; preserve evidence and restore from a trusted source or delete/re-create; restart or full backup is not a mapping repair"
-			return condition, false
-		}
+	if c == nil || c.Owner == "" && c.Checkpoint.GTIDCertification == nil {
+		// The history condition carries the incident; an unavailable historical
+		// mapping proof must not turn it into lifecycle ownership.
 		return condition, true
 	}
 	if c.Legacy {
@@ -531,6 +519,18 @@ func pxcFormationMappingCondition(s *state) (domain.Condition, bool) {
 			condition.Status, condition.Reason, condition.Message = "False", "GTIDMappingCertificationBlocked", c.Blocked
 		}
 		return condition, false
+	}
+	if pxcUnrepairedMixedMapping(s) {
+		condition.Status, condition.Reason, condition.Message = "False", "ObservedMixedGTIDMapping", "A replicated probe observed mixed SID assignment; preserve history and replace from a trusted donor or restore before full acknowledgement; no client holds are acquired"
+		return condition, false
+	}
+	if activeGTIDIncident(s) != nil {
+		condition.Reason, condition.Message = "HistoryIncidentMappingUnproven", "The saved mapping certificate predates a GTID history incident; current compatible accounting is required for acknowledgement, without acquiring client holds"
+		return condition, true
+	}
+	if !pxcFormationMembersMatch(s, c) {
+		condition.Reason, condition.Message = "HistoricalMappingProof", "Previously admitted members have no probe certificate for the current epoch/incarnations; native GTID history comparison remains enforced without client holds"
+		return condition, true
 	}
 	condition.Status, condition.Reason, condition.Message = "True", "ReplicatedGTIDMappingCertified", "The admitted PXC member incarnations passed replicated GTID mapping certification"
 	return condition, true
@@ -552,4 +552,58 @@ func previousPXCMapping(c *pxcFormationCertification) *pxcFormationCertification
 		return c
 	}
 	return nil
+}
+
+// Earlier controllers could replace a serving certificate with a new owner on
+// history/epoch changes alone. No new empty admission means no authority to
+// recertify or retain client holds. Keep its native evidence, not its authority.
+func pxcServingRecertification(c *pxcFormationCertification) bool {
+	return c != nil && !c.JoinOnly && len(c.EmptyMembers) == 0 && len(c.FencedMembers) == 0 &&
+		c.PreviousMapping != nil && (c.PreviousMapping.Legacy ||
+		c.PreviousMapping.Checkpoint.GTIDCertification != nil && c.PreviousMapping.Checkpoint.GTIDCertification.Certified)
+}
+
+func retirePXCServingCertification(ctx context.Context, rc *engine.Context, s *state, c *pxcFormationCertification) error {
+	// Release is replayable after a crash, including a previously completed
+	// cleanup whose proxy start response was lost. Do not retire ownership until
+	// every owned release has succeeded.
+	if err := formationMappingOwner(c).release(freshMySQLReads(ctx), rc, s, true); err != nil {
+		return err
+	}
+	restored := *c.PreviousMapping
+	// Never reuse the retired owner's probe receipts for a later empty join.
+	if restored.Sequence < c.Sequence {
+		restored.Sequence = c.Sequence
+	}
+	if proof := c.Checkpoint.GTIDCertification; proof != nil {
+		proof.FencesOwned, proof.CleanupPending, proof.CleanupComplete = false, false, true
+		proof.Phase = "retired"
+		restored.RetiredCertification = proof
+	}
+	restored.PreviousMapping = nil
+	s.Formation.GTIDCertification = &restored
+	invalidateMySQLReadObservation(ctx, rc)
+	return save(rc.Cluster, s)
+}
+
+func pxcMixedMappingObserved(c *pxcRestoreCertification) bool {
+	if c == nil || len(c.Evidence) == 0 {
+		return false
+	}
+	var first string
+	for _, sid := range c.Evidence[len(c.Evidence)-1].Mapping {
+		if sid == "" {
+			continue
+		}
+		if first != "" && sid != first {
+			return true
+		}
+		first = sid
+	}
+	return false
+}
+
+func pxcUnrepairedMixedMapping(s *state) bool {
+	c := s.Formation.GTIDCertification
+	return c != nil && (pxcMixedMappingObserved(c.RetiredCertification) || pxcMixedMappingObserved(c.Checkpoint.GTIDCertification))
 }
