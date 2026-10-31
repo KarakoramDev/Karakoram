@@ -307,7 +307,7 @@ func TestPITRCoverageWriterChangeDiagnostic(t *testing.T) {
 		{"original", binlogSidecar{ServerUUID: recoverySID, File: "binlog.000007", PreviousGTIDSet: baseline.GTIDSet, GTIDSet: recoverySID + ":11", Transactions: []binlogTransaction{{GTID: recoverySID + ":11", OriginalCommitTimestamp: 200, EndPosition: 600}}}},
 	}
 	coverage, err := replayCoverage(logs, baseline)
-	if err != nil || len(coverage.Windows) != 1 || !coverage.Windows[0].End.Equal(time.UnixMicro(200)) || !coverage.LatestForeignEventTime.IsZero() {
+	if err != nil || coverage.SourceUUID != baseline.SourceUUID || len(coverage.Windows) != 1 || !coverage.Windows[0].End.Equal(time.UnixMicro(200)) || !coverage.LatestForeignEventTime.IsZero() {
 		t.Fatalf("same-writer coverage changed: %+v %v", coverage, err)
 	}
 	for i, writer := range []string{writer2, writer3} {
@@ -321,6 +321,16 @@ func TestPITRCoverageWriterChangeDiagnostic(t *testing.T) {
 		if _, _, err := selectBinlogs(logs, baseline, "", target); err == nil {
 			t.Fatal("foreign writer became replayable", target)
 		}
+	}
+	// The original writer can resume its trusted contiguous history despite
+	// retaining newer foreign archives from the intermediate promotions.
+	returned := append(logs, archivedBinlog{"original-returned", binlogSidecar{ServerUUID: recoverySID, File: "binlog.000008", PreviousGTIDSet: recoverySID + ":1-11", GTIDSet: recoverySID + ":12", Transactions: []binlogTransaction{{GTID: recoverySID + ":12", OriginalCommitTimestamp: 450, EndPosition: 600}}}})
+	resumed, err := replayCoverage(returned, baseline)
+	if err != nil || resumed.SourceUUID != baseline.SourceUUID || len(resumed.Windows) != 1 || !resumed.Windows[0].End.Equal(time.UnixMicro(450)) || !resumed.LatestForeignEventTime.Equal(time.UnixMicro(400)) {
+		t.Fatalf("returning original writer failed to extend coverage: %+v %v", resumed, err)
+	}
+	if _, _, err := selectBinlogs(returned, baseline, "", time.UnixMicro(450).UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal("returning original writer's contiguous upload was refused", err)
 	}
 	baseline.SourceUUID = writer3
 	baseline.GTIDSet = recoverySID + ":1-11"

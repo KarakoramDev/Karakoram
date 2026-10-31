@@ -280,11 +280,18 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
 			base := inventoryBackup(t, rc, "base", "full", "", 10, time.Unix(10, 0))
 			oldEnd := time.Unix(20, 0).UTC()
+			const originalUUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+			const promotedUUID = "bbbbbbbb-bbbb-cccc-dddd-eeeeeeeeeeee"
+			currentUUID := originalUUID
 			foreignEnd := time.Time{}
 			coverageUnavailable := false
 			fallback := b.action
 			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 				switch r.URL.Path {
+				case "/v1/mysql/status":
+					native := b.native[name]
+					native.ServerUUID = currentUUID
+					json.NewEncoder(w).Encode(native)
 				case "/v1/mysql/archive-status":
 					json.NewEncoder(w).Encode(myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000008", LastEventTime: time.Unix(50, 0), LagSeconds: 5})
 				case "/v1/mysql/pitr-coverage":
@@ -298,10 +305,11 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 					}
 					coverage := myspec.PITRCoverageResponse{
 						Windows:                []myspec.PITRWindow{{Start: time.Unix(10, 0), End: oldEnd}},
+						SourceUUID:             originalUUID,
 						LatestForeignEventTime: foreignEnd,
 					}
 					if request.ObjectPaths[0] != base.MySQL.ObjectPaths[0] {
-						coverage = myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{{Start: time.Unix(40, 0), End: time.Unix(60, 0)}}}
+						coverage = myspec.PITRCoverageResponse{SourceUUID: promotedUUID, Windows: []myspec.PITRWindow{{Start: time.Unix(70, 0), End: time.Unix(90, 0)}}}
 					}
 					json.NewEncoder(w).Encode(coverage)
 				default:
@@ -354,18 +362,32 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 			foreignEnd = oldEnd
 			check("WindowAvailable", oldEnd) // Historical foreign uploads do not cap this window.
 			foreignEnd = time.Unix(50, 0)
+			currentUUID = promotedUUID
 			check("WindowFrozenWriterChanged", oldEnd)
 			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(30, 0)); err == nil {
 				t.Fatal("writer-change status admitted an unsafe restore")
 			}
-			inventoryBackup(t, rc, "new-writer", "full", "", 20, time.Unix(40, 0))
-			check("WindowAvailable", time.Unix(60, 0))
-			for _, target := range []int64{15, 50} {
+			// A -> B -> A: A's original lineage is compatible even while its
+			// next archive is pending and B's newer archives remain retained.
+			currentUUID = originalUUID
+			check("WindowAvailable", oldEnd)
+			oldEnd = time.Unix(55, 0).UTC()
+			check("WindowAvailable", oldEnd)
+			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(50, 0)); err != nil {
+				t.Fatal("contiguous original-writer upload did not extend coverage", err)
+			}
+			// Return to the incompatible writer to exercise a fresh full.
+			currentUUID = promotedUUID
+			foreignEnd = time.Unix(65, 0)
+			check("WindowFrozenWriterChanged", oldEnd)
+			inventoryBackup(t, rc, "new-writer", "full", "", 20, time.Unix(70, 0))
+			check("WindowAvailable", time.Unix(90, 0))
+			for _, target := range []int64{15, 80} {
 				if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(target, 0)); err != nil {
 					t.Fatalf("safe target %d lost: %v", target, err)
 				}
 			}
-			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(30, 0)); err == nil {
+			if _, err := p.ValidatePITRRestore(t.Context(), rc, time.Unix(60, 0)); err == nil {
 				t.Fatal("new full filled the uncovered interval")
 			}
 			coverageUnavailable = true

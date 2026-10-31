@@ -127,9 +127,10 @@ archive writer/source change, take a fresh full backup from the current writer
 to establish its own exact anchor; normal service and full backups remain
 available while the previous PITR window is frozen.
 
-When live coverage finds another writer's archived transactions beyond the
-newest recoverable endpoint, **PITR** remains `True` for the existing window but
-uses reason `WindowFrozenWriterChanged`. Its message names the frozen window
+When the current writer differs from a baseline's physical source and live
+coverage finds foreign-writer archived transactions beyond the newest
+recoverable endpoint, **PITR** remains `True` for the existing window but uses
+reason `WindowFrozenWriterChanged`. Its message names the frozen window
 end and asks you to **take a full backup to extend point-in-time recovery**.
 **BinlogArchive** can still be healthy: its message labels the current writer's
 archive lag separately and states the recoverable endpoint, rather than implying
@@ -138,6 +139,9 @@ After a successful full from the new writer establishes its own safe coverage,
 PITR returns to `True/WindowAvailable`. The old window remains usable; the new
 full does not fill any uncovered interval between the two windows. Elapsed time
 alone, including an idle writer, does not trigger the writer-change reason.
+If the original writer returns, its pending uploads are normal archive lag,
+not proof that a new full is required. Its contiguous, trusted uploads can
+extend the original baseline again; retained foreign uploads do not prevent it.
 
 ```sh
 karactl -n NS backups pitr-window CLUSTER -o json

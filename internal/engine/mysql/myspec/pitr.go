@@ -19,6 +19,8 @@ type PITRWindow struct {
 
 type PITRCoverageResponse struct {
 	Windows []PITRWindow `json:"windows"`
+	// SourceUUID is read from the verified baseline, not backup inventory.
+	SourceUUID string `json:"sourceUUID,omitempty"`
 	// LatestForeignEventTime is diagnostic only: transactions archived by a
 	// different physical source cannot extend this baseline's replay lineage.
 	LatestForeignEventTime time.Time `json:"latestForeignEventTime,omitzero"`

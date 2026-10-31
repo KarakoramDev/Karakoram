@@ -116,7 +116,7 @@ func (p *Core) validateBackups(ctx context.Context, old, n *domain.Cluster) erro
 	}
 	return nil
 }
-func archiveWriter(ctx context.Context, rc *engine.Context, s *state) (string, error) {
+func archiveWriter(ctx context.Context, rc *engine.Context, s *state) (string, string, error) {
 	for _, m := range s.data() {
 		// Archive ownership requires an admitted data member, not a planned
 		// hostname. PITR observation must not spend the sweep on absent DNS.
@@ -125,10 +125,10 @@ func archiveWriter(ctx context.Context, rc *engine.Context, s *state) (string, e
 		}
 		st, err := live(ctx, rc, m.Name)
 		if err == nil && st.MemberState == "ONLINE" && (s.Topology == "single" || onlinePrimary(st)) {
-			return m.Name, nil
+			return m.Name, st.ServerUUID, nil
 		}
 	}
-	return "", engine.ErrUnavailable
+	return "", "", engine.ErrUnavailable
 }
 
 func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, error) {
@@ -184,7 +184,7 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	if err != nil {
 		return nil, nil, err
 	}
-	writer, err := archiveWriter(ctx, rc, s)
+	writer, writerUUID, err := archiveWriter(ctx, rc, s)
 	if err != nil {
 		if known := rememberedGTIDWindows(s); rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
 			return known, nil, nil
@@ -228,7 +228,10 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 				byFull[b.Name] = append(byFull[b.Name], bounded)
 				if observation != nil {
 					// A separate GTID incident cap is not proof of a writer-change cap.
-					frozen := boundedEnd.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
+					// If the original writer returns, its pending uploads can still
+					// extend this baseline; historical foreign uploads do not forbid it.
+					incompatibleWriter := myspec.ValidUUID(writerUUID) && myspec.ValidUUID(coverage.SourceUUID) && writerUUID != coverage.SourceUUID
+					frozen := incompatibleWriter && boundedEnd.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
 					if boundedEnd.After(observation.end) || boundedEnd.Equal(observation.end) && !frozen {
 						observation.end = boundedEnd
 						observation.writerChanged = frozen
@@ -319,7 +322,7 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 	status.Conditions = append(status.Conditions, condition)
 	s, e := load(rc.Cluster)
 	if e == nil {
-		writer, e := archiveWriter(ctx, rc, s)
+		writer, _, e := archiveWriter(ctx, rc, s)
 		if e == nil {
 			var a myspec.BinlogArchiveStatus
 			condition := domain.Condition{Type: "BinlogArchive", Status: "Unknown", Reason: "ObservationUnavailable", Message: "Binlog archive observation unavailable", LastTransitionTime: now(rc)}

@@ -180,7 +180,7 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	// A PITR baseline must anchor the stream that is actually archived.
 	// Numeric GTID equality cannot authorize replay from another member.
 	if rc.Cluster.Spec.Backup.PITR.Enabled {
-		writer, err := archiveWriter(ctx, rc, s)
+		writer, _, err := archiveWriter(ctx, rc, s)
 		if err != nil {
 			return "", err
 		}
@@ -359,7 +359,7 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	var response myspec.BackupResponse
 	if cp.Step == "dispatch" {
 		if rc.Cluster.Spec.Backup.PITR.Enabled {
-			writer, e := archiveWriter(ctx, rc, s)
+			writer, _, e := archiveWriter(ctx, rc, s)
 			if e != nil || writer != cp.Member {
 				return backupResult(cp, false), engine.Invalid("PITR archive writer changed before backup dispatch; take a fresh full from the current archive writer")
 			}

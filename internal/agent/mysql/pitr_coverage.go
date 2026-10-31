@@ -91,7 +91,7 @@ func replayCoverage(logs []archivedBinlog, baseline myspec.BackupResult) (myspec
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	coverage := myspec.PITRCoverageResponse{Windows: windows}
+	coverage := myspec.PITRCoverageResponse{Windows: windows, SourceUUID: baseline.SourceUUID}
 	for _, log := range logs {
 		if baseline.SourceUUID == "" || log.meta.ServerUUID == baseline.SourceUUID {
 			continue
