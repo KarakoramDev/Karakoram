@@ -52,6 +52,16 @@ and restored/recovered follower cohorts, including legacy agents. A runtime
 deployment or reachable agent is not native Synced proof or permission to launch
 an uninitialized seed as an ordinary joiner.
 
+During create-from-backup, fresh PXC followers have never started mysqld and
+therefore have no previous SST identity receipt. The explicit restore action
+authorizes SST only after proving their stopped data directory is empty and
+has no previous identity, transfer, or bootstrap evidence. This authorization
+is durable and resumable; it does not start the follower or bypass serialized
+join admission. Existing-data followers still require their own older identity
+receipt before the restore action may quarantine and replace their dataset.
+The correction is agent-side: replacing only the control plane does not update
+already deployed agents.
+
 Galera's local bind address is distinct from its advertised member names.
 For agents advertising `capability=mysql-galera-listen-host` on their
 authenticated configuration pull, the control plane supplies a numeric IPv4
