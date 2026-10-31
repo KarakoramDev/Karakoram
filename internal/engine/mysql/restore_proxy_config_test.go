@@ -145,7 +145,7 @@ func TestPXCRestorePersistedReformRecoversWithRealProxyValidation(t *testing.T) 
 					config, err := p.MemberConfig(r.Context(), rc, name)
 					if err != nil {
 						t.Error(err)
-						http.Error(w, "configuration unavailable", 503)
+						http.Error(w, "configuration unavailable", http.StatusServiceUnavailable)
 						return true
 					}
 					var spec myspec.Spec
@@ -178,7 +178,7 @@ func TestPXCRestorePersistedReformRecoversWithRealProxyValidation(t *testing.T) 
 					return true
 				}
 				if r.URL.Path == "/v1/mysql/status" && dataHeld[name] {
-					http.Error(w, "restore-owned process stop", 503)
+					http.Error(w, "restore-owned process stop", http.StatusServiceUnavailable)
 					return true
 				}
 				if r.URL.Path == "/v1/mysql/galera-prepare-join" {
