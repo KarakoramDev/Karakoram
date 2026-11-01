@@ -305,3 +305,126 @@ func TestPXCPreOfflineRequiresAdmittedSurvivor(t *testing.T) {
 		t.Fatal("admitted backup writer did not release Galera barrier", err)
 	}
 }
+
+func TestProxyHandoffReselectsElectedWriterAcrossReplay(t *testing.T) {
+	for _, path := range []string{"rolling-handoff", "rolling-offline", "retirement-handoff", "retirement-drain"} {
+		t.Run(path, func(t *testing.T) {
+			p, rc, b := setup(t, "group")
+			converge(t, p, rc, b)
+			s, _ := load(rc.Cluster)
+			old := b.leader
+			var peers []string
+			for _, peer := range s.data() {
+				if peer.Name != old {
+					peers = append(peers, peer.Name)
+				}
+			}
+			pinned, elected := peers[0], peers[1]
+			backend, responses, _ := admissionFixture(t, rc, s)
+			m := s.find(old)
+			switch path {
+			case "rolling-handoff", "rolling-offline":
+				stage := "handoff"
+				if path == "rolling-offline" {
+					stage, m.Offline = "offline", true
+				}
+				s.Rolling = &rollingState{To: rc.Cluster.Spec.Version, Order: []string{old}, Stage: stage, HandoffTarget: pinned, Targets: map[string]domain.ComponentSpec{old: desiredComponent(rc, m)}}
+			case "retirement-handoff":
+				m.Retirement, m.HandoffTarget = "handoff", pinned
+			case "retirement-drain":
+				m.Retirement, m.HandoffTarget, m.Removing = "drain", pinned, true
+			}
+			// The selected primary has restarted and rejoined as a secondary;
+			// another healthy member won a legitimate native election.
+			for name, native := range b.native {
+				native.MemberRole = "SECONDARY"
+				native.ReadOnly, native.SuperReadOnly = true, true
+				if name == elected {
+					native.MemberRole = "PRIMARY"
+					native.ReadOnly, native.SuperReadOnly = false, false
+				}
+				b.native[name] = native
+			}
+			b.leader = elected
+			for i := range responses {
+				responses[i].Backends = []myspec.ProxyBackend{admitted(pinned, 10, "ONLINE"), admitted(elected, 20, "ONLINE")}
+			}
+			nativeStops := 0
+			b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
+				if name == old && r.URL.Path == "/v1/mysql/stop-group" {
+					nativeStops++
+				}
+				return false
+			}
+			tick := func() error {
+				if s.Rolling != nil {
+					_, err := p.reconcileRolling(t.Context(), rc, s)
+					return err
+				}
+				_, err := p.retireMember(t.Context(), rc, s, s.find(old))
+				return err
+			}
+			s = replayAdmissionState(t, rc, s)
+			b.apply(t, p, rc)
+			if err := tick(); !errors.Is(err, errProxyWriterChanged) {
+				t.Fatal("native election did not checkpoint a new admission target", err)
+			}
+			s = replayAdmissionState(t, rc, s)
+			target := s.find(old).HandoffTarget
+			if s.Rolling != nil {
+				target = s.Rolling.HandoffTarget
+			}
+			if target != elected || backend.stops[old] != 0 || nativeStops != 0 {
+				t.Fatal("reselection was not durable or stopped old writer", target)
+			}
+			p = New(Options{})
+			if err := tick(); !errors.Is(err, engine.ErrUnavailable) {
+				t.Fatal("obsolete writer HG10 admitted the newly elected target", err)
+			}
+			responses[0].Backends = []myspec.ProxyBackend{admitted(elected, 10, "ONLINE")}
+			if err := tick(); !errors.Is(err, engine.ErrUnavailable) {
+				t.Fatal("partial admission of newly elected writer passed", err)
+			}
+			responses[1] = responses[0]
+			if err := tick(); err != nil {
+				t.Fatal("new native writer admitted everywhere did not release maintenance", err)
+			}
+		})
+	}
+}
+
+func TestSwitchAwayRanksOnlyProxyAdmittedCandidates(t *testing.T) {
+	p, rc, b := setup(t, "group")
+	converge(t, p, rc, b)
+	s, _ := load(rc.Cluster)
+	old := b.leader
+	var peers []string
+	for _, peer := range s.data() {
+		if peer.Name != old {
+			peers = append(peers, peer.Name)
+		}
+	}
+	eligible, blocked := peers[0], peers[1]
+	for name, native := range b.native {
+		native.GTIDExecuted = "11111111-2222-3333-4444-555555555555:1-9"
+		b.native[name] = native
+	}
+	_, responses, _ := admissionFixture(t, rc, s)
+	for i := range responses {
+		responses[i].Backends = []myspec.ProxyBackend{admitted(old, 10, "ONLINE"), admitted(eligible, 20, "ONLINE"), admitted(blocked, 30, "ONLINE")}
+	}
+	target := &s.find(old).HandoffTarget
+	if err := switchAway(t.Context(), rc, s, old, target); err != nil || *target != eligible || b.leader != old {
+		t.Fatal("equal-GTID but proxy-offlined tie winner prevented eligible selection", *target, err)
+	}
+	s = replayAdmissionState(t, rc, s)
+	target = &s.find(old).HandoffTarget
+	// Even if the former tie winner recovers, replay retains the admitted
+	// candidate whose identity was checkpointed before native switchover.
+	for i := range responses {
+		responses[i].Backends = append(responses[i].Backends, admitted(blocked, 20, "ONLINE"))
+	}
+	if err := switchAway(t.Context(), rc, s, old, target); err != nil || b.leader != eligible {
+		t.Fatal("checkpointed eligible candidate was not promoted", err)
+	}
+}

@@ -268,6 +268,10 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		}
 		if clustered(s.Topology) && m.Role == "data" {
 			if e := proxyHandoffReady(ctx, rc, s, m.Name, &cp.HandoffTarget); e != nil {
+				if errors.Is(e, errProxyWriterChanged) {
+					raw, err := json.Marshal(cp)
+					return engine.OpResult{Checkpoint: raw, Step: "proxy-admission", Message: s.ProxyAdmissionWait, RequeueAfter: 2 * time.Second}, err
+				}
 				return engine.OpResult{}, e
 			}
 		}

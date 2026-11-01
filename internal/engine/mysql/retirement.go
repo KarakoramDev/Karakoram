@@ -45,6 +45,9 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string, c
 		if e != nil || !set.contains(writer) {
 			continue
 		}
+		if err := proxyAdmission(ctx, rc, s, peer.Name, myspec.ProxyReaderGroup); err != nil {
+			continue
+		}
 		if target == "" || set.contains(best) {
 			target, targetName, best = status.ServerUUID, peer.Name, set
 		}
@@ -52,9 +55,7 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string, c
 	if target == "" {
 		return engine.ErrUnavailable
 	}
-	if err := proxyAdmission(ctx, rc, s, targetName, myspec.ProxyReaderGroup); err != nil {
-		return err
-	}
+	s.ProxyAdmissionWait = ""
 	if *chosen == "" {
 		*chosen = targetName
 		if hasServingProxy(s) {

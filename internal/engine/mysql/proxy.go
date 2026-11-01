@@ -160,6 +160,8 @@ func proxyRejoinReady(ctx context.Context, rc *engine.Context, s *state, name st
 	return proxyHandoffReady(ctx, rc, s, "", &target)
 }
 
+var errProxyWriterChanged = fmt.Errorf("native writer changed; checkpointing proxy admission target: %w", engine.ErrUnavailable)
+
 // Pin the observed native writer when resuming an older checkpoint or a
 // mixed-major election. Never accept an unrelated HG10 row for this identity.
 func proxyHandoffReady(ctx context.Context, rc *engine.Context, s *state, old string, target *string) error {
@@ -180,6 +182,14 @@ func proxyHandoffReady(ctx context.Context, rc *engine.Context, s *state, old st
 		}
 		return engine.ErrUnavailable
 	}
+	pinnedPrimary := false
+	if *target != "" {
+		pinned, err := live(ctx, rc, *target)
+		if err != nil {
+			return err
+		}
+		pinnedPrimary = onlinePrimary(pinned)
+	}
 	for _, peer := range s.data() {
 		if peer.Name == old || peer.Removing {
 			continue
@@ -192,7 +202,14 @@ func proxyHandoffReady(ctx context.Context, rc *engine.Context, s *state, old st
 			*target = peer.Name
 		}
 		if *target != peer.Name {
-			return engine.ErrUnavailable
+			if pinnedPrimary {
+				return engine.ErrUnavailable
+			}
+			// A legitimate election invalidates the old routing target. Persist
+			// its replacement before accepting any proxy admission observation.
+			*target = peer.Name
+			s.ProxyAdmissionWait = "Native writer changed; waiting for " + peer.Name + " ONLINE in writer hostgroup on every serving proxy"
+			return errProxyWriterChanged
 		}
 		return proxyAdmission(ctx, rc, s, *target, myspec.ProxyWriterGroup)
 	}
