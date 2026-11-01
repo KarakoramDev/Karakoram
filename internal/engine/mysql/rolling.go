@@ -60,6 +60,13 @@ func rollingNeedsWindow(m *member, version string, target domain.ComponentSpec, 
 		m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
 }
 
+// Only replica changes may bypass the service-wide restart. Runtime artifacts
+// and resources must remain on the stop/redeploy path.
+func proxyCountOnly(m *member, version string, target domain.ComponentSpec) bool {
+	return m.Role == "proxy" && m.Replicas != target.Replicas &&
+		m.Version == version && reflect.DeepEqual(m.Resources, target.Resources)
+}
+
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	if s.Rolling != nil {
 		ctx = freshMySQLReads(ctx)
@@ -83,6 +90,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 				return false, nil
 			}
 			desired := desiredComponent(rc, m)
+			if m.Role == "proxy" && desired.Replicas < 1 {
+				return true, engine.Invalid("ProxySQL scaling requires at least one serving replica")
+			}
 			changed = changed || m.Version != rc.Cluster.Spec.Version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
 			changed = changed || m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
 			needsWindow = needsWindow || rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters)
@@ -155,6 +165,23 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			u.Index++
 			return true, nil
 		}
+		if proxyCountOnly(m, u.To, target) {
+			if target.Replicas < 1 {
+				return true, engine.Invalid("ProxySQL scaling requires at least one serving replica")
+			}
+			// Do not resize an already unavailable endpoint. Check the current
+			// fleet before publishing the expected post-scale instance count.
+			ok, err := ready(ctx, rc, m)
+			if err != nil || !ok {
+				return true, err
+			}
+			m.Replicas = target.Replicas
+			publishRevision(s)
+			// Persist intent before the idempotent backend call. Both readiness
+			// and D103 admission now require the target number of acknowledgers.
+			u.Stage = "scale"
+			return true, nil
+		}
 		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
@@ -179,6 +206,27 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			publishRevision(s)
 		}
 		u.Stage = "handoff"
+	case "scale":
+		op, err := rc.Backend.SetContainerCount(ctx, m.Name, target.Replicas, target.Replicas)
+		if err != nil {
+			return true, err
+		}
+		u.Op = &op
+		u.Stage = "scaled"
+	case "scaled":
+		done, err := rollingOpDone(ctx, rc, u)
+		if err != nil || !done {
+			return true, err
+		}
+		// Every live instance must acknowledge the published backend/user
+		// configuration and report a healthy writer before scale completes.
+		ok, err := ready(ctx, rc, m)
+		if err != nil || !ok {
+			return true, err
+		}
+		u.Index++
+		u.Op = nil
+		u.Stage = "prepare"
 	case "handoff":
 		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
