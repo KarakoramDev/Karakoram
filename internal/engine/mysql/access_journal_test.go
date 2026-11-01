@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -337,6 +338,76 @@ func TestAccessWaitsForProxyAcknowledgement(t *testing.T) {
 	pending, err := loadAccessIntent(t.Context(), rc)
 	if err != nil || pending == nil || !pending.Applied {
 		t.Fatal("unacknowledged publication lost its applied intent", err)
+	}
+}
+
+func TestAccessReloadsProxyBeforeAcknowledgement(t *testing.T) {
+	for _, outcome := range []string{"applied", "stale", "unhealthy", "reload-failed"} {
+		t.Run(outcome, func(t *testing.T) {
+			p, rc, b := setup(t, "group")
+			converge(t, p, rc, b)
+			var applied atomic.Int64
+			var reloads atomic.Int64
+			installAccessAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v1/mysql/status":
+					json.NewEncoder(w).Encode(myspec.StatusResponse{MemberState: "ONLINE", MemberRole: "PRIMARY"})
+				case "/v1/mysql/" + myspec.ActionAccessUsers:
+					json.NewEncoder(w).Encode(myspec.AccessResult{Outcome: "applied"})
+				case "/v1/status":
+					json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: applied.Load()})
+				case "/v1/mysql/" + myspec.ActionProxyStatus:
+					status := "ONLINE"
+					if outcome == "unhealthy" && reloads.Load() > 0 {
+						status = "OFFLINE_HARD"
+					}
+					json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{Backends: []myspec.ProxyBackend{{Hostgroup: myspec.ProxyWriterGroup, Status: status}}})
+				case "/v1/reload":
+					reloads.Add(1)
+					if outcome == "reload-failed" {
+						http.Error(w, "reload unavailable", http.StatusServiceUnavailable)
+						return
+					}
+					revision, err := accessRevision(r.Context(), rc)
+					if err != nil || revision == 0 {
+						t.Error("reload preceded sealed revision publication", revision, err)
+					}
+					if outcome != "stale" {
+						applied.Store(revision)
+					}
+					json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			})
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			password, err := p.CreateUser(ctx, rc, UserWrite{Name: "app"})
+			if reloads.Load() == 0 {
+				t.Fatal("access publication never requested a proxy reload")
+			}
+			pending, pendingErr := loadAccessIntent(t.Context(), rc)
+			if pendingErr != nil {
+				t.Fatal(pendingErr)
+			}
+			if outcome != "applied" {
+				if !errors.Is(err, engine.ErrUnavailable) || pending == nil || !pending.Applied {
+					t.Fatal("unacknowledged publication was not retained", err, pending)
+				}
+				return
+			}
+			if err != nil || password == "" || pending != nil {
+				t.Fatal("explicit reload did not complete publication", err)
+			}
+			previousReloads := reloads.Load()
+			rotated, err := p.RotateUserPassword(ctx, rc, "app", false)
+			if err != nil || rotated == "" || rotated == password || reloads.Load() <= previousReloads {
+				t.Fatal("rotation did not reload the new credential revision", err)
+			}
+			if pending, err := loadAccessIntent(t.Context(), rc); err != nil || pending != nil {
+				t.Fatal("acknowledged rotation retained its intent", err)
+			}
+		})
 	}
 }
 

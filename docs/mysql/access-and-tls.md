@@ -54,6 +54,13 @@ Creation and rotation return server-generated passwords once. Rotation may retai
 
 Native mutations resolve the current writer and synchronize managed credentials to the proxies. If an outcome is unknown, inspect the account/operation state before another mutation; transport failure does not prove that account DDL failed. MySQL account DDL implicitly commits, and password changes are not a transactional rollback mechanism. Recovery also has [account-snapshot caveats](backups.md#accounts-after-recovery).
 
+Credential publication explicitly reloads stale ProxySQL agents and waits up to
+10 seconds for every live proxy replica to acknowledge the desired revision and
+report an online writer. It does not wait for the agents' normal 60-second
+configuration pull. If acknowledgement remains unavailable, the request returns
+503 and retains its sealed intent for recovery; a successful reload response alone
+does not establish that credentials are ready.
+
 PXC administration follows the writer designated by ProxySQL, and only a
 Primary-component, Synced, ready and connected member is eligible. Joining and
 Donor/Desynced members are never selected. PXC agents serialize managed access

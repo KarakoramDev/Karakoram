@@ -181,7 +181,9 @@ func (p *Core) completeAccessIntent(ctx context.Context, rc *engine.Context, int
 			if m.Role != "proxy" || m.Replicas == 0 {
 				continue
 			}
-			ok, err := proxyApplied(wait, rc, m)
+			// Readiness actively reloads stale proxies; a passive acknowledgement
+			// cannot rely on the agent's 60-second pull within this 10-second wait.
+			ok, err := ready(wait, rc, m)
 			if err != nil || !ok {
 				all = false
 			}
