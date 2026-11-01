@@ -50,6 +50,7 @@ func TestMemberConfigReservesBackupMemory(t *testing.T) {
 		{"one-gib", 1, 1, 256 << 20},
 		{"one-gib-elastic", 1, 4, 256 << 20},
 		{"two-gib", 2, 2, 1 << 30},
+		{"three-gib", 3, 3, 1536 << 20},
 		{"four-gib", 4, 4, 2 << 30},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -77,6 +78,45 @@ func TestMemberConfigReservesBackupMemory(t *testing.T) {
 			}
 			if spec.MaxConnections != 200 {
 				t.Fatal("memory sizing changed the connection contract")
+			}
+		})
+	}
+}
+
+func TestClusteredPoolBaselinePreservesOperatorOverrides(t *testing.T) {
+	for _, topology := range []string{"single", "group", "cluster"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, backend := setup(t, topology)
+			if topology == "cluster" {
+				p, rc, backend = setupPXC(t)
+			}
+			rc.Cluster.Spec.Components.Engine.Resources.MinRAM = 2
+			rc.Cluster.Spec.Components.Engine.Resources.MaxRAM = 4
+			converge(t, p, rc, backend)
+			state, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, pool := range []string{"134217728", "1073741824"} {
+				rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"parameters":{"innodb_buffer_pool_size":"` + pool + `","max_connections":"30"}}`)
+				config, err := p.MemberConfig(t.Context(), rc, state.data()[0].Name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var spec myspec.Spec
+				if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+					t.Fatal(err)
+				}
+				want := int64(768 << 20)
+				if topology == "single" {
+					want = 1 << 30
+				}
+				if spec.BufferPoolBytes != want || spec.MaxConnections != 200 {
+					t.Fatal("operator override changed the managed baseline or elastic maximum changed sizing")
+				}
+				if spec.Parameters["innodb_buffer_pool_size"] != pool || spec.Parameters["max_connections"] != "30" {
+					t.Fatal("operator overrides lost on normal configuration pull")
+				}
 			}
 		})
 	}

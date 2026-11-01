@@ -157,6 +157,10 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	// concurrent physical-backup processes, including on 1 GiB singletons.
 	memory := int64(ram * float64(1<<30))
 	buffer := max(int64(128<<20), min(memory/2, memory-(768<<20)))
+	// Small clustered data members also share their budget with replication.
+	if m.Role == "data" && (s.Topology == "group" || s.Topology == "cluster") && memory <= 2<<30 {
+		buffer = min(buffer, int64(768<<20))
+	}
 	o.Parameters = memberParameters(m, o.Parameters)
 	sp := myspec.Spec{Member: name, Role: m.Role, Topology: s.Topology, Ordinal: m.Index, Version: version, ServerDir: serverDir, XtraBackupDir: backupDir, BufferPoolBytes: buffer, MaxConnections: 200, Parameters: o.Parameters, CAPEM: get("tls/ca.crt"), ServerCert: cert("servers"), Superuser: credential("root"), Agent: credential("kk_agent"), Replication: credential("kk_repl"), Monitor: credential("kk_monitor"), BackupUser: credential("kk_backup"), AllowInitialize: m.Role == "data" && !m.Initialized && !m.CloneReplacesData && !s.Formation.reforming()}
 	sp.ListenHost = mysqlListenHost(rc)

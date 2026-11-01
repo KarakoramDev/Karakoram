@@ -37,15 +37,40 @@ engineOptions:
 
 The UI offers the supported parameter names and validates numeric bounds, booleans (`ON`/`OFF` or `0`/`1`) and isolation values. A connection limit can exhaust memory long before its syntactic maximum; size buffers and concurrency together. Use the catalog resource minima and do not shrink persistent disks.
 
+## Memory sizing
+
 The default InnoDB buffer pool is the smaller of half the member's minimum RAM
-and minimum RAM minus 768 MiB, with a 128 MiB lower bound. This reserves memory
-for mysqld's non-pool allocations, the agent and physical-backup processes: a
-1 GiB singleton receives a 256 MiB pool; 2 GiB and 4 GiB members retain 1 GiB and
-2 GiB pools. Explicit buffer-pool overrides remain operator-sized and can consume
-this headroom. This is not a hard total-RSS limit on MySQL or application queries.
-The corrected control plane sends the new baseline to existing agents; their
-normal configuration reload updates both `my.cnf` and the dynamic global pool
-size, without a restart or re-create.
+and minimum RAM minus 768 MiB, with a 128 MiB lower bound. For clustered data
+members (`group` and PXC `cluster`) with minimum RAM at most 2 GiB, it is also
+capped at **768 MiB**. Single-server and larger-member sizing is unchanged:
+
+| Minimum member RAM | Single pool | GR/PXC pool | GR message cache | PXC Galera cache |
+| --- | --- | --- | --- | --- |
+| 1 GiB | 256 MiB | Not admitted | Not admitted | Not admitted |
+| 2 GiB | 1 GiB | **768 MiB** | **128 MiB** | 128 MiB |
+| 3 GiB | 1.5 GiB | 1.5 GiB | 384 MiB | 128 MiB |
+| 4 GiB | 2 GiB | 2 GiB | 512 MiB | 128 MiB |
+
+Sizing uses minimum RAM, not an elastic maximum. **2 GiB is the clustered
+minimum with little headroom**, particularly with PITR and physical backups;
+**at least 3 GiB per GR/PXC data member is recommended for production**.
+The remaining memory must cover mysqld's non-pool allocations, replication,
+Performance Schema, connections, the co-located agent and backup/state-transfer
+processes. Explicit buffer-pool overrides retain precedence and can consume
+this headroom. These defaults are not a hard total-RSS limit or a guarantee that
+arbitrary queries fit. The default 200 connections and Performance Schema
+behavior are unchanged.
+
+As with the singleton pool-policy correction (`d4dcc9f7`), these pool defaults
+apply on create and to existing members on their normal configuration pull and
+reload: a corrected control plane sends the baseline, and existing agents
+rewrite `my.cnf` and apply the dynamic global pool size. No automatic rolling
+restart or re-create is introduced just because the control plane is upgraded.
+Native pool shrink is asynchronous; observe the effective value before claiming
+headroom restored. GR's cache change is agent-rendered and requires a corrected
+data-member agent and a subsequent native startup; normal reload does not set
+the runtime cache. MySQL/PXC do not support `upgrade-agents`; use supported
+member replacement on a healthy topology or re-create to obtain new agents.
 
 The startup-only `innodb_buffer_pool_instances` and `table_open_cache_instances` parameters accept integers 1–64. They require rolling maintenance and remain pinned per member until that member's turn; changing them is not a live-only tuning operation.
 
@@ -66,7 +91,7 @@ Groups use authenticated TLS on the [MySQL](https://www.mysql.com/) communicatio
 
 Every Group Replication server starts with `super_read_only=ON`, including initialized restarts with unchanged credentials. It remains fenced while waiting to rejoin or if rejoin fails; Group Replication lifts the fence only for a legitimate primary. During authorized native clone, the agent temporarily lifts `super_read_only` behind an `offline_mode` client fence so old recipient data can be removed, then restores startup fencing through the supervised restart. Single-server deployments remain writable, and [PXC](https://docs.percona.com/percona-xtradb-cluster/) uses its own wsrep eligibility rather than this Group Replication startup fence.
 
-Group Replication data members require **at least 2 GiB minimum RAM each** on every backend, even with custom buffer parameters; a larger elastic maximum does not bypass this floor. The managed message cache is one eighth of the member's minimum RAM, with a 128 MiB floor, instead of the upstream 1 GiB default. It is derived from the control plane's half-RAM buffer-pool baseline before user overrides. At 2 GiB, the default pool is 1 GiB and the message cache is 256 MiB, leaving 768 MiB for cache metadata, mysqld, Performance Schema, connections, the co-located agent and clone. This is explicit-cache headroom, not a total-RSS guarantee: tune concurrency, transaction sizes and custom buffers for the workload. A smaller message history can require distributed recovery when a disconnected member misses retained messages.
+Group Replication data members require **at least 2 GiB minimum RAM each** on every backend, even with custom buffer parameters; a larger elastic maximum does not bypass this floor. The managed message cache is **128 MiB** for the small-member pool baseline (at most 768 MiB); larger members retain a cache of one quarter of the managed pool baseline, with a 128 MiB floor. It is derived before operator buffer-pool overrides, instead of inheriting the upstream 1 GiB cache. At 2 GiB the default pool is 768 MiB and the message cache is 128 MiB, leaving 1,152 MiB outside these explicit caches, not a total-RSS guarantee. Follow the production RAM recommendation above and tune concurrency, transaction sizes and custom buffers for the workload. A smaller message history can require distributed recovery when a disconnected member misses retained messages.
 
 The RAM rejection requires the corrected control plane; the cache bound requires corrected **data-member agents**. Updating the control plane alone does not change existing agents' rendering. No wire-schema change is needed. MySQL does not support `upgrade-agents`; replace agents through supported member lifecycle only on a healthy group. An unsuccessful fresh create with no healthy donor/quorum should be deleted and re-created at the supported minimum, not repaired by editing managed files or issuing forced bootstrap commands.
 

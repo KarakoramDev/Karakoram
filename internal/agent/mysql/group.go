@@ -60,11 +60,14 @@ func RenderGroupOptions(s myspec.Spec, root string) map[string]string {
 	for _, p := range g.Seeds {
 		seeds = append(seeds, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)))
 	}
-	// BufferPoolBytes is the control plane's half-MinRAM baseline, before user
-	// parameter overrides. Reserve one eighth of that member RAM for messages;
-	// never inherit the upstream 1 GiB cache on a small member. Cache metadata,
-	// connections, Performance Schema and clone still need separate headroom.
-	messageCache := max(int64(128<<20), s.BufferPoolBytes/4)
+	// BufferPoolBytes is the managed baseline before user parameter overrides.
+	// Small clustered members have a baseline capped at 768 MiB; keep their
+	// message cache at 128 MiB. Larger members retain the quarter-pool policy.
+	// Cache metadata, connections, Performance Schema and clone need headroom too.
+	messageCache := int64(128 << 20)
+	if s.BufferPoolBytes > 768<<20 {
+		messageCache = max(messageCache, s.BufferPoolBytes/4)
+	}
 	return map[string]string{
 		"plugin-load-add":                                         "group_replication.so;mysql_clone.so",
 		"loose-group_replication_group_name":                      g.GroupName,

@@ -241,7 +241,7 @@ func TestGroupResourceMemoryFloor(t *testing.T) {
 
 func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 	for _, topology := range []string{"single", "group", "cluster"} {
-		for _, ram := range []float64{1, 2} {
+		for _, ram := range []float64{1, 2, 3, 4} {
 			var p *Core
 			var rc *engine.Context
 			var b *fakeBackend
@@ -281,6 +281,9 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 				if topology == "single" && ram == 1 {
 					wantPool = 256 << 20
 				}
+				if topology != "single" && ram == 2 {
+					wantPool = 768 << 20
+				}
 				if spec.BufferPoolBytes != wantPool || spec.MaxConnections != 200 {
 					t.Fatalf("%s RAM %g: unexpected memory defaults: %+v", topology, ram, spec)
 				}
@@ -293,9 +296,11 @@ func TestMySQLMinimumRAMAndRenderedHeadroom(t *testing.T) {
 					}
 					caches += 128 << 20
 				} else if topology == "group" {
-					// Agent rendering derives this managed cache from the baseline
-					// pool, not the independently overridable SQL parameter.
-					caches += max(int64(128<<20), spec.BufferPoolBytes/4)
+					wantCache := int64(128 << 20)
+					if ram > 2 {
+						wantCache = limit / 8
+					}
+					caches += wantCache
 				}
 				if limit-caches < limit*3/8 {
 					t.Fatalf("%s RAM %g: explicit caches leave less than 37.5%% headroom", topology, ram)
