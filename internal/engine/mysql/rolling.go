@@ -15,16 +15,17 @@ import (
 // rollingState freezes the desired artifacts/resources and order across CP restarts.
 // Each side effect has a durable preceding stage and an observation checkpoint.
 type rollingState struct {
-	From        string                          `json:"from"`
-	To          string                          `json:"to"`
-	Major       bool                            `json:"major"`
-	RequestedAt time.Time                       `json:"requestedAt"`
-	Order       []string                        `json:"order"`
-	Index       int                             `json:"index"`
-	Stage       string                          `json:"stage"`
-	Targets     map[string]domain.ComponentSpec `json:"targets"`
-	Op          *infra.Op                       `json:"op,omitempty"`
-	Parameters  map[string]string               `json:"restartParameters,omitempty"`
+	From          string                          `json:"from"`
+	To            string                          `json:"to"`
+	Major         bool                            `json:"major"`
+	RequestedAt   time.Time                       `json:"requestedAt"`
+	Order         []string                        `json:"order"`
+	Index         int                             `json:"index"`
+	Stage         string                          `json:"stage"`
+	Targets       map[string]domain.ComponentSpec `json:"targets"`
+	Op            *infra.Op                       `json:"op,omitempty"`
+	Parameters    map[string]string               `json:"restartParameters,omitempty"`
+	HandoffTarget string                          `json:"handoffTarget,omitempty"`
 }
 
 func rollingOrder(ctx context.Context, rc *engine.Context, s *state) ([]string, error) {
@@ -204,7 +205,12 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 				return true, err
 			}
 			if onlinePrimary(st) {
-				return true, switchAway(ctx, rc, s, m.Name)
+				return true, switchAway(ctx, rc, s, m.Name, &u.HandoffTarget)
+			}
+		}
+		if clustered(s.Topology) && m.Role == "data" && !u.Major {
+			if err := proxyHandoffReady(ctx, rc, s, m.Name, &u.HandoffTarget); err != nil {
+				return true, err
 			}
 		}
 		// For mixed-major groups the old primary leaves rather than promoting an
@@ -219,6 +225,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		}
 		if clustered(s.Topology) && m.Role == "data" {
 			if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
+				return true, err
+			}
+			if err := proxyHandoffReady(ctx, rc, s, m.Name, &u.HandoffTarget); err != nil {
 				return true, err
 			}
 		}
@@ -336,8 +345,14 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if err != nil || !ok {
 			return true, err
 		}
+		if clustered(s.Topology) && m.Role == "data" {
+			if err := proxyRejoinReady(ctx, rc, s, m.Name); err != nil {
+				return true, err
+			}
+		}
 		u.Index++
 		u.Op = nil
+		u.HandoffTarget = ""
 		u.Stage = "prepare"
 	default:
 		return true, engine.Invalid("unknown MySQL rolling checkpoint %s", u.Stage)

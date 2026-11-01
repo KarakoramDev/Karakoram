@@ -15,7 +15,7 @@ import (
 
 // switchAway chooses an ONLINE secondary covering the writer's observed GTIDs.
 // Incomparable or unknown observations never become a zero-lag candidate.
-func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) error {
+func switchAway(ctx context.Context, rc *engine.Context, s *state, old string, chosen *string) error {
 	if s.Topology == "cluster" {
 		return engine.ErrNotSupported
 	}
@@ -31,9 +31,10 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 		return err
 	}
 	target := ""
+	targetName := ""
 	var best gtidSet
 	for _, peer := range s.data() {
-		if peer.Name == old || peer.Removing || peer.Retirement != "" {
+		if peer.Name == old || peer.Removing || peer.Retirement != "" || *chosen != "" && peer.Name != *chosen {
 			continue
 		}
 		status, e := live(ctx, rc, peer.Name)
@@ -45,11 +46,21 @@ func switchAway(ctx context.Context, rc *engine.Context, s *state, old string) e
 			continue
 		}
 		if target == "" || set.contains(best) {
-			target, best = status.ServerUUID, set
+			target, targetName, best = status.ServerUUID, peer.Name, set
 		}
 	}
 	if target == "" {
 		return engine.ErrUnavailable
+	}
+	if err := proxyAdmission(ctx, rc, s, targetName, myspec.ProxyReaderGroup); err != nil {
+		return err
+	}
+	if *chosen == "" {
+		*chosen = targetName
+		if hasServingProxy(s) {
+			// Persist selection before issuing the native action on the next pass.
+			return nil
+		}
 	}
 	a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), old)
 	if err != nil {
@@ -103,9 +114,12 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		if s.Topology == "group" && onlinePrimary(st) {
-			return false, switchAway(ctx, rc, s, m.Name)
+			return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
 		}
 		if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
+			return false, err
+		}
+		if err := proxyHandoffReady(ctx, rc, s, m.Name, &m.HandoffTarget); err != nil {
 			return false, err
 		}
 		if s.Topology == "cluster" {
@@ -130,7 +144,10 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		if s.Topology == "group" && onlinePrimary(st) {
-			return false, switchAway(ctx, rc, s, m.Name)
+			return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
+		}
+		if err := proxyHandoffReady(ctx, rc, s, m.Name, &m.HandoffTarget); err != nil {
+			return false, err
 		}
 		a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
 		if err != nil {

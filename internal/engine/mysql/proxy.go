@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -87,4 +88,113 @@ func proxyApplied(ctx context.Context, rc *engine.Context, m *member) (bool, err
 		return all && count >= m.Replicas, err
 	})
 	return ready, err
+}
+
+// proxyTargetOnline uses only the original proxy-status response fields. Native
+// membership and config versions cannot stand in for monitor-owned admission.
+func proxyTargetOnline(st myspec.ProxyStatusResponse, target string, groups ...int) bool {
+	for _, b := range st.Backends {
+		if b.Host != target || b.Port != myspec.PortMySQL || b.Status != "ONLINE" {
+			continue
+		}
+		for _, group := range groups {
+			if b.Hostgroup == group {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasServingProxy(s *state) bool {
+	for _, m := range s.Members {
+		if m.Role == "proxy" && !m.Removing && !m.Offline && m.Replicas > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func proxyAdmission(ctx context.Context, rc *engine.Context, s *state, target string, groups ...int) error {
+	for _, proxy := range s.Members {
+		if proxy.Role != "proxy" || proxy.Removing || proxy.Offline || proxy.Replicas == 0 {
+			continue
+		}
+		all, count, err := engine.VisitLiveInstancesConcurrent(ctx, rc, proxy.Name, func(a *agentapi.Client) (bool, error) {
+			var status myspec.ProxyStatusResponse
+			if err := mysqlReadClientAction(ctx, rc, proxy.Name, a, myspec.ActionProxyStatus, struct{}{}, &status); err != nil {
+				return false, err
+			}
+			return proxyTargetOnline(status, target, groups...), nil
+		})
+		if err != nil || !all || count < proxy.Replicas {
+			s.ProxyAdmissionWait = fmt.Sprintf("Waiting for %s ONLINE in proxy hostgroups %v on every instance of %s", target, groups, proxy.Name)
+			return fmt.Errorf("%s: %w", s.ProxyAdmissionWait, engine.ErrUnavailable)
+		}
+	}
+	s.ProxyAdmissionWait = ""
+	return nil
+}
+
+func proxyRejoinReady(ctx context.Context, rc *engine.Context, s *state, name string) error {
+	if !clustered(s.Topology) || !hasServingProxy(s) {
+		return nil
+	}
+	st, err := live(ctx, rc, name)
+	if err != nil {
+		return err
+	}
+	groups := []int{myspec.ProxyReaderGroup}
+	if s.Topology == "cluster" {
+		groups = []int{myspec.ProxyWriterGroup, myspec.ProxyBackupWriterGroup, myspec.ProxyReaderGroup}
+	} else if onlinePrimary(st) {
+		groups = []int{myspec.ProxyWriterGroup}
+	}
+	if err := proxyAdmission(ctx, rc, s, name, groups...); err != nil {
+		return err
+	}
+	if s.Topology == "cluster" {
+		return nil
+	}
+	target := ""
+	return proxyHandoffReady(ctx, rc, s, "", &target)
+}
+
+// Pin the observed native writer when resuming an older checkpoint or a
+// mixed-major election. Never accept an unrelated HG10 row for this identity.
+func proxyHandoffReady(ctx context.Context, rc *engine.Context, s *state, old string, target *string) error {
+	if !clustered(s.Topology) || !hasServingProxy(s) {
+		return nil
+	}
+	if s.Topology == "cluster" {
+		for _, peer := range s.data() {
+			if peer.Name == old || peer.Removing || peer.Offline || peer.Retirement != "" {
+				continue
+			}
+			st, err := live(ctx, rc, peer.Name)
+			if err == nil && st.MemberState == "ONLINE" {
+				if err := proxyAdmission(ctx, rc, s, peer.Name, myspec.ProxyWriterGroup, myspec.ProxyBackupWriterGroup, myspec.ProxyReaderGroup); err == nil {
+					return nil
+				}
+			}
+		}
+		return engine.ErrUnavailable
+	}
+	for _, peer := range s.data() {
+		if peer.Name == old || peer.Removing {
+			continue
+		}
+		st, err := live(ctx, rc, peer.Name)
+		if err != nil || !onlinePrimary(st) {
+			continue
+		}
+		if *target == "" {
+			*target = peer.Name
+		}
+		if *target != peer.Name {
+			return engine.ErrUnavailable
+		}
+		return proxyAdmission(ctx, rc, s, *target, myspec.ProxyWriterGroup)
+	}
+	return engine.ErrUnavailable
 }

@@ -643,3 +643,59 @@ func TestSingletonProxyLeavesHostgroupAttributesUnmanaged(t *testing.T) {
 		}
 	}
 }
+
+func TestProxyDNSCachePolicyConverges(t *testing.T) {
+	for _, mode := range []string{"gr", "galera", "single"} {
+		t.Run(mode, func(t *testing.T) {
+			s := testProxySpec()
+			if mode == "galera" {
+				s.Proxy.Mode = "galera"
+			}
+			if mode == "single" {
+				s.Topology = myspec.TopologySingle
+			}
+			text, err := RenderProxyConfig(s, "/config", t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, setting := range []string{"monitor_local_dns_cache_ttl=5000", "monitor_local_dns_cache_refresh_interval=1000"} {
+				if !strings.Contains(text, setting) {
+					t.Fatalf("cold config missing %s", setting)
+				}
+			}
+			db, statements := proxyTestDB(t, s)
+			if err := applyProxySQL(t.Context(), db, s); err != nil {
+				t.Fatal(err)
+			}
+			for _, prefix := range []string{"", "runtime_"} {
+				for name, value := range map[string]string{"mysql-monitor_local_dns_cache_ttl": "300000", "mysql-monitor_local_dns_cache_refresh_interval": "60000"} {
+					if _, err := db.Exec("UPDATE "+prefix+"global_variables SET variable_value=? WHERE variable_name=?", value, name); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			*statements = nil
+			if err := applyProxySQL(t.Context(), db, s); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(*statements, "\n"), "LOAD MYSQL VARIABLES TO RUNTIME") {
+				t.Fatal("legacy DNS policy did not trigger a runtime reload")
+			}
+			for _, prefix := range []string{"", "runtime_"} {
+				for name, want := range map[string]string{"mysql-monitor_local_dns_cache_ttl": "5000", "mysql-monitor_local_dns_cache_refresh_interval": "1000"} {
+					var got string
+					if err := db.QueryRow("SELECT variable_value FROM "+prefix+"global_variables WHERE variable_name=?", name).Scan(&got); err != nil || got != want {
+						t.Fatalf("%s%s=%q, want %q: %v", prefix, name, got, want, err)
+					}
+				}
+			}
+			*statements = nil
+			if err := applyProxySQL(t.Context(), db, s); err != nil {
+				t.Fatal(err)
+			}
+			if len(*statements) != 0 {
+				t.Fatal("converged policy was not read-only")
+			}
+		})
+	}
+}

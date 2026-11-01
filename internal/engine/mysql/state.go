@@ -39,6 +39,7 @@ type state struct {
 	RestoreGTIDBlocked     string                   `json:"restoreGTIDBlocked,omitempty"`
 	RestoreGTIDUnavailable string                   `json:"restoreGTIDUnavailable,omitempty"`
 	GTIDPrefixLag          *gtidPrefixLag           `json:"gtidPrefixLag,omitempty"`
+	ProxyAdmissionWait     string                   `json:"proxyAdmissionWait,omitempty"`
 }
 
 // Incidents are retained after a fresh full baseline so old chains can never
@@ -116,6 +117,7 @@ type member struct {
 	CloneDone            bool                 `json:"cloneDone,omitempty"`
 	CloneReplacesData    bool                 `json:"cloneReplacesData,omitempty"`
 	Retirement           string               `json:"retirement,omitempty"`
+	HandoffTarget        string               `json:"handoffTarget,omitempty"`
 	Removing             bool                 `json:"removing,omitempty"`
 	SlowShutdown         bool                 `json:"slowShutdown,omitempty"`
 	RetirementOp         *infra.Op            `json:"retirementOp,omitempty"`

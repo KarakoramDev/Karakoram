@@ -196,7 +196,18 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 		case "/v1/mysql/offline-gtid":
 			json.NewEncoder(w).Encode(b.offline[name])
 		case "/v1/mysql/proxy-status":
-			json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{Backends: []myspec.ProxyBackend{{Hostgroup: 10, Host: b.leader, Port: 3306, Status: "ONLINE"}}})
+			var status myspec.ProxyStatusResponse
+			for peer, native := range b.native {
+				if native.MemberState != "ONLINE" {
+					continue
+				}
+				group := myspec.ProxyReaderGroup
+				if peer == b.leader {
+					group = myspec.ProxyWriterGroup
+				}
+				status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: group, Host: peer, Port: 3306, Status: "ONLINE"})
+			}
+			json.NewEncoder(w).Encode(status)
 		case "/v1/reload", "/v1/process":
 			json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
 		case "/v1/mysql/bootstrap":

@@ -106,8 +106,12 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			}
 			var status myspec.ProxyStatusResponse
 			for _, peer := range spec.Proxy.Backends {
-				if peer.Host == b.leader && b.native[peer.Host].MemberState == "ONLINE" {
-					status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: myspec.ProxyWriterGroup, Host: peer.Host, Port: peer.Port, Status: "ONLINE"})
+				if b.native[peer.Host].MemberState == "ONLINE" {
+					group := myspec.ProxyReaderGroup
+					if peer.Host == b.leader {
+						group = myspec.ProxyWriterGroup
+					}
+					status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: group, Host: peer.Host, Port: peer.Port, Status: "ONLINE"})
 				}
 			}
 			json.NewEncoder(w).Encode(status)

@@ -207,6 +207,9 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		}
 		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLMaintenance", Status: "True", Reason: "RollingMaintenance", Message: s.Rolling.Stage, LastTransitionTime: now(rc)})
 	}
+	if s.ProxyAdmissionWait != "" {
+		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLProxyAdmission", Status: "False", Reason: "WaitingForProxyAdmission", Message: s.ProxyAdmissionWait, LastTransitionTime: now(rc)})
+	}
 	if s.Replacement != nil || s.TLSRotation != nil || s.GaleraTLS != nil {
 		status.Phase = domain.PhaseUpdating
 	}

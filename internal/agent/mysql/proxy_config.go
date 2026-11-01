@@ -120,7 +120,7 @@ func proxyConfigImage(s myspec.Spec) []proxyTable {
 		}
 		image[4].rows = append(image[4].rows, fmt.Sprintf("%d,1,%s,%s,%d,1", r.id, pattern, port, r.group)+defaultValues.String())
 	}
-	for _, v := range [][2]string{{"mysql-monitor_username", p.Monitor.Username}, {"mysql-monitor_password", p.Monitor.Password}, {"mysql-max_connections", strconv.Itoa(p.MaxConnections)}} {
+	for _, v := range [][2]string{{"mysql-monitor_username", p.Monitor.Username}, {"mysql-monitor_password", p.Monitor.Password}, {"mysql-max_connections", strconv.Itoa(p.MaxConnections)}, {"mysql-monitor_local_dns_cache_ttl", "5000"}, {"mysql-monitor_local_dns_cache_refresh_interval", "1000"}} {
 		image[5].rows = append(image[5].rows, proxyQuote(v[0])+","+proxyQuote(v[1]))
 	}
 	return image
@@ -172,7 +172,7 @@ func proxyConfigMatches(ctx context.Context, c *sql.Conn, s myspec.Spec, image [
 			}
 			actual := "SELECT DISTINCT " + proxyProjection(s, t, runtime) + " FROM " + name
 			if t.name == "global_variables" {
-				actual += " WHERE variable_name IN ('mysql-monitor_username','mysql-monitor_password','mysql-max_connections')"
+				actual += " WHERE variable_name IN ('mysql-monitor_username','mysql-monitor_password','mysql-max_connections','mysql-monitor_local_dns_cache_ttl','mysql-monitor_local_dns_cache_refresh_interval')"
 			}
 			if t.name == "mysql_users" {
 				actual += " GROUP BY username,password,active,default_hostgroup,use_ssl,transaction_persistent"

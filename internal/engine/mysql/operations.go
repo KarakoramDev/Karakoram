@@ -145,7 +145,7 @@ func handoffBlockedRestore(ctx context.Context, rc *engine.Context, op *domain.O
 }
 
 // RunOperation's closed dispatch prevents unsupported maintenance from mutating data.
-func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
 	defer invalidateMySQLReadObservation(ctx, rc)
@@ -177,6 +177,11 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 	if err != nil {
 		return engine.OpResult{}, err
 	}
+	defer func() {
+		if e := save(rc.Cluster, s); err == nil {
+			err = e
+		}
+	}()
 	if err := maintenanceAllowed(ctx, rc, s); err != nil {
 		return engine.OpResult{}, err
 	}
@@ -184,9 +189,10 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		return engine.OpResult{}, engine.ErrUnavailable
 	}
 	var cp struct {
-		Order   []string `json:"order"`
-		Index   int      `json:"index"`
-		Waiting bool     `json:"waiting"`
+		Order         []string `json:"order"`
+		Index         int      `json:"index"`
+		Waiting       bool     `json:"waiting"`
+		HandoffTarget string   `json:"handoffTarget,omitempty"`
 	}
 	if len(op.Checkpoint) > 0 {
 		if err = json.Unmarshal(op.Checkpoint, &cp); err != nil {
@@ -228,9 +234,15 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		if e != nil {
 			return engine.OpResult{}, e
 		}
+		if ok && clustered(s.Topology) && m.Role == "data" {
+			if e := proxyRejoinReady(ctx, rc, s, m.Name); e != nil {
+				return engine.OpResult{}, e
+			}
+		}
 		if ok {
 			cp.Index++
 			cp.Waiting = false
+			cp.HandoffTarget = ""
 		}
 	} else {
 		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
@@ -247,11 +259,16 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 				return engine.OpResult{}, e
 			}
 			if onlinePrimary(st) {
-				if e := switchAway(ctx, rc, s, m.Name); e != nil {
+				if e := switchAway(ctx, rc, s, m.Name, &cp.HandoffTarget); e != nil {
 					return engine.OpResult{}, e
 				}
 				raw, e := json.Marshal(cp)
 				return engine.OpResult{Checkpoint: raw, Step: "switchover", RequeueAfter: 2 * time.Second}, e
+			}
+		}
+		if clustered(s.Topology) && m.Role == "data" {
+			if e := proxyHandoffReady(ctx, rc, s, m.Name, &cp.HandoffTarget); e != nil {
+				return engine.OpResult{}, e
 			}
 		}
 		if s.Topology == "cluster" && m.Role == "data" {
