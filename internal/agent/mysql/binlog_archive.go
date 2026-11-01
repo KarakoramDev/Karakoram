@@ -92,6 +92,15 @@ func loadArchiveState(name string) (archiveIndex, error) {
 	if idx.Version != 0 {
 		return idx, errors.New("archive_index_version")
 	}
+	// A status observation before initialization has no index (or even root
+	// directory) yet. It is empty, not corrupt, and must remain read-only.
+	if _, err := os.Stat(name); os.IsNotExist(err) {
+		idx.Version = 1
+		idx.Files = nil
+		return idx, nil
+	} else if err != nil {
+		return idx, err
+	}
 	for key, meta := range idx.Files {
 		if err = durableJSON(archiveReceiptPath(name, key), meta); err != nil {
 			return idx, err

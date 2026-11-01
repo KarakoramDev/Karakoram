@@ -235,7 +235,8 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		}
 		if previous {
 			v := strings.TrimSpace(strings.TrimPrefix(line, "#"))
-			if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") && v != "[empty]" {
+			headerMetadata := binlogCommit.MatchString(line) || strings.HasPrefix(v, "immediate_commit_timestamp=")
+			if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") && v != "[empty]" && !headerMetadata {
 				if previousBlock.Len() > 0 {
 					previousBlock.WriteByte(',')
 				}

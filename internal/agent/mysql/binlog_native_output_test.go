@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
 // frozenBinlogParser is the fac5447b parser, retained only as a differential
@@ -166,5 +168,58 @@ func TestIncompleteNativeGTIDHeaderFails(t *testing.T) {
 		if _, err := parseBinlogStream(strings.NewReader(text+suffix), nil); err == nil {
 			t.Fatal("accepted missing GTID at event boundary")
 		}
+	}
+}
+
+func TestParsedPreviousGTIDsConstrainReplayCoverage(t *testing.T) {
+	const otherSID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+	base := recoverySID + ":1-3," + otherSID + ":1-7"
+	backup := myspec.BackupResult{GTIDSet: base, EndTime: time.UnixMicro(1000000),
+		SourceUUID: recoverySID, BinlogFile: "binlog.000001", BinlogPosition: 4}
+	makeLog := func(file, previous string, number int, stamp int64) archivedBinlog {
+		t.Helper()
+		text := "# Previous-GTIDs\n" + previous + "\n" +
+			fmt.Sprintf("# original_commit_timestamp=%d\nSET @@SESSION.GTID_NEXT= '%s:%d'/*!*/;\n# end_log_pos 500 Xid = 1\nCOMMIT/*!*/;\n", stamp, recoverySID, number)
+		meta, err := parseBinlogStream(strings.NewReader(text), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta.ServerUUID, meta.File = recoverySID, file
+		return archivedBinlog{key: file, meta: meta}
+	}
+	for _, tc := range []struct {
+		name           string
+		previous       string
+		secondPrevious string
+		includeFirst   bool
+		wantLogs       int
+		wantEnd        int64
+	}{
+		{"empty-previous-at-snapshot", "# [empty]", "", true, 2, 1200000},
+		{"complete-multi-UUID", "# " + recoverySID + ":1-3,\n# " + otherSID + ":1-7", "", true, 2, 1200000},
+		{"missing-first-file", "", "", false, 0, 1000000},
+		{"empty-previous-after-snapshot", "", "# [empty]", false, 0, 1000000},
+		{"missing-other-UUID-predecessor", "# " + recoverySID + ":1-3,\n# " + otherSID + ":1-7", "# " + recoverySID + ":1-4,\n# " + otherSID + ":1-8", true, 1, 1100000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := tc.secondPrevious
+			if previous == "" {
+				previous = "# " + recoverySID + ":1-4,\n# " + otherSID + ":1-7"
+			}
+			logs := []archivedBinlog{makeLog("binlog.000002", previous, 5, 1200000)}
+			if tc.includeFirst {
+				logs = append([]archivedBinlog{makeLog("binlog.000001", tc.previous, 4, 1100000)}, logs...)
+			}
+			trusted, last, err := trustedReplayHistory(logs, backup)
+			if err != nil || len(trusted) != tc.wantLogs || last != tc.wantEnd {
+				t.Fatalf("trusted=%d last=%d error=%v", len(trusted), last, err)
+			}
+			coverage, err := replayCoverage(logs, backup)
+			if err != nil || len(coverage.Windows) != 1 ||
+				coverage.Windows[0].Start.UnixMicro() != 1000000 ||
+				coverage.Windows[0].End.UnixMicro() != tc.wantEnd {
+				t.Fatalf("coverage=%+v error=%v", coverage, err)
+			}
+		})
 	}
 }
