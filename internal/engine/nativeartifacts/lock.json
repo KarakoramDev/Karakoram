@@ -318,8 +318,8 @@
     "name": "supabase-supavisor",
     "version": "2.9.13",
     "file": "supabase-supavisor-2.9.13-ubuntu24.04-amd64.tar.gz",
-    "sha256": "ee3aad0698fe8472a349b251613b4477c7486b25f88a765dd94ca49613237676",
-    "size": 30281034,
+    "sha256": "5d8f95c44c3a299324e26e31a9f675518f8c7725befb2599230e969ae3040c8a",
+    "size": 30287788,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
