@@ -387,6 +387,8 @@ func TestMemberRolesMapToPublicEnum(t *testing.T) {
 		{"primary", "openbao", "RUNNING", "primary"}, {"secondary", "openbao", "RUNNING", "secondary"},
 		{"unknown", "openbao", "SEALED", "unknown"}, {"unknown", "openbao", "UNINITIALIZED", "unknown"},
 		{"primary", "other-native-engine", "RUNNING", "primary"},
+		{"PRIMARY", "", "ONLINE", "primary"}, {"SECONDARY", "", "ONLINE", "secondary"},
+		{"SECONDARY", "", "RECOVERING", "secondary"}, {"", "", "OFFLINE", "unknown"},
 	} {
 		member := (&Server{}).memberAPI(domain.ClusterRef{Name: ""}, domain.MemberStatus{Role: tc.role, Set: tc.set, State: tc.state})
 		if string(member.Role) != tc.want || member.State != tc.state {

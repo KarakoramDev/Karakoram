@@ -294,16 +294,16 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
 	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
-	switch m.Role {
+	// Native engines may report roles in upper case (MySQL reports PRIMARY/SECONDARY).
+	switch role := strings.ToLower(m.Role); role {
 	case "primary", "secondary":
 		if config {
-			return api.MemberRole("config-" + m.Role)
+			return api.MemberRole("config-" + role)
 		}
-		return api.MemberRole(m.Role)
-	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector":
-		return api.MemberRole(m.Role)
-	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
-		return api.MemberRole(m.Role)
+		return api.MemberRole(role)
+	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector",
+		"broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
+		return api.MemberRole(role)
 	}
 	if m.Role == "mongos" || m.Role == "router" {
 		return api.MemberRole("router")
