@@ -191,6 +191,19 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		queryBoundary = false
 		return nil
 	}
+	var previousBlock strings.Builder
+	finishPrevious := func() error {
+		if previousBlock.Len() == 0 {
+			return nil
+		}
+		set, err := parseRecoveryGTIDs(previousBlock.String())
+		if err != nil {
+			return err
+		}
+		out.PreviousGTIDSet = set.String()
+		previousBlock.Reset()
+		return nil
+	}
 	for scan.Scan() {
 		if bytes.HasPrefix(scan.Bytes(), []byte("###")) {
 			continue
@@ -222,24 +235,26 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		}
 		if previous {
 			v := strings.TrimSpace(strings.TrimPrefix(line, "#"))
-			if v == "[empty]" {
-				previous = false
-			} else if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") {
-				if _, err := parseRecoveryGTIDs(v); err == nil {
-					if out.PreviousGTIDSet != "" {
-						out.PreviousGTIDSet += ","
-					}
-					out.PreviousGTIDSet += v
-				} else {
-					return out, err
+			if strings.HasPrefix(line, "# ") && !strings.Contains(v, " ") && v != "[empty]" {
+				if previousBlock.Len() > 0 {
+					previousBlock.WriteByte(',')
 				}
-			} else {
-				previous = false
+				previousBlock.WriteString(strings.TrimSuffix(v, ","))
+				continue
+			}
+			previous = false
+			if err := finishPrevious(); err != nil {
+				return out, err
 			}
 		}
 		if m := binlogCommit.FindStringSubmatch(line); m != nil {
-			if err := finish(); err != nil {
-				return out, err
+			// mysqlbinlog prints the original timestamp both in the GTID
+			// comment and in a versioned SET before GTID_NEXT. These are
+			// repeated fields of one header, not a transaction boundary.
+			if tx.GTID != "" {
+				if err := finish(); err != nil {
+					return out, err
+				}
 			}
 			var err error
 			tx.OriginalCommitTimestamp, err = strconv.ParseInt(m[1], 10, 64)
@@ -270,6 +285,9 @@ func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogS
 		}
 	}
 	if err := scan.Err(); err != nil {
+		return out, err
+	}
+	if err := finishPrevious(); err != nil {
 		return out, err
 	}
 	if err := finish(); err != nil {
