@@ -3,19 +3,23 @@
 package mysql
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
@@ -34,11 +38,14 @@ type binlogSidecar struct {
 	FirstCommitTimestamp int64               `json:"first_commit_timestamp"`
 	LastCommitTimestamp  int64               `json:"last_commit_timestamp"`
 	Transactions         []binlogTransaction `json:"transactions"`
+	DecodePosition       uint64              `json:"-"`
 }
 type archiveIndex struct {
-	Files   map[string]binlogSidecar   `json:"files"`
+	Files   map[string]binlogSidecar   `json:"files,omitempty"`
 	Pending map[string]bool            `json:"pending"`
 	Status  myspec.BinlogArchiveStatus `json:"status"`
+	Version int                        `json:"version,omitempty"`
+	Active  *binlogResume              `json:"active,omitempty"`
 }
 
 var archiveMu sync.Mutex
@@ -69,6 +76,39 @@ func readArchiveIndex(name string) (archiveIndex, error) {
 	}
 	return out, err
 }
+
+// Completed history lives in immutable per-file receipts. Only pending native
+// files, the active cursor and the compact recovery summary are rewritten.
+// Migration leaves the old index authoritative until all receipts are durable.
+func archiveReceiptPath(indexPath, key string) string {
+	return indexPath + ".file-" + requestDigest(key)
+}
+
+func loadArchiveState(name string) (archiveIndex, error) {
+	idx, err := readArchiveIndex(name)
+	if err != nil || idx.Version == 1 {
+		return idx, err
+	}
+	if idx.Version != 0 {
+		return idx, errors.New("archive_index_version")
+	}
+	for key, meta := range idx.Files {
+		if err = durableJSON(archiveReceiptPath(name, key), meta); err != nil {
+			return idx, err
+		}
+	}
+	idx.Files = nil
+	idx.Version = 1
+	return idx, durableJSON(name, idx)
+}
+
+func archiveRecorded(name, key string) (bool, error) {
+	_, err := os.Stat(archiveReceiptPath(name, key))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
 func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	s, p := e.state()
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
@@ -76,7 +116,7 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	}
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
-	idx, err := readArchiveIndex(archiveIndexPath(p, s.Backup.Repository))
+	idx, err := loadArchiveState(archiveIndexPath(p, s.Backup.Repository))
 	if err != nil {
 		return idx.Status, errors.New("archive_index_invalid")
 	}
@@ -150,13 +190,83 @@ func hashFile(name string) (string, int64, error) {
 	return hex.EncodeToString(h.Sum(nil)), n, err
 }
 func decodeBinlog(ctx context.Context, s myspec.Spec, name string) (binlogSidecar, error) {
-	cmd := exec.CommandContext(ctx, filepath.Join(s.ServerDir, "bin", "mysqlbinlog"), "--base64-output=DECODE-ROWS", "--verbose", name)
-	cmd.Env = append(nativeEnv(), "TZ=UTC")
-	b, err := cmd.Output()
-	if err != nil {
-		return binlogSidecar{}, errors.New("binlog_decode_failed")
+	return decodeBinlogFrom(ctx, s, name, 4, nil)
+}
+
+type boundedDiagnostics struct{ data []byte }
+
+func (b *boundedDiagnostics) Write(p []byte) (int, error) {
+	n := len(p)
+	if remaining := 8192 - len(b.data); remaining > 0 {
+		b.data = append(b.data, p[:min(remaining, len(p))]...)
 	}
-	return parseBinlogOutput(b)
+	return n, nil
+}
+
+func decodeBinlogFrom(ctx context.Context, s myspec.Spec, name string, position uint64, emit func(binlogTransaction) error) (binlogSidecar, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(s.ServerDir, "bin", "mysqlbinlog"),
+		"--base64-output=DECODE-ROWS", "--verbose", "--start-position="+strconv.FormatUint(position, 10), name)
+	cmd.Env = append(nativeEnv(), "TZ=UTC")
+	var diagnostics boundedDiagnostics
+	cmd.Stderr = &diagnostics
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return binlogSidecar{}, fmt.Errorf("binlog_decode_failed: %w", err)
+	}
+	if err = cmd.Start(); err != nil {
+		return binlogSidecar{}, fmt.Errorf("binlog_decode_failed: %w", err)
+	}
+	out, parseErr := parseBinlogStream(stdout, emit)
+	if parseErr != nil {
+		cancel()
+		_ = stdout.Close()
+	}
+	waitErr := cmd.Wait()
+	if err := errors.Join(parseErr, waitErr); err != nil {
+		return binlogSidecar{}, fmt.Errorf("binlog_decode_failed: %w; stderr: %s", err, diagnostics.data)
+	}
+	return out, nil
+}
+
+type binlogResume struct {
+	Key        string `json:"key"`
+	Device     uint64 `json:"device"`
+	Inode      uint64 `json:"inode"`
+	Prefix     string `json:"prefix"`
+	PrefixSize int    `json:"prefix_size"`
+	Position   uint64 `json:"position"`
+}
+
+func resumeBinlog(name, key string, previous *binlogResume) (binlogResume, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return binlogResume{}, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return binlogResume{}, err
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	const prefixSize = 128
+	n := int(min(info.Size(), prefixSize))
+	var prefixBuffer [prefixSize]byte
+	prefix := prefixBuffer[:n]
+	if _, err = io.ReadFull(f, prefix); err != nil {
+		return binlogResume{}, err
+	}
+	sum := sha256.Sum256(prefix)
+	next := binlogResume{Key: key, Device: uint64(st.Dev), Inode: st.Ino,
+		Prefix: hex.EncodeToString(sum[:]), PrefixSize: n, Position: 4}
+	if previous != nil && n == prefixSize && previous.PrefixSize == n &&
+		previous.Key == key && previous.Device == next.Device &&
+		previous.Inode == next.Inode && previous.Prefix == next.Prefix &&
+		previous.Position >= 4 && previous.Position <= uint64(info.Size()) {
+		next.Position = previous.Position
+	}
+	return next, nil
 }
 func archiveGap(idx *archiveIndex, reason string) {
 	if !idx.Status.Gap {
@@ -187,7 +297,7 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	}
 	repo := s.Backup.Repository
 	indexPath := archiveIndexPath(p, repo)
-	idx, err := readArchiveIndex(indexPath)
+	idx, err := loadArchiveState(indexPath)
 	if err != nil {
 		return errors.New("archive_index_invalid")
 	}
@@ -229,11 +339,24 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	}
 	// Only a file containing a committed transaction needs bounded rotation.
 	current := logs[len(logs)-1]
-	decoded, err := decodeBinlog(ctx, s, filepath.Join(filepath.Dir(base), current.name))
+	localCurrent := filepath.Join(filepath.Dir(base), current.name)
+	resume, err := resumeBinlog(localCurrent, uuid+"/"+current.name, idx.Active)
+	if err != nil {
+		return fmt.Errorf("binlog_read_failed: %w", err)
+	}
+	hasTransactions := false
+	decoded, err := decodeBinlogFrom(ctx, s, localCurrent, resume.Position, func(binlogTransaction) error {
+		hasTransactions = true
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	if len(decoded.Transactions) > 0 {
+	if decoded.DecodePosition >= resume.Position {
+		resume.Position = decoded.DecodePosition
+	}
+	idx.Active = &resume
+	if hasTransactions {
 		latest, err := e.status(ctx)
 		if err != nil || !latest.WriterEligible(s.Galera != nil) {
 			return nil
@@ -250,7 +373,11 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	for _, f := range logs {
 		key := uuid + "/" + f.name
 		present[key] = true
-		if _, ok := idx.Files[key]; !ok {
+		recorded, err := archiveRecorded(indexPath, key)
+		if err != nil {
+			return fmt.Errorf("archive_index_invalid: %w", err)
+		}
+		if !recorded {
 			idx.Pending[key] = true
 		}
 	}
@@ -269,7 +396,11 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	for _, f := range logs[:len(logs)-1] {
 		key := uuid + "/" + f.name
 		local := filepath.Join(filepath.Dir(base), f.name)
-		if _, ok := idx.Files[key]; ok {
+		recorded, err := archiveRecorded(indexPath, key)
+		if err != nil {
+			return fmt.Errorf("archive_index_invalid: %w", err)
+		}
+		if recorded {
 			continue
 		}
 		sidecar, err := decodeBinlog(ctx, s, local)
@@ -289,7 +420,6 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 		if err = uploadArchive(ctx, client, repo, object, local, sidecar); err != nil {
 			return err
 		}
-		idx.Files[key] = sidecar
 		delete(idx.Pending, key)
 		idx.Status.LastArchivedFile = f.name
 		if sidecar.LastEventTime.After(idx.Status.LastEventTime) {
@@ -312,6 +442,11 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 			idx.Status.ContiguousGTIDSet = idx.Status.GTIDSet
 		}
 		if err = durableJSON(indexPath, idx); err != nil {
+			return errors.New("archive_index_write")
+		}
+		// Summary first: a crash before the receipt retries the immutable upload
+		// and idempotent GTID union; no receipt can hide an undurable summary.
+		if err = durableJSON(archiveReceiptPath(indexPath, key), sidecar); err != nil {
 			return errors.New("archive_index_write")
 		}
 	}
@@ -338,7 +473,7 @@ func uploadArchive(ctx context.Context, c *minio.Client, r myspec.Repository, ob
 	if err != nil {
 		return errors.New("archive_metadata_invalid")
 	}
-	if _, err = c.PutObject(ctx, r.S3.Bucket, object+".json", strings.NewReader(string(b)), int64(len(b)), minio.PutObjectOptions{ContentType: "application/json"}); err != nil {
+	if _, err = c.PutObject(ctx, r.S3.Bucket, object+".json", bytes.NewReader(b), int64(len(b)), minio.PutObjectOptions{ContentType: "application/json"}); err != nil {
 		return errors.New("archive_upload_failed")
 	}
 	return nil

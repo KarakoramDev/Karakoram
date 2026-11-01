@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -136,25 +137,64 @@ var binlogCommit = regexp.MustCompile(`original_commit_timestamp(?:=|\s+)\s*([0-
 var binlogPosition = regexp.MustCompile(`end_log_pos\s+([0-9]+)`)
 
 func parseBinlogOutput(data []byte) (binlogSidecar, error) {
+	return parseBinlogStream(bytes.NewReader(data), nil)
+}
+
+// emit permits probes to discard transaction metadata as it is consumed.
+// Replay sidecars retain only one small record per committed transaction, never rows.
+func parseBinlogStream(r io.Reader, emit func(binlogTransaction) error) (binlogSidecar, error) {
 	var out binlogSidecar
-	scan := bufio.NewScanner(bytes.NewReader(data))
+	scan := bufio.NewScanner(r)
 	scan.Buffer(make([]byte, 4096), 4<<20)
 	var tx binlogTransaction
 	var position uint64
 	previous := false
+	inTransaction := false
+	queryBoundary := false
+	set := recoveryGTIDs{}
+	record := func() error {
+		g, err := parseRecoveryGTIDs(tx.GTID)
+		if err != nil {
+			return err
+		}
+		set.add(g)
+		if out.FirstCommitTimestamp == 0 || tx.OriginalCommitTimestamp < out.FirstCommitTimestamp {
+			out.FirstCommitTimestamp = tx.OriginalCommitTimestamp
+		}
+		if tx.OriginalCommitTimestamp > out.LastCommitTimestamp {
+			out.LastCommitTimestamp = tx.OriginalCommitTimestamp
+		}
+		if emit != nil {
+			return emit(tx)
+		}
+		out.Transactions = append(out.Transactions, tx)
+		return nil
+	}
 	finish := func() error {
 		if tx.GTID == "" {
+			if tx.OriginalCommitTimestamp != 0 {
+				return errors.New("missing_transaction_gtid")
+			}
 			return nil
+		}
+		if inTransaction || !queryBoundary {
+			return errors.New("incomplete_binlog_transaction")
 		}
 		if tx.OriginalCommitTimestamp == 0 {
 			return errors.New("missing_commit_timestamp")
 		}
 		tx.EndPosition = position
-		out.Transactions = append(out.Transactions, tx)
+		if err := record(); err != nil {
+			return err
+		}
 		tx = binlogTransaction{}
+		queryBoundary = false
 		return nil
 	}
 	for scan.Scan() {
+		if bytes.HasPrefix(scan.Bytes(), []byte("###")) {
+			continue
+		}
 		line := scan.Text()
 		// DDL commits do not have an Xid event. Seal their previous Query
 		// boundary before consuming the next transaction or rotation header.
@@ -164,7 +204,17 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 			}
 		}
 		if m := binlogPosition.FindStringSubmatch(line); m != nil {
-			position, _ = strconv.ParseUint(m[1], 10, 64)
+			var err error
+			position, err = strconv.ParseUint(m[1], 10, 64)
+			if err != nil {
+				return out, err
+			}
+			if position >= 4 {
+				out.DecodePosition = position
+			}
+		}
+		if tx.GTID != "" && strings.HasPrefix(line, "#") && strings.Contains(line, " Query") {
+			queryBoundary = true
 		}
 		if strings.Contains(line, "Previous-GTIDs") {
 			previous = true
@@ -181,7 +231,7 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 					}
 					out.PreviousGTIDSet += v
 				} else {
-					previous = false
+					return out, err
 				}
 			} else {
 				previous = false
@@ -191,7 +241,11 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 			if err := finish(); err != nil {
 				return out, err
 			}
-			tx.OriginalCommitTimestamp, _ = strconv.ParseInt(m[1], 10, 64)
+			var err error
+			tx.OriginalCommitTimestamp, err = strconv.ParseInt(m[1], 10, 64)
+			if err != nil {
+				return out, err
+			}
 		}
 		if m := binlogGTID.FindStringSubmatch(line); m != nil && m[1] != "AUTOMATIC" {
 			if _, err := parseRecoveryGTIDs(m[1]); err != nil {
@@ -199,12 +253,19 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 			}
 			tx.GTID = m[1]
 		}
+		if tx.GTID != "" && strings.HasPrefix(line, "BEGIN") {
+			inTransaction = true
+		}
 		if tx.GTID != "" && (strings.Contains(line, "Xid =") || strings.HasPrefix(line, "COMMIT") || strings.Contains(line, "COMMIT/*!*/")) {
 			if tx.OriginalCommitTimestamp == 0 {
 				return out, errors.New("missing_commit_timestamp")
 			}
 			tx.EndPosition = position
-			out.Transactions = append(out.Transactions, tx)
+			if err := record(); err != nil {
+				return out, err
+			}
+			inTransaction = false
+			queryBoundary = false
 			tx = binlogTransaction{}
 		}
 	}
@@ -213,17 +274,6 @@ func parseBinlogOutput(data []byte) (binlogSidecar, error) {
 	}
 	if err := finish(); err != nil {
 		return out, err
-	}
-	set := recoveryGTIDs{}
-	for _, tx := range out.Transactions {
-		g, _ := parseRecoveryGTIDs(tx.GTID)
-		set.add(g)
-		if out.FirstCommitTimestamp == 0 || tx.OriginalCommitTimestamp < out.FirstCommitTimestamp {
-			out.FirstCommitTimestamp = tx.OriginalCommitTimestamp
-		}
-		if tx.OriginalCommitTimestamp > out.LastCommitTimestamp {
-			out.LastCommitTimestamp = tx.OriginalCommitTimestamp
-		}
 	}
 	out.GTIDSet = set.String()
 	if out.FirstCommitTimestamp != 0 {
