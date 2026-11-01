@@ -4,7 +4,10 @@ package mysql
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -26,6 +29,8 @@ type rollingState struct {
 	Op            *infra.Op                       `json:"op,omitempty"`
 	Parameters    map[string]string               `json:"restartParameters,omitempty"`
 	HandoffTarget string                          `json:"handoffTarget,omitempty"`
+
+	ScaleIn bool `json:"scaleIn,omitempty"`
 }
 
 func rollingOrder(ctx context.Context, rc *engine.Context, s *state) ([]string, error) {
@@ -62,9 +67,33 @@ func rollingNeedsWindow(m *member, version string, target domain.ComponentSpec, 
 
 // Only replica changes may bypass the service-wide restart. Runtime artifacts
 // and resources must remain on the stop/redeploy path.
-func proxyCountOnly(m *member, version string, target domain.ComponentSpec) bool {
-	return m.Role == "proxy" && m.Replicas != target.Replicas &&
-		m.Version == version && reflect.DeepEqual(m.Resources, target.Resources)
+func proxyCountOnly(m *member, version string, target domain.ComponentSpec, runtimeHash string, capabilities infra.Capabilities) bool {
+	return capabilities.ReplicaScalePreservesServing && m.Role == "proxy" && m.Replicas != target.Replicas &&
+		m.Version == version && reflect.DeepEqual(m.Resources, target.Resources) &&
+		m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash == runtimeHash
+}
+
+func proxyRuntimeHash(rc *engine.Context, spec infra.RuntimeSpec) (string, error) {
+	raw, err := json.Marshal(struct {
+		Runtime infra.RuntimeSpec
+
+		ListenHost string
+	}{Runtime: spec, ListenHost: mysqlListenHost(rc)})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(raw)), nil
+}
+
+func (p *Core) desiredProxyRuntimeHash(rc *engine.Context, m *member) (string, error) {
+	if m.Role != "proxy" {
+		return "", nil
+	}
+	spec, err := p.runtimeSpec(rc, m)
+	if err != nil {
+		return "", err
+	}
+	return proxyRuntimeHash(rc, spec)
 }
 
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
@@ -93,6 +122,14 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			if m.Role == "proxy" && desired.Replicas < 1 {
 				return true, engine.Invalid("ProxySQL scaling requires at least one serving replica")
 			}
+			runtimeHash, err := p.desiredProxyRuntimeHash(rc, m)
+			if err != nil {
+				return true, err
+			}
+			runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
+			restartingScale := m.Role == "proxy" && m.Replicas != desired.Replicas && (!rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash == "")
+			changed = changed || runtimeChanged
+			needsWindow = needsWindow || runtimeChanged || restartingScale
 			changed = changed || m.Version != rc.Cluster.Spec.Version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
 			changed = changed || m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
 			needsWindow = needsWindow || rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters)
@@ -159,13 +196,23 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		return true, engine.ErrNotFound
 	}
 	target := u.Targets[m.Name]
+	runtimeHash, err := p.desiredProxyRuntimeHash(rc, m)
+	if err != nil {
+		return true, err
+	}
+	runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
+	restartingScale := m.Role == "proxy" && m.Replicas != target.Replicas && (!rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash == "")
+	needsWindow := runtimeChanged || restartingScale || rollingNeedsWindow(m, u.To, target, u.Parameters)
 	switch u.Stage {
 	case "prepare":
-		if m.Version == u.To && m.Replicas == target.Replicas && reflect.DeepEqual(m.Resources, target.Resources) && (m.Role != "data" || reflect.DeepEqual(m.Parameters, u.Parameters)) {
+		if !runtimeChanged && m.Version == u.To && m.Replicas == target.Replicas && reflect.DeepEqual(m.Resources, target.Resources) && (m.Role != "data" || reflect.DeepEqual(m.Parameters, u.Parameters)) {
 			u.Index++
 			return true, nil
 		}
-		if proxyCountOnly(m, u.To, target) {
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
+		if proxyCountOnly(m, u.To, target, runtimeHash, rc.Backend.Capabilities()) {
 			if target.Replicas < 1 {
 				return true, engine.Invalid("ProxySQL scaling requires at least one serving replica")
 			}
@@ -175,16 +222,15 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			if err != nil || !ok {
 				return true, err
 			}
-			m.Replicas = target.Replicas
+			u.ScaleIn = target.Replicas < m.Replicas
+			m.PendingReplicas = target.Replicas
 			publishRevision(s)
 			// Persist intent before the idempotent backend call. Both readiness
 			// and D103 admission now require the target number of acknowledgers.
 			u.Stage = "scale"
 			return true, nil
 		}
-		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
-			return false, nil
-		}
+		// Restarting changes retain the existing service-wide maintenance path.
 		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
 			if err := engine.RequireDiskGrowth(rc.Backend); err != nil {
 				s.Rolling = nil
@@ -207,6 +253,15 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		}
 		u.Stage = "handoff"
 	case "scale":
+		if u.ScaleIn && rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
+		if runtimeChanged || !rc.Backend.Capabilities().ReplicaScalePreservesServing {
+			m.PendingReplicas = 0
+			u.ScaleIn = false
+			u.Stage = "prepare"
+			return true, nil
+		}
 		op, err := rc.Backend.SetContainerCount(ctx, m.Name, target.Replicas, target.Replicas)
 		if err != nil {
 			return true, err
@@ -224,11 +279,14 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if err != nil || !ok {
 			return true, err
 		}
+		m.Replicas = target.Replicas
+		m.PendingReplicas = 0
+		u.ScaleIn = false
 		u.Index++
 		u.Op = nil
 		u.Stage = "prepare"
 	case "handoff":
-		if rollingNeedsWindow(m, u.To, target, u.Parameters) && rc.WaitForWindow().RequeueAfter > 0 {
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
 		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
@@ -362,9 +420,19 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if engine.DeploymentBlocked(rc, m.Name, spec) {
 			return true, nil
 		}
+		runtimeHash := ""
+		if m.Role == "proxy" {
+			runtimeHash, err = proxyRuntimeHash(rc, spec)
+			if err != nil {
+				return true, err
+			}
+		}
 		op, err := engine.Deploy(ctx, rc, m.Name, spec)
 		if err != nil {
 			return true, err
+		}
+		if m.Role == "proxy" {
+			m.ProxyRuntimeHash = runtimeHash
 		}
 		u.Op = &op
 		u.Stage = "deployed"

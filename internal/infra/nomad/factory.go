@@ -16,7 +16,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-var nomadCapabilities = infra.Capabilities{PublicTCP: true, Placement: true, Logs: true, HorizontalScaling: true, DedicatedCPU: true, StatelessRolloutSurge: 1}
+var nomadCapabilities = infra.Capabilities{PublicTCP: true, Placement: true, Logs: true, HorizontalScaling: true, ReplicaScalePreservesServing: true, DedicatedCPU: true, StatelessRolloutSurge: 1}
 var configEnv = [...]struct{ key, env string }{
 	{"address", "KARAKORAM_NOMAD_ADDR"}, {"region", "KARAKORAM_NOMAD_REGION"}, {"datacenters", "KARAKORAM_NOMAD_DATACENTERS"}, {"nodePool", "KARAKORAM_NOMAD_NODE_POOL"}, {"network", "KARAKORAM_NOMAD_NETWORK"}, {"publicIPv4", "KARAKORAM_NOMAD_PUBLIC_IPV4"}, {"publicIPv6", "KARAKORAM_NOMAD_PUBLIC_IPV6"},
 	{"ephemeralDiskMB", "KARAKORAM_NOMAD_EPHEMERAL_DISK_MB"},

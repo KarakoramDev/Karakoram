@@ -43,7 +43,7 @@ type fakeBackend struct {
 
 func (*fakeBackend) Name() string { return "fake" }
 func (*fakeBackend) Capabilities() infra.Capabilities {
-	return infra.Capabilities{HorizontalScaling: true, Placement: true, PublicTCP: true}
+	return infra.Capabilities{HorizontalScaling: true, ReplicaScalePreservesServing: true, Placement: true, PublicTCP: true}
 }
 func (*fakeBackend) Layout() infra.Layout {
 	return infra.Layout{AppDir: "/srv/application", VolumeRoot: "/srv/volumes", User: "app", PrivateAddressFamily: infra.AddressFamilyIPv4}

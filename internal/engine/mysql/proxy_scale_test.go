@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -22,6 +24,16 @@ type proxyScaleBackend struct {
 	scales, resources, deploys int
 
 	pending bool
+
+	disruptiveScale bool
+
+	ports []infra.Port
+}
+
+func (b *proxyScaleBackend) Capabilities() infra.Capabilities {
+	c := b.Backend.Capabilities()
+	c.ReplicaScalePreservesServing = !b.disruptiveScale
+	return c
 }
 
 func (b *proxyScaleBackend) SetContainerCount(ctx context.Context, name string, min, max int) (infra.Op, error) {
@@ -42,6 +54,7 @@ func (b *proxyScaleBackend) SetResources(ctx context.Context, name string, resou
 func (b *proxyScaleBackend) Deploy(ctx context.Context, name string, deployment infra.Deployment) (infra.Op, error) {
 	if name == b.proxy {
 		b.deploys++
+		b.ports = deployment.Runtime.Ports
 	}
 	return b.Backend.Deploy(ctx, name, deployment)
 }
@@ -141,7 +154,7 @@ func TestProxyCountOnlyScaleReplay(t *testing.T) {
 						break
 					}
 				}
-				if !checkpointed || s.find(b.proxy).Replicas != count {
+				if !checkpointed || s.find(b.proxy).PendingReplicas != count || s.find(b.proxy).Replicas == count {
 					t.Fatal("scale intent/receipt not checkpointed with expected replica count")
 				}
 				// Replay a durable pending receipt through another CP instance.
@@ -231,20 +244,111 @@ func TestProxyScaleRejectsZeroReplicas(t *testing.T) {
 }
 
 func TestProxyCountOnlyDetection(t *testing.T) {
-	m := &member{Role: "proxy", Version: "8.4.11-11", Replicas: 1, Resources: defaultResources(false)}
+	m := &member{Role: "proxy", Version: "8.4.11-11", Replicas: 1, Resources: defaultResources(false), ProxyRuntimeHash: "admitted"}
 	target := domain.ComponentSpec{Replicas: 2, Resources: m.Resources}
-	if !proxyCountOnly(m, m.Version, target) {
+	capabilities := infra.Capabilities{ReplicaScalePreservesServing: true}
+	if !proxyCountOnly(m, m.Version, target, "admitted", capabilities) {
 		t.Fatal("count-only update was not detected")
 	}
-	if proxyCountOnly(m, "8.4.12-12", target) {
+	if proxyCountOnly(m, "8.4.12-12", target, "admitted", capabilities) {
 		t.Fatal("version change bypassed restart")
 	}
+	if proxyCountOnly(m, m.Version, target, "changed", capabilities) {
+		t.Fatal("runtime/startup change bypassed restart")
+	}
+	if proxyCountOnly(m, m.Version, target, "admitted", infra.Capabilities{}) {
+		t.Fatal("backend without preserving scale bypassed restart")
+	}
+	m.ProxyRuntimeHash = ""
+	if proxyCountOnly(m, m.Version, target, "admitted", capabilities) {
+		t.Fatal("unknown legacy runtime bypassed restart")
+	}
+	m.ProxyRuntimeHash = "admitted"
 	target.Resources.MinRAM++
-	if proxyCountOnly(m, m.Version, target) {
+	if proxyCountOnly(m, m.Version, target, "admitted", capabilities) {
 		t.Fatal("combined resource/count change bypassed restart")
 	}
 	target.Replicas = m.Replicas
-	if proxyCountOnly(m, m.Version, target) {
+	if proxyCountOnly(m, m.Version, target, "admitted", capabilities) {
 		t.Fatal("resource-only change bypassed restart")
+	}
+}
+
+func TestProxyScaleRuntimeAndBackendRestart(t *testing.T) {
+	for _, change := range []string{"reader-port", "backend-reloads", "legacy-runtime"} {
+		t.Run(change, func(t *testing.T) {
+			p, rc, base := setup(t, "group")
+			converge(t, p, rc, base)
+			s, _ := load(rc.Cluster)
+			b, _ := proxyScaleFixture(t, rc, s)
+			if change == "reader-port" {
+				rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"proxy":{"readerPort":true}}`)
+			} else if change == "backend-reloads" {
+				b.disruptiveScale = true
+			} else {
+				s.find(b.proxy).ProxyRuntimeHash = ""
+				replayAdmissionState(t, rc, s)
+			}
+			setProxyScaleTarget(rc, 2, false)
+			converge(t, p, rc, base)
+			if b.stops[b.proxy] != 1 || b.resources != 1 || b.deploys != 1 || b.scales != 1 {
+				t.Fatalf("restart calls: scale=%d stop=%d resources=%d deploy=%d", b.scales, b.stops[b.proxy], b.resources, b.deploys)
+			}
+			if change == "reader-port" {
+				exposed := false
+				for _, port := range b.ports {
+					exposed = exposed || port.Port == 3307
+				}
+				if !exposed {
+					t.Fatal("reader-port change did not reach deployed runtime ports")
+				}
+			}
+		})
+	}
+}
+
+func TestProxyScaleInRechecksMaintenanceWindow(t *testing.T) {
+	p, rc, base := setup(t, "group")
+	converge(t, p, rc, base)
+	s, _ := load(rc.Cluster)
+	b, _ := proxyScaleFixture(t, rc, s)
+	setProxyScaleTarget(rc, 2, false)
+	converge(t, p, rc, base)
+	setProxyScaleTarget(rc, 1, false)
+	s, _ = load(rc.Cluster)
+	proxy := s.find(b.proxy)
+	s.Rolling = &rollingState{To: rc.Cluster.Spec.Version, Order: []string{proxy.Name}, Stage: "prepare", Targets: map[string]domain.ComponentSpec{proxy.Name: desiredComponent(rc, proxy)}}
+	closeWindow := func() {
+		rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
+	}
+	closeWindow()
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "prepare" || proxy.PendingReplicas != 0 || proxy.Replicas != 2 || b.scales != 1 {
+		t.Fatal("closed window allowed scale-in preparation")
+	}
+	rc.Cluster.Spec.Maintenance = nil
+	s = replayAdmissionState(t, rc, s)
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "scale" || !s.Rolling.ScaleIn || s.find(b.proxy).Replicas != 2 || s.find(b.proxy).PendingReplicas != 1 {
+		t.Fatal("scale-in intent lost committed size or disruptive flag")
+	}
+	closeWindow()
+	s = replayAdmissionState(t, rc, s)
+	p = New(Options{Provider: p.Name()})
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "scale" || b.scales != 1 {
+		t.Fatal("replay crossed closed maintenance window")
+	}
+	rc.Cluster.Spec.Maintenance = nil
+	s = replayAdmissionState(t, rc, s)
+	converge(t, p, rc, base)
+	if b.scales != 2 || b.stops[b.proxy] != 0 {
+		t.Fatal("resumed scale-in did not use preserving scale")
 	}
 }

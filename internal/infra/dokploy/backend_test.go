@@ -1099,3 +1099,9 @@ func TestContainersAddressEveryStillRunningSwarmTask(t *testing.T) {
 		t.Fatalf("desired shutdown hid a still-running task: %+v", containers)
 	}
 }
+
+func TestReplicaScalingDoesNotClaimPreservingServing(t *testing.T) {
+	if dokployCapabilities.ReplicaScalePreservesServing {
+		t.Fatal("application.reload restarts existing tasks")
+	}
+}

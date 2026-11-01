@@ -90,6 +90,17 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	// Agent transport readiness is independent of GR quorum and clone completion.
 	return runtime.Spec(rc.Backend.Layout()), nil
 }
+
+func mysqlListenHost(rc *engine.Context) string {
+	if !slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {
+		return ""
+	}
+	if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
+		return "0.0.0.0"
+	}
+	return "::"
+}
+
 func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -148,12 +159,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	buffer := max(int64(128<<20), min(memory/2, memory-(768<<20)))
 	o.Parameters = memberParameters(m, o.Parameters)
 	sp := myspec.Spec{Member: name, Role: m.Role, Topology: s.Topology, Ordinal: m.Index, Version: version, ServerDir: serverDir, XtraBackupDir: backupDir, BufferPoolBytes: buffer, MaxConnections: 200, Parameters: o.Parameters, CAPEM: get("tls/ca.crt"), ServerCert: cert("servers"), Superuser: credential("root"), Agent: credential("kk_agent"), Replication: credential("kk_repl"), Monitor: credential("kk_monitor"), BackupUser: credential("kk_backup"), AllowInitialize: m.Role == "data" && !m.Initialized && !m.CloneReplacesData && !s.Formation.reforming()}
-	if slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityMySQLListenHost) {
-		sp.ListenHost = "::"
-		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
-			sp.ListenHost = "0.0.0.0"
-		}
-	}
+	sp.ListenHost = mysqlListenHost(rc)
 	sp.SlowShutdown = m.SlowShutdown
 	sp.Admin = credential("admin")
 	for _, peer := range s.data() {

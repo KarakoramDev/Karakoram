@@ -57,6 +57,11 @@ type Capabilities struct {
 	// HorizontalScaling: SetContainerCount runs more than one container of a
 	// stateless service.
 	HorizontalScaling bool `json:"horizontalScaling"`
+	// ReplicaScalePreservesServing: a pure stateless replica-count update
+	// preserves existing serving tasks (apart from replicas removed by scale-in).
+	// HorizontalScaling alone does not imply this: some platforms reload all tasks.
+	// Internal execution contract, not a user-selectable feature capability.
+	ReplicaScalePreservesServing bool `json:"-"`
 	// EnvChangeRestarts: writing variables restarts or redeploys the runtime.
 	EnvChangeRestarts bool `json:"envChangeRestarts"`
 	// StatelessRolloutSurge bounds extra serving instances during a stateless

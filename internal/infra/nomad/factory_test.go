@@ -152,3 +152,9 @@ func TestFactoryConfigAndEnvironment(t *testing.T) {
 		t.Fatal("backend aliases caller config")
 	}
 }
+
+func TestReplicaScalingPreservesServingCapability(t *testing.T) {
+	if !nomadCapabilities.ReplicaScalePreservesServing {
+		t.Fatal("pure-count retained-job scaling must advertise preserving serving replicas")
+	}
+}

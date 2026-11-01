@@ -125,6 +125,12 @@ type member struct {
 	GaleraJoinFence      bool                 `json:"galeraJoinFence,omitempty"`
 	GaleraSSTDonor       string               `json:"galeraSSTDonor,omitempty"`
 	GaleraHistoryBlocked bool                 `json:"galeraHistoryBlocked,omitempty"`
+
+	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
+	// Missing legacy receipts deliberately require redeployment before scaling.
+	ProxyRuntimeHash string `json:"proxyRuntimeHash,omitempty"`
+	// PendingReplicas is the admission/readiness expectation, not committed size.
+	PendingReplicas int `json:"pendingReplicas,omitempty"`
 }
 type pending struct {
 	Op     infra.Op `json:"op"`

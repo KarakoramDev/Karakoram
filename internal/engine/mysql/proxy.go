@@ -60,6 +60,15 @@ func proxyWriterHealthy(st myspec.ProxyStatusResponse) bool {
 
 var errProxyConfigPending = errors.New("proxy configuration has not been applied")
 
+// During scale, admission follows the pending fleet, while Replicas remains
+// the committed count until the backend operation and config acks complete.
+func proxyExpectedReplicas(m *member) int {
+	if m.PendingReplicas > 0 {
+		return m.PendingReplicas
+	}
+	return m.Replicas
+}
+
 func proxyApplied(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
 	ready, _, err := mysqlReadValue(ctx, rc, m.Name, "proxy-applied", func(probe context.Context) (bool, error) {
 		all, count, err := engine.VisitLiveInstancesConcurrent(probe, rc, m.Name, func(a *agentapi.Client) (bool, error) {
@@ -85,7 +94,7 @@ func proxyApplied(ctx context.Context, rc *engine.Context, m *member) (bool, err
 			}
 			return proxyWriterHealthy(native), nil
 		})
-		return all && count >= m.Replicas, err
+		return all && count >= proxyExpectedReplicas(m), err
 	})
 	return ready, err
 }
@@ -127,7 +136,7 @@ func proxyAdmission(ctx context.Context, rc *engine.Context, s *state, target st
 			}
 			return proxyTargetOnline(status, target, groups...), nil
 		})
-		if err != nil || !all || count < proxy.Replicas {
+		if err != nil || !all || count < proxyExpectedReplicas(proxy) {
 			s.ProxyAdmissionWait = fmt.Sprintf("Waiting for %s ONLINE in proxy hostgroups %v on every instance of %s", target, groups, proxy.Name)
 			return fmt.Errorf("%s: %w", s.ProxyAdmissionWait, engine.ErrUnavailable)
 		}

@@ -394,9 +394,19 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if engine.DeploymentBlocked(rc, m.Name, spec) {
 			continue
 		}
+		runtimeHash := ""
+		if m.Role == "proxy" {
+			runtimeHash, e = proxyRuntimeHash(rc, spec)
+			if e != nil {
+				return result, e
+			}
+		}
 		op, e := engine.Deploy(ctx, rc, m.Name, spec)
 		if e != nil {
 			return result, e
+		}
+		if m.Role == "proxy" {
+			m.ProxyRuntimeHash = runtimeHash
 		}
 		m.DeployOp = &op
 		m.Stage = "deploying"

@@ -78,3 +78,9 @@ func TestFactoryProjectMismatch(t *testing.T) {
 		t.Fatalf("unsafe mismatch detail: %s", detail)
 	}
 }
+
+func TestReplicaScalingDoesNotClaimPreservingServing(t *testing.T) {
+	if zeropsCapabilities.ReplicaScalePreservesServing {
+		t.Fatal("unverified autoscaling must retain the conservative restart path")
+	}
+}
