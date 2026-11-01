@@ -135,8 +135,13 @@ func (p *Core) advanceReplacement(ctx context.Context, rc *engine.Context, s *st
 			return replacementResult(cp), err
 		}
 		if st.MemberState == "ONLINE" {
-			if err := proxyRejoinReady(ctx, rc, s, next.Name); err != nil {
-				return replacementResult(cp), err
+			// PXC join certification intentionally withholds routing until the
+			// replacement retires its predecessor and final membership certifies.
+			// Retirement still requires an already admitted surviving candidate.
+			if !pxcJoinRoutingFenced(s, next) {
+				if err := proxyRejoinReady(ctx, rc, s, next.Name); err != nil {
+					return replacementResult(cp), err
+				}
 			}
 			if rc.Operation != nil && rc.Operation.Actor != "system" {
 				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {

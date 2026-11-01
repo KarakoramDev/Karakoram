@@ -202,7 +202,7 @@ func setup(t *testing.T, topology string) (*Core, *engine.Context, *fakeBackend)
 					continue
 				}
 				group := myspec.ProxyReaderGroup
-				if peer == b.leader {
+				if peer == b.leader || native.MemberRole == "PRIMARY" {
 					group = myspec.ProxyWriterGroup
 				}
 				status.Backends = append(status.Backends, myspec.ProxyBackend{Hostgroup: group, Host: peer, Port: 3306, Status: "ONLINE"})
