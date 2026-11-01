@@ -175,7 +175,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		return true, nil
 	}
 	u := s.Rolling
-	if u.To != rc.Cluster.Spec.Version {
+	if u.To != rc.Cluster.Spec.Version && u.Stage != "scale-failed" {
 		return true, engine.Invalid("cannot change version during MySQL maintenance")
 	}
 	if u.Stage == "backup" {
@@ -194,6 +194,9 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 	m := s.find(u.Order[u.Index])
 	if m == nil {
 		return true, engine.ErrNotFound
+	}
+	if u.Stage == "scale-failed" {
+		return true, p.reconcileFailedProxyScale(ctx, rc, s, m)
 	}
 	target := u.Targets[m.Name]
 	runtimeHash, err := p.desiredProxyRuntimeHash(rc, m)
@@ -269,8 +272,18 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		u.Op = &op
 		u.Stage = "scaled"
 	case "scaled":
-		done, err := rollingOpDone(ctx, rc, u)
-		if err != nil || !done {
+		if u.Op == nil {
+			return true, engine.Invalid("missing MySQL scale receipt")
+		}
+		status, err := rc.Backend.OpStatus(ctx, *u.Op)
+		if status.Failed {
+			// A terminal receipt will never become Done. Persist a distinct
+			// checkpoint before attempting any backend-proven recovery.
+			m.PendingReplicas = 0
+			u.Stage = "scale-failed"
+			return true, nil
+		}
+		if err != nil || !status.Done {
 			return true, err
 		}
 		// Every live instance must acknowledge the published backend/user
@@ -488,4 +501,87 @@ func rollingOpDone(ctx context.Context, rc *engine.Context, u *rollingState) (bo
 		return false, engine.ErrUnavailable
 	}
 	return st.Done, nil
+}
+
+// A failed scale receipt is terminal. Observe the surviving fleet, rather than
+// pinning readiness to the failed target or resubmitting the same placement.
+func (p *Core) reconcileFailedProxyScale(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if m.Role != "proxy" {
+		return engine.Invalid("failed scale checkpoint is not a proxy")
+	}
+	inventory := engine.ObserveInstanceInventory(ctx, rc, m.Name)
+	if inventory.Err != nil {
+		return inventory.Err
+	}
+	count := 0
+	for _, instance := range inventory.Containers {
+		if instance.Status == infra.ContainerRunning || instance.Status == infra.ContainerActive {
+			count++
+		}
+	}
+	m.Replicas = count
+	m.PendingReplicas = 0
+	u := s.Rolling
+	desired := desiredComponent(rc, m)
+	if desired.Replicas < 1 {
+		return engine.Invalid("ProxySQL scaling requires at least one serving replica")
+	}
+	hash, err := p.desiredProxyRuntimeHash(rc, m)
+	if err != nil {
+		return err
+	}
+	// A superseding disruptive specification takes the ordinary maintenance
+	// path; recreating the plan retains version/window/resource safeguards.
+	if m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources) || m.ProxyRuntimeHash != hash {
+		s.Rolling = nil
+		return nil
+	}
+	if desired.Replicas < count && rc.WaitForWindow().RequeueAfter > 0 {
+		return nil
+	}
+	// Nomad proves that this new operation needs no placement and preserves
+	// serving tasks. Its retain-only recovery cannot be blindly retried after
+	// another terminal failure, and a lost reply adopts the retained receipt.
+	if recoverer, ok := rc.Backend.(infra.FailedScaleRecoverer); ok {
+		op, recovering, err := recoverer.RecoverFailedScale(ctx, m.Name, desired.Replicas, desired.Replicas)
+		if err != nil {
+			return err
+		}
+		if recovering {
+			u.Targets[m.Name] = desired
+			u.ScaleIn = desired.Replicas < count
+			u.Op = &op
+			u.Stage = "scaled"
+			m.PendingReplicas = desired.Replicas
+			publishRevision(s)
+			return nil
+		}
+	}
+	if desired.Replicas != u.Targets[m.Name].Replicas {
+		if desired.Replicas != count {
+			// A different explicit count may request new placement. It is not
+			// an automatic retry of the terminal operation's failed target.
+			s.Rolling = nil
+			return nil
+		}
+		// A reverted desired count can already match the surviving fleet.
+		// Still require separately restored backend health and config acks:
+		// never interpret the failed receipt itself as successful.
+		service, err := rc.Backend.GetService(ctx, m.Name)
+		if err != nil {
+			return err
+		}
+		if service != nil && (service.Status == infra.StatusRunning || service.Status == infra.StatusActive) {
+			ok, err := ready(ctx, rc, m)
+			if err != nil {
+				return err
+			}
+			if ok {
+				s.Rolling = nil
+				return nil
+			}
+		}
+	}
+	rc.SyncWait = "ProxySQL scale failed; restore backend health or supersede the failed replica count"
+	return nil
 }

@@ -352,3 +352,119 @@ func TestProxyScaleInRechecksMaintenanceWindow(t *testing.T) {
 		t.Fatal("resumed scale-in did not use preserving scale")
 	}
 }
+
+type terminalProxyScaleBackend struct {
+	*proxyScaleBackend
+
+	allowRecovery bool
+
+	recoveries int
+}
+
+func (b *terminalProxyScaleBackend) SetContainerCount(ctx context.Context, name string, min, max int) (infra.Op, error) {
+	op, err := b.proxyScaleBackend.SetContainerCount(ctx, name, min, max)
+	if name == b.proxy && err == nil {
+		op.ID = "terminal-scale"
+	}
+	return op, err
+}
+
+func (b *terminalProxyScaleBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if op.ID == "terminal-scale" {
+		b.count = 1
+		service, err := b.Backend.GetService(ctx, b.proxy)
+		if err != nil {
+			return infra.OpState{}, err
+		}
+		service.Status = infra.StatusFailed
+		return infra.OpState{Failed: true, Message: "terminal placement failure"}, nil
+	}
+	return b.proxyScaleBackend.OpStatus(ctx, op)
+}
+
+func (b *terminalProxyScaleBackend) RecoverFailedScale(ctx context.Context, name string, min, max int) (infra.Op, bool, error) {
+	if !b.allowRecovery || b.recoveries != 0 {
+		return infra.Op{}, false, nil
+	}
+	b.recoveries++
+	b.count = min
+	service, err := b.Backend.GetService(ctx, name)
+	if err != nil {
+		return infra.Op{}, false, err
+	}
+	service.Status = infra.StatusRunning
+	return infra.Op{ID: "retained-recovery"}, true, nil
+}
+
+func TestProxyTerminalScaleFailureReplayAndRevert(t *testing.T) {
+	for _, recovery := range []string{"backend-proof", "restored-health"} {
+		t.Run(recovery, func(t *testing.T) {
+			p, rc, base := setup(t, "group")
+			converge(t, p, rc, base)
+			s, _ := load(rc.Cluster)
+			scale, _ := proxyScaleFixture(t, rc, s)
+			b := &terminalProxyScaleBackend{proxyScaleBackend: scale}
+			rc.Backend = b
+			setProxyScaleTarget(rc, 2, false)
+			failed := false
+			for range 30 {
+				p = New(Options{Provider: p.Name()})
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				base.apply(t, p, rc)
+				s, _ = load(rc.Cluster)
+				if s.Rolling != nil && s.Rolling.Stage == "scale-failed" {
+					failed = true
+					break
+				}
+			}
+			if !failed || s.find(b.proxy).PendingReplicas != 0 {
+				t.Fatal("terminal failure did not release the pending readiness expectation")
+			}
+			for range 3 {
+				p = New(Options{Provider: p.Name()})
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling == nil || s.Rolling.Stage != "scale-failed" || s.find(b.proxy).Replicas != 1 || b.scales != 1 || b.recoveries != 0 {
+				t.Fatal("terminal replay retried placement or failed to observe survivors")
+			}
+			status, err := p.Status(t.Context(), rc)
+			if err != nil || status.Phase != domain.PhaseDegraded {
+				t.Fatalf("terminal scale readiness: %+v %v", status, err)
+			}
+			recorded := false
+			for _, condition := range status.Conditions {
+				recorded = recorded || condition.Type == "MySQLProxyScale" && condition.Status == "False" && condition.Reason == "ScaleFailed"
+			}
+			if !recorded || rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+				t.Fatal("terminal scale failure was not reported or was acknowledged as success")
+			}
+			setProxyScaleTarget(rc, 1, false)
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling == nil || rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+				t.Fatal("revert accepted failed backend as healthy")
+			}
+			if recovery == "backend-proof" {
+				b.allowRecovery = true
+			} else {
+				base.services[b.proxy].Status = infra.StatusRunning
+			}
+			p = New(Options{Provider: p.Name()})
+			converge(t, p, rc, base)
+			s, _ = load(rc.Cluster)
+			if s.Rolling != nil || s.find(b.proxy).Replicas != 1 || s.find(b.proxy).PendingReplicas != 0 || b.scales != 1 || b.stops[b.proxy] != 0 || b.deploys != 0 {
+				t.Fatal("reverted fleet did not converge without replaying terminal placement")
+			}
+			if recovery == "backend-proof" && b.recoveries != 1 {
+				t.Fatal("did not adopt backend-proven recovery")
+			}
+		})
+	}
+}

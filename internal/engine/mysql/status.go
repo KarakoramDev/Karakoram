@@ -206,6 +206,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			status.Phase = domain.PhaseUpgrading
 		}
 		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLMaintenance", Status: "True", Reason: "RollingMaintenance", Message: s.Rolling.Stage, LastTransitionTime: now(rc)})
+		if s.Rolling.Stage == "scale-failed" {
+			status.Phase = domain.PhaseDegraded
+			status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLProxyScale", Status: "False", Reason: "ScaleFailed", Message: "ProxySQL scale operation failed; observing surviving replicas and waiting for backend-proven recovery or a superseding desired count", LastTransitionTime: now(rc)})
+		}
 	}
 	if s.ProxyAdmissionWait != "" {
 		status.Conditions = append(status.Conditions, domain.Condition{Type: "MySQLProxyAdmission", Status: "False", Reason: "WaitingForProxyAdmission", Message: s.ProxyAdmissionWait, LastTransitionTime: now(rc)})

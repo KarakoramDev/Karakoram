@@ -66,7 +66,7 @@ func proxyExpectedReplicas(m *member) int {
 	if m.PendingReplicas > 0 {
 		return m.PendingReplicas
 	}
-	return m.Replicas
+	return max(1, m.Replicas)
 }
 
 func proxyApplied(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
