@@ -24,8 +24,10 @@ type Options struct {
 	Provider                       string
 }
 type Core struct {
-	options  Options
-	accessMu sync.Mutex
+	options         Options
+	accessMu        sync.Mutex
+	recoveryMu      sync.Mutex
+	recoveryRetries map[string]offlineRecoveryRetry
 }
 
 func New(o Options) *Core { return &Core{options: o} }

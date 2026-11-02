@@ -127,6 +127,13 @@ func TestOfflineRecoveryFailureObservesAllAndRetries(t *testing.T) {
 			if _, err := p.reconcileFormation(t.Context(), rc, s); err != nil {
 				t.Fatal(err)
 			}
+			if calls.Load() != 3 {
+				t.Fatal("retry bypassed provider backoff")
+			}
+			rc.Clock = trafficRenewalClock{at: time.Now().Add(16 * time.Second)}
+			if _, err := p.reconcileFormation(t.Context(), rc, s); err != nil {
+				t.Fatal(err)
+			}
 			if calls.Load() != 6 || s.Formation.Reformation.State != "bootstrapping" {
 				t.Fatalf("retry failed: %+v", s.Formation)
 			}
@@ -159,9 +166,16 @@ func TestOfflineRecoveryBudgetAndCancellation(t *testing.T) {
 	if got := offlineRecoveryTimeout(rc, m); got != time.Minute {
 		t.Fatal(got)
 	}
-	m.Resources.MinRAM = 8
-	if got := offlineRecoveryTimeout(rc, m); got != 150*time.Second {
-		t.Fatal(got)
+	for _, ram := range []float64{2, 2.5, 8, 10, 100} {
+		m.Resources.MinRAM = ram
+		if got := offlineRecoveryTimeout(rc, m); got != time.Minute {
+			t.Fatalf("GR RAM=%v budget=%v", ram, got)
+		}
+		rc.Cluster.Spec.Topology.Type = "cluster"
+		if got := offlineRecoveryTimeout(rc, m); got != 3*time.Minute {
+			t.Fatalf("Galera RAM=%v budget=%v", ram, got)
+		}
+		rc.Cluster.Spec.Topology.Type = "group"
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -172,5 +186,84 @@ func TestOfflineRecoveryBudgetAndCancellation(t *testing.T) {
 	_, blocked = collectOfflineRecovery(t.Context(), rc, []*member{m}, func(context.Context, *member) (bool, error) { return false, context.DeadlineExceeded })
 	if !strings.Contains(blocked, "m0: offline recovery timed out") {
 		t.Fatal(blocked)
+	}
+}
+
+func TestOfflineRecoveryPrecheckAvoidsNativeWork(t *testing.T) {
+	for _, topology := range []string{"group", "cluster"} {
+		for _, cause := range []string{"not deployed", "not stopped"} {
+			t.Run(topology+"/"+cause, func(t *testing.T) {
+				p, rc, _ := setup(t, topology)
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				s, _ := load(rc.Cluster)
+				s.Formation.State = "formed"
+				s.Formation.Reformation = &reformation{State: "observing"}
+				for _, m := range s.data() {
+					m.Stage = "deployed"
+					m.Offline = true
+				}
+				if cause == "not deployed" {
+					s.find("demom0").Stage = "pending"
+				}
+				var calls atomic.Int32
+				installAccessAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+					name := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+					if r.URL.Path != "/v1/status" {
+						calls.Add(1)
+						http.Error(w, "unexpected native work", 503)
+						return
+					}
+					status := agentapi.Status{ConfigVersion: s.find(name).ConfigVersion}
+					if cause == "not stopped" && name == "demom0" {
+						status.Processes = map[string]agentapi.ProcessStatus{"mysqld": {PID: 1}}
+					}
+					json.NewEncoder(w).Encode(status)
+				})
+				if _, err := p.reconcileFormation(t.Context(), rc, s); err != nil {
+					t.Fatal(err)
+				}
+				if calls.Load() != 0 || !strings.Contains(s.Formation.Reformation.Blocked, cause) {
+					t.Fatalf("calls=%d blocked=%s", calls.Load(), s.Formation.Reformation.Blocked)
+				}
+			})
+		}
+	}
+}
+
+func TestOfflineRecoveryBackoffCapAndReset(t *testing.T) {
+	p, rc, _ := setup(t, "group")
+	s := &state{UID: "recovery-owner"}
+	s.Formation.Reformation = &reformation{State: "observing", Blocked: "failed"}
+	at := time.Now()
+	rc.Clock = trafficRenewalClock{at: at}
+	for _, delay := range []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 5 * time.Minute, 5 * time.Minute} {
+		p.finishRecoverySweep(rc, s)
+		if p.recoveryReady(rc, s) {
+			t.Fatal("blocked retry admitted")
+		}
+		rc.Clock = trafficRenewalClock{at: at.Add(delay - time.Nanosecond)}
+		if p.recoveryReady(rc, s) {
+			t.Fatal("retry admitted early")
+		}
+		at = at.Add(delay)
+		rc.Clock = trafficRenewalClock{at: at}
+		if !p.recoveryReady(rc, s) {
+			t.Fatal("retry not admitted at deadline")
+		}
+	}
+	s.Formation.FormationEpoch++
+	if !p.recoveryReady(rc, s) {
+		t.Fatal("new epoch inherited backoff")
+	}
+	p.finishRecoverySweep(rc, s)
+	s.Formation.Reformation.State = "bootstrapping"
+	if !p.recoveryReady(rc, s) {
+		t.Fatal("state change did not reset")
+	}
+	s.Formation.Reformation.State = "observing"
+	if !p.recoveryReady(rc, s) {
+		t.Fatal("state reset retained backoff")
 	}
 }

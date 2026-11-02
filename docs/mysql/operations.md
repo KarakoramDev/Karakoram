@@ -399,12 +399,17 @@ All members must be stopped/fenced before choosing a seed. Recovery fails closed
 After a crash, `grastate.dat` often contains sequence `-1`; `safe_to_bootstrap` alone cannot rank data freshness. Graceful suspension uses the same evidence-based resume policy rather than assuming shutdown order. An ordinary PXC restart also recovers its local position before rejoining; it must not turn stale bootstrap intent into a new independent cluster. Bootstrap authorization is bound to a formation epoch, preventing an old desired configuration from replaying bootstrap.
 
 Offline GTID/identity and Galera position recovery are native operations, not
-four-second health observations. Each member has a separate **60-second minimum**
-budget covering dialing, private-server startup/recovery and graceful shutdown,
-plus 15 seconds per additional GiB of guaranteed member RAM above 2 GiB (rounded
-up), capped at the existing three-minute agent engine-action limit. Up to three
-members are probed concurrently; a failed member does not prevent
-the others being observed. The operation remains cancelable and does not inherit
+four-second health observations. GR probes have a **60-second total** control-plane
+and agent budget; the agent permits **40 seconds for private-server startup and
+recovery**, leaving the remaining total budget for observation and graceful
+shutdown. Galera recovered-position probes retain their **180-second** budget.
+These are fixed native-route limits, not RAM-scaled guarantees. Up to three members
+are probed concurrently after every member passes cheap deployed/stopped checks.
+A failed native probe does not prevent the other probes completing. A blocked
+sweep backs off in memory for 15 seconds, doubling to five minutes; success or a
+change of recovery state/epoch resets this throttle. Restarting the control plane
+also clears the throttle, but never supplies missing evidence.
+The operation remains cancelable and does not inherit
 the read-only reconciliation sweep's shared observation deadline. These budgets
 also apply to retained-volume suspend/resume. Slow disks or extensive crash
 recovery can still exhaust the budget; blocked conditions identify unavailable,

@@ -142,6 +142,16 @@ func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *st
 		invalidateMySQLReadObservation(ctx, rc)
 		defer invalidateMySQLReadObservation(ctx, rc)
 	}
+	if !p.recoveryReady(rc, s) {
+		return true, nil
+	}
+	if r := s.Formation.Reformation; r != nil && r.State == "observing" {
+		defer p.finishRecoverySweep(rc, s)
+		if blocked := precheckOfflineRecovery(ctx, rc, s); blocked != "" {
+			r.Blocked = blocked
+			return true, nil
+		}
+	}
 	if s.Topology == "cluster" {
 		return p.reconcileGaleraFormation(ctx, rc, s)
 	}
@@ -172,7 +182,7 @@ func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *st
 	if r := f.Reformation; r != nil && r.State == "observing" {
 		observations, blocked := collectOfflineRecovery(ctx, rc, s.data(), func(probe context.Context, m *member) (mysqloffline, error) {
 			if m.Stage != "deployed" && m.Stage != "joined" {
-				return mysqloffline{}, fmt.Errorf("member not deployed")
+				return mysqloffline{}, errOfflineNotDeployed
 			}
 			a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
 			if err != nil {
@@ -182,8 +192,14 @@ func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *st
 			if err = a.Engine(probe, "mysql", myspec.ActionOfflineGTID, struct{}{}, &out); err != nil {
 				return mysqloffline{}, err
 			}
-			if !out.Stopped || !out.DataIdentity.Initialized || m.ServerUUID != "" && out.ServerUUID != m.ServerUUID {
-				return mysqloffline{}, fmt.Errorf("stopped initialized identity required")
+			if m.ServerUUID != "" && out.ServerUUID != m.ServerUUID {
+				return mysqloffline{}, errOfflineIdentityMismatch
+			}
+			if !out.Stopped {
+				return mysqloffline{}, errOfflineNotStopped
+			}
+			if !out.DataIdentity.Initialized {
+				return mysqloffline{}, errOfflineUninitialized
 			}
 			return mysqloffline{GTID: out.GTIDExecuted, UUID: out.ServerUUID}, nil
 		})

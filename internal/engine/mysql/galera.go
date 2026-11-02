@@ -101,15 +101,17 @@ func selectGaleraPosition(observations map[string]myspec.WSRepRecoverResponse) (
 func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	f := &s.Formation
 	if r := f.Reformation; r != nil && r.State == "observing" {
+		// Preserve configuration/reload failures as reconcile errors, before
+		// starting native recovery on any member.
+		for _, m := range s.data() {
+			applied, err := configApplied(ctx, rc, m)
+			if err != nil || !applied {
+				r.Blocked = "Cannot fence every stopped member"
+				return true, err
+			}
+		}
 		observations, blocked := collectOfflineRecovery(ctx, rc, s.data(), func(probe context.Context, m *member) (myspec.WSRepRecoverResponse, error) {
 			var out myspec.WSRepRecoverResponse
-			applied, err := configApplied(probe, rc, m)
-			if err != nil {
-				return out, err
-			}
-			if !applied {
-				return out, fmt.Errorf("member not fenced")
-			}
 			a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
 			if err != nil {
 				return out, err
@@ -119,7 +121,7 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 				return out, err
 			}
 			if status.Processes["mysqld"].PID != 0 {
-				return out, fmt.Errorf("member not stopped")
+				return out, errOfflineNotStopped
 			}
 			err = a.Engine(probe, "mysql", myspec.ActionWSRepRecover, struct{}{}, &out)
 			return out, err

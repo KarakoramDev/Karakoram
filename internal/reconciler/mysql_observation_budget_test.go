@@ -433,3 +433,111 @@ func mysqlBudgetNativeUUID(member string) string {
 		return "aaaaaaaa-bbbb-cccc-dddd-000000000004"
 	}
 }
+
+func TestMySQLManagerOfflineRecoveryOutlastsObservationPass(t *testing.T) {
+	const group = "11111111-2222-3333-4444-555555555555"
+	p := mysql.New(mysql.Options{})
+	m, st := newTestManager(t, p)
+	backend := mysqlBudgetBackend{Backend: fake.New(fake.Options{})}
+	m.opts.Namespaces = engine.StaticNamespaces{DefaultBackend: backend}
+	c := &domain.Cluster{Name: "recovergr", Generation: 1, Spec: domain.ClusterSpec{Provider: "mysql", Topology: domain.Topology{Type: "group"}}}
+	p.ApplyDefaults(&c.Spec)
+	c.Spec.Backup.PITR.Enabled = false
+	c.Status = domain.ClusterStatus{Phase: domain.PhaseDegraded, ObservedGeneration: 1}
+	var members []map[string]any
+	for i := range 4 {
+		name, role, component := fmt.Sprintf("%sm%d", c.Name, i), "data", c.Spec.Components.Engine
+		if i == 3 {
+			name, role, component = c.Name+"mx", "proxy", c.Spec.Components.Extra["proxy"]
+		}
+		members = append(members, map[string]any{
+			"name": name, "role": role, "index": i, "serviceId": name + "-id", "stage": "joined",
+			"version": c.Spec.Version, "resources": component.Resources, "replicas": 1,
+			"configVersion": 1, "initialized": role == "data", "serverUUID": mysqlBudgetNativeUUID(name),
+		})
+	}
+	internal := map[string]any{"mysql": map[string]any{
+		"uid": "offline-manager-fixture", "nextIndex": 3, "configVersion": 1, "topology": "group", "members": members,
+		"formation": map[string]any{"groupName": group, "formationEpoch": 1, "seed": c.Name + "m0", "state": "formed"},
+	}}
+	var err error
+	if c.Internal, err = json.Marshal(internal); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.CreateCluster(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	var armed atomic.Bool
+	var probes atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		switch r.URL.Path {
+		case "/v1/status":
+			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: 100000})
+		case "/v1/mysql/status":
+			status := myspec.StatusResponse{ServerUUID: mysqlBudgetNativeUUID(name), MemberState: "ONLINE", MemberRole: "PRIMARY", GroupMembers: 3, DataIdentity: myspec.DataIdentity{Initialized: true, FormationEpoch: 1}}
+			if armed.Load() {
+				status.MemberState, status.MemberRole, status.GroupMembers = "OFFLINE", "", 0
+			}
+			json.NewEncoder(w).Encode(status)
+		case "/v1/mysql/offline-gtid":
+			probes.Add(1)
+			if name == c.Name+"m0" {
+				timer := time.NewTimer(5 * time.Second)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+				case <-r.Context().Done():
+					return
+				}
+			}
+			json.NewEncoder(w).Encode(myspec.OfflineGTIDResponse{Stopped: true, ServerUUID: mysqlBudgetNativeUUID(name), GTIDExecuted: group + ":1-9", DataIdentity: myspec.DataIdentity{Initialized: true}})
+		case "/v1/mysql/proxy-status":
+			json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{})
+		default:
+			t.Errorf("unexpected native action %s", r.URL.Path)
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	m.opts.Context.Agents = mysqlBudgetAgents{url: server.URL, ca: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})}
+	rc := m.opts.Context
+	rc.Cluster, rc.Backend, rc.Namespace = c, backend, c.Ref().Namespace
+	if _, err = p.Sync(t.Context(), &rc); err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(c.Internal, &internal); err != nil {
+		t.Fatal(err)
+	}
+	owned := internal["mysql"].(map[string]any)
+	owned["formation"].(map[string]any)["reformation"] = map[string]any{"state": "observing"}
+	for _, value := range owned["members"].([]any) {
+		member := value.(map[string]any)
+		if member["role"] == "data" {
+			member["offline"] = true
+		}
+	}
+	if c.Internal, err = json.Marshal(internal); err != nil {
+		t.Fatal(err)
+	}
+	if err = st.UpdateClusterState(t.Context(), c); err != nil {
+		t.Fatal(err)
+	}
+	armed.Store(true)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	if _, err = m.reconcile(ctx, c.Ref()); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := st.GetCluster(t.Context(), c.Ref())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(updated.Internal, &internal); err != nil {
+		t.Fatal(err)
+	}
+	formation := internal["mysql"].(map[string]any)["formation"].(map[string]any)
+	if probes.Load() != 3 || formation["state"] != "bootstrapping" || formation["seed"] != c.Name+"m0" {
+		t.Fatalf("Manager Sync failed offline recovery: probes=%d formation=%v", probes.Load(), formation)
+	}
+}
