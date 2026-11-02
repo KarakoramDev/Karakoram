@@ -105,6 +105,20 @@ These cross-engine constraints define the operating model; engine-specific limit
   single-member clusters, and don't do it on a cluster that has already lost
   its majority. Don't lower binlog retention to work around it. A fix is planned
   for v0.4.3.
+- **MySQL Group Replication doesn't recover by itself after all members go down
+  at once** (also present in v0.4.0 and v0.4.1). After a whole-group outage —
+  for example a power loss or all nodes rebooting — or after suspending and
+  resuming a Group Replication cluster that keeps its volumes, the cluster can
+  stay Degraded with no writer, reporting `GroupReformationBlocked`
+  (`UnsafeOfflineGTID`), even though every member has the same data. The check
+  that compares members before re-forming the group times out. Recovery: don't
+  force a bootstrap or reset GTIDs; restore the cluster in place from its
+  latest full backup
+  (`karactl restores create CLUSTER NAME --backup FULL_BACKUP --yes`).
+  Data written after that backup is lost, because point-in-time restore isn't
+  available on a cluster without a writer in this release. Until the fix, take
+  full backups frequently and avoid suspending Group Replication clusters.
+  PXC is not affected. A fix is planned for v0.4.3.
 - After a PXC in-place full or PITR restore on Zerops, a member can be flagged
   GTID-history-diverged and the cluster Degraded despite correct checked data
   and writes; incremental backups/PITR continuity can be blocked. Investigation
