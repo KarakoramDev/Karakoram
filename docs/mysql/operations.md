@@ -410,9 +410,10 @@ sweep backs off in memory for 15 seconds, doubling to five minutes; success or a
 change of recovery state/epoch resets this throttle. Restarting the control plane
 also clears the throttle, but never supplies missing evidence.
 The operation remains cancelable and does not inherit
-the read-only reconciliation sweep's shared observation deadline. These budgets
-also apply to retained-volume suspend/resume. Slow disks or extensive crash
-recovery can still exhaust the budget; blocked conditions identify unavailable,
+the read-only reconciliation sweep's shared observation deadline. These budgets,
+prechecks and retry throttle also apply to retained-volume suspend/resume and
+PXC traffic-TLS re-formation. Slow disks or extensive crash recovery can still
+exhaust the budget; blocked conditions identify unavailable,
 invalid or timed-out members without exposing native error payloads. Every member
 must supply valid evidence in the same sweep before seed selection; partial
 observations never authorize bootstrap or substitute for fresh evidence on retry.

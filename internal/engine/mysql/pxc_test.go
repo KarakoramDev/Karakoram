@@ -500,7 +500,7 @@ func TestPXCResumeRecoversEveryStoppedMemberAndPinsSeedPosition(t *testing.T) {
 		t.Fatal(err)
 	}
 	b.apply(t, p, rc)
-	if _, err := p.reconcileGaleraFormation(t.Context(), rc, s); err != nil {
+	if _, err := p.reconcileFormation(t.Context(), rc, s); err != nil {
 		t.Fatal(err)
 	}
 	if s.Formation.Reformation.State != "bootstrapping" || len(s.Formation.Reformation.GaleraObservations) != 3 {

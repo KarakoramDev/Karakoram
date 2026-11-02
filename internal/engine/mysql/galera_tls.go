@@ -191,7 +191,7 @@ func (p *Core) reconcileGaleraTrafficRotation(ctx context.Context, rc *engine.Co
 		if err := beginPXCFormationCertification(ctx, rc, s); err != nil {
 			return true, err
 		}
-		busy, err := p.reconcileGaleraFormation(ctx, rc, s)
+		busy, err := p.reconcileFormation(ctx, rc, s)
 		if err != nil || busy {
 			return true, err
 		}

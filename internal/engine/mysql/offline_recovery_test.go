@@ -267,3 +267,66 @@ func TestOfflineRecoveryBackoffCapAndReset(t *testing.T) {
 		t.Fatal("state reset retained backoff")
 	}
 }
+
+func TestOfflineRecoveryTLSReformUsesPrecheckAndBackoff(t *testing.T) {
+	p, rc, _ := setup(t, "cluster")
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	// Existing PXC formations have no new birth/empty-join certificate owner.
+	rc.Cluster.Spec.Provider = "pxc"
+	s, _ := load(rc.Cluster)
+	s.Formation.State = "formed"
+	s.Formation.Reformation = &reformation{State: "observing"}
+	s.GaleraTLS = &galeraTLSRotation{Stage: "reform"}
+	for _, m := range s.data() {
+		m.Stage, m.Offline = "deployed", true
+		s.GaleraTLS.Members = append(s.GaleraTLS.Members, m.Name)
+	}
+	s.find("demom0").Stage = "pending"
+	var calls atomic.Int32
+	var fail atomic.Bool
+	fail.Store(true)
+	installAccessAgent(t, rc, func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if r.URL.Path == "/v1/status" {
+			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: s.find(name).ConfigVersion})
+			return
+		}
+		calls.Add(1)
+		if fail.Load() && name == "demom0" {
+			http.Error(w, "unavailable", 503)
+			return
+		}
+		json.NewEncoder(w).Encode(myspec.WSRepRecoverResponse{Stopped: true, UUID: sid, Seqno: 9})
+	})
+	at := time.Now()
+	rc.Clock = trafficRenewalClock{at: at}
+	reconcile := func() {
+		t.Helper()
+		if busy, err := p.reconcileGaleraTrafficRotation(t.Context(), rc, s); err != nil || !busy {
+			t.Fatalf("TLS reform busy=%v err=%v", busy, err)
+		}
+	}
+	reconcile()
+	if calls.Load() != 0 || !strings.Contains(s.Formation.Reformation.Blocked, "not deployed") {
+		t.Fatal("TLS reform bypassed cheap preflight", calls.Load(), s.Formation.Reformation.Blocked)
+	}
+	s.find("demom0").Stage = "deployed"
+	at = at.Add(15 * time.Second)
+	rc.Clock = trafficRenewalClock{at: at}
+	reconcile()
+	if calls.Load() != 3 || s.Formation.Reformation.State != "observing" {
+		t.Fatal("failed TLS native sweep did not collect all members", calls.Load())
+	}
+	fail.Store(false)
+	reconcile()
+	if calls.Load() != 3 {
+		t.Fatal("TLS reform bypassed native retry backoff", calls.Load())
+	}
+	rc.Clock = trafficRenewalClock{at: at.Add(30 * time.Second)}
+	reconcile()
+	if calls.Load() != 6 || s.Formation.Reformation.State != "bootstrapping" {
+		t.Fatal("TLS reform did not recover after retry deadline", calls.Load(), s.Formation.Reformation)
+	}
+}
