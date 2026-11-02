@@ -167,6 +167,8 @@ func DeleteMySQLBackup(ctx context.Context, s domain.BackupStorage, b domain.Bac
 // of its transactions. Wall-clock backup completion alone is not sufficient:
 // XtraBackup's consistent snapshot can precede its completion timestamp.
 func pruneMySQLBinlogs(ctx context.Context, client *minio.Client, bucket, prefix string, surviving []domain.MySQLBackup) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for object := range client.ListObjectsIter(ctx, bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if object.Err != nil {
 			return object.Err

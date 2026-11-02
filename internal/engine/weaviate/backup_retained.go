@@ -38,8 +38,10 @@ func (p *Provider) DeleteRetainedBackup(ctx context.Context, storage domain.Back
 }
 
 func deleteBackupObjects(ctx context.Context, client *minio.Client, m *domain.WeaviateBackup) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	prefix := m.Path + "/" + m.ID + "/"
-	for object := range client.ListObjects(ctx, m.Bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+	for object := range client.ListObjectsIter(ctx, m.Bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if object.Err != nil {
 			return object.Err
 		}

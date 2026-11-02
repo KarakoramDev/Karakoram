@@ -19,7 +19,8 @@ import (
 )
 
 // walkReplayObjects hashes a streaming inventory rather than retaining its keys.
-// Cancellation also releases the SDK listing goroutine on an early read error.
+// Use the synchronous iterator: the SDK channel adapter can block forever while
+// sending its cancellation error after a consumer has already returned.
 func walkReplayObjects(ctx context.Context, c *minio.Client, source myspec.Repository, digest hash.Hash, visit func(minio.ObjectInfo) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -27,7 +28,7 @@ func walkReplayObjects(ctx context.Context, c *minio.Client, source myspec.Repos
 	if digest != nil {
 		encoder = json.NewEncoder(digest)
 	}
-	for obj := range c.ListObjects(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: path.Join(source.Path, "binlogs") + "/", Recursive: true}) {
+	for obj := range c.ListObjectsIter(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: path.Join(source.Path, "binlogs") + "/", Recursive: true}) {
 		if obj.Err != nil {
 			return obj.Err
 		}

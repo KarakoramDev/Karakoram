@@ -61,7 +61,7 @@ func storedRestoreSetPresent(ctx context.Context, storage *domain.BackupStorage,
 	}
 	defer closeClient()
 	found := false
-	for object := range client.ListObjects(ctx, storage.Bucket, minio.ListObjectsOptions{Prefix: prefix + "backup.manifest", Recursive: true}) {
+	for object := range client.ListObjectsIter(ctx, storage.Bucket, minio.ListObjectsOptions{Prefix: prefix + "backup.manifest", Recursive: true}) {
 		if object.Err != nil {
 			return false, object.Err
 		}

@@ -62,6 +62,13 @@ an independently successful complete listing and all other native checks. Denied
 or partial listings retain the restore holds; repair the scoped policy rather
 than bypassing the fence.
 
+Object-store inventory readers release listing resources when an observation is
+cancelled or a metadata/deletion operation returns early. The listing-lifecycle
+fix requires an updated control plane and, for MySQL/PXC PITR observations,
+updated member agents. Older readers can retain a listing page on each failed
+observation, so agent memory can grow while the database is idle; increasing the
+binary-log archive interval does not prevent that polling-path failure.
+
 Storage registration accepts DNS hosts, IPv4 literals and bracketed unscoped IPv6 literals, with an explicit `http://` or `https://` scheme and an optional port from 1–65535. Bare `host` / `host:port`, scoped IPv6, dotted IPv4-mapped IPv6 literals, URL credentials, query strings and fragments are rejected. For mapped IPv6, use hex-only notation or the equivalent IPv4 literal. Endpoint mount paths such as `/s3` are **not supported**: [pgBackRest](https://pgbackrest.org/) does not preserve the endpoint URL's path. Supply an origin-level S3 endpoint instead. `prefix` scopes **object keys**, not an HTTP reverse-proxy mount, so copying `/s3` into `prefix` does not repair a mounted S3 service.
 
 With `forcePathStyle: true`, requests use `https://endpoint/bucket/key`. With `false`, ordinary DNS endpoints use `https://bucket.endpoint/key`, requiring bucket-subdomain DNS and a matching certificate. Literal IPv4/IPv6 endpoints always use path style; dotted bucket names over HTTPS also use path style to avoid wildcard-certificate mismatch. HTTP dotted buckets may use virtual hosting. The [Go](https://go.dev/) object client, [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), pgBackRest and [Supabase](https://supabase.com/) Storage share these rules; [Elasticsearch](https://www.elastic.co/elasticsearch) intentionally always uses path style. TLS validation still requires a certificate matching the effective hostname (or literal IP), and HTTP remains plaintext.

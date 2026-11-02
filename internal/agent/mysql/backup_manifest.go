@@ -88,8 +88,10 @@ func readBackupManifest(ctx context.Context, client *minio.Client, source myspec
 }
 
 func verifyPhysicalObjectSet(ctx context.Context, client *minio.Client, source myspec.Repository, manifest myspec.BackupObjectManifest) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	keys := make([]string, 0, len(manifest.Objects))
-	for object := range client.ListObjects(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: manifest.ObjectPrefix + "/", Recursive: true}) {
+	for object := range client.ListObjectsIter(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: manifest.ObjectPrefix + "/", Recursive: true}) {
 		if object.Err != nil {
 			return object.Err
 		}
