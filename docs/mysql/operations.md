@@ -101,12 +101,14 @@ counters before changing credentials.
 
 This policy is rendered and applied by the **proxy member agent**. Updating only
 the control plane or restarting an old ProxySQL process does not install it.
-Existing MySQL/PXC agents have no automatic rollout: plan a verified proxy-agent
-redeployment/re-provisioning, or recreate a disposable test cluster with corrected
-agents. Preserve data identities and availability evidence for valuable clusters.
+Existing MySQL/PXC agents have no automatic rollout. Existing GR proxies need
+the disruptive, genuinely changed resource PATCH in the
+[proxy redeployment procedure](../upgrade.md#proxysql-monitor-tls), which was
+live-verified on Zerops. Preserve data identities, a verified backup and
+availability evidence for valuable clusters.
 Do not disable TLS or blindly rotate the shared monitor credential as a workaround.
-Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 
+Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
 
 ### PXC GTID history safety
 
@@ -156,22 +158,31 @@ executed-set cache.
 
 Terminal recovery is independent of whether the original queue operation is still
 Running: the persisted restore checkpoint owns pending releases. Native-status
-failure must not prevent attempts to release every proxy hold. A controller
-restart alone cannot repair a member agent whose native status reports
-`sql: database is closed` while independent privileged SQL still succeeds:
-older certification probes incorrectly closed the agent's shared SQL pool.
-MySQL/PXC does not support automatic agent rollout. For an affected disposable
-test deployment, preserve evidence and re-create it with corrected agents;
-valuable data requires an explicit verified recovery plan. Updated agents retain
-ownership of their shared SQL pool and reopen a confirmed closed pool. Recovery
-then retries its checkpointed releases and compares actual member histories.
+failure must not prevent attempts to release every proxy hold. Recovery retries
+its checkpointed releases and compares actual member histories.
 A direct/inverse mismatch remains a durable GTID incident; repair the
 minority from trusted history before acknowledging it with a fresh full.
 
 If any deployed agent lacks the capability, restore follows the legacy path
 without new certification fences, proxy holds or probe endpoints. It reports
 `RestoreGTIDCertified=Unknown/RestoreCertificationUnavailable`: agents are
-outdated/incompatible; re-create the cluster to get certified restores.
+outdated/incompatible. Certified restores require corrected agents on **every
+data member and every deployed proxy**. A genuinely changed data-member CPU or
+memory resource target performs rolling stop/redeploy, but does not replace
+proxy agents. Redeploy outdated PXC proxies through a genuinely changed
+`spec.components.extra.proxy.resources` target; the whole proxy stops and
+redeploys, so plan a client interruption even with multiple replicas. Verify
+that all participants advertise certification support before restoring.
+**This v0.4.3 existing-cluster certification rollout is not verified live.**
+It is distinct from the GR-only monitor-TLS correction. Use a maintenance
+window, check capacity and preserve a verified backup and independent recovery
+path; expect writer-handoff interruptions or single-member downtime. Do not
+roll a cluster that has lost its majority.
+Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
+verify member builds, data and client writes before switching clients.
+`karactl clusters restart` restarts native processes, not member agents;
+MySQL/PXC have no `upgrade-agents` command. See
+[existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
 The post-restore history comparator remains fully active: real mixed accounting
 still records a durable latch and Degraded status, never a silently cleared
 incident. The automatic full after an uncertified restore cannot acknowledge
@@ -388,6 +399,17 @@ Full-outage recovery below compares stopped members' recovered positions and is 
 ## Full-outage recovery
 
 All members must be stopped/fenced before choosing a seed. Recovery fails closed if evidence is missing or incompatible; do not choose the first reachable member.
+
+For a previously formed GR cluster with equal GTID histories and complete,
+valid stopped-member identity evidence, the control plane automatically re-forms
+the group after a whole-group outage, such as power loss or all nodes rebooting.
+The same path supports suspending and resuming a GR cluster that keeps its
+volumes (`karactl clusters delete --keep-volumes` + `karactl clusters resume`).
+The v0.4.3 correction to the offline-probe timeout is control-plane-side, with
+no agent change required. Whole-group recovery and retained-volume suspend/resume
+were live-verified on Nomad with three GR members and exact data checks.
+The PXC/Galera re-formation path is verified by tests only; no general
+recovery-time guarantee follows from the GR measurements.
 
 | MySQL Group Replication | PXC / Galera |
 | --- | --- |
