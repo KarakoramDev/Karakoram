@@ -140,6 +140,21 @@ use new v0.4.2 members, not merely a database-process restart.
   can fail. Seen on Zerops; other providers may be affected. Don't disable TLS
   or change the monitor account to work around it. A fix is planned for
   v0.4.3; existing clusters will need their proxy redeployed to pick it up.
+- **MySQL point-in-time recovery can make members run out of memory under write
+  load** (also present in v0.4.0 and v0.4.1 when the archive interval is shorter
+  than 60 seconds). The binlog archiver decodes each archive interval's binlogs
+  in memory inside the member, so busy members can have `mysqld` killed for
+  running out of memory, restart repeatedly and refuse writes; a Group
+  Replication cluster can lose its majority and stay without a writer until an
+  operator intervenes. Acknowledged writes are preserved. Idle and lightly
+  written clusters are not affected in practice. Workaround: disable
+  point-in-time recovery on busy MySQL, Group Replication and PXC clusters
+  (`spec.backup.pitr.enabled: false`, applied with
+  `karactl clusters patch CLUSTER -f change.yaml`); full backups keep working.
+  If you need point-in-time recovery, keep the default archive interval and
+  give members generous memory (at least 4 GiB); no size is guaranteed under
+  heavy writes. Don't lower binlog retention to work around it. A fix is
+  planned for v0.4.3.
 - **PXC after an in-place restore on Zerops:** after either a full or PITR
   restore, one member can be flagged `GTIDHistoryDiverged` and the cluster
   reports Degraded even though the checked data and writes are correct.
