@@ -131,6 +131,9 @@ proof. Cancelling a status request does not cancel/restart this work. Memory
 includes the key inventory, a bounded batch and exact GTID/window complexity,
 not every historical transaction. Appends read new sidecars only; deletion,
 replacement or out-of-order insertion forces a verified rebuild.
+At most 32 roots are retained in memory and on disk. Inactive roots are
+reclaimed with their checkpoint inventories; startup keeps the newest retained
+roots and removes abandoned inventories without discarding resumable work.
 
 With a reachable source agent, restore/clone admission does **not** use the
 status freshness lease or a remembered window alone: it waits under the operation
@@ -143,9 +146,11 @@ Missing or invalid restore inputs fail closed.
 Updated agents expose pending/progress and freshness metadata. During a mixed-
 version rollout, a legacy agent's successful synchronous coverage response is
 still fresh for that request; it cannot provide the background convergence fix.
-A legacy control plane ignores progress but receives no windows while the new
-agent is pending, and can read completed windows normally. Existing PXC
-remembered-safe-window disaster-recovery behavior is unchanged.
+The control plane explicitly negotiates pending responses with `acceptPending`.
+A legacy control plane receives an observation error while coverage is pending
+or expired, matching a legacy agent's unsuccessful synchronous request; it can
+read completed windows normally. Existing PXC remembered-safe-window fallback
+on observation errors and disaster-recovery behavior are unchanged.
 
 MySQL singletons and Group Replication can restore in place or clone with a PITR
 time even when no source member is an ONLINE writer. Keep at least one admitted

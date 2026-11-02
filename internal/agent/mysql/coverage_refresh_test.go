@@ -202,6 +202,10 @@ func (f *delayedCoverageRepo) agent(t *testing.T, dir string) *refreshTestAgent 
 func (a *refreshTestAgent) poll(ctx context.Context, fresh bool) (myspec.PITRCoverageResponse, error) {
 	request := a.request
 	request.RequireFresh = fresh
+	request.AcceptPending = true
+	return a.pollRequest(ctx, request)
+}
+func (a *refreshTestAgent) pollRequest(ctx context.Context, request myspec.PITRCoverageRequest) (myspec.PITRCoverageResponse, error) {
 	raw, err := json.Marshal(request)
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err

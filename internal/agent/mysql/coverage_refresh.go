@@ -25,6 +25,8 @@ const (
 	coverageQuantum         = 128
 )
 
+var errCoverageQueueBusy = errors.New("coverage_refresh_queue_busy")
+
 type coverageEntry struct {
 	key                                string
 	request                            myspec.PITRCoverageRequest
@@ -54,6 +56,7 @@ type coverageRefresh struct {
 
 func coverageRequestKey(request myspec.PITRCoverageRequest) string {
 	request.RequireFresh = false
+	request.AcceptPending = false
 	return requestDigest(request)
 }
 func (e *Runner) coverageService() (*coverageRefresh, error) {
@@ -67,6 +70,9 @@ func (e *Runner) coverageService() (*coverageRefresh, error) {
 	}
 	_, p := e.state()
 	if err := privateDir(p.root); err != nil {
+		return nil, err
+	}
+	if err := pruneCoverageStore(p.root, nil, true); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -113,7 +119,7 @@ func (s *coverageRefresh) entry(request myspec.PITRCoverageRequest) (*coverageEn
 	if len(s.entries) >= coverageResidentRoots {
 		var oldest *coverageEntry
 		for _, entry := range s.entries {
-			if entry.working || entry.queued || entry.err != nil {
+			if entry.working || entry.queued {
 				continue
 			}
 			if oldest == nil || entry.requested.Before(oldest.requested) {
@@ -121,9 +127,19 @@ func (s *coverageRefresh) entry(request myspec.PITRCoverageRequest) (*coverageEn
 			}
 		}
 		if oldest == nil {
-			return nil, errors.New("coverage_refresh_queue_busy")
+			return nil, errCoverageQueueBusy
+		}
+		if err := removeCoverageState(coverageStatePrefix(s.root, oldest.key)); err != nil {
+			return nil, err
 		}
 		delete(s.entries, oldest.key)
+	}
+	retained := map[string]bool{key: true}
+	for resident := range s.entries {
+		retained[resident] = true
+	}
+	if err := pruneCoverageStore(s.root, retained, false); err != nil {
+		return nil, err
 	}
 	entry := &coverageEntry{key: key, request: request, changed: make(chan struct{}), progress: myspec.PITRCoverageProgress{Stage: "queued"}}
 	entry.request.ObjectPaths = slices.Clone(request.ObjectPaths)
@@ -161,6 +177,9 @@ func (s *coverageRefresh) poll(ctx context.Context, request myspec.PITRCoverageR
 		entry, err := s.entry(request)
 		if err != nil {
 			s.mu.Unlock()
+			if !request.AcceptPending || !errors.Is(err, errCoverageQueueBusy) {
+				return myspec.PITRCoverageResponse{}, err
+			}
 			return myspec.PITRCoverageResponse{Pending: true, Progress: &myspec.PITRCoverageProgress{Stage: "queue-busy"}}, nil
 		}
 		now := time.Now().UTC()
@@ -193,6 +212,12 @@ func (s *coverageRefresh) poll(ctx context.Context, request myspec.PITRCoverageR
 		failure := entry.err
 		changed := entry.changed
 		s.mu.Unlock()
+		if !request.AcceptPending {
+			if failure != nil {
+				return myspec.PITRCoverageResponse{}, failure
+			}
+			return myspec.PITRCoverageResponse{}, errors.New("pitr_coverage_verification_pending")
+		}
 		if !request.RequireFresh {
 			if failure != nil {
 				return myspec.PITRCoverageResponse{}, failure
@@ -251,6 +276,7 @@ func (s *coverageRefresh) run() {
 			return
 		}
 		finished, err := s.advance(entry)
+		err = errors.Join(err, pruneCoverageInventories(coverageStatePrefix(s.root, entry.key)))
 		if err != nil && s.ctx.Err() == nil {
 			s.mu.Lock()
 			entry.err = err

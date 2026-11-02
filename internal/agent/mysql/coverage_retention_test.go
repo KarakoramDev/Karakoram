@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+package mysql
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+)
+
+func TestFailedCoverageRootsCanBeReclaimedWithoutRevivingSuccess(t *testing.T) {
+	for _, persist := range []bool{true, false} {
+		t.Run(fmt.Sprint("failure-persisted=", persist), func(t *testing.T) {
+			root := t.TempDir()
+			s := &coverageRefresh{root: root, startedAt: time.Unix(1, 0), entries: map[string]*coverageEntry{}}
+			blocked := filepath.Join(root, "not-a-directory")
+			if err := os.WriteFile(blocked, []byte("x"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var first myspec.PITRCoverageRequest
+			for i := 0; i < 2*coverageResidentRoots; i++ {
+				request := myspec.PITRCoverageRequest{ObjectPaths: []string{fmt.Sprint(i)}}
+				if i == 0 {
+					first = request
+				}
+				entry, err := s.entry(request)
+				if err != nil {
+					t.Fatalf("root %d: %v", i, err)
+				}
+				entry.requested = time.Unix(int64(i+1), 0)
+				cache := coverageCacheDisk{Inventory: requestDigest(i), Have: recoverySID + ":1", Base: recoverySID + ":1"}
+				entry.verified = &coverageVerifiedDisk{Version: 1, Cache: &cache, StartedAt: time.Now(), VerifiedAt: time.Now()}
+				if err := durableJSON(coverageStatePrefix(root, entry.key)+".verified.json", entry.verified); err != nil {
+					t.Fatal(err)
+				}
+				entry.err = errors.New("new refresh failed")
+				if !persist {
+					s.root = blocked
+				}
+				err = s.persistFailure(entry)
+				s.root = root
+				if persist && err != nil {
+					t.Fatal(err)
+				}
+				if !persist && err == nil {
+					t.Fatal("failure persistence unexpectedly succeeded")
+				}
+			}
+			if len(s.entries) != coverageResidentRoots {
+				t.Fatalf("resident count=%d", len(s.entries))
+			}
+			prefix := coverageStatePrefix(root, coverageRequestKey(first))
+			if _, err := os.Stat(prefix + ".verified.json"); !os.IsNotExist(err) {
+				t.Fatalf("evicted old success survived: %v", err)
+			}
+			entry, err := s.entry(first)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry.verified != nil {
+				t.Fatal("failed-root eviction revived old success")
+			}
+		})
+	}
+}
+
+func TestCoverageDurableRetentionKeepsResumableRootsAndCollectsOrphans(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < coverageResidentRoots+8; i++ {
+		key := requestDigest(i)
+		prefix := coverageStatePrefix(root, key)
+		inventory := requestDigest([]int{i, 1})
+		work := coverageWorkDisk{Version: 1, Cache: coverageCacheDisk{Inventory: inventory, Have: recoverySID + ":1", Base: recoverySID + ":1"}, StartedAt: time.Unix(int64(i+1), 0), Position: 0, Total: 1}
+		if err := durableJSON(prefix+".work.json", work); err != nil {
+			t.Fatal(err)
+		}
+		if err := saveCoverageRefs(prefix, inventory, []replayObjectRef{{key: "binlog.000001", sequence: 1, native: true}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(prefix+".refs-"+requestDigest("abandoned"), []byte("orphan"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		names, _ := filepath.Glob(prefix + ".*")
+		for _, name := range names {
+			if err := os.Chtimes(name, time.Unix(int64(i+1), 0), time.Unix(int64(i+1), 0)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, ".coverage-refs-interrupted"), []byte("orphan"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := pruneCoverageStore(root, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	files, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2*coverageResidentRoots {
+		t.Fatalf("durable files=%d, want%d", len(files), 2*coverageResidentRoots)
+	}
+	for i := 0; i < coverageResidentRoots+8; i++ {
+		work, err := loadCoverageWork(coverageStatePrefix(root, requestDigest(i)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i < 8 && work != nil {
+			t.Fatalf("abandoned root%d retained", i)
+		}
+		if i >= 8 && (work == nil || len(work.refs) != 1) {
+			t.Fatalf("retained root%d lost resumable work", i)
+		}
+	}
+}

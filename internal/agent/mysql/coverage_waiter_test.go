@@ -46,6 +46,14 @@ func TestLegacyCoverageClientReceivesWindowsOnlyAfterVerification(t *testing.T) 
 		}
 		return legacy.Windows
 	}
+	if _, err := agent.pollRequest(t.Context(), agent.request); err == nil {
+		t.Fatal("legacy pending request succeeded instead of returning observation error")
+	}
+	unnegotiatedFresh := agent.request
+	unnegotiatedFresh.RequireFresh = true
+	if _, err := agent.pollRequest(t.Context(), unnegotiatedFresh); err == nil {
+		t.Fatal("unnegotiated fresh waiter returned success")
+	}
 	response, err := agent.poll(t.Context(), false)
 	if err != nil {
 		t.Fatal(err)
@@ -54,11 +62,21 @@ func TestLegacyCoverageClientReceivesWindowsOnlyAfterVerification(t *testing.T) 
 		t.Fatalf("legacy client saw an unverified window: %+v", response)
 	}
 	waitRefresh(t, agent, 20, 5*time.Second)
-	response, err = agent.poll(t.Context(), false)
+	response, err = agent.pollRequest(t.Context(), agent.request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if response.Pending || len(legacyWindows(response)) == 0 || response.VerificationStartedAt.IsZero() {
 		t.Fatalf("legacy client lost completed coverage: %+v", response)
+	}
+	service, err := agent.runner.coverageService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.mu.Lock()
+	service.entries[coverageRequestKey(agent.request)].verified.VerifiedAt = time.Now().Add(-2 * coverageLease)
+	service.mu.Unlock()
+	if _, err := agent.pollRequest(t.Context(), agent.request); err == nil {
+		t.Fatal("legacy expired proof succeeded")
 	}
 }

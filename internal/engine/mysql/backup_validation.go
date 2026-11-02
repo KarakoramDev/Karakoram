@@ -248,7 +248,7 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		for _, observer := range observers {
 			coverage = myspec.PITRCoverageResponse{}
 			admissionStarted = time.Now().UTC()
-			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs, RequireFresh: requireFresh}, &coverage)
+			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs, RequireFresh: requireFresh, AcceptPending: true}, &coverage)
 			if e == nil {
 				break
 			}

@@ -12,6 +12,8 @@ type PITRCoverageRequest struct {
 	ObjectManifests []BackupManifestRef `json:"objectManifests"`
 	// RequireFresh waits for verification started after this admission request.
 	RequireFresh bool `json:"requireFresh,omitempty"`
+	// AcceptPending negotiates progress responses; absent means pending is an error.
+	AcceptPending bool `json:"acceptPending,omitempty"`
 }
 
 type PITRWindow struct {

@@ -33,6 +33,9 @@ func TestPITRCoveragePendingPublishesProgressWithoutWindow(t *testing.T) {
 			t.Error(err)
 		}
 		freshFlags = append(freshFlags, request.RequireFresh)
+		if !request.AcceptPending {
+			t.Error("updated control plane did not negotiate pending responses")
+		}
 		_ = json.NewEncoder(w).Encode(myspec.PITRCoverageResponse{Pending: pending, Progress: &myspec.PITRCoverageProgress{Stage: "sidecars", Processed: 320, Total: 10000}, Fresh: request.RequireFresh, Windows: []myspec.PITRWindow{{Start: time.Unix(10, 0), End: time.Unix(20, 0)}}})
 		return true
 	}
