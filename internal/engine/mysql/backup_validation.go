@@ -147,6 +147,7 @@ func (p *Core) pitrWindowsByFull(ctx context.Context, rc *engine.Context) ([]dom
 type pitrWindowObservation struct {
 	end           time.Time
 	writerChanged bool
+	pending       error
 }
 
 type pitrCoveragePending struct{ detail *domain.ResourceError }
@@ -305,6 +306,9 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			}
 		}
 	}
+	if observation != nil {
+		observation.pending = pendingErr
+	}
 	merged := mergeGTIDWindows(windows)
 	if len(merged) == 0 && pendingErr != nil {
 		return nil, byFull, pendingErr
@@ -348,7 +352,8 @@ func (p *Core) validatePITRRestoreMode(ctx context.Context, rc *engine.Context, 
 	if !rc.Cluster.Spec.Backup.PITR.Enabled {
 		return nil, nil, engine.Invalid("PITR is not enabled for the source cluster")
 	}
-	windows, byFull, err := p.observePITRWindowsByFull(ctx, rc, nil, requireFresh)
+	var observation pitrWindowObservation
+	windows, byFull, err := p.observePITRWindowsByFull(ctx, rc, &observation, requireFresh)
 	if err != nil {
 		return windows, byFull, err
 	}
@@ -356,6 +361,9 @@ func (p *Core) validatePITRRestoreMode(ctx context.Context, rc *engine.Context, 
 		if !target.Before(w.Start) && !target.After(w.End) {
 			return windows, byFull, nil
 		}
+	}
+	if observation.pending != nil {
+		return windows, byFull, observation.pending
 	}
 	return windows, byFull, pitrTargetOutOfRange()
 }

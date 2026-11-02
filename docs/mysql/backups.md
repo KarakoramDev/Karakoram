@@ -136,6 +136,9 @@ proofs and resumable checkpoints. Disk GC expires roots unrequested for 24 hours
 and keeps up to 256 inactive roots, without deleting the current working set.
 Pending coverage excludes only that full backup's window: other completed roots
 remain available while it converges.
+A restore target already covered by a completed root remains admissible. An
+uncovered target returns pending rather than out-of-range while any eligible
+root is still verifying or queued; out-of-range requires completed observations.
 
 With a reachable source agent, restore/clone admission does **not** use the
 status freshness lease or a remembered window alone: it waits under the operation
