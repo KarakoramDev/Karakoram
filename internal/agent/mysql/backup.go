@@ -376,7 +376,13 @@ func (e *Runner) backupRoutes(mux *http.ServeMux, n *agent.Node) {
 				var req myspec.PITRCoverageRequest
 				err = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req)
 				if err == nil {
-					result, err = e.pitrCoverage(ctx, req)
+					if req.RequireFresh {
+						// Admission inherits its operation deadline, not the short
+						// observation cap. The agent-owned refresh survives a waiter.
+						result, err = e.pitrCoverage(r.Context(), req)
+					} else {
+						result, err = e.pitrCoverage(ctx, req)
+					}
 				}
 			}
 			if err != nil {

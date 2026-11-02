@@ -139,7 +139,7 @@ func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.Tim
 // are available. A non-nil map contains the live, GTID-bounded coverage of each
 // full backup, keyed by backup name.
 func (p *Core) pitrWindowsByFull(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
-	return p.observePITRWindowsByFull(ctx, rc, nil)
+	return p.observePITRWindowsByFull(ctx, rc, nil, false)
 }
 
 // pitrWindowObservation describes only the newest live window. A historical
@@ -149,7 +149,12 @@ type pitrWindowObservation struct {
 	writerChanged bool
 }
 
-func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context, observation *pitrWindowObservation) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
+type pitrCoveragePending struct{ detail *domain.ResourceError }
+
+func (e *pitrCoveragePending) Error() string { return e.detail.Error() }
+func (e *pitrCoveragePending) Unwrap() error { return e.detail }
+
+func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context, observation *pitrWindowObservation, requireFresh bool) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
 	if !rc.Cluster.Spec.Backup.PITR.Enabled || rc.Cluster.Spec.Backup.Storage == "" {
 		return nil, nil, nil
 	}
@@ -170,14 +175,22 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	if s.GTIDWindowGeneration != bs.Generation {
 		s.GTIDWindows = nil
 	}
+	var frozenCoverage []domain.TimeWindow
 	if incident := activeGTIDIncident(s); incident != nil || observationErr != nil {
-		if known := rememberedGTIDWindows(s); len(known) > 0 {
-			return known, nil, nil
+		known := rememberedGTIDWindows(s)
+		if len(known) > 0 {
+			if !requireFresh {
+				return known, nil, nil
+			}
+			// Archived proof may freshly validate historical data, but cannot
+			// extend the already established safe GTID/time boundaries.
+			frozenCoverage = known
+		} else {
+			if incident != nil {
+				return nil, nil, engine.Invalid("%s", incident.message())
+			}
+			return nil, nil, observationErr
 		}
-		if incident != nil {
-			return nil, nil, engine.Invalid("%s", incident.message())
-		}
-		return nil, nil, observationErr
 	}
 	storage, err := p.backupStorage(ctx, rc, "", rc.Cluster.Ref().Namespace)
 	if err != nil {
@@ -189,9 +202,12 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		observers = []string{writer}
 	} else {
 		if known := rememberedGTIDWindows(s); rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
-			return known, nil, nil
+			if !requireFresh {
+				return known, nil, nil
+			}
+			frozenCoverage = known
 		}
-		if rc.Cluster.Spec.Provider != "mysql" || rc.Agents == nil {
+		if (rc.Cluster.Spec.Provider != "mysql" && !(requireFresh && len(frozenCoverage) > 0)) || rc.Agents == nil {
 			return nil, nil, err
 		}
 		// Coverage reads the sealed baseline and archive index from object
@@ -228,9 +244,11 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		var coverage myspec.PITRCoverageResponse
+		var admissionStarted time.Time
 		for _, observer := range observers {
 			coverage = myspec.PITRCoverageResponse{}
-			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs}, &coverage)
+			admissionStarted = time.Now().UTC()
+			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs, RequireFresh: requireFresh}, &coverage)
 			if e == nil {
 				break
 			}
@@ -242,24 +260,42 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			}
 			continue
 		}
+		if coverage.Pending {
+			progress := myspec.PITRCoverageProgress{Stage: "queued"}
+			if coverage.Progress != nil {
+				progress = *coverage.Progress
+			}
+			message := fmt.Sprintf("PITR coverage verification pending: %s (%d/%d sidecars)", progress.Stage, progress.Processed, progress.Total)
+			return nil, nil, &pitrCoveragePending{detail: domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrUnavailable, "%s", message)}
+		}
+		// Legacy agents compute synchronously inside this request. Only the
+		// background protocol can return a cached proof and must attest freshness.
+		if requireFresh && !coverage.VerificationStartedAt.IsZero() && (!coverage.Fresh || coverage.VerificationStartedAt.Before(admissionStarted)) {
+			return nil, nil, engine.Invalid("agent returned PITR verification predating restore admission")
+		}
 		for _, w := range coverage.Windows {
 			if w.Start.Before(m.EndTime) || w.End.Before(w.Start) {
 				return nil, nil, engine.Invalid("agent returned invalid baseline-specific PITR coverage")
 			}
 			boundedEnd := gtidWindowEnd(s, m.EndTime, w.End)
 			if !boundedEnd.IsZero() && !boundedEnd.Before(w.Start) {
-				bounded := domain.TimeWindow{Start: w.Start, End: boundedEnd}
-				windows = append(windows, bounded)
-				byFull[b.Name] = append(byFull[b.Name], bounded)
-				if observation != nil {
-					// A separate GTID incident cap is not proof of a writer-change cap.
-					// If the original writer returns, its pending uploads can still
-					// extend this baseline; historical foreign uploads do not forbid it.
-					incompatibleWriter := myspec.ValidUUID(writerUUID) && myspec.ValidUUID(coverage.SourceUUID) && writerUUID != coverage.SourceUUID
-					frozen := incompatibleWriter && boundedEnd.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
-					if boundedEnd.After(observation.end) || boundedEnd.Equal(observation.end) && !frozen {
-						observation.end = boundedEnd
-						observation.writerChanged = frozen
+				bounds := []domain.TimeWindow{{Start: w.Start, End: boundedEnd}}
+				if len(frozenCoverage) > 0 {
+					bounds = intersectCoverageWindow(bounds[0], frozenCoverage)
+				}
+				for _, bounded := range bounds {
+					windows = append(windows, bounded)
+					byFull[b.Name] = append(byFull[b.Name], bounded)
+					if observation != nil {
+						// A separate GTID incident cap is not proof of a writer-change cap.
+						// If the original writer returns, its pending uploads can still
+						// extend this baseline; historical foreign uploads do not forbid it.
+						incompatibleWriter := myspec.ValidUUID(writerUUID) && myspec.ValidUUID(coverage.SourceUUID) && writerUUID != coverage.SourceUUID
+						frozen := incompatibleWriter && bounded.End.Equal(w.End) && coverage.LatestForeignEventTime.After(w.End)
+						if bounded.End.After(observation.end) || bounded.End.Equal(observation.end) && !frozen {
+							observation.end = bounded.End
+							observation.writerChanged = frozen
+						}
 					}
 				}
 			}
@@ -267,7 +303,7 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	}
 	merged := mergeGTIDWindows(windows)
 	if len(merged) == 0 && coverageErr != nil {
-		if known := rememberedGTIDWindows(s); rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
+		if known := rememberedGTIDWindows(s); !requireFresh && rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
 			return known, nil, nil
 		}
 		return nil, nil, coverageErr
@@ -281,7 +317,10 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	return merged, byFull, nil
 }
 func (p *Core) ValidatePITRRestore(ctx context.Context, rc *engine.Context, target time.Time) ([]domain.TimeWindow, error) {
-	windows, _, err := p.validatePITRRestore(ctx, rc, target)
+	// Preserve the totally dead-source DR path. Its target-agent preflight
+	// freshly validates staged inputs before activation; reachable source agents
+	// must instead provide post-admission verification, never a status lease.
+	windows, _, err := p.validatePITRRestoreMode(ctx, rc, target, rc.Agents != nil)
 	return windows, err
 }
 
@@ -290,10 +329,16 @@ func pitrTargetOutOfRange() error {
 }
 
 func (p *Core) validatePITRRestore(ctx context.Context, rc *engine.Context, target time.Time) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
+	// Selection is not admission. An admitted restore still requires the fresh
+	// public validator and fresh member-side input preflight before activation.
+	return p.validatePITRRestoreMode(ctx, rc, target, false)
+}
+
+func (p *Core) validatePITRRestoreMode(ctx context.Context, rc *engine.Context, target time.Time, requireFresh bool) ([]domain.TimeWindow, map[string][]domain.TimeWindow, error) {
 	if !rc.Cluster.Spec.Backup.PITR.Enabled {
 		return nil, nil, engine.Invalid("PITR is not enabled for the source cluster")
 	}
-	windows, byFull, err := p.pitrWindowsByFull(ctx, rc)
+	windows, byFull, err := p.observePITRWindowsByFull(ctx, rc, nil, requireFresh)
 	if err != nil {
 		return windows, byFull, err
 	}
@@ -303,6 +348,23 @@ func (p *Core) validatePITRRestore(ctx context.Context, rc *engine.Context, targ
 		}
 	}
 	return windows, byFull, pitrTargetOutOfRange()
+}
+
+func intersectCoverageWindow(window domain.TimeWindow, limits []domain.TimeWindow) []domain.TimeWindow {
+	var out []domain.TimeWindow
+	for _, limit := range limits {
+		start, end := window.Start, window.End
+		if limit.Start.After(start) {
+			start = limit.Start
+		}
+		if limit.End.Before(end) {
+			end = limit.End
+		}
+		if !end.Before(start) {
+			out = append(out, domain.TimeWindow{Start: start, End: end})
+		}
+	}
+	return out
 }
 func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *domain.ClusterStatus) error {
 	if rc.Store == nil {
@@ -322,11 +384,16 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 		return nil
 	}
 	var observation pitrWindowObservation
-	windows, _, err := p.observePITRWindowsByFull(ctx, rc, &observation)
+	windows, _, err := p.observePITRWindowsByFull(ctx, rc, &observation, false)
 	condition := domain.Condition{Type: "PITR", Status: "False", Reason: "WindowUnavailable", LastTransitionTime: now(rc)}
 	if err != nil {
 		condition.Status = "Unknown"
 		condition.Reason = "ObservationUnavailable"
+		if pending, ok := err.(*pitrCoveragePending); ok {
+			condition.Reason = "CoveragePending"
+			condition.Message = pending.Error()
+			status.Backup.PITRWindow = nil
+		}
 	} else if len(windows) > 0 {
 		// Match the PITR endpoint: expose the newest contiguous window,
 		// rather than the oldest (possibly snapshot-only) recovery point.

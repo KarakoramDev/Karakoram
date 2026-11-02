@@ -112,7 +112,7 @@ func TestCoverageLongHistoryStreamsAndFetchesOnlyAppends(t *testing.T) {
 			}
 			defer closeClient()
 			baseline := myspec.BackupResult{SourceUUID: recoverySID, BinlogFile: "binlog.000001", BinlogPosition: 4, EndTime: time.Unix(1, 0).UTC()}
-			e := New()
+			e := &coverageAlgorithmCache{}
 			before := archiveMemorySnapshot(t, 0)
 			var peakAlloc, peakInuse, peakRSS atomic.Uint64
 			stop, stopped := make(chan struct{}), make(chan struct{})

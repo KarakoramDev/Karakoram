@@ -10,6 +10,7 @@ import (
 )
 
 func (e *Runner) Shutdown(ctx context.Context, n *agent.Node) error {
+	e.stopCoverageRefresh(ctx)
 	e.resetArchiveLoop(false)
 	e.mu.Lock()
 	if e.rejoinCancel != nil {

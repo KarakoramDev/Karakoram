@@ -100,36 +100,6 @@ type replayCoverageCache struct {
 	lastOrderedKey          string
 }
 
-// Cache only the most recent baseline's compact lineage/window state. Inventory
-// fingerprints establish append-only changes before fetching just new sidecars.
-func (e *Runner) cachedReplayCoverage(ctx context.Context, c *minio.Client, source myspec.Repository, baseline myspec.BackupResult) (myspec.PITRCoverageResponse, error) {
-	e.coverageOnce.Do(func() { e.coverageGate = make(chan struct{}, 1) })
-	if err := ctx.Err(); err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	select {
-	case e.coverageGate <- struct{}{}:
-		defer func() { <-e.coverageGate }()
-	case <-ctx.Done():
-		return myspec.PITRCoverageResponse{}, ctx.Err()
-	}
-	if err := ctx.Err(); err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	key := requestDigest([]any{source, baseline})
-	previous := e.coverageCache
-	if previous != nil && previous.key != key {
-		previous = nil
-	}
-	current, err := computeReplayCoverage(ctx, c, source, baseline, previous)
-	if err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	current.key = key
-	e.coverageCache = current
-	return current.state.response, nil
-}
-
 func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspec.PITRCoverageRequest) (myspec.BackupResult, error) {
 	var empty myspec.BackupResult
 	intent := myspec.Restore{Source: request.Source, BackupID: "coverage", Label: "coverage", ObjectPaths: request.ObjectPaths, ObjectManifests: request.ObjectManifests}
@@ -161,15 +131,13 @@ func loadPITRBaseline(ctx context.Context, s myspec.Spec, p paths, request myspe
 }
 
 func (e *Runner) pitrCoverage(ctx context.Context, request myspec.PITRCoverageRequest) (myspec.PITRCoverageResponse, error) {
-	s, p := e.state()
-	baseline, err := loadPITRBaseline(ctx, s, p, request)
+	intent := myspec.Restore{Source: request.Source, BackupID: "coverage", Label: "coverage", ObjectPaths: request.ObjectPaths, ObjectManifests: request.ObjectManifests}
+	if err := intent.Validate(); err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	service, err := e.coverageService()
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	client, closeClient, err := s3Client(request.Source)
-	if err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	defer closeClient()
-	return e.cachedReplayCoverage(ctx, client, request.Source, baseline)
+	return service.poll(ctx, request)
 }

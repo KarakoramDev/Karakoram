@@ -55,7 +55,7 @@ func TestCoverageCacheChecksInventoryAndBaselineWithoutRetainingSidecars(t *test
 		objects[archiveObject(repo, recoverySID, file)+".json"] = b
 	}
 	put("binlog.000001", recoverySID+":1-3", recoverySID+":4", 1100000)
-	e := New()
+	e := &coverageAlgorithmCache{}
 	poll := func() myspec.PITRCoverageResponse {
 		t.Helper()
 		out, err := e.cachedReplayCoverage(t.Context(), c, repo, baseline)
@@ -127,7 +127,7 @@ func TestCoverageOrdinalAppendsAndOutOfOrderGapRepair(t *testing.T) {
 				}
 				objects[archiveObject(repo, recoverySID, file)+".json"] = raw
 			}
-			e := New()
+			e := &coverageAlgorithmCache{}
 			poll := func() myspec.PITRCoverageResponse {
 				t.Helper()
 				out, err := e.cachedReplayCoverage(t.Context(), c, repo, baseline)

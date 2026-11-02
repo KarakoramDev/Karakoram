@@ -115,22 +115,37 @@ missing; later passes therefore neither re-upload it nor forget it after expiry.
 Updated agents migrate the local archive index to format 2 before using the
 split inventory.
 
-The member retains only its most recent baseline's compact GTID/window state,
-not historical sidecars or transaction slices. Every observation checks the
-remote inventory. Unchanged history avoids sidecar downloads; verified
-append-only changes fetch just the new sidecars in numeric binlog order.
-Replacements, deletions, out-of-order insertions and baseline/repository changes
-rebuild coverage by sorting object keys and decoding one sidecar at a time.
-Rebuild memory therefore includes the object-key inventory and one sidecar,
-rather than every historical transaction. Exact fragmented GTID sets and
-disjoint recovery windows still contribute to the compact result's size.
-Cancelled observations stop waiting for another coverage rebuild rather than
-accumulating behind its lock.
+Coverage refresh belongs to a single background worker in each member agent,
+not to a short status HTTP request. Status polls read compact state without
+listing or downloading archived history. Active roots are reverified about
+every 30 seconds; a successful status result is usable for at most 60 seconds.
+A newer refresh failure withdraws that result instead of returning an older
+success. Cold or expired coverage reports `Unknown/CoveragePending`, with the
+stage and processed/total sidecar counts and no claimed recovery window.
 
-Live coverage admission and backup selection use each full backup root's own
-GTID-bounded coverage. When live coverage is unavailable, the remembered-window
-fallback retains newest-safe backup selection; a newer incompatible root does
-not invalidate an older root whose own verified stream covers the target.
+The worker uses bounded parallel reads and ordered 16-sidecar batches. It
+persists compact GTID/window progress and a separate object-key inventory, so
+an agent restart resumes its verified prefix rather than redownloading history
+from zero. A new primary with a different local state directory builds its own
+proof. Cancelling a status request does not cancel/restart this work. Memory
+includes the key inventory, a bounded batch and exact GTID/window complexity,
+not every historical transaction. Appends read new sidecars only; deletion,
+replacement or out-of-order insertion forces a verified rebuild.
+
+With a reachable source agent, restore/clone admission does **not** use the
+status freshness lease or a remembered window alone: it waits under the operation
+deadline for verification started after that admission request. The existing
+totally dead-source disaster-recovery path may select a previously proven safe
+window without a source agent; it does not extend remembered continuity.
+In either path, the target member's restore preflight/recheck freshly reads and
+verifies the sealed inputs and replay checksums before destructive activation.
+Missing or invalid restore inputs fail closed.
+Updated agents expose pending/progress and freshness metadata. During a mixed-
+version rollout, a legacy agent's successful synchronous coverage response is
+still fresh for that request; it cannot provide the background convergence fix.
+A legacy control plane ignores progress but receives no windows while the new
+agent is pending, and can read completed windows normally. Existing PXC
+remembered-safe-window disaster-recovery behavior is unchanged.
 
 MySQL singletons and Group Replication can restore in place or clone with a PITR
 time even when no source member is an ONLINE writer. Keep at least one admitted

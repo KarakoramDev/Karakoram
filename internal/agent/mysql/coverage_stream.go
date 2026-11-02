@@ -152,7 +152,13 @@ func replayRef(key, objectPrefix, sourceUUID, basePrefix string) replayObjectRef
 	return ref
 }
 
-func computeReplayCoverage(ctx context.Context, c *minio.Client, source myspec.Repository, baseline myspec.BackupResult, previous *replayCoverageCache) (*replayCoverageCache, error) {
+type replayCoveragePlan struct {
+	refs      []replayObjectRef
+	cache     *replayCoverageCache
+	continued bool
+}
+
+func planReplayCoverage(ctx context.Context, c *minio.Client, source myspec.Repository, baseline myspec.BackupResult, previous *replayCoverageCache) (*replayCoveragePlan, error) {
 	digest := sha256.New()
 	var oldDigest hash.Hash
 	var oldEncoder *json.Encoder
@@ -190,10 +196,10 @@ func computeReplayCoverage(ctx context.Context, c *minio.Client, source myspec.R
 		// A changed/deleted old object or an out-of-order native ordinal is not an
 		// append. Re-list and rebuild, still retaining only object keys + one decode.
 		if hex.EncodeToString(oldDigest.Sum(nil)) != previous.inventory {
-			return computeReplayCoverage(ctx, c, source, baseline, nil)
+			return planReplayCoverage(ctx, c, source, baseline, nil)
 		}
 		if inventory == previous.inventory {
-			return previous, nil
+			return &replayCoveragePlan{cache: previous, continued: true}, nil
 		}
 	}
 	var state *replayCoverageState
@@ -215,17 +221,5 @@ func computeReplayCoverage(ctx context.Context, c *minio.Client, source myspec.R
 		}
 		return a.key < b.key
 	})
-	for _, ref := range refs {
-		if err = ctx.Err(); err != nil {
-			return nil, err
-		}
-		log, err := readReplaySidecar(ctx, c, source, ref.key)
-		if err != nil {
-			return nil, err
-		}
-		if err = state.consume(log, baseline); err != nil {
-			return nil, err
-		}
-	}
-	return &replayCoverageCache{inventory: inventory, lastKey: lastKey, lastSequence: lastSequence, lastOrderedKey: lastOrderedKey, state: state}, nil
+	return &replayCoveragePlan{refs: refs, cache: &replayCoverageCache{inventory: inventory, lastKey: lastKey, lastSequence: lastSequence, lastOrderedKey: lastOrderedKey, state: state}, continued: previous != nil}, nil
 }
