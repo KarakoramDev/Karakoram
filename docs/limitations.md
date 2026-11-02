@@ -83,23 +83,28 @@ These cross-engine constraints define the operating model; engine-specific limit
   can fail. Seen on Zerops; other providers may be affected. Don't disable TLS
   or change the monitor account to work around it. A fix is planned for
   v0.4.3; existing clusters will need their proxy redeployed to pick it up.
-- **MySQL point-in-time recovery can make members run out of memory under write
-  load** (also present in v0.4.0 and v0.4.1 when the archive interval is shorter
-  than 60 seconds). The binlog archiver decodes each archive interval's binlogs
-  in memory inside the member, so busy members can have `mysqld` killed for
-  running out of memory, restart repeatedly and refuse writes; a Group
-  Replication cluster can lose its majority and stay without a writer until an
-  operator intervenes. Acknowledged writes are preserved. Lightly written
-  clusters are not affected in practice as long as their archive history is
-  pruned (see below). Workaround: disable
-  point-in-time recovery on busy MySQL, Group Replication and PXC clusters
-  (`spec.backup.pitr.enabled: false`, applied with
+- **MySQL point-in-time recovery makes member agents use more and more memory**
+  (v0.4.2; in v0.4.0 and v0.4.1 the normal trigger is blocked because MySQL full
+  backups fail there). The binlog archiver decodes each interval's binlogs in
+  memory, so busy members need a lot of memory per archive pass. Separately,
+  once a cluster has about a day or more of archived binlogs, the control
+  plane's routine recovery-coverage checks start timing out, and each one leaves
+  memory behind in the member agent — up to about 0.5 GB per hour, even when the
+  cluster is idle and whatever the archive interval. Eventually `mysqld` is
+  killed for running out of memory, restarts repeatedly and refuses writes; a
+  Group Replication cluster can lose its majority and stay without a writer
+  until an operator intervenes. Acknowledged writes are preserved.
+  Workaround: disable point-in-time recovery on all MySQL, Group Replication
+  and PXC clusters until the fix (`spec.backup.pitr.enabled: false`, applied with
   `karactl clusters patch CLUSTER -f change.yaml`); full backups keep working.
-  If you need point-in-time recovery, keep the default archive interval, give
-  members generous memory (at least 4 GiB), and configure a backup schedule with
-  a limited `retainCount` so old archive history is pruned; no size is guaranteed
-  under heavy writes. Don't lower binlog retention to work around it. A fix is
-  planned for v0.4.3.
+  Disabling it stops further growth but doesn't free memory already used:
+  `karactl clusters restart` doesn't help, because it restarts only the database
+  and proxy processes. To free it, make a resource change (for example CPU or
+  memory), which restarts members one at a time; do this in a maintenance window,
+  expect a short write interruption while the writer moves, expect downtime on
+  single-member clusters, and don't do it on a cluster that has already lost
+  its majority. Don't lower binlog retention to work around it. A fix is planned
+  for v0.4.3.
 - After a PXC in-place full or PITR restore on Zerops, a member can be flagged
   GTID-history-diverged and the cluster Degraded despite correct checked data
   and writes; incremental backups/PITR continuity can be blocked. Investigation
