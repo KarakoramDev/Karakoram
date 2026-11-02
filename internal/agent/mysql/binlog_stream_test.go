@@ -200,7 +200,7 @@ func TestArchiveIndexMigratesWithoutHistoricalReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx, err := loadArchiveState(name)
-	if err != nil || idx.Version != 1 || len(idx.Files) != 0 || idx.Status.GTIDSet != old.Status.GTIDSet || !idx.Pending["source/binlog.000999"] {
+	if err != nil || idx.Version != 2 || len(idx.Files) != 0 || idx.Status.GTIDSet != old.Status.GTIDSet || !idx.Pending["source/binlog.000999"] {
 		t.Fatalf("migration=%+v %v", idx, err)
 	}
 	for key, want := range old.Files {
@@ -218,7 +218,7 @@ func TestArchiveIndexMigratesWithoutHistoricalReload(t *testing.T) {
 		}
 	}
 	idx.Active = &binlogResume{Key: "source/binlog.000999", Position: 400}
-	if err = durableJSON(name, idx); err != nil {
+	if err = writeArchiveSummary(name, idx); err != nil {
 		t.Fatal(err)
 	}
 	restarted, err := loadArchiveState(name)

@@ -104,6 +104,13 @@ short archive intervals from accumulating abandoned idle S3/TLS connections.
 This lifecycle fix requires updated member agents, not only a control-plane
 upgrade, and is not a limit on the combined mysqld and agent RSS.
 
+Pending native files are persisted separately from per-file recovery summaries,
+so draining a large backlog does not rewrite its entire pending inventory after
+each upload. A completion receipt still becomes authoritative only after its
+summary is durable; a crash may cause safe upload retries, not a false gap when
+an already archived native file subsequently expires. Updated agents migrate
+the local archive index to format 2 before using the split inventory.
+
 The member retains only its most recent baseline's compact GTID/window state,
 not historical sidecars or transaction slices. Every observation checks the
 remote inventory. Unchanged history avoids sidecar downloads; verified

@@ -43,7 +43,7 @@ type binlogSidecar struct {
 }
 type archiveIndex struct {
 	Files   map[string]binlogSidecar   `json:"files,omitempty"`
-	Pending map[string]bool            `json:"pending"`
+	Pending map[string]bool            `json:"pending,omitempty"`
 	Status  myspec.BinlogArchiveStatus `json:"status"`
 	Version int                        `json:"version,omitempty"`
 	Active  *binlogResume              `json:"active,omitempty"`
@@ -78,25 +78,51 @@ func readArchiveIndex(name string) (archiveIndex, error) {
 	return out, err
 }
 
-// Completed history lives in immutable per-file receipts. Only pending native
-// files, the active cursor and the compact recovery summary are rewritten.
-// Migration leaves the old index authoritative until all receipts are durable.
+// Completed history lives in immutable per-file receipts. Version 2 stores the
+// pending native inventory separately, so per-file summary commits do not
+// rewrite a large backlog. Migration leaves the old index authoritative until
+// all receipts and the pending inventory are durable.
 func archiveReceiptPath(indexPath, key string) string {
 	return indexPath + ".file-" + requestDigest(key)
 }
 
+func writeArchivePending(name string, pending map[string]bool) error {
+	return durableJSON(name+".pending", pending)
+}
+
+func writeArchiveSummary(name string, idx archiveIndex) error {
+	idx.Pending = nil
+	return durableJSON(name, idx)
+}
+
 func loadArchiveState(name string) (archiveIndex, error) {
 	idx, err := readArchiveIndex(name)
-	if err != nil || idx.Version == 1 {
+	if err != nil {
 		return idx, err
 	}
-	if idx.Version != 0 {
+	if idx.Version == 2 {
+		raw, err := os.ReadFile(name + ".pending")
+		if err != nil {
+			return idx, err
+		}
+		var pending map[string]bool
+		if err = json.Unmarshal(raw, &pending); err != nil {
+			return idx, err
+		}
+		if pending == nil {
+			return idx, errors.New("archive_pending_invalid")
+		}
+		idx.Pending = pending
+		idx.Files = nil
+		return idx, nil
+	}
+	if idx.Version != 0 && idx.Version != 1 {
 		return idx, errors.New("archive_index_version")
 	}
 	// A status observation before initialization has no index (or even root
 	// directory) yet. It is empty, not corrupt, and must remain read-only.
 	if _, err := os.Stat(name); os.IsNotExist(err) {
-		idx.Version = 1
+		idx.Version = 2
 		idx.Files = nil
 		return idx, nil
 	} else if err != nil {
@@ -108,8 +134,11 @@ func loadArchiveState(name string) (archiveIndex, error) {
 		}
 	}
 	idx.Files = nil
-	idx.Version = 1
-	return idx, durableJSON(name, idx)
+	idx.Version = 2
+	if err = writeArchivePending(name, idx.Pending); err != nil {
+		return idx, err
+	}
+	return idx, writeArchiveSummary(name, idx)
 }
 
 func archiveRecorded(name, key string) (bool, error) {
@@ -395,14 +424,32 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 		}
 		if !recorded {
 			idx.Pending[key] = true
+		} else {
+			delete(idx.Pending, key)
 		}
 	}
 	for key := range idx.Pending {
-		if strings.HasPrefix(key, uuid+"/") && !present[key] {
+		if present[key] {
+			continue
+		}
+		recorded, err := archiveRecorded(indexPath, key)
+		if err != nil {
+			return fmt.Errorf("archive_index_invalid: %w", err)
+		}
+		if recorded {
+			// A crash may leave a completed receipt in the old pending batch.
+			// Reconcile it before deciding that native expiry created a gap.
+			delete(idx.Pending, key)
+			continue
+		}
+		if strings.HasPrefix(key, uuid+"/") {
 			archiveGap(&idx, "unarchived_binlog_purged")
 		}
 	}
-	if err = durableJSON(indexPath, idx); err != nil {
+	if err = writeArchivePending(indexPath, idx.Pending); err != nil {
+		return errors.New("archive_index_write")
+	}
+	if err = writeArchiveSummary(indexPath, idx); err != nil {
 		return errors.New("archive_index_write")
 	}
 	client, closeClient, err := s3Client(repo)
@@ -410,6 +457,7 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 		return errors.New("repository_invalid")
 	}
 	defer closeClient()
+	completed := false
 	for _, f := range logs[:len(logs)-1] {
 		key := uuid + "/" + f.name
 		local := filepath.Join(filepath.Dir(base), f.name)
@@ -458,12 +506,18 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 		if !idx.Status.Gap {
 			idx.Status.ContiguousGTIDSet = idx.Status.GTIDSet
 		}
-		if err = durableJSON(indexPath, idx); err != nil {
+		if err = writeArchiveSummary(indexPath, idx); err != nil {
 			return errors.New("archive_index_write")
 		}
 		// Summary first: a crash before the receipt retries the immutable upload
 		// and idempotent GTID union; no receipt can hide an undurable summary.
 		if err = durableJSON(archiveReceiptPath(indexPath, key), sidecar); err != nil {
+			return errors.New("archive_index_write")
+		}
+		completed = true
+	}
+	if completed {
+		if err = writeArchivePending(indexPath, idx.Pending); err != nil {
 			return errors.New("archive_index_write")
 		}
 	}
