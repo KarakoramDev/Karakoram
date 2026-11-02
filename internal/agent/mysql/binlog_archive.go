@@ -47,6 +47,8 @@ type archiveIndex struct {
 	Status  myspec.BinlogArchiveStatus `json:"status"`
 	Version int                        `json:"version,omitempty"`
 	Active  *binlogResume              `json:"active,omitempty"`
+	// The summary proves this upload completed even if receipt publication fails.
+	LastCompletedKey string `json:"last_completed_key,omitempty"`
 }
 
 var archiveMu sync.Mutex
@@ -147,6 +149,13 @@ func archiveRecorded(name, key string) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+func archiveCompleted(name, key, lastCompleted string) (bool, error) {
+	if key == lastCompleted {
+		return true, nil
+	}
+	return archiveRecorded(name, key)
 }
 func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	s, p := e.state()
@@ -418,7 +427,7 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	for _, f := range logs {
 		key := uuid + "/" + f.name
 		present[key] = true
-		recorded, err := archiveRecorded(indexPath, key)
+		recorded, err := archiveCompleted(indexPath, key, idx.LastCompletedKey)
 		if err != nil {
 			return fmt.Errorf("archive_index_invalid: %w", err)
 		}
@@ -432,13 +441,13 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 		if present[key] {
 			continue
 		}
-		recorded, err := archiveRecorded(indexPath, key)
+		recorded, err := archiveCompleted(indexPath, key, idx.LastCompletedKey)
 		if err != nil {
 			return fmt.Errorf("archive_index_invalid: %w", err)
 		}
 		if recorded {
-			// A crash may leave a completed receipt in the old pending batch.
-			// Reconcile it before deciding that native expiry created a gap.
+			// A receipt or the durable last-completion identity proves the
+			// upload preceded any subsequent native expiry.
 			delete(idx.Pending, key)
 			continue
 		}
@@ -461,7 +470,7 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	for _, f := range logs[:len(logs)-1] {
 		key := uuid + "/" + f.name
 		local := filepath.Join(filepath.Dir(base), f.name)
-		recorded, err := archiveRecorded(indexPath, key)
+		recorded, err := archiveCompleted(indexPath, key, idx.LastCompletedKey)
 		if err != nil {
 			return fmt.Errorf("archive_index_invalid: %w", err)
 		}
@@ -506,11 +515,12 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 		if !idx.Status.Gap {
 			idx.Status.ContiguousGTIDSet = idx.Status.GTIDSet
 		}
+		idx.LastCompletedKey = key
 		if err = writeArchiveSummary(indexPath, idx); err != nil {
 			return errors.New("archive_index_write")
 		}
-		// Summary first: a crash before the receipt retries the immutable upload
-		// and idempotent GTID union; no receipt can hide an undurable summary.
+		// The completion identity and GTID/time summary commit together before
+		// receipt publication, so a missing receipt cannot create a purge gap.
 		if err = durableJSON(archiveReceiptPath(indexPath, key), sidecar); err != nil {
 			return errors.New("archive_index_write")
 		}

@@ -107,9 +107,10 @@ upgrade, and is not a limit on the combined mysqld and agent RSS.
 Pending native files are persisted separately from per-file recovery summaries,
 so draining a large backlog does not rewrite its entire pending inventory after
 each upload. A completion receipt still becomes authoritative only after its
-summary is durable; a crash may cause safe upload retries, not a false gap when
-an already archived native file subsequently expires. Updated agents migrate
-the local archive index to format 2 before using the split inventory.
+summary is durable. That summary also records the most recent completion
+identity, so a crash before receipt publication cannot turn an already archived
+native file's later expiry into a false gap. Updated agents migrate the local
+archive index to format 2 before using the split inventory.
 
 The member retains only its most recent baseline's compact GTID/window state,
 not historical sidecars or transaction slices. Every observation checks the
@@ -120,6 +121,8 @@ rebuild coverage by sorting object keys and decoding one sidecar at a time.
 Rebuild memory therefore includes the object-key inventory and one sidecar,
 rather than every historical transaction. Exact fragmented GTID sets and
 disjoint recovery windows still contribute to the compact result's size.
+Cancelled observations stop waiting for another coverage rebuild rather than
+accumulating behind its lock.
 
 Live coverage admission and backup selection use each full backup root's own
 GTID-bounded coverage. When live coverage is unavailable, the remembered-window

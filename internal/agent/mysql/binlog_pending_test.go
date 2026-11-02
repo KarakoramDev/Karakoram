@@ -114,8 +114,9 @@ func (c *pendingRecoveryConnector) QueryContext(ctx context.Context, q string, a
 }
 
 func TestArchiveReconcilesStalePendingReceiptsBeforeNativePurgeGap(t *testing.T) {
-	for _, completed := range []bool{false, true} {
-		t.Run(fmt.Sprintf("completed-receipt=%t", completed), func(t *testing.T) {
+	for _, proof := range []string{"unarchived", "receipt", "summary-without-receipt"} {
+		t.Run(proof, func(t *testing.T) {
+			completed := proof != "unarchived"
 			dir := t.TempDir()
 			p := paths{root: dir}
 			repo := manifestS3Fixture(t, map[string][]byte{})
@@ -128,15 +129,18 @@ func TestArchiveReconcilesStalePendingReceiptsBeforeNativePurgeGap(t *testing.T)
 				idx.Status.LastArchivedFile = "binlog.000001"
 				idx.Status.GTIDSet = recoverySID + ":1-4"
 			}
+			if proof == "summary-without-receipt" {
+				idx.LastCompletedKey = oldKey
+			}
 			if err := writeArchivePending(name, idx.Pending); err != nil {
 				t.Fatal(err)
 			}
 			if err := writeArchiveSummary(name, idx); err != nil {
 				t.Fatal(err)
 			}
-			// Crash boundary: summary and immutable receipt are durable, but the pending
-			// batch has not been rewritten. Native expiry then removes the closed file.
-			if completed {
+			// A completion summary may be durable before receipt publication.
+			// Native expiry must not turn that committed upload into a gap.
+			if proof == "receipt" {
 				if err := durableJSON(archiveReceiptPath(name, oldKey), binlogSidecar{ServerUUID: recoverySID, File: "binlog.000001", GTIDSet: recoverySID + ":4"}); err != nil {
 					t.Fatal(err)
 				}

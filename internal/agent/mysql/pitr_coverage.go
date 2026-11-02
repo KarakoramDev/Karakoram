@@ -102,8 +102,19 @@ type replayCoverageCache struct {
 // Cache only the most recent baseline's compact lineage/window state. Inventory
 // fingerprints establish append-only changes before fetching just new sidecars.
 func (e *Runner) cachedReplayCoverage(ctx context.Context, c *minio.Client, source myspec.Repository, baseline myspec.BackupResult) (myspec.PITRCoverageResponse, error) {
-	e.coverageMu.Lock()
-	defer e.coverageMu.Unlock()
+	e.coverageOnce.Do(func() { e.coverageGate = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	select {
+	case e.coverageGate <- struct{}{}:
+		defer func() { <-e.coverageGate }()
+	case <-ctx.Done():
+		return myspec.PITRCoverageResponse{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
 	key := requestDigest([]any{source, baseline})
 	previous := e.coverageCache
 	if previous != nil && previous.key != key {
