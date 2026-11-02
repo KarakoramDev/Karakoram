@@ -103,13 +103,16 @@ fails; backup, restore and coverage observations do the same. This prevents
 short archive intervals from accumulating abandoned idle S3/TLS connections.
 This lifecycle fix requires updated member agents, not only a control-plane
 upgrade, and is not a limit on the combined mysqld and agent RSS.
-The member caches only its most recently computed baseline's coverage response,
-not historical sidecars or transaction slices. Every repeated observation still
-checks the remote sidecar inventory; unchanged history avoids downloading and
-parsing it again. Appends, replacements, deletions and baseline/repository
-changes require fresh verification. The initial or changed-history computation
-still needs memory proportional to the retained replay metadata; this is not an
-unconditional memory bound for arbitrarily large repositories.
+
+The member retains only its most recent baseline's compact GTID/window state,
+not historical sidecars or transaction slices. Every observation checks the
+remote inventory. Unchanged history avoids sidecar downloads; verified
+append-only changes fetch just the new sidecars in numeric binlog order.
+Replacements, deletions, out-of-order insertions and baseline/repository changes
+rebuild coverage by sorting object keys and decoding one sidecar at a time.
+Rebuild memory therefore includes the object-key inventory and one sidecar,
+rather than every historical transaction. Exact fragmented GTID sets and
+disjoint recovery windows still contribute to the compact result's size.
 
 Live coverage admission and backup selection use each full backup root's own
 GTID-bounded coverage. When live coverage is unavailable, the remembered-window
