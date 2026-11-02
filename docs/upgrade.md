@@ -146,14 +146,16 @@ use new v0.4.2 members, not merely a database-process restart.
   in memory inside the member, so busy members can have `mysqld` killed for
   running out of memory, restart repeatedly and refuse writes; a Group
   Replication cluster can lose its majority and stay without a writer until an
-  operator intervenes. Acknowledged writes are preserved. Idle and lightly
-  written clusters are not affected in practice. Workaround: disable
+  operator intervenes. Acknowledged writes are preserved. Lightly written
+  clusters are not affected in practice as long as their archive history is
+  pruned (see below). Workaround: disable
   point-in-time recovery on busy MySQL, Group Replication and PXC clusters
   (`spec.backup.pitr.enabled: false`, applied with
   `karactl clusters patch CLUSTER -f change.yaml`); full backups keep working.
-  If you need point-in-time recovery, keep the default archive interval and
-  give members generous memory (at least 4 GiB); no size is guaranteed under
-  heavy writes. Don't lower binlog retention to work around it. A fix is
+  If you need point-in-time recovery, keep the default archive interval, give
+  members generous memory (at least 4 GiB), and configure a backup schedule with
+  a limited `retainCount` so old archive history is pruned; no size is guaranteed
+  under heavy writes. Don't lower binlog retention to work around it. A fix is
   planned for v0.4.3.
 - **PXC after an in-place restore on Zerops:** after either a full or PITR
   restore, one member can be flagged `GTIDHistoryDiverged` and the cluster
