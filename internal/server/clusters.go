@@ -1160,7 +1160,7 @@ func (s *Server) createCluster(ctx context.Context, b *api.CreateClusterRequest,
 				return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
 			}
 		}
-		if d.PITRTime != nil && c.Spec.Provider == "pxc" {
+		if d.PITRTime != nil && (c.Spec.Provider == "pxc" || c.Spec.Provider == "mysql") {
 			sourceRC, sourceProvider, e := s.context(ctx, source)
 			if e != nil {
 				return s.failure(e)

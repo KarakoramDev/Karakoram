@@ -106,13 +106,12 @@ func (p *Core) validateBackups(ctx context.Context, old, n *domain.Cluster) erro
 		if source.Spec.Provider != n.Spec.Provider || major(source.Spec.Version) != major(n.Spec.Version) {
 			return engine.Invalid("dataSource provider and MySQL major must match")
 		}
-		w := source.Status.Backup.PITRWindow
-		if !source.Spec.Backup.PITR.Enabled || n.Spec.Provider != "pxc" && (w == nil || d.PITRTime.Before(w.Start) || d.PITRTime.After(w.End)) {
-			return engine.Invalid("dataSource PITR time must be in the source conservative binlog window")
+		if !source.Spec.Backup.PITR.Enabled {
+			return engine.Invalid("dataSource PITR requires PITR enabled on the source")
 		}
-		// PXC live/archived provenance is checked by the server's source
-		// validator and again at execution. Its single cached status window
-		// cannot represent safe ranges separated by a durable GTID incident.
+		// Baseline-specific archived provenance is checked by the server's
+		// source validator and again at execution. A cached status window
+		// cannot represent disjoint safe ranges or prove current coverage.
 	}
 	return nil
 }
@@ -185,11 +184,27 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		return nil, nil, err
 	}
 	writer, writerUUID, err := archiveWriter(ctx, rc, s)
-	if err != nil {
+	var observers []string
+	if err == nil {
+		observers = []string{writer}
+	} else {
 		if known := rememberedGTIDWindows(s); rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
 			return known, nil, nil
 		}
-		return nil, nil, err
+		if rc.Cluster.Spec.Provider != "mysql" || rc.Agents == nil {
+			return nil, nil, err
+		}
+		// Coverage reads the sealed baseline and archive index from object
+		// storage; it needs an agent, not a running source mysqld. Retain
+		// baseline-specific proof even when no ONLINE writer can be found.
+		for _, m := range s.data() {
+			if m.ServiceID != "" && m.Stage == "joined" && !m.Removing {
+				observers = append(observers, m.Name)
+			}
+		}
+		if len(observers) == 0 {
+			return nil, nil, err
+		}
 	}
 	items, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
 	if err != nil {
@@ -213,8 +228,18 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 			continue
 		}
 		var coverage myspec.PITRCoverageResponse
-		if e = mysqlAction(ctx, rc, writer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs}, &coverage); e != nil {
+		for _, observer := range observers {
+			coverage = myspec.PITRCoverageResponse{}
+			e = mysqlAction(ctx, rc, observer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: m.ObjectPaths, ObjectManifests: refs}, &coverage)
+			if e == nil {
+				break
+			}
+		}
+		if e != nil {
 			coverageErr = e
+			if writer == "" {
+				coverageErr = engine.ErrUnavailable
+			}
 			continue
 		}
 		for _, w := range coverage.Windows {

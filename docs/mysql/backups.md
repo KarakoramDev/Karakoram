@@ -103,6 +103,15 @@ GTID-bounded coverage. When live coverage is unavailable, the remembered-window
 fallback retains newest-safe backup selection; a newer incompatible root does
 not invalidate an older root whose own verified stream covers the target.
 
+MySQL singletons and Group Replication can restore in place or clone with a PITR
+time even when no source member is an ONLINE writer. Keep at least one admitted
+data-member agent reachable: it verifies each sealed full baseline against the
+object-store archive index without connecting to the source mysqld. Restore uses
+the archived physical backup and binary logs, not the failed server's local logs.
+Targets outside proven contiguous coverage are rejected; an unavailable archive
+or all unreachable agents cannot establish coverage. This does not clear GTID
+divergence or automatically replace a member.
+
 An observed log purged before upload is a gap. The continuous endpoint freezes at the last safe event even if later uploads succeed; later data does not heal missing GTIDs. Inspect the **BinlogArchive** condition, archive-lag monitoring and PITR window. Preserve needed objects and establish a new valid backup/coverage chain after resolving the cause; never infer recovery coverage from a green upload alone.
 
 Time targets resolve to the last complete transaction whose original commit timestamp is at or before the target. Microsecond commit metadata and transaction end positions matter: second-resolution `mysqlbinlog --stop-datetime` cannot distinguish commits within the same second. The recovery implementation preserves GTIDs and excludes already recovered transactions; low-level GTID/position replay must never skip a missing dependency. Public restore workflows use their documented backup/time target fields; an internal GTID boundary is not a separate CLI/API target flag.
