@@ -13,9 +13,8 @@ import (
 	"testing"
 )
 
-// MinIO's channel ListObjects adapter requires complete draining, even after
-// cancellation: its cancellation-error send can block on a full output channel.
-// Production listings must use the synchronous iterator and own cancellation.
+// The channel adapter's cancellation-error send can block after early return.
+// Inspect selectors, not just calls: capturing a method value is equally unsafe.
 func TestProductionS3ListingsUseOwnedIterators(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {
@@ -41,31 +40,7 @@ func TestProductionS3ListingsUseOwnedIterators(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		for _, declaration := range file.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if !ok || function.Body == nil {
-				continue
-			}
-			ast.Inspect(function.Body, func(node ast.Node) bool {
-				call, ok := node.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				selector, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-				switch selector.Sel.Name {
-				case "ListObjects":
-					t.Errorf("%s: channel ListObjects can strand a producer; use scoped ListObjectsIter", set.Position(call.Pos()))
-				case "ListObjectsIter":
-					if !listingOwnsContext(function, call) {
-						t.Errorf("%s: iterator must use a local context.WithCancel/WithTimeout and defer its cancel", set.Position(call.Pos()))
-					}
-				}
-				return true
-			})
-		}
+		ast.Walk(&listingContractVisitor{report: func(pos token.Pos, message string) { t.Errorf("%s: %s", set.Position(pos), message) }}, file)
 		return nil
 	})
 	if err != nil {
@@ -73,57 +48,130 @@ func TestProductionS3ListingsUseOwnedIterators(t *testing.T) {
 	}
 }
 
-func listingOwnsContext(function *ast.FuncDecl, listing *ast.CallExpr) bool {
-	if len(listing.Args) == 0 {
+type listingContractVisitor struct {
+	report func(token.Pos, string)
+	body   *ast.BlockStmt
+	params *ast.FieldList
+	parent *listingContractVisitor
+}
+
+func (v *listingContractVisitor) Visit(node ast.Node) ast.Visitor {
+	switch value := node.(type) {
+	case *ast.FuncDecl:
+		return &listingContractVisitor{report: v.report, body: value.Body, params: value.Type.Params, parent: v}
+	case *ast.FuncLit:
+		return &listingContractVisitor{report: v.report, body: value.Body, params: value.Type.Params, parent: v}
+	case *ast.SelectorExpr:
+		if value.Sel.Name == "ListObjects" {
+			v.report(value.Pos(), "channel ListObjects reference can strand a producer; use scoped ListObjectsIter")
+		}
+	case *ast.CallExpr:
+		selector, ok := value.Fun.(*ast.SelectorExpr)
+		if ok && selector.Sel.Name == "ListObjectsIter" && !v.ownsContext(value) {
+			v.report(value.Pos(), "iterator must use a local context.WithCancel/WithTimeout and defer its cancel")
+		}
+	}
+	return v
+}
+func (v *listingContractVisitor) ownsContext(call *ast.CallExpr) bool {
+	if len(call.Args) == 0 {
 		return false
 	}
-	ctx, ok := listing.Args[0].(*ast.Ident)
+	ctx, ok := call.Args[0].(*ast.Ident)
 	if !ok {
 		return false
 	}
-	owned := false
-	ast.Inspect(function.Body, func(node ast.Node) bool {
-		assignment, ok := node.(*ast.AssignStmt)
-		if !ok || assignment.Pos() >= listing.Pos() || len(assignment.Lhs) != 2 || len(assignment.Rhs) != 1 {
+	for scope := v; scope != nil; scope = scope.parent {
+		if listingBodyOwnsContext(scope.body, call, ctx.Name) {
 			return true
 		}
+		if scope.params != nil {
+			for _, field := range scope.params.List {
+				for _, name := range field.Names {
+					if name.Name == ctx.Name {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+func listingBodyOwnsContext(body *ast.BlockStmt, listing *ast.CallExpr, ctx string) bool {
+	if body == nil {
+		return false
+	}
+	for _, statement := range body.List {
+		assignment, ok := statement.(*ast.AssignStmt)
+		if !ok || assignment.Pos() >= listing.Pos() || len(assignment.Lhs) != 2 || len(assignment.Rhs) != 1 {
+			continue
+		}
 		name, ok := assignment.Lhs[0].(*ast.Ident)
-		if !ok || name.Name != ctx.Name {
-			return true
+		if !ok || name.Name != ctx {
+			continue
 		}
 		cancel, ok := assignment.Lhs[1].(*ast.Ident)
 		if !ok {
-			return true
+			continue
 		}
 		call, ok := assignment.Rhs[0].(*ast.CallExpr)
 		if !ok {
-			return true
+			continue
 		}
 		selector, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok {
-			return true
+			continue
 		}
 		namespace, ok := selector.X.(*ast.Ident)
 		if !ok || namespace.Name != "context" {
-			return true
+			continue
 		}
 		switch selector.Sel.Name {
 		case "WithCancel", "WithTimeout", "WithDeadline":
 		default:
-			return true
+			continue
 		}
-		ast.Inspect(function.Body, func(node ast.Node) bool {
-			deferred, ok := node.(*ast.DeferStmt)
+		for _, statement := range body.List {
+			deferred, ok := statement.(*ast.DeferStmt)
 			if !ok || deferred.Pos() <= assignment.Pos() || deferred.Pos() >= listing.Pos() {
-				return true
+				continue
 			}
 			name, ok := deferred.Call.Fun.(*ast.Ident)
 			if ok && name.Name == cancel.Name {
-				owned = true
+				return true
 			}
-			return true
-		})
-		return true
-	})
-	return owned
+		}
+	}
+	return false
+}
+
+func TestListingContractRejectsAliasesAndPackageInitializers(t *testing.T) {
+	for _, source := range []string{
+		`package p; func bad(ctx context.Context) { list := client.ListObjects; for range list(ctx, "b", options) {} }`,
+		`package p; var list = client.ListObjects`,
+		`package p; var objects = client.ListObjects(context.Background(), "b", options)`,
+		`package p; var work = func(ctx context.Context) { for range client.ListObjects(ctx, "b", options) {} }`,
+		`package p; var work = func(ctx context.Context) { for range client.ListObjectsIter(ctx, "b", options) {} }`,
+	} {
+		file, err := parser.ParseFile(token.NewFileSet(), "negative.go", source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		failures := 0
+		ast.Walk(&listingContractVisitor{report: func(token.Pos, string) { failures++ }}, file)
+		if failures == 0 {
+			t.Fatalf("unsafe listing escaped guard: %s", source)
+		}
+	}
+	for _, source := range []string{
+		`package p; func good(ctx context.Context) { ctx, cancel := context.WithCancel(ctx); defer cancel(); for range client.ListObjectsIter(ctx, "b", options) {} }`,
+		`package p; var good = func(ctx context.Context) { ctx, cancel := context.WithTimeout(ctx, timeout); defer cancel(); for range client.ListObjectsIter(ctx, "b", options) {} }`,
+		`package p; func good(ctx context.Context) { ctx, cancel := context.WithCancel(ctx); defer cancel(); go func() { for range client.ListObjectsIter(ctx, "b", options) {} }() }`,
+	} {
+		file, err := parser.ParseFile(token.NewFileSet(), "positive.go", source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Walk(&listingContractVisitor{report: func(_ token.Pos, message string) { t.Errorf("safe listing rejected: %s (%s)", source, message) }}, file)
+	}
 }

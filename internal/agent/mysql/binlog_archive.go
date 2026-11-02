@@ -155,7 +155,33 @@ func archiveCompleted(name, key, lastCompleted string) (bool, error) {
 	if key == lastCompleted {
 		return true, nil
 	}
-	return archiveRecorded(name, key)
+	recorded, err := archiveRecorded(name, key)
+	if err != nil || recorded {
+		return recorded, err
+	}
+	_, err = os.Stat(archiveCompletionPath(name, key))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func archiveCompletionPath(name, key string) string {
+	return name + ".complete-" + requestDigest(key)
+}
+
+// Keep the committed identity independently before the next summary replaces
+// LastCompletedKey. This is an explicit completion proof, not a fabricated
+// sidecar receipt; it remains valid even if remote retention removed the object.
+func preserveArchiveCompletion(name, key string) error {
+	if key == "" {
+		return nil
+	}
+	completed, err := archiveCompleted(name, key, "")
+	if err != nil || completed {
+		return err
+	}
+	return durableJSON(archiveCompletionPath(name, key), key)
 }
 func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	s, p := e.state()
@@ -354,6 +380,9 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	idx, err := loadArchiveState(indexPath)
 	if err != nil {
 		return errors.New("archive_index_invalid")
+	}
+	if err = preserveArchiveCompletion(indexPath, idx.LastCompletedKey); err != nil {
+		return errors.New("archive_index_write")
 	}
 	type logFile struct {
 		name string

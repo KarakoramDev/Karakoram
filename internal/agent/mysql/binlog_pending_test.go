@@ -9,8 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
@@ -170,5 +175,86 @@ func TestArchiveReconcilesStalePendingReceiptsBeforeNativePurgeGap(t *testing.T)
 				t.Fatalf("genuinely unarchived purged file was forgotten: %+v", loaded)
 			}
 		})
+	}
+}
+
+func TestRecoveredCompletionSurvivesNextCompletionAndNativeExpiry(t *testing.T) {
+	dir := t.TempDir()
+	p := paths{root: dir}
+	repo := testBackupRepository()
+	var uploadsA, uploadsB atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if r.Method != http.MethodPut {
+			t.Errorf("unexpected repository request: %s", r.Method)
+			w.WriteHeader(405)
+			return
+		}
+		if strings.Contains(r.URL.Path, "binlog.000001") {
+			uploadsA.Add(1)
+		}
+		if strings.Contains(r.URL.Path, "binlog.000002") {
+			uploadsB.Add(1)
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("ETag", "\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"")
+	}))
+	defer server.Close()
+	repo.S3.Endpoint = server.URL
+	name := archiveIndexPath(p, repo)
+	keyA := recoverySID + "/binlog.000001"
+	idx := archiveIndex{Version: 2, Pending: map[string]bool{keyA: true}, LastCompletedKey: keyA}
+	idx.Status.LastArchivedFile = "binlog.000001"
+	idx.Status.GTIDSet = recoverySID + ":1-4"
+	if err := writeArchivePending(name, idx.Pending); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeArchiveSummary(name, idx); err != nil {
+		t.Fatal(err)
+	}
+	// A's upload and summary committed, but its receipt was never published.
+	for i := 1; i <= 3; i++ {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("binlog.%06d", i)), make([]byte, 512), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	text := strings.Replace(streamTransaction(), recoverySID+":4", recoverySID+":5", 1)
+	s := fakeMysqlbinlog(t, "case \"$4\" in *binlog.000003) exit 0;; *binlog.000001) exit 99;; esac\nprintf '%s' "+shellQuote(text)+"\n")
+	s.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: true}}
+	connector := &pendingRecoveryConnector{archiveMemoryConnector: &archiveMemoryConnector{groupTestConnector: groupTestConnector{t: t}, dir: dir}, logs: [][]driver.Value{{"binlog.000001", int64(512)}, {"binlog.000002", int64(512)}, {"binlog.000003", int64(512)}}}
+	db := sql.OpenDB(connector)
+	defer db.Close()
+	pass := func() {
+		t.Helper()
+		if err := archiveNativeBinlogs(t.Context(), s, p, db, func(context.Context) (myspec.StatusResponse, error) {
+			return myspec.StatusResponse{}, errors.New("unexpected rotation")
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pass() // Persist A's independent proof, then complete B and replace the marker.
+	if _, err := os.Stat(archiveCompletionPath(name, keyA)); err != nil {
+		t.Fatal("A completion proof was not made durable before B")
+	}
+	afterB, err := loadArchiveState(name)
+	if err != nil || afterB.LastCompletedKey != recoverySID+"/binlog.000002" {
+		t.Fatalf("B did not replace marker: %+v %v", afterB, err)
+	}
+	pass() // A remains native: it must not be re-added, decoded or uploaded.
+	if err := os.Remove(filepath.Join(dir, "binlog.000001")); err != nil {
+		t.Fatal(err)
+	}
+	connector.logs = connector.logs[1:]
+	pass()
+	final, err := loadArchiveState(name)
+	if err != nil || final.Status.Gap || final.Pending[keyA] {
+		t.Fatalf("A expiry produced a false gap: %+v %v", final, err)
+	}
+	if uploadsA.Load() != 0 || uploadsB.Load() != 2 {
+		t.Fatalf("recovered upload repeated: A=%d B=%d", uploadsA.Load(), uploadsB.Load())
 	}
 }

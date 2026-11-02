@@ -109,8 +109,11 @@ so draining a large backlog does not rewrite its entire pending inventory after
 each upload. A completion receipt still becomes authoritative only after its
 summary is durable. That summary also records the most recent completion
 identity, so a crash before receipt publication cannot turn an already archived
-native file's later expiry into a false gap. Updated agents migrate the local
-archive index to format 2 before using the split inventory.
+native file's later expiry into a false gap. Before replacing that identity, an
+agent preserves an independent durable completion proof if its receipt is still
+missing; later passes therefore neither re-upload it nor forget it after expiry.
+Updated agents migrate the local archive index to format 2 before using the
+split inventory.
 
 The member retains only its most recent baseline's compact GTID/window state,
 not historical sidecars or transaction slices. Every observation checks the
