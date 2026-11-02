@@ -108,7 +108,7 @@ func TestOfflineRecoveryFailureObservesAllAndRetries(t *testing.T) {
 				}
 				calls.Add(1)
 				if name == "demom0" && fail.Load() {
-					http.Error(w, "unavailable", 503)
+					http.Error(w, "unavailable", http.StatusServiceUnavailable)
 					return
 				}
 				if topology == "group" {
@@ -212,7 +212,7 @@ func TestOfflineRecoveryPrecheckAvoidsNativeWork(t *testing.T) {
 					name := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 					if r.URL.Path != "/v1/status" {
 						calls.Add(1)
-						http.Error(w, "unexpected native work", 503)
+						http.Error(w, "unexpected native work", http.StatusServiceUnavailable)
 						return
 					}
 					status := agentapi.Status{ConfigVersion: s.find(name).ConfigVersion}
@@ -295,7 +295,7 @@ func TestOfflineRecoveryTLSReformUsesPrecheckAndBackoff(t *testing.T) {
 		}
 		calls.Add(1)
 		if fail.Load() && name == "demom0" {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		json.NewEncoder(w).Encode(myspec.WSRepRecoverResponse{Stopped: true, UUID: sid, Seqno: 9})
