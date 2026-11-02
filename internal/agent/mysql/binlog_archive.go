@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -300,8 +301,14 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	if err != nil {
 		return errors.New("member_unavailable")
 	}
+	return archiveNativeBinlogs(ctx, s, p, db, e.status)
+}
+
+// archiveNativeBinlogs performs one serialized pass after local writer admission.
+// Recheck writer eligibility immediately before rotating the native log.
+func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.DB, status func(context.Context) (myspec.StatusResponse, error)) error {
 	var uuid, base string
-	if err = db.QueryRowContext(ctx, "SELECT @@server_uuid,@@log_bin_basename").Scan(&uuid, &base); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT @@server_uuid,@@log_bin_basename").Scan(&uuid, &base); err != nil {
 		return errors.New("binlog_query_failed")
 	}
 	repo := s.Backup.Repository
@@ -366,7 +373,7 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	}
 	idx.Active = &resume
 	if hasTransactions {
-		latest, err := e.status(ctx)
+		latest, err := status(ctx)
 		if err != nil || !latest.WriterEligible(s.Galera != nil) {
 			return nil
 		}
@@ -398,10 +405,11 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	if err = durableJSON(indexPath, idx); err != nil {
 		return errors.New("archive_index_write")
 	}
-	client, err := s3Client(repo)
+	client, closeClient, err := s3Client(repo)
 	if err != nil {
 		return errors.New("repository_invalid")
 	}
+	defer closeClient()
 	for _, f := range logs[:len(logs)-1] {
 		key := uuid + "/" + f.name
 		local := filepath.Join(filepath.Dir(base), f.name)

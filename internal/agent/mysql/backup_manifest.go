@@ -111,10 +111,11 @@ func verifyPhysicalObjectSet(ctx context.Context, client *minio.Client, source m
 // downloaded chunk contents directly to stdout, in per-file chunk order. Feed
 // only verified local chunks to xbstream, never a second mutable S3 discovery.
 func extractVerifiedBackup(ctx context.Context, s myspec.Spec, source myspec.Repository, ref myspec.BackupManifestRef, dir string, logicalFiles []string) error {
-	client, err := s3Client(source)
+	client, closeClient, err := s3Client(source)
 	if err != nil {
 		return err
 	}
+	defer closeClient()
 	manifest, err := readBackupManifest(ctx, client, source, ref)
 	if err != nil {
 		return err

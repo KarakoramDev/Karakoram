@@ -4,8 +4,11 @@ package mysql
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash"
 	"io"
 	"math"
 	"os"
@@ -18,32 +21,101 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-func readReplaySidecars(ctx context.Context, c *minio.Client, source myspec.Repository) ([]archivedBinlog, error) {
-	var logs []archivedBinlog
+// walkReplayObjects hashes a streaming inventory rather than retaining its keys.
+// Cancellation also releases the SDK listing goroutine on an early read error.
+func walkReplayObjects(ctx context.Context, c *minio.Client, source myspec.Repository, digest hash.Hash, visit func(minio.ObjectInfo) error) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var encoder *json.Encoder
+	if digest != nil {
+		encoder = json.NewEncoder(digest)
+	}
 	for obj := range c.ListObjects(ctx, source.S3.Bucket, minio.ListObjectsOptions{Prefix: path.Join(source.Path, "binlogs") + "/", Recursive: true}) {
 		if obj.Err != nil {
-			return nil, obj.Err
+			return obj.Err
 		}
 		if !strings.HasSuffix(obj.Key, ".json") {
 			continue
 		}
+		if encoder != nil {
+			// Include every remotely observable identity field. A replacement,
+			// deletion, append or repository/baseline change must invalidate.
+			if err := encoder.Encode(struct {
+				Key, ETag, VersionID string
+				Size                 int64
+				Modified             time.Time
+			}{obj.Key, obj.ETag, obj.VersionID, obj.Size, obj.LastModified}); err != nil {
+				return err
+			}
+		}
+		if visit != nil {
+			if err := visit(obj); err != nil {
+				return err
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+func readReplaySidecars(ctx context.Context, c *minio.Client, source myspec.Repository) ([]archivedBinlog, error) {
+	return readReplaySidecarsWithDigest(ctx, c, source, nil)
+}
+
+func readReplaySidecarsWithDigest(ctx context.Context, c *minio.Client, source myspec.Repository, digest hash.Hash) ([]archivedBinlog, error) {
+	var logs []archivedBinlog
+	err := walkReplayObjects(ctx, c, source, digest, func(obj minio.ObjectInfo) error {
 		o, err := c.GetObject(ctx, source.S3.Bucket, obj.Key, minio.GetObjectOptions{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		var metadata binlogSidecar
 		err = json.NewDecoder(io.LimitReader(o, 32<<20)).Decode(&metadata)
 		o.Close()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		key := strings.TrimSuffix(obj.Key, ".json")
 		if key != path.Join(source.Path, "binlogs", metadata.ServerUUID, metadata.File) {
-			return nil, errors.New("invalid_sidecar")
+			return errors.New("invalid_sidecar")
 		}
 		logs = append(logs, archivedBinlog{key, metadata})
+		return nil
+	})
+	return logs, err
+}
+
+type replayCoverageCache struct {
+	key, inventory string
+	response       myspec.PITRCoverageResponse
+}
+
+// Only the most recent baseline's computed response is cached, never sidecars
+// or transaction slices. Every hit still checks the full remote inventory.
+// Changing history recomputes the exact existing lineage/window semantics.
+func (e *Runner) cachedReplayCoverage(ctx context.Context, c *minio.Client, source myspec.Repository, baseline myspec.BackupResult) (myspec.PITRCoverageResponse, error) {
+	e.coverageMu.Lock()
+	defer e.coverageMu.Unlock()
+	key := requestDigest([]any{source, baseline})
+	if previous := e.coverageCache; previous != nil && previous.key == key {
+		digest := sha256.New()
+		if err := walkReplayObjects(ctx, c, source, digest, nil); err != nil {
+			return myspec.PITRCoverageResponse{}, err
+		}
+		if hex.EncodeToString(digest.Sum(nil)) == previous.inventory {
+			return previous.response, nil
+		}
 	}
-	return logs, nil
+	digest := sha256.New()
+	logs, err := readReplaySidecarsWithDigest(ctx, c, source, digest)
+	if err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	response, err := replayCoverage(logs, baseline)
+	if err != nil {
+		return myspec.PITRCoverageResponse{}, err
+	}
+	e.coverageCache = &replayCoverageCache{key: key, inventory: hex.EncodeToString(digest.Sum(nil)), response: response}
+	return response, nil
 }
 
 func replayCoverageWindows(logs []archivedBinlog, backup myspec.BackupResult) ([]myspec.PITRWindow, error) {
@@ -142,13 +214,10 @@ func (e *Runner) pitrCoverage(ctx context.Context, request myspec.PITRCoverageRe
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	client, err := s3Client(request.Source)
+	client, closeClient, err := s3Client(request.Source)
 	if err != nil {
 		return myspec.PITRCoverageResponse{}, err
 	}
-	logs, err := readReplaySidecars(ctx, client, request.Source)
-	if err != nil {
-		return myspec.PITRCoverageResponse{}, err
-	}
-	return replayCoverage(logs, baseline)
+	defer closeClient()
+	return e.cachedReplayCoverage(ctx, client, request.Source, baseline)
 }

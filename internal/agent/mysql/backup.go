@@ -325,10 +325,11 @@ func runBackup(ctx context.Context, s myspec.Spec, p paths, r myspec.BackupReque
 	if out.FromLSN != r.BaseLSN {
 		return out, errors.New("backup_lsn_mismatch")
 	}
-	client, err := s3Client(r.Repository)
+	client, closeClient, err := s3Client(r.Repository)
 	if err != nil {
 		return out, errors.New("repository_invalid")
 	}
+	defer closeClient()
 	out.ManifestDigest, out.ManifestSize, err = createBackupManifest(ctx, client, r.Repository, manifest)
 	if err != nil {
 		return out, errors.New("physical_manifest_failed")

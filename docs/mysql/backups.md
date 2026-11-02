@@ -98,6 +98,19 @@ observation reports `Unknown/ObservationUnavailable`. A full-backup-only
 zero-width window is a snapshot recovery point, not evidence of continuous
 archiving; verify that the endpoint advances after post-backup writes.
 
+Each archive pass releases its repository connection pool when it completes or
+fails; backup, restore and coverage observations do the same. This prevents
+short archive intervals from accumulating abandoned idle S3/TLS connections.
+This lifecycle fix requires updated member agents, not only a control-plane
+upgrade, and is not a limit on the combined mysqld and agent RSS.
+The member caches only its most recently computed baseline's coverage response,
+not historical sidecars or transaction slices. Every repeated observation still
+checks the remote sidecar inventory; unchanged history avoids downloading and
+parsing it again. Appends, replacements, deletions and baseline/repository
+changes require fresh verification. The initial or changed-history computation
+still needs memory proportional to the retained replay metadata; this is not an
+unconditional memory bound for arbitrarily large repositories.
+
 Live coverage admission and backup selection use each full backup root's own
 GTID-bounded coverage. When live coverage is unavailable, the remembered-window
 fallback retains newest-safe backup selection; a newer incompatible root does

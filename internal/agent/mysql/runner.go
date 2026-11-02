@@ -36,6 +36,8 @@ type Runner struct {
 	rejoinCancel           context.CancelFunc
 	archiveCancel          context.CancelFunc
 	archiveBackup          myspec.Backup
+	coverageMu             sync.Mutex
+	coverageCache          *replayCoverageCache
 	proxyTLSReloadFallback bool
 	dataTLSReloadPending   bool
 }

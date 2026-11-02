@@ -447,10 +447,11 @@ type replayLogs struct {
 }
 
 func fetchReplayLogs(ctx context.Context, s myspec.Spec, r myspec.Restore, dir string, backup myspec.BackupResult) (replayLogs, string, error) {
-	c, err := s3Client(r.Source)
+	c, closeClient, err := s3Client(r.Source)
 	if err != nil {
 		return replayLogs{}, "", err
 	}
+	defer closeClient()
 	logs, err := readReplaySidecars(ctx, c, r.Source)
 	if err != nil {
 		return replayLogs{}, "", err

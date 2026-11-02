@@ -181,10 +181,11 @@ func startNativeBackupRepository(t *testing.T, ctx context.Context) (myspec.Repo
 		}
 	})
 	repo := myspec.Repository{Path: "mysql/integration", S3: myspec.S3{Endpoint: "http://" + minioAddress, Bucket: "native-backups", Region: "us-east-1", PathStyle: true, AccessKey: access, SecretKey: secret}}
-	c, err := s3Client(repo)
+	c, closeClient, err := s3Client(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(closeClient)
 	nativeGroupPoll(t, 30*time.Second, "MinIO readiness", func() bool {
 		return c.MakeBucket(ctx, repo.S3.Bucket, minio.MakeBucketOptions{Region: repo.S3.Region}) == nil
 	})
