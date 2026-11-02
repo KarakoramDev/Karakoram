@@ -101,31 +101,34 @@ func selectGaleraPosition(observations map[string]myspec.WSRepRecoverResponse) (
 func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
 	f := &s.Formation
 	if r := f.Reformation; r != nil && r.State == "observing" {
-		observations := map[string]myspec.WSRepRecoverResponse{}
-		for _, m := range s.data() {
-			applied, err := configApplied(ctx, rc, m)
-			if err != nil || !applied {
-				r.Blocked = "Cannot fence every stopped member"
-				return true, err
-			}
-			a, err := rc.Agents.Dial(ctx, rc.Cluster.Ref(), m.Name)
-			if err != nil {
-				r.Blocked = "Cannot observe every stopped member"
-				return true, nil
-			}
-			status, err := a.Status(ctx)
-			if err != nil || status.Processes["mysqld"].PID != 0 {
-				r.Blocked = "Every member must be intentionally stopped before recovery"
-				return true, nil
-			}
+		observations, blocked := collectOfflineRecovery(ctx, rc, s.data(), func(probe context.Context, m *member) (myspec.WSRepRecoverResponse, error) {
 			var out myspec.WSRepRecoverResponse
-			if err = a.Engine(ctx, "mysql", myspec.ActionWSRepRecover, struct{}{}, &out); err != nil {
-				r.Blocked = "Missing recovered Galera position"
-				return true, nil
+			applied, err := configApplied(probe, rc, m)
+			if err != nil {
+				return out, err
 			}
-			observations[m.Name] = out
-		}
+			if !applied {
+				return out, fmt.Errorf("member not fenced")
+			}
+			a, err := rc.Agents.Dial(probe, rc.Cluster.Ref(), m.Name)
+			if err != nil {
+				return out, err
+			}
+			status, err := a.Status(probe)
+			if err != nil {
+				return out, err
+			}
+			if status.Processes["mysqld"].PID != 0 {
+				return out, fmt.Errorf("member not stopped")
+			}
+			err = a.Engine(probe, "mysql", myspec.ActionWSRepRecover, struct{}{}, &out)
+			return out, err
+		})
 		r.GaleraObservations = observations
+		if blocked != "" {
+			r.Blocked = blocked
+			return true, nil
+		}
 		seed, position, err := selectGaleraPosition(observations)
 		if err != nil {
 			r.Blocked = err.Error()

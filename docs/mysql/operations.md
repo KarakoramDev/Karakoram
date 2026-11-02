@@ -398,6 +398,20 @@ All members must be stopped/fenced before choosing a seed. Recovery fails closed
 
 After a crash, `grastate.dat` often contains sequence `-1`; `safe_to_bootstrap` alone cannot rank data freshness. Graceful suspension uses the same evidence-based resume policy rather than assuming shutdown order. An ordinary PXC restart also recovers its local position before rejoining; it must not turn stale bootstrap intent into a new independent cluster. Bootstrap authorization is bound to a formation epoch, preventing an old desired configuration from replaying bootstrap.
 
+Offline GTID/identity and Galera position recovery are native operations, not
+four-second health observations. Each member has a separate **60-second minimum**
+budget covering dialing, private-server startup/recovery and graceful shutdown,
+plus 15 seconds per additional GiB of guaranteed member RAM above 2 GiB (rounded
+up), capped at the existing three-minute agent engine-action limit. Up to three
+members are probed concurrently; a failed member does not prevent
+the others being observed. The operation remains cancelable and does not inherit
+the read-only reconciliation sweep's shared observation deadline. These budgets
+also apply to retained-volume suspend/resume. Slow disks or extensive crash
+recovery can still exhaust the budget; blocked conditions identify unavailable,
+invalid or timed-out members without exposing native error payloads. Every member
+must supply valid evidence in the same sweep before seed selection; partial
+observations never authorize bootstrap or substitute for fresh evidence on retry.
+
 PXC state transfer uses upstream SST behavior rather than custom keep-list overrides. Managed data-identity tracking permits UUID regeneration only for an explicitly authorized state transfer and records the accepted identity after Synced state. Re-formation/restoration may explicitly reset a stopped joiner's own dataset for SST; an arbitrary identity mismatch is not permission to erase or initialize it. This is distinct from independent [backup restore](backups.md#offline-restore-and-clone), which creates new replication history.
 
 If recovery is blocked, preserve all remaining data and position evidence, isolate application traffic and resolve the missing observations or recover from a verified backup. Never reset GTIDs, invent a Galera position or edit bootstrap flags across multiple members to force a green status.
