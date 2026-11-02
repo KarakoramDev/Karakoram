@@ -3,7 +3,6 @@
 package mysql
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,9 +12,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 )
 
-// Invalidate the published proof first, durably, before reclaiming partial work.
-// This also makes eviction safe when persisting a newer failure was impossible.
-func removeCoverageState(prefix string) error {
+const coverageDurableRoots = 256
+const coverageDurableLifetime = 24 * time.Hour
+
+// Invalidate the proof durably before reclaiming an unpersisted failure.
+func invalidateCoverageProof(prefix string) error {
 	if err := os.Remove(prefix + ".verified.json"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -26,6 +27,13 @@ func removeCoverageState(prefix string) error {
 	err = dir.Sync()
 	dir.Close()
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeCoverageState(prefix string) error {
+	if err := invalidateCoverageProof(prefix); err != nil {
 		return err
 	}
 	names, err := filepath.Glob(prefix + ".*")
@@ -66,9 +74,9 @@ func pruneCoverageInventories(prefix string) error {
 	return nil
 }
 
-// Retain at most the resident-root bound on disk too. Initial recovery keeps the
-// newest roots; new root admission prioritizes all currently resident roots.
-// Inventory GC is startup-only here: a different root can be publishing a batch.
+// Retain recent working roots regardless of the inactive-root cap. Memory LRU
+// eviction never removes proofs. Old inactive roots expire after 24 hours;
+// beyond the generous inactive cap, retain the most recently written proofs.
 func pruneCoverageStore(root string, resident map[string]bool, startup bool) error {
 	files, err := os.ReadDir(root)
 	if err != nil {
@@ -112,16 +120,15 @@ func pruneCoverageStore(root string, resident map[string]bool, startup bool) err
 		}
 		return roots[a].After(roots[b])
 	})
-	// Resident roots without files still reserve a durable slot for their worker.
-	slots := coverageResidentRoots
-	for key := range resident {
-		if _, ok := roots[key]; !ok {
-			slots--
-		}
-	}
-	for i, key := range keys {
+	now := time.Now()
+	inactive := 0
+	for _, key := range keys {
 		prefix := coverageStatePrefix(root, key)
-		if i >= slots {
+		active := resident[key] || now.Sub(roots[key]) < coverageActiveLifetime
+		if !active {
+			inactive++
+		}
+		if !active && (now.Sub(roots[key]) > coverageDurableLifetime || inactive > coverageDurableRoots) {
 			if err := removeCoverageState(prefix); err != nil {
 				return err
 			}
@@ -132,9 +139,6 @@ func pruneCoverageStore(root string, resident map[string]bool, startup bool) err
 				return err
 			}
 		}
-	}
-	if slots < 0 {
-		return errors.New("coverage_refresh_queue_busy")
 	}
 	return nil
 }

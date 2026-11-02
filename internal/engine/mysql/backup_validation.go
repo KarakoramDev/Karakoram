@@ -229,6 +229,7 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	var windows []domain.TimeWindow
 	byFull := make(map[string][]domain.TimeWindow)
 	var coverageErr error
+	var pendingErr error
 	for _, b := range items {
 		m := b.MySQL
 		if b.Phase != domain.PhaseSucceeded || m == nil || m.Type != "full" || b.Storage != storage.Name || m.Repository != repoPrefix(storage, rc.Cluster, s, bs.Generation) || m.ClusterUID != s.UID {
@@ -266,7 +267,10 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 				progress = *coverage.Progress
 			}
 			message := fmt.Sprintf("PITR coverage verification pending: %s (%d/%d sidecars)", progress.Stage, progress.Processed, progress.Total)
-			return nil, nil, &pitrCoveragePending{detail: domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrUnavailable, "%s", message)}
+			if pendingErr == nil {
+				pendingErr = &pitrCoveragePending{detail: domain.Conflict("cluster", rc.Cluster.Name, domain.ReasonInvalidState, engine.ErrUnavailable, "%s", message)}
+			}
+			continue
 		}
 		// Legacy agents compute synchronously inside this request. Only the
 		// background protocol can return a cached proof and must attest freshness.
@@ -302,6 +306,9 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 		}
 	}
 	merged := mergeGTIDWindows(windows)
+	if len(merged) == 0 && pendingErr != nil {
+		return nil, byFull, pendingErr
+	}
 	if len(merged) == 0 && coverageErr != nil {
 		if known := rememberedGTIDWindows(s); !requireFresh && rc.Cluster.Spec.Provider == "pxc" && len(known) > 0 {
 			return known, nil, nil
@@ -311,6 +318,9 @@ func (p *Core) observePITRWindowsByFull(ctx context.Context, rc *engine.Context,
 	if rc.Cluster.Spec.Provider == "pxc" {
 		if err := rememberGTIDWindows(ctx, rc, s, merged); err != nil {
 			return nil, nil, err
+		}
+		if pendingErr != nil {
+			return merged, byFull, nil
 		}
 		return rememberedGTIDWindows(s), byFull, nil
 	}

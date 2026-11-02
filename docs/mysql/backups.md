@@ -131,9 +131,11 @@ proof. Cancelling a status request does not cancel/restart this work. Memory
 includes the key inventory, a bounded batch and exact GTID/window complexity,
 not every historical transaction. Appends read new sidecars only; deletion,
 replacement or out-of-order insertion forces a verified rebuild.
-At most 32 roots are retained in memory and on disk. Inactive roots are
-reclaimed with their checkpoint inventories; startup keeps the newest retained
-roots and removes abandoned inventories without discarding resumable work.
+At most 32 root entries reside in memory; eviction retains their compact durable
+proofs and resumable checkpoints. Disk GC expires roots unrequested for 24 hours
+and keeps up to 256 inactive roots, without deleting the current working set.
+Pending coverage excludes only that full backup's window: other completed roots
+remain available while it converges.
 
 With a reachable source agent, restore/clone admission does **not** use the
 status freshness lease or a remembered window alone: it waits under the operation
@@ -151,6 +153,11 @@ A legacy control plane receives an observation error while coverage is pending
 or expired, matching a legacy agent's unsuccessful synchronous request; it can
 read completed windows normally. Existing PXC remembered-safe-window fallback
 on observation errors and disaster-recovery behavior are unchanged.
+
+Upgrade the control plane before agents; do not downgrade the CP below v0.4.3
+while v0.4.3 agents run. Old-CP/new-agent operation is not supported: an old CP
+retains its released PXC error-to-remembered-window fallback and cannot implement
+the updated pending/freshness contract.
 
 MySQL singletons and Group Replication can restore in place or clone with a PITR
 time even when no source member is an ONLINE writer. Keep at least one admitted

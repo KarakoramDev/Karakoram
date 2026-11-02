@@ -44,6 +44,7 @@ func TestFailedCoverageRootsCanBeReclaimedWithoutRevivingSuccess(t *testing.T) {
 				}
 				err = s.persistFailure(entry)
 				s.root = root
+				entry.failureDurable = err == nil
 				if persist && err != nil {
 					t.Fatal(err)
 				}
@@ -55,14 +56,21 @@ func TestFailedCoverageRootsCanBeReclaimedWithoutRevivingSuccess(t *testing.T) {
 				t.Fatalf("resident count=%d", len(s.entries))
 			}
 			prefix := coverageStatePrefix(root, coverageRequestKey(first))
-			if _, err := os.Stat(prefix + ".verified.json"); !os.IsNotExist(err) {
-				t.Fatalf("evicted old success survived: %v", err)
+			verified, err := loadCoverageVerified(prefix)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if persist && (verified == nil || verified.Error == "") {
+				t.Fatal("durable failure marker lost on resident eviction")
+			}
+			if !persist && verified != nil {
+				t.Fatal("unpersisted failure revived an old proof")
 			}
 			entry, err := s.entry(first)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if entry.verified != nil {
+			if entry.verified != nil && entry.verified.Error == "" {
 				t.Fatal("failed-root eviction revived old success")
 			}
 		})
@@ -71,7 +79,7 @@ func TestFailedCoverageRootsCanBeReclaimedWithoutRevivingSuccess(t *testing.T) {
 
 func TestCoverageDurableRetentionKeepsResumableRootsAndCollectsOrphans(t *testing.T) {
 	root := t.TempDir()
-	for i := 0; i < coverageResidentRoots+8; i++ {
+	for i := 0; i < coverageDurableRoots+8; i++ {
 		key := requestDigest(i)
 		prefix := coverageStatePrefix(root, key)
 		inventory := requestDigest([]int{i, 1})
@@ -87,7 +95,8 @@ func TestCoverageDurableRetentionKeepsResumableRootsAndCollectsOrphans(t *testin
 		}
 		names, _ := filepath.Glob(prefix + ".*")
 		for _, name := range names {
-			if err := os.Chtimes(name, time.Unix(int64(i+1), 0), time.Unix(int64(i+1), 0)); err != nil {
+			stamp := time.Now().Add(-3*time.Minute + time.Duration(i)*time.Millisecond)
+			if err := os.Chtimes(name, stamp, stamp); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -102,10 +111,10 @@ func TestCoverageDurableRetentionKeepsResumableRootsAndCollectsOrphans(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 2*coverageResidentRoots {
-		t.Fatalf("durable files=%d, want%d", len(files), 2*coverageResidentRoots)
+	if len(files) != 2*coverageDurableRoots {
+		t.Fatalf("durable files=%d, want%d", len(files), 2*coverageDurableRoots)
 	}
-	for i := 0; i < coverageResidentRoots+8; i++ {
+	for i := 0; i < coverageDurableRoots+8; i++ {
 		work, err := loadCoverageWork(coverageStatePrefix(root, requestDigest(i)))
 		if err != nil {
 			t.Fatal(err)
@@ -115,6 +124,40 @@ func TestCoverageDurableRetentionKeepsResumableRootsAndCollectsOrphans(t *testin
 		}
 		if i >= 8 && (work == nil || len(work.refs) != 1) {
 			t.Fatalf("retained root%d lost resumable work", i)
+		}
+	}
+}
+
+func TestCoverageDurableRetentionProtectsWorkingSetAndExpiresOldRoots(t *testing.T) {
+	root := t.TempDir()
+	active := map[string]bool{}
+	for i := 0; i < coverageDurableRoots+40; i++ {
+		key := requestDigest(i)
+		prefix := coverageStatePrefix(root, key)
+		if err := durableJSON(prefix+".verified.json", coverageVerifiedDisk{Version: 1}); err != nil {
+			t.Fatal(err)
+		}
+		stamp := time.Now().Add(-25 * time.Hour)
+		if err := os.Chtimes(prefix+".verified.json", stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+		if i < 40 {
+			active[key] = true
+		}
+	}
+	if err := pruneCoverageStore(root, active, false); err != nil {
+		t.Fatal(err)
+	}
+	files, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 40 {
+		t.Fatalf("active working set retained%d files, want40", len(files))
+	}
+	for key := range active {
+		if _, err := os.Stat(coverageStatePrefix(root, key) + ".verified.json"); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

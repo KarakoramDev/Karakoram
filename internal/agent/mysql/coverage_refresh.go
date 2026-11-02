@@ -33,25 +33,29 @@ type coverageEntry struct {
 	verified                           *coverageVerifiedDisk
 	progress                           myspec.PITRCoverageProgress
 	err                                error
+	failureDurable                     bool
 	requested, lastAttempt, freshAfter time.Time
 	queued, working                    bool
 	changed                            chan struct{}
 }
 type coverageRefresh struct {
-	mu          sync.Mutex
-	runner      *Runner
-	root        string
-	startedAt   time.Time
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wake        chan struct{}
-	done        chan struct{}
-	entries     map[string]*coverageEntry
-	queue       []*coverageEntry
-	currentKey  string
-	work        *coverageWork
-	client      *minio.Client
-	closeClient func()
+	mu           sync.Mutex
+	runner       *Runner
+	root         string
+	startedAt    time.Time
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wake         chan struct{}
+	done         chan struct{}
+	entries      map[string]*coverageEntry
+	recentRoots  map[string]time.Time
+	lastPrune    time.Time
+	retentionErr error
+	queue        []*coverageEntry
+	currentKey   string
+	work         *coverageWork
+	client       *minio.Client
+	closeClient  func()
 }
 
 func coverageRequestKey(request myspec.PITRCoverageRequest) string {
@@ -113,6 +117,10 @@ func (s *coverageRefresh) enqueue(entry *coverageEntry) {
 }
 func (s *coverageRefresh) entry(request myspec.PITRCoverageRequest) (*coverageEntry, error) {
 	key := coverageRequestKey(request)
+	if s.recentRoots == nil {
+		s.recentRoots = map[string]time.Time{}
+	}
+	s.recentRoots[key] = time.Now()
 	if entry := s.entries[key]; entry != nil {
 		return entry, nil
 	}
@@ -129,17 +137,12 @@ func (s *coverageRefresh) entry(request myspec.PITRCoverageRequest) (*coverageEn
 		if oldest == nil {
 			return nil, errCoverageQueueBusy
 		}
-		if err := removeCoverageState(coverageStatePrefix(s.root, oldest.key)); err != nil {
-			return nil, err
+		if oldest.err != nil && !oldest.failureDurable {
+			if err := invalidateCoverageProof(coverageStatePrefix(s.root, oldest.key)); err != nil {
+				return nil, err
+			}
 		}
 		delete(s.entries, oldest.key)
-	}
-	retained := map[string]bool{key: true}
-	for resident := range s.entries {
-		retained[resident] = true
-	}
-	if err := pruneCoverageStore(s.root, retained, false); err != nil {
-		return nil, err
 	}
 	entry := &coverageEntry{key: key, request: request, changed: make(chan struct{}), progress: myspec.PITRCoverageProgress{Stage: "queued"}}
 	entry.request.ObjectPaths = slices.Clone(request.ObjectPaths)
@@ -152,6 +155,7 @@ func (s *coverageRefresh) entry(request myspec.PITRCoverageRequest) (*coverageEn
 		if verified != nil {
 			if verified.Error != "" {
 				entry.err = errors.New(verified.Error)
+				entry.failureDurable = true
 			}
 			if !verified.VerifiedAt.After(s.startedAt) {
 				verified.VerifiedAt = time.Time{}
@@ -171,6 +175,11 @@ func (s *coverageRefresh) poll(ctx context.Context, request myspec.PITRCoverageR
 	for {
 		s.mu.Lock()
 		if err := s.ctx.Err(); err != nil {
+			s.mu.Unlock()
+			return myspec.PITRCoverageResponse{}, err
+		}
+		if s.retentionErr != nil {
+			err := s.retentionErr
 			s.mu.Unlock()
 			return myspec.PITRCoverageResponse{}, err
 		}
@@ -250,6 +259,23 @@ func (s *coverageRefresh) run() {
 	for {
 		s.mu.Lock()
 		now := time.Now()
+		if now.Sub(s.lastPrune) >= time.Minute {
+			retained := map[string]bool{}
+			for key, stamp := range s.recentRoots {
+				if now.Sub(stamp) > coverageDurableLifetime {
+					delete(s.recentRoots, key)
+				} else if now.Sub(stamp) < coverageActiveLifetime {
+					retained[key] = true
+				}
+			}
+			for key, entry := range s.entries {
+				if entry.working || entry.queued {
+					retained[key] = true
+				}
+			}
+			s.retentionErr = pruneCoverageStore(s.root, retained, false)
+			s.lastPrune = now
+		}
 		for _, entry := range s.entries {
 			if now.Sub(entry.requested) < coverageActiveLifetime && !entry.working && !entry.queued && now.Sub(entry.lastAttempt) >= coverageRefreshInterval {
 				s.enqueue(entry)
@@ -280,15 +306,18 @@ func (s *coverageRefresh) run() {
 		if err != nil && s.ctx.Err() == nil {
 			s.mu.Lock()
 			entry.err = err
+			entry.failureDurable = false
 			entry.progress.Stage = "failed"
 			s.notify(entry)
 			s.mu.Unlock()
-			if persistErr := s.persistFailure(entry); persistErr != nil {
-				s.mu.Lock()
+			persistErr := s.persistFailure(entry)
+			s.mu.Lock()
+			entry.failureDurable = persistErr == nil
+			if persistErr != nil {
 				entry.err = errors.Join(err, persistErr)
 				s.notify(entry)
-				s.mu.Unlock()
 			}
+			s.mu.Unlock()
 		}
 		s.mu.Lock()
 		entry.working = false
