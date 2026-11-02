@@ -49,10 +49,11 @@ func TestProductionS3ListingsUseOwnedIterators(t *testing.T) {
 }
 
 type listingContractVisitor struct {
-	report func(token.Pos, string)
-	body   *ast.BlockStmt
-	params *ast.FieldList
-	parent *listingContractVisitor
+	report               func(token.Pos, string)
+	body                 *ast.BlockStmt
+	params               *ast.FieldList
+	parent               *listingContractVisitor
+	directIteratorCallee *ast.SelectorExpr
 }
 
 func (v *listingContractVisitor) Visit(node ast.Node) ast.Visitor {
@@ -65,10 +66,18 @@ func (v *listingContractVisitor) Visit(node ast.Node) ast.Visitor {
 		if value.Sel.Name == "ListObjects" {
 			v.report(value.Pos(), "channel ListObjects reference can strand a producer; use scoped ListObjectsIter")
 		}
+		if value.Sel.Name == "ListObjectsIter" && value != v.directIteratorCallee {
+			v.report(value.Pos(), "iterator method values bypass cancellation ownership checks; invoke the scoped iterator directly")
+		}
 	case *ast.CallExpr:
 		selector, ok := value.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == "ListObjectsIter" && !v.ownsContext(value) {
-			v.report(value.Pos(), "iterator must use a local context.WithCancel/WithTimeout and defer its cancel")
+		if ok && selector.Sel.Name == "ListObjectsIter" {
+			if !v.ownsContext(value) {
+				v.report(value.Pos(), "iterator must use a local context.WithCancel/WithTimeout and defer its cancel")
+			}
+			child := *v
+			child.directIteratorCallee = selector
+			return &child
 		}
 	}
 	return v
@@ -152,6 +161,8 @@ func TestListingContractRejectsAliasesAndPackageInitializers(t *testing.T) {
 		`package p; var objects = client.ListObjects(context.Background(), "b", options)`,
 		`package p; var work = func(ctx context.Context) { for range client.ListObjects(ctx, "b", options) {} }`,
 		`package p; var work = func(ctx context.Context) { for range client.ListObjectsIter(ctx, "b", options) {} }`,
+		`package p; func bad(ctx context.Context) { list := client.ListObjectsIter; for range list(ctx, "b", options) {} }`,
+		`package p; var list = client.ListObjectsIter`,
 	} {
 		file, err := parser.ParseFile(token.NewFileSet(), "negative.go", source, 0)
 		if err != nil {
