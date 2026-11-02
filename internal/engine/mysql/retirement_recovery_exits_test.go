@@ -181,7 +181,8 @@ func TestPXCRoutingHeldDiagnosticMemberCanBeActuallyReplaced(t *testing.T) {
 }
 
 func TestPXCDiagnosticJoinRestoreCompletesBeforeAnyFullAcknowledgement(t *testing.T) {
-	testPXCFailedIrreversibleReplacementJoinOwner(t, true, func(p *Core, rc *engine.Context, b *fakeBackend, s *state) {
+	testPXCFailedIrreversibleReplacementJoinOwner(t, true, func(_ *Core, rc *engine.Context, b *fakeBackend, s *state) {
+		var p *Core
 		if activeGTIDIncident(s) == nil || !pxcJoinRoutingFenced(s, s.find(rc.Cluster.Name+"m3")) {
 			t.Fatal("restore must begin with the original incident active and copied member unrouted")
 		}
@@ -304,7 +305,8 @@ func TestPXCDiagnosticJoinRestoreCompletesBeforeAnyFullAcknowledgement(t *testin
 }
 
 func TestPXCDiagnosticJoinDeleteCompletesFullTeardown(t *testing.T) {
-	testPXCFailedIrreversibleReplacementJoinOwner(t, true, func(p *Core, rc *engine.Context, b *fakeBackend, s *state) {
+	testPXCFailedIrreversibleReplacementJoinOwner(t, true, func(_ *Core, rc *engine.Context, b *fakeBackend, s *state) {
+		var p *Core
 		if activeGTIDIncident(s) == nil {
 			t.Fatal("delete must begin before the original incident is acknowledged")
 		}

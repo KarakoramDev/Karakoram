@@ -346,7 +346,7 @@ func TestProxyScaleInRechecksMaintenanceWindow(t *testing.T) {
 		t.Fatal("replay crossed closed maintenance window")
 	}
 	rc.Cluster.Spec.Maintenance = nil
-	s = replayAdmissionState(t, rc, s)
+	replayAdmissionState(t, rc, s)
 	converge(t, p, rc, base)
 	if b.scales != 2 || b.stops[b.proxy] != 0 {
 		t.Fatal("resumed scale-in did not use preserving scale")
