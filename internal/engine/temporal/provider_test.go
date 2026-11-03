@@ -120,9 +120,11 @@ func (fakeArtifact) Open(context.Context) (io.ReadCloser, error) {
 }
 
 type fakeAgents struct {
-	server  *httptest.Server
-	rc      *engine.Context
-	unready string
+	server         *httptest.Server
+	rc             *engine.Context
+	unready        string
+	builds         map[string]string
+	buildForStatus func(string) string
 }
 
 func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, member string) (*agentapi.Client, error) {
@@ -185,7 +187,14 @@ func fixture(t *testing.T, topology string) (*Provider, *engine.Context, *fakeBi
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasSuffix(r.URL.Path, "/v1/status") {
-			json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: "agent-build"}, ConfigVersion: config.ConfigVersion})
+			build := "agent-build"
+			if agents.builds != nil {
+				build = agents.builds[member]
+			}
+			if agents.buildForStatus != nil {
+				build = agents.buildForStatus(member)
+			}
+			json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Version: "agent-version", Commit: "agent-commit", Build: build}, ConfigVersion: config.ConfigVersion})
 			return
 		}
 		var sp tspec.Spec

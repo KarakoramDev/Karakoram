@@ -23,6 +23,7 @@ type receiptSQL struct {
 	loseCommit       bool
 	beginError       error
 	requireRoleLock  bool
+	statements       []string
 }
 type receiptTx struct {
 	pgx.Tx
@@ -41,6 +42,7 @@ func (s *receiptSQL) Begin(context.Context) (pgx.Tx, error) {
 	return &receiptTx{db: s, oid: s.oid, digest: s.digest, receiptOID: s.receiptOID}, nil
 }
 func (tx *receiptTx) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	tx.db.statements = append(tx.db.statements, sql)
 	switch {
 	case sql == "LOCK TABLE pg_catalog.pg_authid IN SHARE ROW EXCLUSIVE MODE":
 		tx.roleLocked = true

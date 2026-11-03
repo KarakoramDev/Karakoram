@@ -11,13 +11,15 @@ import (
 )
 
 type memberChange struct {
-	Kind        string           `json:"kind"`
-	Step        string           `json:"step"`
-	Version     string           `json:"version"`
-	Fingerprint string           `json:"fingerprint"`
-	Resources   domain.Resources `json:"resources"`
-	Disk        domain.Resources `json:"disk"`
-	Started     bool             `json:"started,omitempty"`
+	Kind               string           `json:"kind"`
+	Step               string           `json:"step"`
+	Version            string           `json:"version"`
+	Fingerprint        string           `json:"fingerprint"`
+	Resources          domain.Resources `json:"resources"`
+	Disk               domain.Resources `json:"disk"`
+	Started            bool             `json:"started,omitempty"`
+	OperationID        string           `json:"operationId,omitempty"`
+	AgentPreviousBuild string           `json:"agentPreviousBuild,omitempty"`
 }
 
 func (p *Provider) restartFingerprint(ctx context.Context, rc *engine.Context) (string, error) {
@@ -71,6 +73,12 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 	}
 	for _, m := range ordered(s) {
 		if m.Change != nil {
+			// Agent rollouts belong exclusively to their operation journal. Sync
+			// must never turn a retained apply intent into desired-config activation
+			// or deploy bytes from a different control-plane build.
+			if m.Change.Kind == "agent" {
+				return true, nil
+			}
 			s.RollingKind = m.Change.Kind
 			if s.RollingGeneration == 0 {
 				s.RollingGeneration = rc.Cluster.Generation
@@ -172,6 +180,15 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 			client, err := p.nativeClient(ctx, rc, m.Name, token)
 			if err != nil {
 				return err
+			}
+			if c.Kind == "agent" && !c.Started {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return nil
+				}
+				c.Started = true
+				if err = s.save(rc.Cluster); err != nil {
+					return err
+				}
 			}
 			if err = client.StepDown(ctx); err != nil {
 				return err
@@ -388,6 +405,15 @@ func (p *Provider) allowDisruption(ctx context.Context, rc *engine.Context, s *i
 		return false, nil
 	}
 	if len(s.Members) > 1 && leader.IsSelf {
+		if target.Change != nil && target.Change.Kind == "agent" && !target.Change.Started {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return false, nil
+			}
+			target.Change.Started = true
+			if err = s.save(rc.Cluster); err != nil {
+				return false, err
+			}
+		}
 		if err = client.StepDown(ctx); err != nil {
 			return false, err
 		}

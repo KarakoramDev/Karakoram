@@ -33,6 +33,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 			err = e
 		}
 	}()
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, s, op, false)
+	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return engine.OpResult{Checkpoint: op.Checkpoint, RequeueAfter: time.Second}, e
 	}

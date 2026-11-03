@@ -6,8 +6,161 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.4
 
-Preserve a consistent [control-plane state backup](#consistent-pre-upgrade-state-backup)
-and its master key before upgrading.
+Back up control-plane state using the
+[consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+the original `KARAKORAM_MASTER_KEY` separately, and retain the previous executable
+with its pre-upgrade state before deploying the new control plane. Engine
+versions and deployed member agents are separate from the control-plane upgrade.
+
+### Agent rollout now covers every member-agent engine
+
+After upgrading the control plane to v0.4.4, run the existing rollout command for
+MySQL (single or Group Replication), PXC, OpenBao (Raft or PostgreSQL storage),
+Keycloak, Temporal, Neo4j Community and Weaviate:
+
+```sh
+karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m
+```
+
+PostgreSQL (including Citus), Supabase, MongoDB, RabbitMQ and Elasticsearch retain
+their existing support. Existing v0.4.3 agents become upgradable once the control
+plane is v0.4.4; unknown legacy identities are also eligible. This installs the
+frozen control-plane agent build without changing applied engine versions,
+configuration, resources, bindings or persistent runtime/volume identities.
+It replaces earlier resource-change/re-creation workarounds for installing agent
+fixes; a native process restart still does not replace its agent.
+
+- **MySQL/PXC:** ProxySQL first, with every live instance acknowledging build,
+  configuration/credentials and writer health; non-writer data members next and
+  the initially observed writer last. GR checks ONLINE membership, surviving
+  majority and GTID-safe election with proxy reader/writer admission. PXC checks
+  Primary/Synced/ready/connected membership, full component size and history
+  continuity, then excludes the routed writer only after a safe successor is
+  available and waits for proxy handoff before deployment. The ProxySQL rollout
+  is service-level: on backends replacing all instances, the entire endpoint
+  can briefly fail even with multiple replicas. MySQL single has database downtime.
+  If runtime recovery or confirmed loss appears mid-rollout, the serialized
+  operation settles its current member/routing drain without a new deployment,
+  then retires with a recovery diagnostic so lost-volume replacement can proceed.
+  Confirmed-lost members remain excluded from routing, never readmitted as healthy.
+- **OpenBao:** standbys/inactive members before the initial active; native
+  step-down must establish another active before its deployment. Raft requires
+  healthy unsealed voters and surviving quorum/autopilot gates. PostgreSQL
+  storage uses native HA semantics without Raft APIs. Native recovery and
+  Shamir/auto-unseal finish before the next member. A singleton is unavailable
+  during deployment and until unseal completes.
+- **Keycloak:** the single runtime is redeployed and must acknowledge native
+  readiness, configuration and the exact build. Authentication has downtime
+  even when its source PostgreSQL is HA; unexpected multi-instance services
+  are refused.
+- **Temporal:** history → matching → frontend → worker → server → UI, skipping
+  disabled components. Every expected instance must acknowledge native
+  readiness, applied version/configuration and the exact build; history/server
+  settle for one minute. Deployment addresses logical component services, not
+  individual instances. Singleton components have downtime, and platform
+  replacement policy controls availability with replicas.
+- **Neo4j Community:** its singleton redeployment interrupts all database access
+  until native readiness and exact-build acknowledgement.
+- **Weaviate:** non-voters, then non-leader voters, then the observed Raft
+  leader. Healthy synchronized peers, surviving voting majority, applied minimum
+  and collection replication factors of at least two, and native proof of no
+  sole physical shard replica gate clustered rollout. Unknown shard evidence
+  refuses disruption. Singletons bypass impossible redundancy checks but have
+  database downtime.
+
+Use an appropriate [maintenance window](operations.md#maintenance-windows) and
+verify native replication/readiness, every member's build and client reconnects.
+Each new member/component disruption and deferred submission rechecks the window
+and native safety; already-started handoff/deployment recovery finishes after
+window closure. Current agents are skipped unless `--include-current` is set,
+and completed checkpoint entries are not repeated. Cancellation stops new work,
+not completed deployments: known receipts require native readiness and exact
+target-build acknowledgement. An intent with a missing receipt may have reached
+the backend; cancellation settles native readiness on the old or target build
+without resubmitting.
+
+Receipt-missing replay adopts a ready target deployment where persisted build
+transition and instance evidence prove completion. An explicit same-build
+`--include-current` refresh cannot prove acceptance from unchanged build identity:
+there is no backend deployment lookup by member/request identity, so replay can
+cause another window/native-gated deployment and interruption. A changed
+control-plane executable never silently retargets an existing rollout; follow
+its diagnostic and re-run for the new target after recovery. See
+[member-agent rollout](#rolling-out-member-agents) and
+[ADR 0065](adr/0065-agent-upgrade-all-member-engines.md).
+
+### PostgreSQL administrator password rotation
+
+PostgreSQL single/Patroni HA, Citus and Supabase now support in-place rotation of
+the revealed `postgres` password. Upgrade the control plane, then complete
+`upgrade-agents` on every data member first. The new agents use exact-owner
+Unix-socket peer authentication for local management, with an agent-managed
+identity map outside PGDATA so rebuilds/restores cannot remove it. Warm activation
+stages and observes a reload of the currently active map before publishing peer
+HBA rules. Adopting the external `ident_file` startup path may require the ordinary
+pending configuration restart during the preceding agent rollout; rotation itself
+is restart-free. Admission remains closed until every data member proves
+successful password-independent local socket access. Older or unobservable data
+agents receive HTTP 409 with `upgrade-agents` guidance; remote SCRAM/TLS
+authentication is unchanged.
+
+```sh
+karactl -n NS system-users rotate NAME postgres --yes
+```
+
+Finish structural/rolling work first and follow the returned operation through
+all member, proxy and component acknowledgements before revealing/distributing
+the replacement credential. A sealed transition journal and native receipts
+recover partially committed rotations forward; do not repair one with manual
+`ALTER ROLE`, secret edits or another rotation. Rotation itself does not restart
+PostgreSQL, including a singleton. Supabase credential consumers restart and may
+be briefly unavailable; Citus can have transient cross-group authentication
+failures while local role changes and outbound authentication converge.
+
+This is not a dual-password grace period. Administrator clients must use the
+replacement on reconnect; existing sessions are not terminated. Rotation is not
+session revocation or remediation of arbitrary superuser compromise. Bindings
+and Data MCP use separate identities and are unchanged; other engine-owned
+PostgreSQL identities remain unsupported on this route. See
+[administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
+
+### Automatic MySQL/PXC lost-volume replacement
+
+Confirmed loss of initialized storage can now queue managed add-before-remove
+replacement for MySQL Group Replication and PXC. `VOLUME_LOST` keeps the cluster
+Degraded while recovery or evidence is pending; `VolumeReplacementSafe=False`
+explains native admission refusal. An unreachable agent, identity conflict,
+unknown mount, stale observation or storage API error is not proof of loss and
+never authorizes initialization of empty old storage.
+
+GR requires fresh ONLINE survivors in the configured group, a writable primary,
+a configured-member majority and a donor containing the lost member's last
+persisted GTIDs when known. **Upgrade GR agents before relying on automatic
+recovery:** the new native `GroupName` observation is required for same-group
+proof. Old agents continue ordinary lifecycle behavior but this new admission
+fails closed without that evidence. Upgrade deployed agents for the pre-start
+sentinel gate as well.
+
+PXC requires fresh Primary/Synced/ready/connected survivors in one state UUID,
+a configured-member majority, compatible GTID histories, no active
+history-continuity latch and a qualified SST donor. A lost formation seed or
+pinned donor moves to a qualified survivor; existing join certification still
+owns SST and final routing fences.
+Outstanding rollout drains must settle before replacement admission; a withdrawn
+survivor is not an eligible donor or writer. An active rollout yields through its
+recovery cleanup rather than being preempted by automatic replacement.
+
+The new member and volume join before the old identity retires. Proxy exclusion
+must be acknowledged, the exact old runtime stopped, and native membership
+removal proved before resource cleanup; retirement does not contact lost mysqld
+or initialize an empty old volume. One deterministic operation is used per lost
+incarnation. Terminal replacements are not automatically retried: inspect and
+resolve blockers, then request managed replacement if needed.
+
+MySQL single cannot automatically recover lost data. Without a safe surviving
+copy, recover original storage or restore a verified backup into a new cluster.
+There is no forced quorum/bootstrap, row-equivalence proof, zero-loss or RTO
+guarantee. See [MySQL operations](mysql/operations.md).
 
 ### MySQL and PXC automatic PITR re-anchoring
 
@@ -363,6 +516,11 @@ hostgroup defaults are defensive policy, not evidence of the same defect.
 A native process restart, an unchanged spec, or a control-plane-only upgrade
 does not replace its agent. MySQL/PXC do not support `upgrade-agents`.
 
+**v0.4.4 supersedes this workaround:** after upgrading the control plane, use
+[agent rollout](#agent-rollout-now-covers-every-member-agent-engine) to replace
+data and proxy agents without a resource change. The procedure below describes
+v0.4.3 only.
+
 Use a genuinely changed, valid `spec.components.extra.proxy.resources` target.
 For example, if the proxy is currently fixed at 1 GiB, save this as
 `proxy-maintenance.yaml` after checking capacity, cost and the maintenance window:
@@ -404,6 +562,10 @@ the correction.
 does not replace running data-member or proxy-agent executables. MySQL/PXC
 do not support `upgrade-agents`, and `karactl clusters restart` restarts native
 database/proxy processes, **not their agents**.
+
+For v0.4.4, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+instead of the resource-change/new-target procedures below; their v0.4.3
+compatibility and live-verification statements remain historical.
 
 **Upgrade order is required: upgrade the control plane first, then relaunch
 MySQL/PXC agents. Do not downgrade the control plane below v0.4.3 while
@@ -588,6 +750,9 @@ Unless noted otherwise, the following issues affected both v0.4.0 and v0.4.1:
 
 ### Existing MySQL and PXC agents
 
+**For v0.4.4:** [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+replaces the re-creation requirement described here for v0.4.2.
+
 The MySQL Group Replication clustered-restart/primary-handoff, in-place restore
 follower re-clone, MySQL/PXC PITR binlog archiving and ProxySQL reload fixes are
 **agent-side**, as are the new clone diagnostics. Existing MySQL and PXC
@@ -622,6 +787,10 @@ does not install agent-side fixes from older releases: when upgrading from
 v0.4.0, also follow the separate v0.4.1 agent guidance below. MySQL/PXC formation
 durability and sanitized startup/clone diagnostics include agent-side changes;
 use new v0.4.2 members, not merely a database-process restart.
+
+For v0.4.4, all of these engines support the
+[agent rollout command](#agent-rollout-now-covers-every-member-agent-engine);
+the unsupported statement above describes v0.4.2 only.
 
 ### Known issues in v0.4.2
 
@@ -770,6 +939,10 @@ where supported. Preserve and verify valuable data first. There is no generic
 data-preserving agent-only upgrade for these engines; consumer deletion is
 especially destructive, as explained below. Do not use volume retention or
 copying binaries as a substitute.
+
+**For v0.4.4:** all of these engines support
+[agent-only rollout](#agent-rollout-now-covers-every-member-agent-engine).
+The re-creation requirement above applies to v0.4.1, not the current rollout path.
 
 Agent-side changes include Keycloak JDBC and Temporal SQL driver settings;
 MySQL Group Replication pre-bootstrap observation and message-cache budgeting;
@@ -970,7 +1143,7 @@ credential returned by the connection endpoint.** `system-users rotate` returns
 HTTP 409 with an explanation; the other internal PostgreSQL system roles are
 also not rotatable through this command. Native application-role password
 rotation and managed binding rotation do not rotate the administrator.
-In-place administrator rotation is planned for the next release.
+For v0.4.4, see [PostgreSQL administrator password rotation](#postgresql-administrator-password-rotation).
 
 If this credential is exposed, restrict access at both private and public
 network boundaries and terminate existing privileged sessions; removing public
@@ -1351,12 +1524,12 @@ Upgrading or restarting the control plane does **not** replace existing member a
 
 Inspect `karactl clusters get NAME` or `clusters status NAME`: `status.agents` reports `targetBuild`, `targetVersion`, and the `outdated` and `unknown` member names. Member output includes `agent.version`, `agent.commit` and `agent.build`. The `AgentsCurrent` condition is informational: `True/Current`, `False/Outdated`, or `Unknown/Unreported`; it never makes a cluster unready or Degraded. An `AgentsOutdated` event signals outdated member agents.
 
-Build inventory is independent of support for `upgrade-agents`: all registered
-providers publish identities returned by their existing generic agent status
-probes, including MySQL/PXC, Keycloak, OpenBao, Temporal, Neo4j and Weaviate
-whose agent-only rollout is unsupported. A healthy native engine is not evidence
-of a current agent executable. Legacy agents without build metadata remain
-unknown. PostgreSQL proxy, Supabase, Temporal and Keycloak instance observations
+Build inventory is independent of rollout execution: v0.4.4 supports
+`upgrade-agents` for PostgreSQL (including Citus), Supabase, MongoDB/PSMDB,
+RabbitMQ, Elasticsearch, MySQL/PXC (including ProxySQL), OpenBao, Keycloak,
+Temporal, Neo4j and Weaviate. A healthy native engine is not evidence of a current
+agent executable. Legacy agents without build metadata remain unknown.
+PostgreSQL proxy, Supabase, Temporal and Keycloak instance observations
 conservatively report a non-current or unknown identity when replicas disagree,
 rather than letting a current replica hide an incomplete rollout.
 

@@ -291,6 +291,9 @@ func (p *Core) reconcileFormation(ctx context.Context, rc *engine.Context, s *st
 	}
 	if f.State == "formed" {
 		for _, m := range s.data() {
+			if m.ConfirmedVolumeLost {
+				continue
+			}
 			st, err := live(ctx, rc, m.Name)
 			if err != nil || st.MemberState == "ONLINE" || st.MemberState == "RECOVERING" {
 				continue

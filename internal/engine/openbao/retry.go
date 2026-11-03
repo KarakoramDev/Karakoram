@@ -139,6 +139,10 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 	if v == nil {
 		return false, nil
 	}
+	if m := s.find(v.Member); m != nil && m.Change != nil && m.Change.Kind == "agent" &&
+		(rc.Operation == nil || rc.Operation.Kind != domain.OperationUpgradeAgents) {
+		return true, nil
+	}
 	r := s.PlatformRetries[platformRetryKey(v)]
 	if r == nil {
 		return true, fmt.Errorf("missing platform retry checkpoint")

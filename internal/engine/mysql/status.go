@@ -67,6 +67,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return status, err
 	}
+	defer func() { applyMySQLRuntimeRecoveryStatus(&status, s, now(rc)) }()
 	status = domain.ClusterStatus{Phase: domain.PhaseCreating, Version: rc.Cluster.Spec.Version, ObservedAt: now(rc), ObservedGeneration: rc.Cluster.Status.ObservedGeneration, Members: []domain.MemberStatus{}, Conditions: []domain.Condition{}, Connection: discovery(rc, s), Placement: domain.Placement{Groups: map[string][]string{}}}
 	if s.Suspended {
 		status.Phase = domain.PhaseSuspended

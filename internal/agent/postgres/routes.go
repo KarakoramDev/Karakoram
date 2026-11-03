@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/jackc/pgx/v5"
 )
 
 func observedServerVersion(serverVersion, description string) string {
@@ -184,7 +185,17 @@ func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.Stat
 		})
 		return out
 	}
-	c, err := localConnect(ctx, s, p)
+	var c *pgx.Conn
+	var err error
+	if s.LocalPeerAuth {
+		c, err = localPeerConnect(ctx, s, p)
+		out.AdminRotation = err == nil
+	}
+	if c == nil {
+		legacy := s
+		legacy.LocalPeerAuth = false
+		c, err = localConnect(ctx, legacy, p)
+	}
 	if err == nil {
 		defer c.Close(ctx)
 		out.Running = true

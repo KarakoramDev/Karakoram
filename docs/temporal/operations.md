@@ -43,6 +43,50 @@ Use split-role names only in split topology (`history`, `matching`, `frontend`, 
 
 Rolling restart uses **history → matching → frontend → worker → server → ui**, skipping disabled components. It waits for all instances of each component to apply the desired configuration and become Ready before advancing, with a one-minute settle period after history or combined server restart. A restart can target a component/member through the operation payload; TLS CA rotation must include all components. A singleton role is unavailable during restart; multiple replicas are not a zero-disruption guarantee.
 
+## Agent upgrades
+
+```sh
+karactl -n NS clusters upgrade-agents workflows --wait
+```
+
+This replaces member agents with the frozen control-plane build, not a new
+Temporal release. Applied server/UI versions, component resources, replica counts,
+sealed configuration, restart tokens and the PostgreSQL binding remain unchanged.
+An active version upgrade, restore recovery, import or other pending structural
+work blocks admission.
+
+The durable order is **history → matching → frontend → worker → server → ui**,
+skipping disabled roles and already-current agents (unless `--include-current`).
+Each component has a persisted deployment intent and receipt, followed by native
+readiness, applied-configuration checks and exact target-build acknowledgement
+from every live instance. History and combined server retain the restart path's
+one-minute settle period. Replaying a completed component never redeploys it.
+Each new deployment respects the maintenance window; an already-deployed
+component finishes its readiness checks even after the window closes.
+
+The backend contract deploys a whole logical component service; it has no
+per-instance deployment primitive. Platform replacement strategy therefore
+controls multi-instance rollout within that component. **Singleton components
+have downtime, and additional replicas do not guarantee uninterrupted service.**
+The next component never starts until all expected instances are ready on the
+target build. A different control-plane executable cannot replace the frozen
+target; re-run the operation using the intended build.
+
+Cancellation stops between components or before deployment intent is recorded.
+An intent without a receipt may have reached the backend, so cancellation waits
+for native readiness on either the old or target build. A submitted component
+with a receipt must acknowledge the exact target build before cancellation
+completes; no subsequent component is deployed or completed work rolled back.
+Component recovery/import journals defer operation admission until normal
+recovery finishes.
+With `--include-current`, a lost deployment receipt after platform acceptance
+can cause an additional same-build redeployment of that component on replay.
+The backend contract has no request-identity receipt lookup to distinguish a
+completed deployment from untouched current agents. Normal readiness/window
+gates still apply. Without the flag, all expected instances must report the
+exact frozen target build before replay adopts the completed component.
+
+
 ## Server upgrades and schema
 
 The current catalog path is **1.31.4 → 1.32.1**. Admission requires locked artifacts. The version policy permits forward patches within a minor or exactly one minor forward; skipping minors and downgrades are rejected. Do not bypass the advertised `UpgradePaths`.

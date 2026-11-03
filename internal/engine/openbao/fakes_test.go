@@ -36,6 +36,7 @@ type fakeBao struct {
 	config                                               int64
 	generation                                           int64
 	version                                              string
+	build                                                string
 	unreachable                                          bool
 	removed                                              bool
 	receipt                                              *baospec.Envelope
@@ -132,7 +133,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 				if b.running {
 					state = "running"
 				}
-				_ = json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: b.config, EngineVersion: "2.7.1", Volume: &agentapi.VolumeStatus{Identity: *cfg.Volume, Verified: true}, Processes: map[string]agentapi.ProcessStatus{"openbao": {State: state}}})
+				_ = json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Build: b.build}, ConfigVersion: b.config, EngineVersion: "2.7.1", Volume: &agentapi.VolumeStatus{Identity: *cfg.Volume, Verified: true}, Processes: map[string]agentapi.ProcessStatus{"openbao": {State: state}}})
 			case "/v1/reload":
 				b.config = 0
 				_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
@@ -430,7 +431,7 @@ func (a *fakeAgents) serveNative(name string, w http.ResponseWriter, r *http.Req
 		b.active = false
 		for _, m := range ordered(state(a.t, a.rc)) {
 			other := a.member(m.Name)
-			if m.Name != name && other.voter && !other.sealed && !other.unreachable && !other.removed {
+			if m.Name != name && (other.voter || a.p.postgresStorage(a.rc.Cluster)) && !other.sealed && !other.unreachable && !other.removed {
 				other.active = true
 				break
 			}

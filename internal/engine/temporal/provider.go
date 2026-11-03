@@ -140,7 +140,7 @@ func (p *Provider) Describe() domain.ProviderInfo {
 		Name: tspec.Engine, DisplayName: "Temporal",
 		Capabilities: []string{"tls", "backups", "restores", "temporalAccess"},
 		BackupTypes:  []string{"full", "diff", "incr"},
-		Operations:   []string{"restart", "rotate-tls", "backup", "delete-backup", "restore"},
+		Operations:   []string{"restart", "rotate-tls", "backup", "delete-backup", "restore", domain.OperationUpgradeAgents},
 		Processes:    []string{"temporal-server", "ui-server"},
 		EngineOptions: map[string]any{
 			"persistence": map[string]any{

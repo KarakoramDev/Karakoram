@@ -95,37 +95,47 @@ type mysqloffline struct {
 	UUID string `json:"uuid"`
 }
 type member struct {
-	Name                 string               `json:"name"`
-	Role                 string               `json:"role"`
-	Index                int                  `json:"index"`
-	Volume               string               `json:"volume,omitempty"`
-	VolumeID             string               `json:"volumeId,omitempty"`
-	ServiceID            string               `json:"serviceId,omitempty"`
-	Stage                string               `json:"stage"`
-	ImportBatch          *engine.ImportPlan   `json:"importBatch,omitempty"`
-	DeployOp             *infra.Op            `json:"deployOp,omitempty"`
-	NativeReadiness      *bool                `json:"nativeReadiness,omitempty"`
-	Version              string               `json:"version"`
-	Resources            domain.Resources     `json:"resources"`
-	Replicas             int                  `json:"replicas"`
-	ConfigVersion        int64                `json:"configVersion"`
-	Initialized          bool                 `json:"initialized,omitempty"`
-	ServerUUID           string               `json:"serverUUID,omitempty"`
-	Offline              bool                 `json:"offline,omitempty"`
-	Public               bool                 `json:"public,omitempty"`
-	ExposureHash         string               `json:"exposureHash,omitempty"`
-	Clone                *myspec.CloneRequest `json:"clone,omitempty"`
-	CloneDone            bool                 `json:"cloneDone,omitempty"`
-	CloneReplacesData    bool                 `json:"cloneReplacesData,omitempty"`
-	Retirement           string               `json:"retirement,omitempty"`
-	HandoffTarget        string               `json:"handoffTarget,omitempty"`
-	Removing             bool                 `json:"removing,omitempty"`
-	SlowShutdown         bool                 `json:"slowShutdown,omitempty"`
-	RetirementOp         *infra.Op            `json:"retirementOp,omitempty"`
-	Parameters           map[string]string    `json:"restartParameters,omitempty"`
-	GaleraJoinFence      bool                 `json:"galeraJoinFence,omitempty"`
-	GaleraSSTDonor       string               `json:"galeraSSTDonor,omitempty"`
-	GaleraHistoryBlocked bool                 `json:"galeraHistoryBlocked,omitempty"`
+	Name                  string                 `json:"name"`
+	Role                  string                 `json:"role"`
+	Index                 int                    `json:"index"`
+	Volume                string                 `json:"volume,omitempty"`
+	VolumeID              string                 `json:"volumeId,omitempty"`
+	ServiceID             string                 `json:"serviceId,omitempty"`
+	Stage                 string                 `json:"stage"`
+	ImportBatch           *engine.ImportPlan     `json:"importBatch,omitempty"`
+	DeployOp              *infra.Op              `json:"deployOp,omitempty"`
+	NativeReadiness       *bool                  `json:"nativeReadiness,omitempty"`
+	Version               string                 `json:"version"`
+	Resources             domain.Resources       `json:"resources"`
+	Replicas              int                    `json:"replicas"`
+	ConfigVersion         int64                  `json:"configVersion"`
+	Initialized           bool                   `json:"initialized,omitempty"`
+	ServerUUID            string                 `json:"serverUUID,omitempty"`
+	Offline               bool                   `json:"offline,omitempty"`
+	Public                bool                   `json:"public,omitempty"`
+	ExposureHash          string                 `json:"exposureHash,omitempty"`
+	Clone                 *myspec.CloneRequest   `json:"clone,omitempty"`
+	CloneDone             bool                   `json:"cloneDone,omitempty"`
+	CloneReplacesData     bool                   `json:"cloneReplacesData,omitempty"`
+	Retirement            string                 `json:"retirement,omitempty"`
+	HandoffTarget         string                 `json:"handoffTarget,omitempty"`
+	Removing              bool                   `json:"removing,omitempty"`
+	SlowShutdown          bool                   `json:"slowShutdown,omitempty"`
+	RetirementOp          *infra.Op              `json:"retirementOp,omitempty"`
+	Parameters            map[string]string      `json:"restartParameters,omitempty"`
+	GaleraJoinFence       bool                   `json:"galeraJoinFence,omitempty"`
+	GaleraSSTDonor        string                 `json:"galeraSSTDonor,omitempty"`
+	GaleraHistoryBlocked  bool                   `json:"galeraHistoryBlocked,omitempty"`
+	RuntimeRecovery       engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
+	RuntimeRecoveryReason string                 `json:"runtimeRecoveryReason,omitempty"`
+	LastGTIDExecuted      string                 `json:"lastGTIDExecuted,omitempty"`
+	// ConfirmedVolumeLost is affirmative physical/agent loss evidence, not the
+	// shared journal's broader identity-conflict status flag.
+	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`
+	// ProxyDraining temporarily withdraws a PXC writer for an agent rollout.
+	// Unlike Removing, it does not change Galera peers or retire its identity.
+	ProxyDraining       bool   `json:"proxyDraining,omitempty"`
+	ProxyDrainOperation string `json:"proxyDrainOperation,omitempty"`
 
 	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
 	// Missing legacy receipts deliberately require redeployment before scaling.

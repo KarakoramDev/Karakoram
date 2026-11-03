@@ -1130,7 +1130,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 				op.Phase = domain.PhaseCancelled
 			}
 		} else {
-			opErr = errors.New("Provider no longer supports cancellation of this operation")
+			opErr = errors.New("provider no longer supports cancellation of this operation")
 		}
 	} else {
 		dependenciesResolved = true

@@ -121,7 +121,7 @@ func (*Provider) Describe() domain.ProviderInfo {
 		Versions:     []domain.VersionInfo{{Version: kcspec.Version, Major: "26", Default: true, Status: "supported"}},
 		Topologies:   []domain.TopologyInfo{{Type: "single", Components: map[string]domain.ComponentInfo{"engine": {Defaults: c, MinReplicas: 1, MaxReplicas: 1}}}},
 		Presets:      []domain.Preset{{Name: "dev", Description: "Single Keycloak runtime with a PostgreSQL binding; maintenance interrupts access", Topology: domain.Topology{Type: "single"}, Components: domain.Components{Engine: c}}},
-		Capabilities: []string{"monitoring"}, Operations: []string{}, Processes: []string{"keycloak"},
+		Capabilities: []string{"monitoring"}, Operations: []string{domain.OperationUpgradeAgents}, Processes: []string{"keycloak"},
 		EngineOptions: map[string]any{"database": map[string]any{"required": true}, "proxyHeaders": map[string]any{"enum": []string{"forwarded", "xforwarded"}}},
 	}
 }
@@ -780,9 +780,6 @@ func (*Provider) Status(ctx context.Context, rc *engine.Context) (domain.Cluster
 		out.Phase = domain.PhaseDegraded
 	}
 	return out, err
-}
-func (*Provider) RunOperation(context.Context, *engine.Context, *domain.Operation) (engine.OpResult, error) {
-	return engine.OpResult{}, engine.ErrNotSupported
 }
 func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.DeleteOptions) (done bool, err error) {
 	s, err := load(rc.Cluster)

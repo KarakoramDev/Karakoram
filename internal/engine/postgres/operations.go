@@ -99,6 +99,14 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 	previousOperation := rc.Operation
 	rc.Operation = op
 	defer func() { rc.Operation = previousOperation }()
+	journal, readErr := readAdminRotation(ctx, rc)
+	if readErr != nil {
+		return engine.OpResult{}, readErr
+	}
+	if journal != nil && journal.Operation != op.ID && journal.Stage != "rotated" && journal.Stage != "rejected" {
+		recovery, recoveryErr := p.rotateAdministrator(ctx, rc, &domain.Operation{ID: journal.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)})
+		return engine.OpResult{Message: "Administrator rotation recovery owns the cluster: " + recovery.Message, RequeueAfter: time.Second}, recoveryErr
+	}
 	allowed, err := p.CanClaimOperation(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
@@ -140,6 +148,15 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 	}
 	switch op.Kind {
 	case domain.OperationRotateSystemUser:
+		var rotation struct {
+			User string `json:"user"`
+		}
+		if err := json.Unmarshal(op.Payload, &rotation); err != nil {
+			return engine.OpResult{}, engine.Invalid("invalid rotation payload")
+		}
+		if rotation.User == "postgres" {
+			return p.rotateAdministrator(ctx, rc, op)
+		}
 		return p.rotateDataUser(ctx, rc, op)
 	case "rebalance":
 		return p.runCitusRebalance(ctx, rc, op, false)
