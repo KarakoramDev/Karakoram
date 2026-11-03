@@ -41,6 +41,11 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		return result, engine.Invalid("MySQL member replacement requires group topology")
 	}
 	if s.Replacement == nil {
+		for _, m := range s.Members {
+			if m.ProxyDraining || m.ProxyDrainOperation != "" {
+				return result, fmt.Errorf("member replacement waits for agent rollout drain settlement of %s: %w", m.Name, engine.ErrUnavailable)
+			}
+		}
 		var previous replacementState
 		if len(op.Checkpoint) != 0 {
 			if err := json.Unmarshal(op.Checkpoint, &previous); err != nil {

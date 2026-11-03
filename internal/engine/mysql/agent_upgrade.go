@@ -82,6 +82,9 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		}
 		return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q; re-run upgrade-agents", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
 	}
+	if err = agentUpgradeRecoveryGate(ctx, rc, s); err != nil {
+		return result, err
+	}
 	if cp.Order == nil {
 		if err = maintenanceAllowed(ctx, rc, s); err != nil {
 			return result, fmt.Errorf("agent rollout requires completed formation, backup, restore and recovery: %w", err)
@@ -423,6 +426,9 @@ func agentUpgradeBuildCurrent(ctx context.Context, rc *engine.Context, m *member
 }
 
 func agentUpgradeGate(ctx context.Context, rc *engine.Context, s *state, m *member) error {
+	if err := agentUpgradeRecoveryGate(ctx, rc, s); err != nil {
+		return err
+	}
 	if m.Role == "proxy" {
 		ok, err := ready(ctx, rc, m)
 		if err != nil {
@@ -469,6 +475,38 @@ func agentUpgradeGate(ctx context.Context, rc *engine.Context, s *state, m *memb
 	return nil
 }
 
+// Infrastructure repair and replica replacement own the data identity before
+// executable maintenance may start, even if a stale agent still reports ONLINE.
+func agentUpgradeRecoveryGate(ctx context.Context, rc *engine.Context, s *state) error {
+	if s.Replacement != nil {
+		return fmt.Errorf("agent rollout waits for member replacement: %w", engine.ErrUnavailable)
+	}
+	for _, m := range s.Members {
+		q := m.RuntimeRecovery
+		if m.ConfirmedVolumeLost || q.VolumeLost || q.Op != nil || q.ImportPlan != nil || q.Action != "" || !q.RetryAt.IsZero() {
+			return fmt.Errorf("agent rollout waits for runtime recovery of %s: %w", m.Name, engine.ErrUnavailable)
+		}
+	}
+	if rc.Store != nil {
+		inventory, ok := rc.Store.(interface {
+			ListOperations(context.Context, domain.ClusterRef, ...domain.Phase) ([]domain.Operation, error)
+		})
+		if !ok {
+			return fmt.Errorf("agent rollout requires replacement queue inventory: %w", engine.ErrUnavailable)
+		}
+		ops, err := inventory.ListOperations(ctx, rc.Cluster.Ref(), domain.PhasePending, domain.PhaseRunning)
+		if err != nil {
+			return err
+		}
+		for _, op := range ops {
+			if op.Kind == domain.OperationReplaceMember {
+				return fmt.Errorf("agent rollout waits for replacement operation %s: %w", op.ID, engine.ErrUnavailable)
+			}
+		}
+	}
+	return nil
+}
+
 // Only the temporary PXC routing withdrawal survives outside the operation
 // checkpoint. A terminal/missing owner must not strand that control forever.
 // Recovery here never submits an executable, including after a CP build change.
@@ -493,6 +531,14 @@ func (p *Core) reconcileOrphanedAgentDrain(ctx context.Context, rc *engine.Conte
 				(owner.Phase == domain.PhasePending || owner.Phase == domain.PhaseRunning) {
 				return true, nil
 			}
+		}
+		if m.ConfirmedVolumeLost {
+			// No native health or readmission is possible for this identity.
+			// Confirmed loss remains a routing fence after releasing the owner.
+			m.ProxyDraining = false
+			m.ProxyDrainOperation = ""
+			publishRevision(s)
+			return true, nil
 		}
 		if _, err := p.reconcileFormation(ctx, rc, s); err != nil {
 			return true, err

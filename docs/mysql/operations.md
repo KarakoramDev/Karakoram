@@ -179,8 +179,9 @@ path; expect writer-handoff interruptions or single-member downtime. Do not
 roll a cluster that has lost its majority.
 Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
 verify member builds, data and client writes before switching clients.
-`karactl clusters restart` restarts native processes, not member agents;
-MySQL/PXC have no `upgrade-agents` command. See
+`karactl clusters restart` restarts native processes, not member agents.
+On v0.4.4, use [agent rollout](#agent-rollout) only after its native safety gates
+are satisfied. See also
 [existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
 The post-restore history comparator remains fully active: real mixed accounting
 still records a durable latch and Degraded status, never a silently cleared
@@ -321,6 +322,13 @@ restarts. Current agents are skipped unless `--include-current` is supplied.
 If the control-plane executable changes again, finish recovery of an already
 submitted member, then submit a new rollout for the new build; the original
 operation never silently retargets.
+
+Admission and every member boundary wait for outstanding runtime recovery,
+confirmed volume loss, identity conflicts and queued/running member replacement.
+A stale `ONLINE` report never makes a lost member a healthy rollout peer.
+Operations are serialized per cluster: automatic replacement queueing cannot
+preempt an active rollout. Replacement admission also refuses any outstanding
+rollout drain, including the readmission acknowledgement phase.
 
 The proxy phase comes first: redeploy the ProxySQL **service**, then require
 every live instance to acknowledge the published configuration/credentials,
@@ -505,6 +513,8 @@ survivors, the new joiner and deployed proxies must still negotiate certificatio
   absence of an SST donor containing the lost member's last known GTIDs refuses
   automation. A lost seed/pinned donor is re-pinned to a qualified survivor;
   existing joining-member certification still fences SST and routing.
+  A survivor withdrawn by an agent rollout is not an eligible donor or writer;
+  settle its drain before replacement admission.
 - Replacement creates a new member/storage identity before retiring the old
   one. ProxySQL acknowledges exclusion of the lost member, its exact runtime
   is fenced, and surviving native membership must confirm removal. No live
@@ -518,6 +528,12 @@ Inspect the precise status reason and queued operation. Reconciliation reuses
 one deterministic operation ID and does not requeue terminal operations. After
 resolving a terminal failure, inspect retained data before requesting managed
 replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
+withdrawn member itself is confirmed lost and its rollout owner is terminal or
+missing, settlement releases only the drain ownership, without waiting for native
+health or readmitting that identity. Confirmed loss keeps it out of proxy routing;
+the next reconciliation can queue replacement. A live rollout owner retains its
+drain until the serialized operation completes or terminates.
 This is distinct from retained-data full-outage re-formation below.
 See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).
 
@@ -648,8 +664,9 @@ This does not alter formed GR clusters or reopen consumed multi-member epochs.
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
-agent's durable claim or change its native renderer. MySQL does not support
-`upgrade-agents`.
+agent's durable claim or change its native renderer. The v0.4.4
+[agent rollout](#agent-rollout) requires completed formation and cannot repair
+an unformed or consumed bootstrap epoch.
 
 ### Native startup and agent connectivity
 

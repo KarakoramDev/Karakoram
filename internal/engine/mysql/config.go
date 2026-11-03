@@ -226,7 +226,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			sp.Proxy.Mode = "galera"
 		}
 		for _, peer := range s.data() {
-			if peer.Stage == "joined" && !peer.Removing && !peer.ProxyDraining && !pxcJoinRoutingFenced(s, peer) {
+			if peer.Stage == "joined" && !peer.Removing && !peer.ConfirmedVolumeLost && !peer.ProxyDraining && !pxcJoinRoutingFenced(s, peer) {
 				sp.Proxy.Backends = append(sp.Proxy.Backends, myspec.Peer{Name: peer.Name, Host: peer.Name, Port: 3306})
 			}
 		}

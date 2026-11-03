@@ -65,6 +65,14 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 			m.ConfirmedVolumeLost = true
 		}
 		if m.ConfirmedVolumeLost {
+			// Discover loss before orphan settlement (which cannot wait for a
+			// lost member's health), but settle all rollout withdrawals before
+			// selecting donors or queueing replacement.
+			for _, peer := range s.Members {
+				if peer.ProxyDraining || peer.ProxyDrainOperation != "" {
+					return false, nil
+				}
+			}
 			replicated := clustered(s.Topology) && m.Role == "data"
 			if replicated {
 				if err = p.volumeRecoverySafe(ctx, rc, s, m); err != nil {
@@ -118,7 +126,7 @@ func (p *Core) volumeRecoverySafe(ctx context.Context, rc *engine.Context, s *st
 		if m.Name == lost.Name {
 			continue
 		}
-		if m.Removing || m.Offline || m.RuntimeRecovery.VolumeLost || m.Stage != "joined" || pxcJoinRoutingFenced(s, m) {
+		if m.Removing || m.Offline || m.ConfirmedVolumeLost || m.RuntimeRecovery.VolumeLost || m.ProxyDraining || m.ProxyDrainOperation != "" || m.Stage != "joined" || pxcJoinRoutingFenced(s, m) {
 			return refuse("survivor " + m.Name + " is not an admitted online data member")
 		}
 		var gtid string
