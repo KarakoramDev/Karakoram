@@ -20,7 +20,95 @@ The supervised process is `neo4j`, the server JVM derived from the pinned distri
 
 At first boot, before normal network listeners start, the member initializes the managed administrator via a temporary authentication-disabled server bound only to `127.0.0.1`, Bolt 17687 and HTTPS 17473. It sets the password through a parameterized query, stops that child and starts normally. The same recovery mechanism resets the target administrator after restore. Passwords are not passed as `neo4j-admin set-initial-password` command-line arguments.
 
+Bootstrap completion is recorded in `credentials-initialized.json` only after
+the managed password is established, `SHOW USERS` confirms that `neo4j` exists
+with `passwordChangeRequired=false`, and the recovery child has stopped. If the
+password already matches, recovery independently clears the password-change
+requirement instead of treating password equality alone as completion. It never
+needs the previous/default password or uses `ALTER CURRENT USER`.
+
+Interrupted first creation is replayed against the existing store; do not delete
+the system database, seed `auth.ini`, remove markers or start a second JVM.
+`applied.json` and the applied configuration version are published later, after
+the normal start action succeeds. A reachable agent with configuration version
+zero is not a successfully configured database.
+
+| Interruption point | Retry behavior |
+| --- | --- |
+| Before recovery starts, during store initialization, or before the password transaction | Missing completion marker starts isolated recovery again; native store damage/startup failures remain errors. |
+| Password transaction committed, but response lost or agent/container killed before the marker | Recovery sees the existing password, clears the change-required flag independently and verifies the user before recording completion. |
+| Clearing the flag or reading its postcondition fails | No completion marker is written. Preserve the categorized diagnostic; another apply safely repeats recovery. |
+| Recovery child stop fails or times out | No completion marker is written; the temporary child is force-killed and the next apply performs store recovery again. |
+| Marker published, before normal process start or applied-state publication | Existing marker plus system store skips credential mutation; the supervisor starts normally and apply publishes its state. |
+| After successful apply, before the control plane observes it | The control plane observes matching readiness, configuration version and restart token; replay does not require a new credential. |
+
+Control-plane retries and periodic agent configuration pulls use the same path.
+Request cancellation can interrupt recovery; it cannot certify completion.
+Persistent transport/TLS, resource, store or user-metadata failures still require
+operator repair: inspect the closed diagnostic category and process logs, retain
+the volume, and correct the underlying cause. A successful `SHOW USERS` readiness
+probe does not prove that a subsequent password mutation succeeded. Missing or
+malformed administrator metadata and a remaining password-change requirement
+produce explicit verification errors rather than a completion marker.
+
+No protocol fields or endpoints change. Both control plane and member should be
+upgraded for current diagnostics and request budgets; upgrading only the control
+plane does not repair an older member's bootstrap implementation.
+
 The server uses SIGTERM and declares a **45-second graceful stop budget** for checkpointing during agent shutdown, bounded by the remaining overall shutdown deadline. A timeout is an error, not proof of a stopped JVM; the supervisor does not turn it into successful shutdown or immediately SIGKILL that child. The infrastructure may subsequently terminate the runtime according to its own grace period. The temporary credential-recovery child has a separate 45-second stop wait and is force-killed if it cannot exit. Check runtime/platform stop grace and allow crash recovery after forced termination.
+
+### Legacy bootstrap marker with expired credentials
+
+A v0.4.3 member could record `credentials-initialized.json` after an
+unchanged-password rejection even though `neo4j.passwordChangeRequired` remained
+true. Upgrading the member prevents new false completions but does **not** validate
+or invalidate an existing marker. With both that marker and the system store
+present, `BeforeStart` skips recovery. The normal server can therefore run while
+authenticated readiness and other managed queries fail with
+`Neo.ClientError.Security.CredentialsExpired`; this is not necessarily an
+incorrect password. Repeated reloads or restarts alone do not repair it.
+
+Automatic repair is not performed: readiness and metrics are observations outside
+the node action lock, and a failed observation cannot authorize a singleton
+outage or release a restore/backup/recovery job's stop hold. Moving the mutation
+into apply would also require durable attempt/admission state to prevent repeated
+stop/recovery/start cycles on persistent failure. Ordinary system-user rotation
+does not enter offline repair for `CredentialsExpired`: its recovery admission
+requires explicit credential rejection, not the change-required signal.
+
+For this specific legacy-marker condition, arrange a maintenance outage and
+support-assisted access to the member's authenticated private agent API and
+volume (there is no public CLI bootstrap-repair command):
+
+1. Upgrade the member agent to the fixed version. Preserve the volume and sealed
+   managed password; retain a copy of the marker and relevant redacted diagnostics.
+   Confirm that no backup, restore, administrator recovery or other lifecycle
+   operation is active or recovery-pending. Resolve any such operation first;
+   never release its hold or alter its receipts.
+   Prevent new scheduled backups and lifecycle submissions for the duration of
+   this procedure; an operator stop hold alone does not exclude offline jobs.
+2. Explicitly stop `neo4j` through the agent process API
+   (`POST /v1/processes/neo4j/stop`). This persists the operator stop hold.
+   Confirm successful stop and absence of a server/recovery JVM before touching
+   the volume. A timeout or a merely unreachable connector is not proof of stop.
+3. Only after confirming this legacy condition and the stopped state, remove
+   `karakoram/neo4j/credentials-initialized.json` from the member volume. Do not
+   remove the system database, `applied.json`, controls, job receipts or any store
+   directory, and do not seed `auth.ini` or launch a separate JVM.
+4. Explicitly start through the agent process API
+   (`POST /v1/processes/neo4j/start`), releasing only the operator hold just taken.
+   The upgraded agent replays the bounded loopback-only recovery against the
+   existing store, clears and verifies the change-required flag, then records a
+   new completion marker before normal launch. Allow the engine-action request
+   budget for recovery rather than an ordinary short request timeout.
+5. Confirm authenticated readiness, matching configuration/restart token and
+   application queries. If recovery fails, stop retrying starts, retain the
+   volume and inspect the categorized diagnostic; missing metadata, TLS, store
+   or resource failures require their own repair, not repeated marker deletion.
+
+This narrowly scoped stopped-member procedure is an exception to the general
+instruction not to remove bootstrap markers; it is not a lost-password recovery
+shortcut or a remedy for arbitrary readiness failures.
 
 ## Upgrades
 
@@ -51,7 +139,7 @@ These are gauges. If a collection step fails, the member returns only `neo4j_up=
 
 - **`CredentialMismatch` / `AdminAuthenticationRejected`:** the managed password was rejected by Neo4j. Do not repeatedly reveal credentials into logs or overwrite sealed secrets. Ordinary system-user rotation requires either the current or already-applied next password to authenticate; it is not a lost-password bypass. Explicit loopback credential recovery is required. Preserve the volume and inspect the condition/operation before attempting repair; there is no documented public CLI recovery command.
 - **`ConfigurationApplyFailed` / not Ready:** inspect the operation, member status and agent logs as well as `neo4j` logs. This condition means an apply step failed (including command derivation, startup or credential recovery); it does not establish that Neo4j rejected a setting. Only [allowlisted settings](README.md#memory-and-options) are accepted, but accepted strings still must satisfy Neo4j's strict validation. Readiness requires authenticated queries, matching desired version/configuration and applied restart token; a running JVM or reachable agent is insufficient. Synchronous reload uses the engine-action request budget (three minutes by default), rather than the ordinary 30-second agent-request budget; caller deadlines and individual startup/recovery limits still apply. The agent retries configuration pulls every 60 seconds, and the controller retries reconciliation, so a reload timeout alone does not establish permanent failure.
-- **`Neo4j credential recovery failed`:** agent logs distinguish `category=native` (an allowlisted Neo4j status code and closed message class) from `category=request` (transport, timeout, cancellation, HTTP rejection, authentication or invalid response). Unknown native codes are reported as `unrecognized`; raw native messages, query text, passwords and transport URLs are never included. `class=not-leader`, `database-unavailable` and `password-change-required` are diagnostics, not successful initialization. The exact supported unchanged-password rejection is treated as an already-satisfied password mutation; other failures remain errors and initialization is retried without writing its completion marker. Preserve the categorized failure before changing the runtime or credentials.
+- **`Neo4j credential recovery failed`:** agent logs distinguish `category=native` (an allowlisted Neo4j status code and closed message class) from `category=request` (transport, timeout, cancellation, HTTP rejection, authentication or invalid response). Unknown native codes are reported as `unrecognized`; raw native messages, query text, passwords and transport URLs are never included. `class=not-leader`, `database-unavailable` and `password-change-required` are diagnostics, not successful initialization. The exact supported unchanged-password rejection establishes password equality only; recovery separately clears and verifies the change-required flag. Other failures remain errors and initialization is retried without writing its completion marker. Preserve the categorized failure before changing the runtime or volume.
 - **TLS connection failure:** trust the cluster CA in the client, use a certificate-covered endpoint and verify the scheme. Public routing discovery can return private hostnames; use a verified direct `bolt+s` connection when appropriate. Do not disable certificate verification to conceal a trust error.
 - **Interrupted backup:** recovery restarts the server and marks the receipt failed instead of resuming a partial stream. Wait for the failed operation and normal readiness before submitting a new backup. No manifest means an incomplete prefix.
 - **Interrupted restore:** the durable swap journal rolls back an uncommitted replacement; a committed replacement remains. If rollback or startup is blocked, retain all stores/receipts and investigate. Do not manually delete staging/previous-store directories or remove stop holds while recovery owns them.
