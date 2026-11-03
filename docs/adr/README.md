@@ -61,6 +61,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0070](0070-proxysql-serving-scale-and-resource-changes.md) | Serving-preserving ProxySQL count/resource contracts, provider admission and legacy-runtime boundaries |
 | [0063](0063-mysql-pitr-automatic-reanchor.md) | Automatic full-backup re-anchoring after MySQL/PXC physical archive-writer changes |
 | [0064](0064-pitr-restorable-intervals.md) | Additive PITR interval lists with optional full-backup provenance and unchanged legacy summaries |
+| [0067](0067-mysql-lost-volume-replacement.md) | Native surviving-data admission for MySQL/PXC automatic lost-volume replacement |
 
 ## References and verification
 

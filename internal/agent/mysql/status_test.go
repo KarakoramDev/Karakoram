@@ -62,6 +62,9 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 			}
 			s := myspec.Spec{Role: myspec.RoleData, Topology: myspec.TopologyGroup}
 			c := &nativeStatusConnector{groupTestConnector: groupTestConnector{t: t, queries: []groupQuery{{contains: "SELECT @@server_uuid", values: []driver.Value{uuid, "", true, true, "8.4.10-10"}}}}}
+			if strings.HasPrefix(mode, "group ") {
+				c.queries = append(c.queries, groupQuery{contains: "SELECT @@group_replication_group_name", values: []driver.Value{uuid}})
+			}
 			state, role := "OFFLINE", ""
 			switch mode {
 			case "group absent":
@@ -110,6 +113,9 @@ func TestNativeStatusBeforeAndAfterGroupMembership(t *testing.T) {
 			}
 			if out.MemberState != state || out.MemberRole != role || out.GroupMembers != int(count) {
 				t.Fatalf("membership status=%+v", out)
+			}
+			if strings.HasPrefix(mode, "group ") && out.GroupName != uuid {
+				t.Fatalf("group identity missing: %+v", out)
 			}
 			if out.ServerUUID != uuid || out.Version != "8.4.10-10" || out.PhysicalIdentity == "" {
 				t.Fatalf("native identity/version was lost: %+v", out)
