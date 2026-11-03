@@ -329,7 +329,8 @@ A stale `ONLINE` report never makes a lost member a healthy rollout peer.
 Operations are serialized per cluster: automatic replacement queueing cannot
 preempt an active rollout. If recovery appears mid-rollout, settle the current
 member and its routing withdrawal without submitting another executable, then
-retire the rollout with a recovery diagnostic so replacement can claim ownership.
+fail the incomplete rollout with a recovery diagnostic so replacement can claim
+ownership without retrying the rollout. Re-run `upgrade-agents` after recovery.
 A known deployment receipt still requires its exact target build; confirmed
 storage loss instead releases the drain without native readmission and retains
 the independent loss routing fence. Cancellation follows the same cleanup path.
