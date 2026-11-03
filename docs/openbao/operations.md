@@ -146,14 +146,22 @@ skipped unless `--include-current` is supplied. A control-plane build change can
 retarget an existing rollout: an undisrupted member journal is discarded, while
 submitted or ambiguous work first settles on its previous or frozen target build.
 The operation then reports the mismatch; re-run `upgrade-agents` for the new target.
-Ordinary Sync never advances an operation-owned agent change or deployment retry.
+Ordinary Sync never submits an operation-owned agent deployment or activates its
+configuration. Failure cleanup settles the affected member without a new deploy.
+If the owner has already become terminal, Sync resumes that non-deploying recovery,
+retires the journal once native readiness returns, and allows subsequent operations.
 
 Maintenance windows are rechecked immediately before the first step-down or deploy,
 including after a controller restart with a journaled but undisrupted member.
 Cancellation discards that undisrupted journal; after disruption it finishes recovery
 before stopping between members. If a deployment intent has no receipt, cancellation
 settles the member on its previous or target build without submitting another deploy.
-Replaying that intent rechecks the window and quorum before any resubmission.
+Replaying an intent adopts an already healthy native member reporting the exact
+target build when that build differs from its previous build, including after an
+ambiguous submission error. That proof retires the lost receipt/retry without a
+second deployment. For same-build `--include-current`, build identity cannot prove
+that the requested redeployment happened: replay conservatively redeploys, checking
+the maintenance window and quorum again before resubmission.
 Other established Shamir peers that seal during the operation are recovered serially,
 including during cancellation. Cancellation is not rollback. Shamir unseal reuses
 control-plane-held shares; auto-unseal still depends on the configured

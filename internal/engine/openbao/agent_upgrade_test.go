@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type upgradeBackend struct {
@@ -506,5 +507,172 @@ func TestAgentUpgradeBuildMismatchCannotEscapeThroughSync(t *testing.T) {
 				t.Fatal("ordinary Sync escaped the build fence")
 			}
 		})
+	}
+}
+
+func TestAgentUpgradeAdoptsExactTargetAfterLostReceipt(t *testing.T) {
+	for _, retry := range []bool{false, true} {
+		t.Run(map[bool]string{false: "crash", true: "submission-error"}[retry], func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			for _, m := range a.members {
+				m.build = "previous-build"
+			}
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			upgradeTick(t, p, rc, op, false)
+			upgradeTick(t, p, rc, op, false)
+			s := state(t, rc)
+			m := s.find("demom1")
+			m.Change.Step = "deploy"
+			m.Change.Started = true
+			if retry {
+				s.Retry = &pending{Action: "deploy", Member: m.Name, Version: m.DesiredVersion}
+			}
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			a.redeploy(m.Name)
+			a.member(m.Name).build = b.target
+			for i := range 40 {
+				upgradeTick(t, p, rc, op, false)
+				var cp agentUpgradeCheckpoint
+				if err := json.Unmarshal(op.Checkpoint, &cp); err != nil {
+					t.Fatal(err)
+				}
+				if slices.Contains(cp.Done, m.Name) {
+					break
+				}
+				if i == 39 {
+					t.Fatal("target completion was not adopted")
+				}
+			}
+			if len(b.deploys) != 0 {
+				t.Fatalf("already-complete target was redeployed: %v", b.deploys)
+			}
+			s = state(t, rc)
+			m = s.find(m.Name)
+			if s.Retry != nil || m.Change != nil || !m.Healthy || m.Sealed {
+				t.Fatal("adoption retained recovery journal")
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeTerminalOwnerRecoversWithoutDeployment(t *testing.T) {
+	for _, boundary := range []string{"intent", "wait", "retry"} {
+		t.Run(boundary, func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			for _, m := range a.members {
+				m.build = "previous-build"
+			}
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			op.Cluster = rc.Cluster.Name
+			op.Namespace = rc.Cluster.Ref().Namespace
+			st := rc.Store.(*store.Store)
+			if err := st.EnqueueOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			upgradeTick(t, p, rc, op, false)
+			upgradeTick(t, p, rc, op, false)
+			s := state(t, rc)
+			m := s.find("demom1")
+			config := m.ConfigVersion
+			m.Change.Step = "deploy"
+			m.Change.Started = true
+			if boundary == "wait" {
+				m.Change.Step = "wait"
+			}
+			if boundary == "retry" {
+				s.Retry = &pending{Action: "deploy", Member: m.Name, Version: m.DesiredVersion}
+			}
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			a.redeploy(m.Name)
+			if boundary != "intent" {
+				a.member(m.Name).build = b.target
+			}
+			op.Phase = domain.PhaseFailed
+			if err := st.UpdateOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			if !p.SupportsFailureCleanup(op) {
+				t.Fatal("failure cleanup not supported")
+			}
+			for i := range 40 {
+				p = New(p.options)
+				a.p = p
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				if state(t, rc).find(m.Name).Change == nil {
+					break
+				}
+				if i == 39 {
+					t.Fatal("terminal owner stranded member journal")
+				}
+			}
+			m = state(t, rc).find(m.Name)
+			if len(b.deploys) != 0 || m.ConfigVersion != config || !m.Healthy || m.Sealed {
+				t.Fatal("terminal cleanup deployed or changed config")
+			}
+			allowed, err := p.CanClaimOperation(rc.Cluster)
+			if err != nil || !allowed {
+				t.Fatalf("next operation blocked: allowed=%v err=%v", allowed, err)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeSameBuildIntentRequiresGatedRedeploy(t *testing.T) {
+	p, rc, f, a := setup(t)
+	ready(t, p, rc)
+	for _, m := range a.members {
+		m.build = engine.CurrentAgentBuild().Build
+	}
+	b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+	rc.Backend = b
+	op := upgradeOperation(t, true)
+	upgradeTick(t, p, rc, op, false)
+	upgradeTick(t, p, rc, op, false)
+	s := state(t, rc)
+	m := s.find("demom1")
+	m.Change.Step = "deploy"
+	m.Change.Started = true
+	if err := s.save(rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	rc.Clock = &testClock{at: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)}
+	rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1h"}}}
+	for range 8 {
+		upgradeTick(t, p, rc, op, false)
+	}
+	var cp agentUpgradeCheckpoint
+	if err := json.Unmarshal(op.Checkpoint, &cp); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.deploys) != 0 || cp.Waiting != m.Name {
+		t.Fatal("same-build intent bypassed window or was adopted")
+	}
+	rc.Cluster.Spec.Maintenance = nil
+	for i := range 30 {
+		upgradeTick(t, p, rc, op, false)
+		if err := json.Unmarshal(op.Checkpoint, &cp); err != nil {
+			t.Fatal(err)
+		}
+		if slices.Contains(cp.Done, m.Name) {
+			break
+		}
+		if i == 29 {
+			t.Fatal("same-build redeployment did not complete")
+		}
+	}
+	if !slices.Equal(b.deploys, []string{m.Name}) {
+		t.Fatalf("same-build redeploys: %v", b.deploys)
 	}
 }

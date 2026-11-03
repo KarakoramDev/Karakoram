@@ -99,6 +99,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		return agentUpgradeResult(cp, true)
 	}
 	mismatch := cp.Target.TargetBuild != engine.CurrentAgentBuild().Build
+	cleanup := cancel && op.FailureCleanupStartedAt != nil
 	if mismatch && cp.Waiting == "" {
 		return result, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 	}
@@ -145,7 +146,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			if cancel || mismatch {
 				m.Change = nil
 				cp.Waiting = ""
-				if mismatch {
+				if mismatch && !cleanup {
 					return result, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 				}
 				return agentUpgradeResult(cp, true)
@@ -157,7 +158,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
 		}
-		if (cancel && s.Retry != nil && s.Retry.Op.ID == "" || mismatch) && s.Retry != nil && s.Retry.Action == "deploy" && s.Retry.Member == m.Name {
+		if (cancel && s.Retry != nil && s.Retry.Op.ID == "" || mismatch || cleanup) && s.Retry != nil && s.Retry.Action == "deploy" && s.Retry.Member == m.Name {
 			// An ambiguous submission error is not proof that the runtime stayed
 			// untouched. A build mismatch also forbids retrying a failed receipt.
 			// Retire the retry journal and settle natively before reporting either.
@@ -165,18 +166,6 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			if m.Change != nil {
 				m.Change.Step = "deploy"
 			}
-		}
-		if s.Retry != nil && s.Retry.Action == "deploy" {
-			p.observeMembers(ctx, rc, s)
-			if busy, e := p.recoverEstablishedPeers(ctx, rc, s, m); busy || e != nil {
-				return agentUpgradeResultError(cp, e)
-			}
-			if rc.WaitForWindow().RequeueAfter > 0 {
-				return agentUpgradeResult(cp, false)
-			}
-		}
-		if busy, e := p.retryPending(ctx, rc, s); busy || e != nil {
-			return agentUpgradeResultError(cp, e)
 		}
 		if busy, e := p.observeDeployments(ctx, rc, s); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
@@ -222,12 +211,38 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if busy, e := p.recoverEstablishedPeers(ctx, rc, s, m); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
 		}
+		if !cancel && !mismatch && cp.Target.TargetBuild != cp.PreviousBuild && healthy && m.Healthy {
+			st, e := p.agentStatus(ctx, rc, m.Name)
+			if e != nil {
+				return result, e
+			}
+			if st.Agent.Build == cp.Target.TargetBuild && st.Processes["openbao"].State == "running" && st.ConfigVersion >= m.ConfigVersion {
+				// Exact-target native recovery proves a lost receipt already took
+				// effect. Never redeploy it merely to manufacture a new receipt.
+				if s.Retry != nil {
+					s.resetPlatformRetry(s.Retry)
+				}
+				m.Change = nil
+				m.Stage = "ready"
+				cp.Done = append(cp.Done, m.Name)
+				cp.Waiting = ""
+				return agentUpgradeResult(cp, false)
+			}
+		}
+		if s.Retry != nil {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return agentUpgradeResult(cp, false)
+			}
+			if busy, e := p.retryPending(ctx, rc, s); busy || e != nil {
+				return agentUpgradeResultError(cp, e)
+			}
+		}
 		if m.Change != nil {
 			c := m.Change
 			// Started with no receipt may mean the deploy was accepted immediately
 			// before a crash. Cancellation settles either the old or target build,
 			// never submits another deployment merely to cancel.
-			if (cancel && c.Step != "wait" || mismatch) && c.Started && m.ResumeDeploy == nil && s.Pending == nil && s.Retry == nil {
+			if (cancel && c.Step != "wait" || mismatch || cleanup) && c.Started && m.ResumeDeploy == nil && s.Pending == nil && s.Retry == nil {
 				st, e := p.agentStatus(ctx, rc, m.Name)
 				if e != nil {
 					return result, e
@@ -238,7 +253,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 				m.Change = nil
 				m.Stage = "ready"
 				cp.Waiting = ""
-				if mismatch {
+				if mismatch && !cleanup {
 					return result, engine.Invalid("agent upgrade target build differs from running control-plane build; member recovered, re-run upgrade-agents")
 				}
 				return agentUpgradeResult(cp, true)
@@ -328,7 +343,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		// Journal before deployment. Reuse rolling step-down, receipt and unseal gates,
 		// but never activate desired config or change the engine version.
-		m.Change = &memberChange{Kind: "agent", Version: m.DesiredVersion, Fingerprint: m.RestartFingerprint}
+		m.Change = &memberChange{Kind: "agent", Version: m.DesiredVersion, Fingerprint: m.RestartFingerprint, OperationID: op.ID, AgentPreviousBuild: st.Agent.Build}
 		cp.Waiting = name
 		cp.PreviousBuild = st.Agent.Build
 		return agentUpgradeResult(cp, false)
@@ -354,4 +369,43 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 		return engine.OpResult{}, engine.ErrNotSupported
 	}
 	return p.upgradeAgents(ctx, rc, op, true)
+}
+
+func (*Provider) SupportsFailureCleanup(op *domain.Operation) bool {
+	return op.Kind == domain.OperationUpgradeAgents
+}
+
+// Recover a terminal owner's journal through the same non-deploying cleanup path.
+// This also covers cleanup timeout followed by restored native observations.
+func (p *Provider) recoverRetiredAgentUpgrade(ctx context.Context, rc *engine.Context, s *internalState) (bool, error) {
+	if rc.Operation != nil {
+		return false, nil
+	}
+	for _, m := range s.Members {
+		if m.Change == nil || m.Change.Kind != "agent" || m.Change.OperationID == "" {
+			continue
+		}
+		op, err := rc.Store.GetOperation(ctx, m.Change.OperationID)
+		if err != nil {
+			return true, err
+		}
+		if op == nil || !op.Terminal() {
+			return false, nil
+		}
+		target, err := engine.AgentUpgradeTarget(op)
+		if err != nil {
+			return true, err
+		}
+		cp := agentUpgradeCheckpoint{Target: target, Order: []string{m.Name}, Waiting: m.Name, PreviousBuild: m.Change.AgentPreviousBuild}
+		recovery := *op
+		recovery.Checkpoint, err = json.Marshal(cp)
+		if err != nil {
+			return true, err
+		}
+		now := time.Now()
+		recovery.FailureCleanupStartedAt = &now
+		_, err = p.upgradeAgents(ctx, rc, &recovery, true)
+		return true, err
+	}
+	return false, nil
 }

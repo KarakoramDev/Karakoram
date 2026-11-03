@@ -11,13 +11,15 @@ import (
 )
 
 type memberChange struct {
-	Kind        string           `json:"kind"`
-	Step        string           `json:"step"`
-	Version     string           `json:"version"`
-	Fingerprint string           `json:"fingerprint"`
-	Resources   domain.Resources `json:"resources"`
-	Disk        domain.Resources `json:"disk"`
-	Started     bool             `json:"started,omitempty"`
+	Kind               string           `json:"kind"`
+	Step               string           `json:"step"`
+	Version            string           `json:"version"`
+	Fingerprint        string           `json:"fingerprint"`
+	Resources          domain.Resources `json:"resources"`
+	Disk               domain.Resources `json:"disk"`
+	Started            bool             `json:"started,omitempty"`
+	OperationID        string           `json:"operationId,omitempty"`
+	AgentPreviousBuild string           `json:"agentPreviousBuild,omitempty"`
 }
 
 func (p *Provider) restartFingerprint(ctx context.Context, rc *engine.Context) (string, error) {
