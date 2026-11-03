@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"maps"
 	"reflect"
 	"time"
 )
@@ -86,6 +87,12 @@ func proxyResourceOnly(m *member, version string, target domain.ComponentSpec, r
 }
 
 func proxyRuntimeHash(rc *engine.Context, spec infra.RuntimeSpec) (string, error) {
+	// This marker controls backend health gating, not the proxy runtime.
+	// Exclude it so upgraded control planes retain existing count fast paths.
+	if _, marked := spec.Env["KARAKORAM_PROXY_SERVING_PROBE"]; marked {
+		spec.Env = maps.Clone(spec.Env)
+		delete(spec.Env, "KARAKORAM_PROXY_SERVING_PROBE")
+	}
 	raw, err := json.Marshal(struct {
 		Runtime infra.RuntimeSpec
 
@@ -106,22 +113,6 @@ func (p *Core) desiredProxyRuntimeHash(rc *engine.Context, m *member) (string, e
 		return "", err
 	}
 	return proxyRuntimeHash(rc, spec)
-}
-
-// Adding the serving-probe marker is a lazy migration, not an instruction to
-// restart an otherwise unchanged proxy after a control-plane upgrade. Fast paths
-// still require the full new hash, so the next requested change redeploys once.
-func (p *Core) proxyRuntimeChanged(rc *engine.Context, m *member, hash string) (bool, error) {
-	if m.Role != "proxy" || m.ProxyRuntimeHash == "" || m.ProxyRuntimeHash == hash {
-		return false, nil
-	}
-	spec, err := p.runtimeSpec(rc, m)
-	if err != nil {
-		return false, err
-	}
-	delete(spec.Env, "KARAKORAM_PROXY_SERVING_PROBE")
-	legacy, err := proxyRuntimeHash(rc, spec)
-	return m.ProxyRuntimeHash != legacy, err
 }
 
 func proxyUpdatesPreserveServing(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
@@ -163,10 +154,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			if err != nil {
 				return true, err
 			}
-			runtimeChanged, err := p.proxyRuntimeChanged(rc, m, runtimeHash)
-			if err != nil {
-				return true, err
-			}
+			runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
 			serving, err := proxyUpdatesPreserveServing(ctx, rc, m)
 			if err != nil {
 				return true, err
@@ -260,10 +248,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 	if err != nil {
 		return true, err
 	}
-	runtimeChanged, err := p.proxyRuntimeChanged(rc, m, runtimeHash)
-	if err != nil {
-		return true, err
-	}
+	runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
 	serving, err := proxyUpdatesPreserveServing(ctx, rc, m)
 	if err != nil {
 		return true, err

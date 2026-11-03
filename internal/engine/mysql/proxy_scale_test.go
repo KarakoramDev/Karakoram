@@ -457,13 +457,16 @@ func TestProxyResourceServingRechecksMaintenanceWindow(t *testing.T) {
 }
 
 func TestProxyResourceServingProbeMarkerMigration(t *testing.T) {
-	for _, resources := range []bool{false, true} {
-		t.Run(fmt.Sprintf("resources=%v", resources), func(t *testing.T) {
+	for _, serving := range []bool{true, false} {
+		t.Run(fmt.Sprintf("deployed-runtime-serving=%v", serving), func(t *testing.T) {
 			p, rc, base := setup(t, "group")
 			converge(t, p, rc, base)
 			s, _ := load(rc.Cluster)
 			b, _ := proxyScaleFixture(t, rc, s)
 			b.servingResources = true
+			// Nomad retains its existing count guarantee; legacy Dokploy gates
+			// it off until a marked runtime has actually been deployed.
+			b.unsupportedRuntime = !serving
 			proxy := s.find(b.proxy)
 			spec, err := p.runtimeSpec(rc, proxy)
 			if err != nil {
@@ -488,18 +491,20 @@ func TestProxyResourceServingProbeMarkerMigration(t *testing.T) {
 			if s.Rolling != nil || s.find(b.proxy).ProxyRuntimeHash != legacy || b.stops[b.proxy] != 0 || b.resources != 0 || b.deploys != 0 {
 				t.Fatal("control-plane marker migration automatically redeployed proxy")
 			}
-			count := 2
-			if resources {
-				count = 1
-			}
-			setProxyScaleTarget(rc, count, resources)
+			setProxyScaleTarget(rc, 2, false)
 			converge(t, p, rc, base)
-			if b.stops[b.proxy] != 1 || b.deploys != 1 {
-				t.Fatal("next requested change did not migrate legacy proxy")
+			restarts := 0
+			if !serving {
+				restarts = 1
 			}
+			if b.stops[b.proxy] != restarts || b.deploys != restarts || b.scales != 1 {
+				t.Fatalf("legacy count fast path: serving=%v stops=%d deploys=%d scales=%d", serving, b.stops[b.proxy], b.deploys, b.scales)
+			}
+			// Successful marked deployment admits future no-stop changes.
+			b.unsupportedRuntime = false
 			setProxyScaleTarget(rc, 1, false)
 			converge(t, p, rc, base)
-			if b.stops[b.proxy] != 1 || b.deploys != 1 {
+			if b.stops[b.proxy] != restarts || b.deploys != restarts {
 				t.Fatal("runtime marker migration repeated after acknowledgement")
 			}
 		})
