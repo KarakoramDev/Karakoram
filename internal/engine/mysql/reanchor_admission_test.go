@@ -27,8 +27,9 @@ func (s *interleavedReanchorStore) EnqueueBackup(ctx context.Context, b *domain.
 }
 
 func TestPITRReanchorTransactionalAdmission(t *testing.T) {
-	for _, maintenance := range []bool{false, true} {
-		t.Run(map[bool]string{false: "manual-backup", true: "maintenance"}[maintenance], func(t *testing.T) {
+	for _, scenario := range []string{"manual-backup", "maintenance", "cancelled-maintenance"} {
+		t.Run(scenario, func(t *testing.T) {
+			maintenance := scenario != "manual-backup"
 			p, rc, _ := backupFixture(t, "single")
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
 			at := time.Now().UTC()
@@ -56,6 +57,14 @@ func TestPITRReanchorTransactionalAdmission(t *testing.T) {
 					op.Kind = domain.OperationRestart
 					if err := db.EnqueueOperation(t.Context(), op); err != nil {
 						t.Fatal(err)
+					}
+					if scenario == "cancelled-maintenance" {
+						finished := rc.Clock.Now()
+						op.Phase = domain.PhaseCancelled
+						op.CompletedAt = &finished
+						if err := db.UpdateOperation(t.Context(), op); err != nil {
+							t.Fatal(err)
+						}
 					}
 				} else {
 					op.Kind = domain.OperationBackup

@@ -230,8 +230,9 @@ plane restarts. An existing pending/running backup blocks the automatic full,
 and re-anchor fulls are limited to one per cluster per hour. A deterministic
 name deduplicates each cluster/writer/newest-full epoch, including failed attempts;
 manual full backups remain available if intervention is needed.
-Admission rechecks active backups and cluster operations in the same transaction
-that inserts the automatic full, so work queued after observation still defers it.
+Admission rechecks active backups, cluster operations and the five-minute
+post-operation grace in the same transaction that inserts the automatic full,
+so work queued and even cancelled after observation still defers it.
 
 `PITRReanchorTriggered` events name the queued full. Skip events use
 `PITRReanchorSkipped` with a reason suffix (`NoStorage`, `WriterUnavailable`,

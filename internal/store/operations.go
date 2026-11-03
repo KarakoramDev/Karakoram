@@ -388,13 +388,35 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 		// Recheck under the same writer transaction as insertion: an API or
 		// scheduler enqueue may have won after the engine's observation pass.
 		scope := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key()
-		var operations, backups int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind') NOT IN (?,?)`, scope, domain.OperationBackup, domain.OperationDeleteBackup).Scan(&operations); err != nil {
-			return err
+		rows, e := tx.QueryContext(ctx, `SELECT data FROM records WHERE kind='operation' AND scope=?`, scope)
+		if e != nil {
+			return e
 		}
-		if operations != 0 {
+		blocked := false
+		for rows.Next() {
+			var raw []byte
+			var existing domain.Operation
+			if e = rows.Scan(&raw); e == nil {
+				e = json.Unmarshal(raw, &existing)
+			}
+			if e != nil {
+				rows.Close()
+				return e
+			}
+			if domain.OperationDefersPITRReanchor(existing, backup.CreatedAt) {
+				blocked = true
+				break
+			}
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return e
+		}
+		if blocked {
 			return &domain.BackupAdmissionBusyError{Operation: true}
 		}
+		var backups int
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE scope=? AND phase IN ('Pending','Running') AND (kind='backup' OR (kind='operation' AND json_extract(data,'$.kind')=?))`, scope, domain.OperationBackup).Scan(&backups); err != nil {
 			return err
 		}

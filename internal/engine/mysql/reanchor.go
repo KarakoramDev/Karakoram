@@ -73,7 +73,7 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 		return err
 	}
 	for _, op := range ops {
-		if op.Kind == domain.OperationBackup || op.Kind == domain.OperationDeleteBackup {
+		if !domain.OperationDefersPITRReanchor(op, at) {
 			continue
 		}
 		if op.Phase == domain.PhasePending || op.Phase == domain.PhaseRunning {
@@ -154,7 +154,7 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 	if !r.LastTriggered.IsZero() && at.Sub(r.LastTriggered) < time.Hour {
 		return skip("Cooldown", "Automatic PITR full backup deferred: one-hour re-anchor cooldown")
 	}
-	if at.Sub(r.FirstSeen) < 5*time.Minute {
+	if at.Sub(r.FirstSeen) < domain.PITRReanchorStabilityPeriod {
 		return skip("WriterNotStable", "Automatic PITR full backup deferred: writer must remain stable for five minutes after cluster operations")
 	}
 	b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: name, Provider: rc.Cluster.Spec.Provider, Storage: policy.Storage, Type: "full", Trigger: domain.BackupTriggerPITRReanchor, Phase: domain.PhasePending, CreatedAt: at}
