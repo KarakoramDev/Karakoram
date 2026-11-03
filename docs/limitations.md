@@ -149,10 +149,12 @@ These cross-engine constraints define the operating model; engine-specific limit
   supersession and Stop. A caller crash before checkpointing a returned failure
   can permit one resubmission. Dokploy count/resource updates require a deployed
   serving-probe marker and serial start-first replacement with spare capacity.
-  Native readiness gates initial admission, latched for the agent/container
-  lifetime; later Swarm checks require supervisor liveness only, preventing
-  writer outages or intentional holds from triggering replacement cascades.
-  Replacement resets the latch. Unmarked legacy proxies retain their
+  Native readiness gates initial task/container admission. A provenance-bound
+  marker in container `/tmp` (never the engine volume) survives agent-only
+  restart/re-exec; new task/container identities need fresh native admission.
+  Later Swarm checks use lock-free agent/supervisor liveness only; dependency
+  failures and intentional holds remain engine-managed, avoiding replacement
+  cascades. Unmarked legacy proxies retain their
   disruptive/maintenance-gated path until redeployed. All proxy resource changes
   and count reductions remain maintenance-window gated; only serving-preserving
   count scale-out bypasses the window. Replacing or removing an instance can
