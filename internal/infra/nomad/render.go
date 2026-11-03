@@ -168,8 +168,9 @@ func (b *Backend) renderJob(ctx context.Context, r *record) (map[string]any, err
 		}}
 		task["VolumeMounts"] = []any{map[string]any{"Volume": "data", "Destination": layout.VolumePath(r.Volume), "ReadOnly": false}}
 	} else if len(r.Deployment.Runtime.Args) == 0 || r.Deployment.Runtime.Args[0] != "relay" {
-		// Stateless applications retain their serving predecessor until the
-		// replacement passes checks. Relay sessions must remain singleton.
+		// Only the canary starts before its predecessors stop. After promotion,
+		// MaxParallel bounds destructive replacements, not start-first ones.
+		// TCP checks are not engine readiness. Relay sessions remain singleton.
 		group["Update"] = map[string]any{
 			"MaxParallel": 1, "Canary": 1, "AutoPromote": true, "AutoRevert": true,
 			"HealthCheck": "checks", "MinHealthyTime": int64(10 * time.Second),
