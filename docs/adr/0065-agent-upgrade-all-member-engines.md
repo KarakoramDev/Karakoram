@@ -48,6 +48,11 @@ the operation diagnostic before submitting a new rollout.
   latch. Select a GTID-containing admitted peer, exclude the routed writer and
   observe replacement writer routing before redeploying it; wait for native rejoin
   and proxy readmission. MySQL single has no writer handoff and has downtime.
+  If recovery or confirmed loss appears during rollout, settle the current member
+  and routing withdrawal without another executable submission, then retire the
+  serialized rollout so replacement can take ownership. Confirmed loss releases
+  drain ownership without native readmission and retains the separate loss routing
+  fence; a lost member never becomes a healthy rollout peer.
 - **OpenBao:** freeze standby/inactive-before-active order. Raft requires healthy,
   unsealed peers, live quorum/autopilot checks and a surviving voter majority.
   Step down the active member and observe another healthy active before its

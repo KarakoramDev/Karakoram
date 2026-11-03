@@ -47,6 +47,14 @@ that configuration on proxies, stop and observe its exact runtime, then prove
 native survivor membership no longer contains it before deleting resources.
 The old identity is never deployed or initialized on fresh storage.
 
+Agent rollout and replacement are serialized, not mutually preempting workflows.
+If loss/recovery appears during rollout, settle its current member and routing
+withdrawal without another deployment, then retire the rollout so replacement can
+claim ownership. A withdrawn survivor cannot be a donor or writer; outstanding
+drains, including readmission acknowledgement, block replacement admission.
+Confirmed loss releases a lost member's drain without native readmission while
+retaining its independent loss routing fence.
+
 ## Consequences
 
 Single topology is refused: there is no surviving replica, so recover original

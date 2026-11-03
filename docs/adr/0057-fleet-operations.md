@@ -16,7 +16,7 @@ Members report `agent.version`, `agent.commit` and `agent.build`; the build uses
 
 Expose `POST /clusters/{cluster}/upgrade-agents` as a durable `upgrade-agents` operation, authorized by `clusters:update` on the cluster and protected by normal CSRF and idempotency handling. Optional `includeCurrent` defaults to false; return `409 AgentsCurrent` if no outdated or unknown member needs work. Engine drivers advertise support in their operation catalog.
 
-Freeze the target build in the checkpoint when the operation is claimed. Redeploy the current executable through `engine.Deploy` to the **same runtime and volume**, at the **unchanged database version**. Skip members already at the target unless explicitly included. Use existing one-member-at-a-time disruption journals, allow cancellation between members, and retain native gates:
+Persist the enqueue-frozen target build in the checkpoint when the operation is claimed. Redeploy the current executable through `engine.Deploy` to the **same runtime and volume**, at the **unchanged database version**. Skip members already at the target unless explicitly included. Use existing one-member-at-a-time disruption journals, allow cancellation between members, and retain native gates:
 
 - [PSMDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) checks safe restart, primary step-down and catch-up.
 - [RabbitMQ](https://www.rabbitmq.com) checks quorum, drains and revives through its agent-change action.
