@@ -55,6 +55,8 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	b.native[bad] = st
 	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
 		t.Fatal("divergence accepted")
+	} else if conflict, ok := err.(*myspec.GTIDQuorumError); !ok || !conflict.Diverged {
+		t.Fatalf("divergence lost typed False discriminator: %v", err)
 	}
 	incident := activeGTIDIncident(s)
 	if incident == nil || !incident.SafeThrough.Equal(lastSafe) {
@@ -84,7 +86,7 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	found := false
 	for _, c := range status.Conditions {
 		if c.Type == "GTIDHistorySafe" {
-			found = c.Status == "False" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
+			found = c.Status == "False" && c.Reason == "GTIDHistoryDiscontinuityLatched" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
 		}
 	}
 	if !found {

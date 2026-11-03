@@ -155,6 +155,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
 			healthy = false
 			condition.Status, condition.Reason, condition.Message = "Unknown", "QuorumComparisonUnavailable", e.Error()
+			if _, comparison := e.(*myspec.GTIDQuorumError); !comparison {
+				condition.Reason = "GTIDHistoryPersistenceUnavailable"
+				condition.Message = "GTID history journal, state or audit persistence unavailable; continuity cannot be certified until persistence recovers"
+				if _, persistence := e.(*gtidHistoryPersistenceError); persistence {
+					condition.Message = e.Error()
+				}
+			}
 			if conflict, ok := e.(*myspec.GTIDQuorumError); ok && conflict.Diverged {
 				condition.Status, condition.Reason = "False", "GTIDHistoryDiverged"
 				for i := range status.Members {

@@ -15,6 +15,7 @@ import (
 )
 
 type mysqlReadModeKey struct{}
+type mysqlQuorumReadKey struct{}
 type mysqlReadScopeKey struct{ namespace, cluster string }
 type mysqlReadKey struct{ member, instance, action string }
 
@@ -40,6 +41,7 @@ type mysqlReadCall struct {
 type mysqlReadScope struct {
 	mu                  sync.Mutex
 	deadline            time.Time
+	quorumDeadline      time.Time
 	identity            mysqlReadIdentity
 	members             []mysqlReadMember
 	initialized         bool
@@ -92,11 +94,19 @@ func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context,
 		probe, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 		return infra.ObservationContext(probe), cancel
 	}
+	// Continuity gets its own bounded reservation, not the leftovers of native
+	// readiness/platform reads. Repeated callers still share one absolute budget.
+	quorum, _ := ctx.Value(mysqlQuorumReadKey{}).(bool)
 	scope.mu.Lock()
-	if scope.deadline.IsZero() {
-		scope.deadline = time.Now().Add(engine.ObservationTimeout)
+	budget := &scope.deadline
+	duration := engine.ObservationTimeout
+	if quorum {
+		budget, duration = &scope.quorumDeadline, time.Second
 	}
-	deadline := scope.deadline
+	if budget.IsZero() {
+		*budget = time.Now().Add(duration)
+	}
+	deadline := *budget
 	scope.mu.Unlock()
 	probe, cancel := context.WithDeadline(ctx, deadline)
 	return infra.ObservationContext(probe), cancel

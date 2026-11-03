@@ -231,8 +231,28 @@ permission over old admitted members or acknowledges a real incident.
 boundary, the detection time and affected members. The condition appears in the
 cluster API and the overview's conditions table. A later restart, equal GTID
 sets, SST or forced re-formation does not silently erase that observation.
-`Unknown` / `QuorumComparisonUnavailable` means a safe majority comparison
-cannot currently be established.
+The `GTIDHistorySafe` condition uses these reasons:
+
+| Status | Reason | Meaning |
+| --- | --- | --- |
+| True | `QuorumHistoryCompatible` | A compatible configured-member majority is observable, with no active latch. |
+| Unknown | `QuorumComparisonUnavailable` | No compatible majority is currently proven. The message distinguishes `comparison`, `observation-budget` and `observation-lock`, with per-member `eligible`, `rpc-error`, `timeout`, `not-eligible(...)` or `no-observation` outcomes. |
+| Unknown | `GTIDHistoryPersistenceUnavailable` | History journal loading, state/journal persistence, audit recording or journal-lock acquisition failed; this is not evidence of incompatible histories. |
+| False | `GTIDHistoryDiverged` | The comparison proves incompatible history. |
+| False | `GTIDHistoryDiscontinuityLatched` | A recorded divergence remains active, including after later equal observations. |
+
+Read-only quorum sampling has its own one-second absolute reservation per
+observation pass, independent of the four-second readiness/platform budget.
+Invalidation and retries do not renew either budget. Journal-lock waiting is
+separately bounded to one second. Parent cancellation still applies.
+Configured members, including planned or unreachable members, remain in the
+majority denominator: five members require three compatible reports.
+`no-observation` includes missing agent/service identity, undeployed stages and
+the pass's optional-action retry cap. Agent SQL, transport and durable identity
+refresh failures appear as `rpc-error`; raw agent error bodies and GTIDs are not
+published in the discriminator. Persistent faults can keep Unknown indefinitely;
+there is no automatic time-based promotion to safe.
+
 The safe watermark advances only when every configured member is successfully
 observed eligible in the same component. An available majority with an unseen
 member does not certify that unseen member's intervening history.
@@ -249,6 +269,10 @@ incremental backup chains and PITR/binlog replay spanning it. An independently
 valid backup and archived target before the recorded safe boundary remain
 restorable. Do not equate the detection timestamp with the first unsafe
 transaction: an IST can replay an older transaction under a different GTID.
+Comparison unavailability also permits a full backup, but an unavailable durable
+journal/state/audit fails backup admission closed because continuity state cannot
+be reliably loaded or recorded. Incrementals still require a compatible majority
+and no active incident.
 For PXC-4493 mixed accounting after activation, re-provision the affected member
 from trusted history using managed replacement/SST, then take the fresh full.
 A mysqld restart is **not** a repair: it may change the mapping for future

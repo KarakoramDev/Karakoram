@@ -39,7 +39,7 @@ func lockedQuorumSample(ctx context.Context, rc *engine.Context, s *state, fresh
 	mu := gtidObservationMutex(rc)
 	mu.Lock()
 	defer mu.Unlock()
-	return samplePXCQuorumGTIDs(ctx, rc, s, fresh)
+	return samplePXCQuorumGTIDs(ctx, rc, s, fresh, nil)
 }
 
 func TestPXCQuorumObservationPassAndFresh(t *testing.T) {

@@ -19,7 +19,7 @@ import (
 // Serialize each cluster's observation and journal commit together: a newer
 // equal sample must not move the boundary past an older in-flight conflict.
 // Unrelated clusters only share the short sealed-journal read/write lock.
-var gtidJournalMu sync.Mutex
+var gtidJournalMu = gtidObservationLock{held: make(chan struct{}, 1)}
 var gtidObservationLocks sync.Map
 
 type gtidObservationLock struct{ held chan struct{} }
@@ -108,9 +108,12 @@ func persistGTIDHistory(ctx context.Context, rc *engine.Context, s *state) error
 	return save(rc.Cluster, s)
 }
 
-func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) error {
+func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (result error) {
 	if rc.Cluster.Spec.Provider != "pxc" {
 		return nil
+	}
+	if !mysqlReadsFresh(ctx) {
+		ctx = context.WithValue(ctx, mysqlQuorumReadKey{}, true)
 	}
 	probe, cancel := mysqlReadContext(ctx, rc)
 	defer cancel()
@@ -121,20 +124,34 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	}
 	observationMu := gtidObservationMutex(rc)
 	if err := observationMu.LockContext(probe); err != nil {
-		if mysqlReadsFresh(ctx) {
-			return err
-		}
-		unavailable := make(map[string]myspec.GaleraStatusResponse, len(s.data()))
+		names := make([]string, 0, len(s.data()))
+		outcomes := make(map[string]string, len(s.data()))
 		for _, m := range s.data() {
-			unavailable[m.Name] = myspec.GaleraStatusResponse{}
+			names = append(names, m.Name)
+			outcomes[m.Name] = "no-observation"
 		}
-		return myspec.CheckGTIDQuorum(unavailable)
+		sort.Strings(names)
+		return &myspec.GTIDQuorumError{Members: names, Detail: quorumOutcomeDetail(outcomes, "observation-lock")}
 	}
 	defer observationMu.Unlock()
-	observations, sampleAt := samplePXCQuorumGTIDs(probe, rc, s, mysqlReadsFresh(ctx))
+	outcomes := make(map[string]string, len(s.data()))
+	observations, sampleAt := samplePXCQuorumGTIDs(probe, rc, s, mysqlReadsFresh(ctx), outcomes)
+	defer func() {
+		if result != nil {
+			if _, comparison := result.(*myspec.GTIDQuorumError); !comparison {
+				result = &gtidHistoryPersistenceError{cause: result, detail: quorumOutcomeDetail(outcomes, "persistence-error")}
+			}
+		}
+	}()
 	err := myspec.CheckGTIDQuorum(observations)
 	complete := completeGTIDObservation(observations)
-	gtidJournalMu.Lock()
+	// Sampling may consume its entire reservation. Journal serialization gets a
+	// separate bounded wait so timeout evidence and divergence still get recorded.
+	journalWait, stopJournalWait := context.WithTimeout(ctx, time.Second)
+	defer stopJournalWait()
+	if e := gtidJournalMu.LockContext(journalWait); e != nil {
+		return fmt.Errorf("GTID history journal lock unavailable: %w", e)
+	}
 	defer gtidJournalMu.Unlock()
 	if e := loadGTIDJournal(ctx, rc, s); e != nil {
 		return e
@@ -201,6 +218,13 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) erro
 	if e := save(rc.Cluster, s); e != nil {
 		return e
 	}
+	if unavailable, ok := err.(*myspec.GTIDQuorumError); ok && !unavailable.Diverged {
+		class := "comparison"
+		if probe.Err() != nil {
+			class = "observation-budget"
+		}
+		unavailable.Detail = quorumOutcomeDetail(outcomes, class)
+	}
 	return err
 }
 
@@ -213,7 +237,7 @@ func observePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) ma
 		return nil
 	}
 	defer observationMu.Unlock()
-	observations, _ := samplePXCQuorumGTIDs(probe, rc, s, true)
+	observations, _ := samplePXCQuorumGTIDs(probe, rc, s, true, nil)
 	return observations
 }
 
@@ -348,7 +372,7 @@ func establishGTIDBaseline(ctx context.Context, rc *engine.Context, s *state, b 
 		return engine.ErrUnavailable
 	}
 	// Acknowledge complete member histories, never just the backup source.
-	observations, _ := samplePXCQuorumGTIDs(ctx, rc, s, true)
+	observations, _ := samplePXCQuorumGTIDs(ctx, rc, s, true, nil)
 	gtidJournalMu.Lock()
 	defer gtidJournalMu.Unlock()
 	if err := loadGTIDJournal(ctx, rc, s); err != nil {
@@ -483,3 +507,27 @@ func rememberGTIDWindows(ctx context.Context, rc *engine.Context, s *state, wind
 	s.GTIDWindows = rememberedGTIDWindows(s)
 	return persistGTIDHistory(ctx, rc, s)
 }
+
+func quorumOutcomeDetail(outcomes map[string]string, class string) string {
+	names := make([]string, 0, len(outcomes))
+	for name := range outcomes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, name+"="+outcomes[name])
+	}
+	return fmt.Sprintf(" (%s; %s)", class, strings.Join(parts, "; "))
+}
+
+type gtidHistoryPersistenceError struct {
+	cause  error
+	detail string
+}
+
+func (e *gtidHistoryPersistenceError) Error() string {
+	return "PXC GTID history journal, state or audit persistence unavailable" + e.detail + "; continuity cannot be certified until persistence recovers"
+}
+
+func (e *gtidHistoryPersistenceError) Unwrap() error { return e.cause }

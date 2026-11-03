@@ -75,15 +75,18 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **PostgreSQL administrator password rotation remains unavailable.** The
   `postgres` administrator password cannot be rotated in place; follow
   [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
-- **PXC GTID-history observation after scale-out:** episodes of
-  `GTIDHistorySafe=Unknown` with reason `QuorumComparisonUnavailable` have
-  cleared on their own after approximately 16 and 30 minutes on idle PXC
-  clusters. The cause remains under investigation; these observations do not
-  guarantee recovery. The cluster reports Degraded while this condition is
-  Unknown, and history-sensitive backups can be blocked. Avoid history-sensitive
-  maintenance, including restore and member replacement, until it returns True.
-  If it persists or recurs, capture the condition message and each member's
-  Galera status, then contact support or open an issue.
+- **PXC GTID-history observation:** recurrent `GTIDHistorySafe=Unknown` can
+  persist while fewer than a configured-member majority are observable and
+  compatible. Read-only quorum sampling now has a reserved one-second pass
+  budget, so slow readiness/platform reads cannot starve it. This addresses a
+  code-proven failure mechanism, not a confirmed cause of earlier live episodes.
+  `QuorumComparisonUnavailable` includes secret-safe per-member outcome classes
+  and distinguishes comparison, budget and observation-lock failures;
+  `GTIDHistoryPersistenceUnavailable` identifies journal/state/audit failures.
+  Neither has a guaranteed recovery time. Incrementals and new PITR continuity
+  certification remain gated; journal persistence failures can also block full
+  backup admission. If Unknown persists or recurs, preserve the condition message
+  and contemporaneous agent Galera outcomes, then contact support or open an issue.
 - **GTID-history safety is not row equivalence:** `GTIDHistorySafe` cannot
   detect row drift caused by privileged unlogged writes (`SESSION wsrep_on=OFF`,
   `sql_log_bin=0`, or `gtid_next` manipulation). Restrict those privileges and

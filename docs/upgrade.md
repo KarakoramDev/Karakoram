@@ -47,6 +47,20 @@ uncovered gaps remain rejected. MySQL/PXC lists preserve each full's provenance;
 remembered PXC coverage and other engines omit provenance when unavailable.
 No node-agent protocol or backup artifact migration is required.
 
+### PXC GTID history safety observation
+
+PXC `GTIDHistorySafe=Unknown` now separates comparison unavailability
+(`QuorumComparisonUnavailable`) from journal/state/audit persistence failures
+(`GTIDHistoryPersistenceUnavailable`). Update condition-reason alert filters.
+Comparison messages include secret-safe member outcome classes and distinguish
+majority shortage, observation budget and observation-lock contention; do not
+parse the message as a stable wire schema. No agent protocol change is required.
+Quorum sampling has a separate bounded pass reservation, preventing slow required
+reads from consuming its entire budget. Configured-majority, complete-observation
+safe-watermark requirements and durable divergence latches are unchanged.
+Full backups remain admitted on typed comparison unavailability, but persistence
+failures still fail closed; incrementals/PITR cannot gain unproven continuity.
+
 ## Upgrading to v0.4.3
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),
