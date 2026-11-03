@@ -52,17 +52,30 @@ func (a *nodeAgent) serveProxyServing() (net.Listener, error) {
 		return nil, err
 	}
 	go func() {
+		// Admission belongs to this running agent, not the data directory. Once
+		// admitted, dependency loss or an intentional hold must not make Swarm
+		// kill every proxy. A new agent/container must earn admission again.
+		admitted := false
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			if !admitted {
+				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+				admitted = a.proxyServingHealth(ctx) == nil
+				cancel()
+			}
+			// Post-admission health is supervisor liveness only. In particular,
+			// do not take applyMu: a long config apply/maintenance operation is
+			// not evidence that this already admitted agent has died.
+			a.sup.mu.Lock()
+			alive := !a.sup.closed
+			a.sup.mu.Unlock()
 			response := byte(0)
-			if a.proxyServingHealth(ctx) == nil {
+			if admitted && alive {
 				response = 1
 			}
-			cancel()
 			_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
 			_, _ = conn.Write([]byte{response})
 			_ = conn.Close()
