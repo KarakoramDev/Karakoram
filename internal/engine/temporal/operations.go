@@ -56,6 +56,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	previousOperation := rc.Operation
 	rc.Operation = op
 	defer func() { rc.Operation = previousOperation }()
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, op)
+	}
 	s, err := loadState(rc.Cluster)
 	if err != nil {
 		return result, err

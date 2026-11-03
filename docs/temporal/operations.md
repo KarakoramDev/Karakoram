@@ -43,6 +43,36 @@ Use split-role names only in split topology (`history`, `matching`, `frontend`, 
 
 Rolling restart uses **history → matching → frontend → worker → server → ui**, skipping disabled components. It waits for all instances of each component to apply the desired configuration and become Ready before advancing, with a one-minute settle period after history or combined server restart. A restart can target a component/member through the operation payload; TLS CA rotation must include all components. A singleton role is unavailable during restart; multiple replicas are not a zero-disruption guarantee.
 
+## Agent upgrades
+
+```sh
+karactl -n NS clusters upgrade-agents workflows --wait
+```
+
+This replaces member agents with the frozen control-plane build, not a new
+Temporal release. Applied server/UI versions, component resources, replica counts,
+sealed configuration, restart tokens and the PostgreSQL binding remain unchanged.
+An active version upgrade, restore recovery, import or other pending structural
+work blocks admission.
+
+The durable order is **history → matching → frontend → worker → server → ui**,
+skipping disabled roles and already-current agents (unless `--include-current`).
+Each component has a persisted deployment intent and receipt, followed by native
+readiness, applied-configuration checks and exact target-build acknowledgement
+from every live instance. History and combined server retain the restart path's
+one-minute settle period. Replaying a completed component never redeploys it.
+Each new deployment respects the maintenance window; an already-deployed
+component finishes its readiness checks even after the window closes.
+
+The backend contract deploys a whole logical component service; it has no
+per-instance deployment primitive. Platform replacement strategy therefore
+controls multi-instance rollout within that component. **Singleton components
+have downtime, and additional replicas do not guarantee uninterrupted service.**
+The next component never starts until all expected instances are ready on the
+target build. A different control-plane executable cannot replace the frozen
+target; re-run the operation using the intended build.
+
+
 ## Server upgrades and schema
 
 The current catalog path is **1.31.4 → 1.32.1**. Admission requires locked artifacts. The version policy permits forward patches within a minor or exactly one minor forward; skipping minors and downgrades are rejected. Do not bypass the advertised `UpgradePaths`.

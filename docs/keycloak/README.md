@@ -46,10 +46,9 @@ operations after recovery, not merely an already-cached session. See the
 [binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
 
 The setting is rendered by the member agent, not the control plane. Existing
-consumers need a newly deployed agent; ordinary restart and `upgrade-agents`
-are not a supported rollout for this provider. Follow the
-[v0.4.1 consumer rollout procedure](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility),
-including its data-retention warnings.
+consumers can deploy the current control-plane agent with
+`karactl clusters upgrade-agents CLUSTER --wait`. Ordinary process restart does
+not replace the agent executable.
 
 The member configuration is sealed at rest, including the generated temporary `admin` password under `keycloak/admin`. It is not returned through ordinary cluster reads. Member pulls are restricted to the allocated member identity and use the existing authenticated agent channel. On the runtime, database and bootstrap credentials live only in mode-0600 files under `<data-dir>/karakoram/keycloak/`; they are not placed in process arguments or environment variables. The optimized distribution is built with `kc.sh build --db=postgres --health-enabled=true` before `start --optimized`.
 
@@ -120,6 +119,25 @@ policy survives and the desired generation is unacknowledged, recovery defaults
 to private access rather than publishing an unadmitted route.
 
 Exactly **one replica** is supported. Multi-instance JDBC-ping discovery has not been qualified for this engine driver; advertising three replicas without that proof would imply unverified availability. Runtime maintenance, resource changes and credential rotation cause downtime even when the source PostgreSQL cluster is highly available.
+
+## Agent upgrades
+
+`upgrade-agents` is Keycloak's only imperative maintenance operation. It freezes
+the requested control-plane build, records the singleton member before disruption,
+and redeploys the existing runtime without changing its applied configuration,
+resources, Keycloak version or PostgreSQL binding. It does not rotate source
+credentials or upgrade PostgreSQL. The maintenance window is checked before
+deployment; `--ignore-maintenance-window` explicitly overrides it.
+
+**Authentication is unavailable during this single-instance rollout.** An
+unexpected multi-instance backend runtime is refused rather than treated as a
+qualified HA deployment. Completion requires exactly one live instance, applied
+configuration, native Keycloak readiness and the exact target agent build.
+Already-current agents are skipped unless `--include-current` is requested.
+Checkpoints survive control-plane restarts; completed members are not redeployed.
+A different control-plane build cannot deploy under the frozen target identity:
+re-run the operation with the intended control-plane executable.
+
 
 Resource reconciliation compares values, including an explicit `startCpu`, not
 the identity of the decoded optional value. An unchanged resource specification
