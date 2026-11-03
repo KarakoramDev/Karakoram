@@ -236,21 +236,29 @@ The `GTIDHistorySafe` condition uses these reasons:
 | Status | Reason | Meaning |
 | --- | --- | --- |
 | True | `QuorumHistoryCompatible` | A compatible configured-member majority is observable, with no active latch. |
-| Unknown | `QuorumComparisonUnavailable` | No compatible majority is currently proven. The message distinguishes `comparison`, `observation-budget` and `observation-lock`, with per-member `eligible`, `rpc-error`, `timeout`, `not-eligible(...)` or `no-observation` outcomes. |
-| Unknown | `GTIDHistoryPersistenceUnavailable` | History journal loading, state/journal persistence, audit recording or journal-lock acquisition failed; this is not evidence of incompatible histories. |
+| Unknown | `QuorumComparisonUnavailable` | Current continuity certification is unavailable: majority shortage, interrupted observation, or parent deadline/cancellation during journal work. The message distinguishes `comparison`, `observation-budget` and `observation-lock`, with per-member `eligible`, `rpc-error`, `timeout`, `not-eligible(...)` or `no-observation` outcomes. |
+| Unknown | `GTIDHistoryPersistenceUnavailable` | History journal loading, state/journal persistence, audit recording or journal-lock acquisition failed independently of parent cancellation; this is not evidence of incompatible histories. |
 | False | `GTIDHistoryDiverged` | The comparison proves incompatible history. |
 | False | `GTIDHistoryDiscontinuityLatched` | A recorded divergence remains active, including after later equal observations. |
 
-Read-only quorum sampling has its own four-second absolute reservation per
-observation pass, matching the existing agent read timeout and independent of
-the four-second readiness/platform budget. The observation lock is acquired
-first with a separate one-second wait, so contention cannot consume sampling
-time. Invalidation and retries do not renew the sampling budget. Journal-lock
-waiting is separately bounded to one second. Thus one read-only comparison's
-lock waits plus quorum RPCs can add at most six seconds (up to ten seconds
-including its initial required reads), excluding journal/audit I/O. Repeated
-callers share the sampling deadline but may each wait for locks. Parent deadlines
-and cancellation still apply to every stage; journal/audit I/O retains the caller's deadline.
+PXC Status starts continuity checking concurrently with required readiness reads;
+neither needs the other's RPC results. Both run inside the existing five-second
+status-sweep deadline. Readiness uses an immutable cluster snapshot while the
+quorum checker owns history-state writes. A completed same-pass sample remains
+available to subsequent Sync checks rather than requiring another RPC sweep.
+Quorum sampling has its own four-second absolute reservation per observation
+pass, matching the existing agent read timeout. Its observation lock is acquired
+first with a separate one-second wait; journal-lock waiting is also bounded to
+one second. Invalidation and retries do not renew the sampling budget.
+
+Synchronous backup admission (`CreateBackup`/`ValidateBackup`) and PITR-window
+requests also reach this check. Outside the status wrapper, a comparison can
+spend up to six seconds on these lock waits plus quorum RPCs, in addition to
+journal/audit I/O and the endpoint's other work. Parent deadlines may shorten
+every stage, and persistence I/O retains that deadline; six seconds is not an
+end-to-end HTTP latency guarantee. Repeated callers share the sampling deadline
+but may each wait for locks. Parent cancellation/deadline during journal work
+is reported as observation-budget exhaustion, not a storage outage.
 Configured members, including planned or unreachable members, remain in the
 majority denominator: five members require three compatible reports.
 `no-observation` includes missing agent/service identity, undeployed stages and

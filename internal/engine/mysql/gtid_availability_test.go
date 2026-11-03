@@ -4,11 +4,17 @@ package mysql
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -188,6 +194,9 @@ func (s quorumFailingHistoryStore) GetClusterSecret(ctx context.Context, ref dom
 	if key == "mysql/gtid/history" {
 		if s.onHistoryRead != nil {
 			s.onHistoryRead()
+			if s.mode == "cancel" {
+				return nil, ctx.Err()
+			}
 			ctx = context.WithoutCancel(ctx)
 		}
 		switch s.mode {
@@ -305,5 +314,126 @@ func TestPXCQuorumJournalCancellationDoesNotRelabelSampling(t *testing.T) {
 	err := checkPXCQuorumGTIDs(ctx, rc, s)
 	if err == nil || !strings.Contains(err.Error(), "(comparison;") || strings.Contains(err.Error(), "observation-budget") {
 		t.Fatalf("post-sample cancellation relabelled a completed majority-short comparison: %v", err)
+	}
+}
+
+func TestPXCQuorumObserveStatusConcurrentReads(t *testing.T) {
+	for _, shortage := range []bool{false, true} {
+		t.Run(fmt.Sprintf("shortage=%t", shortage), func(t *testing.T) {
+			p, rc, b := setupPXC(t)
+			rc.Cluster.Spec.Components.Engine.Replicas = 5
+			converge(t, p, rc, b)
+			// Delay outside the backend fixture's serialized handler, so the
+			// fixture models independent remote member RPCs rather than a queue.
+			original := rc.Agents.(fakeAgents)
+			target, err := url.Parse(original.url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			roots := x509.NewCertPool()
+			if !roots.AppendCertsFromPEM(original.ca) {
+				t.Fatal("invalid fixture CA")
+			}
+			transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots}}
+			t.Cleanup(transport.CloseIdleConnections)
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			proxy.Transport = transport
+			var quorumCalls atomic.Int32
+			front, _ := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+				var delay time.Duration
+				switch r.URL.Path {
+				case "/v1/status", "/v1/mysql/status":
+					delay = 3500 * time.Millisecond
+				case "/v1/mysql/galera-status":
+					delay = 2 * time.Second
+					quorumCalls.Add(1)
+				}
+				timer := time.NewTimer(delay)
+				defer timer.Stop()
+				select {
+				case <-r.Context().Done():
+					return
+				case <-timer.C:
+				}
+				if shortage && r.URL.Path == "/v1/mysql/galera-status" {
+					_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Joining", Connected: true})
+					return
+				}
+				proxy.ServeHTTP(w, r)
+			})
+			rc.Agents = front.Agents
+			ctx := engine.WithObservationPass(t.Context())
+			status, err := engine.ObserveStatus(ctx, p, rc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, c := range status.Conditions {
+				if c.Type != "GTIDHistorySafe" {
+					continue
+				}
+				found = true
+				if shortage {
+					if c.Status != "Unknown" || c.Reason != "QuorumComparisonUnavailable" || !strings.Contains(c.Message, "majority-short (comparison;") {
+						t.Fatalf("real majority shortage misclassified: %+v", c)
+					}
+				} else if c.Status != "True" || c.Reason != "QuorumHistoryCompatible" {
+					t.Fatalf("outer status deadline starved healthy majority: %+v", c)
+				}
+			}
+			if !found {
+				t.Fatal("missing GTID safety condition")
+			}
+			if quorumCalls.Load() != 5 {
+				t.Fatalf("comparison needed another RPC sweep after exhausting the first parent deadline: %d calls", quorumCalls.Load())
+			}
+			if !shortage {
+				before := quorumCalls.Load()
+				rc.Cluster.Status = status
+				if _, err := p.Sync(ctx, rc); err != nil {
+					t.Fatal(err)
+				}
+				if quorumCalls.Load() != before {
+					t.Fatal("Sync did not reuse completed same-pass quorum sample")
+				}
+			}
+		})
+	}
+}
+
+func TestPXCQuorumParentCancellationDuringJournalIsBudget(t *testing.T) {
+	const sid = "11111111-2222-3333-4444-555555555555"
+	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: sid, GTIDExecuted: sid + ":1-7", ClusterSize: 3})
+	})
+	_, rc, _ := setup(t, "cluster")
+	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(engine.WithObservationPass(t.Context()))
+	defer cancel()
+	rc.Secrets = quorumFailingHistoryStore{SecretStore: rc.Secrets, mode: "cancel", onHistoryRead: cancel}
+	err := checkPXCQuorumGTIDs(ctx, rc, s)
+	if _, ok := err.(*myspec.GTIDQuorumError); !ok || !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "observation-budget") {
+		t.Fatalf("parent cancellation misclassified as persistence failure: %v", err)
+	}
+}
+
+func TestPXCQuorumCachedShortageSurvivesExpiredBudget(t *testing.T) {
+	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{})
+	})
+	_, rc, _ := setup(t, "cluster")
+	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	ctx := engine.WithObservationPass(t.Context())
+	_ = checkPXCQuorumGTIDs(ctx, rc, s)
+	mysqlObservationScope(ctx, rc).quorumDeadline = time.Now().Add(-time.Second)
+	err := checkPXCQuorumGTIDs(ctx, rc, s)
+	if err == nil || !strings.Contains(err.Error(), "majority-short (comparison;") {
+		t.Fatalf("completed cached comparison relabelled as budget failure: %v", err)
 	}
 }

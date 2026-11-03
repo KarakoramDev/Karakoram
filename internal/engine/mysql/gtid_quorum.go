@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -129,7 +130,7 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 			outcomes[m.Name] = "no-observation"
 		}
 		sort.Strings(names)
-		return &myspec.GTIDQuorumError{Members: names, Detail: quorumOutcomeDetail(outcomes, "observation-lock")}
+		return &myspec.GTIDQuorumError{Members: names, Detail: quorumOutcomeDetail(outcomes, "observation-lock"), Cause: err}
 	}
 	defer observationMu.Unlock()
 	if !mysqlReadsFresh(ctx) {
@@ -139,15 +140,38 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 	defer cancel()
 	outcomes := make(map[string]string, len(s.data()))
 	observations, sampleAt := samplePXCQuorumGTIDs(probe, rc, s, mysqlReadsFresh(ctx), outcomes)
-	samplingBudgetExhausted := probe.Err() != nil
+	samplingBudgetExhausted := false
+	if probe.Err() != nil {
+		// A complete cached sweep needs no new RPC budget, even when its
+		// reports are ineligible and the comparison still lacks a majority.
+		for _, outcome := range outcomes {
+			if outcome == "timeout" || outcome == "no-observation" {
+				samplingBudgetExhausted = true
+				break
+			}
+		}
+	}
+	err := myspec.CheckGTIDQuorum(observations)
 	defer func() {
 		if result != nil {
 			if _, comparison := result.(*myspec.GTIDQuorumError); !comparison {
-				result = &gtidHistoryPersistenceError{cause: result, detail: quorumOutcomeDetail(outcomes, "persistence-error")}
+				if ctx.Err() != nil && errors.Is(result, ctx.Err()) {
+					if conflict, ok := err.(*myspec.GTIDQuorumError); ok && conflict.Diverged {
+						conflict.Cause, result = result, conflict
+						return
+					}
+					names := make([]string, 0, len(observations))
+					for name := range observations {
+						names = append(names, name)
+					}
+					sort.Strings(names)
+					result = &myspec.GTIDQuorumError{Members: names, Detail: quorumOutcomeDetail(outcomes, "observation-budget"), Cause: result}
+				} else {
+					result = &gtidHistoryPersistenceError{cause: result, detail: quorumOutcomeDetail(outcomes, "persistence-error")}
+				}
 			}
 		}
 	}()
-	err := myspec.CheckGTIDQuorum(observations)
 	complete := completeGTIDObservation(observations)
 	// Sampling may consume its entire reservation. Journal serialization gets a
 	// separate bounded wait so timeout evidence and divergence still get recorded.

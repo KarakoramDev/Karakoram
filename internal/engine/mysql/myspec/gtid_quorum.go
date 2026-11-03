@@ -15,14 +15,22 @@ type GTIDQuorumError struct {
 	Members  []string
 	// Detail is a controller-generated, secret-safe observation discriminator.
 	Detail string
+	// Cause preserves cancellation without publishing its potentially unsafe text.
+	Cause error
 }
 
 func (e *GTIDQuorumError) Error() string {
 	if e.Diverged {
 		return fmt.Sprintf("PXC GTID divergence affecting members %s; freeze incremental/PITR continuity across the unsafe interval, repair from trusted quorum history and take a fresh full backup", strings.Join(e.Members, ", "))
 	}
-	return fmt.Sprintf("PXC GTID quorum comparison unavailable for members %s; majority-short%s; new GTID-continuity claims require a healthy same-history quorum (verified archived history and full backups remain available)", strings.Join(e.Members, ", "), e.Detail)
+	summary := "majority-short"
+	if e.Cause != nil {
+		summary = "observation-incomplete"
+	}
+	return fmt.Sprintf("PXC GTID quorum comparison unavailable for members %s; %s%s; new GTID-continuity claims require a healthy same-history quorum (verified archived history and full backups remain available)", strings.Join(e.Members, ", "), summary, e.Detail)
 }
+
+func (e *GTIDQuorumError) Unwrap() error { return e.Cause }
 
 // CheckGTIDQuorum requires a majority of configured members with healthy,
 // same-Galera-history, pairwise prefix-compatible executed sets. Only the current state
