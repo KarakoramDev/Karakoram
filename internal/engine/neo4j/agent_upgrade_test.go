@@ -23,13 +23,17 @@ import (
 
 type upgradeBackend struct {
 	*fake.Backend
-	names []string
-	specs []infra.RuntimeSpec
+	names     []string
+	specs     []infra.RuntimeSpec
+	submitErr error
 }
 
 func (b *upgradeBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
 	b.names = append(b.names, name)
 	b.specs = append(b.specs, d.Runtime)
+	if b.submitErr != nil {
+		return infra.Op{}, b.submitErr
+	}
 	return b.Backend.Deploy(ctx, name, d)
 }
 func upgradeOperation(include bool) *domain.Operation {
@@ -209,5 +213,82 @@ func TestAgentUpgradeCancelsWhileWaitingForWindow(t *testing.T) {
 	result, err = canceller.CancelOperation(t.Context(), rc, op)
 	if err != nil || !result.Done || len(wrapped.names) != 0 {
 		t.Fatal("window wait cancellation did not stop safely", result, err)
+	}
+}
+
+func TestAgentUpgradeDeferredSubmissionRechecksWindowAndCancellation(t *testing.T) {
+	for _, acceptedBuild := range []string{"old", "target"} {
+		t.Run(acceptedBuild, func(t *testing.T) {
+			p, rc, b, a := setup(t)
+			converge(t, p, rc)
+			build, ready := upgradeAgent(t, rc, a)
+			wrapped := &upgradeBackend{Backend: b, submitErr: engine.ErrUnavailable}
+			rc.Backend = wrapped
+			op := upgradeOperation(true)
+			result, err := p.RunOperation(t.Context(), rc, op)
+			if err != nil {
+				t.Fatal(err)
+			}
+			op.Checkpoint = result.Checkpoint
+			// Submission returns no receipt. Retain the durable pre-submit
+			// checkpoint, just as a lost platform reply would.
+			if _, err := p.RunOperation(t.Context(), rc, op); err == nil {
+				t.Fatal("fixture did not defer submission")
+			}
+			attempts := len(wrapped.names)
+			wrapped.submitErr = nil
+			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 " + time.Now().UTC().Add(2*time.Hour).Format("15") + " * * *", Duration: "1h"}}}
+			if _, err := p.RunOperation(t.Context(), rc, op); err != nil || len(wrapped.names) != attempts {
+				t.Fatal("deferred submission bypassed a closed window", err)
+			}
+			rc.Cluster.Spec.Maintenance = nil
+			*ready = false
+			if _, err := p.RunOperation(t.Context(), rc, op); err != nil || len(wrapped.names) != attempts {
+				t.Fatal("replay bypassed native readiness", err)
+			}
+			if acceptedBuild == "target" {
+				*build = engine.CurrentAgentBuild().Build
+			}
+			result, err = p.CancelOperation(t.Context(), rc, op)
+			if err != nil || result.Done {
+				t.Fatal("missing receipt let cancellation abandon an unready member", result, err)
+			}
+			op.Checkpoint = result.Checkpoint
+			*ready = true
+			result, err = p.CancelOperation(t.Context(), rc, op)
+			if err != nil || !result.Done || len(wrapped.names) != attempts {
+				t.Fatal("cancellation did not settle without resubmission", result, err)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeFailedBuildFenceCannotResumeThroughSync(t *testing.T) {
+	p, rc, b, _ := setup(t)
+	converge(t, p, rc)
+	wrapped := &upgradeBackend{Backend: b}
+	rc.Backend = wrapped
+	op := upgradeOperation(true)
+	result, err := p.RunOperation(t.Context(), rc, op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cp agentUpgradeCheckpoint
+	if err := json.Unmarshal(result.Checkpoint, &cp); err != nil {
+		t.Fatal(err)
+	}
+	cp.Target.TargetBuild = "previous-control-plane"
+	op.Checkpoint, _ = json.Marshal(cp)
+	if _, err := p.RunOperation(t.Context(), rc, op); err == nil {
+		t.Fatal("missing frozen build fence")
+	}
+	op.Phase = "Failed"
+	for range 4 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(wrapped.names) != 0 {
+		t.Fatal("ordinary Sync resumed a failed agent rollout")
 	}
 }

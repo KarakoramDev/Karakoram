@@ -110,6 +110,12 @@ pending structural work blocks a new rollout. Cancellation stops between members
 an already-submitted deployment is recovered even after cancellation or window
 closure. Cancellation is not rollback. A changed control-plane build cannot
 silently retarget an existing operation; follow its diagnostic before continuing.
+An intent without a platform receipt is ambiguous, not proof that no restart
+occurred. Cancellation waits until that member is native-ready and synchronized
+on its previously observed or target agent build before retiring the intent.
+Replay rechecks the window and native safety before another submission. After
+an operation terminates, ordinary reconciliation only settles its in-flight
+member and retires the journal; it never starts the next agent deployment.
 
 
 ## Scaling

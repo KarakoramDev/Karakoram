@@ -95,28 +95,21 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, s *sta
 		s.Rolling = nil
 		return operationResult(operationState{Stage: "complete"}, true)
 	}
-	if r.Step != "ack" && r.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build {
-		return engine.OpResult{}, invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
-	}
 	if s.Pending != nil {
-		if s.Pending.Op == nil && r.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build {
-			return engine.OpResult{}, invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
+		if cancel && r.Step == "deploy" {
+			ready, err := p.agentUpgradeIntentSettled(ctx, rc, s)
+			if err != nil || !ready {
+				res, _ := operationResult(operationState{Stage: "rolling"}, false)
+				return res, err
+			}
+			s.Pending = nil
+			s.Rolling = nil
+			return operationResult(operationState{Stage: "complete"}, true)
 		}
-		if r.Step == "deploy" {
-			if cancel {
-				s.Pending = nil
-				s.Rolling = nil
-				return operationResult(operationState{Stage: "complete"}, true)
-			}
-			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
-				res, e := operationResult(operationState{Stage: "rolling"}, false)
-				res.RequeueAfter = wait.RequeueAfter
-				return res, e
-			}
-			if err := p.agentUpgradeSafe(ctx, rc, s, s.find(s.Pending.Member)); err != nil {
+		if r.Step != "ack" {
+			if err := agentUpgradeBuildFence(s); err != nil {
 				return engine.OpResult{}, err
 			}
-			r.Step = "ack"
 		}
 		_, err := p.advancePending(ctx, rc, s)
 		res, _ := operationResult(operationState{Stage: "rolling"}, false)
@@ -134,6 +127,11 @@ func (p *Provider) agentUpgradeStep(ctx context.Context, rc *engine.Context, s *
 	if target == nil {
 		return invalid("agent rollout is missing its frozen target")
 	}
+	if r.Step != "ack" {
+		if err := agentUpgradeBuildFence(s); err != nil {
+			return err
+		}
+	}
 	switch r.Step {
 	case "gate":
 		st, _, err := p.memberReady(ctx, rc, m)
@@ -148,6 +146,7 @@ func (p *Provider) agentUpgradeStep(ctx context.Context, rc *engine.Context, s *
 		if err = p.agentUpgradeSafe(ctx, rc, s, m); err != nil {
 			return err
 		}
+		r.AgentPreviousBuild = st.Agent.Build
 		// The pending owner persists the in-flight member before deployment.
 		s.Pending = &pending{Action: "deploy", Member: m.Name}
 		r.Step = "deploy"
@@ -265,4 +264,43 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 		}
 	}()
 	return p.upgradeAgents(ctx, rc, s, op, true)
+}
+
+// A terminal operation releases undisrupted work, never authorization for Sync
+// to start the next deployment. Accepted work remains owned until it settles.
+func (p *Provider) recoverAgentUpgrade(ctx context.Context, rc *engine.Context, s *state) error {
+	raw, _ := json.Marshal(operationState{Stage: "rolling"})
+	op := &domain.Operation{ID: s.Rolling.OperationID, Kind: domain.OperationUpgradeAgents, Checkpoint: raw}
+	_, err := p.upgradeAgents(ctx, rc, s, op, true)
+	return err
+}
+
+func agentUpgradeBuildFence(s *state) error {
+	r := s.Rolling
+	if r.AgentTarget == nil {
+		return invalid("agent rollout is missing its frozen target")
+	}
+	if r.AgentTarget.TargetBuild == engine.CurrentAgentBuild().Build {
+		return nil
+	}
+	if r.Step == "gate" {
+		s.Rolling = nil
+	}
+	return invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
+}
+
+func (p *Provider) agentUpgradeIntentSettled(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	r := s.Rolling
+	m := s.find(r.Order[r.Position])
+	if m == nil {
+		return false, engine.ErrNotFound
+	}
+	st, _, err := p.memberReady(ctx, rc, m)
+	if err != nil {
+		return false, nil
+	}
+	if st.Agent.Build != r.AgentPreviousBuild && st.Agent.Build != r.AgentTarget.TargetBuild {
+		return false, nil
+	}
+	return p.clusterReady(ctx, rc, s)
 }

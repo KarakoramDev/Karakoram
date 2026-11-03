@@ -323,3 +323,149 @@ func TestAgentUpgradeCancelsWhileWaitingForWindow(t *testing.T) {
 		t.Fatal("cancel left an active disruption journal")
 	}
 }
+
+func TestAgentUpgradeDeferredSubmissionRechecksWindowAndCancellation(t *testing.T) {
+	for _, action := range []string{"window", "cancel"} {
+		t.Run(action, func(t *testing.T) {
+			f := coreSetup(t, 3)
+			coreConverge(t, f)
+			wrapped := &upgradeBackend{Backend: f.backend}
+			f.rc.Backend = wrapped
+			op := upgradeOperation(true)
+			upgradeTick(t, f, op)
+			upgradeTick(t, f, op)
+			s, _ := load(f.rc.Cluster)
+			s.Pending.RetryAt = time.Now().Add(time.Minute)
+			if err := s.save(f.rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			upgradeTick(t, f, op) // Pending owner defers without a receipt.
+			s, _ = load(f.rc.Cluster)
+			if s.Rolling.Step != "deploy" || s.Pending.Op != nil {
+				t.Fatal("deferred submission was recorded as accepted")
+			}
+			s.Pending.RetryAt = time.Time{}
+			if err := s.save(f.rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			if action == "window" {
+				f.rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 " + time.Now().UTC().Add(2*time.Hour).Format("15") + " * * *", Duration: "1h"}}}
+				upgradeTick(t, f, op)
+				if len(wrapped.names) != 0 {
+					t.Fatal("deferred submission bypassed the closed window")
+				}
+				f.rc.Cluster.Spec.Maintenance = nil
+				f.readinessStale = true
+				if _, err := f.p.RunOperation(t.Context(), f.rc, op); err == nil {
+					t.Fatal("deferred submission bypassed native readiness")
+				}
+			} else {
+				f.readinessStale = true
+				result, err := f.p.CancelOperation(t.Context(), f.rc, op)
+				if err != nil || result.Done {
+					t.Fatal("ambiguous intent abandoned an unready member", result, err)
+				}
+				op.Checkpoint = result.Checkpoint
+				f.readinessStale = false
+				result, err = f.p.CancelOperation(t.Context(), f.rc, op)
+				if err != nil || !result.Done {
+					t.Fatal("settled deferred intent could not cancel", result, err)
+				}
+			}
+			if len(wrapped.names) != 0 {
+				t.Fatal("deferred cancellation/readiness gate deployed")
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeFailedBuildFenceCannotResumeThroughSync(t *testing.T) {
+	for _, queued := range []bool{false, true} {
+		t.Run(map[bool]string{false: "gate", true: "intent"}[queued], func(t *testing.T) {
+			f := coreSetup(t, 3)
+			coreConverge(t, f)
+			wrapped := &upgradeBackend{Backend: f.backend}
+			f.rc.Backend = wrapped
+			op := upgradeOperation(true)
+			upgradeTick(t, f, op)
+			if queued {
+				upgradeTick(t, f, op)
+			}
+			s, _ := load(f.rc.Cluster)
+			s.Rolling.AgentTarget.TargetBuild = "previous-control-plane"
+			if err := s.save(f.rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.p.RunOperation(t.Context(), f.rc, op); err == nil {
+				t.Fatal("missing frozen build fence")
+			}
+			op.Phase = "Failed"
+			for range 5 {
+				if _, err := f.p.Sync(t.Context(), f.rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s, _ = load(f.rc.Cluster)
+			if len(wrapped.names) != 0 || s.Rolling != nil || s.Pending != nil {
+				t.Fatal("ordinary Sync resumed a failed agent rollout", wrapped.names, s.Rolling, s.Pending)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeSyncRecoversAcceptedMemberOnly(t *testing.T) {
+	f := coreSetup(t, 3)
+	coreConverge(t, f)
+	wrapped := &upgradeBackend{Backend: f.backend}
+	f.rc.Backend = wrapped
+	op := upgradeOperation(true)
+	for range 3 {
+		upgradeTick(t, f, op)
+	}
+	s, _ := load(f.rc.Cluster)
+	s.Rolling.AgentTarget.TargetBuild = "previous-control-plane"
+	if err := s.save(f.rc.Cluster); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.p.Sync(t.Context(), f.rc); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = load(f.rc.Cluster)
+	if s.Rolling == nil {
+		t.Fatal("Sync abandoned an accepted member before build acknowledgement")
+	}
+	f.agentBuild = agentapi.AgentBuild{Build: "previous-control-plane"}
+	for range 4 {
+		if _, err := f.p.Sync(t.Context(), f.rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, _ = load(f.rc.Cluster)
+	if len(wrapped.names) != 1 || s.Rolling != nil || s.Pending != nil {
+		t.Fatal("Sync did not retire safely between members", wrapped.names)
+	}
+}
+
+func TestAgentUpgradeMissingReceiptCancellationSettlesTargetBuild(t *testing.T) {
+	f := coreSetup(t, 3)
+	coreConverge(t, f)
+	wrapped := &upgradeBackend{Backend: f.backend}
+	f.rc.Backend = wrapped
+	op := upgradeOperation(true)
+	upgradeTick(t, f, op)
+	upgradeTick(t, f, op)
+	// Simulate a platform acceptance followed by a crash before its receipt
+	// reached the journal: the durable state still contains only intent.
+	f.agentBuild = agentapi.AgentBuild{Build: engine.CurrentAgentBuild().Build}
+	f.readinessStale = true
+	result, err := f.p.CancelOperation(t.Context(), f.rc, op)
+	if err != nil || result.Done {
+		t.Fatal("cancel abandoned accepted-but-unrecorded deployment", result, err)
+	}
+	op.Checkpoint = result.Checkpoint
+	f.readinessStale = false
+	result, err = f.p.CancelOperation(t.Context(), f.rc, op)
+	if err != nil || !result.Done || len(wrapped.names) != 0 {
+		t.Fatal("cancel failed to settle without resubmission", result, err, wrapped.names)
+	}
+}

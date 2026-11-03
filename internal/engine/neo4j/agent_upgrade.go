@@ -14,11 +14,12 @@ import (
 )
 
 type agentUpgradeCheckpoint struct {
-	Target engine.AgentUpgradePayload `json:"target"`
-	Order  []string                   `json:"order"`
-	Done   []string                   `json:"done,omitempty"`
-	Step   string                     `json:"step"`
-	Deploy *infra.Op                  `json:"deploy,omitempty"`
+	Target        engine.AgentUpgradePayload `json:"target"`
+	Order         []string                   `json:"order"`
+	Done          []string                   `json:"done,omitempty"`
+	Step          string                     `json:"step"`
+	Deploy        *infra.Op                  `json:"deploy,omitempty"`
+	PreviousBuild string                     `json:"previousBuild,omitempty"`
 }
 
 func agentUpgradeResult(cp agentUpgradeCheckpoint, done bool) (engine.OpResult, error) {
@@ -36,7 +37,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 	if err != nil {
 		return engine.OpResult{}, err
 	}
-	if cp.Step == "complete" || cancel && (cp.Step == "" || cp.Step == "gate" || cp.Step == "deploy") {
+	if cp.Step == "complete" || cancel && (cp.Step == "" || cp.Step == "gate") {
 		return agentUpgradeResult(cp, true)
 	}
 	if cp.Step == "" {
@@ -50,7 +51,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		cp.Order = []string{s.Member.Name}
 		cp.Step = "gate"
 	}
-	if cp.Step != "ack" && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
+	if !cancel && cp.Step != "ack" && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
 		return engine.OpResult{}, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 	}
 	m := s.Member
@@ -69,9 +70,27 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		st, e := a.Status(ctx)
 		return domain.MemberStatus{Agent: domain.AgentStatus{Build: st.Agent.Build, Healthy: e == nil && st.Error == "" && st.ConfigVersion >= s.ConfigVersion && st.Processes["neo4j"].State == "running"}}, e
 	}
+	settled := func() bool {
+		native, e := readiness(ctx, rc)
+		if e != nil || !native.Ready || native.CredentialMismatch || native.ConfigVersion < s.ConfigVersion || native.Version != m.Version {
+			return false
+		}
+		st, e := status()
+		return e == nil && st.Agent.Healthy && (st.Agent.Build == cp.PreviousBuild || st.Agent.Build == cp.Target.TargetBuild)
+	}
+	if cancel && cp.Step == "deploy" {
+		if !settled() {
+			return agentUpgradeResult(cp, false)
+		}
+		cp.Step = "complete"
+		return agentUpgradeResult(cp, true)
+	}
 	switch cp.Step {
 	case "gate":
 		st, e := status()
+		if e != nil {
+			return agentUpgradeResult(cp, false)
+		}
 		if e == nil && !engine.MemberNeedsAgentUpgrade(st, cp.Target) {
 			cp.Step = "complete"
 			return agentUpgradeResult(cp, true)
@@ -81,6 +100,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			r.RequeueAfter = wait.RequeueAfter
 			return r, e
 		}
+		cp.PreviousBuild = st.Agent.Build
 		cp.Step = "deploy" // Persist the in-flight member before the platform mutation.
 		return agentUpgradeResult(cp, false)
 	case "deploy":
@@ -89,6 +109,11 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			r, e := agentUpgradeResult(cp, false)
 			r.RequeueAfter = wait.RequeueAfter
 			return r, e
+		}
+		// Missing receipt is ambiguous: let any accepted restart settle before
+		// another submission, and recheck the native gate on every replay.
+		if !settled() {
+			return agentUpgradeResult(cp, false)
 		}
 		if err := verify(ctx, rc, m); err != nil {
 			return engine.OpResult{}, err

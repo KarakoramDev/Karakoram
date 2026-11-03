@@ -45,6 +45,10 @@ Pending structural or offline maintenance work blocks admission. Cancellation or
 a closing window does not abandon an already-submitted deployment; cancellation
 is not rollback. If the control-plane build changes before deployment, restore
 the intended build or re-run the operation as directed by its diagnostic.
+If deployment intent exists but its platform receipt is missing, cancellation
+first waits for native readiness on the previously observed or target agent
+build; missing receipt does not prove that the platform rejected deployment.
+Replay rechecks the maintenance window and native readiness before resubmitting.
 
 
 ## Monitoring
