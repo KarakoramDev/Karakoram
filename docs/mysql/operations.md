@@ -259,6 +259,11 @@ every stage, and persistence I/O retains that deadline; six seconds is not an
 end-to-end HTTP latency guarantee. Repeated callers share the sampling deadline
 but may each wait for locks. Parent cancellation/deadline during journal work
 is reported as observation-budget exhaustion, not a storage outage.
+New divergence is authoritative only after the history journal loads and any
+acknowledged frozen-history allowance is evaluated. Cancellation before that
+point reports observation-incomplete, not a new divergence; an already-active
+incident still takes precedence.
+
 Configured members, including planned or unreachable members, remain in the
 majority denominator: five members require three compatible reports.
 `no-observation` includes missing agent/service identity, undeployed stages and

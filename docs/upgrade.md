@@ -65,6 +65,8 @@ on comparison lock waits and sampling, plus journal/audit I/O and other endpoint
 work, subject to parent deadlines; this is not an HTTP latency guarantee.
 Configured-majority, complete-observation safe-watermark requirements and durable
 divergence latches are unchanged.
+Cancellation before journal loading/allowance evaluation completes does not
+reclassify an acknowledged frozen-history difference as new divergence.
 Full backups remain admitted on typed comparison unavailability, but persistence
 failures still fail closed; incrementals/PITR cannot gain unproven continuity.
 

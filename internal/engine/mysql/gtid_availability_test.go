@@ -437,3 +437,49 @@ func TestPXCQuorumCachedShortageSurvivesExpiredBudget(t *testing.T) {
 		t.Fatalf("completed cached comparison relabelled as budget failure: %v", err)
 	}
 }
+
+func TestPXCQuorumAcknowledgedBaselineJournalCancellation(t *testing.T) {
+	const sid = "11111111-2222-3333-4444-555555555555"
+	const local = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	p, rc, b := setupPXC(t)
+	converge(t, p, rc, b)
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, m := range s.data() {
+		st := b.native[m.Name]
+		st.GTIDExecuted = sid + ":1-10"
+		if i == 2 {
+			st.GTIDExecuted += "," + local + ":1"
+		}
+		b.native[m.Name] = st
+	}
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
+		t.Fatal("initial divergence not detected")
+	}
+	start := activeGTIDIncident(s).DetectedAt.Add(time.Second)
+	full := &domain.Backup{Name: "baseline", Type: "full", Phase: domain.PhaseSucceeded, StartedAt: &start, MySQL: &domain.MySQLBackup{EndTime: start.Add(time.Second)}}
+	if err := establishGTIDBaseline(t.Context(), rc, s, full); err != nil {
+		t.Fatal(err)
+	}
+	if activeGTIDIncident(s) != nil || s.GTIDIncidents[0].Allowance == nil {
+		t.Fatal("baseline not acknowledged")
+	}
+	original := rc.Secrets
+	ctx, cancel := context.WithCancel(engine.WithObservationPass(t.Context()))
+	defer cancel()
+	rc.Secrets = quorumFailingHistoryStore{SecretStore: original, mode: "cancel", onHistoryRead: cancel}
+	err = checkPXCQuorumGTIDs(ctx, rc, s)
+	unavailable, ok := err.(*myspec.GTIDQuorumError)
+	if !ok || unavailable.Diverged || !errors.Is(err, context.Canceled) || !strings.Contains(err.Error(), "observation-incomplete") {
+		t.Fatalf("unloaded acknowledged allowance became false divergence: %v", err)
+	}
+	if activeGTIDIncident(s) != nil {
+		t.Fatal("cancelled journal load latched an acknowledged difference")
+	}
+	rc.Secrets = original
+	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
+		t.Fatalf("authoritative baseline stopped permitting its frozen difference: %v", err)
+	}
+}

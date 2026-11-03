@@ -92,20 +92,13 @@ func setupPXC(t *testing.T) (*Core, *engine.Context, *fakeBackend) {
 			_ = json.NewEncoder(w).Encode(out)
 			return true
 		case "/v1/mysql/proxy-status":
-			cfg, err := p.MemberConfig(r.Context(), rc, name)
-			if err != nil {
-				t.Error(err)
-				http.Error(w, "config unavailable", http.StatusServiceUnavailable)
-				return true
-			}
-			var spec myspec.Spec
-			if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil || spec.Proxy == nil {
-				t.Error("invalid proxy config", err)
-				http.Error(w, "invalid proxy config", http.StatusServiceUnavailable)
+			proxy := b.proxyConfigs[name] // Handler already holds b.mu.
+			if proxy == nil {
+				http.Error(w, "proxy config not applied", http.StatusServiceUnavailable)
 				return true
 			}
 			var status myspec.ProxyStatusResponse
-			for _, peer := range spec.Proxy.Backends {
+			for _, peer := range proxy.Backends {
 				if b.native[peer.Host].MemberState == "ONLINE" {
 					group := myspec.ProxyReaderGroup
 					if peer.Host == b.leader {

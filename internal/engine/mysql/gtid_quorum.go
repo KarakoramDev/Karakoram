@@ -152,11 +152,12 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 		}
 	}
 	err := myspec.CheckGTIDQuorum(observations)
+	authoritativeComparison := false
 	defer func() {
 		if result != nil {
 			if _, comparison := result.(*myspec.GTIDQuorumError); !comparison {
 				if ctx.Err() != nil && errors.Is(result, ctx.Err()) {
-					if conflict, ok := err.(*myspec.GTIDQuorumError); ok && conflict.Diverged {
+					if conflict, ok := err.(*myspec.GTIDQuorumError); authoritativeComparison && ok && conflict.Diverged {
 						conflict.Cause, result = result, conflict
 						return
 					}
@@ -196,6 +197,7 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 			err = myspec.CheckGTIDQuorumBaseline(observations, incident.Allowance.Histories)
 		}
 	}
+	authoritativeComparison = true
 	prefixConflict, prefixSuspected, prefixChanged := observePXCEqualPositionLag(s, observations, sampleAt, err == nil && complete)
 	if prefixConflict != nil {
 		err = prefixConflict
