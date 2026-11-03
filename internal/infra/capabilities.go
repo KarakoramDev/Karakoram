@@ -33,6 +33,13 @@ type ServingResourceUpdate interface {
 	ResourceUpdatePreservesServingFor(current, target Resources) bool
 }
 
+// ServingProxyUpdates optionally narrows both serving-preserving capabilities
+// to deployed proxy runtimes with the required platform readiness integration.
+// A false result or an error forbids the serving-preserving engine path.
+type ServingProxyUpdates interface {
+	ProxyUpdatesPreserveServing(context.Context, string) (bool, error)
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract

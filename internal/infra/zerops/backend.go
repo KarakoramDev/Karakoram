@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -713,10 +714,15 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 	if err != nil {
 		return infra.Op{}, err
 	}
+	lock := b.operationLock(s.ID)
+	if err := lock.Lock(ctx); err != nil {
+		return infra.Op{}, err
+	}
+	defer lock.Unlock()
 	if len(s.CurrentAutoscaling) == 0 {
 		return infra.Op{}, errors.New("zerops: missing current autoscaling configuration")
 	}
-	config := s.CurrentAutoscaling
+	config := maps.Clone(s.CurrentAutoscaling)
 	v, err := decodeObject(config["verticalAutoscaling"])
 	if err != nil {
 		return infra.Op{}, err
@@ -810,6 +816,15 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 		putJSON(h, "minContainerCount", *minCount)
 		putJSON(h, "maxContainerCount", *maxCount)
 		putJSON(config, "horizontalAutoscaling", h)
+	}
+	if s.Status == "ACTIVE" && strings.HasPrefix(s.Base, "ubuntu") {
+		current, e := decodeObject(s.CurrentAutoscaling["verticalAutoscaling"])
+		if e != nil {
+			return infra.Op{}, e
+		}
+		if r == nil || r.CPUMode == "" || string(current["cpuMode"]) == fmt.Sprintf("%q", r.CPUMode) {
+			return b.servingAutoscaling(ctx, s, config)
+		}
 	}
 	p, err := b.client.Autoscaling(ctx, s.ID, config)
 	attempted := attemptedResources(config)
@@ -1051,6 +1066,9 @@ func (b *Backend) Logs(ctx context.Context, name string, q infra.LogQuery) ([]in
 // may have created; any other expired action fails as Expired so the caller's
 // bounded retry re-issues it instead of polling a missing process forever.
 func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if op.Kind == "serving-autoscaling" {
+		return b.servingAutoscalingStatus(ctx, op)
+	}
 	if receiptAction(op.Kind) && op.ServiceID != "" {
 		lock := b.operationLock(op.ServiceID)
 		if err := lock.Lock(ctx); err != nil {

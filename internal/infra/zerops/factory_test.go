@@ -79,8 +79,8 @@ func TestFactoryProjectMismatch(t *testing.T) {
 	}
 }
 
-func TestReplicaScalingDoesNotClaimPreservingServing(t *testing.T) {
-	if zeropsCapabilities.ReplicaScalePreservesServing {
-		t.Fatal("unverified autoscaling must retain the conservative restart path")
+func TestLinuxContainerScalingPreservesServing(t *testing.T) {
+	if !zeropsCapabilities.ReplicaScalePreservesServing || !zeropsCapabilities.ResourceUpdatePreservesServing {
+		t.Fatal("Linux-container autoscaling must expose serving-preserving operations")
 	}
 }

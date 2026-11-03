@@ -21,16 +21,21 @@ import (
 
 // fakeAPI keeps REST state rather than replacing the backend being exercised.
 type fakeAPI struct {
-	mu            sync.Mutex
-	url           string
-	serial        int
-	services      map[string]*ServiceStack
-	env           map[string][]EnvItem
-	routes        map[string]PublicPortRouting
-	versions      map[string]string
-	uploaded      map[string]bool
-	versionStatus map[string]string
-	processes     map[string]Process
+	mu                   sync.Mutex
+	url                  string
+	serial               int
+	services             map[string]*ServiceStack
+	env                  map[string][]EnvItem
+	routes               map[string]PublicPortRouting
+	versions             map[string]string
+	uploaded             map[string]bool
+	versionStatus        map[string]string
+	processes            map[string]Process
+	containers           map[string][]RuntimeContainer
+	autoscalingPending   bool
+	replaceContainers    bool
+	loseAutoscalingReply bool
+	autoscalingWrites    int
 }
 
 func newFakeAPI(t *testing.T) *httptest.Server {
@@ -244,8 +249,25 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s.CurrentAutoscaling = body.Custom
+			f.autoscalingWrites++
+			if f.containers == nil {
+				f.containers = map[string][]RuntimeContainer{}
+			}
+			if f.replaceContainers {
+				f.containers[id] = nil
+			}
 			s.CustomAutoscaling = body.Custom
-			respond(map[string]any{"process": f.process(id)})
+			p := f.process(id)
+			p.ActionName = "autoscaling"
+			if f.autoscalingPending {
+				p.Status = "RUNNING"
+			}
+			f.processes[p.ID] = p
+			if f.loseAutoscalingReply {
+				fakeError(w, 503, "lostReply")
+				return
+			}
+			respond(map[string]any{"process": p})
 		case "start", "restart":
 			s.Status = "ACTIVE"
 			respond(f.process(id))
@@ -311,10 +333,19 @@ func (f *fakeAPI) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		case "container":
 			list := []RuntimeContainer{}
 			if s.Status == "ACTIVE" && !strings.HasPrefix(s.Base, "local-storage") {
-				h, _ := decodeObject(s.CurrentAutoscaling["horizontalAutoscaling"])
-				for i := range max(1, int(number(h, "minContainerCount"))) {
-					list = append(list, RuntimeContainer{ID: fmt.Sprintf("%sc%d", id, i), Hostname: fmt.Sprintf("%s%d", s.Name, i+1), Status: "ACTIVE", IPv4: "192.0.2.2", IPv6: "2001:db8::2"})
+				if f.containers == nil {
+					f.containers = map[string][]RuntimeContainer{}
 				}
+				list = f.containers[id]
+				h, _ := decodeObject(s.CurrentAutoscaling["horizontalAutoscaling"])
+				count := max(1, int(number(h, "minContainerCount")))
+				if count < len(list) {
+					list = list[:count]
+				}
+				for len(list) < count {
+					list = append(list, RuntimeContainer{ID: f.next("container"), Hostname: fmt.Sprintf("%s%d", s.Name, len(list)+1), Status: "ACTIVE", IPv4: "192.0.2.2", IPv6: "2001:db8::2"})
+				}
+				f.containers[id] = list
 			}
 			fakePage(w, r, list)
 		default:
