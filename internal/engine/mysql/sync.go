@@ -166,6 +166,9 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
 		return result, e
 	}
+	if busy, e := p.reconcileOrphanedAgentDrain(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
 		return result, e
 	}

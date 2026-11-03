@@ -132,6 +132,10 @@ type member struct {
 	// ConfirmedVolumeLost is affirmative physical/agent loss evidence, not the
 	// shared journal's broader identity-conflict status flag.
 	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`
+	// ProxyDraining temporarily withdraws a PXC writer for an agent rollout.
+	// Unlike Removing, it does not change Galera peers or retire its identity.
+	ProxyDraining       bool   `json:"proxyDraining,omitempty"`
+	ProxyDrainOperation string `json:"proxyDrainOperation,omitempty"`
 
 	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
 	// Missing legacy receipts deliberately require redeployment before scaling.

@@ -101,11 +101,10 @@ counters before changing credentials.
 
 This policy is rendered and applied by the **proxy member agent**. Updating only
 the control plane or restarting an old ProxySQL process does not install it.
-Existing MySQL/PXC agents have no automatic rollout. Existing GR proxies need
-the disruptive, genuinely changed resource PATCH in the
-[proxy redeployment procedure](../upgrade.md#proxysql-monitor-tls), which was
-live-verified on Zerops. Preserve data identities, a verified backup and
-availability evidence for valuable clusters.
+Use the [agent rollout](#agent-rollout) to update existing MySQL/PXC data and
+ProxySQL agents. A process restart alone does not replace the agent executable.
+Preserve data identities, a verified backup and availability evidence for
+valuable clusters.
 Do not disable TLS or blindly rotate the shared monitor credential as a workaround.
 
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
@@ -180,8 +179,9 @@ path; expect writer-handoff interruptions or single-member downtime. Do not
 roll a cluster that has lost its majority.
 Alternatively, restore/clone a verified backup into a new v0.4.3 cluster and
 verify member builds, data and client writes before switching clients.
-`karactl clusters restart` restarts native processes, not member agents;
-MySQL/PXC have no `upgrade-agents` command. See
+`karactl clusters restart` restarts native processes, not member agents.
+On v0.4.4, use [agent rollout](#agent-rollout) only after its native safety gates
+are satisfied. See also
 [existing-cluster rollout](../upgrade.md#existing-clusters-and-member-artifacts).
 The post-restore history comparator remains fully active: real mixed accounting
 still records a durable latch and Degraded status, never a silently cleared
@@ -351,6 +351,105 @@ attach an asynchronous replica across the affected history merely because rows
 or later sets match. An inverse SID alone is not an error: compare the complete
 history with quorum. See [backup continuity boundaries](backups.md#pxc-gtid-continuity).
 
+## Agent rollout
+
+```sh
+karactl -n NS clusters upgrade-agents CLUSTER --wait
+```
+
+MySQL `single`, Group Replication and PXC support the same-version
+`upgrade-agents` operation. It freezes the control-plane agent build and member
+order, preserves each member's applied database version, runtime, volume and
+resources, and journals completed and in-flight members across control-plane
+restarts. Current agents are skipped unless `--include-current` is supplied.
+If the control-plane executable changes again, finish recovery of an already
+submitted member, then submit a new rollout for the new build; the original
+operation never silently retargets.
+
+Admission and every new disruption wait for outstanding runtime recovery,
+confirmed volume loss, identity conflicts and queued/running member replacement.
+A stale `ONLINE` report never makes a lost member a healthy rollout peer.
+Operations are serialized per cluster: automatic replacement queueing cannot
+preempt an active rollout. If recovery appears mid-rollout, settle the current
+member and its routing withdrawal without submitting another executable, then
+retire the rollout with a recovery diagnostic so replacement can claim ownership.
+A known deployment receipt still requires its exact target build; confirmed
+storage loss instead releases the drain without native readmission and retains
+the independent loss routing fence. Cancellation follows the same cleanup path.
+Replacement admission refuses outstanding rollout drains, including the
+readmission acknowledgement phase.
+
+The proxy phase comes first: redeploy the ProxySQL **service**, then require
+every live instance to acknowledge the published configuration/credentials,
+report a healthy writer and report the exact frozen agent build. Infrastructure
+deployment completion alone is insufficient. This uses the existing
+service-level proxy deployment path, not an independent per-instance deployment
+API. A backend that replaces all replicas together can cause a **brief complete
+proxy endpoint outage**, even with multiple replicas; a single proxy also has
+an outage. The Nomad count-only scale optimization is not an agent upgrade and
+does not establish a zero-outage executable rollout. Plan a maintenance window
+and client reconnection accordingly.
+
+An already current proxy is not redeployed, but still must pass the same
+all-instance configuration/credentials and healthy-writer checks before data
+maintenance starts.
+
+Data secondaries/non-writers follow, with the initially observed writer last.
+Before each Group Replication data restart, all configured members must be
+`ONLINE`, the group must have a primary, and removing that member must retain a
+configured majority. Before disrupting a primary, the existing handoff selects
+a secondary containing its observed GTIDs, waits for reader admission on every
+serving proxy, elects it, and waits for that new primary in writer HG10.
+`RECOVERING` is not completion: the member must return `ONLINE` with the exact
+target build and be readmitted by every serving proxy.
+
+PXC requires safe GTID-history observations with no latched divergence, and a
+full-size Primary component whose members are all Synced, ready and connected.
+Before restarting its routed writer, the rollout selects a caught-up,
+proxy-eligible survivor, withdraws the old writer from proxy configuration and
+waits for the selected survivor in HG10 on every proxy. The temporary routing
+withdrawal does not retire the data identity or alter Galera peers. The existing
+same-member/same-volume restart keeps its joined admission and certification
+fences; it rejoins through normal Galera IST when available (SST otherwise),
+never by acquiring fresh empty-member replacement authority. Completion requires
+Synced in the full Primary component, exact build and proxy readmission.
+
+Each new member disruption waits for the maintenance window, including retries
+after a deferred submission. Closing the window does not abandon a member after
+actual writer handoff or a receipted deployment: native recovery and exact build
+acknowledgement finish before stopping between members. Merely selecting a
+handoff target does not bypass the window. A crash or transport failure can leave an
+unreceipted deployment intent with an uncertain outcome. Cancellation never
+submits that deployment again: it waits for native health and proxy routing to
+settle at the old or target build, then stops. Normal replay rechecks the window
+and native safety before resubmission. The operation also reuses retained-member
+native rejoin for peers while ordinary synchronization is paused.
+
+The checkpoint records the member's pre-upgrade instance builds. On normal
+replay after a lost deployment reply, native readiness and the exact frozen
+target on every expected instance prove completion when that target differs
+from the recorded pre-upgrade build, regardless of `--include-current`.
+For an explicit refresh whose instances already reported that same target,
+build identity cannot prove whether the deployment was accepted: the backend
+contract has no deployment lookup. That ambiguous case conservatively redeploys
+through the maintenance and native-safety gates and can repeat an accepted
+same-build refresh. Cancellation still never submits another deployment.
+
+If an operation becomes terminal without running its cleanup, ordinary
+synchronization settles any orphaned PXC writer-routing withdrawal using native
+readiness and a healthy routed writer, readmits the member, then releases its
+owner marker. This recovery accepts the old or target build, never starts an
+agent deployment, and must complete before another operation is admitted.
+
+Cancellation is not rollback. Single topology has no writer handoff and incurs
+**database downtime** while its sole runtime is redeployed.
+
+Rolling maintenance, replacement, scale, restore, recovery, pending structural
+work and TLS rotation must finish before starting the rollout. Operation steps
+and messages identify the member, writer handoff, native readiness and build
+wait; `AgentsCurrent` remains the shared build inventory. Unknown/stale native
+or proxy evidence is never permission to advance.
+
 ## Restart, configuration and scale
 
 - Dynamic allowlisted parameters can apply live. Startup-only parameters and resource changes use managed rolling maintenance. Keep configuration in the specification, not `SET PERSIST`.
@@ -467,6 +566,8 @@ survivors, the new joiner and deployed proxies must still negotiate certificatio
   absence of an SST donor containing the lost member's last known GTIDs refuses
   automation. A lost seed/pinned donor is re-pinned to a qualified survivor;
   existing joining-member certification still fences SST and routing.
+  A survivor withdrawn by an agent rollout is not an eligible donor or writer;
+  settle its drain before replacement admission.
 - Replacement creates a new member/storage identity before retiring the old
   one. ProxySQL acknowledges exclusion of the lost member, its exact runtime
   is fenced, and surviving native membership must confirm removal. No live
@@ -480,6 +581,12 @@ Inspect the precise status reason and queued operation. Reconciliation reuses
 one deterministic operation ID and does not requeue terminal operations. After
 resolving a terminal failure, inspect retained data before requesting managed
 replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
+withdrawn member itself is confirmed lost and its rollout owner is terminal or
+missing, settlement releases only the drain ownership, without waiting for native
+health or readmitting that identity. Confirmed loss keeps it out of proxy routing;
+the next reconciliation can queue replacement. A live rollout owner retains its
+drain until the serialized operation completes or terminates.
 This is distinct from retained-data full-outage re-formation below.
 See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).
 
@@ -625,8 +732,9 @@ This does not alter formed GR clusters or reopen consumed multi-member epochs.
 If the create may contain valuable data, retain its volumes and seek
 evidence-based recovery instead; there is no public Group Replication
 `reset-bootstrap-epoch` action. Updating only the control plane cannot undo an
-agent's durable claim or change its native renderer. MySQL does not support
-`upgrade-agents`.
+agent's durable claim or change its native renderer. The v0.4.4
+[agent rollout](#agent-rollout) requires completed formation and cannot repair
+an unformed or consumed bootstrap epoch.
 
 ### Native startup and agent connectivity
 
