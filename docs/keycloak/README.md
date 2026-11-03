@@ -137,9 +137,10 @@ Already-current agents are skipped unless `--include-current` is requested.
 Checkpoints survive control-plane restarts; completed members are not redeployed.
 A different control-plane build cannot deploy under the frozen target identity:
 re-run the operation with the intended control-plane executable.
-Cancellation stops immediately before deployment, including while waiting for a
-maintenance window. Once deployment is submitted, cancellation waits for native
-readiness and exact target-build acknowledgement; it does not roll back the agent.
+Cancellation stops immediately before a deployment intent is recorded. An intent
+without a receipt may have reached the backend: cancellation waits for native
+readiness on either the old or target build. A receipt requires native readiness
+and exact target-build acknowledgement. Cancellation does not roll back agents.
 Outstanding recovery restart/import journals defer operation admission so normal
 recovery can complete first.
 

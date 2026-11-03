@@ -4,7 +4,9 @@ package keycloak
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -230,6 +232,94 @@ func TestAgentUpgradeRecoveryAdmission(t *testing.T) {
 			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
 			if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}); err == nil {
 				t.Fatal("recovery passed defensive admission")
+			}
+		})
+	}
+}
+
+type uncertainUpgradeBackend struct {
+	idleBackend
+	lose    bool
+	missing bool
+}
+
+func (b *uncertainUpgradeBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	op, err := b.idleBackend.Deploy(ctx, name, d)
+	if b.lose {
+		return infra.Op{}, io.ErrUnexpectedEOF
+	}
+	return op, err
+}
+
+func (b *uncertainUpgradeBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
+	if b.missing {
+		return nil, nil
+	}
+	return b.idleBackend.Containers(ctx, name)
+}
+
+func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
+	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "retry-inventory"} {
+		t.Run(mode, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			base := rc.Backend.(*backendFake)
+			backend := &uncertainUpgradeBackend{idleBackend: idleBackend{base}}
+			rc.Backend = backend
+			build, ready := "old", true
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				s, _ := load(rc.Cluster)
+				if r.URL.Path == "/v1/status" {
+					json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: s.ConfigVersion, Agent: agentapi.AgentBuild{Build: build}})
+					return
+				}
+				json.NewEncoder(w).Encode(map[string]bool{"ready": ready})
+			}))
+			defer server.Close()
+			rc.Agents = idleAgents{server}
+			converge(t, p, rc)
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
+			for range 2 {
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Checkpoint = out.Checkpoint
+			}
+			backend.lose = true
+			if _, err := p.RunOperation(t.Context(), rc, op); err == nil {
+				t.Fatal("lost response not exercised")
+			}
+			deploys := base.deploys
+			p = New(p.options) // Replay durable intent without the lost deployment receipt.
+			if mode == "retry-inventory" {
+				backend.missing = true
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || out.Done || base.deploys != deploys {
+					t.Fatal("retry bypassed instance gate", err)
+				}
+				return
+			}
+			if mode == "replay-target" {
+				build = engine.CurrentAgentBuild().Build
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || !out.Done || base.deploys != deploys {
+					t.Fatal("replay failed to adopt target", err)
+				}
+				return
+			}
+			ready = false
+			out, err := p.CancelOperation(t.Context(), rc, op)
+			if err != nil || out.Done {
+				t.Fatal("cancel abandoned ambiguous deployment", err)
+			}
+			ready = true
+			if mode == "cancel-target" {
+				build = engine.CurrentAgentBuild().Build
+			}
+			out, err = p.CancelOperation(t.Context(), rc, op)
+			if err != nil || !out.Done || base.deploys != deploys {
+				t.Fatal("cancel failed to settle ambiguous deployment", err)
 			}
 		})
 	}

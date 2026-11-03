@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"reflect"
 	"slices"
 	"testing"
@@ -251,6 +252,72 @@ func TestAgentUpgradeRecoveryAdmission(t *testing.T) {
 			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
 			if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}); err == nil {
 				t.Fatal("recovery passed defensive admission")
+			}
+		})
+	}
+}
+
+type uncertainUpgradeBackend struct {
+	*agentUpgradeBackend
+	lose bool
+}
+
+func (b *uncertainUpgradeBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	op, err := b.agentUpgradeBackend.Deploy(ctx, name, d)
+	if b.lose {
+		return infra.Op{}, io.ErrUnexpectedEOF
+	}
+	return op, err
+}
+
+func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
+	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "retry-readiness"} {
+		t.Run(mode, func(t *testing.T) {
+			p, rc, _, agents := fixture(t, "split")
+			converge(t, p, rc)
+			backend := &uncertainUpgradeBackend{agentUpgradeBackend: &agentUpgradeBackend{testBackend: rc.Backend.(*testBackend)}}
+			rc.Backend = backend
+			agents.builds = map[string]string{}
+			s, _ := loadState(rc.Cluster)
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
+			for range 2 {
+				stepOperation(t, p, rc, op)
+			}
+			backend.lose = true
+			if _, err := p.RunOperation(t.Context(), rc, op); err == nil {
+				t.Fatal("lost response not exercised")
+			}
+			p = New(p.options)
+			if mode == "replay-target" {
+				agents.builds[s.Members["history"].Name] = engine.CurrentAgentBuild().Build
+				out, err := p.RunOperation(t.Context(), rc, op)
+				var cp agentUpgradeCheckpoint
+				json.Unmarshal(out.Checkpoint, &cp)
+				if err != nil || cp.Index != 1 || len(backend.order) != 1 {
+					t.Fatal("replay failed to adopt target", err, cp)
+				}
+				return
+			}
+			agents.unready = "history"
+			if mode == "retry-readiness" {
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || out.Done || len(backend.order) != 1 {
+					t.Fatal("retry bypassed readiness gate", err)
+				}
+				return
+			}
+			out, err := p.CancelOperation(t.Context(), rc, op)
+			if err != nil || out.Done {
+				t.Fatal("cancel abandoned ambiguous deployment", err)
+			}
+			agents.unready = ""
+			if mode == "cancel-target" {
+				agents.builds[s.Members["history"].Name] = engine.CurrentAgentBuild().Build
+			}
+			out, err = p.CancelOperation(t.Context(), rc, op)
+			if err != nil || !out.Done || len(backend.order) != 1 {
+				t.Fatal("cancel failed to settle ambiguous deployment", err)
 			}
 		})
 	}

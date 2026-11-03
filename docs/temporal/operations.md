@@ -72,10 +72,11 @@ The next component never starts until all expected instances are ready on the
 target build. A different control-plane executable cannot replace the frozen
 target; re-run the operation using the intended build.
 
-Cancellation stops between components or before deployment submission, including
-while waiting for a maintenance window. A submitted component finishes native
-readiness and exact target-build acknowledgement before cancellation completes;
-no subsequent component is deployed, and completed work is not rolled back.
+Cancellation stops between components or before deployment intent is recorded.
+An intent without a receipt may have reached the backend, so cancellation waits
+for native readiness on either the old or target build. A submitted component
+with a receipt must acknowledge the exact target build before cancellation
+completes; no subsequent component is deployed or completed work rolled back.
 Component recovery/import journals defer operation admission until normal
 recovery finishes.
 

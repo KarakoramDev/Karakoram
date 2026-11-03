@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 type agentUpgradeCheckpoint struct {
@@ -36,7 +37,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			return out(false), err
 		}
 	}
-	if cancel && !cp.Submitted {
+	if cancel && !cp.Waiting {
 		return out(true), nil
 	}
 	s, err := loadState(rc.Cluster)
@@ -89,6 +90,33 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		return out(false), engine.ErrNotFound
 	}
 	if cp.Waiting && !cp.Submitted {
+		// Intent without a receipt is ambiguous: the backend may have accepted
+		// the deployment. Wait for the service and native component to settle.
+		svc, e := rc.Backend.GetService(ctx, m.Name)
+		if e != nil {
+			return out(false), e
+		}
+		if svc == nil || (svc.Status != infra.StatusRunning && svc.Status != infra.StatusActive) {
+			return out(false), nil
+		}
+		var agent domain.AgentStatus
+		status, e := componentStatus(ctx, rc, m, &agent)
+		if e != nil {
+			return out(false), e
+		}
+		if !status.Ready {
+			return out(false), nil
+		}
+		if cancel || (!cp.Target.IncludeCurrent && agent.Build == cp.Target.TargetBuild) {
+			m.NativeReadiness = nil
+			cp.Done = append(cp.Done, m.Component)
+			cp.Index++
+			cp.Waiting = false
+			if m.Component == tspec.History || m.Component == tspec.Server {
+				cp.SettleUntil = clockNow(rc).Add(time.Minute)
+			}
+			return out(cancel), nil
+		}
 		if cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
 			return out(false), engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 		}

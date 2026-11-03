@@ -71,7 +71,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		cp.Target = target
 	}
-	if cancel && !cp.Submitted {
+	if cancel && !cp.Waiting {
 		return result(true), nil
 	}
 	if len(cp.Done) > 0 {
@@ -95,6 +95,30 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		return result(false), engine.Invalid("Keycloak agent upgrade member changed")
 	}
 	if cp.Waiting && !cp.Submitted {
+		// A missing receipt may mean the platform accepted a deployment whose
+		// response was lost. Observe recovery before cancelling or retrying.
+		svc, e := rc.Backend.GetService(ctx, s.Member)
+		if e != nil {
+			return result(false), e
+		}
+		if svc == nil || (svc.Status != infra.StatusRunning && svc.Status != infra.StatusActive) {
+			return result(false), nil
+		}
+		status, e := p.Status(ctx, rc)
+		if e != nil {
+			return result(false), e
+		}
+		if len(status.Members) != 1 || !status.Members[0].Health {
+			return result(false), nil
+		}
+		if cancel {
+			cp.Done = append(cp.Done, s.Member)
+			return result(true), nil
+		}
+		if !cp.Target.IncludeCurrent && status.Members[0].Agent.Build == cp.Target.TargetBuild {
+			cp.Done = append(cp.Done, s.Member)
+			return result(true), nil
+		}
 		if cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
 			return result(false), engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 		}
