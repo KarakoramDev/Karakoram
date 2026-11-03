@@ -4,6 +4,7 @@ package mysql
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -117,6 +118,30 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 			newest = b
 		}
 	}
+	baseline := ""
+	if newest == nil {
+		r.Baseline, r.SourceUUID, r.VerifyAfter = "", "", time.Time{}
+	} else {
+		baseline = newest.Name
+		// Names are reusable after deletion. Bind the scheduling proof to the
+		// immutable backup incarnation, repository and complete physical
+		// provenance, including generation and sealed object-path identity.
+		identity, e := json.Marshal(struct {
+			Name             string
+			OperationID      string
+			CreatedAt        time.Time
+			Storage          string
+			RecoveryIdentity string
+			MySQL            *domain.MySQLBackup
+		}{newest.Name, newest.OperationID, newest.CreatedAt, newest.Storage, newest.RecoveryIdentity, newest.MySQL})
+		if e != nil {
+			return e
+		}
+		key := fmt.Sprintf("%x", sha256.Sum256(identity))
+		if r.Baseline != key {
+			r.Baseline, r.SourceUUID, r.VerifyAfter = key, "", time.Time{}
+		}
+	}
 	for _, b := range items {
 		if b.Phase == domain.PhasePending || b.Phase == domain.PhaseRunning {
 			return skip("BackupInProgress", "Automatic PITR full backup deferred: another backup is pending or running")
@@ -133,12 +158,7 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 	if at.Sub(r.FirstSeen) < domain.PITRReanchorStabilityPeriod {
 		return skip("WriterNotStable", "Automatic PITR full backup deferred: writer must remain stable for five minutes after cluster operations")
 	}
-	baseline := ""
 	if newest != nil {
-		baseline = newest.Name
-		if r.Baseline != baseline {
-			r.Baseline, r.SourceUUID, r.VerifyAfter = baseline, "", time.Time{}
-		}
 		if !myspec.ValidUUID(r.SourceUUID) {
 			if at.Before(r.VerifyAfter) {
 				return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
