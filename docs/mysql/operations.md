@@ -396,6 +396,41 @@ The CLI command is `karactl -n NS mysql recover-quorum CLUSTER -f recovery.json`
 Full-outage recovery below compares stopped members' recovered positions and is distinct from this live-minority action.
 
 
+## Confirmed volume loss
+
+MySQL Group Replication and PXC automatically queue managed add-before-remove
+replacement only after **confirmed** loss of a member's initialized volume.
+An unreachable agent, storage API failure or unknown mount is not confirmed
+loss and never authorizes an empty data directory. `VolumeLost` / `VOLUME_LOST`
+keeps the cluster Degraded while evidence or replacement is pending.
+
+- GR requires fresh ONLINE observations of every survivor in the configured
+  group, a writable primary and a survivor majority of configured membership.
+  A donor's executed GTIDs must contain the lost member's last known persisted
+  set. Missing survivor GTIDs/group identity or an observation error refuses
+  automation. Older agents without the group-name observation must be upgraded
+  before this new automatic recovery can be admitted.
+- PXC requires a Primary component, every survivor Synced/ready/connected, one
+  state UUID and a configured-member majority. A latched history divergence or
+  absence of an SST donor containing the lost member's last known GTIDs refuses
+  automation. A lost seed/pinned donor is re-pinned to a qualified survivor;
+  existing joining-member certification still fences SST and routing.
+- Replacement creates a new member/storage identity before retiring the old
+  one. ProxySQL acknowledges exclusion of the lost member, its exact runtime
+  is fenced, and surviving native membership must confirm removal. No live
+  database observation of the lost member is required, and its old runtime is
+  never initialized on an empty volume.
+- `single` is refused because there is no retained replica. Recover original
+  storage or restore a backup into a new cluster; ordinary retained-volume
+  runtime restarts still cause singleton downtime.
+
+Inspect the precise status reason and queued operation. Reconciliation reuses
+one deterministic operation ID and does not requeue terminal operations. After
+resolving a terminal failure, inspect retained data before requesting managed
+replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+This is distinct from retained-data full-outage re-formation below.
+See [ADR 0067](../adr/0067-mysql-lost-volume-replacement.md).
+
 ## Full-outage recovery
 
 All members must be stopped/fenced before choosing a seed. Recovery fails closed if evidence is missing or incompatible; do not choose the first reachable member.

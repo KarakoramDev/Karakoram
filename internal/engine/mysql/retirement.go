@@ -110,12 +110,14 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		if s.Replacement == nil && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		st, err := live(ctx, rc, m.Name)
-		if err != nil {
-			return false, err
-		}
-		if s.Topology == "group" && onlinePrimary(st) {
-			return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
+		if !m.RuntimeRecovery.VolumeLost {
+			st, err := live(ctx, rc, m.Name)
+			if err != nil {
+				return false, err
+			}
+			if s.Topology == "group" && onlinePrimary(st) {
+				return false, switchAway(ctx, rc, s, m.Name, &m.HandoffTarget)
+			}
 		}
 		if err := survivorsOnline(ctx, rc, s, m.Name); err != nil {
 			return false, err
@@ -139,6 +141,12 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 					return false, err
 				}
 			}
+		}
+		if m.RuntimeRecovery.VolumeLost {
+			// Never start or contact the old data process. Fence its exact
+			// runtime, then require native membership removal before deletion.
+			m.Retirement = "runtime-stop"
+			return false, nil
 		}
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
@@ -178,7 +186,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -222,7 +230,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		if !status.Done {
 			return false, nil
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -239,7 +247,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		if m.ServiceID != "" {
-			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, false)
+			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 			if err != nil {
 				return false, err
 			}
@@ -262,7 +270,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, nil
 		}
 		if m.VolumeID != "" {
-			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, false)
+			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
 			if err != nil {
 				return false, err
 			}

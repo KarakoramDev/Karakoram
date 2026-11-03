@@ -66,6 +66,12 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if old == nil || old.Role != "data" {
 			return result, engine.Invalid("replacement target must be a MySQL data member")
 		}
+		if old.RuntimeRecovery.VolumeLost {
+			if err := p.volumeRecoverySafe(ctx, rc, s, old); err != nil {
+				old.RuntimeRecoveryReason = err.Error()
+				return result, err
+			}
+		}
 		index := s.NextIndex
 		s.NextIndex++
 		name := fmt.Sprintf("%sm%d", rc.Cluster.Name, index)

@@ -94,6 +94,9 @@ func observeNativeStatus(ctx context.Context, db *sql.DB, s myspec.Spec, p paths
 			out.MemberRole = "PRIMARY"
 		}
 	} else if s.Topology == myspec.TopologyGroup {
+		if err = db.QueryRowContext(ctx, "SELECT @@group_replication_group_name").Scan(&out.GroupName); err != nil {
+			return err
+		}
 		err = db.QueryRowContext(ctx, "SELECT MEMBER_STATE,MEMBER_ROLE FROM performance_schema.replication_group_members WHERE MEMBER_ID=@@server_uuid").Scan(&out.MemberState, &out.MemberRole)
 		if errors.Is(err, sql.ErrNoRows) {
 			// Before bootstrap (and after leaving), GR can expose only an
