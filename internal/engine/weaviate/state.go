@@ -70,11 +70,13 @@ type pending struct {
 // rolling freezes order and target configs before any disruption. Targets are
 // encrypted separately, never embedded in this journal.
 type rolling struct {
-	Reason      string   `json:"reason"`
-	OperationID string   `json:"operationId,omitempty"`
-	Order       []string `json:"order"`
-	Position    int      `json:"position"`
-	Step        string   `json:"step"`
+	Reason      string                      `json:"reason"`
+	OperationID string                      `json:"operationId,omitempty"`
+	Order       []string                    `json:"order"`
+	Position    int                         `json:"position"`
+	Step        string                      `json:"step"`
+	AgentTarget *engine.AgentUpgradePayload `json:"agentTarget,omitempty"`
+	Done        []string                    `json:"done,omitempty"`
 }
 
 func load(c *domain.Cluster) (*state, error) {

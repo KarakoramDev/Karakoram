@@ -82,6 +82,36 @@ Rolling maintenance restarts one member at a time, non-voters before voters, che
 
 Supported versions are `1.39.12` and `1.40.1` (default). Only same-minor patch-forward or **one minor forward at a time** is allowed, and the target must be cataloged. The current cross-minor path is `1.39.12 → 1.40.1`. Downgrades, major changes and skipped minors are rejected. Rolling members can temporarily run source/target versions; wait for actual native version acknowledgement and observed desired generation before declaring convergence. Control-plane rollback does not downgrade engine data.
 
+### Agent upgrades
+
+```sh
+karactl -n default clusters upgrade-agents vectors --wait
+```
+
+The rollout redeploys agents without changing applied database versions,
+configuration, resources, identities or volume attachments. Its existing rolling
+journal freezes the target build and member order: non-voters first, then voters,
+with the observed Raft leader last. Already-current healthy agents are skipped
+unless `--include-current` is supplied.
+
+Before each new deployment, the maintenance window must be open, all members
+must be native-ready with synchronized cluster statistics, and removing the
+selected member must retain a live voting majority. Multi-member clusters require
+an applied minimum replication factor of at least two, collection replication
+factors of at least two, and native shard evidence proving that no selected
+member holds a sole replica. Unknown evidence fails closed. These gates do not
+promise uninterrupted application reads/writes at every consistency level.
+**Single-member agent upgrades cause database downtime** and do not require
+redundancy that a singleton cannot provide.
+
+The next member waits for native readiness, synchronized cluster statistics and
+the exact frozen agent build. Other rolling, replacement, scaling, rotation or
+pending structural work blocks a new rollout. Cancellation stops between members;
+an already-submitted deployment is recovered even after cancellation or window
+closure. Cancellation is not rollback. A changed control-plane build cannot
+silently retarget an existing operation; follow its diagnostic before continuing.
+
+
 ## Scaling
 
 Change `spec.components.engine.replicas` or use `clusters scale --replicas`. `single` stays at one; `cluster` allows 3–9 with exactly three fixed voters. CPU/RAM resource changes are supported; disk only grows and depends on provider capability. See [resources](README.md#resources-and-runtime).

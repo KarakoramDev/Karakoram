@@ -26,6 +26,27 @@ The server uses SIGTERM and declares a **45-second graceful stop budget** for ch
 
 The supported transition is **2026.09.0 → 2026.10.0**, requested by changing `spec.version`. It requires a fresh successful backup and restarts on the new pinned artifacts; the store and system database upgrade in place. Plan an outage, verify the dump and recovery destination first, and do not combine this with an assumed rollback-by-downgrade strategy. Downgrades and other version paths are rejected. See [shared upgrade admission](../clusters.md) and [offline dumps](backups.md).
 
+### Agent upgrades
+
+```sh
+karactl -n NS clusters upgrade-agents graphdb --wait
+```
+
+Agent upgrades redeploy the single member with its **unchanged applied Neo4j
+version, runtime, persistent volume and resources**. This interrupts all database
+access: arrange application downtime and reconnection. A maintenance window is
+required before deployment unless explicitly overridden.
+
+The operation freezes the control-plane agent build and records its member and
+deployment progress before disruption. It skips an already-current healthy agent
+unless `--include-current` is supplied. Completion requires authenticated native
+readiness, the applied version/configuration and the exact frozen agent build.
+Pending structural or offline maintenance work blocks admission. Cancellation or
+a closing window does not abandon an already-submitted deployment; cancellation
+is not rollback. If the control-plane build changes before deployment, restore
+the intended build or re-run the operation as directed by its diagnostic.
+
+
 ## Monitoring
 
 Community has no native [Prometheus](https://prometheus.io/) metrics endpoint. The member gathers authenticated Query API observations (including the JVM memory bean), plus filesystem store size; generic process-tree CPU/RAM and volume metrics remain available through [Karakoram monitoring](../monitoring.md).
