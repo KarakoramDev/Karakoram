@@ -24,7 +24,7 @@ Older agents receive no IPv6 configuration; configuration pulls return HTTP 409
 with `AgentUpgradeRequired`, the missing capability and an instruction to upgrade
 the member agent, rather than a transient-connectivity diagnostic. A new agent
 receiving an older control plane's payload retains IPv4 behavior; upgrade the
-control plane before creating Temporal on Zerops. See [ADR 0069](../adr/0069-temporal-zerops.md).
+control plane before creating Temporal on Zerops. See [ADR 0068](../adr/0068-temporal-zerops.md).
 
 The `PostgreSQLBinding` status condition reports `Bound` only after the binding
 has an identity and its source connection has resolved. An unreachable source

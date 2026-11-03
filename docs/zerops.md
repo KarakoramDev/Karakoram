@@ -45,7 +45,7 @@ the frontend/UI client endpoint. All roles and the source writer must be
 reachable in that family. No Temporal volume is allocated: durability belongs
 to the bound PostgreSQL source. The frontend stays private; optional Web UI
 HTTPS requires OIDC. IPv6-capable member agents are required; see
-[ADR 0069](adr/0069-temporal-zerops.md). This support is covered by offline
+[ADR 0068](adr/0068-temporal-zerops.md). This support is covered by offline
 admission, configuration and fake-backend tests, not live acceptance.
 
 ## Requirements
@@ -133,7 +133,7 @@ ProxySQL count-only changes add/remove containers without a service-wide stop; r
 
 Terminal platform failures and `INCUMBENTS_REPLACED` are stored separately and release the active submission fence when observed. Before observation, replaying the target returns the original operation; afterward a new request may retry that same target. Unresolved submissions still block superseding targets, CPU-mode changes and Stop. A caller crash between receiving a terminal failure and checkpointing it can permit one resubmission; engine failure checkpoints and recovery rules remain necessary.
 
-New count/resources are committed only after platform completion and configuration/native writer admission on every requested live proxy. Count reductions and all MySQL/PXC and PostgreSQL/Supabase proxy resource changes wait for maintenance windows, including serving-preserving resizes; only serving-preserving count scale-out bypasses that window. PostgreSQL/Supabase poll the prior operation before submitting a superseding count so terminal submission fences can be finalized. MySQL/PXC combined count/resource, version or startup/runtime changes retain stop/redeploy. Removed instances can disconnect existing sessions, and live-provider acceptance of these preservation paths remains pending. See [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md), [MySQL/PXC operations](mysql/operations.md#restart-configuration-and-scale) and [PostgreSQL maintenance](postgres/operations.md#agent-rollout-and-maintenance-windows).
+New count/resources are committed only after platform completion and configuration/native writer admission on every requested live proxy. Count reductions and all MySQL/PXC and PostgreSQL/Supabase proxy resource changes wait for maintenance windows, including serving-preserving resizes; only serving-preserving count scale-out bypasses that window. PostgreSQL/Supabase poll the prior operation before submitting a superseding count so terminal submission fences can be finalized. MySQL/PXC combined count/resource, version or startup/runtime changes retain stop/redeploy. Removed instances can disconnect existing sessions, and live-provider acceptance of these preservation paths remains pending. See [ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md), [MySQL/PXC operations](mysql/operations.md#restart-configuration-and-scale) and [PostgreSQL maintenance](postgres/operations.md#agent-rollout-and-maintenance-windows).
 
 ProxySQL `upgrade-agents` uses ordinary whole-service new-build deployment, not
 the autoscaling preservation path. `temporaryShutdown=false` can overlap old and

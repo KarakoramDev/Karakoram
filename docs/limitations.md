@@ -174,7 +174,7 @@ These cross-engine constraints define the operating model; engine-specific limit
   disconnect its existing sessions.
   Version/startup-runtime changes do not acquire a serving guarantee from these
   capabilities. Live-provider acceptance remains pending; see
-  [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
+  [ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md),
   [Zerops resources](zerops.md#resources-and-autoscaling),
   [Dokploy proxy updates](dokploy.md#proxysql-count-and-resource-updates) and
   [Nomad resource limitations](nomad.md#proxy-resource-changes-are-not-a-zero-outage-contract).

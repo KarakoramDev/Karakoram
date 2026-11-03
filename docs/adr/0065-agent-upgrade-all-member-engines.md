@@ -131,7 +131,7 @@ enables the next preserving rollout. Cold/stopped proxies do not qualify.
 Zerops count/resource incumbent retention does not establish a new-build rollout
 guarantee; Nomad's TCP-gated canary and subsequent destructive replacements also
 do not qualify. Both retain whole-service deployment with native acknowledgement,
-not a serving-preservation claim. See [ADR 0070](0070-proxysql-serving-scale-and-resource-changes.md).
+not a serving-preservation claim. See [ADR 0069](0069-proxysql-serving-scale-and-resource-changes.md).
 Temporal also deploys logical component services; platform instance replacement
 policy, not the engine rollout, controls availability inside each component.
 

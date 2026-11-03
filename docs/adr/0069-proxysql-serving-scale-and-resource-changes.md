@@ -1,4 +1,4 @@
-# 0070 — ProxySQL serving-preserving replica and resource changes
+# 0069 — ProxySQL serving-preserving replica and resource changes
 
 Status: Accepted
 

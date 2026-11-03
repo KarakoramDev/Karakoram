@@ -38,7 +38,7 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 - PITR responses add `intervals`; legacy summaries remain unchanged.
 - PXC adds `GTIDHistoryPersistenceUnavailable`; update reason-based alerts.
 - Eligible ProxySQL count/resource changes preserve serving on Zerops and
-  Dokploy under [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md).
+  Dokploy under [ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md).
   PostgreSQL/Supabase proxy count increases now wait for maintenance when
   serving cannot be preserved; legacy runtimes keep their maintenance-gated path.
 - Temporal supports Zerops private IPv6 with upgraded agents. MySQL/PXC mutation
@@ -298,7 +298,7 @@ existing Nomad count-only eligibility. Replacing or removing an instance can
 disconnect existing sessions even on an eligible serving-preserving path.
 Applications must reconnect and handle uncertain transaction outcomes.
 Live-provider acceptance of these paths remains pending. See
-[ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
+[ADR 0069](adr/0069-proxysql-serving-scale-and-resource-changes.md),
 [Zerops](zerops.md#resources-and-autoscaling) and
 [Dokploy](dokploy.md#proxysql-count-and-resource-updates).
 
@@ -312,7 +312,7 @@ the bound PostgreSQL writer over private IPv6; application workers must reach
 the private frontend. Public IPv4 is not a substitute. No database, artifact or
 backup migration is required. Live workflow, failover/recovery and optional UI
 OIDC acceptance remain pending. See [Temporal](temporal/README.md#limits) and
-[ADR 0069](adr/0069-temporal-zerops.md).
+[ADR 0068](adr/0068-temporal-zerops.md).
 
 ### MySQL/PXC per-cluster mutation isolation
 

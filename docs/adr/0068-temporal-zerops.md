@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# 0069 — Temporal on Zerops private IPv6
+# 0068 — Temporal on Zerops private IPv6
 
 Status: Accepted
 
