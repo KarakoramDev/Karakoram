@@ -186,7 +186,7 @@ func TestLostMemberRetirementWithoutNativeObservation(t *testing.T) {
 	b.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 		if name == lost.Name && strings.HasPrefix(r.URL.Path, "/v1/mysql/") {
 			t.Errorf("contacted lost member: %s", r.URL.Path)
-			http.Error(w, "lost", 503)
+			http.Error(w, "lost", http.StatusServiceUnavailable)
 			return true
 		}
 		return false

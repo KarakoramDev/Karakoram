@@ -74,7 +74,7 @@ func TestAgentUpgradeBlocksOutstandingRecovery(t *testing.T) {
 						if stage == "admission" && !errors.Is(err, engine.ErrUnavailable) {
 							t.Fatalf("%s: %v", stage, err)
 						}
-						if stage != "admission" && err != nil {
+						if stage != "admission" && err != nil && !(result.Done && errors.Is(err, engine.ErrInvalid)) {
 							t.Fatalf("settlement blocked at %s: %v", stage, err)
 						}
 						if stage == "select" && !result.Done {
@@ -228,7 +228,38 @@ func TestAgentUpgradeRecoveryRetiresInflightOwner(t *testing.T) {
 			if err := st.EnqueueOperation(t.Context(), replacement); err != nil {
 				t.Fatal(err)
 			}
-			finishAgentRollout(t, rc, b, op, tc.cancel)
+			retired := false
+			for range 20 {
+				p := New(Options{Provider: rc.Cluster.Spec.Provider})
+				var result engine.OpResult
+				var err error
+				if tc.cancel {
+					result, err = p.CancelOperation(t.Context(), rc, op)
+				} else {
+					result, err = p.RunOperation(t.Context(), rc, op)
+				}
+				if result.Checkpoint != nil {
+					op.Checkpoint = result.Checkpoint
+				}
+				if result.Done {
+					if tc.cancel {
+						if err != nil {
+							t.Fatalf("cleanup failed: %v", err)
+						}
+					} else if !errors.Is(err, engine.ErrInvalid) || result.Message == "" {
+						t.Fatalf("incomplete rollout did not return terminal failure diagnostic: %+v %v", result, err)
+					}
+					retired = true
+					break
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				b.apply(t, p, rc)
+			}
+			if !retired {
+				t.Fatal("rollout did not retire")
+			}
 			if len(b.names) != 0 {
 				t.Fatal("recovery settlement submitted another executable", b.names)
 			}
@@ -240,7 +271,7 @@ func TestAgentUpgradeRecoveryRetiresInflightOwner(t *testing.T) {
 			if cp.StopReason == "" {
 				t.Fatal("missing durable retirement diagnostic")
 			}
-			op.Phase = domain.PhaseSucceeded
+			op.Phase = domain.PhaseFailed
 			if tc.cancel {
 				op.Phase = domain.PhaseCancelled
 			}

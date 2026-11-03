@@ -6,7 +6,7 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.4
 
-This section is a draft for v0.4.4. Back up control-plane state using the
+Back up control-plane state using the
 [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
 the original `KARAKORAM_MASTER_KEY` separately, and retain the previous executable
 with its pre-upgrade state before deploying the new control plane. Engine
@@ -161,11 +161,6 @@ MySQL single cannot automatically recover lost data. Without a safe surviving
 copy, recover original storage or restore a verified backup into a new cluster.
 There is no forced quorum/bootstrap, row-equivalence proof, zero-loss or RTO
 guarantee. See [MySQL operations](mysql/operations.md).
-
-## Upgrading to v0.4.4
-
-Preserve a consistent [control-plane state backup](#consistent-pre-upgrade-state-backup)
-and its master key before upgrading.
 
 ### MySQL and PXC automatic PITR re-anchoring
 

@@ -5,11 +5,14 @@ package mysql
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // Runtime repair never imports storage. Intentional stops remain owned by their
@@ -25,15 +28,35 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 	if bs.RestoreOperation != nil || s.GaleraTLS != nil || s.TLSRotation != nil {
 		return false, nil
 	}
-	ctx = freshMySQLReads(ctx)
-	// Retain the latest successful native cut, including an empty executed set.
-	// An unavailable sample never overwrites previously persisted evidence.
-	for _, m := range s.data() {
-		if m.Offline || m.Removing || m.RuntimeRecovery.VolumeLost {
+	// Recovery's read-only discovery shares Sync/Status's bounded pass. Only
+	// the subsequent destructive replacement proof uses fresh actor reads.
+	readService := func(ctx context.Context, name string) (*infra.Service, error) {
+		return mysqlReadService(ctx, rc, name)
+	}
+	readStatus := func(ctx context.Context, name string) (agentapi.Status, error) {
+		status, _, err := mysqlAgentStatus(ctx, rc, name)
+		return status, err
+	}
+	members := make([]*member, 0, len(s.Members))
+	var reads sync.WaitGroup
+	for _, m := range s.Members {
+		if m.Offline || m.Removing || m.ConfirmedVolumeLost || m.RuntimeRecovery.VolumeLost || m.Stage != "joined" {
 			continue
 		}
-		st, err := live(ctx, rc, m.Name)
-		if err == nil && st.MemberState == "ONLINE" {
+		members = append(members, m)
+		if m.Volume != "" {
+			reads.Go(func() { _, _ = readService(ctx, m.Volume) })
+		}
+	}
+	// Overlap runtime/storage inventory with agent/native probes instead of
+	// adding a sequential timeout for every healthy member before ordinary Sync.
+	observations := observeStatusMembers(ctx, rc, members)
+	reads.Wait()
+	// Retain successful native cuts, including an empty executed set. Failed
+	// samples never overwrite previously persisted evidence.
+	for i, m := range members {
+		st := observations[i].status
+		if m.Role == "data" && observations[i].nativeObserved && st.MemberState == "ONLINE" {
 			if _, err := parseGTIDSet(st.GTIDExecuted); err == nil {
 				m.LastGTIDExecuted = st.GTIDExecuted
 			}
@@ -56,10 +79,13 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 		}
 		var out engine.RuntimeRecoveryResult
 		if !m.ConfirmedVolumeLost {
-			out, err = engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery})
+			out, err = engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery, ReadService: readService, ReadStatus: readStatus})
 			if err != nil {
 				return true, err
 			}
+		}
+		if out.Busy || out.Imported || out.VolumeLost {
+			invalidateMySQLReadObservation(ctx, rc)
 		}
 		if out.VolumeLost {
 			m.ConfirmedVolumeLost = true

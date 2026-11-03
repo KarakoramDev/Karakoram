@@ -308,6 +308,13 @@ func mysqlAgentStatus(ctx context.Context, rc *engine.Context, member string) (a
 	return mysqlReadStatus(ctx, rc, member, "", nil)
 }
 
+func mysqlReadService(ctx context.Context, rc *engine.Context, name string) (*infra.Service, error) {
+	service, _, err := mysqlReadValue(ctx, rc, name, "platform-service", func(probe context.Context) (*infra.Service, error) {
+		return rc.Backend.GetService(probe, name)
+	})
+	return service, err
+}
+
 func mysqlReadClientStatus(ctx context.Context, rc *engine.Context, member string, client *agentapi.Client) (agentapi.Status, time.Time, error) {
 	return mysqlReadStatus(ctx, rc, member, client.ObservationInstance(), client)
 }

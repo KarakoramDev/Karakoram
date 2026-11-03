@@ -57,13 +57,13 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
 | [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
-| [0065](0065-agent-upgrade-all-member-engines.md) | Native-gated agent upgrades for every member-agent engine, durable replay and service-level deployment limits |
-| [0066](0066-postgres-administrator-rotation.md) | Peer-authenticated local PostgreSQL management and receipt-backed administrator rotation with consumer publication barriers |
-| [0069](0069-temporal-zerops.md) | Temporal on Zerops: backend-selected private IPv6 membership and capability-gated agent configuration |
-| [0070](0070-proxysql-serving-scale-and-resource-changes.md) | Serving-preserving ProxySQL count/resource contracts, provider admission and legacy-runtime boundaries |
 | [0063](0063-mysql-pitr-automatic-reanchor.md) | Automatic full-backup re-anchoring after MySQL/PXC physical archive-writer changes |
 | [0064](0064-pitr-restorable-intervals.md) | Additive PITR interval lists with optional full-backup provenance and unchanged legacy summaries |
+| [0065](0065-agent-upgrade-all-member-engines.md) | Native-gated agent upgrades for every member-agent engine, durable replay and service-level deployment limits |
+| [0066](0066-postgres-administrator-rotation.md) | Peer-authenticated local PostgreSQL management and receipt-backed administrator rotation with consumer publication barriers |
 | [0067](0067-mysql-lost-volume-replacement.md) | Native surviving-data admission for MySQL/PXC automatic lost-volume replacement |
+| [0069](0069-temporal-zerops.md) | Temporal on Zerops: backend-selected private IPv6 membership and capability-gated agent configuration |
+| [0070](0070-proxysql-serving-scale-and-resource-changes.md) | Serving-preserving ProxySQL count/resource contracts, provider admission and legacy-runtime boundaries |
 
 ## References and verification
 

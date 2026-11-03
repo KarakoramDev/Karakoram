@@ -92,8 +92,11 @@ func TestAgentUpgradeReplayAndGates(t *testing.T) {
 			}
 			ready = true
 			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1m"}}}
-			if !step().Done || !step().Done {
-				t.Fatal("in-flight replay did not complete")
+			if !step().Done {
+				t.Fatal("in-flight rollout did not complete")
+			}
+			if !step().Done {
+				t.Fatal("completed checkpoint replay did not remain complete")
 			}
 			if backend.deploys != deploys+1 || !bytes.Equal(before, rc.Cluster.Internal) || !bytes.Equal(config, secrets.values["keycloak/config/loginkc"]) || len(bindings.requests) != requests {
 				t.Fatal("rollout changed applied state or binding")

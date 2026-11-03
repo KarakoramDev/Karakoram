@@ -372,7 +372,8 @@ A stale `ONLINE` report never makes a lost member a healthy rollout peer.
 Operations are serialized per cluster: automatic replacement queueing cannot
 preempt an active rollout. If recovery appears mid-rollout, settle the current
 member and its routing withdrawal without submitting another executable, then
-retire the rollout with a recovery diagnostic so replacement can claim ownership.
+fail the incomplete rollout with a recovery diagnostic so replacement can claim
+ownership without retrying the rollout. Re-run `upgrade-agents` after recovery.
 A known deployment receipt still requires its exact target build; confirmed
 storage loss instead releases the drain without native readmission and retains
 the independent loss routing fence. Cancellation follows the same cleanup path.
@@ -581,6 +582,10 @@ Inspect the precise status reason and queued operation. Reconciliation reuses
 one deterministic operation ID and does not requeue terminal operations. After
 resolving a terminal failure, inspect retained data before requesting managed
 replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+Read-only runtime/storage discovery shares the bounded MySQL observation pass
+with native health and agent status; it does not add a timeout per member.
+Replacement admission still obtains fresh surviving-data proof before queueing.
+
 Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
 withdrawn member itself is confirmed lost and its rollout owner is terminal or
 missing, settlement releases only the drain ownership, without waiting for native

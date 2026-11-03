@@ -36,6 +36,18 @@ func agentUpgradeResult(cp *agentUpgradeCheckpoint, message string) (engine.OpRe
 	return engine.OpResult{Checkpoint: raw, Step: "upgrade-agents/" + cp.Stage + "/" + cp.Member, Message: message, RequeueAfter: 2 * time.Second}, err
 }
 
+func agentUpgradeRetired(cp *agentUpgradeCheckpoint, cancel bool) (engine.OpResult, error) {
+	raw, err := json.Marshal(cp)
+	result := engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}
+	if err != nil || cancel {
+		// Cancellation/failure cleanup must report successful settlement; the
+		// reconciler retains Cancelled or the original failure in that path.
+		return result, err
+	}
+	result.Message += "; re-run upgrade-agents after recovery"
+	return result, engine.Invalid("%s", result.Message)
+}
+
 func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain.Operation, cancel bool) (result engine.OpResult, err error) {
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
@@ -64,8 +76,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		}
 	}()
 	if cp.Member == "" && cp.StopReason != "" {
-		raw, e := json.Marshal(&cp)
-		return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
+		return agentUpgradeRetired(&cp, cancel)
 	}
 	if cp.Member == "" && (cancel || cp.Order != nil && cp.Index >= len(cp.Order)) {
 		return engine.OpResult{Done: true}, nil
@@ -91,10 +102,9 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		if cp.Order == nil {
 			return result, recoveryErr
 		}
-		cp.StopReason = "Agent rollout retired for recovery: " + recoveryErr.Error()
+		cp.StopReason = "Agent rollout stopped for recovery: " + recoveryErr.Error()
 		if cp.Member == "" {
-			raw, e := json.Marshal(&cp)
-			return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
+			return agentUpgradeRetired(&cp, cancel)
 		}
 		// Settle the already selected identity without another deployment.
 		// Keep a known receipt in waiting so its exact build is acknowledged.
@@ -360,8 +370,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			publishRevision(s)
 			cp.Member = ""
 			cp.Index = len(cp.Order)
-			raw, e := json.Marshal(&cp)
-			return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
+			return agentUpgradeRetired(&cp, cancel)
 		}
 		if m.Role == "data" && clustered(s.Topology) {
 			// Ordinary Sync is disabled during imperative maintenance. Reuse its
