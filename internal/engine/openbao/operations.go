@@ -30,6 +30,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	if r, handled, e := p.runBackupOperation(ctx, rc, op); handled {
 		return r, e
 	}
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, op, false)
+	}
 	switch op.Kind {
 	case domain.OperationRestart, domain.OperationRotateTLS, domain.OperationReplaceMember:
 	default:

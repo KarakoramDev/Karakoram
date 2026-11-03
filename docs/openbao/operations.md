@@ -124,6 +124,35 @@ karactl -n NS clusters rotate-tls secrets --yes --wait
 
 Restart and binary upgrade process standbys first, one at a time, re-unsealing and waiting for healthy-voter/autopilot gates. The active member steps down before its turn. Resource/process-trust changes also use serialized convergence. **TLS rotation is a serial certificate reload via SIGHUP**, not a process restart, and does not require re-unseal.
 
+### Upgrade member agents
+
+```sh
+karactl -n NS clusters upgrade-agents secrets --wait
+```
+
+This replaces the Karakoram executable, not the OpenBao version, configuration,
+resources or persistent volume. Raft and PostgreSQL-storage HA clusters roll
+inactive/standby members first and the initial active member last. Before active
+redeployment, the live native step-down path must establish another healthy active.
+Raft requires healthy, unsealed voters and a surviving voter majority; unhealthy
+or sealed standbys block the rollout. PostgreSQL storage uses its native HA
+active/standby semantics without Raft membership checks.
+
+The operation freezes its target build and member order, persists each in-flight
+member before disruption, and waits for process readiness, unseal, healthy native
+membership and the exact target agent build before advancing. Existing rolling,
+replacement or pending structural work must finish first. Current agents are
+skipped unless `--include-current` is supplied. A control-plane build change cannot
+retarget an existing rollout: restore the target build to finish an in-flight
+deployment, or start a new rollout after recovery.
+
+Maintenance windows gate each new member. Cancellation finishes recovery of the
+already-started member, then stops between members; it is not rollback. Shamir
+unseal reuses control-plane-held shares; auto-unseal still depends on the configured
+external seal service. **A single-member cluster is supported with downtime**:
+OpenBao is unavailable during redeployment and remains sealed until unseal completes.
+
+
 CPU-only and RAM-only changes leave the persistent volume unchanged: only
 `minDisk` and `maxDisk` determine whether a volume resize is required. Nomad and
 Dokploy accept runtime resource changes subject to backend admission, but reject
