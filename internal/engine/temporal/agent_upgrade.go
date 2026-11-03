@@ -99,15 +99,21 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if svc == nil || (svc.Status != infra.StatusRunning && svc.Status != infra.StatusActive) {
 			return out(false), nil
 		}
-		var agent domain.AgentStatus
-		status, e := componentStatus(ctx, rc, m, &agent)
+		status, e := componentStatus(ctx, rc, m)
 		if e != nil {
 			return out(false), e
 		}
 		if !status.Ready {
 			return out(false), nil
 		}
-		if cancel || (!cp.Target.IncludeCurrent && agent.Build == cp.Target.TargetBuild) {
+		exact := false
+		if !cancel && !cp.Target.IncludeCurrent {
+			exact, e = componentAgentBuildMatches(ctx, rc, m, cp.Target.TargetBuild)
+			if e != nil {
+				return out(false), e
+			}
+		}
+		if cancel || exact {
 			m.NativeReadiness = nil
 			cp.Done = append(cp.Done, m.Component)
 			cp.Index++
@@ -134,6 +140,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if e != nil {
 			return out(false), e
 		}
+		// Deploy has no request-identity receipt lookup in infra.Backend.
+		// IncludeCurrent cannot distinguish a completed same-build deployment
+		// from untouched instances after a lost receipt, so replay may redeploy.
 		deployment, e := engine.Deploy(ctx, rc, m.Name, runtime)
 		if e != nil {
 			return out(false), e
@@ -164,14 +173,11 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if !st.Ready {
 			return out(false), nil
 		}
-		exact, count, e := engine.VisitLiveInstances(ctx, rc, m.Name, func(client *agentapi.Client) (bool, error) {
-			status, e := client.Status(ctx)
-			return e == nil && status.Agent.Build == cp.Target.TargetBuild, e
-		})
+		exact, e := componentAgentBuildMatches(ctx, rc, m, cp.Target.TargetBuild)
 		if e != nil {
 			return out(false), e
 		}
-		if !exact || count != max(1, m.Replicas) {
+		if !exact {
 			return out(false), nil
 		}
 		m.NativeReadiness = nil
@@ -217,4 +223,12 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 	rc.Operation = op
 	defer func() { rc.Operation = previous }()
 	return p.upgradeAgents(ctx, rc, op, true)
+}
+
+func componentAgentBuildMatches(ctx context.Context, rc *engine.Context, m *componentMember, target string) (bool, error) {
+	exact, count, err := engine.VisitLiveInstances(ctx, rc, m.Name, func(client *agentapi.Client) (bool, error) {
+		status, err := client.Status(ctx)
+		return err == nil && status.Agent.Build == target, err
+	})
+	return exact && count == max(1, m.Replicas), err
 }

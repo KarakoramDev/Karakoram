@@ -79,6 +79,12 @@ with a receipt must acknowledge the exact target build before cancellation
 completes; no subsequent component is deployed or completed work rolled back.
 Component recovery/import journals defer operation admission until normal
 recovery finishes.
+With `--include-current`, a lost deployment receipt after platform acceptance
+can cause an additional same-build redeployment of that component on replay.
+The backend contract has no request-identity receipt lookup to distinguish a
+completed deployment from untouched current agents. Normal readiness/window
+gates still apply. Without the flag, all expected instances must report the
+exact frozen target build before replay adopts the completed component.
 
 
 ## Server upgrades and schema

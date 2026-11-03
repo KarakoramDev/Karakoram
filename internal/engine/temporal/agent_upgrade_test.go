@@ -9,6 +9,7 @@ import (
 	"io"
 	"reflect"
 	"slices"
+	"sync/atomic"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
@@ -271,7 +272,7 @@ func (b *uncertainUpgradeBackend) Deploy(ctx context.Context, name string, d inf
 }
 
 func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
-	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "retry-readiness"} {
+	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "replay-current", "retry-readiness"} {
 		t.Run(mode, func(t *testing.T) {
 			p, rc, _, agents := fixture(t, "split")
 			converge(t, p, rc)
@@ -279,7 +280,12 @@ func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
 			rc.Backend = backend
 			agents.builds = map[string]string{}
 			s, _ := loadState(rc.Cluster)
-			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			if mode == "replay-current" {
+				for _, m := range s.Members {
+					agents.builds[m.Name] = engine.CurrentAgentBuild().Build
+				}
+			}
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: mode == "replay-current"})
 			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
 			for range 2 {
 				stepOperation(t, p, rc, op)
@@ -289,6 +295,14 @@ func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
 				t.Fatal("lost response not exercised")
 			}
 			p = New(p.options)
+			if mode == "replay-current" {
+				backend.lose = false
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || out.Done || len(backend.order) != 2 {
+					t.Fatal("same-build replay policy changed", err)
+				}
+				return
+			}
 			if mode == "replay-target" {
 				agents.builds[s.Members["history"].Name] = engine.CurrentAgentBuild().Build
 				out, err := p.RunOperation(t.Context(), rc, op)
@@ -320,5 +334,51 @@ func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
 				t.Fatal("cancel failed to settle ambiguous deployment", err)
 			}
 		})
+	}
+}
+
+func TestAgentUpgradeFrozenTargetAdoptionChecksEveryInstance(t *testing.T) {
+	p, rc, _, agents := fixture(t, "split")
+	history := rc.Cluster.Spec.Components.Extra["history"]
+	history.Replicas = 2
+	rc.Cluster.Spec.Components.Extra["history"] = history
+	converge(t, p, rc)
+	s, _ := loadState(rc.Cluster)
+	if s.Members["history"].Replicas != 2 {
+		t.Fatal("test requires two instances")
+	}
+	// Simulate restart under a different control-plane executable: neither
+	// frozen-target-b nor other-build-c is the current executable identity.
+	var calls atomic.Int64
+	agents.buildForStatus = func(string) string {
+		if calls.Add(1)%2 == 0 {
+			return "other-build-c"
+		}
+		return "frozen-target-b"
+	}
+	cp := agentUpgradeCheckpoint{
+		operationCheckpoint: operationCheckpoint{Stage: "roll", Order: []string{"history"}, Waiting: true},
+		Target:              engine.AgentUpgradePayload{TargetBuild: "frozen-target-b"},
+	}
+	raw, _ := json.Marshal(cp)
+	op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Checkpoint: raw}
+	out, err := p.RunOperation(t.Context(), rc, op)
+	if err == nil {
+		t.Fatal("mixed frozen-target instances bypassed changed-build fence")
+	}
+	var observed agentUpgradeCheckpoint
+	json.Unmarshal(out.Checkpoint, &observed)
+	if observed.Index != 0 || len(observed.Done) != 0 {
+		t.Fatal("mixed instances adopted", observed)
+	}
+	agents.buildForStatus = func(string) string { return "frozen-target-b" }
+	out, err = p.RunOperation(t.Context(), rc, op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed = agentUpgradeCheckpoint{}
+	json.Unmarshal(out.Checkpoint, &observed)
+	if observed.Index != 1 || len(observed.Done) != 1 {
+		t.Fatal("exact frozen target not adopted", observed)
 	}
 }

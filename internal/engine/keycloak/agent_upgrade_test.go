@@ -259,7 +259,7 @@ func (b *uncertainUpgradeBackend) Containers(ctx context.Context, name string) (
 }
 
 func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
-	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "retry-inventory"} {
+	for _, mode := range []string{"cancel-old", "cancel-target", "replay-target", "replay-current", "retry-inventory"} {
 		t.Run(mode, func(t *testing.T) {
 			p, rc, _, _ := setup(t)
 			base := rc.Backend.(*backendFake)
@@ -277,7 +277,10 @@ func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
 			defer server.Close()
 			rc.Agents = idleAgents{server}
 			converge(t, p, rc)
-			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			if mode == "replay-current" {
+				build = engine.CurrentAgentBuild().Build
+			}
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build, IncludeCurrent: mode == "replay-current"})
 			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
 			for range 2 {
 				out, err := p.RunOperation(t.Context(), rc, op)
@@ -292,6 +295,14 @@ func TestAgentUpgradeAmbiguousSubmission(t *testing.T) {
 			}
 			deploys := base.deploys
 			p = New(p.options) // Replay durable intent without the lost deployment receipt.
+			if mode == "replay-current" {
+				backend.lose = false
+				out, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil || out.Done || base.deploys != deploys+1 {
+					t.Fatal("same-build replay policy changed", err)
+				}
+				return
+			}
 			if mode == "retry-inventory" {
 				backend.missing = true
 				out, err := p.RunOperation(t.Context(), rc, op)

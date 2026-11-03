@@ -129,6 +129,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if e != nil {
 			return result(false), e
 		}
+		// infra.Backend has no deployment receipt lookup by request identity.
+		// With IncludeCurrent, a lost receipt cannot distinguish an untouched
+		// same-build runtime from a completed deployment; replay may redeploy.
 		deployment, e := engine.Deploy(ctx, rc, s.Member, runtime)
 		if e != nil {
 			return result(false), e

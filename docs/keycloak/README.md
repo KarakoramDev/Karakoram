@@ -143,6 +143,11 @@ readiness on either the old or target build. A receipt requires native readiness
 and exact target-build acknowledgement. Cancellation does not roll back agents.
 Outstanding recovery restart/import journals defer operation admission so normal
 recovery can complete first.
+With `--include-current`, losing a deployment receipt after platform acceptance
+can cause one additional same-build redeployment during replay. The backend
+contract has no request-identity receipt lookup to distinguish that completed
+deployment from an untouched current agent; normal readiness/window gates still
+apply. Without this flag, a ready target build is adopted without redeployment.
 
 
 Resource reconciliation compares values, including an explicit `startCpu`, not
