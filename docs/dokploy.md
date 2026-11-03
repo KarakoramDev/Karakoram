@@ -59,11 +59,12 @@ The cap also applies during initial cluster bootstrap; there is no quorum-group
 exception. Initial member deployment readiness means the agent supervisor is
 running and initialising, not that the database has formed a quorum. Stateless
 day-2 replacements retain native readiness when dependencies are healthy; the
-engine persists that choice for stable retries. Dokploy does not map either
-probe to a Docker `HEALTHCHECK`, because Swarm service
-discovery must be available to bootstrapping tasks. Application/native health,
-configuration acknowledgement and rolling-replacement catch-up remain enforced
-by Karakoram's engine-level convergence gates. See
+engine persists that choice for stable retries. Cold deployments do not map
+either probe to a Docker `HEALTHCHECK`, because Swarm service discovery must be
+available to bootstrapping tasks. Running, marker-backed ProxySQL count/resource
+updates instead install the separate serving healthcheck described below.
+Application/native health, configuration acknowledgement and rolling-replacement
+catch-up remain enforced by Karakoram's engine-level convergence gates. See
 [member startup and admission](operations.md#deployment-admission-and-member-startup).
 
 
@@ -89,23 +90,65 @@ exhausted, a subsequent deployment request reports `DeploymentRetriesExhausted`;
 the engine retains the failure status and emits a warning with the last safe
 platform error. Fix the platform/build cause before explicitly re-arming.
 
-Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
-change. A pure count reduction back to an already-running count therefore uses
-temporary `stop-first`, `Parallelism=1` when at least two replicas remain running.
-This frees one replacement slot without deliberately stopping the entire service.
-The saved policy returns to `start-first` after the operation becomes terminal,
-without another reload; superseding specification changes and Start/Restart/Stop
-also restore it before replacing the pending operation, including Stop→Start.
-Singleton reductions retain `start-first` because `stop-first` would retire the
-only remaining serving task before its replacement starts.
+### ProxySQL count and resource updates
 
-This exception requires a matching application-specification receipt from a
-successful deployment or reload. Staged environment, resource, port or image
-changes cannot use the count-only exception; older records without that receipt
-conservatively keep their existing policy until an ordinary rollout establishes
-it. Unlike Nomad's count-only reconciliation, Dokploy still replaces tasks because
-its API exposes no count-only Swarm update. Runtime Running is not native SQL/API
-readiness; the engine's application-health and every-instance gates still apply.
+Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
+change: these are rolling replacements, not an in-place replica-count mutation.
+For newly deployed MySQL/PXC and PostgreSQL/Supabase ProxySQL runtimes carrying
+the serving-probe marker, count-only and resource-only updates keep the service
+running with **start-first, parallelism one, and a native serving healthcheck**.
+The local agent must have successfully applied its latest accepted nonzero
+configuration revision, have a running ProxySQL process without maintenance or
+stop holds, and report an ONLINE writer before Swarm admits the replacement to
+service DNS/VIP and retires its predecessor. Fresh agents pull configuration
+themselves; this does not depend on reconciliation pushing configuration while
+the platform operation is in progress.
+
+The backend completes only after exactly the requested number of new healthy
+tasks is Running, no previous task is still Running, the expected Swarm
+`ForceUpdate` is still applied, and Swarm reports the update completed. The
+engine then checks every live instance's configuration and native writer
+readiness again before committing. Scale-in remains maintenance-window gated.
+Version, startup/runtime and combined count/resource changes retain the
+engine's disruptive deployment path.
+
+A health failure **pauses** the rollout rather than continuing through the
+remaining incumbents. The healthcheck runs every five seconds, with a ten-second
+timeout, a sixty-second start period and three retries; Swarm monitors updates
+for thirty seconds with zero tolerated failures. A paused or rolled-back update
+is reported as failed. If spare capacity or native readiness never arrives, the
+operation reports failure after fifteen minutes without switching to stop-first.
+Inspect task health, config-pull connectivity, writer availability and surge
+capacity before retrying. A single extra replacement slot is required in addition
+to the larger of the old and desired fleet; insufficient capacity can leave the
+update pending. Lost reload replies reuse the persisted exact operation rather
+than starting another replacement.
+
+The serving-probe healthcheck is installed only for running count/resource
+updates, not cold deployments, so it cannot hold initial bootstrap admission on
+unformed dependencies. An old agent lacks the local probe socket and fails
+closed. Older deployed runtimes without the marker retain their previous
+disruptive reload policy; the control plane does not claim serving preservation
+for them. MySQL takes its stop/redeploy path on the next requested update to
+establish the new runtime; PostgreSQL retains its maintenance-gated legacy path.
+Non-proxy runtimes are unchanged.
+
+For unmarked legacy runtimes, a pure count reduction back to an already-running
+count still temporarily uses `stop-first`, `Parallelism=1` when at least two
+replicas remain, with the saved policy restored after completion. Marked proxies
+never use that capacity workaround. Runtime Running alone, a transport-only
+probe, and start-first without the serving healthcheck are not native readiness.
+The serving contract preserves availability for new connections; replacing a
+task can still disconnect client sessions attached to that task. It is not a
+connection-draining or independent-host availability guarantee.
+
+The application-specification receipt prevents staged environment, resource,
+port or image changes from being mistaken for a legacy count-only exception.
+The platform behavior is defined by Dokploy's
+[Swarm service builder](https://github.com/Dokploy/dokploy/blob/canary/packages/server/src/utils/builders/index.ts),
+[Swarm settings mapping](https://github.com/Dokploy/dokploy/blob/canary/packages/server/src/utils/docker/utils.ts),
+and Docker's [health-gated service binding](https://github.com/moby/moby/blob/master/daemon/cluster/executor/container/controller.go).
+
 Specification receipts use the shared versioned HMAC-SHA256 helper, keyed by the
 control-plane-held Dokploy API credential with a dedicated value domain. This
 prevents a metadata reader from guessing low-entropy environment secrets offline.

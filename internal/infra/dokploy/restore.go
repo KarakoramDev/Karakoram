@@ -18,7 +18,11 @@ const restoreFence = time.Minute
 var errObservationMutation = errors.New("runtime observation requires serialized reconciliation")
 
 type swarmService struct {
-	ID       string `json:"ID"`
+	ID           string `json:"ID"`
+	UpdateStatus struct {
+		State   string `json:"State"`
+		Message string `json:"Message"`
+	} `json:"UpdateStatus"`
 	Endpoint struct {
 		Ports []swarmPort `json:"Ports"`
 	} `json:"Endpoint"`
@@ -34,6 +38,7 @@ type swarmService struct {
 			} `json:"Replicated"`
 		} `json:"Mode"`
 		TaskTemplate struct {
+			ForceUpdate   uint64 `json:"ForceUpdate"`
 			ContainerSpec struct {
 				Image  string            `json:"Image"`
 				Labels map[string]string `json:"Labels"`
@@ -248,7 +253,7 @@ func (b *Backend) mutationReady(ctx context.Context, a *application, m *metadata
 	if m.Pending == nil || m.Pending.Failed && !m.Pending.Uncertain {
 		return nil
 	}
-	if m.Pending.Action != "deploy" && !(m.Desired == "deleting" && m.Pending.Action != "delete" && m.Pending.Action != "stop") {
+	if m.Pending.Action != "deploy" && !m.Pending.HealthGated && !(m.Desired == "deleting" && m.Pending.Action != "delete" && m.Pending.Action != "stop") {
 		return nil
 	}
 	state, err := b.pollOperation(ctx, encodeOp(*m.Pending))

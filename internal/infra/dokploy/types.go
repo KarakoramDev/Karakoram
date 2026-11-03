@@ -53,6 +53,7 @@ type metadata struct {
 	Min                    int                `json:"min"`
 	Max                    int                `json:"max"`
 	Deployed               bool               `json:"deployed,omitempty"`
+	ProxyServingProbe      bool               `json:"proxyServingProbe,omitempty"`
 	AppliedSpecification   string             `json:"appliedSpecification,omitempty"`
 	DeploymentDigest       string             `json:"deploymentDigest,omitempty"`
 	DeploymentBudget       *deploymentBudget  `json:"deploymentBudget,omitempty"`
