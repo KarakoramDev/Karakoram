@@ -29,7 +29,7 @@ func TestProxyServingReadinessFailsClosed(t *testing.T) {
 			t.Run(engine+"/"+condition, func(t *testing.T) {
 				e := &servingProxyEngine{name: engine}
 				a := &nodeAgent{o: Options{Engine: engine, DataDir: t.TempDir()}, engine: e, sup: newSupervisor(io.Discard), c: agentapi.MemberConfig{Role: "proxy", ConfigVersion: 4, DesiredProcesses: []string{"proxysql"}}}
-				t.Cleanup(func() { _ = os.Remove(proxyAdmissionPath(a.o.DataDir)) })
+				t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(proxyAdmissionPath(a.o.DataDir))) })
 				a.acceptedVersion = 4
 				a.sup.children["proxysql"] = &child{status: agentapi.ProcessStatus{State: "running", PID: 123}}
 				switch condition {
@@ -85,7 +85,7 @@ func TestProxyServingReadinessOldAgentAndArgumentsFailClosed(t *testing.T) {
 
 func proxyServingLatchFixture(t *testing.T, engine, dir string) (*nodeAgent, *servingProxyEngine) {
 	t.Helper()
-	t.Cleanup(func() { _ = os.Remove(proxyAdmissionPath(dir)) })
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(proxyAdmissionPath(dir))) })
 	e := &servingProxyEngine{name: engine}
 	a := &nodeAgent{o: Options{Engine: engine, DataDir: dir}, engine: e, sup: newSupervisor(io.Discard),
 		c: agentapi.MemberConfig{Role: "proxy", ConfigVersion: 4, DesiredProcesses: []string{"proxysql"}}, acceptedVersion: 4}
@@ -261,7 +261,7 @@ func TestProxyAdmissionUsesStableContainerProvenanceOutsideDataDir(t *testing.T)
 	if first != second {
 		t.Fatal("agent-only re-exec would change container provenance")
 	}
-	if filepath.Dir(first.path) != "/tmp" || first.path == filepath.Join(dir, filepath.Base(first.path)) {
+	if filepath.Dir(filepath.Dir(first.path)) != "/tmp" || first.path == filepath.Join(dir, filepath.Base(first.path)) {
 		t.Fatal("admission marker can live in an engine data volume")
 	}
 }

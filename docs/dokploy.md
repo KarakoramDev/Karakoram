@@ -105,8 +105,10 @@ themselves; this does not depend on reconciliation pushing configuration while
 the platform operation is in progress.
 
 Successful native admission is **latched for that Swarm task/container lifetime**.
-An atomic admission record lives in the container's fixed `/tmp` writable layer,
-never its engine data volume. Provenance binds the record to the PID namespace,
+An atomic admission record lives in an agent-owned, mode-0700 directory in the
+container's fixed `/tmp` writable layer, never its engine data volume. Directory
+and opened-record ownership/type/mode are validated; symlinks, FIFOs and oversized
+records fail closed without blocking or unbounded reads. Provenance binds it to the PID namespace,
 PID 1 start identity, kernel boot ID and hostname. Agent-only restart/re-exec
 preserves established admission; a new task or container restart must earn
 admission again, even if an old marker was copied into its filesystem.
