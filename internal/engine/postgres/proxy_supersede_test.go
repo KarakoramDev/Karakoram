@@ -6,6 +6,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -18,6 +19,18 @@ type pendingProxyScaleBackend struct {
 	fail    error
 	busy    bool
 	targets []int
+}
+
+func (b *pendingProxyScaleBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
+	if name != "demopx" {
+		return b.fakeBackend.Containers(ctx, name)
+	}
+	instances := make([]infra.Container, b.count)
+	for i := range instances {
+		id := fmt.Sprintf("%s-%d", name, i)
+		instances[i] = infra.Container{ID: id, Hostname: id, Status: infra.ContainerRunning}
+	}
+	return instances, nil
 }
 
 func (b *pendingProxyScaleBackend) OpStatus(_ context.Context, op infra.Op) (infra.OpState, error) {

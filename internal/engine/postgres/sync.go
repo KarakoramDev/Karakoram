@@ -114,6 +114,15 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
 		replicas := desiredComponent(rc, m).Replicas
 		if replicas > 0 && replicas < q.Replicas {
+			serving, err := proxyRuntimePreservesServing(ctx, rc, m.Name)
+			if err != nil {
+				return true, err
+			}
+			if !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || replicas < m.Replicas {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
+			}
 			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
 			if err != nil {
 				return true, err
@@ -188,6 +197,15 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	m := s.find(q.Member)
 	if m == nil {
 		return true, engine.ErrNotFound
+	}
+	if m.Role == "proxy" && (q.Action == "scale" || q.Action == "resize") {
+		replicas := m.Replicas
+		if q.Action == "scale" {
+			replicas = q.Replicas
+		}
+		if admitted, err := proxyUpdateReady(ctx, rc, m, replicas); err != nil || !admitted {
+			return true, err
+		}
 	}
 	switch q.Action {
 	case "import":
@@ -885,6 +903,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 			}
 		}
 		desired := desiredComponent(rc, m)
+		proxyServing := true
 		if m.Role == "proxy" {
 			runtime, err := rc.Backend.GetService(ctx, m.Name)
 			if err != nil {
@@ -922,12 +941,16 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				if e != nil || !applied {
 					return result, e
 				}
+				proxyServing, e = proxyRuntimePreservesServing(ctx, rc, m.Name)
+				if e != nil {
+					return result, e
+				}
 			}
 		}
 		changed := m.ConfigVersion != s.ConfigVersion || m.Version != rc.Cluster.Spec.Version || !reflect.DeepEqual(m.Resources, desired.Resources)
 		if m.Role == "proxy" && m.Replicas != desired.Replicas && !changed {
 			rc.SyncWait = fmt.Sprintf("scaling proxy %s", m.Name)
-			if desired.Replicas < m.Replicas {
+			if desired.Replicas < m.Replicas || !rc.Backend.Capabilities().ReplicaScalePreservesServing || !proxyServing {
 				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 					return wait, nil
 				}
@@ -957,7 +980,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if !changed {
 			continue
 		}
-		if needsDisruption(p, rc, m, desired) {
+		if needsDisruption(p, rc, m, desired) || (m.Role == "proxy" && !proxyServing && !reflect.DeepEqual(m.Resources, desired.Resources)) {
 			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 				return wait, nil
 			}

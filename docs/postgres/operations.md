@@ -22,17 +22,37 @@ to start the next disruption. Re-enqueue against the new build instead.
 Deploy admission caps and deployment retry budgets still apply.
 
 `spec.maintenance` gates the start of desired engine-version changes, major
-offline upgrades, rolling resource changes, restart-required settings (including
-directional shared-memory restarts), and scale-in. Each new member disruption
-waits independently; work already stopped/deployed continues to readiness after
-the window closes. Automatic database leaf renewal waits only while more than
-seven days remain. Agent transport renewal, emergency database leaf renewal,
-healing/runtime recovery, creation/scale-out and recovery operations remain
-ungated. Restart, TLS rotation and agent-rollout operations wait before claim.
+offline upgrades, disruptive resource changes, restart-required settings (including
+directional shared-memory restarts), and scale-in. Proxy scale-out also waits
+unless the backend explicitly guarantees serving-preserving count updates.
+Proxy resource updates bypass this gate only when the backend guarantees
+serving-preserving updates for the particular resource transition. Otherwise the
+existing backend update runs in the maintenance window and may interrupt clients;
+multiple proxy replicas alone do not make it non-disruptive.
+Each new member disruption waits independently; admitted infrastructure work
+continues to readiness after the window closes. Automatic database leaf renewal
+waits only while more than seven days remain. Agent transport renewal, emergency
+database leaf renewal, healing/runtime recovery, creation, database scale-out and
+recovery operations remain ungated. Restart, TLS rotation and agent-rollout
+operations wait before claim.
 `MaintenanceWindow=False/WaitingForWindow` explains a delayed convergence;
 waiting does not consume the operation budget. No configured windows means
 always open. The shared [operations guide](../operations.md) describes policy
 syntax and `--ignore-maintenance-window` overrides.
+
+Proxy count/resource changes retain a durable pending target until the backend
+operation completes and the exact requested number of live proxy instances each
+acknowledges the current configuration, runs its native process, and reports an
+ONLINE writer backend. Backend completion or a successful reload response alone
+does not commit applied replicas/resources or acknowledge convergence. These
+checks resume from the same pending receipt after a control-plane restart.
+Serving-preserving updates still require provider capacity and native health;
+keep client reconnect logic for failures and maintenance-gated changes.
+On backends requiring a serving-readiness probe, legacy proxy deployments without
+it remain on the maintenance-gated disruptive path even when the backend generally
+supports serving-preserving updates. Upgrade/redeploy their agents deliberately before
+relying on that backend guarantee; a control-plane-only upgrade does not install
+the probe into an existing runtime.
 
 Exposure admission is retained separately from runtime routes. Resume and runtime
 recovery restore the previously admitted TCP exposure even when the maintenance
