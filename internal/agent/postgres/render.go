@@ -6,6 +6,8 @@ package postgres
 import (
 	"fmt"
 	"net"
+	"os"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -88,6 +90,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 	for k, v := range map[string]any{"listen_addresses": "*", "port": 5432, "unix_socket_directories": p.socket, "password_encryption": "scram-sha-256", "archive_mode": "on", "archive_command": "/bin/true", "archive_timeout": archiveTimeout(s), "hba_file": filepath.Join(p.root, "pg_hba.conf")} {
 		m[k] = v
 	}
+	if s.LocalPeerAuth {
+		m["ident_file"] = filepath.Join(p.root, "pg_ident.conf")
+	}
 	if s.ListenHost != "" {
 		m["listen_addresses"] = postgresListenHost(s.ListenHost)
 	}
@@ -122,6 +127,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 }
 func hba(s pgspec.Spec) []string {
 	lines := []string{"local all all scram-sha-256", "local replication all scram-sha-256", "host replication " + s.Replication.Username + " 127.0.0.1/32 scram-sha-256", "host replication " + s.Replication.Username + " ::1/128 scram-sha-256"}
+	if s.LocalPeerAuth {
+		lines = append([]string{"local all postgres peer map=karakoram-local", "local replication postgres peer map=karakoram-local"}, lines...)
+	}
 	cidrs := s.Postgres.ClientCIDRs
 	if len(cidrs) == 0 {
 		cidrs = []string{"0.0.0.0/0", "::/0"}
@@ -229,7 +237,7 @@ func restoreArgs(s pgspec.Spec, p paths) ([]string, error) {
 	return append(args, "restore"), nil
 }
 
-var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
+var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ident_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
 
 func dynamicConfig(s pgspec.Spec, p paths) map[string]any {
 	params := parameters(s, p)
@@ -345,6 +353,16 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 			files = append(files, renderedFile{"proxy/proxysql-cert.pem", s.Proxy.ServerCert.CertPEM, false}, renderedFile{"proxy/proxysql-key.pem", s.Proxy.ServerCert.KeyPEM, false}, renderedFile{"proxy/proxysql-ca.pem", s.CAPEM, false})
 		}
 		return files, nil
+	}
+	if s.LocalPeerAuth {
+		// Every supervised child inherits the agent's effective UID. Resolve
+		// the kernel identity, never USER/LOGNAME supplied through environment.
+		owner, err := user.LookupId(strconv.Itoa(os.Geteuid()))
+		if err != nil || owner.Username == "" || strings.ContainsAny(owner.Username, "\r\n\x00") {
+			return nil, fmt.Errorf("cannot resolve runtime owner for PostgreSQL peer authentication")
+		}
+		identity := `"` + strings.ReplaceAll(owner.Username, `"`, `""`) + `"`
+		files = append(files, renderedFile{"pg_ident.conf", "karakoram-local " + identity + " postgres\n", false})
 	}
 	if statements == nil {
 		var err error

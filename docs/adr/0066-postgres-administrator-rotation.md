@@ -21,9 +21,38 @@ Use the existing asynchronous system-user rotation API and operation for
 member-status `adminRotation` capability on every data agent, including replicas
 that may become primaries. Refuse unsupported/unobservable agents with HTTP 409
 and `upgrade-agents` guidance, and refuse structural/rolling maintenance conflicts.
-The new optional member-spec `alternateSuperuser` and optional status capability
-preserve old-control-plane/new-agent behavior when absent. A control-plane-only
-upgrade cannot perform this operation against v0.4.3 agents.
+The optional member-spec `alternateSuperuser` and `localPeerAuth` fields preserve
+old-control-plane/new-agent behavior when absent. `localPeerAuth` is sent only
+when the authenticated configuration pull advertises `postgres-local-peer`;
+v0.4.3 agents never receive the new field. A control-plane-only upgrade cannot
+perform administrator rotation against those agents.
+
+### Password-independent node-local management
+
+The runtime owner already controls the PostgreSQL data directory and can read
+all rendered management credentials. All native supervised children inherit the
+agent's effective UID; Patroni and pgBackRest already connect over the private
+Unix socket. Map exactly that UID's account name to database role `postgres` in
+an owner-only rendered `pg_ident.conf`, with first-match `local ... postgres
+peer map=karakoram-local` HBA rules. Resolve the account from the effective
+kernel UID, never environment-supplied USER/LOGNAME. No other OS account is
+mapped, and remote TCP authentication remains SCRAM/TLS. This changes neither
+the runtime-owner trust boundary nor customer authentication.
+
+The agent's local connection/recovery rekey first uses that socket with no
+password. Patroni's existing `use_unix_socket` and pgBackRest's `pg1-socket-path`
+use the same HBA map even while their rendered password is temporarily old.
+Legacy or not-yet-active peer configurations retain desired, alternate and
+base-backup password fallbacks. `adminRotation` is advertised only after an
+actual passwordless local connection succeeds, so native ALTER is never
+admitted while Patroni still depends on the rotating local password.
+
+This is deliberately preferable to retaining an unbounded sealed password
+history: PITR can restore any intermediate native password after one or several
+rotations, including a clone from an older base or in-place recovery to an
+intermediate WAL target. Its base-backup recovery password need not match that
+catalog. Password-independent local rekey can always apply the target-owned
+credentials after recovery, without guessing the restored credential generation.
 
 Seal one journal under `admin/rotation` before native dispatch. It contains the
 operation identity, previous password, selected replacement, stable SCRAM verifier,
@@ -31,9 +60,10 @@ immutable sorted group order, completed-group cursor and in-flight intent. Publi
 operation checkpoints contain only the stage, never credentials. A completed or
 rejected journal retains its identity/stage without passwords or verifiers.
 
-1. Stage and acknowledge transition configurations on all members. Desired local
-   authentication is attempted first, then the alternate. Ordinary bootstrap role
-   reconciliation must not rewrite `postgres` during the transition.
+1. Stage and acknowledge transition configurations on all members. Peer local
+   authentication is attempted first; desired and alternate passwords remain
+   fallbacks while peer is unavailable. Ordinary bootstrap role reconciliation
+   must not rewrite `postgres` during the transition, including from cached SQL.
 2. Discover each writable group primary afresh. Patroni leader-lock and recovery
    checks are repeated by the agent before SQL. On single/HA there is one group;
    Citus needs one transaction per group because role DDL is node-local. Disable
@@ -64,7 +94,11 @@ or Supabase component that still needs acknowledgement.
 
 ## Consequences
 
-There is no database restart requirement, including on single-member PostgreSQL.
+Rotation itself requires no database restart, including on a single member.
+Installing peer authentication during the preceding agent upgrade can require
+the ordinary configuration restart because `ident_file` is a server-start
+setting. Complete that rollout first; admission stays closed until every member
+proves password-independent local authentication.
 Supabase component refreshes restart their processes and may interrupt service.
 Citus can have transient cross-group authentication failures while the node-local
 transactions and outbound authentication converge. This is recoverable but not an

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -234,6 +235,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	desired := []string{"postgres"}
 	if m.Role == "data" {
 		sp.Superuser = credential("postgres")
+		sp.LocalPeerAuth = slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityPostgresLocalPeer)
 		rotation, rotationErr := readAdminRotation(ctx, rc)
 		if rotationErr != nil {
 			return agentapi.MemberConfig{}, rotationErr

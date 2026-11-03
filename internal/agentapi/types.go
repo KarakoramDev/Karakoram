@@ -23,6 +23,10 @@ const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
 // ConfigCapabilityMySQLListenHost advertises support for SQL listener policy.
 const ConfigCapabilityMySQLListenHost = "mysql-listen-host"
 
+// ConfigCapabilityPostgresLocalPeer advertises password-independent local
+// management authentication, including restore across administrator rotations.
+const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
+
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`

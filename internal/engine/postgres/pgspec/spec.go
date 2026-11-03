@@ -228,10 +228,13 @@ type Spec struct {
 	Superuser Credentials `json:"superuser"`
 	// AlternateSuperuser keeps management reachable during administrator rotation.
 	AlternateSuperuser *Credentials `json:"alternateSuperuser,omitempty"`
-	Replication        Credentials  `json:"replication"`
-	Rewind             Credentials  `json:"rewind"`
-	Monitor            Credentials  `json:"monitor"`
-	PatroniREST        Credentials  `json:"patroniRest"`
+	// LocalPeerAuth maps only this runtime's OS owner to postgres over its
+	// private Unix socket. Omitted for control planes/agents without support.
+	LocalPeerAuth bool        `json:"localPeerAuth,omitempty"`
+	Replication   Credentials `json:"replication"`
+	Rewind        Credentials `json:"rewind"`
+	Monitor       Credentials `json:"monitor"`
+	PatroniREST   Credentials `json:"patroniRest"`
 
 	// TLS material issued by the cluster CA. ServerCert serves PostgreSQL,
 	// Patroni REST and etcd (server+client usages); CAPEM is the trust anchor.

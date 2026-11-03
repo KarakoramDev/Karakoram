@@ -44,7 +44,7 @@ func TestPinnedClient(t *testing.T) {
 			if got := r.URL.Query().Get("capability"); got != ConfigCapabilityGaleraListenHost {
 				t.Errorf("first configuration pull capability=%q", got)
 			}
-			if got := r.URL.Query()["capability"]; len(got) != 2 || got[1] != ConfigCapabilityMySQLListenHost {
+			if got := r.URL.Query()["capability"]; len(got) != 3 || got[1] != ConfigCapabilityMySQLListenHost || got[2] != ConfigCapabilityPostgresLocalPeer {
 				t.Errorf("SQL listener configuration pull capabilities=%q", got)
 			}
 			w.Write([]byte(`{"role":"mongod-rs","configVersion":7}`))

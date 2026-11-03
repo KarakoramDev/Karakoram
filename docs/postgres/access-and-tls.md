@@ -33,13 +33,19 @@ It returns **202** and an operation, not the new password. Follow that operation
 to completion before revealing and distributing the new connection credential.
 Every data member must advertise administrator-rotation support; an old or
 unreachable agent causes a **409** explaining that `upgrade-agents` is required.
-Complete agent upgrades and structural/rolling maintenance first.
+Complete agent upgrades and structural/rolling maintenance first. Activating
+password-independent local authentication during that upgrade can require the
+ordinary configuration restart; rotation is refused until it is active.
 
 The control plane seals the previous password, selected replacement and stable
 native request before changing PostgreSQL. Members first acknowledge a
-transition configuration containing both credentials. Their local management
-connections try the desired credential, then the alternate, without disclosing
-either in diagnostics. The writable primary commits `ALTER ROLE postgres PASSWORD`
+transition configuration containing both credentials. Local management first
+uses Unix-socket peer authentication mapped only from the runtime's OS owner to
+`postgres`; desired and alternate passwords remain fallbacks before peer auth
+is available. Patroni and pgBackRest use the same private socket, so a reconnect
+or promotion does not depend on the password currently published. This OS owner
+already controls PGDATA and reads the rendered credentials; other local OS
+users and all remote clients gain no access. The writable primary commits `ALTER ROLE postgres PASSWORD`
 and a credential-free receipt atomically; HA replicas receive it through
 streaming replication. Replay checks that receipt instead of repeating ALTER.
 Citus applies it separately to every group primary.
@@ -50,8 +56,10 @@ ProxySQL's frontend administrator/writer probe, health/metrics and Supabase
 component consumers. Completion waits for every member/proxy acknowledgement,
 `CredentialsPublished` where proxies are enabled, and Supabase component
 acknowledgements before retiring the alternate from assigned configuration.
-No database restart is required, including on a single member; Supabase
-credential-consuming components restart and can be briefly unavailable.
+Rotation itself requires no database restart, including on a single member;
+Supabase credential-consuming components restart and can be briefly unavailable.
+The same local peer authentication permits recovery/rekey when a PITR WAL target
+contains a password different from its base backup, across any number of rotations.
 
 A definitive native rejection before any group commits discards the pending
 credential and retains the original. An unknown outcome or a commit on any

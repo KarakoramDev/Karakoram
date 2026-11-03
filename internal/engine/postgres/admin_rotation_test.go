@@ -265,3 +265,28 @@ func TestAdministratorRotationFailureBeforeDispatchDiscardsPending(t *testing.T)
 		t.Fatal("failure cleanup retained pending credential", err)
 	}
 }
+
+func TestAdministratorLocalPeerConfigurationCapability(t *testing.T) {
+	p, rc, _ := setup(t, "single")
+	s := converge(t, p, rc)
+	for _, capable := range []bool{false, true, false} {
+		rc.AgentConfigCapabilities = nil
+		if capable {
+			rc.AgentConfigCapabilities = []string{agentapi.ConfigCapabilityPostgresLocalPeer}
+		}
+		cfg, err := p.MemberConfig(t.Context(), rc, s.data()[0].Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var spec pgspec.Spec
+		if err := json.Unmarshal(cfg.EngineSpec, &spec); err != nil {
+			t.Fatal(err)
+		}
+		if spec.LocalPeerAuth != capable {
+			t.Fatal("peer auth capability was not request-scoped")
+		}
+		if !capable && strings.Contains(string(cfg.EngineSpec), "localPeerAuth") {
+			t.Fatal("old strict-decoder agent received a new configuration field")
+		}
+	}
+}

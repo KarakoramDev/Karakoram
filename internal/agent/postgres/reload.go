@@ -19,7 +19,7 @@ func postgresProcess(s pgspec.Spec, p paths) agent.ProcessSpec {
 	return agent.ProcessSpec{Binary: filepath.Join(s.BinDir, "postgres"), Args: []string{"-D", p.pgdata, "-c", "config_file=" + filepath.Join(p.root, "postgresql.conf")}, Dir: p.pgdata, StopSignal: syscall.SIGINT}
 }
 func singleReloadChanged(changed []string) bool {
-	for _, name := range []string{"postgresql.conf", "pg_hba.conf", "server.pem", "server.key", "ca.pem"} {
+	for _, name := range []string{"postgresql.conf", "pg_hba.conf", "pg_ident.conf", "server.pem", "server.key", "ca.pem"} {
 		if slices.Contains(changed, name) {
 			return true
 		}

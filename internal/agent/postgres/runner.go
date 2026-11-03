@@ -94,7 +94,7 @@ func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error
 	return localConnectWith(ctx, s, p, pgx.ConnectConfig)
 }
 
-func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(context.Context, *pgx.ConnConfig) (*pgx.Conn, error)) (*pgx.Conn, error) {
+func localConnectionConfig(s pgspec.Spec, p paths) (*pgx.ConnConfig, error) {
 	cfg, err := pgx.ParseConfig("")
 	if err != nil {
 		return nil, err
@@ -116,6 +116,30 @@ func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(
 		// Citus declares this PGC_SU_BACKEND: primary-only management routing
 		// must be selected at connection startup, never with a later SET.
 		cfg.RuntimeParams["citus.use_secondary_nodes"] = "never"
+	}
+	return cfg, nil
+}
+
+func localPeerConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
+	cfg, err := localConnectionConfig(s, p)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Password = ""
+	return pgx.ConnectConfig(ctx, cfg)
+}
+
+func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(context.Context, *pgx.ConnConfig) (*pgx.Conn, error)) (*pgx.Conn, error) {
+	cfg, err := localConnectionConfig(s, p)
+	if err != nil {
+		return nil, err
+	}
+	if s.LocalPeerAuth {
+		cfg.Password = ""
+		if c, err := connect(ctx, cfg); err == nil {
+			return c, nil
+		}
+		cfg.Password = s.Superuser.Password
 	}
 	c, err := connect(ctx, cfg)
 	if err != nil && s.AlternateSuperuser != nil {
@@ -330,7 +354,7 @@ func (e *Runner) systemRoleSQL(s pgspec.Spec) ([]string, error) {
 	if s.Role != pgspec.RoleData {
 		return nil, nil
 	}
-	digest := hash([]any{s.Superuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
+	digest := hash([]any{s.Superuser, s.AlternateSuperuser, s.Monitor, s.Replication, s.Rewind, dataAccessDefinition(s.DataAccess)})
 	if e.roleSQL == nil || e.roleSQLHash != digest {
 		statements, err := roleStatements(s)
 		if err != nil {
