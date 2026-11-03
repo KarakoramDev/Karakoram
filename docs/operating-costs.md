@@ -234,7 +234,7 @@ Plan space for shard recovery/rebalance and watermarks, not just indexed data. O
 
 ## Additional v0.4.0 engines
 
-These engines and the [Citus](https://www.citusdata.com/) distributed topology are new in v0.4.0; their release status is listed once in [engine availability](providers.md#engine-availability). The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad, except [Temporal](https://temporal.io/) on Zerops as explained below; provider support is not deployment acceptance.
+These engines and the [Citus](https://www.citusdata.com/) distributed topology are new in v0.4.0; their release status is listed once in [engine availability](providers.md#engine-availability). The private, shared-CPU configurations below use the common runtime contract on Zerops, Dokploy and Nomad; provider support is not deployment acceptance.
 
 [PostGIS](https://postgis.net/), [pgvector](https://github.com/pgvector/pgvector) and [TimescaleDB](https://www.timescale.com/) profiles cost the same as the corresponding PostgreSQL tier above; no extra runtime is required, but workload-driven CPU/RAM/disk growth is additional.
 
@@ -268,7 +268,7 @@ Use integrated **Raft storage** and the default Shamir seal: no PostgreSQL sourc
 
 The strict minimum is one **combined** server with UI explicitly disabled. Combined servers run frontend/history/matching/internal worker together; split topology instead requires one of each role. Common component validation requires 1 whole CPU, positive RAM and 1-GB runtime disk but no fixed positive RAM floor: use the created **1-GiB RAM default**. Replicated combined servers supply redundant service instances, not a separate consensus quorum. See [Temporal](temporal/README.md).
 
-A bound PostgreSQL source is mandatory. Each cell includes one additional source at the **PostgreSQL MINIMAL** sizing (1 / 1 / 5, proxy disabled), sharing this installation’s control plane/provider server; backup occupancy is charged once on that source (20/100/500). This remains a singleton persistence bottleneck even in MINIMAL HA; upgrade the source to PostgreSQL HA separately for durable service HA. UI, application workers and external ingress are excluded. **Zerops is not supported** in this release: Temporal members need a private IPv4 route to their PostgreSQL source, while Zerops private service networking is IPv6. Dokploy and Nomad provide the required private IPv4 networking; managed public HTTPS is disabled.
+A bound PostgreSQL source is mandatory. Each cell includes one additional source at the **PostgreSQL MINIMAL** sizing (1 / 1 / 5, proxy disabled), sharing this installation’s control plane/provider server; backup occupancy is charged once on that source (20/100/500). This remains a singleton persistence bottleneck even in MINIMAL HA; upgrade the source to PostgreSQL HA separately for durable service HA. UI, application workers and external ingress are excluded. Temporal uses private IPv6 on Zerops and private IPv4 on Dokploy and Nomad; managed public UI HTTPS is disabled in these estimates.
 
 | Tier sizing | Members × CPU / RAM / persistent disk; auxiliary runtimes |
 | --- | --- |
@@ -278,7 +278,7 @@ A bound PostgreSQL source is mandatory. Each cell includes one additional source
 
 | Worker placement | Minimal | Minimal HA | Production-shaped |
 | --- | --- | --- | --- |
-| **Zerops** | not supported | not supported | not supported |
+| **Zerops** | 1 combined runtime + 1 PostgreSQL runtime/volume | 2 combined runtimes + 1 PostgreSQL runtime/volume | 3 combined runtimes + 1 PostgreSQL runtime/volume |
 | Hetzner | 1 × CX23 + 1 × CX23 | 2 × CX23 + 1 × CX23 | 3 × CX43 + 1 × CX23 |
 | AWS | 1 × t3.small + 1 × t3.small | 2 × t3.small + 1 × t3.small | 3 × m6i.xlarge + 1 × t3.small |
 | DigitalOcean | 1 × Basic 2-GiB + 1 × Basic 2-GiB | 2 × Basic 2-GiB + 1 × Basic 2-GiB | 3 × Basic 16-GiB + 1 × Basic 2-GiB |
@@ -286,11 +286,15 @@ A bound PostgreSQL source is mandatory. Each cell includes one additional source
 
 | Monthly total | Minimal | Minimal HA | Production-shaped |
 | --- | ---: | ---: | ---: |
-| **Zerops (USD)** | not supported | not supported | not supported |
+| **Zerops (USD)** | not estimated | not estimated | not estimated |
 | Hetzner (EUR) | €30 | €36 | €74 |
 | AWS (USD) | $97 | $118 | $598 |
 | DigitalOcean (USD) | $66 | $78 | $347 |
 | OVHcloud (EUR) | €40 | €48 | €329 |
+
+Zerops Temporal totals have not been recalculated since IPv6 support was added;
+use the role/source sizing above and current project pricing rather than treating
+the missing estimate as a deployment restriction or a zero-cost allocation.
 
 ### Percona Server for MySQL
 

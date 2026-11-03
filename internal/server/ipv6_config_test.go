@@ -6,12 +6,10 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"os/exec"
 	"strings"
 	"testing"
 
-	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal"
 	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
@@ -85,12 +83,8 @@ func TestEveryEngineIPv6NativeConfig(t *testing.T) {
 	if t.Failed() {
 		t.FailNow()
 	}
-	// Explicit support exemption, not a skip: Temporal's renderer is exercised,
-	// but production admission must continue rejecting IPv6-only backends until
-	// route discovery and native membership are qualified in that family.
-	err := temporal.New(temporal.Options{}).ValidateBackend(new(zerops.Backend))
-	if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "private IPv4") {
-		t.Fatalf("Temporal IPv6 admission exemption changed: %v", err)
+	if err := temporal.New(temporal.Options{}).ValidateBackend(new(zerops.Backend)); err != nil {
+		t.Fatalf("Temporal IPv6 admission: %v", err)
 	}
 	packages := []string{}
 	packageSeen := map[string]bool{}

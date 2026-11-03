@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -61,7 +62,7 @@ func frontendRequest(ctx context.Context, s tspec.Spec, method, path string, bod
 			return nil, errors.New("encode Temporal API request failed")
 		}
 	}
-	request, err := http.NewRequestWithContext(ctx, method, "https://127.0.0.1:7243"+path, bytes.NewReader(data))
+	request, err := http.NewRequestWithContext(ctx, method, "https://"+net.JoinHostPort(loopback(s.IPv6), "7243")+path, bytes.NewReader(data))
 	if err != nil {
 		return nil, errors.New("create Temporal API request failed")
 	}
@@ -220,7 +221,7 @@ func deleteNamespace(ctx context.Context, s tspec.Spec, name string) error {
 	frame := make([]byte, 5, len(message)+5)
 	binary.BigEndian.PutUint32(frame[1:], uint32(len(message)))
 	frame = append(frame, message...)
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://127.0.0.1:7233/temporal.api.operatorservice.v1.OperatorService/DeleteNamespace", bytes.NewReader(frame))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://"+net.JoinHostPort(loopback(s.IPv6), "7233")+"/temporal.api.operatorservice.v1.OperatorService/DeleteNamespace", bytes.NewReader(frame))
 	if err != nil {
 		return errors.New("create namespace deletion request failed")
 	}

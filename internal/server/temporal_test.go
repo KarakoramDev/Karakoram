@@ -222,7 +222,7 @@ func TestTemporalRestoreAcknowledgementPayload(t *testing.T) {
 // Admission never calls binding operations; the service only needs to be present.
 type temporalAdmissionBindings struct{ pgbinding.Service }
 
-func TestTemporalPrivateIPv4Admission(t *testing.T) {
+func TestTemporalPrivateNetworkingAdmission(t *testing.T) {
 	s, _, token := testServer(t)
 	p := temporal.New(temporal.Options{Bindings: temporalAdmissionBindings{}})
 	var err error
@@ -241,23 +241,23 @@ func TestTemporalPrivateIPv4Admission(t *testing.T) {
 		t.Helper()
 		w := call(s, method, path, body, token)
 		if w.Code != 400 || !strings.Contains(w.Body.String(), "invalid_request") ||
-			!strings.Contains(w.Body.String(), "Temporal requires a backend with private IPv4 networking; Zerops is not supported yet") {
+			!strings.Contains(w.Body.String(), "Temporal requires a backend with a known private address family") {
 			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body.String())
 		}
 	}
-	setFamily(infra.AddressFamilyIPv6)
+	setFamily("")
 	for _, path := range []string{"/api/v1/clusters", "/api/v1/dry-run/clusters"} {
 		assertRejected("POST", path, body)
 	}
 	if _, err := s.Store.GetCluster(t.Context(), domain.ClusterRef{Name: "workflows"}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("rejected create persisted: %v", err)
 	}
-	setFamily(infra.AddressFamilyIPv4)
+	setFamily(infra.AddressFamilyIPv6)
 	previewBody(t, call(s, "POST", "/api/v1/dry-run/clusters", body, token))
 	if w := call(s, "POST", "/api/v1/clusters", body, token); w.Code != 201 {
 		t.Fatal(w.Code, w.Body.String())
 	}
-	setFamily(infra.AddressFamilyIPv6)
+	setFamily("")
 	for _, prefix := range []string{"/api/v1/clusters/", "/api/v1/dry-run/clusters/"} {
 		assertRejected("PUT", prefix+"workflows", `{"spec":`+spec+`}`)
 		assertRejected("PATCH", prefix+"workflows", `{"spec":{"monitoring":{"enabled":true}}}`)
