@@ -1100,8 +1100,8 @@ func TestContainersAddressEveryStillRunningSwarmTask(t *testing.T) {
 	}
 }
 
-func TestReplicaScalingDoesNotClaimPreservingServing(t *testing.T) {
-	if dokployCapabilities.ReplicaScalePreservesServing {
-		t.Fatal("application.reload restarts existing tasks")
+func TestProxyUpdatesAdvertiseServingWithRuntimeGate(t *testing.T) {
+	if !dokployCapabilities.ReplicaScalePreservesServing || !dokployCapabilities.ResourceUpdatePreservesServing {
+		t.Fatal("marked proxy updates must use health-gated start-first replacement")
 	}
 }

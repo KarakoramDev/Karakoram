@@ -45,7 +45,11 @@ type operationReceipt struct {
 	DeployBudgetStart int    `json:"deployBudgetStart,omitempty"`
 	// PriorRetries carries consumed retries across replacement allocations;
 	// DeployRetries counts exact-version retries for the currently selected ID.
-	PriorRetries int `json:"priorRetries,omitempty"`
+	PriorRetries      int    `json:"priorRetries,omitempty"`
+	AutoscalingConfig string `json:"autoscalingConfig,omitempty"`
+	Incumbents        string `json:"incumbents,omitempty"`
+	MinContainers     int    `json:"minContainers,omitempty"`
+	MaxContainers     int    `json:"maxContainers,omitempty"`
 }
 
 func (b *Backend) receipt(ctx context.Context, id string) (operationReceipt, error) {
@@ -284,6 +288,9 @@ func (b *Backend) versionStatus(ctx context.Context, op infra.Op) (infra.OpState
 	}
 	if state.Done {
 		err = b.clearReceipt(ctx, op)
+	}
+	if state.Done && !state.Failed && err == nil && op.ServiceID != "" {
+		err = b.clearAutoscalingFailures(ctx, op.ServiceID)
 	}
 	return state, err
 }
@@ -692,7 +699,7 @@ func validReceipt(receipt operationReceipt) bool {
 		return false
 	}
 	switch receipt.Action {
-	case "deploy", "start", "stop", "restart":
+	case "deploy", "start", "stop", "restart", "autoscaling":
 	default:
 		return false
 	}

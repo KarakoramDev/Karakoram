@@ -49,6 +49,12 @@ func OptionsFromEnv() (Options, error) {
 
 // Readiness dispatches the local probe, defaulting to the built-in PSMDB TCP probe.
 func Readiness(ctx context.Context, o Options, args []string, engines ...Engine) error {
+	if len(args) > 0 && args[0] == "--serving-proxy" {
+		if len(args) != 2 || !strings.HasPrefix(args[1], "--data-dir=") {
+			return errors.New("serving proxy readiness accepts --data-dir=<absolute path>")
+		}
+		return proxyServingReadiness(ctx, strings.TrimPrefix(args[1], "--data-dir="))
+	}
 	if len(args) > 0 && args[0] == "--startup" {
 		dir := o.DataDir
 		for _, arg := range args[1:] {
@@ -348,6 +354,11 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 		return fmt.Errorf("agent startup listener: %w", err)
 	}
 	defer startup.Close()
+	proxyServing, err := a.serveProxyServing()
+	if err != nil {
+		return fmt.Errorf("agent proxy serving listener: %w", err)
+	}
+	defer proxyServing.Close()
 	retryCtx, cancelRetries := context.WithCancel(ctx)
 	retriesDone := make(chan struct{})
 	go func() {

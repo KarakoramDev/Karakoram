@@ -108,6 +108,16 @@ the engine and proxy component bounds. Database/proxy settings, managed access
 revisions, and Supabase engine options still participate in database configuration
 convergence, including extension preload changes.
 
+The embedded PostgreSQL core's ProxySQL count/resource updates follow
+[PostgreSQL maintenance and readiness rules](../postgres/operations.md#agent-rollout-and-maintenance-windows):
+scale-in and resource changes always wait for a maintenance window, including
+serving-preserving resource updates. Count scale-out also waits unless the backend
+guarantees serving preservation for the deployed proxy runtime.
+Every requested live proxy must apply the configuration and report native
+readiness with an ONLINE writer before applied bounds are committed, including
+after a control-plane restart. This is separate from optional Supabase component
+scaling and does not imply that those components have the same rollout contract.
+
 Database slot-retention blockers report `Ready=False/SlotWALRetention`, including
 when all optional components are healthy. An optional-component failure does not
 overwrite that independent database diagnosis. Disabling the offending optional

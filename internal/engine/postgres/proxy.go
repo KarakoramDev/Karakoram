@@ -11,6 +11,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 // proxyApplied waits for every live instance, not whichever service DNS selects.
@@ -18,6 +19,16 @@ import (
 // This is the configuration/native-health barrier, not rollout completion:
 // Sync must still be able to correct a failed rollout's desired configuration.
 func proxyApplied(ctx context.Context, rc *engine.Context, m *member, version int64, requireRunning bool) (bool, error) {
+	return proxyAppliedChecks(ctx, rc, m, version, requireRunning, 0)
+}
+
+// A completed update receipt is not admission. Keep its durable target pending
+// until the exact requested fleet has applied configuration and can route writes.
+func proxyUpdateReady(ctx context.Context, rc *engine.Context, m *member, replicas int) (bool, error) {
+	return proxyAppliedChecks(ctx, rc, m, m.ConfigVersion, true, replicas)
+}
+
+func proxyAppliedChecks(ctx context.Context, rc *engine.Context, m *member, version int64, requireRunning bool, expected int) (bool, error) {
 	all, count, err := engine.VisitLiveInstances(ctx, rc, m.Name, func(a *agentapi.Client) (bool, error) {
 		probeContext, cancel := context.WithTimeout(ctx, engine.ObservationTimeout)
 		defer cancel()
@@ -42,6 +53,19 @@ func proxyApplied(ctx context.Context, rc *engine.Context, m *member, version in
 			if !status.Running {
 				rc.SyncWait = "waiting for proxy " + m.Name + " native process to run"
 			}
+			if expected > 0 {
+				writer := false
+				for _, backend := range status.ProxyBackends {
+					if backend.Hostgroup == pgspec.ProxyWriterGroup && backend.Status == "ONLINE" {
+						writer = true
+						break
+					}
+				}
+				if !writer {
+					rc.SyncWait = "waiting for proxy " + m.Name + " online writer backend"
+					return false, nil
+				}
+			}
 			return status.Running, nil
 		}
 		return true, nil
@@ -49,5 +73,18 @@ func proxyApplied(ctx context.Context, rc *engine.Context, m *member, version in
 	if requireRunning && count == 0 {
 		rc.SyncWait = "waiting for proxy " + m.Name + " live instance inventory"
 	}
+	if expected > 0 && count != expected {
+		rc.SyncWait = fmt.Sprintf("waiting for proxy %s live instances: observed %d, requested %d", m.Name, count, expected)
+		return false, err
+	}
 	return all && (!requireRunning || count > 0), err
+}
+
+// A backend may require a readiness-capable deployed agent before its general
+// serving-preservation capabilities apply to this particular proxy runtime.
+func proxyRuntimePreservesServing(ctx context.Context, rc *engine.Context, name string) (bool, error) {
+	if backend, ok := rc.Backend.(infra.ServingProxyUpdates); ok {
+		return backend.ProxyUpdatesPreserveServing(ctx, name)
+	}
+	return true, nil
 }

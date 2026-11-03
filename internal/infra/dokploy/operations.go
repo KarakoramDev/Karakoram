@@ -51,6 +51,10 @@ type operation struct {
 	ServiceIdentity     string            `json:"serviceIdentity,omitempty"`
 	RestoreUpdateConfig json.RawMessage   `json:"restoreUpdateConfig,omitempty"`
 	Specification       string            `json:"specification,omitempty"`
+	ProxyServingProbe   bool              `json:"proxyServingProbe,omitempty"`
+	HealthGated         bool              `json:"healthGated,omitempty"`
+	ExpectedReplicas    int               `json:"expectedReplicas,omitempty"`
+	ForceUpdate         uint64            `json:"forceUpdate,omitempty"`
 }
 
 // UnmarshalJSON migrates journals and opaque handles written before exact
@@ -210,6 +214,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	settings["networkSwarm"] = b.serviceNetworks(m)
 	settings["createEnvFile"] = false
 	settings["replicas"] = m.Max
+	// A serving-only healthcheck installed by a prior running update must not
+	// turn a later cold deployment into a bootstrap dependency barrier.
+	settings["healthCheckSwarm"] = nil
 	order := "stop-first"
 	if m.Volume == "" && (len(d.Runtime.Args) == 0 || d.Runtime.Args[0] != "relay") {
 		order = "start-first"
@@ -233,6 +240,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if err != nil {
 		return infra.Op{}, err
 	}
+	o.ProxyServingProbe = m.Volume == "" && d.Runtime.Env["KARAKORAM_PROXY_SERVING_PROBE"] == "1"
 	o.Digest = digest
 	m.Pending = &o
 	m.DeploymentBudget.Attempts++
@@ -381,6 +389,7 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 				m.DeploymentBudget.LastError = ""
 			}
 			m.Deployed = true
+			m.ProxyServingProbe = o.ProxyServingProbe
 			m.WriterFenced = o.WriterFenced
 		}
 		if o.Action != "stop" {
@@ -550,6 +559,9 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 				state.Message = "Dokploy deployment made no terminal progress within 6 hours; inspect and resolve the queue/build before retrying; automatic resubmission is refused because the original attempt may still commit"
 			}
 		}
+	}
+	if o.HealthGated {
+		return b.proxyRolloutStatus(ctx, o, a, ts, state)
 	}
 	ready := 0
 	for _, t := range ts {

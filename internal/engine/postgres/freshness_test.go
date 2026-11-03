@@ -790,6 +790,16 @@ type failedProxyScaleBackend struct {
 	ordinaryScales int
 }
 
+func (b *failedProxyScaleBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
+	if name == "demopx" {
+		return []infra.Container{
+			{ID: "proxy-a", Hostname: "proxy-a", Status: infra.ContainerRunning},
+			{ID: "proxy-b", Hostname: "proxy-b", Status: infra.ContainerRunning},
+		}, nil
+	}
+	return b.fakeBackend.Containers(ctx, name)
+}
+
 func (b *failedProxyScaleBackend) RecoverFailedScale(_ context.Context, name string, min, max int) (infra.Op, bool, error) {
 	if !b.canRecover {
 		return infra.Op{}, false, nil
