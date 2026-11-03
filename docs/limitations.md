@@ -144,11 +144,19 @@ These cross-engine constraints define the operating model; engine-specific limit
   PostgreSQL/Supabase use maintenance-gated provider resource rollouts.
   Zerops count changes and same-CPU-mode CPU/RAM resizes retain incumbent
   Linux containers; CPU-mode and disk-bound changes are excluded, and unexpected
-  incumbent replacement fails with `INCUMBENTS_REPLACED`. Dokploy count/resource
-  updates require a successfully deployed serving-probe marker and use serial,
-  native-health-gated start-first replacement with spare capacity; unmarked
-  legacy proxies retain their disruptive/maintenance-gated path until redeployed.
-  Replacing or removing an instance can disconnect its existing sessions.
+  incumbent replacement fails with `INCUMBENTS_REPLACED`. Observed terminal
+  failures release the submission fence; unresolved submissions still block
+  supersession and Stop. A caller crash before checkpointing a returned failure
+  can permit one resubmission. Dokploy count/resource updates require a deployed
+  serving-probe marker and serial start-first replacement with spare capacity.
+  Native readiness gates initial admission, latched for the agent/container
+  lifetime; later Swarm checks require supervisor liveness only, preventing
+  writer outages or intentional holds from triggering replacement cascades.
+  Replacement resets the latch. Unmarked legacy proxies retain their
+  disruptive/maintenance-gated path until redeployed. All proxy resource changes
+  and count reductions remain maintenance-window gated; only serving-preserving
+  count scale-out bypasses the window. Replacing or removing an instance can
+  disconnect its existing sessions.
   Version/startup-runtime changes do not acquire a serving guarantee from these
   capabilities. Live-provider acceptance remains pending; see
   [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
