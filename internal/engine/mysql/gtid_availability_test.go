@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,39 +156,40 @@ func TestPXCQuorumPersistenceCondition(t *testing.T) {
 }
 
 func TestPXCQuorumObservationBudgetDiscriminator(t *testing.T) {
-	release := make(chan struct{})
 	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-r.Context().Done():
-		case <-release:
-		}
+		t.Error("expired injected sampling reservation issued an RPC")
 	})
-	t.Cleanup(func() { close(release) })
 	_, rc, _ := setup(t, "cluster")
 	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
 	if err := save(rc.Cluster, s); err != nil {
 		t.Fatal(err)
 	}
 	ctx := engine.WithObservationPass(t.Context())
+	mysqlObservationScope(ctx, rc).quorumDeadline = time.Now().Add(-time.Second)
 	err := checkPXCQuorumGTIDs(ctx, rc, s)
-	if err == nil || !strings.Contains(err.Error(), "observation-budget") || !strings.Contains(err.Error(), "mysql0=timeout") {
-		t.Fatalf("missing budget/member timeout discriminator: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "observation-budget") || !strings.Contains(err.Error(), "mysql0=no-observation") {
+		t.Fatalf("missing injected budget discriminator: %v", err)
 	}
 	started := time.Now()
 	invalidateMySQLReadObservation(ctx, rc)
 	err = checkPXCQuorumGTIDs(ctx, rc, s)
-	if time.Since(started) > 300*time.Millisecond || err == nil || !strings.Contains(err.Error(), "observation-lock") {
+	if time.Since(started) > 300*time.Millisecond || err == nil || !strings.Contains(err.Error(), "observation-budget") {
 		t.Fatalf("invalidation renewed continuity reservation: %v", err)
 	}
 }
 
 type quorumFailingHistoryStore struct {
 	engine.SecretStore
-	mode string
+	mode          string
+	onHistoryRead func()
 }
 
 func (s quorumFailingHistoryStore) GetClusterSecret(ctx context.Context, ref domain.ClusterRef, key string) ([]byte, error) {
 	if key == "mysql/gtid/history" {
+		if s.onHistoryRead != nil {
+			s.onHistoryRead()
+			ctx = context.WithoutCancel(ctx)
+		}
 		switch s.mode {
 		case "read":
 			return nil, fmt.Errorf("private journal payload")
@@ -243,5 +245,65 @@ func TestPXCQuorumFullAdmissionDuringLockContention(t *testing.T) {
 	}
 	if err := p.ValidateBackup(freshMySQLReads(ctx), rc, "incremental"); err == nil {
 		t.Fatal("incremental admitted without majority proof")
+	}
+}
+
+type quorumDeadlineObserver struct {
+	context.Context
+	onDeadline func()
+}
+
+func (c quorumDeadlineObserver) Deadline() (time.Time, bool) {
+	c.onDeadline()
+	return c.Context.Deadline()
+}
+
+func TestPXCQuorumLockPrecedesSamplingReservation(t *testing.T) {
+	const sid = "11111111-2222-3333-4444-555555555555"
+	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, StateUUID: sid, GTIDExecuted: sid + ":1-7", ClusterSize: 3})
+	})
+	_, rc, _ := setup(t, "cluster")
+	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	ctx := engine.WithObservationPass(t.Context())
+	scope := mysqlObservationScope(ctx, rc)
+	var first sync.Once
+	ctx = quorumDeadlineObserver{Context: ctx, onDeadline: func() {
+		first.Do(func() {
+			scope.mu.Lock()
+			started := !scope.quorumDeadline.IsZero()
+			scope.mu.Unlock()
+			if started {
+				t.Error("sampling reservation started before separately bounded observation-lock wait")
+			}
+		})
+	}}
+	started := time.Now()
+	if err := checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if scope.quorumDeadline.Before(started.Add(engine.ObservationTimeout)) {
+		t.Fatal("sampling reservation shorter than the existing agent read timeout")
+	}
+}
+
+func TestPXCQuorumJournalCancellationDoesNotRelabelSampling(t *testing.T) {
+	probe, s := quorumObservationFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{})
+	})
+	_, rc, _ := setup(t, "cluster")
+	rc.Cluster.Spec.Provider, rc.Agents = "pxc", probe.Agents
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(engine.WithObservationPass(t.Context()))
+	defer cancel()
+	rc.Secrets = quorumFailingHistoryStore{SecretStore: rc.Secrets, onHistoryRead: cancel}
+	err := checkPXCQuorumGTIDs(ctx, rc, s)
+	if err == nil || !strings.Contains(err.Error(), "(comparison;") || strings.Contains(err.Error(), "observation-budget") {
+		t.Fatalf("post-sample cancellation relabelled a completed majority-short comparison: %v", err)
 	}
 }

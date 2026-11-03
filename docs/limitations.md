@@ -77,8 +77,10 @@ These cross-engine constraints define the operating model; engine-specific limit
   [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
 - **PXC GTID-history observation:** recurrent `GTIDHistorySafe=Unknown` can
   persist while fewer than a configured-member majority are observable and
-  compatible. Read-only quorum sampling now has a reserved one-second pass
-  budget, so slow readiness/platform reads cannot starve it. This addresses a
+  compatible. Read-only quorum sampling now has a reserved four-second pass
+  budget after a separately bounded lock wait, so slow readiness/platform reads
+  cannot starve it. One comparison's lock waits and sampling can add up to six
+  seconds, excluding journal/audit I/O and subject to the caller's deadline. This addresses a
   code-proven failure mechanism, not a confirmed cause of earlier live episodes.
   `QuorumComparisonUnavailable` includes secret-safe per-member outcome classes
   and distinguishes comparison, budget and observation-lock failures;

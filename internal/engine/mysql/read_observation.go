@@ -99,12 +99,11 @@ func mysqlReadContext(ctx context.Context, rc *engine.Context) (context.Context,
 	quorum, _ := ctx.Value(mysqlQuorumReadKey{}).(bool)
 	scope.mu.Lock()
 	budget := &scope.deadline
-	duration := engine.ObservationTimeout
 	if quorum {
-		budget, duration = &scope.quorumDeadline, time.Second
+		budget = &scope.quorumDeadline
 	}
 	if budget.IsZero() {
-		*budget = time.Now().Add(duration)
+		*budget = time.Now().Add(engine.ObservationTimeout)
 	}
 	deadline := *budget
 	scope.mu.Unlock()

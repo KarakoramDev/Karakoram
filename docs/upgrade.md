@@ -55,8 +55,11 @@ PXC `GTIDHistorySafe=Unknown` now separates comparison unavailability
 Comparison messages include secret-safe member outcome classes and distinguish
 majority shortage, observation budget and observation-lock contention; do not
 parse the message as a stable wire schema. No agent protocol change is required.
-Quorum sampling has a separate bounded pass reservation, preventing slow required
-reads from consuming its entire budget. Configured-majority, complete-observation
+Quorum sampling has a separate four-second pass reservation, matching the agent
+read timeout and starting after a separately bounded observation-lock wait.
+This prevents required reads or lock contention from consuming its entire
+budget. One comparison's lock waits plus sampling can add up to six seconds,
+excluding journal/audit I/O and subject to parent deadlines. Configured-majority, complete-observation
 safe-watermark requirements and durable divergence latches are unchanged.
 Full backups remain admitted on typed comparison unavailability, but persistence
 failures still fail closed; incrementals/PITR cannot gain unproven continuity.

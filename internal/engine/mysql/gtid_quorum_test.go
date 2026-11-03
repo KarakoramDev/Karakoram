@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -357,8 +358,10 @@ func TestPXCPendingBaselineAuditCannotBlockSafetyTransitions(t *testing.T) {
 			}
 			if scenario == "healing" {
 				setLocal("," + local + ":1-2")
-				if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != context.Canceled {
-					t.Fatalf("expected recorder outage during healing: %v", err)
+				err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+				var persistence *gtidHistoryPersistenceError
+				if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+					t.Fatalf("expected typed recorder outage during healing: %v", err)
 				}
 				reload()
 				if got := s.GTIDIncidents[0].Allowance.Histories[bad].GTIDExecuted; got != current+":1-10,"+local+":1-2" {
@@ -368,8 +371,10 @@ func TestPXCPendingBaselineAuditCannotBlockSafetyTransitions(t *testing.T) {
 			} else {
 				setLocal("," + local + ":1-4")
 			}
-			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != context.Canceled {
-				t.Fatalf("expected recorder outage during divergence: %v", err)
+			err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+			var persistence *gtidHistoryPersistenceError
+			if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+				t.Fatalf("expected typed recorder outage during divergence: %v", err)
 			}
 			reload()
 			if len(s.GTIDIncidents) != 2 || activeGTIDIncident(s) == nil || !s.GTIDIncidents[0].BaselineAuditPending {

@@ -241,10 +241,16 @@ The `GTIDHistorySafe` condition uses these reasons:
 | False | `GTIDHistoryDiverged` | The comparison proves incompatible history. |
 | False | `GTIDHistoryDiscontinuityLatched` | A recorded divergence remains active, including after later equal observations. |
 
-Read-only quorum sampling has its own one-second absolute reservation per
-observation pass, independent of the four-second readiness/platform budget.
-Invalidation and retries do not renew either budget. Journal-lock waiting is
-separately bounded to one second. Parent cancellation still applies.
+Read-only quorum sampling has its own four-second absolute reservation per
+observation pass, matching the existing agent read timeout and independent of
+the four-second readiness/platform budget. The observation lock is acquired
+first with a separate one-second wait, so contention cannot consume sampling
+time. Invalidation and retries do not renew the sampling budget. Journal-lock
+waiting is separately bounded to one second. Thus one read-only comparison's
+lock waits plus quorum RPCs can add at most six seconds (up to ten seconds
+including its initial required reads), excluding journal/audit I/O. Repeated
+callers share the sampling deadline but may each wait for locks. Parent deadlines
+and cancellation still apply to every stage; journal/audit I/O retains the caller's deadline.
 Configured members, including planned or unreachable members, remain in the
 majority denominator: five members require three compatible reports.
 `no-observation` includes missing agent/service identity, undeployed stages and

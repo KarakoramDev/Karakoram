@@ -112,18 +112,16 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 	if rc.Cluster.Spec.Provider != "pxc" {
 		return nil
 	}
-	if !mysqlReadsFresh(ctx) {
-		ctx = context.WithValue(ctx, mysqlQuorumReadKey{}, true)
+	// Lock contention must not consume the RPC reservation. Read-only passes
+	// bound this wait separately; write-relevant callers retain the read timeout.
+	lockBudget := time.Second
+	if mysqlReadsFresh(ctx) {
+		lockBudget = engine.ObservationTimeout
 	}
-	probe, cancel := mysqlReadContext(ctx, rc)
-	defer cancel()
-	if !mysqlReadsFresh(ctx) {
-		optional, stop := context.WithTimeout(probe, time.Second)
-		defer stop()
-		probe = optional
-	}
+	lockWait, stopLockWait := context.WithTimeout(ctx, lockBudget)
+	defer stopLockWait()
 	observationMu := gtidObservationMutex(rc)
-	if err := observationMu.LockContext(probe); err != nil {
+	if err := observationMu.LockContext(lockWait); err != nil {
 		names := make([]string, 0, len(s.data()))
 		outcomes := make(map[string]string, len(s.data()))
 		for _, m := range s.data() {
@@ -134,8 +132,14 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 		return &myspec.GTIDQuorumError{Members: names, Detail: quorumOutcomeDetail(outcomes, "observation-lock")}
 	}
 	defer observationMu.Unlock()
+	if !mysqlReadsFresh(ctx) {
+		ctx = context.WithValue(ctx, mysqlQuorumReadKey{}, true)
+	}
+	probe, cancel := mysqlReadContext(ctx, rc)
+	defer cancel()
 	outcomes := make(map[string]string, len(s.data()))
 	observations, sampleAt := samplePXCQuorumGTIDs(probe, rc, s, mysqlReadsFresh(ctx), outcomes)
+	samplingBudgetExhausted := probe.Err() != nil
 	defer func() {
 		if result != nil {
 			if _, comparison := result.(*myspec.GTIDQuorumError); !comparison {
@@ -220,7 +224,7 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 	}
 	if unavailable, ok := err.(*myspec.GTIDQuorumError); ok && !unavailable.Diverged {
 		class := "comparison"
-		if probe.Err() != nil {
+		if samplingBudgetExhausted {
 			class = "observation-budget"
 		}
 		unavailable.Detail = quorumOutcomeDetail(outcomes, class)
