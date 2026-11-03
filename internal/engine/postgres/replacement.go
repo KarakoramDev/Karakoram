@@ -193,7 +193,7 @@ func replacementResult(cp *replacementState) engine.OpResult {
 // started, completing that same cutover is safer than trying to undo stop holds
 // or an etcd removal whose response may have been lost.
 func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
-	return op.Kind == domain.OperationReplaceMember || op.Kind == "rebalance" || op.Kind == domain.OperationBackup || restoreOperation(op)
+	return op.Kind == domain.OperationReplaceMember || op.Kind == "rebalance" || op.Kind == domain.OperationBackup || restoreOperation(op) || administratorRotationOperation(op)
 }
 
 func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
@@ -204,6 +204,33 @@ func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
 }
 
 func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if administratorRotationOperation(op) {
+		journal, err := readAdminRotation(ctx, rc)
+		if err != nil {
+			return engine.OpResult{}, err
+		}
+		if journal == nil || journal.Operation != op.ID || journal.Stage == "rejected" {
+			return engine.OpResult{Done: true}, nil
+		}
+		if journal.Stage == "transition" || journal.Stage == "native" && journal.Completed == 0 && !journal.InFlight {
+			// Failure before dispatch is definitive: retire the pending
+			// credential, rather than beginning native SQL during cleanup.
+			journal.Stage = "rollback"
+			journal.Previous, journal.Password, journal.Verifier = "", "", ""
+			if err = saveAdminRotation(ctx, rc, journal); err != nil {
+				return engine.OpResult{}, err
+			}
+		}
+		// Once dispatch may have committed, retain forward-only recovery.
+		result, err := p.rotateAdministrator(ctx, rc, op)
+		if errors.Is(err, engine.ErrInvalid) {
+			current, readErr := readAdminRotation(ctx, rc)
+			if readErr == nil && current != nil && current.Stage == "rejected" {
+				return engine.OpResult{Done: true, Message: "Pending administrator rotation discarded; original credential retained"}, nil
+			}
+		}
+		return result, err
+	}
 	if op.Kind == "rebalance" {
 		return p.runCitusRebalance(ctx, rc, op, true)
 	}

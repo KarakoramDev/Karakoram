@@ -104,7 +104,13 @@ func journalRole(ctx context.Context, c accessBeginner, req pgspec.AccessRequest
 			return unknown
 		}
 	}
-	if req.RoleOperation == "delete" {
+	if req.Operation == "admin-rotation" {
+		// Citus role DDL must remain local to this writable group primary.
+		if _, err = tx.Exec(ctx, "SELECT pg_catalog.set_config('citus.enable_ddl_propagation','off',true) WHERE EXISTS (SELECT FROM pg_catalog.pg_extension WHERE extname='citus')"); err != nil {
+			return unknown
+		}
+		_, err = tx.Exec(ctx, "ALTER ROLE postgres PASSWORD "+sqlQuote(*req.Role.Password))
+	} else if req.RoleOperation == "delete" {
 		_, err = tx.Exec(ctx, "DROP ROLE "+pgx.Identifier{req.Role.Name}.Sanitize())
 	} else {
 		err = writeRoleTx(ctx, tx, req.RoleOperation, *req.Role)

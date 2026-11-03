@@ -135,6 +135,17 @@ Patroni still owns initial insertion on a fresh cluster. Writable-member
 readiness repairs inherited authentication after restart, promotion or a target
 credential/path change, caching only successful reconciliation.
 
+`system-users rotate CLUSTER postgres` also uses a receipt-backed, node-local
+administrator transaction on **every group primary**, not just the coordinator.
+Standbys receive each group's role DDL through physical replication. All groups
+must accept the same sealed password before it is published. Writable-member
+readiness then refreshes `pg_dist_authinfo` to that new password and waits for
+configuration acknowledgements before completing the operation. A partial group
+failure recovers forward, never silently restoring passwords on completed groups.
+Plan for transient cross-group authentication failures while groups converge;
+this is not a dual-password grace period for distributed application sessions.
+
+
 Correct node metadata and successful direct logins do **not** prove distributed
 queries work. `CitusTopology` readiness additionally requires coordinator SQL
 (`SELECT 1`) to succeed on every group primary; failed, missing or mismatched

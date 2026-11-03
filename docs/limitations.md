@@ -78,9 +78,10 @@ These cross-engine constraints define the operating model; engine-specific limit
   control-plane backup/restore steps; it can wait for those steps even when
   their target clusters differ. This does not lock asynchronous agent uploads
   or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
-- **PostgreSQL administrator password rotation remains unavailable.** The
-  `postgres` administrator password cannot be rotated in place; follow
-  [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
+- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.4 supports
+  in-place `postgres` rotation after `upgrade-agents`; existing sessions are not
+  revoked, and other engine-owned identities remain unsupported. See
+  [administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
 - **PXC GTID-history observation:** recurrent `GTIDHistorySafe=Unknown` can
   persist while fewer than a configured-member majority are observable and
   compatible. PXC Status now starts quorum checking alongside required reads,

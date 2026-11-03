@@ -23,6 +23,10 @@ const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
 // ConfigCapabilityMySQLListenHost advertises support for SQL listener policy.
 const ConfigCapabilityMySQLListenHost = "mysql-listen-host"
 
+// ConfigCapabilityPostgresLocalPeer advertises password-independent local
+// management authentication, including restore across administrator rotations.
+const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
+
 // ConfigCapabilityTemporalIPv6 advertises private IPv6 route discovery and listeners.
 const ConfigCapabilityTemporalIPv6 = "temporal-ipv6"
 
