@@ -58,6 +58,8 @@ New control plane + old agent therefore remains unavailable until agent rollout,
 not silently misconfigured. Configuration pulls return a safe HTTP 409 resource
 conflict classified as `AgentUpgradeRequired`, naming `temporal-ipv6` and the
 member-agent upgrade action; no part of the saved envelope is returned.
+The internal endpoint includes that safe diagnostic in the legacy `error`
+string decoded by v0.4.3 agents, alongside the structured error fields.
 IPv4 envelopes retain the old schema because `false`
 is omitted. Old control plane + new agent keeps the default IPv4 policy; old
 control planes continue rejecting Temporal on Zerops. No agent HTTP endpoint,

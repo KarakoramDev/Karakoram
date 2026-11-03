@@ -60,6 +60,17 @@ func TestTemporalIPv6AgentCompatibilityHTTP(t *testing.T) {
 		if response.Code != 409 || !strings.Contains(body, "AgentUpgradeRequired") || !strings.Contains(body, agentapi.ConfigCapabilityTemporalIPv6) || !strings.Contains(body, "upgrade") {
 			t.Fatalf("missing actionable compatibility diagnostic: %d %s", response.Code, body)
 		}
+		// v0.4.3 agents decode only the legacy "error" string, not the
+		// public API error's message/details fields.
+		var legacy agentapi.ErrorResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &legacy); err != nil {
+			t.Fatal(err)
+		}
+		for _, required := range []string{"AgentUpgradeRequired", agentapi.ConfigCapabilityTemporalIPv6, "upgrade this member's Karakoram agent"} {
+			if !strings.Contains(legacy.Error, required) {
+				t.Fatalf("legacy agent lost diagnostic %q: %q", required, legacy.Error)
+			}
+		}
 		for _, withheld := range []string{password, "engineSpec", "persistence", "temporal-config-test-token"} {
 			if strings.Contains(body, withheld) {
 				t.Fatalf("compatibility error exposed withheld payload field %q", withheld)
