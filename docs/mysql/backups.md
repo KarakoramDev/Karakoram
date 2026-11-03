@@ -24,9 +24,9 @@ sizing reserves non-pool and backup headroom, including for 1 GiB singletons;
 custom buffers and workload concurrency still need capacity planning.
 `--use-memory` is a prepare-phase setting, not a backup-time RSS limit.
 The bounded streaming options require the corrected member agent; a control-plane
-upgrade alone only updates server sizing. MySQL/PXC do not support `upgrade-agents`,
-so replace agents through a supported healthy-member lifecycle or re-create the
-deployment to obtain the new backup command.
+upgrade alone only updates server sizing. On v0.4.4, use the native-gated
+[agent rollout](operations.md#agent-rollout) on a healthy topology to install
+the corrected backup command without changing database versions.
 
 Full backup receipts report XtraBackup's native checkpoint type
 `full-backuped`; the control plane validates it against the requested API type
@@ -484,9 +484,9 @@ Recovery retries a failed native start only when its matching native progress
 positively shows that file copying never started. Stale receipts, missing
 progress and active or partially completed copies never authorize another clone.
 This behavior requires updated data-member agents, not just a control-plane
-update. MySQL does not support `upgrade-agents`; use supported agent/member
-replacement on a healthy group or re-create disposable clusters with the updated
-agent build before testing in-place recovery.
+update. Complete the [agent rollout](operations.md#agent-rollout) on a healthy
+group before in-place recovery; rollout cannot preempt an active restore or
+repair an unformed cluster.
 
 The UI offers **Restore in place** and **Restore into new cluster**. New-cluster recovery keeps the source unchanged but still requires matching engine driver and major. Target system credentials are re-keyed; source endpoints, writer identity and replication history must not be reused. Target archiving stays inactive until its own repository is active. Follow the target operation, member state, observed generation, recovered data and application authentication before reopening traffic. Never make a restored copy a member of the still-running predecessor cluster.
 

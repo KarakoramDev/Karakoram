@@ -380,16 +380,20 @@ the independent loss routing fence. Cancellation follows the same cleanup path.
 Replacement admission refuses outstanding rollout drains, including the
 readmission acknowledgement phase.
 
-The proxy phase comes first: redeploy the ProxySQL **service**, then require
+The proxy phase comes first: deploy the ProxySQL **service**, then require
 every live instance to acknowledge the published configuration/credentials,
 report a healthy writer and report the exact frozen agent build. Infrastructure
-deployment completion alone is insufficient. This uses the existing
-service-level proxy deployment path, not an independent per-instance deployment
-API. A backend that replaces all replicas together can cause a **brief complete
-proxy endpoint outage**, even with multiple replicas; a single proxy also has
-an outage. The Nomad count-only scale optimization is not an agent upgrade and
-does not establish a zero-outage executable rollout. Plan a maintenance window
-and client reconnection accordingly.
+completion alone is insufficient. On Dokploy, a running, deployed, volume-less,
+serving-probe-marked incumbent and marked incoming build use serial start-first
+replacement with native serving admission and spare capacity. The chosen policy
+is checkpointed before submission and retained on receipt-missing replay,
+including `--include-current`. A legacy/unmarked first upgrade and cold/stopped
+deployment use ordinary deployment; a successful marked upgrade enables later
+serving-preserving rollouts. Zerops ordinary whole-service deployment and Nomad's
+TCP-gated canary followed by potentially destructive replacement have no
+new-build serving guarantee and may interrupt the entire endpoint even with
+replicas. Count/resource serving contracts are not executable-rollout contracts.
+Plan a maintenance window and client reconnection on every backend.
 
 An already current proxy is not redeployed, but still must pass the same
 all-instance configuration/credentials and healthy-writer checks before data

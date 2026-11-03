@@ -126,9 +126,9 @@ visibility lookups after failover; frontend health alone is insufficient. See
 the [binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
 
 This fix requires newly deployed consumer agents; a control-plane upgrade or
-ordinary restart does not replace them. See the [consumer rollout compatibility
-guidance](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)
-before replacing existing consumer agents; preserve the bound databases.
+ordinary restart does not replace them. Use `karactl clusters upgrade-agents CLUSTER --wait`
+and follow the [member-agent rollout guidance](../upgrade.md#agent-rollout-now-covers-every-member-agent-engine).
+Preserve the bound databases; no consumer re-creation is required.
 
 The persistence block, `historyShards` and topology are immutable after creation. The Temporal cluster name is the Karakoram cluster name. Choose database names and shard count before admitting production workflows.
 

@@ -135,6 +135,12 @@ Terminal platform failures and `INCUMBENTS_REPLACED` are stored separately and r
 
 New count/resources are committed only after platform completion and configuration/native writer admission on every requested live proxy. Count reductions and all MySQL/PXC and PostgreSQL/Supabase proxy resource changes wait for maintenance windows, including serving-preserving resizes; only serving-preserving count scale-out bypasses that window. PostgreSQL/Supabase poll the prior operation before submitting a superseding count so terminal submission fences can be finalized. MySQL/PXC combined count/resource, version or startup/runtime changes retain stop/redeploy. Removed instances can disconnect existing sessions, and live-provider acceptance of these preservation paths remains pending. See [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md), [MySQL/PXC operations](mysql/operations.md#restart-configuration-and-scale) and [PostgreSQL maintenance](postgres/operations.md#agent-rollout-and-maintenance-windows).
 
+ProxySQL `upgrade-agents` uses ordinary whole-service new-build deployment, not
+the autoscaling preservation path. `temporaryShutdown=false` can overlap old and
+new containers but does not establish serial native-serving admission or prove
+that a usable predecessor survives. Plan endpoint interruption even with replicas,
+and verify every instance's exact build, configuration and writer readiness.
+
 Member `autoscaling` reports effective platform bounds, not desired spec. Member `resources` reports live allocation from the agent, with an effective-bounds fallback when unavailable; `diskTotalBytes` is mounted data-volume capacity. A matching generation and `Ready` do not mean allocation changes instantly or establish a hard memory-allocation cap.
 
 CPU-mode rate limits surface `PlatformCooldown` with a persisted retry deadline; reconciliation resumes automatically, including after a control-plane restart. Platform resource/import rejections remain authoritative and report safe validation details and attempted bounds. See [Resources and autoscaling](clusters.md#resources-and-autoscaling) for status fields and diagnostics.

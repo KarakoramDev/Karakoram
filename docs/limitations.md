@@ -131,10 +131,16 @@ These cross-engine constraints define the operating model; engine-specific limit
 - **Agent deployment is not necessarily zero-downtime.** v0.4.4 supports
   `upgrade-agents` for every member-agent engine, including MySQL/PXC and
   ProxySQL; a control-plane-only upgrade or native process restart still does
-  not replace deployed agents. Singletons have downtime. ProxySQL is deployed
-  as a logical service: backends that replace all instances may briefly
-  interrupt its entire endpoint even with replicas. Temporal component
-  availability likewise depends on platform instance replacement behavior.
+  not replace deployed agents. Singleton databases/components have downtime.
+  ProxySQL agent rollout preserves serving only on Dokploy with a running,
+  deployed, volume-less, serving-probe-marked incumbent and marked incoming build,
+  using serial start-first native admission and spare capacity. Legacy/unmarked
+  first upgrades and cold/stopped deployment retain ordinary deployment.
+  Zerops new-build deployment and Nomad's TCP-gated canary/destructive rollout
+  do not inherit count/resource serving guarantees and can interrupt the whole
+  endpoint even with replicas. PostgreSQL/Supabase proxy deployments share the
+  eligible Dokploy path. Temporal component availability depends on platform
+  instance replacement behavior.
   With `--include-current`, receipt loss for an already-current member can
   cause another gated same-build deployment and interruption because the
   backend has no deployment lookup by member/request identity. See
