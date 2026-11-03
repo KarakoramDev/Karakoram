@@ -58,7 +58,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
 | [0065](0065-agent-upgrade-all-member-engines.md) | Native-gated agent upgrades for every member-agent engine, durable replay and service-level deployment limits |
-| [0066](0066-postgres-administrator-rotation.md) | Receipt-backed PostgreSQL administrator rotation with sealed old/new management credentials and consumer publication barriers |
+| [0066](0066-postgres-administrator-rotation.md) | Peer-authenticated local PostgreSQL management and receipt-backed administrator rotation with consumer publication barriers |
 | [0069](0069-temporal-zerops.md) | Temporal on Zerops: backend-selected private IPv6 membership and capability-gated agent configuration |
 | [0070](0070-proxysql-serving-scale-and-resource-changes.md) | Serving-preserving ProxySQL count/resource contracts, provider admission and legacy-runtime boundaries |
 | [0063](0063-mysql-pitr-automatic-reanchor.md) | Automatic full-backup re-anchoring after MySQL/PXC physical archive-writer changes |

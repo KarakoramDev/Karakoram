@@ -39,6 +39,10 @@ fixes; a native process restart still does not replace its agent.
   available and waits for proxy handoff before deployment. The ProxySQL rollout
   is service-level: on backends replacing all instances, the entire endpoint
   can briefly fail even with multiple replicas. MySQL single has database downtime.
+  If runtime recovery or confirmed loss appears mid-rollout, the serialized
+  operation settles its current member/routing drain without a new deployment,
+  then retires with a recovery diagnostic so lost-volume replacement can proceed.
+  Confirmed-lost members remain excluded from routing, never readmitted as healthy.
 - **OpenBao:** standbys/inactive members before the initial active; native
   step-down must establish another active before its deployment. Raft requires
   healthy unsealed voters and surviving quorum/autopilot gates. PostgreSQL
@@ -87,16 +91,18 @@ its diagnostic and re-run for the new target after recovery. See
 
 ### PostgreSQL administrator password rotation
 
-<!-- WG1: pg-rotation pending final -->
 PostgreSQL single/Patroni HA, Citus and Supabase now support in-place rotation of
 the revealed `postgres` password. Upgrade the control plane, then complete
 `upgrade-agents` on every data member first. The new agents use exact-owner
-Unix-socket peer authentication for local management; enabling the server-start
-`ident_file` setting may need the ordinary configuration restart during this
-activation rollout. Admission remains closed until every data member proves
+Unix-socket peer authentication for local management, with an agent-managed
+identity map outside PGDATA so rebuilds/restores cannot remove it. Warm activation
+stages and observes a reload of the currently active map before publishing peer
+HBA rules. Adopting the external `ident_file` startup path may require the ordinary
+pending configuration restart during the preceding agent rollout; rotation itself
+is restart-free. Admission remains closed until every data member proves
 successful password-independent local socket access. Older or unobservable data
-agents receive HTTP 409 with upgrade guidance; remote SCRAM/TLS authentication
-is unchanged.
+agents receive HTTP 409 with `upgrade-agents` guidance; remote SCRAM/TLS
+authentication is unchanged.
 
 ```sh
 karactl -n NS system-users rotate NAME postgres --yes
@@ -140,6 +146,9 @@ a configured-member majority, compatible GTID histories, no active
 history-continuity latch and a qualified SST donor. A lost formation seed or
 pinned donor moves to a qualified survivor; existing join certification still
 owns SST and final routing fences.
+Outstanding rollout drains must settle before replacement admission; a withdrawn
+survivor is not an eligible donor or writer. An active rollout yields through its
+recovery cleanup rather than being preempted by automatic replacement.
 
 The new member and volume join before the old identity retires. Proxy exclusion
 must be acknowledged, the exact old runtime stopped, and native membership
