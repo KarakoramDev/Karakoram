@@ -535,6 +535,10 @@ Inspect the precise status reason and queued operation. Reconciliation reuses
 one deterministic operation ID and does not requeue terminal operations. After
 resolving a terminal failure, inspect retained data before requesting managed
 replacement again. No automatic `pc.bootstrap` or `recover-quorum` is introduced.
+Read-only runtime/storage discovery shares the bounded MySQL observation pass
+with native health and agent status; it does not add a timeout per member.
+Replacement admission still obtains fresh surviving-data proof before queueing.
+
 Runtime recovery discovers loss before orphaned rollout-drain settlement. If the
 withdrawn member itself is confirmed lost and its rollout owner is terminal or
 missing, settlement releases only the drain ownership, without waiting for native

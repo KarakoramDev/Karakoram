@@ -25,6 +25,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/infra/fake"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
 )
 
 // The real provider sees an already deployed formation. Only platform inventory
@@ -40,7 +41,11 @@ func (b mysqlBudgetBackend) GetService(ctx context.Context, name string) (*infra
 	if err := b.delay(ctx); err != nil {
 		return nil, err
 	}
-	return &infra.Service{ID: name + "-id", Hostname: name, Kind: infra.KindRuntime, Status: infra.StatusRunning}, nil
+	kind := infra.KindRuntime
+	if strings.HasSuffix(name, "v") {
+		kind = infra.KindVolume
+	}
+	return &infra.Service{ID: name + "-id", Hostname: name, Kind: kind, Status: infra.StatusRunning}, nil
 }
 
 func (b mysqlBudgetBackend) Containers(ctx context.Context, name string) ([]infra.Container, error) {
@@ -131,6 +136,10 @@ func testMySQLManagerObservationBudget(t *testing.T, old bool, slow string, unsu
 			"configVersion": 1, "initialized": role == "data",
 			"serverUUID": fmt.Sprintf("aaaaaaaa-bbbb-cccc-dddd-%012d", i+1),
 		})
+		if role == "data" {
+			members[len(members)-1]["volume"] = name + "v"
+			members[len(members)-1]["volumeId"] = name + "v-id"
+		}
 		c.Status.Members = append(c.Status.Members, domain.MemberStatus{Name: name, Health: true})
 	}
 	detected := time.Now().UTC().Add(-time.Hour)
@@ -146,6 +155,14 @@ func testMySQLManagerObservationBudget(t *testing.T, old bool, slow string, unsu
 	}
 	if err := st.CreateCluster(t.Context(), c); err != nil {
 		t.Fatal(err)
+	}
+	// These members are already deployed: their agent credentials and retained
+	// volume identities must exist before Sync observes infrastructure recovery.
+	for _, member := range members {
+		name := member["name"].(string)
+		if err := st.SetAgentToken(t.Context(), &domain.AgentToken{Namespace: c.Ref().Namespace, Cluster: c.Name, Member: name, Token: name, Hash: secrets.Hash(name)}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	journal, err := json.Marshal(map[string]any{"incidents": []any{incident}})
 	if err != nil {
@@ -455,6 +472,10 @@ func TestMySQLManagerOfflineRecoveryOutlastsObservationPass(t *testing.T) {
 			"version": c.Spec.Version, "resources": component.Resources, "replicas": 1,
 			"configVersion": 1, "initialized": role == "data", "serverUUID": mysqlBudgetNativeUUID(name),
 		})
+		if role == "data" {
+			members[len(members)-1]["volume"] = name + "v"
+			members[len(members)-1]["volumeId"] = name + "v-id"
+		}
 	}
 	internal := map[string]any{"mysql": map[string]any{
 		"uid": "offline-manager-fixture", "nextIndex": 3, "configVersion": 1, "topology": "group", "members": members,
@@ -466,6 +487,12 @@ func TestMySQLManagerOfflineRecoveryOutlastsObservationPass(t *testing.T) {
 	}
 	if err = st.CreateCluster(t.Context(), c); err != nil {
 		t.Fatal(err)
+	}
+	for _, member := range members {
+		name := member["name"].(string)
+		if err := st.SetAgentToken(t.Context(), &domain.AgentToken{Namespace: c.Ref().Namespace, Cluster: c.Name, Member: name, Token: name, Hash: secrets.Hash(name)}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var armed atomic.Bool
 	var probes atomic.Int32

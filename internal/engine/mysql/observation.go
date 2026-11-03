@@ -89,7 +89,7 @@ func observeStatusMembers(ctx context.Context, rc *engine.Context, members []*me
 				out[i].infrastructure, _, out[i].infrastructureErr = mysqlReadValue(ctx, rc, m.Name, "platform-status", func(probe context.Context) (memberInfrastructure, error) {
 					var value memberInfrastructure
 					var err error
-					value.service, err = rc.Backend.GetService(probe, m.Name)
+					value.service, err = mysqlReadService(probe, rc, m.Name)
 					if err != nil || value.service == nil {
 						return value, err
 					}

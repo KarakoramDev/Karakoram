@@ -36,6 +36,10 @@ type RuntimeMember struct {
 	ServiceID *string
 	VolumeID  string
 	Recovery  *RuntimeRecovery
+	// Optional engine-owned readers share a bounded observation pass. They must
+	// never serve observations from an earlier reconciliation or actor mutation.
+	ReadService func(context.Context, string) (*infra.Service, error)
+	ReadStatus  func(context.Context, string) (agentapi.Status, error)
 }
 
 type RuntimeRecoveryResult struct {
@@ -139,7 +143,11 @@ func ReconcileRuntime(ctx context.Context, rc *Context, m RuntimeMember) (Runtim
 		return result, fmt.Errorf("runtime recovery requires a persistent member journal")
 	}
 	q := m.Recovery
-	runtime, err := rc.Backend.GetService(ctx, m.Member)
+	readService := m.ReadService
+	if readService == nil {
+		readService = rc.Backend.GetService
+	}
+	runtime, err := readService(ctx, m.Member)
 	if err != nil {
 		if ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
 			q.VolumeLost = true
@@ -158,7 +166,7 @@ func ReconcileRuntime(ctx context.Context, rc *Context, m RuntimeMember) (Runtim
 		*m.ServiceID = runtime.ID
 	}
 	if m.Volume != "" {
-		volume, err := rc.Backend.GetService(ctx, m.Volume)
+		volume, err := readService(ctx, m.Volume)
 		if err != nil {
 			if ConfirmedVolumeLoss(err, m.Volume, m.VolumeID) {
 				q.VolumeLost = true
@@ -181,35 +189,40 @@ func ReconcileRuntime(ctx context.Context, rc *Context, m RuntimeMember) (Runtim
 			result.Busy = true
 			return result, nil
 		}
-		if runtime != nil && runtime.Status != infra.StatusStopped && rc.Agents != nil {
-			probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			client, dialErr := rc.Agents.Dial(probeCtx, rc.Cluster.Ref(), m.Member)
-			if dialErr == nil {
-				status, statusErr := client.Status(probeCtx)
-				client.Close()
-				cancel()
-				if statusErr == nil && status.Volume != nil {
-					identity := status.Volume.Identity
-					if identity.Member != m.Member || identity.Volume != m.Volume || identity.VolumeID != m.VolumeID {
-						return result, fmt.Errorf("%w: agent volume identity for %s does not match its retained volume", ErrConflict, m.Member)
+		if runtime != nil && runtime.Status != infra.StatusStopped && (rc.Agents != nil || m.ReadStatus != nil) {
+			readStatus := m.ReadStatus
+			if readStatus == nil {
+				readStatus = func(ctx context.Context, member string) (agentapi.Status, error) {
+					probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+					defer cancel()
+					client, err := rc.Agents.Dial(probeCtx, rc.Cluster.Ref(), member)
+					if err != nil {
+						return agentapi.Status{}, err
 					}
-					if status.Volume.Lost || status.Volume.Verified {
-						q.VolumeLost = status.Volume.Lost
-					}
-					if status.Volume.Lost {
-						result.VolumeLost = true
-						return result, nil
-					}
-					if status.Volume.Verified {
-						for name, process := range status.Processes {
-							if name != "pbm-agent" && process.State == "running" {
-								q.Initialized = true
-							}
+					defer client.Close()
+					return client.Status(probeCtx)
+				}
+			}
+			status, statusErr := readStatus(ctx, m.Member)
+			if statusErr == nil && status.Volume != nil {
+				identity := status.Volume.Identity
+				if identity.Member != m.Member || identity.Volume != m.Volume || identity.VolumeID != m.VolumeID {
+					return result, fmt.Errorf("%w: agent volume identity for %s does not match its retained volume", ErrConflict, m.Member)
+				}
+				if status.Volume.Lost || status.Volume.Verified {
+					q.VolumeLost = status.Volume.Lost
+				}
+				if status.Volume.Lost {
+					result.VolumeLost = true
+					return result, nil
+				}
+				if status.Volume.Verified {
+					for name, process := range status.Processes {
+						if name != "pbm-agent" && process.State == "running" {
+							q.Initialized = true
 						}
 					}
 				}
-			} else {
-				cancel()
 			}
 		}
 	}
