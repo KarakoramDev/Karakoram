@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math/big"
 	"time"
 )
 
@@ -93,20 +92,25 @@ func Generate(random io.Reader, now time.Time) (Keys, error) {
 	}
 	// Explicit scalar sampling makes injected readers deterministic, unlike
 	// ecdsa.GenerateKey's optional extra random read. Rejection avoids bias.
-	curve := elliptic.P256()
-	var d *big.Int
+	var private *ecdsa.PrivateKey
+	var d []byte
 	for {
-		b, e := entropy(random, 32)
-		if e != nil {
-			return Keys{}, e
+		var err error
+		d, err = entropy(random, 32)
+		if err != nil {
+			return Keys{}, err
 		}
-		d = new(big.Int).SetBytes(b)
-		if d.Sign() > 0 && d.Cmp(curve.Params().N) < 0 {
+		private, err = ecdsa.ParseRawPrivateKey(elliptic.P256(), d)
+		if err == nil {
 			break
 		}
 	}
-	x, y := curve.ScalarBaseMult(d.Bytes())
-	private := &ecdsa.PrivateKey{PublicKey: ecdsa.PublicKey{Curve: curve, X: x, Y: y}, D: d}
+	// SEC 1 uncompressed points contain 0x04 followed by fixed-width x and y.
+	// Keep those widths (including leading zeros) in the persisted JWK format.
+	point, err := private.PublicKey.Bytes()
+	if err != nil {
+		return Keys{}, err
+	}
 	id, err := entropy(random, 16)
 	if err != nil {
 		return Keys{}, err
@@ -115,13 +119,13 @@ func Generate(random io.Reader, now time.Time) (Keys, error) {
 	id[8] = (id[8] & 63) | 128
 	h := hex.EncodeToString(id)
 	kid := h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
-	public := map[string]any{"kty": "EC", "kid": kid, "use": "sig", "key_ops": []string{"verify"}, "alg": "ES256", "ext": true, "crv": "P-256", "x": b64(x.FillBytes(make([]byte, 32))), "y": b64(y.FillBytes(make([]byte, 32)))}
+	public := map[string]any{"kty": "EC", "kid": kid, "use": "sig", "key_ops": []string{"verify"}, "alg": "ES256", "ext": true, "crv": "P-256", "x": b64(point[1:33]), "y": b64(point[33:])}
 	oct := map[string]any{"kty": "oct", "k": b64([]byte(k.JWTSecret)), "alg": "HS256"}
 	k.JWKS, err = json.Marshal(map[string]any{"keys": []any{public, oct}})
 	if err != nil {
 		return Keys{}, err
 	}
-	public["d"] = b64(d.FillBytes(make([]byte, 32)))
+	public["d"] = b64(d)
 	public["key_ops"] = []string{"sign", "verify"}
 	k.JWTKeys, err = json.Marshal([]any{public, oct})
 	if err != nil {
