@@ -65,12 +65,24 @@ func rollingNeedsWindow(m *member, version string, target domain.ComponentSpec, 
 		m.Role == "data" && !reflect.DeepEqual(m.Parameters, parameters)
 }
 
-// Only replica changes may bypass the service-wide restart. Runtime artifacts
-// and resources must remain on the stop/redeploy path.
+// Count-only and resource-only updates have independent serving guarantees.
 func proxyCountOnly(m *member, version string, target domain.ComponentSpec, runtimeHash string, capabilities infra.Capabilities) bool {
 	return capabilities.ReplicaScalePreservesServing && m.Role == "proxy" && m.Replicas != target.Replicas &&
 		m.Version == version && reflect.DeepEqual(m.Resources, target.Resources) &&
 		m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash == runtimeHash
+}
+
+func proxyResourceOnly(m *member, version string, target domain.ComponentSpec, runtimeHash string, backend infra.Backend) bool {
+	if !backend.Capabilities().ResourceUpdatePreservesServing || m.Role != "proxy" ||
+		m.Replicas != target.Replicas || m.Version != version ||
+		m.ProxyRuntimeHash == "" || m.ProxyRuntimeHash != runtimeHash ||
+		reflect.DeepEqual(m.Resources, target.Resources) {
+		return false
+	}
+	if serving, ok := backend.(infra.ServingResourceUpdate); ok {
+		return serving.ResourceUpdatePreservesServingFor(m.Resources, target.Resources)
+	}
+	return true
 }
 
 func proxyRuntimeHash(rc *engine.Context, spec infra.RuntimeSpec) (string, error) {
@@ -94,6 +106,31 @@ func (p *Core) desiredProxyRuntimeHash(rc *engine.Context, m *member) (string, e
 		return "", err
 	}
 	return proxyRuntimeHash(rc, spec)
+}
+
+// Adding the serving-probe marker is a lazy migration, not an instruction to
+// restart an otherwise unchanged proxy after a control-plane upgrade. Fast paths
+// still require the full new hash, so the next requested change redeploys once.
+func (p *Core) proxyRuntimeChanged(rc *engine.Context, m *member, hash string) (bool, error) {
+	if m.Role != "proxy" || m.ProxyRuntimeHash == "" || m.ProxyRuntimeHash == hash {
+		return false, nil
+	}
+	spec, err := p.runtimeSpec(rc, m)
+	if err != nil {
+		return false, err
+	}
+	delete(spec.Env, "KARAKORAM_PROXY_SERVING_PROBE")
+	legacy, err := proxyRuntimeHash(rc, spec)
+	return m.ProxyRuntimeHash != legacy, err
+}
+
+func proxyUpdatesPreserveServing(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	if m.Role == "proxy" {
+		if gate, ok := rc.Backend.(infra.ServingProxyUpdates); ok {
+			return gate.ProxyUpdatesPreserveServing(ctx, m.Name)
+		}
+	}
+	return true, nil
 }
 
 func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
@@ -126,8 +163,15 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			if err != nil {
 				return true, err
 			}
-			runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
-			restartingScale := m.Role == "proxy" && m.Replicas != desired.Replicas && (!rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash == "")
+			runtimeChanged, err := p.proxyRuntimeChanged(rc, m, runtimeHash)
+			if err != nil {
+				return true, err
+			}
+			serving, err := proxyUpdatesPreserveServing(ctx, rc, m)
+			if err != nil {
+				return true, err
+			}
+			restartingScale := m.Role == "proxy" && m.Replicas != desired.Replicas && (!serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash != runtimeHash)
 			changed = changed || runtimeChanged
 			needsWindow = needsWindow || runtimeChanged || restartingScale
 			changed = changed || m.Version != rc.Cluster.Spec.Version || m.Replicas != desired.Replicas || !reflect.DeepEqual(m.Resources, desired.Resources)
@@ -199,12 +243,32 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		return true, p.reconcileFailedProxyScale(ctx, rc, s, m)
 	}
 	target := u.Targets[m.Name]
+	if u.Stage == "resource-failed" {
+		// A terminal resource receipt must never enter count recovery or be
+		// resubmitted automatically. A different explicit target can supersede it.
+		if desired := desiredComponent(rc, m); !reflect.DeepEqual(desired.Resources, target.Resources) {
+			u.Targets[m.Name] = desired
+			m.PendingReplicas = 0
+			u.Op = nil
+			u.Stage = "resource-recovery"
+			return true, nil
+		}
+		rc.SyncWait = "ProxySQL resource update failed; restore backend health and supersede the failed resource target"
+		return true, nil
+	}
 	runtimeHash, err := p.desiredProxyRuntimeHash(rc, m)
 	if err != nil {
 		return true, err
 	}
-	runtimeChanged := m.Role == "proxy" && m.ProxyRuntimeHash != "" && m.ProxyRuntimeHash != runtimeHash
-	restartingScale := m.Role == "proxy" && m.Replicas != target.Replicas && (!rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash == "")
+	runtimeChanged, err := p.proxyRuntimeChanged(rc, m, runtimeHash)
+	if err != nil {
+		return true, err
+	}
+	serving, err := proxyUpdatesPreserveServing(ctx, rc, m)
+	if err != nil {
+		return true, err
+	}
+	restartingScale := m.Role == "proxy" && m.Replicas != target.Replicas && (!serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || m.ProxyRuntimeHash != runtimeHash)
 	needsWindow := runtimeChanged || restartingScale || rollingNeedsWindow(m, u.To, target, u.Parameters)
 	switch u.Stage {
 	case "prepare":
@@ -215,7 +279,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		if proxyCountOnly(m, u.To, target, runtimeHash, rc.Backend.Capabilities()) {
+		if serving && proxyCountOnly(m, u.To, target, runtimeHash, rc.Backend.Capabilities()) {
 			if target.Replicas < 1 {
 				return true, engine.Invalid("ProxySQL scaling requires at least one serving replica")
 			}
@@ -231,6 +295,18 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 			// Persist intent before the idempotent backend call. Both readiness
 			// and D103 admission now require the target number of acknowledgers.
 			u.Stage = "scale"
+			return true, nil
+		}
+		if serving && proxyResourceOnly(m, u.To, target, runtimeHash, rc.Backend) {
+			ok, err := ready(ctx, rc, m)
+			if err != nil || !ok {
+				return true, err
+			}
+			m.PendingReplicas = target.Replicas
+			publishRevision(s)
+			// Persist before SetResources: a lost reply replays the same target
+			// and the backend adopts its durable in-flight operation.
+			u.Stage = "resource-scale"
 			return true, nil
 		}
 		// Restarting changes retain the existing service-wide maintenance path.
@@ -259,7 +335,7 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		if u.ScaleIn && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		if runtimeChanged || !rc.Backend.Capabilities().ReplicaScalePreservesServing {
+		if runtimeChanged || !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing {
 			m.PendingReplicas = 0
 			u.ScaleIn = false
 			u.Stage = "prepare"
@@ -295,6 +371,58 @@ func (p *Core) reconcileRolling(ctx context.Context, rc *engine.Context, s *stat
 		m.Replicas = target.Replicas
 		m.PendingReplicas = 0
 		u.ScaleIn = false
+		u.Index++
+		u.Op = nil
+		u.Stage = "prepare"
+	case "resource-recovery":
+		// A partial failed rollout makes the committed resources insufficient
+		// evidence, even when reverting. Reapply the explicit superseding
+		// target through maintenance instead of assuming backend rollback.
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok {
+			if err := planner.PlanResources(ctx, m.Name, target.Resources); err != nil {
+				return true, err
+			}
+		}
+		m.Offline = true
+		publishRevision(s)
+		u.Stage = "offline"
+	case "resource-scale":
+		// Unlike count-only scale-up, resource updates retain window gating.
+		if rc.WaitForWindow().RequeueAfter > 0 {
+			return false, nil
+		}
+		if !serving || !proxyResourceOnly(m, u.To, target, runtimeHash, rc.Backend) {
+			return true, engine.Invalid("ProxySQL resource update no longer preserves serving; restore the backend serving guarantee before retrying")
+		}
+		op, err := rc.Backend.SetResources(ctx, m.Name, target.Resources)
+		if err != nil {
+			return true, err
+		}
+		u.Op = &op
+		u.Stage = "resource-scaled"
+	case "resource-scaled":
+		if u.Op == nil {
+			return true, engine.Invalid("missing MySQL proxy resource update receipt")
+		}
+		status, err := rc.Backend.OpStatus(ctx, *u.Op)
+		if status.Failed {
+			u.Stage = "resource-failed"
+			rc.SyncWait = "ProxySQL resource update failed; restore backend health and supersede the failed resource target"
+			return true, nil
+		}
+		if err != nil || !status.Done {
+			return true, err
+		}
+		ok, err := ready(ctx, rc, m)
+		if err != nil || !ok {
+			rc.SyncWait = "ProxySQL resource update is waiting for configuration and writer readiness on every expected live instance"
+			return true, err
+		}
+		m.Resources = target.Resources
+		m.PendingReplicas = 0
 		u.Index++
 		u.Op = nil
 		u.Stage = "prepare"

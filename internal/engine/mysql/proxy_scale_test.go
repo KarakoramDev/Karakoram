@@ -25,7 +25,12 @@ type proxyScaleBackend struct {
 
 	pending bool
 
-	disruptiveScale bool
+	disruptiveScale                    bool
+	servingResources, excludeResources bool
+	resourceFailed, loseResourceReply  bool
+	resourceOp                         *infra.Op
+	writerUnready                      *[2]bool
+	unsupportedRuntime                 bool
 
 	ports []infra.Port
 }
@@ -33,7 +38,16 @@ type proxyScaleBackend struct {
 func (b *proxyScaleBackend) Capabilities() infra.Capabilities {
 	c := b.Backend.Capabilities()
 	c.ReplicaScalePreservesServing = !b.disruptiveScale
+	c.ResourceUpdatePreservesServing = b.servingResources
 	return c
+}
+
+func (b *proxyScaleBackend) ResourceUpdatePreservesServingFor(current, target infra.Resources) bool {
+	return !b.excludeResources
+}
+
+func (b *proxyScaleBackend) ProxyUpdatesPreserveServing(ctx context.Context, name string) (bool, error) {
+	return !b.unsupportedRuntime, nil
 }
 
 func (b *proxyScaleBackend) SetContainerCount(ctx context.Context, name string, min, max int) (infra.Op, error) {
@@ -45,6 +59,22 @@ func (b *proxyScaleBackend) SetContainerCount(ctx context.Context, name string, 
 }
 
 func (b *proxyScaleBackend) SetResources(ctx context.Context, name string, resources infra.Resources) (infra.Op, error) {
+	if name == b.proxy && b.servingResources {
+		if b.resourceOp != nil {
+			return *b.resourceOp, nil
+		}
+		b.resources++
+		op, err := b.Backend.SetResources(ctx, name, resources)
+		if err != nil {
+			return op, err
+		}
+		b.resourceOp = &op
+		if b.loseResourceReply {
+			b.loseResourceReply = false
+			return infra.Op{}, fmt.Errorf("resource update reply lost")
+		}
+		return op, nil
+	}
 	if name == b.proxy {
 		b.resources++
 	}
@@ -60,6 +90,9 @@ func (b *proxyScaleBackend) Deploy(ctx context.Context, name string, deployment 
 }
 
 func (b *proxyScaleBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if b.resourceFailed {
+		return infra.OpState{Failed: true}, nil
+	}
 	if b.pending {
 		return infra.OpState{}, nil
 	}
@@ -80,6 +113,7 @@ func proxyScaleFixture(t *testing.T, rc *engine.Context, s *state) (*proxyScaleB
 		t.Fatal("missing proxy")
 	}
 	stale := new([2]bool)
+	writerUnready := new([2]bool)
 	agents := admissionAgents{fakeAgents: rc.Agents.(fakeAgents), proxy: proxy.Name, peers: map[string]string{}}
 	for i, instance := range []string{"first", "second"} {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +130,10 @@ func proxyScaleFixture(t *testing.T, rc *engine.Context, s *state) (*proxyScaleB
 				json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: version})
 				return
 			}
+			if writerUnready[i] {
+				json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{})
+				return
+			}
 			json.NewEncoder(w).Encode(myspec.ProxyStatusResponse{Backends: []myspec.ProxyBackend{admitted(s.data()[0].Name, myspec.ProxyWriterGroup, "ONLINE")}})
 		}))
 		t.Cleanup(server.Close)
@@ -103,6 +141,7 @@ func proxyScaleFixture(t *testing.T, rc *engine.Context, s *state) (*proxyScaleB
 		agents.peers[instance] = server.Listener.Addr().String()
 	}
 	b := &proxyScaleBackend{admissionBackend: &admissionBackend{Backend: rc.Backend, proxy: proxy.Name, count: proxy.Replicas, stops: map[string]int{}}}
+	b.writerUnready = writerUnready
 	rc.Backend, rc.Agents = b, agents
 	return b, stale
 }
@@ -217,6 +256,251 @@ func TestProxyResourceChangesKeepRestartPath(t *testing.T) {
 			converge(t, p, rc, base)
 			if b.stops[b.proxy] != 1 || b.resources != 1 || b.deploys != 1 || b.scales != count-1 {
 				t.Fatalf("restart calls: scale=%d stop=%d resources=%d deploy=%d", b.scales, b.stops[b.proxy], b.resources, b.deploys)
+			}
+		})
+	}
+}
+
+func TestProxyResourceServingReplay(t *testing.T) {
+	for _, topology := range []string{"single", "group", "cluster"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, base := setup(t, topology)
+			if topology == "cluster" {
+				p, rc, base = setupPXC(t)
+			}
+			if topology == "single" {
+				setProxyScaleTarget(rc, 1, false)
+			}
+			converge(t, p, rc, base)
+			s, _ := load(rc.Cluster)
+			b, stale := proxyScaleFixture(t, rc, s)
+			b.servingResources = true
+			// Two live replicas exercise the per-instance admission barrier.
+			setProxyScaleTarget(rc, 2, false)
+			converge(t, p, rc, base)
+			setProxyScaleTarget(rc, 2, true)
+			for range 30 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				base.apply(t, p, rc)
+				s, _ = load(rc.Cluster)
+				if s.find(b.proxy).Offline {
+					t.Fatal("resource update published Offline")
+				}
+				if s.Rolling != nil && s.Rolling.Stage == "resource-scale" {
+					break
+				}
+			}
+			if s.Rolling == nil || s.Rolling.Stage != "resource-scale" || b.resources != 0 {
+				t.Fatal("resource intent not durably checkpointed before submission")
+			}
+			old := s.find(b.proxy).Resources
+			b.pending, b.loseResourceReply = true, true
+			p = New(Options{Provider: p.Name()})
+			if _, err := p.Sync(t.Context(), rc); err == nil {
+				t.Fatal("lost reply was not surfaced")
+			}
+			p = New(Options{Provider: p.Name()})
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling.Stage != "resource-scaled" || s.find(b.proxy).Resources != old || b.resources != 1 {
+				t.Fatal("lost reply did not adopt pending resource receipt")
+			}
+			b.pending = false
+			b.count = 1
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling.Stage != "resource-scaled" || s.find(b.proxy).Resources != old {
+				t.Fatal("missing live instance committed resources")
+			}
+			b.count = 2
+			stale[1] = true
+			for range 2 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling.Stage != "resource-scaled" || s.find(b.proxy).Resources != old || s.find(b.proxy).Offline {
+				t.Fatal("failed instance readiness committed resources")
+			}
+			stale[1] = false
+			b.writerUnready[1] = true
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling.Stage != "resource-scaled" || s.find(b.proxy).Resources != old {
+				t.Fatal("writer-unready live instance committed resources")
+			}
+			b.writerUnready[1] = false
+			converge(t, p, rc, base)
+			s, _ = load(rc.Cluster)
+			if b.resources != 1 || b.stops[b.proxy] != 0 || b.deploys != 0 || s.find(b.proxy).Resources != rc.Cluster.Spec.Components.Extra["proxy"].Resources {
+				t.Fatalf("serving resource update: resources=%d stop=%d deploy=%d", b.resources, b.stops[b.proxy], b.deploys)
+			}
+		})
+	}
+}
+
+func TestProxyResourceServingFallback(t *testing.T) {
+	for _, reason := range []string{"capability", "request-exclusion", "legacy-runtime", "combined", "unsupported-runtime"} {
+		t.Run(reason, func(t *testing.T) {
+			p, rc, base := setup(t, "group")
+			converge(t, p, rc, base)
+			s, _ := load(rc.Cluster)
+			b, _ := proxyScaleFixture(t, rc, s)
+			b.servingResources = reason != "capability"
+			b.excludeResources = reason == "request-exclusion"
+			b.unsupportedRuntime = reason == "unsupported-runtime"
+			if reason == "legacy-runtime" {
+				s.find(b.proxy).ProxyRuntimeHash = ""
+				replayAdmissionState(t, rc, s)
+			}
+			count := 1
+			if reason == "combined" {
+				count = 2
+			}
+			setProxyScaleTarget(rc, count, true)
+			converge(t, p, rc, base)
+			if b.stops[b.proxy] != 1 || b.resources != 1 || b.deploys != 1 {
+				t.Fatal("unsafe resource update bypassed stop/redeploy")
+			}
+		})
+	}
+}
+
+func TestProxyResourceServingFailure(t *testing.T) {
+	p, rc, base := setup(t, "group")
+	converge(t, p, rc, base)
+	s, _ := load(rc.Cluster)
+	b, _ := proxyScaleFixture(t, rc, s)
+	b.servingResources = true
+	setProxyScaleTarget(rc, 1, true)
+	old := s.find(b.proxy).Resources
+	for range 30 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+		base.apply(t, p, rc)
+		s, _ = load(rc.Cluster)
+		if s.Rolling != nil && s.Rolling.Stage == "resource-scaled" {
+			break
+		}
+	}
+	if s.Rolling == nil || s.Rolling.Stage != "resource-scaled" {
+		t.Fatal("missing resource receipt")
+	}
+	b.resourceFailed = true
+	for range 3 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, _ = load(rc.Cluster)
+	if s.Rolling.Stage != "resource-failed" || s.find(b.proxy).Resources != old || b.resources != 1 || b.scales != 0 || b.stops[b.proxy] != 0 || rc.SyncWait == "" {
+		t.Fatal("failed resource receipt committed, retried, or entered count recovery")
+	}
+	// Reverting to the last committed target is not evidence of backend rollback.
+	// A superseding target must be explicitly reapplied via gated maintenance.
+	target := rc.Cluster.Spec.Components.Extra["proxy"]
+	target.Resources = old
+	rc.Cluster.Spec.Components.Extra["proxy"] = target
+	rc.Cluster.Generation++
+	b.resourceFailed, b.resourceOp = false, nil
+	converge(t, p, rc, base)
+	if b.resources != 2 || b.stops[b.proxy] != 1 || b.deploys != 1 {
+		t.Fatal("failed resource revert assumed rollback instead of reapplying target")
+	}
+}
+
+func TestProxyResourceServingRechecksMaintenanceWindow(t *testing.T) {
+	p, rc, base := setup(t, "group")
+	converge(t, p, rc, base)
+	s, _ := load(rc.Cluster)
+	b, _ := proxyScaleFixture(t, rc, s)
+	b.servingResources = true
+	setProxyScaleTarget(rc, 1, true)
+	proxy := s.find(b.proxy)
+	s.Rolling = &rollingState{To: rc.Cluster.Spec.Version, Order: []string{proxy.Name}, Stage: "prepare", Targets: map[string]domain.ComponentSpec{proxy.Name: desiredComponent(rc, proxy)}}
+	closeWindow := func() {
+		rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: fmt.Sprintf("0 0 1 %d *", int(time.Now().Month())%12+1), Duration: "1h"}}}
+	}
+	closeWindow()
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "prepare" || b.resources != 0 {
+		t.Fatal("closed window allowed resource preparation")
+	}
+	rc.Cluster.Spec.Maintenance = nil
+	s = replayAdmissionState(t, rc, s)
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "resource-scale" || b.resources != 0 {
+		t.Fatal("missing pre-submission checkpoint")
+	}
+	closeWindow()
+	s = replayAdmissionState(t, rc, s)
+	if _, err := p.reconcileRolling(t.Context(), rc, s); err != nil {
+		t.Fatal(err)
+	}
+	if s.Rolling.Stage != "resource-scale" || b.resources != 0 {
+		t.Fatal("closed window allowed checkpoint replay to submit resources")
+	}
+}
+
+func TestProxyResourceServingProbeMarkerMigration(t *testing.T) {
+	for _, resources := range []bool{false, true} {
+		t.Run(fmt.Sprintf("resources=%v", resources), func(t *testing.T) {
+			p, rc, base := setup(t, "group")
+			converge(t, p, rc, base)
+			s, _ := load(rc.Cluster)
+			b, _ := proxyScaleFixture(t, rc, s)
+			b.servingResources = true
+			proxy := s.find(b.proxy)
+			spec, err := p.runtimeSpec(rc, proxy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] != "1" {
+				t.Fatal("proxy runtime omitted serving-probe marker")
+			}
+			delete(spec.Env, "KARAKORAM_PROXY_SERVING_PROBE")
+			legacy, err := proxyRuntimeHash(rc, spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			proxy.ProxyRuntimeHash = legacy
+			replayAdmissionState(t, rc, s)
+			for range 3 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			s, _ = load(rc.Cluster)
+			if s.Rolling != nil || s.find(b.proxy).ProxyRuntimeHash != legacy || b.stops[b.proxy] != 0 || b.resources != 0 || b.deploys != 0 {
+				t.Fatal("control-plane marker migration automatically redeployed proxy")
+			}
+			count := 2
+			if resources {
+				count = 1
+			}
+			setProxyScaleTarget(rc, count, resources)
+			converge(t, p, rc, base)
+			if b.stops[b.proxy] != 1 || b.deploys != 1 {
+				t.Fatal("next requested change did not migrate legacy proxy")
+			}
+			setProxyScaleTarget(rc, 1, false)
+			converge(t, p, rc, base)
+			if b.stops[b.proxy] != 1 || b.deploys != 1 {
+				t.Fatal("runtime marker migration repeated after acknowledgement")
 			}
 		})
 	}
