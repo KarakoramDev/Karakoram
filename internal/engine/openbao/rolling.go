@@ -71,6 +71,12 @@ func (p *Provider) lifecycleStep(ctx context.Context, rc *engine.Context, s *int
 	}
 	for _, m := range ordered(s) {
 		if m.Change != nil {
+			// Agent rollouts belong exclusively to their operation journal. Sync
+			// must never turn a retained apply intent into desired-config activation
+			// or deploy bytes from a different control-plane build.
+			if m.Change.Kind == "agent" {
+				return true, nil
+			}
 			s.RollingKind = m.Change.Kind
 			if s.RollingGeneration == 0 {
 				s.RollingGeneration = rc.Cluster.Generation

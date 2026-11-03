@@ -143,8 +143,10 @@ member before disruption, and waits for process readiness, unseal, healthy nativ
 membership and the exact target agent build before advancing. Existing rolling,
 replacement or pending structural work must finish first. Current agents are
 skipped unless `--include-current` is supplied. A control-plane build change cannot
-retarget an existing rollout: restore the target build to finish an in-flight
-deployment, or start a new rollout after recovery.
+retarget an existing rollout: an undisrupted member journal is discarded, while
+submitted or ambiguous work first settles on its previous or frozen target build.
+The operation then reports the mismatch; re-run `upgrade-agents` for the new target.
+Ordinary Sync never advances an operation-owned agent change or deployment retry.
 
 Maintenance windows are rechecked immediately before the first step-down or deploy,
 including after a controller restart with a journaled but undisrupted member.

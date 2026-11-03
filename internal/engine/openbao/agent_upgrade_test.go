@@ -430,3 +430,81 @@ func TestAgentUpgradeMissingReceiptSettlesBeforeCancellation(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentUpgradeBuildMismatchCannotEscapeThroughSync(t *testing.T) {
+	for _, boundary := range []string{"apply", "deploy", "submitted", "retry"} {
+		t.Run(boundary, func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			for _, m := range a.members {
+				m.build = "previous-build"
+			}
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			upgradeTick(t, p, rc, op, false)
+			upgradeTick(t, p, rc, op, false)
+			var cp agentUpgradeCheckpoint
+			if err := json.Unmarshal(op.Checkpoint, &cp); err != nil {
+				t.Fatal(err)
+			}
+			cp.Target.TargetBuild = "frozen-control-plane-build"
+			op.Checkpoint, _ = json.Marshal(cp)
+			s := state(t, rc)
+			m := s.find(cp.Waiting)
+			config := m.ConfigVersion
+			generation := m.ProcessGeneration
+			appliedOptions := string(m.EngineOptions)
+			m.Change.Step = boundary
+			if boundary == "submitted" || boundary == "retry" {
+				m.Change.Step = "deploy"
+				m.Change.Started = true
+				a.redeploy(m.Name)
+				a.member(m.Name).build = cp.Target.TargetBuild
+			}
+			if boundary == "retry" {
+				s.Retry = &pending{Action: "deploy", Member: m.Name, Version: m.DesiredVersion}
+			}
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			// Even before mismatch handling runs, ordinary convergence may not own
+			// an operation's apply/deploy intent or deferred platform retry.
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			if len(b.deploys) != 0 {
+				t.Fatal("Sync submitted an operation-owned deploy")
+			}
+			if got := state(t, rc).find(m.Name); got.ConfigVersion != config || got.ProcessGeneration != generation || string(got.EngineOptions) != appliedOptions {
+				t.Fatal("Sync activated config for an agent journal")
+			}
+			failed := false
+			for range 50 {
+				r, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil {
+					failed = true
+					break
+				}
+				op.Checkpoint = r.Checkpoint
+			}
+			if !failed {
+				t.Fatal("build mismatch was not reported after recovery")
+			}
+			s = state(t, rc)
+			m = s.find(m.Name)
+			if m.Change != nil || s.Retry != nil || m.Sealed {
+				t.Fatalf("mismatch retained unsafe work: %+v", m)
+			}
+			for range 5 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			m = state(t, rc).find(m.Name)
+			if len(b.deploys) != 0 || m.ConfigVersion != config || m.ProcessGeneration != generation || string(m.EngineOptions) != appliedOptions {
+				t.Fatal("ordinary Sync escaped the build fence")
+			}
+		})
+	}
+}

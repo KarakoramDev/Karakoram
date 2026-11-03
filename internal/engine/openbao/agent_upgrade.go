@@ -142,9 +142,12 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			return result, engine.ErrNotFound
 		}
 		if m.Change != nil && !m.Change.Started {
-			if cancel {
+			if cancel || mismatch {
 				m.Change = nil
 				cp.Waiting = ""
+				if mismatch {
+					return result, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
+				}
 				return agentUpgradeResult(cp, true)
 			}
 			if rc.WaitForWindow().RequeueAfter > 0 {
@@ -154,10 +157,11 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
 		}
-		if cancel && s.Retry != nil && s.Retry.Action == "deploy" && s.Retry.Member == m.Name && s.Retry.Op.ID == "" {
+		if (cancel && s.Retry != nil && s.Retry.Op.ID == "" || mismatch) && s.Retry != nil && s.Retry.Action == "deploy" && s.Retry.Member == m.Name {
 			// An ambiguous submission error is not proof that the runtime stayed
-			// untouched. Retire only the unreceipted retry, then settle natively.
-			s.Retry = nil
+			// untouched. A build mismatch also forbids retrying a failed receipt.
+			// Retire the retry journal and settle natively before reporting either.
+			s.resetPlatformRetry(s.Retry)
 			if m.Change != nil {
 				m.Change.Step = "deploy"
 			}
@@ -170,9 +174,6 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			if rc.WaitForWindow().RequeueAfter > 0 {
 				return agentUpgradeResult(cp, false)
 			}
-		}
-		if mismatch && s.Retry != nil && s.Retry.Action == "deploy" {
-			return result, engine.Invalid("agent upgrade retry requires the frozen target control-plane build")
 		}
 		if busy, e := p.retryPending(ctx, rc, s); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
@@ -226,7 +227,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			// Started with no receipt may mean the deploy was accepted immediately
 			// before a crash. Cancellation settles either the old or target build,
 			// never submits another deployment merely to cancel.
-			if cancel && c.Started && c.Step != "wait" && m.ResumeDeploy == nil && s.Pending == nil && s.Retry == nil {
+			if (cancel && c.Step != "wait" || mismatch) && c.Started && m.ResumeDeploy == nil && s.Pending == nil && s.Retry == nil {
 				st, e := p.agentStatus(ctx, rc, m.Name)
 				if e != nil {
 					return result, e
@@ -237,10 +238,10 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 				m.Change = nil
 				m.Stage = "ready"
 				cp.Waiting = ""
+				if mismatch {
+					return result, engine.Invalid("agent upgrade target build differs from running control-plane build; member recovered, re-run upgrade-agents")
+				}
 				return agentUpgradeResult(cp, true)
-			}
-			if c.Step != "wait" && mismatch {
-				return result, engine.Invalid("agent upgrade target build differs from running control-plane build; restore the target control plane to finish this member")
 			}
 			if c.Step == "" || c.Step == "apply" || c.Step == "deploy" {
 				for _, peer := range s.Members {
