@@ -40,6 +40,13 @@ type ServingProxyUpdates interface {
 	ProxyUpdatesPreserveServing(context.Context, string) (bool, error)
 }
 
+// ProxyDeploymentLookup recovers only an existing proxy deployment receipt for
+// the caller's immutable request identity. It must never submit or upload work.
+// Nil means no pending deployment; ambiguous or mismatched ownership must fail.
+type ProxyDeploymentLookup interface {
+	LookupProxyDeployment(context.Context, string, string) (*Op, error)
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract

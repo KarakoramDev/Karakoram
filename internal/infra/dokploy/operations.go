@@ -55,6 +55,7 @@ type operation struct {
 	HealthGated         bool              `json:"healthGated,omitempty"`
 	ExpectedReplicas    int               `json:"expectedReplicas,omitempty"`
 	ForceUpdate         uint64            `json:"forceUpdate,omitempty"`
+	RequestID           string            `json:"requestId,omitempty"`
 }
 
 // UnmarshalJSON migrates journals and opaque handles written before exact
@@ -175,6 +176,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	defer os.Remove(zipPath)
 	if m.Pending != nil && m.Pending.Action == "deploy" && m.Pending.Digest == digest && (!m.Pending.Failed || m.Pending.Uncertain) {
+		if d.ProxyPreserveServing != nil && *d.ProxyPreserveServing && d.RequestID != m.Pending.RequestID {
+			return infra.Op{}, restoreConflict("pending serving proxy deployment belongs to a different operation; manual recovery required")
+		}
 		return encodeOp(*m.Pending), nil
 	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {
@@ -258,6 +262,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	o.ProxyServingProbe = m.Volume == "" && d.Runtime.Env["KARAKORAM_PROXY_SERVING_PROBE"] == "1"
 	o.Digest = digest
+	o.RequestID = d.RequestID
 	m.Pending = &o
 	m.DeploymentBudget.Attempts++
 	if err = b.update(ctx, a, m, settings); err != nil {

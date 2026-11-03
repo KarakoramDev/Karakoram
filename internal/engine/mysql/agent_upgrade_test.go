@@ -1026,6 +1026,9 @@ type servingAgentRolloutBackend struct {
 	choices     []bool
 	receipt     *infra.Op
 	fail        bool
+	waiting     bool
+	requestID   string
+	lookupCalls int
 }
 
 func (b *servingAgentRolloutBackend) Capabilities() infra.Capabilities {
@@ -1051,16 +1054,28 @@ func (b *servingAgentRolloutBackend) Deploy(ctx context.Context, name string, d 
 	}
 	op, err := b.agentRolloutBackend.Deploy(ctx, name, d)
 	if err == nil {
+		b.requestID = d.RequestID
 		b.receipt = &op
 	}
 	return op, err
 }
 
 func (b *servingAgentRolloutBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if b.waiting {
+		return infra.OpState{Message: "proxy rollout updating"}, nil
+	}
 	if b.fail {
 		return infra.OpState{Failed: true, Message: "proxy rollout paused"}, nil
 	}
 	return b.agentRolloutBackend.OpStatus(ctx, op)
+}
+
+func (b *servingAgentRolloutBackend) LookupProxyDeployment(_ context.Context, name, requestID string) (*infra.Op, error) {
+	b.lookupCalls++
+	if b.receipt != nil && (name != "demomx" || requestID != b.requestID) {
+		return nil, errors.New("proxy rollout request identity mismatch")
+	}
+	return b.receipt, nil
 }
 
 func TestAgentUpgradeProxyServingDeploymentDecisionAndReplay(t *testing.T) {
@@ -1167,5 +1182,71 @@ func TestAgentUpgradeProxyServingLostReceiptRetainsFailure(t *testing.T) {
 	}
 	if !reflect.DeepEqual(b.names, []string{"demomx"}) {
 		t.Fatalf("failed proxy rollout touched data: %v", b.names)
+	}
+}
+
+func TestAgentUpgradeCancelLostServingReceipt(t *testing.T) {
+	for _, include := range []bool{false, true} {
+		for _, outcome := range []string{"updating", "paused", "not-submitted"} {
+			t.Run(fmt.Sprintf("%s/include=%v", outcome, include), func(t *testing.T) {
+				p, rc, b := setupAgentRollout(t, "group")
+				if include {
+					b.builds["demomx"] = engine.CurrentAgentBuild().Build
+				}
+				backend := &servingAgentRolloutBackend{agentRolloutBackend: b, capable: true, marked: true}
+				rc.Backend = backend
+				op := mysqlAgentRolloutOperation(include)
+				for {
+					agentRolloutTick(t, rc, b, op, false)
+					var cp agentUpgradeCheckpoint
+					json.Unmarshal(op.Checkpoint, &cp)
+					if cp.Stage == "deploy" {
+						break
+					}
+				}
+				intent := append(json.RawMessage(nil), op.Checkpoint...)
+				if outcome != "not-submitted" {
+					agentRolloutTick(t, rc, b, op, false)
+					// Retain a healthy incumbent/mixed fleet while Swarm replaces
+					// tasks. Native health alone cannot prove terminal settlement.
+					b.builds["demomx"] = "old"
+				}
+				op.Checkpoint = intent
+				backend.waiting, backend.fail = outcome == "updating", outcome == "paused"
+				result, err := p.CancelOperation(t.Context(), rc, op)
+				if outcome == "paused" {
+					if err == nil || !result.Done || !strings.Contains(err.Error(), "manual recovery required") || !strings.Contains(err.Error(), "proxy rollout paused") {
+						t.Fatalf("paused mixed fleet cancelled successfully: %+v %v", result, err)
+					}
+				} else {
+					if err != nil || result.Done {
+						t.Fatalf("unexpected cancellation settlement: %+v %v", result, err)
+					}
+					op.Checkpoint = result.Checkpoint
+					var cp agentUpgradeCheckpoint
+					json.Unmarshal(op.Checkpoint, &cp)
+					if outcome == "updating" {
+						if cp.Stage != "waiting" || cp.Deploy == nil || cp.Member != "demomx" || !strings.Contains(result.Message, "Waiting for deployment") {
+							t.Fatalf("in-flight serving rollout was abandoned: %+v %+v", cp, result)
+						}
+						backend.waiting = false
+						result = agentRolloutTick(t, rc, b, op, true)
+						json.Unmarshal(op.Checkpoint, &cp)
+						if result.Done || cp.Member == "" || !strings.Contains(result.Message, "ONLINE with build") {
+							t.Fatal("settlement skipped exact target-build acknowledgement")
+						}
+						b.builds["demomx"] = engine.CurrentAgentBuild().Build
+					}
+					finishAgentRollout(t, rc, b, op, true)
+				}
+				want := []string(nil)
+				if outcome != "not-submitted" {
+					want = []string{"demomx"}
+				}
+				if !reflect.DeepEqual(b.names, want) || backend.lookupCalls != 1 {
+					t.Fatalf("cancellation submitted work or skipped lookup: %v, lookups=%d", b.names, backend.lookupCalls)
+				}
+			})
+		}
 	}
 }
