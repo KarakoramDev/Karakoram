@@ -52,7 +52,7 @@ func TestZeropsTemporalReconcile(t *testing.T) {
 						pull.AgentConfigCapabilities = caps
 						cfg, err := p.MemberConfig(t.Context(), &pull, member.Name)
 						if len(caps) == 0 || caps[0] != agentapi.ConfigCapabilityTemporalIPv6 {
-							if !errors.Is(err, engine.ErrUnavailable) || len(cfg.EngineSpec) != 0 {
+							if !errors.Is(err, engine.ErrNotSupported) || len(cfg.EngineSpec) != 0 {
 								t.Fatalf("legacy config leaked: %v", err)
 							}
 							continue

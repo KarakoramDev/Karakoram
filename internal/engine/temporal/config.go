@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
@@ -304,7 +305,8 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		return out, err
 	}
 	if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv6 && !slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityTemporalIPv6) {
-		return agentapi.MemberConfig{}, engine.ErrUnavailable
+		return agentapi.MemberConfig{}, domain.Conflict("agent", name, "AgentUpgradeRequired", engine.ErrNotSupported,
+			"Temporal private IPv6 requires agent capability %q; upgrade this member's Karakoram agent before retrying configuration", agentapi.ConfigCapabilityTemporalIPv6)
 	}
 	return out, nil
 }

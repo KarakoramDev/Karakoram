@@ -20,10 +20,11 @@ and fixed role ports as other backends; no Temporal data volume is required.
 The source writer and every peer must be reachable over private IPv6.
 
 Zerops requires agents with the `temporal-ipv6` configuration-pull capability.
-Older agents receive no IPv6 configuration and remain unavailable rather than
-starting with an incorrect IPv4 membership identity. A new agent receiving an
-older control plane's payload retains IPv4 behavior; upgrade the control plane
-before creating Temporal on Zerops. See [ADR 0069](../adr/0069-temporal-zerops.md).
+Older agents receive no IPv6 configuration; configuration pulls return HTTP 409
+with `AgentUpgradeRequired`, the missing capability and an instruction to upgrade
+the member agent, rather than a transient-connectivity diagnostic. A new agent
+receiving an older control plane's payload retains IPv4 behavior; upgrade the
+control plane before creating Temporal on Zerops. See [ADR 0069](../adr/0069-temporal-zerops.md).
 
 The `PostgreSQLBinding` status condition reports `Bound` only after the binding
 has an identity and its source connection has resolved. An unreachable source
@@ -125,8 +126,9 @@ visibility lookups after failover; frontend health alone is insufficient. See
 the [binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
 
 This fix requires newly deployed consumer agents; a control-plane upgrade or
-ordinary restart does not replace them. Use [agent upgrades](operations.md#agent-upgrades)
-to roll the installed member binaries without recreating the bound databases.
+ordinary restart does not replace them. See the [consumer rollout compatibility
+guidance](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)
+before replacing existing consumer agents; preserve the bound databases.
 
 The persistence block, `historyShards` and topology are immutable after creation. The Temporal cluster name is the Karakoram cluster name. Choose database names and shard count before admitting production workflows.
 
