@@ -39,6 +39,7 @@ type fakeBackend struct {
 	leader            string
 	action            func(http.ResponseWriter, *http.Request, string) bool
 	agentBuild        agentapi.AgentBuild
+	proxyConfigs      map[string]*myspec.Proxy
 }
 
 func (*fakeBackend) Name() string { return "fake" }
@@ -295,6 +296,14 @@ func (b *fakeBackend) apply(t *testing.T, p *Core, rc *engine.Context) {
 		}
 		b.applied[m.Name] = cfg.ConfigVersion
 		if m.Role == "proxy" {
+			// The fake agent serves its last applied immutable config, not
+			// mutable control-plane state during concurrent Status reads.
+			b.mu.Lock()
+			if b.proxyConfigs == nil {
+				b.proxyConfigs = make(map[string]*myspec.Proxy)
+			}
+			b.proxyConfigs[m.Name] = sp.Proxy
+			b.mu.Unlock()
 			continue
 		}
 		status := b.native[m.Name]

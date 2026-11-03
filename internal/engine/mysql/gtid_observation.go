@@ -4,6 +4,8 @@ package mysql
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -38,9 +40,9 @@ type gtidObservationSample struct {
 // must never authorize a write using an earlier read-only observation. Returned
 // maps are immutable. The timestamp belongs to the sample, not its cache lookup.
 // Without a pass scope every invocation samples agents afresh.
-// All read-only RPCs share one absolute pass deadline, including failed sweeps
-// and lock waits. Fresh write-relevant probes are exempt from that read budget.
-func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fresh bool) (map[string]myspec.GaleraStatusResponse, time.Time) {
+// Read-only continuity probes use a reserved absolute pass deadline; fresh
+// write-relevant probes are exempt from that read budget.
+func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fresh bool, outcomes map[string]string) (map[string]myspec.GaleraStatusResponse, time.Time) {
 	members := s.data()
 	sort.Slice(members, func(i, j int) bool { return members[i].Name < members[j].Name })
 	identity := gtidObservationIdentity{
@@ -77,6 +79,9 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 		}
 	}
 	if !fresh && matches && backupErr == nil {
+		for name, status := range previous.statuses {
+			outcomesSet(outcomes, name, gtidStatusOutcome(status))
+		}
 		return previous.statuses, previous.at
 	}
 	// Unsaved caller changes require discarding raw RPC snapshots too. A saved
@@ -118,10 +123,12 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 	statuses := make([]myspec.GaleraStatusResponse, len(members))
 	succeeded := make([]bool, len(members))
 	sampleTimes := make([]time.Time, len(members))
+	classes := make([]string, len(members))
 	// A completed sweep proves no later boundary than when its probes began.
 	at := now(rc)
 	var wg sync.WaitGroup
 	for i, m := range members {
+		classes[i] = "no-observation"
 		if ctx.Err() != nil || rc.Agents == nil || m.ServiceID == "" || m.Stage == "planned" || m.Stage == "imported" {
 			continue
 		}
@@ -129,11 +136,21 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 		go func(i int, name string) {
 			defer wg.Done()
 			if ctx.Err() != nil {
+				classes[i] = "timeout"
 				return
 			}
 			status, sampledAt, err := galeraStatusAt(ctx, rc, name)
 			if err == nil {
 				statuses[i], sampleTimes[i], succeeded[i] = status, sampledAt, true
+				classes[i] = gtidStatusOutcome(status)
+			}
+			if err != nil {
+				classes[i] = "rpc-error"
+				if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || ctx.Err() != nil {
+					classes[i] = "timeout"
+				} else if errors.Is(err, engine.ErrUnavailable) {
+					classes[i] = "no-observation"
+				}
 			}
 		}(i, m.Name)
 	}
@@ -142,6 +159,7 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 	allSucceeded := len(members) > 0 && ctx.Err() == nil
 	for i, m := range members {
 		observations[m.Name] = statuses[i]
+		outcomesSet(outcomes, m.Name, classes[i])
 		allSucceeded = allSucceeded && succeeded[i]
 		// A retry may reuse individual successful responses from an earlier
 		// incomplete sweep. Never advance the safety boundary past those reads.
@@ -157,4 +175,24 @@ func samplePXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state, fre
 		cache.Store(key, &gtidObservationSample{identity: identity, members: identities, statuses: observations, at: at})
 	}
 	return observations, at
+}
+
+func outcomesSet(outcomes map[string]string, name, class string) {
+	if outcomes != nil {
+		outcomes[name] = class
+	}
+}
+
+// Never include agent error text, raw state strings or GTIDs in status messages.
+func gtidStatusOutcome(s myspec.GaleraStatusResponse) string {
+	if !s.Eligible() {
+		return fmt.Sprintf("not-eligible(primary=%t,synced=%t,ready=%t,connected=%t)", s.ClusterStatus == "Primary", s.LocalStateComment == "Synced", s.Ready, s.Connected)
+	}
+	if !myspec.ValidUUID(s.StateUUID) {
+		return "not-eligible(state-uuid)"
+	}
+	if _, err := myspec.GTIDContains(s.GTIDExecuted, s.GTIDExecuted); err != nil {
+		return "not-eligible(gtid)"
+	}
+	return "eligible"
 }
