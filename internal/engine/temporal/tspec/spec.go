@@ -99,6 +99,8 @@ type Spec struct {
 	TLS TLS `json:"tls"`
 	// FrontendAddress is the private host:port of the frontend service (UI and clients).
 	FrontendAddress string `json:"frontendAddress,omitempty"`
+	// IPv6 selects private IPv6 route discovery and listeners. Absent means IPv4.
+	IPv6 bool `json:"ipv6,omitempty"`
 	// UI configures the Web UI component.
 	UI *UISettings `json:"ui,omitempty"`
 }

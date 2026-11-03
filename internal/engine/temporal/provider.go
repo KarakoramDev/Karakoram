@@ -262,8 +262,8 @@ func (p *Provider) Validate(_ context.Context, old, next *domain.Cluster) error 
 
 // ValidateBackend checks the private networking required by Temporal membership.
 func (*Provider) ValidateBackend(backend infra.Backend) error {
-	if backend == nil || backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv4 {
-		return engine.Invalid("Temporal requires a backend with private IPv4 networking; Zerops is not supported yet")
+	if backend == nil || (backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv4 && backend.Layout().PrivateAddressFamily != infra.AddressFamilyIPv6) {
+		return engine.Invalid("Temporal requires a backend with a known private address family")
 	}
 	return nil
 }

@@ -23,6 +23,9 @@ const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
 // ConfigCapabilityMySQLListenHost advertises support for SQL listener policy.
 const ConfigCapabilityMySQLListenHost = "mysql-listen-host"
 
+// ConfigCapabilityTemporalIPv6 advertises private IPv6 route discovery and listeners.
+const ConfigCapabilityTemporalIPv6 = "temporal-ipv6"
+
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`

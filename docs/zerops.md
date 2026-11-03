@@ -38,6 +38,16 @@ Importing infrastructure and deploying code are separate steps. Runtimes are ini
 
 Provider capabilities do not establish engine availability or independent failure domains. Engine catalogs and validation determine which components, topologies and exposure settings are accepted. See [capability differences](providers.md#capability-differences) before choosing a provider.
 
+[Temporal](temporal/README.md) supports combined and split stateless roles over
+Zerops private IPv6 networking. Each replica discovers and advertises its own
+private IPv6 route to the bound PostgreSQL writer; shared service DNS remains
+the frontend/UI client endpoint. All roles and the source writer must be
+reachable in that family. No Temporal volume is allocated: durability belongs
+to the bound PostgreSQL source. The frontend stays private; optional Web UI
+HTTPS requires OIDC. IPv6-capable member agents are required; see
+[ADR 0069](adr/0069-temporal-zerops.md). This support is covered by offline
+admission, configuration and fake-backend tests, not live acceptance.
+
 ## Requirements
 
 - An existing Zerops project and permission to import services and deploy code. Organization Owner/Admin access and project-creation rights are not required.
