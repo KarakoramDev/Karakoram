@@ -62,8 +62,8 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0065](0065-agent-upgrade-all-member-engines.md) | Agent upgrades for every member-agent engine |
 | [0066](0066-postgres-administrator-rotation.md) | PostgreSQL administrator rotation with a sealed transition journal |
 | [0067](0067-mysql-lost-volume-replacement.md) | MySQL and PXC lost-volume replacement |
-| [0069](0069-temporal-zerops.md) | Temporal on Zerops private IPv6 |
-| [0070](0070-proxysql-serving-scale-and-resource-changes.md) | ProxySQL serving-preserving replica and resource changes |
+| [0068](0068-temporal-zerops.md) | Temporal on Zerops private IPv6 |
+| [0069](0069-proxysql-serving-scale-and-resource-changes.md) | ProxySQL serving-preserving replica and resource changes |
 
 ## References and verification
 
