@@ -233,6 +233,15 @@ manual full backups remain available if intervention is needed.
 Admission rechecks active backups, cluster operations and the five-minute
 post-operation grace in the same transaction that inserts the automatic full,
 so work queued and even cancelled after observation still defers it.
+Only after these inexpensive gates pass does automatic re-anchoring request
+baseline verification. Its verified physical source UUID is remembered durably
+by immutable backup incarnation and physical provenance (including storage,
+repository, generation and sealed object identity), not a reusable backup name.
+Only the current baseline is cached; observing no eligible baseline clears it.
+Unchanged baselines need no repeated coverage request for this decision.
+Pending or failed verification retries no more often than every
+five minutes. This cache is scheduling evidence only, never restore admission
+or recovery-window evidence.
 
 `PITRReanchorTriggered` events name the queued full. Skip events use
 `PITRReanchorSkipped` with a reason suffix (`NoStorage`, `WriterUnavailable`,
