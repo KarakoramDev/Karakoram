@@ -69,6 +69,11 @@ Server URLs accept the origin or `/api/v1` suffix. For automation inject `KARAKO
 
 This index follows `karactl --help`; key subcommands are illustrative, not an exhaustive flag reference. **All** means a shared interface subject to engine driver capabilities and RBAC.
 
+`backups pitr-window CLUSTER` displays every restorable interval, with its
+anchoring full backup when known. JSON/YAML retain the additive `intervals`
+array alongside the unchanged legacy latest-ending `start`/`end` summary.
+
+
 | Group/command | Purpose | Key subcommands | Engine applicability |
 | --- | --- | --- | --- |
 | `accounts` | Local control-plane accounts | list, get, create, set, delete, reset-password, change-password | All |

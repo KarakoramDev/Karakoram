@@ -15,6 +15,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func TestPITRWindowOutputsAllIntervals(t *testing.T) {
+	const body = `{"available":true,"start":"2026-10-04T00:00:00Z","end":"2026-10-04T00:00:00Z","intervals":[{"start":"2026-10-01T00:00:00Z","end":"2026-10-02T00:00:00Z","backup":"earlier"},{"start":"2026-10-04T00:00:00Z","end":"2026-10-04T00:00:00Z","backup":"latest"}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}))
+	defer server.Close()
+	for _, format := range []string{"table", "json"} {
+		code, out, stderr := runCLI(t, server.URL, "", false, "backups", "pitr-window", "prod", "-o", format)
+		if code != 0 {
+			t.Fatal(code, stderr)
+		}
+		for _, want := range []string{"intervals", "earlier", "latest", "2026-10-01", "2026-10-02", "2026-10-04"} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("%s missing %s: %s", format, want, out)
+			}
+		}
+		if format == "json" {
+			var got, expected any
+			_ = json.Unmarshal([]byte(out), &got)
+			_ = json.Unmarshal([]byte(body), &expected)
+			if !reflect.DeepEqual(got, expected) {
+				t.Fatal("JSON changed", out)
+			}
+		}
+	}
+}
+
 const summaryProvider = `{
   "name":"psmdb","displayName":"Percona Server for MongoDB",
   "versions":[{"version":"7.0","major":"7.0","default":false,"status":"supported"},{"version":"8.0","major":"8.0","default":true,"status":"supported"}],

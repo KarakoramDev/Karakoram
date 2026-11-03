@@ -191,9 +191,9 @@ Older files and events at or before that position are excluded on the original
 stream. A different writer's numeric GTID prefix cannot prove that its counters
 describe the same transactions. Foreign-source streams are therefore refused
 as replay contributors, even if their GTID sets appear compatible. After an
-archive writer/source change, take a fresh full backup from the current writer
-to establish its own exact anchor; normal service and full backups remain
-available while the previous PITR window is frozen.
+archive writer/source change, v0.4.4 automatically queues a full backup from the
+current writer to establish its own exact anchor; normal service and full backups
+remain available while the previous PITR window is frozen.
 
 When the current writer differs from a baseline's physical source and live
 coverage finds foreign-writer archived transactions beyond the newest
@@ -211,9 +211,62 @@ If the original writer returns, its pending uploads are normal archive lag,
 not proof that a new full is required. Its contiguous, trusted uploads can
 extend the original baseline again; retained foreign uploads do not prevent it.
 
+### Automatic writer re-anchoring
+
+`spec.backup.pitr.autoReanchor` defaults to `true` when omitted (MySQL and PXC).
+Set it to `false` to manage replacement full baselines manually. With PITR and
+backup storage configured, reconciliation compares the current physical writer
+UUID with the newest verified successful full's source UUID. A mismatch, or no
+matching full baseline, queues an ordinary full backup with trigger
+`pitr-reanchor`; read-only status and PITR-window requests never queue work.
+
+The writer must be observed continuously for at least five minutes. Any pending
+or running non-backup cluster operation, including rolling maintenance, resource
+relaunch, scale, member replacement and agent upgrades, restarts that wait; at
+least five minutes must also elapse after the operation finishes. An unavailable
+writer restarts observation. Returning to the newest full's original source
+needs no replacement backup. The writer observation is durable across control-
+plane restarts. An existing pending/running backup blocks the automatic full,
+and re-anchor fulls are limited to one per cluster per hour. A deterministic
+name deduplicates each cluster/writer/newest-full epoch, including failed attempts;
+manual full backups remain available if intervention is needed.
+Admission rechecks active backups, cluster operations and the five-minute
+post-operation grace in the same transaction that inserts the automatic full,
+so work queued and even cancelled after observation still defers it.
+
+`PITRReanchorTriggered` events name the queued full. Skip events use
+`PITRReanchorSkipped` with a reason suffix (`NoStorage`, `WriterUnavailable`,
+`OperationsUnavailable`, `OperationInProgress`, `BaselineUnavailable`,
+`BackupInProgress`, `Cooldown`, or `WriterNotStable`). They are emitted only
+when the reason changes, not every reconciliation.
+
+Automatic full backups incur ordinary full-backup storage, IO and writer memory
+peaks. They do not extend recovery coverage until the full succeeds and its
+coverage is verified; the gap after the old frozen endpoint remains unrestorable.
+They also do not live forever: with full schedules, they count alongside the
+schedule having the largest positive `retainCount` (lexical schedule name breaks
+ties). Without such a schedule, only the two most recent successful automatic
+re-anchor fulls are retained. Normal backup deletion preserves required chains,
+the newest successful full (the live/extending interval's anchor), and pending/
+running restore or clone references; protected backups may temporarily exceed
+the count. Older recovery ranges expire with the fulls removed by retention.
+Post-restore automatic fulls keep their existing retention behavior.
+See [ADR 0063](../adr/0063-mysql-pitr-automatic-reanchor.md).
+
+
 ```sh
 karactl -n NS backups pitr-window CLUSTER -o json
 ```
+
+The endpoint and CLI expose every proven range in `intervals`, including the
+full backup's name in `backup` when known. Ranges belonging to different full
+backups remain separate even when they overlap; entries are ordered by start,
+end, then backup name. The restore picker and backups page show all ranges and
+allow a target inside any one of them, never an uncovered gap. Legacy
+`available`, `start`, `end`, and `message` are unchanged: `start`/`end` still
+describe the latest-ending merged interval. Cluster status keeps that summary.
+Remembered PXC windows have no per-full attribution and omit `backup`.
+
 
 ## PXC GTID continuity
 

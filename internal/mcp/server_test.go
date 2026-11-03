@@ -59,6 +59,37 @@ func connectClient(t *testing.T, server *httptest.Server, version string, opts *
 	t.Cleanup(func() { _ = session.Close() })
 	return session
 }
+
+func TestPITRWindowStructuredIntervals(t *testing.T) {
+	const body = `{"available":true,"start":"2026-10-04T00:00:00Z","end":"2026-10-04T00:00:00Z","intervals":[{"start":"2026-10-01T00:00:00Z","end":"2026-10-02T00:00:00Z","backup":"earlier"},{"start":"2026-10-04T00:00:00Z","end":"2026-10-04T00:00:00Z"}]}`
+	server, _ := testEndpoint(t, "readonly", "admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/clusters/prod/pitr" {
+			t.Error(r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, body)
+	}), nil)
+	session := connectClient(t, server, "2026-07-28", nil)
+	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "pitr_window_get", Arguments: map[string]any{"cluster": "prod"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatal(result)
+	}
+	encoded, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	var intervals []map[string]any
+	if err := json.Unmarshal(got["intervals"], &intervals); err != nil || len(intervals) != 2 || intervals[0]["backup"] != "earlier" {
+		t.Fatalf("structured intervals missing: %s (%v)", encoded, err)
+	}
+}
 func TestProtocolErasAndModes(t *testing.T) {
 	for _, version := range []string{"2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26"} {
 		for _, mode := range []string{"readonly", "readwrite"} {

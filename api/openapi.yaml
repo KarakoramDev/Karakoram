@@ -7777,9 +7777,9 @@ paths:
       operationId: getPITRWindow
       tags:
         - Backups
-      summary: Read the continuous restorable PITR window
+      summary: Read restorable PITR intervals
       description: >-
-        Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+        Returns every engine-verified restorable range in intervals, with optional anchoring full-backup names; legacy start/end retain the latest-ending merged interval. An initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
       x-karakoram-rbac:
         resource: backups
         action: read
@@ -11327,6 +11327,10 @@ components:
       properties:
         enabled:
           type: boolean
+        autoReanchor:
+          type: boolean
+          default: true
+          description: MySQL and PXC only. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
         oplogSpanMinutes:
           type: integer
           minimum: 1
@@ -11935,9 +11939,31 @@ components:
           type: boolean
         message:
           type: string
-      description: Only a continuous engine-verified restorable interval is reported.
+        intervals:
+          type: array
+          description: All engine-verified restorable intervals, sorted by start, end, then backup name. Intervals anchored by different full backups are not merged. Omitted or empty when unavailable.
+          items:
+            $ref: '#/components/schemas/PITRInterval'
+      description: Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range.
       required:
         - available
+    PITRInterval:
+      type: object
+      additionalProperties: false
+      description: A continuous engine-verified restorable interval, optionally attributed to its anchoring full backup.
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        backup:
+          type: string
+          description: Name of the full backup anchoring this interval; omitted when provenance is unavailable.
+      required:
+        - start
+        - end
     ClusterBackupStatus:
       type: object
       additionalProperties: false
@@ -14480,6 +14506,10 @@ components:
         enabled:
           type: boolean
           nullable: true
+        autoReanchor:
+          type: boolean
+          nullable: true
+          description: MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change.
         oplogSpanMinutes:
           type: integer
           minimum: 1

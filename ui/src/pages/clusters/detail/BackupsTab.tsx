@@ -24,6 +24,7 @@ import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
 import { isMySQL } from '@/engines/mysql/spec';
 import { BackupDrills } from './BackupDrills';
+import { pitrIntervals } from '../wizard/restore-point';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
@@ -94,7 +95,7 @@ export function BackupsTab() {
           <div className="stat">
             <span className="stat-label">PITR window</span>
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
-              {win?.available && win.start && win.end ? `${formatTime(win.start)} → ${formatTime(win.end)}` : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
+              {win?.available && pitrIntervals(win).length ? pitrIntervals(win).map((range, index) => <span style={{ display: 'block' }} key={index}>{formatTime(range.start)} → {formatTime(range.end)}{range.backup ? ` · ${range.backup}` : ''}</span>) : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
             </span>
             <span className="stat-sub">{win?.message ?? (win?.available ? isMySQL(cluster.spec.provider) ? 'continuous, GTID-checked archive coverage' : 'continuous, engine-verified' : '')}</span>
           </div>

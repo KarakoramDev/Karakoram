@@ -27,7 +27,7 @@ import { componentEntries, memberChoices, nameError, topologyErrors, validateWiz
 import { resourceMinimums } from './wizard/resources';
 import { engineConsequences, engineRules } from './wizard/engine';
 import { configurationReviewRows, exposureReviewRows, exposureSummary, totalFootprint } from './wizard/review';
-import { validatePitrPoint } from './wizard/restore-point';
+import { pitrIntervals, validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
@@ -812,16 +812,17 @@ export function PitrPicker({ namespace, cluster, value, onChange, showErrors = f
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
   const pointErrors = validatePitrPoint(value, win);
+  const intervals = pitrIntervals(win);
   return (
     <div className="stack">
-      <p className="small muted">
-        Restorable window: <strong>{new Date(win.start).toLocaleString()}</strong> → <strong>{new Date(win.end).toLocaleString()}</strong>
-      </p>
+      {intervals.map((range, index) => <p className="small muted" key={index}>
+        Restorable window: <strong>{new Date(range.start).toLocaleString()}</strong> → <strong>{new Date(range.end).toLocaleString()}</strong>{range.backup ? ` · ${range.backup}` : ''}
+      </p>)}
       <TextField
         label="Point in time (local)"
         type="datetime-local"
         step={1}
-        min={toLocal(win.start)}
+        min={toLocal(intervals.reduce((start, range) => Date.parse(range.start) < Date.parse(start) ? range.start : start, win.start))}
         max={toLocal(win.end)}
         value={value ? toLocal(value) : ''}
         onChange={(e) => {

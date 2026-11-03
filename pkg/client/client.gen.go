@@ -1165,7 +1165,7 @@ type Cluster struct {
 type ClusterBackupStatus struct {
 	LastBackup *string `json:"lastBackup,omitempty"`
 
-	// PitrWindow Only a continuous engine-verified restorable interval is reported.
+	// PitrWindow Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range.
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
@@ -2648,24 +2648,39 @@ type OrphanedVolumeList struct {
 	Items []OrphanedVolume `json:"items"`
 }
 
+// PITRInterval A continuous engine-verified restorable interval, optionally attributed to its anchoring full backup.
+type PITRInterval struct {
+	// Backup Name of the full backup anchoring this interval; omitted when provenance is unavailable.
+	Backup *string   `json:"backup,omitempty"`
+	End    time.Time `json:"end"`
+	Start  time.Time `json:"start"`
+}
+
 // PITRSpec defines model for PITRSpec.
 type PITRSpec struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes *int `json:"oplogSpanMinutes,omitempty"`
+	// AutoReanchor MySQL and PXC only. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	Enabled          bool  `json:"enabled"`
+	OplogSpanMinutes *int  `json:"oplogSpanMinutes,omitempty"`
 }
 
 // PITRSpecPatch defines model for PITRSpecPatch.
 type PITRSpecPatch struct {
+	// AutoReanchor MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change.
+	AutoReanchor     *bool `json:"autoReanchor"`
 	Enabled          *bool `json:"enabled"`
 	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
 }
 
-// PITRWindow Only a continuous engine-verified restorable interval is reported.
+// PITRWindow Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range.
 type PITRWindow struct {
 	Available bool       `json:"available"`
 	End       *time.Time `json:"end,omitempty"`
-	Message   *string    `json:"message,omitempty"`
-	Start     *time.Time `json:"start,omitempty"`
+
+	// Intervals All engine-verified restorable intervals, sorted by start, end, then backup name. Intervals anchored by different full backups are not merged. Omitted or empty when unavailable.
+	Intervals *[]PITRInterval `json:"intervals,omitempty"`
+	Message   *string         `json:"message,omitempty"`
+	Start     *time.Time      `json:"start,omitempty"`
 }
 
 // Permission defines model for Permission.

@@ -144,8 +144,9 @@ type BackupSchedule struct {
 
 // PITRConfig controls oplog capture and slicing.
 type PITRConfig struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes int  `json:"oplogSpanMinutes"`
+	Enabled          bool  `json:"enabled"`
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	OplogSpanMinutes int   `json:"oplogSpanMinutes"`
 }
 
 // TLSConfig configures transport encryption and certificate material.
@@ -328,8 +329,9 @@ type Endpoint struct {
 
 // TimeWindow bounds a restorable point-in-time interval.
 type TimeWindow struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Backup string    `json:"backup,omitempty"`
 }
 
 // BackupStatus summarizes backup recency and PITR availability.
@@ -451,6 +453,36 @@ func (b BackupStorage) SameConnection(other BackupStorage) bool {
 type StorageCredentials struct {
 	AccessKeyID     string `json:"accessKeyId"`
 	SecretAccessKey string `json:"secretAccessKey"`
+}
+
+// BackupTriggerPITRReanchor identifies automatic physical-writer baselines.
+const BackupTriggerPITRReanchor = "pitr-reanchor"
+
+// PITRReanchorStabilityPeriod is the continuous writer and post-operation wait.
+const PITRReanchorStabilityPeriod = 5 * time.Minute
+
+// OperationDefersPITRReanchor is shared by observation and transactional
+// admission, including terminal operations that just finished between them.
+func OperationDefersPITRReanchor(op Operation, at time.Time) bool {
+	if op.Kind == OperationBackup || op.Kind == OperationDeleteBackup {
+		return false
+	}
+	return op.Phase == PhasePending || op.Phase == PhaseRunning ||
+		op.CompletedAt != nil && op.CompletedAt.After(at.Add(-PITRReanchorStabilityPeriod))
+}
+
+// BackupAdmissionBusyError means an automatic baseline lost admission to work
+// queued after its observation pass. Operation distinguishes maintenance from
+// another backup so callers can report the appropriate deferral.
+type BackupAdmissionBusyError struct {
+	Operation bool
+}
+
+func (e *BackupAdmissionBusyError) Error() string {
+	if e.Operation {
+		return "automatic backup deferred: cluster operation in progress"
+	}
+	return "automatic backup deferred: backup in progress"
 }
 
 // Backup tracks one durable backup inventory entry.

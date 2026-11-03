@@ -59,6 +59,8 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
 | [0069](0069-temporal-zerops.md) | Temporal on Zerops: backend-selected private IPv6 membership and capability-gated agent configuration |
 | [0070](0070-proxysql-serving-scale-and-resource-changes.md) | Serving-preserving ProxySQL count/resource contracts, provider admission and legacy-runtime boundaries |
+| [0063](0063-mysql-pitr-automatic-reanchor.md) | Automatic full-backup re-anchoring after MySQL/PXC physical archive-writer changes |
+| [0064](0064-pitr-restorable-intervals.md) | Additive PITR interval lists with optional full-backup provenance and unchanged legacy summaries |
 
 ## References and verification
 
