@@ -12,6 +12,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate/wvspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, s *state, op *domain.Operation, cancel bool) (engine.OpResult, error) {
@@ -105,11 +106,6 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, s *sta
 			s.Pending = nil
 			s.Rolling = nil
 			return operationResult(operationState{Stage: "complete"}, true)
-		}
-		if r.Step != "ack" {
-			if err := agentUpgradeBuildFence(s); err != nil {
-				return engine.OpResult{}, err
-			}
 		}
 		_, err := p.advancePending(ctx, rc, s)
 		res, _ := operationResult(operationState{Stage: "rolling"}, false)
@@ -303,4 +299,44 @@ func (p *Provider) agentUpgradeIntentSettled(ctx context.Context, rc *engine.Con
 		return false, nil
 	}
 	return p.clusterReady(ctx, rc, s)
+}
+
+// A build transition proves that a receipt-missing deployment reached this
+// singleton runtime. Compare with the journal target, never the current CP.
+func (p *Provider) adoptAgentUpgradeIntent(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	r := s.Rolling
+	if r == nil || r.Reason != "upgrade-agents" || r.Step != "deploy" || r.AgentTarget == nil || s.Pending == nil || s.Pending.Op != nil {
+		return false, nil
+	}
+	if r.AgentPreviousBuild == r.AgentTarget.TargetBuild {
+		// Backend can poll a known receipt but exposes no deployment history
+		// by member. IncludeCurrent cannot prove receipt-missing acceptance
+		// without a build transition, so conservatively redeploy once more.
+		return false, nil
+	}
+	m := s.find(s.Pending.Member)
+	if m == nil {
+		return false, engine.ErrNotFound
+	}
+	containers, err := rc.Backend.Containers(ctx, m.Name)
+	if err != nil {
+		return false, err
+	}
+	if len(containers) != 1 || containers[0].Status != infra.ContainerRunning && containers[0].Status != infra.ContainerActive {
+		return false, nil
+	}
+	st, _, err := p.memberReady(ctx, rc, m)
+	if err != nil || st.Agent.Build != r.AgentTarget.TargetBuild {
+		return false, nil
+	}
+	ready, err := p.clusterReady(ctx, rc, s)
+	if err != nil || !ready {
+		return false, err
+	}
+	m.Stage = "ready"
+	r.Done = append(r.Done, m.Name)
+	r.Position++
+	r.Step = "gate"
+	s.Pending = nil
+	return true, nil
 }

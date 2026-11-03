@@ -469,3 +469,59 @@ func TestAgentUpgradeMissingReceiptCancellationSettlesTargetBuild(t *testing.T) 
 		t.Fatal("cancel failed to settle without resubmission", result, err, wrapped.names)
 	}
 }
+
+func TestAgentUpgradeAdoptsAcceptedDeploymentWithoutReceipt(t *testing.T) {
+	for _, include := range []bool{false, true} {
+		for _, changedControlPlane := range []bool{false, true} {
+			name := map[bool]string{false: "skip-current", true: "include-current"}[include] + "/" + map[bool]string{false: "same-control-plane", true: "changed-control-plane"}[changedControlPlane]
+			t.Run(name, func(t *testing.T) {
+				f := coreSetup(t, 3)
+				coreConverge(t, f)
+				f.agentBuild = agentapi.AgentBuild{Build: "old"}
+				wrapped := &upgradeBackend{Backend: f.backend}
+				f.rc.Backend = wrapped
+				op := upgradeOperation(include)
+				upgradeTick(t, f, op)
+				upgradeTick(t, f, op)
+				beforeSubmission := slices.Clone(f.rc.Cluster.Internal)
+				upgradeTick(t, f, op) // Platform accepts, but its receipt is lost.
+				f.rc.Cluster.Internal = beforeSubmission
+				s, _ := load(f.rc.Cluster)
+				if changedControlPlane {
+					s.Rolling.AgentTarget.TargetBuild = "frozen-previous-control-plane"
+				}
+				f.agentBuild = agentapi.AgentBuild{Build: s.Rolling.AgentTarget.TargetBuild}
+				if err := s.save(f.rc.Cluster); err != nil {
+					t.Fatal(err)
+				}
+				f.rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 " + time.Now().UTC().Add(2*time.Hour).Format("15") + " * * *", Duration: "1h"}}}
+				upgradeTick(t, f, op)
+				s, _ = load(f.rc.Cluster)
+				if len(wrapped.names) != 1 || s.Pending != nil || s.Rolling.Position != 1 || len(s.Rolling.Done) != 1 {
+					t.Fatal("lost receipt caused another disruption instead of adoption", wrapped.names, s.Pending, s.Rolling)
+				}
+			})
+		}
+	}
+}
+
+func TestAgentUpgradeIncludeCurrentMissingReceiptConservativelyRedeploys(t *testing.T) {
+	f := coreSetup(t, 1)
+	coreConverge(t, f)
+	f.agentBuild = agentapi.AgentBuild{Build: engine.CurrentAgentBuild().Build}
+	wrapped := &upgradeBackend{Backend: f.backend}
+	f.rc.Backend = wrapped
+	op := upgradeOperation(true)
+	upgradeTick(t, f, op)
+	upgradeTick(t, f, op)
+	beforeSubmission := slices.Clone(f.rc.Cluster.Internal)
+	upgradeTick(t, f, op)
+	f.rc.Cluster.Internal = beforeSubmission
+	// Backend cannot discover the accepted deployment without its opaque
+	// receipt; an unchanged build is not proof of include-current completion.
+	upgradeTick(t, f, op)
+	s, _ := load(f.rc.Cluster)
+	if len(wrapped.names) != 2 || s.Pending == nil || s.Pending.Op == nil || s.Rolling.Position != 0 {
+		t.Fatal("unchanged build falsely proved receipt-missing deployment", wrapped.names, s.Rolling)
+	}
+}

@@ -292,3 +292,71 @@ func TestAgentUpgradeFailedBuildFenceCannotResumeThroughSync(t *testing.T) {
 		t.Fatal("ordinary Sync resumed a failed agent rollout")
 	}
 }
+
+func TestAgentUpgradeAdoptsAcceptedDeploymentWithoutReceipt(t *testing.T) {
+	for _, include := range []bool{false, true} {
+		for _, changedControlPlane := range []bool{false, true} {
+			name := map[bool]string{false: "skip-current", true: "include-current"}[include] + "/" + map[bool]string{false: "same-control-plane", true: "changed-control-plane"}[changedControlPlane]
+			t.Run(name, func(t *testing.T) {
+				p, rc, b, a := setup(t)
+				converge(t, p, rc)
+				build, _ := upgradeAgent(t, rc, a)
+				wrapped := &upgradeBackend{Backend: b}
+				rc.Backend = wrapped
+				op := upgradeOperation(include)
+				result, err := p.RunOperation(t.Context(), rc, op)
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Checkpoint = result.Checkpoint
+				// The platform accepts deployment, but its returned receipt is
+				// deliberately not persisted before simulating a restart.
+				if _, err := p.RunOperation(t.Context(), rc, op); err != nil {
+					t.Fatal(err)
+				}
+				var cp agentUpgradeCheckpoint
+				if err := json.Unmarshal(op.Checkpoint, &cp); err != nil {
+					t.Fatal(err)
+				}
+				if changedControlPlane {
+					cp.Target.TargetBuild = "frozen-previous-control-plane"
+				}
+				*build = cp.Target.TargetBuild
+				op.Checkpoint, _ = json.Marshal(cp)
+				rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 " + time.Now().UTC().Add(2*time.Hour).Format("15") + " * * *", Duration: "1h"}}}
+				p = New(p.options)
+				result, err = p.RunOperation(t.Context(), rc, op)
+				if err != nil || !result.Done || len(wrapped.names) != 1 {
+					t.Fatal("lost receipt caused another disruption instead of adoption", result, err, wrapped.names)
+				}
+				if err := json.Unmarshal(result.Checkpoint, &cp); err != nil || len(cp.Done) != 1 {
+					t.Fatal("adoption was not checkpointed", cp, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAgentUpgradeIncludeCurrentMissingReceiptConservativelyRedeploys(t *testing.T) {
+	p, rc, b, a := setup(t)
+	converge(t, p, rc)
+	build, _ := upgradeAgent(t, rc, a)
+	*build = engine.CurrentAgentBuild().Build
+	wrapped := &upgradeBackend{Backend: b}
+	rc.Backend = wrapped
+	op := upgradeOperation(true)
+	result, err := p.RunOperation(t.Context(), rc, op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	op.Checkpoint = result.Checkpoint
+	if _, err := p.RunOperation(t.Context(), rc, op); err != nil {
+		t.Fatal(err)
+	}
+	// Without a build transition or a saved receipt, native readiness cannot
+	// prove that this include-current deployment happened.
+	result, err = p.RunOperation(t.Context(), rc, op)
+	if err != nil || result.Done || len(wrapped.names) != 2 {
+		t.Fatal("unchanged build falsely proved receipt-missing deployment", result, err, wrapped.names)
+	}
+}

@@ -51,9 +51,6 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		cp.Order = []string{s.Member.Name}
 		cp.Step = "gate"
 	}
-	if !cancel && cp.Step != "ack" && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
-		return engine.OpResult{}, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
-	}
 	m := s.Member
 	if m == nil || len(cp.Order) != 1 || m.Name != cp.Order[0] {
 		return engine.OpResult{}, engine.ErrConflict
@@ -70,20 +67,37 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		st, e := a.Status(ctx)
 		return domain.MemberStatus{Agent: domain.AgentStatus{Build: st.Agent.Build, Healthy: e == nil && st.Error == "" && st.ConfigVersion >= s.ConfigVersion && st.Processes["neo4j"].State == "running"}}, e
 	}
+	settledBuild := ""
 	settled := func() bool {
 		native, e := readiness(ctx, rc)
 		if e != nil || !native.Ready || native.CredentialMismatch || native.ConfigVersion < s.ConfigVersion || native.Version != m.Version {
 			return false
 		}
 		st, e := status()
+		settledBuild = st.Agent.Build
 		return e == nil && st.Agent.Healthy && (st.Agent.Build == cp.PreviousBuild || st.Agent.Build == cp.Target.TargetBuild)
 	}
+	intentSettled := false
+	if cp.Step == "deploy" {
+		intentSettled = settled()
+		if intentSettled && cp.PreviousBuild != cp.Target.TargetBuild && settledBuild == cp.Target.TargetBuild {
+			containers, err := rc.Backend.Containers(ctx, m.Name)
+			if err == nil && len(containers) == 1 && (containers[0].Status == infra.ContainerRunning || containers[0].Status == infra.ContainerActive) {
+				cp.Done = append(cp.Done, m.Name)
+				cp.Step = "complete"
+				return agentUpgradeResult(cp, true)
+			}
+		}
+	}
 	if cancel && cp.Step == "deploy" {
-		if !settled() {
+		if !intentSettled {
 			return agentUpgradeResult(cp, false)
 		}
 		cp.Step = "complete"
 		return agentUpgradeResult(cp, true)
+	}
+	if !cancel && cp.Step != "ack" && cp.Target.TargetBuild != engine.CurrentAgentBuild().Build {
+		return engine.OpResult{}, engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 	}
 	switch cp.Step {
 	case "gate":
@@ -112,9 +126,12 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		// Missing receipt is ambiguous: let any accepted restart settle before
 		// another submission, and recheck the native gate on every replay.
-		if !settled() {
+		if !intentSettled {
 			return agentUpgradeResult(cp, false)
 		}
+		// Backend exposes receipt polling, not deployment history by member.
+		// IncludeCurrent with an unchanged pre-build cannot prove a missing-
+		// receipt deployment happened, so conservatively redeploy once more.
 		if err := verify(ctx, rc, m); err != nil {
 			return engine.OpResult{}, err
 		}

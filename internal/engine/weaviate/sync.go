@@ -96,6 +96,9 @@ func (p *Provider) advancePending(ctx context.Context, rc *engine.Context, s *st
 		return true, fmt.Errorf("pending member is missing")
 	}
 	if q.Op == nil {
+		if adopted, err := p.adoptAgentUpgradeIntent(ctx, rc, s); adopted || err != nil {
+			return true, err
+		}
 		if q.Waiting(now(rc), q.RetryAt) {
 			return true, nil
 		}

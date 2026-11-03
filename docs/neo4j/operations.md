@@ -49,6 +49,13 @@ If deployment intent exists but its platform receipt is missing, cancellation
 first waits for native readiness on the previously observed or target agent
 build; missing receipt does not prove that the platform rejected deployment.
 Replay rechecks the maintenance window and native readiness before resubmitting.
+When the sole expected runtime is native-ready on the exact frozen target and
+that build differs from its recorded pre-upgrade build, replay adopts completion
+without redeploying, even if the control-plane build or maintenance window has
+changed. With `--include-current`, a member already on that target has no build
+transition to prove deployment. The backend contract cannot recover a deployment
+receipt by member identity, so receipt loss in that case can cause one additional
+same-build redeployment and outage, subject to the window and native safety gates.
 
 
 ## Monitoring

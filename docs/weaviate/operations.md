@@ -116,6 +116,14 @@ on its previously observed or target agent build before retiring the intent.
 Replay rechecks the window and native safety before another submission. After
 an operation terminates, ordinary reconciliation only settles its in-flight
 member and retires the journal; it never starts the next agent deployment.
+If the sole expected member runtime is native-ready on the exact persisted target
+build, that build differs from its recorded pre-upgrade build, and cluster
+statistics are synchronized, replay adopts that member without another deployment,
+even after a control-plane build change or window closure. With `--include-current`
+on an already-target-build member, readiness alone cannot prove that deployment
+happened. The backend contract cannot recover a deployment receipt by member
+identity, so receipt loss can cause one additional gated same-build redeployment
+(and another singleton outage) rather than falsely declaring completion.
 
 
 ## Scaling
