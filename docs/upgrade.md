@@ -4,6 +4,72 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.4
+
+Preserve a consistent [control-plane state backup](#consistent-pre-upgrade-state-backup)
+and its master key before upgrading.
+
+### MySQL and PXC automatic PITR re-anchoring
+
+With PITR and backup storage configured, the control plane now automatically
+takes a full backup after a physical archive-writer change (including failover,
+rolling maintenance and resource relaunch). This is **ON by default** when
+`spec.backup.pitr.autoReanchor` is omitted. Extra full backups consume storage
+and IO and can increase the writer's peak memory; review capacity before upgrade.
+Set `spec.backup.pitr.autoReanchor: false` to retain manual baseline management.
+
+The writer must remain stable for five minutes after non-backup cluster
+operations finish. A pending/running backup blocks the automatic full, and a
+one-hour cooldown limits re-anchor fulls. Returning to the newest full's source
+does not queue another full. Coverage stays frozen until a new full succeeds
+and verifies; the gap between the old safe endpoint and new baseline cannot be
+restored. Foreign-writer binary logs remain ineligible for replay.
+
+Successful re-anchor fulls count toward the full schedule with the largest
+positive `retainCount` (schedule name breaks ties), or retain the newest two
+when no full schedule supplies a count. Normal deletion preserves backup
+chains, the newest full anchoring the live/extending interval, and active restore/
+clone references, so protected backups can temporarily exceed retention. Older
+recovery ranges expire with the fulls removed by retention. Post-restore full
+behavior does not change. `PITRReanchorTriggered` and reason-specific
+`PITRReanchorSkipped…` cluster events explain enqueue and deferral; skips are
+emitted on reason change rather than every reconcile.
+See [MySQL backups](mysql/backups.md#automatic-writer-re-anchoring).
+
+### All restorable PITR intervals
+
+`GET /clusters/{cluster}/pitr` adds optional `intervals`, with required `start`
+and `end` and optional `backup` (the anchoring full backup name). Legacy
+`available`, `start`, `end`, and `message` retain their previous values.
+Clients that reject unknown response properties must accept the additive field.
+The CLI and restore UI show all ranges and allow earlier covered points;
+uncovered gaps remain rejected. MySQL/PXC lists preserve each full's provenance;
+remembered PXC coverage and other engines omit provenance when unavailable.
+No node-agent protocol or backup artifact migration is required.
+
+### PXC GTID history safety observation
+
+PXC `GTIDHistorySafe=Unknown` now separates comparison unavailability
+(`QuorumComparisonUnavailable`) from journal/state/audit persistence failures
+(`GTIDHistoryPersistenceUnavailable`). Update condition-reason alert filters.
+Comparison messages include secret-safe member outcome classes and distinguish
+majority shortage, observation budget and observation-lock contention; do not
+parse the message as a stable wire schema. No agent protocol change is required.
+PXC Status starts quorum checking concurrently with required readiness reads,
+inside the existing five-second status sweep. Sampling has a separate four-second
+pass reservation matching the agent read timeout, after a bounded lock wait.
+Subsequent same-pass Sync checks reuse completed samples. Parent cancellation
+during journal work is classified as observation-budget exhaustion, not a
+persistence outage. Synchronous backup/PITR requests can spend up to six seconds
+on comparison lock waits and sampling, plus journal/audit I/O and other endpoint
+work, subject to parent deadlines; this is not an HTTP latency guarantee.
+Configured-majority, complete-observation safe-watermark requirements and durable
+divergence latches are unchanged.
+Cancellation before journal loading/allowance evaluation completes does not
+reclassify an acknowledged frozen-history difference as new divergence.
+Full backups remain admitted on typed comparison unavailability, but persistence
+failures still fail closed; incrementals/PITR cannot gain unproven continuity.
+
 ## Upgrading to v0.4.3
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),

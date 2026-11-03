@@ -54,6 +54,24 @@ func TestAbsentResponseValuesAreOmittedOrEmptyArrays(t *testing.T) {
 	}
 }
 
+func TestPITRAutoReanchorConfigurationRoundTrip(t *testing.T) {
+	for _, setting := range []*bool{nil, new(false), new(true)} {
+		spec := specAPI(domain.ClusterSpec{Backup: domain.BackupConfig{PITR: domain.PITRConfig{Enabled: true, AutoReanchor: setting}}})
+		raw, err := json.Marshal(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var input api.ClusterInputSpec
+		if err := json.Unmarshal(raw, &input); err != nil {
+			t.Fatal(err)
+		}
+		got := specDomain(input).Backup.PITR.AutoReanchor
+		if (got == nil) != (setting == nil) || got != nil && *got != *setting {
+			t.Fatalf("autoReanchor changed through public contract: got %v, want %v", got, setting)
+		}
+	}
+}
+
 func TestVersionExplainsMissingBuildMetadata(t *testing.T) {
 	oldVersion, oldCommit := version.Version, version.Commit
 	t.Cleanup(func() { version.Version, version.Commit = oldVersion, oldCommit })

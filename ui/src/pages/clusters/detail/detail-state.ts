@@ -3,6 +3,10 @@
 
 import { isPostgres, POSTGRES_OFFLINE_UPGRADE, postgresMajorUpgrade } from '../../../engines/postgres/spec.ts';
 
+export function backupPITRDraft(persisted: { autoReanchor?: boolean } | undefined, enabled: boolean, oplogSpanMinutes: number) {
+  return { ...persisted, enabled, oplogSpanMinutes };
+}
+
 export function knownHost(name: string): boolean {
   return Boolean(name.trim()) && !['unknown', 'unavailable', 'pending'].includes(name.trim().toLowerCase());
 }

@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -55,6 +56,8 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	b.native[bad] = st
 	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err == nil {
 		t.Fatal("divergence accepted")
+	} else if conflict, ok := err.(*myspec.GTIDQuorumError); !ok || !conflict.Diverged {
+		t.Fatalf("divergence lost typed False discriminator: %v", err)
 	}
 	incident := activeGTIDIncident(s)
 	if incident == nil || !incident.SafeThrough.Equal(lastSafe) {
@@ -84,7 +87,7 @@ func TestPXCQuorumGTIDDurableLatchAndBaseline(t *testing.T) {
 	found := false
 	for _, c := range status.Conditions {
 		if c.Type == "GTIDHistorySafe" {
-			found = c.Status == "False" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
+			found = c.Status == "False" && c.Reason == "GTIDHistoryDiscontinuityLatched" && strings.Contains(c.Message, bad) && strings.Contains(c.Message, "safe through")
 		}
 	}
 	if !found {
@@ -355,8 +358,10 @@ func TestPXCPendingBaselineAuditCannotBlockSafetyTransitions(t *testing.T) {
 			}
 			if scenario == "healing" {
 				setLocal("," + local + ":1-2")
-				if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != context.Canceled {
-					t.Fatalf("expected recorder outage during healing: %v", err)
+				err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+				var persistence *gtidHistoryPersistenceError
+				if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+					t.Fatalf("expected typed recorder outage during healing: %v", err)
 				}
 				reload()
 				if got := s.GTIDIncidents[0].Allowance.Histories[bad].GTIDExecuted; got != current+":1-10,"+local+":1-2" {
@@ -366,8 +371,10 @@ func TestPXCPendingBaselineAuditCannotBlockSafetyTransitions(t *testing.T) {
 			} else {
 				setLocal("," + local + ":1-4")
 			}
-			if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != context.Canceled {
-				t.Fatalf("expected recorder outage during divergence: %v", err)
+			err := checkPXCQuorumGTIDs(t.Context(), rc, s)
+			var persistence *gtidHistoryPersistenceError
+			if !errors.Is(err, context.Canceled) || !errors.As(err, &persistence) {
+				t.Fatalf("expected typed recorder outage during divergence: %v", err)
 			}
 			reload()
 			if len(s.GTIDIncidents) != 2 || activeGTIDIncident(s) == nil || !s.GTIDIncidents[0].BaselineAuditPending {

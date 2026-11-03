@@ -18,12 +18,13 @@ import { RabbitMQBackupNotice, SchedulesEditor } from '../editors/SchedulesEdito
 import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
-import { latestSuccessfulBackup } from './detail-state';
+import { backupPITRDraft, latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
 import { isMySQL } from '@/engines/mysql/spec';
 import { BackupDrills } from './BackupDrills';
+import { pitrIntervals } from '../wizard/restore-point';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
@@ -94,7 +95,7 @@ export function BackupsTab() {
           <div className="stat">
             <span className="stat-label">PITR window</span>
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
-              {win?.available && win.start && win.end ? `${formatTime(win.start)} → ${formatTime(win.end)}` : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
+              {win?.available && pitrIntervals(win).length ? pitrIntervals(win).map((range, index) => <span style={{ display: 'block' }} key={index}>{formatTime(range.start)} → {formatTime(range.end)}{range.backup ? ` · ${range.backup}` : ''}</span>) : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
             </span>
             <span className="stat-sub">{win?.message ?? (win?.available ? isMySQL(cluster.spec.provider) ? 'continuous, GTID-checked archive coverage' : 'continuous, engine-verified' : '')}</span>
           </div>
@@ -290,7 +291,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     }
   }, [persistedKey, seed, persisted]);
 
-  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } : {}) };
+  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: backupPITRDraft(persisted.pitr, pitrEnabled, span) } : {}) };
   const dirty = storage !== (persisted.storage ?? '') || JSON.stringify(schedules) !== JSON.stringify(persisted.schedules ?? []) || pitrEnabled !== (persisted.pitr?.enabled ?? false) || span !== (persisted.pitr?.oplogSpanMinutes ?? 10);
   const errors = validateSchedules(schedules);
   if ((schedules.length || pitrEnabled) && !storage) errors.unshift('Choose a primary storage.');

@@ -1365,8 +1365,8 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * Read the continuous restorable PITR window
-         * @description Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+         * Read restorable PITR intervals
+         * @description Returns every engine-verified restorable range in intervals, with optional anchoring full-backup names; legacy start/end retain the latest-ending merged interval. An initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
          */
         get: operations["getPITRWindow"];
         put?: never;
@@ -4685,21 +4685,36 @@ export type components = {
             permissions: components["schemas"]["Permission"][];
             subject: string;
         };
+        /** @description A continuous engine-verified restorable interval, optionally attributed to its anchoring full backup. */
+        PITRInterval: {
+            /** @description Name of the full backup anchoring this interval; omitted when provenance is unavailable. */
+            backup?: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: date-time */
+            start: string;
+        };
         PITRSpec: {
+            /** @description MySQL and PXC only. Defaults to true when omitted. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually. */
+            autoReanchor?: boolean;
             enabled: boolean;
             /** @default 10 */
             oplogSpanMinutes: number;
         };
         PITRSpecPatch: {
+            /** @description MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change. */
+            autoReanchor?: boolean | null;
             enabled?: boolean | null;
             /** @default 10 */
             oplogSpanMinutes: number | null;
         } | null;
-        /** @description Only a continuous engine-verified restorable interval is reported. */
+        /** @description Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range. */
         PITRWindow: {
             available: boolean;
             /** Format: date-time */
             end?: string;
+            /** @description All engine-verified restorable intervals, sorted by start, end, then backup name. Intervals anchored by different full backups are not merged. Omitted or empty when unavailable. */
+            intervals?: components["schemas"]["PITRInterval"][];
             message?: string;
             /** Format: date-time */
             start?: string;

@@ -72,7 +72,24 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		status.Phase = domain.PhaseSuspended
 		return status, nil
 	}
-	observed := observeStatusMembers(ctx, rc, s.Members)
+	var observed []memberObservation
+	var quorumErr error
+	if rc.Cluster.Spec.Provider == "pxc" {
+		// Required readiness reads and continuity sampling fit under the same
+		// outer status-sweep deadline. Neither depends on the other's RPCs.
+		// Readiness gets an immutable cluster snapshot: the quorum check alone
+		// owns journal/state writes to the caller's Cluster.Internal.
+		readRC, readCluster := *rc, *rc.Cluster
+		readRC.Cluster = &readCluster
+		required := make(chan []memberObservation, 1)
+		go func() {
+			required <- observeStatusMembers(ctx, &readRC, s.Members)
+		}()
+		quorumErr = checkPXCQuorumGTIDs(ctx, rc, s)
+		observed = <-required
+	} else {
+		observed = observeStatusMembers(ctx, rc, s.Members)
+	}
 	if deferred, deferredErr, ok := deferredMySQLObservation(rc, s, observed); ok {
 		return deferred, deferredErr
 	}
@@ -152,9 +169,16 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	status.Conditions = append(status.Conditions, domain.Condition{Type: "WriterReady", Status: boolCondition(writer), Reason: "PrimaryObservation", Message: primary, LastTransitionTime: now(rc)})
 	if rc.Cluster.Spec.Provider == "pxc" {
 		condition := domain.Condition{Type: "GTIDHistorySafe", Status: "True", Reason: "QuorumHistoryCompatible", LastTransitionTime: now(rc)}
-		if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
+		if e := quorumErr; e != nil {
 			healthy = false
 			condition.Status, condition.Reason, condition.Message = "Unknown", "QuorumComparisonUnavailable", e.Error()
+			if _, comparison := e.(*myspec.GTIDQuorumError); !comparison {
+				condition.Reason = "GTIDHistoryPersistenceUnavailable"
+				condition.Message = "GTID history journal, state or audit persistence unavailable; continuity cannot be certified until persistence recovers"
+				if _, persistence := e.(*gtidHistoryPersistenceError); persistence {
+					condition.Message = e.Error()
+				}
+			}
 			if conflict, ok := e.(*myspec.GTIDQuorumError); ok && conflict.Diverged {
 				condition.Status, condition.Reason = "False", "GTIDHistoryDiverged"
 				for i := range status.Members {

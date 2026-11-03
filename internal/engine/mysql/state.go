@@ -40,6 +40,7 @@ type state struct {
 	RestoreGTIDUnavailable string                   `json:"restoreGTIDUnavailable,omitempty"`
 	GTIDPrefixLag          *gtidPrefixLag           `json:"gtidPrefixLag,omitempty"`
 	ProxyAdmissionWait     string                   `json:"proxyAdmissionWait,omitempty"`
+	PITRReanchor           reanchorState            `json:"pitrReanchor,omitempty"`
 }
 
 // Incidents are retained after a fresh full baseline so old chains can never

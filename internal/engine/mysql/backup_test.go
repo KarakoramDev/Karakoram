@@ -273,6 +273,75 @@ func TestBackupStatusSelectsNewestPITRWindow(t *testing.T) {
 	}
 }
 
+func TestPITRIntervalsPreserveFullBackupProvenance(t *testing.T) {
+	p, rc, backend := backupFixture(t, "single")
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	base := inventoryBackup(t, rc, "earlier", "full", "", 10, time.Unix(10, 0))
+	inventoryBackup(t, rc, "latest", "full", "", 30, time.Unix(30, 0))
+	backend.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
+		if r.URL.Path != "/v1/mysql/pitr-coverage" {
+			return false
+		}
+		var request myspec.PITRCoverageRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		start, end := time.Unix(30, 0), time.Unix(30, 0)
+		if request.ObjectPaths[0] == base.MySQL.ObjectPaths[0] {
+			start, end = time.Unix(10, 0), time.Unix(20, 0)
+		}
+		json.NewEncoder(w).Encode(myspec.PITRCoverageResponse{Windows: []myspec.PITRWindow{{Start: start, End: end}}})
+		return true
+	}
+	windows, intervals, err := p.PITRWindowIntervals(t.Context(), rc)
+	if err != nil || len(windows) != 2 || len(intervals) != 2 {
+		t.Fatal(windows, intervals, err)
+	}
+	byBackup := map[string]domain.TimeWindow{}
+	for _, interval := range intervals {
+		byBackup[interval.Backup] = interval
+	}
+	if !byBackup["earlier"].Start.Equal(time.Unix(10, 0)) || !byBackup["earlier"].End.Equal(time.Unix(20, 0)) || !byBackup["latest"].Start.Equal(time.Unix(30, 0)) || !byBackup["latest"].End.Equal(time.Unix(30, 0)) {
+		t.Fatal("lost full provenance", intervals)
+	}
+	for _, window := range windows {
+		if window.Backup != "" {
+			t.Fatal("legacy merged coverage gained attribution", windows)
+		}
+	}
+	if _, _, err := p.validatePITRRestore(t.Context(), rc, time.Unix(15, 0)); err != nil {
+		t.Fatal("earlier range rejected", err)
+	}
+}
+
+func TestFullPITRIntervalsMergeOnlyWithinFullAndRetainRememberedCoverage(t *testing.T) {
+	window := func(start, end int64) domain.TimeWindow {
+		return domain.TimeWindow{Start: time.Unix(start, 0), End: time.Unix(end, 0)}
+	}
+	safe := []domain.TimeWindow{window(1, 5), window(10, 40)}
+	intervals := fullPITRIntervals(safe, map[string][]domain.TimeWindow{
+		"earlier": {window(10, 20), window(15, 30)},
+		"latest":  {window(25, 50)},
+	})
+	if len(intervals) != 3 {
+		t.Fatal(intervals)
+	}
+	byBackup := map[string]domain.TimeWindow{}
+	for _, interval := range intervals {
+		byBackup[interval.Backup] = interval
+	}
+	for backup, expected := range map[string]domain.TimeWindow{"": window(1, 5), "earlier": window(10, 30), "latest": window(25, 40)} {
+		got := byBackup[backup]
+		if !got.Start.Equal(expected.Start) || !got.End.Equal(expected.End) {
+			t.Fatal(backup, intervals)
+		}
+	}
+	remembered := fullPITRIntervals([]domain.TimeWindow{window(1, 5)}, nil)
+	if len(remembered) != 1 || remembered[0].Backup != "" || !remembered[0].Start.Equal(time.Unix(1, 0)) {
+		t.Fatal("invented remembered provenance", remembered)
+	}
+}
+
 func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 	for _, topology := range []string{"single", "group", "pxc"} {
 		t.Run(topology, func(t *testing.T) {
@@ -379,6 +448,29 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 			// Return to the incompatible writer to exercise a fresh full.
 			currentUUID = promotedUUID
 			foreignEnd = time.Unix(65, 0)
+			check("WindowFrozenWriterChanged", oldEnd)
+			// Automatic enqueue is not recovery evidence. Coverage stays frozen
+			// while the new writer's full is merely pending.
+			start := time.Now().UTC()
+			rc.Clock = trafficRenewalClock{at: start}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			rc.Clock = trafficRenewalClock{at: start.Add(5 * time.Minute)}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			items, err := rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
+			if err != nil {
+				t.Fatal(err)
+			}
+			queued := false
+			for _, item := range items {
+				queued = queued || item.Trigger == "pitr-reanchor" && item.Phase == domain.PhasePending
+			}
+			if !queued {
+				t.Fatal("writer change did not queue automatic full")
+			}
 			check("WindowFrozenWriterChanged", oldEnd)
 			inventoryBackup(t, rc, "new-writer", "full", "", 20, time.Unix(70, 0))
 			check("WindowAvailable", time.Unix(90, 0))
