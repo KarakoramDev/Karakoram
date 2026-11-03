@@ -101,11 +101,10 @@ counters before changing credentials.
 
 This policy is rendered and applied by the **proxy member agent**. Updating only
 the control plane or restarting an old ProxySQL process does not install it.
-Existing MySQL/PXC agents have no automatic rollout. Existing GR proxies need
-the disruptive, genuinely changed resource PATCH in the
-[proxy redeployment procedure](../upgrade.md#proxysql-monitor-tls), which was
-live-verified on Zerops. Preserve data identities, a verified backup and
-availability evidence for valuable clusters.
+Use the [agent rollout](#agent-rollout) to update existing MySQL/PXC data and
+ProxySQL agents. A process restart alone does not replace the agent executable.
+Preserve data identities, a verified backup and availability evidence for
+valuable clusters.
 Do not disable TLS or blindly rotate the shared monitor credential as a workaround.
 
 Monitor connections versus limits, running threads, query/network rates, replication queues/lag, archive lag and proxy provider state. No metric value or local failover experiment establishes a production recovery-time or zero-loss guarantee. Check placements independently: three members co-located in one failure domain do not tolerate losing that domain.
@@ -307,6 +306,71 @@ Do not reset, normalize or inject GTIDs, force bootstrap as a GTID repair, or
 attach an asynchronous replica across the affected history merely because rows
 or later sets match. An inverse SID alone is not an error: compare the complete
 history with quorum. See [backup continuity boundaries](backups.md#pxc-gtid-continuity).
+
+## Agent rollout
+
+```sh
+karactl -n NS clusters upgrade-agents CLUSTER --wait
+```
+
+MySQL `single`, Group Replication and PXC support the same-version
+`upgrade-agents` operation. It freezes the control-plane agent build and member
+order, preserves each member's applied database version, runtime, volume and
+resources, and journals completed and in-flight members across control-plane
+restarts. Current agents are skipped unless `--include-current` is supplied.
+If the control-plane executable changes again, finish recovery of an already
+submitted member, then submit a new rollout for the new build; the original
+operation never silently retargets.
+
+The proxy phase comes first: redeploy the ProxySQL **service**, then require
+every live instance to acknowledge the published configuration/credentials,
+report a healthy writer and report the exact frozen agent build. Infrastructure
+deployment completion alone is insufficient. This uses the existing
+service-level proxy deployment path, not an independent per-instance deployment
+API. A backend that replaces all replicas together can cause a **brief complete
+proxy endpoint outage**, even with multiple replicas; a single proxy also has
+an outage. The Nomad count-only scale optimization is not an agent upgrade and
+does not establish a zero-outage executable rollout. Plan a maintenance window
+and client reconnection accordingly.
+
+Data secondaries/non-writers follow, with the initially observed writer last.
+Before each Group Replication data restart, all configured members must be
+`ONLINE`, the group must have a primary, and removing that member must retain a
+configured majority. Before disrupting a primary, the existing handoff selects
+a secondary containing its observed GTIDs, waits for reader admission on every
+serving proxy, elects it, and waits for that new primary in writer HG10.
+`RECOVERING` is not completion: the member must return `ONLINE` with the exact
+target build and be readmitted by every serving proxy.
+
+PXC requires safe GTID-history observations with no latched divergence, and a
+full-size Primary component whose members are all Synced, ready and connected.
+Before restarting its routed writer, the rollout selects a caught-up,
+proxy-eligible survivor, withdraws the old writer from proxy configuration and
+waits for the selected survivor in HG10 on every proxy. The temporary routing
+withdrawal does not retire the data identity or alter Galera peers. The existing
+same-member/same-volume restart keeps its joined admission and certification
+fences; it rejoins through normal Galera IST when available (SST otherwise),
+never by acquiring fresh empty-member replacement authority. Completion requires
+Synced in the full Primary component, exact build and proxy readmission.
+
+Each new member disruption waits for the maintenance window, including retries
+after a deferred submission. Closing the window does not abandon a member after
+actual writer handoff or a receipted deployment: native recovery and exact build
+acknowledgement finish before stopping between members. Merely selecting a
+handoff target does not bypass the window. A crash or transport failure can leave an
+unreceipted deployment intent with an uncertain outcome. Cancellation never
+submits that deployment again: it waits for native health and proxy routing to
+settle at the old or target build, then stops. Normal replay rechecks the window
+and native safety before resubmission. The operation also reuses retained-member
+native rejoin for peers while ordinary synchronization is paused.
+Cancellation is not rollback. Single topology has no writer handoff and incurs
+**database downtime** while its sole runtime is redeployed.
+
+Rolling maintenance, replacement, scale, restore, recovery, pending structural
+work and TLS rotation must finish before starting the rollout. Operation steps
+and messages identify the member, writer handoff, native readiness and build
+wait; `AgentsCurrent` remains the shared build inventory. Unknown/stale native
+or proxy evidence is never permission to advance.
 
 ## Restart, configuration and scale
 

@@ -158,6 +158,8 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		return engine.OpResult{}, err
 	}
 	switch op.Kind {
+	case domain.OperationUpgradeAgents:
+		return p.upgradeAgents(ctx, rc, op, false)
 	case "recover-quorum":
 		if p.Name() != "pxc" {
 			return engine.OpResult{}, engine.ErrNotSupported

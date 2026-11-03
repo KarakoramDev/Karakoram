@@ -39,8 +39,9 @@ func rollingOrder(ctx context.Context, rc *engine.Context, s *state) ([]string, 
 	for _, m := range s.Members {
 		if m.Role == "proxy" {
 			order = append(order, m.Name)
-			continue
 		}
+	}
+	for _, m := range s.data() {
 		st, err := live(ctx, rc, m.Name)
 		if err != nil || st.MemberState != "ONLINE" {
 			return nil, engine.ErrUnavailable
