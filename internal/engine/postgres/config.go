@@ -234,6 +234,17 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	desired := []string{"postgres"}
 	if m.Role == "data" {
 		sp.Superuser = credential("postgres")
+		rotation, rotationErr := readAdminRotation(ctx, rc)
+		if rotationErr != nil {
+			return agentapi.MemberConfig{}, rotationErr
+		}
+		if rotation != nil && (rotation.Stage == "transition" || rotation.Stage == "native" || rotation.Stage == "publish") {
+			alternate := rotation.Password
+			if sp.Superuser.Password == rotation.Password {
+				alternate = rotation.Previous
+			}
+			sp.AlternateSuperuser = &pgspec.Credentials{Username: "postgres", Password: alternate}
+		}
 		sp.Replication = credential("kk_replicator")
 		sp.Rewind = credential("kk_rewind")
 		sp.Monitor = credential("kk_monitor")

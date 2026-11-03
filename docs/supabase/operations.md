@@ -489,6 +489,22 @@ The CLI masks credential fields by default in every output format. Protect revea
 
 JWT rotation replaces signing/API-key material and rolls dependent service configuration; old application JWTs/keys stop working as the new configuration takes effect. It is not a dual-key overlap rollout. Coordinate clients and follow the returned operation. Independent dashboard password, database-role passwords and encryption keys are retained. Dashboard username is `supabase`. Service-role/secret keys bypass ordinary application restrictions and must never be embedded in public clients.
 
+The PostgreSQL administrator rotates separately with
+`karactl -n NS system-users rotate appapi postgres --yes`. Upgrade all PostgreSQL
+data agents first; incompatible agents return 409 with `upgrade-agents` guidance.
+The operation changes the writable PostgreSQL primary, publishes the new sealed
+password, then reconfigures/restarts and waits for acknowledgement from enabled
+components, including `meta`, `studio` and `functions`, before retiring the old
+management fallback. Those components can be briefly unavailable during refresh.
+Other service-role passwords, JWT signing keys, dashboard and encryption keys
+are unchanged. Supavisor uses its independent managed credentials and native
+client-verifier lookup. Bindings and Data MCP use dedicated non-superuser roles,
+not `postgres`, and do not require credential rotation as part of this operation.
+External clients must reconnect with the newly revealed administrator password;
+existing PostgreSQL sessions are not terminated. See
+[administrator rotation](../postgres/access-and-tls.md#administrator-credential-containment).
+
+
 ## Security boundaries
 
 [Postgres-meta](https://github.com/supabase/postgres-meta) runs with the [PostgreSQL](https://www.postgresql.org/) superuser credential. Its API binds

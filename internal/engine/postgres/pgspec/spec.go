@@ -225,11 +225,13 @@ type Spec struct {
 	Proxy     *Proxy     `json:"proxy,omitempty"`
 
 	// System credentials (data members).
-	Superuser   Credentials `json:"superuser"`
-	Replication Credentials `json:"replication"`
-	Rewind      Credentials `json:"rewind"`
-	Monitor     Credentials `json:"monitor"`
-	PatroniREST Credentials `json:"patroniRest"`
+	Superuser Credentials `json:"superuser"`
+	// AlternateSuperuser keeps management reachable during administrator rotation.
+	AlternateSuperuser *Credentials `json:"alternateSuperuser,omitempty"`
+	Replication        Credentials  `json:"replication"`
+	Rewind             Credentials  `json:"rewind"`
+	Monitor            Credentials  `json:"monitor"`
+	PatroniREST        Credentials  `json:"patroniRest"`
 
 	// TLS material issued by the cluster CA. ServerCert serves PostgreSQL,
 	// Patroni REST and etcd (server+client usages); CAPEM is the trust anchor.
@@ -281,6 +283,7 @@ type StatusResponse struct {
 	HealthCapabilities *HealthCapabilities `json:"healthCapabilities,omitempty"`
 	// CredentialReceipts advertises durable credential mutation replay.
 	CredentialReceipts bool   `json:"credentialReceipts,omitempty"`
+	AdminRotation      bool   `json:"adminRotation,omitempty"`
 	Role               string `json:"role"` // primary, replica, standalone, proxy, starting, stopped
 	// Running reports whether PostgreSQL (or ProxySQL) accepts connections.
 	Running bool `json:"running"`

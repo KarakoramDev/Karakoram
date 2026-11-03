@@ -91,6 +91,10 @@ func command(ctx context.Context, binary string, args ...string) ([]byte, error)
 	return out, err
 }
 func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error) {
+	return localConnectWith(ctx, s, p, pgx.ConnectConfig)
+}
+
+func localConnectWith(ctx context.Context, s pgspec.Spec, p paths, connect func(context.Context, *pgx.ConnConfig) (*pgx.Conn, error)) (*pgx.Conn, error) {
 	cfg, err := pgx.ParseConfig("")
 	if err != nil {
 		return nil, err
@@ -113,11 +117,16 @@ func localConnect(ctx context.Context, s pgspec.Spec, p paths) (*pgx.Conn, error
 		// must be selected at connection startup, never with a later SET.
 		cfg.RuntimeParams["citus.use_secondary_nodes"] = "never"
 	}
-	c, err := pgx.ConnectConfig(ctx, cfg)
+	c, err := connect(ctx, cfg)
+	if err != nil && s.AlternateSuperuser != nil {
+		cfg.User = s.AlternateSuperuser.Username
+		cfg.Password = s.AlternateSuperuser.Password
+		c, err = connect(ctx, cfg)
+	}
 	if err != nil && recoveryCredentialsPending(s, p) && s.Bootstrap.RecoverySuperuser != nil {
 		cfg.User = s.Bootstrap.RecoverySuperuser.Username
 		cfg.Password = s.Bootstrap.RecoverySuperuser.Password
-		c, err = pgx.ConnectConfig(ctx, cfg)
+		c, err = connect(ctx, cfg)
 	}
 	return c, err
 }
@@ -168,6 +177,11 @@ func roleStatements(s pgspec.Spec) ([]string, error) {
 		result = append(result, "SET LOCAL citus.enable_ddl_propagation = off")
 	}
 	for _, c := range []pgspec.Credentials{s.Superuser, s.Monitor, s.Replication, s.Rewind} {
+		if c.Username == s.Superuser.Username && s.AlternateSuperuser != nil {
+			// Only the receipt-backed operation may change the administrator
+			// while an old/new credential transition is active.
+			continue
+		}
 		verifier, err := secrets.SCRAMVerifier(c.Password)
 		if err != nil {
 			return nil, err

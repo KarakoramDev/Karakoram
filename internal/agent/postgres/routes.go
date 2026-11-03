@@ -139,7 +139,7 @@ func patchDynamic(ctx context.Context, s pgspec.Spec, p paths) error {
 }
 func (e *Runner) status(ctx context.Context, s pgspec.Spec, p paths) pgspec.StatusResponse {
 	out := pgspec.StatusResponse{
-		Role: "starting", CredentialReceipts: true,
+		Role: "starting", CredentialReceipts: true, AdminRotation: true,
 		HealthCapabilities: &pgspec.HealthCapabilities{
 			LocalEtcd: true, ReplicationSlots: true, WALArchive: true,
 			ReplicationDistance: true, PatroniPause: true,

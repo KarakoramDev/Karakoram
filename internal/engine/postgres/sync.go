@@ -357,6 +357,17 @@ func readyDesired(ctx context.Context, rc *engine.Context, m *member) (bool, err
 
 // Sync advances durable infrastructure work and rolls one ready member at a time.
 func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	if ctx.Value(adminRotationSyncKey{}) == nil {
+		journal, readErr := readAdminRotation(ctx, rc)
+		if readErr != nil {
+			return result, readErr
+		}
+		if journal != nil && journal.Stage != "rotated" && journal.Stage != "rejected" {
+			recovery, recoveryErr := p.rotateAdministrator(ctx, rc, &domain.Operation{ID: journal.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)})
+			rc.SyncWait = recovery.Message
+			return engine.Result{RequeueAfter: recovery.RequeueAfter}, recoveryErr
+		}
+	}
 	result.RequeueAfter = 2 * time.Second
 	rc.SyncWait = "loading PostgreSQL convergence state"
 	defer func() {

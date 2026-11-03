@@ -478,6 +478,11 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 		switch req.Operation {
 		case "capabilities":
 			return nil
+		case "admin-rotation":
+			if req.RequestID != "" && safeValue(req.RequestID, 256) && req.Role != nil && req.Role.Name == "postgres" && req.Role.Password != nil && validVerifier(*req.Role.Password) && !req.Binding {
+				return nil
+			}
+			return invalidAccess("invalid administrator rotation request")
 		case "journal":
 			if req.RequestID == "" || !safeValue(req.RequestID, 256) || req.Role == nil ||
 				(req.RoleOperation != "create" && req.RoleOperation != "update" && !(req.Binding && req.RoleOperation == "delete")) {
@@ -563,7 +568,7 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 		if req.Operation == "capabilities" {
 			return pgspec.AccessCapabilities{CredentialReceipts: true}, nil
 		}
-		if req.Operation == "journal" {
+		if req.Operation == "journal" || req.Operation == "admin-rotation" {
 			return journalRole(ctx, c, req), nil
 		}
 		switch req.Operation {
@@ -713,7 +718,7 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				return
 			}
 			if err := validateAccessRequest(action, req); err != nil {
-				if action == pgspec.ActionRoles && req.Operation == "journal" {
+				if action == pgspec.ActionRoles && (req.Operation == "journal" || req.Operation == "admin-rotation") {
 					actionJSON(w, http.StatusOK, accessRejected("invalid_request", err.Error(), http.StatusBadRequest))
 					return
 				}
@@ -764,7 +769,7 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 			})
 			if err != nil {
 				safe := accessFailure(err).(*accessError)
-				if action == pgspec.ActionRoles && req.Operation == "journal" {
+				if action == pgspec.ActionRoles && (req.Operation == "journal" || req.Operation == "admin-rotation") {
 					actionJSON(w, http.StatusOK, pgspec.AccessResult{Outcome: "unknown", Code: "execution_unavailable", Message: safe.message})
 					return
 				}

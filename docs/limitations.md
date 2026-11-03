@@ -72,9 +72,10 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Continuing limitations
 
-- **PostgreSQL administrator password rotation remains unavailable.** The
-  `postgres` administrator password cannot be rotated in place; follow
-  [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
+- **PostgreSQL administrator rotation requires upgraded agents.** v0.4.4 supports
+  in-place `postgres` rotation after `upgrade-agents`; existing sessions are not
+  revoked, and other engine-owned identities remain unsupported. See
+  [administrator rotation and containment](postgres/access-and-tls.md#administrator-credential-containment).
 - **PXC GTID-history observation after scale-out:** episodes of
   `GTIDHistorySafe=Unknown` with reason `QuorumComparisonUnavailable` have
   cleared on their own after approximately 16 and 30 minutes on idle PXC

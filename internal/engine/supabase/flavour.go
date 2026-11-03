@@ -18,7 +18,10 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 )
 
-type supabaseFlavour struct{ core *postgres.Core }
+type supabaseFlavour struct {
+	core     *postgres.Core
+	provider *Provider
+}
 
 var supabaseProfile = func() pgprofile.Descriptor {
 	d, _ := pgprofile.Get("supabase")
@@ -32,6 +35,37 @@ func (supabaseFlavour) PostgresOptions(raw json.RawMessage) (json.RawMessage, er
 func (supabaseFlavour) SelectedExtensions(raw json.RawMessage) ([]string, error) {
 	o, err := ParseOptions(raw)
 	return o.Extensions, err
+}
+
+func (f supabaseFlavour) AdminConsumers(ctx context.Context, rc *engine.Context) (string, error) {
+	if _, err := f.provider.syncComponents(ctx, rc); err != nil {
+		return "component configuration", err
+	}
+	state, err := loadState(rc.Cluster)
+	if err != nil {
+		return "component inventory", err
+	}
+	for _, def := range stackComponents {
+		if rc.Cluster.Spec.Components.Extra[def.Name].Replicas == 0 {
+			continue
+		}
+		m := state.Members[def.Name]
+		if m == nil {
+			return def.Name, nil
+		}
+		desired, err := f.provider.desiredSpec(ctx, rc, m)
+		if err != nil {
+			return def.Name, err
+		}
+		if m.ConfigHash != desired.RestartToken {
+			return def.Name, nil
+		}
+		status, err := componentStatus(ctx, rc, m)
+		if err != nil || !status.Ready {
+			return def.Name, err
+		}
+	}
+	return "", nil
 }
 func (f supabaseFlavour) PostReady(ctx context.Context, rc *engine.Context) error {
 	if err := ensureCredentials(ctx, rc); err != nil {

@@ -300,8 +300,17 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		return s.unsupportedClusterAction(name, p)
 	}
 	if name == "RotateSystemUser" && (p.Name() == "postgres" || p.Name() == "supabase") {
-		// PostgreSQL rotates only the Data MCP identities; managed roles stay engine-owned.
-		if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
+		if in.User == "postgres" {
+			admission, ok := p.(interface {
+				AdmitAdminRotation(context.Context, *engine.Context) error
+			})
+			if !ok {
+				return s.unsupportedClusterAction(name, p)
+			}
+			if err := admission.AdmitAdminRotation(ctx, rc); err != nil {
+				return s.failure(err)
+			}
+		} else if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
 			return s.unsupportedClusterAction(name, p)
 		}
 		if read, readWrite := engine.DataAccessLevels(c); in.User == engine.DataAccessReadUser && !read || in.User == engine.DataAccessReadWriteUser && !readWrite {

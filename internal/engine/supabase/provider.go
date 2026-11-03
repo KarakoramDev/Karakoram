@@ -65,7 +65,9 @@ func New(o postgres.Options) *Provider {
 	o.ReservedRole = ReservedRole
 	core := postgres.New(o)
 	flavour.core = core
-	return &Provider{Core: core, options: o}
+	p := &Provider{Core: core, options: o}
+	flavour.provider = p
+	return p
 }
 func (*Provider) Name() string      { return "supabase" }
 func ReservedRole(name string) bool { return supabaseProfile.ReservedRole(name) }

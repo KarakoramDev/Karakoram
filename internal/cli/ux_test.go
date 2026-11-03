@@ -32,7 +32,7 @@ func TestSystemUserRotationHelpStatesPostgresBoundary(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("rotation help failed: code=%d stderr=%q", code, stderr)
 	}
-	for _, detail := range []string{"provider-supported identities", "enabled Data MCP users", "not postgres"} {
+	for _, detail := range []string{"provider-supported credentials", "enabled Data MCP users", "postgres after upgrade-agents"} {
 		if !strings.Contains(out, detail) {
 			t.Errorf("rotation help omitted %q: %s", detail, out)
 		}

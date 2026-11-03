@@ -21,40 +21,56 @@ connection files contain the same secret; protect them as credentials. Hiding
 system roles from the native role API does **not** mean the administrator is
 never disclosed.
 
-**Known security limitation:** there is no supported in-place password rotation
-for `postgres` or the other engine-owned system identities. This applies to
-v0.2.0 through v0.4.1. `system-users list` inventories managed identities; it
-does not promise rotation for every entry. For PostgreSQL, `system-users rotate`
-only rotates enabled Data MCP identities, not `postgres`, `kk_replicator`,
-`kk_rewind`, `kk_monitor`, `kk_admin` or `kk_proxy_admin`. The native
-`postgres roles rotate-password` command rejects reserved roles too.
+Starting with v0.4.4, rotate `postgres` in place with the durable system-user
+operation (PostgreSQL single/Patroni HA, Citus and Supabase):
 
-If an administrator credential is exposed:
+```sh
+karactl -n NS system-users rotate appdb postgres --yes
+```
 
-1. Immediately isolate client access to the affected cluster at **both private
-   and public network boundaries**. Removing public exposure alone does not
-   prevent private access or terminate existing sessions. Treat this as a
-   superuser compromise and assess unauthorized data/schema/role changes.
-2. If data must be retained, plan a controlled migration to a **fresh cluster**
-   with independently generated credentials, using trusted data and the
-   [backup/recovery constraints](backups.md). Quiesce writers for cutover and
-   verify retained data, new authentication, and rejection of the exposed
-   password through every new client route. A physical recovery carries the
-   source catalog/application identities; inspect them for compromise.
-3. Move applications and any bound consumers deliberately; binding sources are
-   immutable, so consumers need recreation and an explicit data migration.
-   Resolve [binding deletion guards](bindings.md) before retiring the source.
-   If no data is needed, delete the affected cluster directly.
-4. Delete the compromised source through the normal lifecycle, verify its
-   endpoints/runtimes are gone, and securely retire exposed connection files.
-   `keepVolumes` suspension/resume and in-place restore preserve the cluster's
-   managed credentials and are **not** credential revocation.
+The equivalent request is `POST /clusters/{cluster}/system-users/postgres/rotate`.
+It returns **202** and an operation, not the new password. Follow that operation
+to completion before revealing and distributing the new connection credential.
+Every data member must advertise administrator-rotation support; an old or
+unreachable agent causes a **409** explaining that `upgrade-agents` is required.
+Complete agent upgrades and structural/rolling maintenance first.
 
-Do not independently run `ALTER ROLE postgres PASSWORD`, edit sealed secrets,
-or invoke private recovery/rekey endpoints as a rotation workaround: the SQL
-catalog, member configuration, Patroni and proxy credentials must agree.
-TLS rotation does not revoke passwords. This limitation remains an open
-capability gap; the containment procedure is not an online rotation feature.
+The control plane seals the previous password, selected replacement and stable
+native request before changing PostgreSQL. Members first acknowledge a
+transition configuration containing both credentials. Their local management
+connections try the desired credential, then the alternate, without disclosing
+either in diagnostics. The writable primary commits `ALTER ROLE postgres PASSWORD`
+and a credential-free receipt atomically; HA replicas receive it through
+streaming replication. Replay checks that receipt instead of repeating ALTER.
+Citus applies it separately to every group primary.
+
+Only then does the control plane publish `users/postgres` and refresh member
+configuration, Patroni superuser authentication, pgBackRest `backup.pgpass`,
+ProxySQL's frontend administrator/writer probe, health/metrics and Supabase
+component consumers. Completion waits for every member/proxy acknowledgement,
+`CredentialsPublished` where proxies are enabled, and Supabase component
+acknowledgements before retiring the alternate from assigned configuration.
+No database restart is required, including on a single member; Supabase
+credential-consuming components restart and can be briefly unavailable.
+
+A definitive native rejection before any group commits discards the pending
+credential and retains the original. An unknown outcome or a commit on any
+group is **forward-only recovery** with the same sealed credential. Operation
+messages identify the group or consumer still pending. Do not manually revert
+SQL or sealed secrets, or start another rotation to repair a partial one.
+
+Customer-managed clients must reconnect with the newly revealed password.
+**Existing sessions are not terminated**: rotation is not session revocation.
+If a credential was exposed, isolate both private and public access and assess
+superuser changes as well as rotating; migration from trusted data may still be
+necessary. Remove compromised connection files. TLS rotation does not change
+passwords. Releases through v0.4.3 do not support this operation.
+
+Other engine-owned identities (`kk_replicator`, `kk_rewind`, `kk_monitor`,
+`kk_admin`, `kk_proxy_admin`) still cannot be rotated through this route.
+`system-users list` is an inventory, not a promise that every entry rotates.
+The native role API continues to reject reserved roles.
+
 
 Application/owner roles created through the native role API can rotate through
 `postgres roles rotate-password`; the managed consumer owner login instead
@@ -160,7 +176,7 @@ A non-secret `role.json` can request a generated password:
 
 Creation without a supplied login password returns `generatedPassword` once; rotation also returns a newly generated password. Responses are `no-store`; authorized idempotent retries replay the sealed result. Role reads do not reveal stored passwords. `validUntil` accepts an RFC3339 timestamp. PUT replaces attributes; PATCH changes only supplied fields. Optional `password` belongs only in a protected request document, never command arguments or source control.
 
-Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable **through this native role API**; [Supabase](https://supabase.com/) protects its service identities too. The revealed `postgres` administrator has the [rotation and containment limitation](#administrator-credential-containment) above. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
+Permissions use the existing `database-users` RBAC resource. Setting `superuser`, `replication` or `bypassrls`, privileged memberships, and modifying an existing privileged role/password additionally require `clusters:update`. Engine system roles are hidden and immutable **through this native role API**; [Supabase](https://supabase.com/) protects its service identities too. The revealed `postgres` administrator uses the [dedicated system-user rotation](#administrator-credential-containment) above. Permitted predefined memberships include `pg_read_all_data`, `pg_write_all_data`, `pg_monitor`, `pg_read_all_stats` and `pg_signal_backend`.
 
 In-process callers of `postgres.Access.CreateRole` / `UpdateRole` may additionally
 set `Role.MemberOfAdmin` (`memberOfAdmin,omitempty` on the internal agent/journal
