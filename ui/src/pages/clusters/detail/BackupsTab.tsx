@@ -18,7 +18,7 @@ import { RabbitMQBackupNotice, SchedulesEditor } from '../editors/SchedulesEdito
 import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
-import { latestSuccessfulBackup } from './detail-state';
+import { backupPITRDraft, latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
@@ -291,7 +291,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     }
   }, [persistedKey, seed, persisted]);
 
-  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } : {}) };
+  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: backupPITRDraft(persisted.pitr, pitrEnabled, span) } : {}) };
   const dirty = storage !== (persisted.storage ?? '') || JSON.stringify(schedules) !== JSON.stringify(persisted.schedules ?? []) || pitrEnabled !== (persisted.pitr?.enabled ?? false) || span !== (persisted.pitr?.oplogSpanMinutes ?? 10);
   const errors = validateSchedules(schedules);
   if ((schedules.length || pitrEnabled) && !storage) errors.unshift('Choose a primary storage.');

@@ -20,6 +20,9 @@ type reanchorState struct {
 	FirstSeen     time.Time `json:"firstSeen,omitempty"`
 	LastTriggered time.Time `json:"lastTriggered,omitempty"`
 	LastReason    string    `json:"lastReason,omitempty"`
+	Baseline      string    `json:"baseline,omitempty"`
+	SourceUUID    string    `json:"sourceUUID,omitempty"`
+	VerifyAfter   time.Time `json:"verifyAfter,omitempty"`
 }
 
 type reanchorOperationStore interface {
@@ -114,33 +117,6 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 			newest = b
 		}
 	}
-	baseline := ""
-	if newest != nil {
-		baseline = newest.Name
-		refs, e := backupManifestRefs(ctx, rc, items, newest.MySQL.ObjectPaths)
-		if e != nil {
-			return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
-		}
-		repo, e := repository(storage, newest.MySQL.Repository)
-		if e != nil {
-			return e
-		}
-		var coverage myspec.PITRCoverageResponse
-		e = mysqlAction(ctx, rc, writer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: newest.MySQL.ObjectPaths, ObjectManifests: refs, AcceptPending: true}, &coverage)
-		if e != nil || coverage.Pending || !myspec.ValidUUID(coverage.SourceUUID) {
-			return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
-		}
-		if coverage.SourceUUID == uuid {
-			r.LastReason = ""
-			return nil
-		}
-	}
-	name := "full-" + secretsHash(rc.Cluster.Ref().Namespace+"/"+rc.Cluster.Name+"/"+uuid+"/"+baseline)
-	for _, b := range items {
-		if b.Name == name && b.Phase != domain.PhasePending && b.Phase != domain.PhaseRunning {
-			return nil
-		}
-	}
 	for _, b := range items {
 		if b.Phase == domain.PhasePending || b.Phase == domain.PhaseRunning {
 			return skip("BackupInProgress", "Automatic PITR full backup deferred: another backup is pending or running")
@@ -156,6 +132,43 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 	}
 	if at.Sub(r.FirstSeen) < domain.PITRReanchorStabilityPeriod {
 		return skip("WriterNotStable", "Automatic PITR full backup deferred: writer must remain stable for five minutes after cluster operations")
+	}
+	baseline := ""
+	if newest != nil {
+		baseline = newest.Name
+		if r.Baseline != baseline {
+			r.Baseline, r.SourceUUID, r.VerifyAfter = baseline, "", time.Time{}
+		}
+		if !myspec.ValidUUID(r.SourceUUID) {
+			if at.Before(r.VerifyAfter) {
+				return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
+			}
+			r.VerifyAfter = at.Add(domain.PITRReanchorStabilityPeriod)
+			refs, e := backupManifestRefs(ctx, rc, items, newest.MySQL.ObjectPaths)
+			if e != nil {
+				return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
+			}
+			repo, e := repository(storage, newest.MySQL.Repository)
+			if e != nil {
+				return e
+			}
+			var coverage myspec.PITRCoverageResponse
+			e = mysqlAction(ctx, rc, writer, myspec.ActionPITRCoverage, myspec.PITRCoverageRequest{Source: repo, ObjectPaths: newest.MySQL.ObjectPaths, ObjectManifests: refs, AcceptPending: true}, &coverage)
+			if e != nil || coverage.Pending || !myspec.ValidUUID(coverage.SourceUUID) {
+				return skip("BaselineUnavailable", "Automatic PITR full backup deferred: baseline verification unavailable")
+			}
+			r.SourceUUID = coverage.SourceUUID
+		}
+		if r.SourceUUID == uuid {
+			r.LastReason = ""
+			return nil
+		}
+	}
+	name := "full-" + secretsHash(rc.Cluster.Ref().Namespace+"/"+rc.Cluster.Name+"/"+uuid+"/"+baseline)
+	for _, b := range items {
+		if b.Name == name && b.Phase != domain.PhasePending && b.Phase != domain.PhaseRunning {
+			return nil
+		}
 	}
 	b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: name, Provider: rc.Cluster.Spec.Provider, Storage: policy.Storage, Type: "full", Trigger: domain.BackupTriggerPITRReanchor, Phase: domain.PhasePending, CreatedAt: at}
 	payload, _ := json.Marshal(map[string]string{"backup": name})
