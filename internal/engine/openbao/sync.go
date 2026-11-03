@@ -108,6 +108,9 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.
 	if err != nil {
 		return result, err
 	}
+	if busy, e := p.recoverRetiredAgentUpgrade(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
 	defer func() {
 		if e := s.save(rc.Cluster); err == nil {
 			err = e
