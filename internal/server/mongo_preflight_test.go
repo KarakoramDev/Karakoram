@@ -63,6 +63,76 @@ func (p *preflightProvider) SystemUsers(context.Context, *engine.Context) ([]dom
 	return []domain.SystemUser{{Name: "clusterMonitor", LastRotatedAt: &p.rotated}}, nil
 }
 
+type intervalProvider struct {
+	preflightProvider
+	intervals []domain.TimeWindow
+}
+
+func (p *intervalProvider) PITRWindowIntervals(context.Context, *engine.Context) ([]domain.TimeWindow, []domain.TimeWindow, error) {
+	return p.windows, p.intervals, nil
+}
+
+func TestPITRWindowPreservesMergedLegacyAndSortsProvenance(t *testing.T) {
+	s, _, token := testServer(t)
+	start := time.Unix(100, 0).UTC()
+	merged := domain.TimeWindow{Start: start, End: start.Add(time.Hour)}
+	p := &intervalProvider{
+		preflightProvider: preflightProvider{windows: []domain.TimeWindow{merged}},
+		intervals: []domain.TimeWindow{
+			{Start: start.Add(time.Minute), End: merged.End, Backup: "latest"},
+			{Start: start, End: start.Add(2 * time.Minute), Backup: "z"},
+			{Start: start, End: start.Add(time.Minute), Backup: "b"},
+			{Start: start, End: start.Add(time.Minute), Backup: "a"},
+		},
+	}
+	s.Registry, _ = engine.NewRegistry(p)
+	w := call(s, "GET", "/api/v1/clusters/prod/pitr", "", token)
+	var result struct {
+		Available  bool
+		Start, End time.Time
+		Intervals  []domain.TimeWindow
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || !result.Available || !result.Start.Equal(merged.Start) || !result.End.Equal(merged.End) || len(result.Intervals) != 4 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	for i, backup := range []string{"a", "b", "z", "latest"} {
+		if result.Intervals[i].Backup != backup {
+			t.Fatal("incorrect ordering", w.Body.String())
+		}
+	}
+}
+
+func TestPITRWindowListsEarlierIntervalsAndAdmitsRestore(t *testing.T) {
+	s, _, token := testServer(t)
+	start := time.Now().UTC().Add(-4 * time.Hour).Truncate(time.Second)
+	early := domain.TimeWindow{Start: start, End: start.Add(time.Hour)}
+	latest := domain.TimeWindow{Start: start.Add(3 * time.Hour), End: start.Add(3 * time.Hour)}
+	p := &preflightProvider{windows: []domain.TimeWindow{latest, early}}
+	s.Registry, _ = engine.NewRegistry(p)
+	w := call(s, "GET", "/api/v1/clusters/prod/pitr", "", token)
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	legacy, _ := json.Marshal(map[string]any{"available": true, "start": latest.Start, "end": latest.End})
+	delete(got, "intervals")
+	legacyGot, _ := json.Marshal(got)
+	if w.Code != 200 || string(legacyGot) != string(legacy) {
+		t.Fatalf("legacy fields changed: %d %s", w.Code, w.Body.String())
+	}
+	var result struct{ Intervals []domain.TimeWindow }
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
+	if len(result.Intervals) != 2 || !result.Intervals[0].Start.Equal(early.Start) || !result.Intervals[1].End.Equal(latest.End) {
+		t.Fatalf("missing or unordered intervals: %s", w.Body.String())
+	}
+	body, _ := json.Marshal(map[string]any{"name": "earlier", "source": map[string]any{"sourceCluster": "prod", "pitrTime": start.Add(time.Minute)}})
+	if w := call(s, "POST", "/api/v1/clusters/prod/restores", string(body), token); w.Code != 202 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}
 func TestRestorePreflightRejectsOutOfWindowBeforeEnqueue(t *testing.T) {
 	s, _, token := testServer(t)
 	start, end := time.Now().UTC().Add(-time.Hour).Truncate(time.Second), time.Now().UTC().Add(-time.Minute).Truncate(time.Second)

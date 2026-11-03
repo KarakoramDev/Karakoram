@@ -92,15 +92,11 @@ These cross-engine constraints define the operating model; engine-specific limit
   the last remembered window; targets outside provable coverage are refused with
   `outside conservative contiguous binlog coverage`. Use a full-backup restore
   or a [documented latch exit](upgrade.md#pxc-formation-and-restore-certification).
-- **MySQL/PXC PITR displays only one interval.** `karactl ... pitr-window` and
-  cluster status show the restorable interval with the latest end. Just after
-  a new full backup, an earlier restorable range can be hidden while the
-  displayed interval is only the new snapshot point; both ranges are not
-  displayed together unless they merge. Restore admission still checks all
-  proven intervals and accepts targets in the hidden earlier range when its
-  backup chain and archived coverage remain valid. This is a display limitation,
-  not evidence that the earlier recovery points were removed. A display fix is
-  planned for a later release.
+- **PITR summaries are not the full range list.** Cluster status and the legacy
+  `start`/`end` fields still show only the latest-ending merged interval.
+  The PITR endpoint's additive `intervals` field, CLI, and UI expose all proven
+  ranges; different full backups are not merged in that list. Remembered PXC
+  ranges omit backup attribution. Gaps between ranges are not restorable.
 - **PITR does not bridge archive-writer changes.** A different physical writer
   freezes the old MySQL/PXC baseline at its last proven endpoint; newer-writer
   uploads alone cannot extend it. `WindowFrozenWriterChanged` identifies foreign

@@ -258,6 +258,16 @@ See [ADR 0063](../adr/0063-mysql-pitr-automatic-reanchor.md).
 karactl -n NS backups pitr-window CLUSTER -o json
 ```
 
+The endpoint and CLI expose every proven range in `intervals`, including the
+full backup's name in `backup` when known. Ranges belonging to different full
+backups remain separate even when they overlap; entries are ordered by start,
+end, then backup name. The restore picker and backups page show all ranges and
+allow a target inside any one of them, never an uncovered gap. Legacy
+`available`, `start`, `end`, and `message` are unchanged: `start`/`end` still
+describe the latest-ending merged interval. Cluster status keeps that summary.
+Remembered PXC windows have no per-full attribution and omit `backup`.
+
+
 ## PXC GTID continuity
 
 The same mapping defect can occur at first formation or concurrent SST/IST joins,

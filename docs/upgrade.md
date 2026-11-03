@@ -6,6 +6,9 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.4
 
+Preserve a consistent [control-plane state backup](#consistent-pre-upgrade-state-backup)
+and its master key before upgrading.
+
 ### MySQL and PXC automatic PITR re-anchoring
 
 With PITR and backup storage configured, the control plane now automatically
@@ -32,6 +35,17 @@ behavior does not change. `PITRReanchorTriggered` and reason-specific
 `PITRReanchorSkipped…` cluster events explain enqueue and deferral; skips are
 emitted on reason change rather than every reconcile.
 See [MySQL backups](mysql/backups.md#automatic-writer-re-anchoring).
+
+### All restorable PITR intervals
+
+`GET /clusters/{cluster}/pitr` adds optional `intervals`, with required `start`
+and `end` and optional `backup` (the anchoring full backup name). Legacy
+`available`, `start`, `end`, and `message` retain their previous values.
+Clients that reject unknown response properties must accept the additive field.
+The CLI and restore UI show all ranges and allow earlier covered points;
+uncovered gaps remain rejected. MySQL/PXC lists preserve each full's provenance;
+remembered PXC coverage and other engines omit provenance when unavailable.
+No node-agent protocol or backup artifact migration is required.
 
 ## Upgrading to v0.4.3
 

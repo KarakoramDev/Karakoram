@@ -329,8 +329,9 @@ type Endpoint struct {
 
 // TimeWindow bounds a restorable point-in-time interval.
 type TimeWindow struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Backup string    `json:"backup,omitempty"`
 }
 
 // BackupStatus summarizes backup recency and PITR availability.

@@ -11,7 +11,7 @@ import { cleanTLS, coversAllAddresses, validateExposure, validateTLS, wireExposu
 import { scheduleErrors } from './schedules.ts';
 import { configurationReviewRows, exposureReviewRows, exposureSummary, totalFootprint } from './review.ts';
 import { engineConsequences, engineRules } from './engine.ts';
-import { validatePitrPoint } from './restore-point.ts';
+import { pitrIntervals, validatePitrPoint } from './restore-point.ts';
 
 const resources: Schemas['Resources'] = { cpuMode: 'SHARED', minCpu: 1, maxCpu: 2, minRam: 1, maxRam: 2, minDisk: 5, maxDisk: 10 };
 const spec: Schemas['ClusterSpec'] = { provider: 'psmdb', version: '8.0.32-14', topology: { type: 'replicaSet' }, components: { engine: { replicas: 3, resources } }, tls: { ca: 'selfSigned', mode: 'requireTLS' }, exposure: { public: false, ipType: 'IPV6', allowlist: [] } };
@@ -257,6 +257,19 @@ test('PITR selection cannot pass a pending, unavailable or out-of-window source'
   assert.ok(validatePitrPoint('not-a-date', window).length);
   assert.deepEqual(validatePitrPoint(window.start, window), []);
   assert.deepEqual(validatePitrPoint(window.end, window), []);
+});
+
+test('PITR accepts earlier intervals and boundaries but rejects uncovered gaps', () => {
+  const earlier = { start: '2026-10-01T00:00:00Z', end: '2026-10-02T00:00:00Z', backup: 'earlier' };
+  const latest = { start: '2026-10-04T00:00:00Z', end: '2026-10-04T00:00:00Z', backup: 'latest' };
+  const window = { available: true, start: latest.start, end: latest.end, intervals: [earlier, latest] };
+  for (const point of [earlier.start, earlier.end, '2026-10-01T12:00:00Z', latest.start]) {
+    assert.deepEqual(validatePitrPoint(point, window), []);
+  }
+  assert.ok(validatePitrPoint('2026-10-03T00:00:00Z', window).length);
+  assert.deepEqual(pitrIntervals(window), [earlier, latest]);
+  assert.deepEqual(pitrIntervals({ available: true, start: earlier.start, end: earlier.end }), [{ start: earlier.start, end: earlier.end }]);
+  assert.deepEqual(pitrIntervals({ ...window, available: false }), []);
 });
 
 test('blank optional TLS leaf fields are omitted instead of submitted as invalid PEM', () => {

@@ -135,6 +135,55 @@ func (p *Core) PITRWindow(ctx context.Context, rc *engine.Context) ([]domain.Tim
 	return windows, err
 }
 
+// PITRWindowIntervals retains per-full provenance without changing the merged
+// coverage used for legacy responses, admission, and cluster status.
+func (p *Core) PITRWindowIntervals(ctx context.Context, rc *engine.Context) ([]domain.TimeWindow, []domain.TimeWindow, error) {
+	windows, byFull, err := p.pitrWindowsByFull(ctx, rc)
+	if err != nil || byFull == nil {
+		return windows, windows, err
+	}
+	return windows, fullPITRIntervals(windows, byFull), nil
+}
+
+func fullPITRIntervals(windows []domain.TimeWindow, byFull map[string][]domain.TimeWindow) []domain.TimeWindow {
+	var intervals, live []domain.TimeWindow
+	for backup, coverage := range byFull {
+		var bounded []domain.TimeWindow
+		for _, window := range coverage {
+			bounded = append(bounded, intersectCoverageWindow(window, windows)...)
+		}
+		for _, window := range mergeGTIDWindows(bounded) {
+			live = append(live, window)
+			window.Backup = backup
+			intervals = append(intervals, window)
+		}
+	}
+	// Remembered PXC coverage can outlive an individual live observation.
+	// Preserve its uncovered portions without inventing full-backup provenance.
+	live = mergeGTIDWindows(live)
+	for _, window := range windows {
+		cursor := window.Start
+		covered := false
+		for _, current := range live {
+			if current.End.Before(cursor) || current.Start.After(window.End) {
+				continue
+			}
+			if current.Start.After(cursor) {
+				intervals = append(intervals, domain.TimeWindow{Start: cursor, End: current.Start})
+			}
+			if !current.End.Before(window.End) {
+				covered = true
+				break
+			}
+			cursor = current.End
+		}
+		if !covered {
+			intervals = append(intervals, domain.TimeWindow{Start: cursor, End: window.End})
+		}
+	}
+	return intervals
+}
+
 // pitrWindowsByFull returns nil lineage coverage when only remembered windows
 // are available. A non-nil map contains the live, GTID-bounded coverage of each
 // full backup, keyed by backup name.
