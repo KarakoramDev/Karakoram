@@ -22,12 +22,12 @@ func TestValidateProjectPermissionsAndIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") != "Bearer valid-token" {
-					http.Error(w, "denied", 401)
+					http.Error(w, "denied", http.StatusUnauthorized)
 					return
 				}
 				if strings.HasSuffix(r.URL.Path, "/service-stack") {
 					if tc.denyList {
-						http.Error(w, "denied", 403)
+						http.Error(w, "denied", http.StatusForbidden)
 						return
 					}
 					fmt.Fprint(w, `{"list":[],"total":0}`)

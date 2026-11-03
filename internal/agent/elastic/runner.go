@@ -359,7 +359,7 @@ func (*Runner) Readiness(ctx context.Context, args []string, pipelines ...agents
 			}
 			response.Body.Close()
 			if response.StatusCode != http.StatusOK {
-				return fmt.Errorf("Kibana is not ready: HTTP %d", response.StatusCode)
+				return fmt.Errorf("the Kibana service is not ready: HTTP %d", response.StatusCode)
 			}
 			return nil
 		}
@@ -403,16 +403,16 @@ func logstashReadiness(ctx context.Context, client *http.Client, base string, pi
 			}
 		}
 		if inventoryErr != nil {
-			return fmt.Errorf("Logstash pipeline inventory unavailable: %w", inventoryErr)
+			return fmt.Errorf("local Logstash pipeline inventory unavailable: %w", inventoryErr)
 		}
 		if statsErr != nil {
-			return fmt.Errorf("Logstash pipeline stats unavailable: %w", statsErr)
+			return fmt.Errorf("local Logstash pipeline stats unavailable: %w", statsErr)
 		}
 		if info, ok := loaded.Pipelines[pipeline.ID]; !ok || string(info) == "null" {
-			return fmt.Errorf("Logstash pipeline %q is not loaded; check its configuration and startup logs", pipeline.ID)
+			return fmt.Errorf("configured Logstash pipeline %q is not loaded; check its configuration and startup logs", pipeline.ID)
 		}
 		if running := stats.Pipelines[pipeline.ID]; running == nil || running.Events == nil {
-			return fmt.Errorf("Logstash pipeline %q is not running; check its configuration and startup logs", pipeline.ID)
+			return fmt.Errorf("configured Logstash pipeline %q is not running; check its configuration and startup logs", pipeline.ID)
 		}
 	}
 	return nil

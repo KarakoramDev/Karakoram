@@ -44,7 +44,7 @@ func TestBackupCheckpointReentryAfterCreate(t *testing.T) {
 	}
 	cp := opsCheckpoint(t, result)
 	st.failUpdate = true
-	result, err = p.runBackup(context.Background(), rc, s, op, cp, st.backup.Name)
+	_, err = p.runBackup(context.Background(), rc, s, op, cp, st.backup.Name)
 	if err == nil || creates != 1 {
 		t.Fatalf("expected interrupted inventory write after one start, creates=%d err=%v", creates, err)
 	}
