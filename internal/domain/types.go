@@ -454,6 +454,23 @@ type StorageCredentials struct {
 	SecretAccessKey string `json:"secretAccessKey"`
 }
 
+// BackupTriggerPITRReanchor identifies automatic physical-writer baselines.
+const BackupTriggerPITRReanchor = "pitr-reanchor"
+
+// BackupAdmissionBusyError means an automatic baseline lost admission to work
+// queued after its observation pass. Operation distinguishes maintenance from
+// another backup so callers can report the appropriate deferral.
+type BackupAdmissionBusyError struct {
+	Operation bool
+}
+
+func (e *BackupAdmissionBusyError) Error() string {
+	if e.Operation {
+		return "automatic backup deferred: cluster operation in progress"
+	}
+	return "automatic backup deferred: backup in progress"
+}
+
 // Backup tracks one durable backup inventory entry.
 type Backup struct {
 	Namespace   string `json:"namespace,omitempty"`

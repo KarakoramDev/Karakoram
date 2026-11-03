@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -102,7 +103,7 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 	var newest *domain.Backup
 	for i := range items {
 		b := &items[i]
-		if b.Trigger == "pitr-reanchor" && b.CreatedAt.After(r.LastTriggered) {
+		if b.Trigger == domain.BackupTriggerPITRReanchor && b.CreatedAt.After(r.LastTriggered) {
 			r.LastTriggered = b.CreatedAt
 		}
 		m := b.MySQL
@@ -156,9 +157,17 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 	if at.Sub(r.FirstSeen) < 5*time.Minute {
 		return skip("WriterNotStable", "Automatic PITR full backup deferred: writer must remain stable for five minutes after cluster operations")
 	}
-	b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: name, Provider: rc.Cluster.Spec.Provider, Storage: policy.Storage, Type: "full", Trigger: "pitr-reanchor", Phase: domain.PhasePending, CreatedAt: at}
+	b := &domain.Backup{Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name, Name: name, Provider: rc.Cluster.Spec.Provider, Storage: policy.Storage, Type: "full", Trigger: domain.BackupTriggerPITRReanchor, Phase: domain.PhasePending, CreatedAt: at}
 	payload, _ := json.Marshal(map[string]string{"backup": name})
 	if err = rc.Store.EnqueueBackup(ctx, b, &domain.Operation{Namespace: b.Namespace, Cluster: b.Cluster, Kind: domain.OperationBackup, Payload: payload, Actor: "pitr-reanchor", CreatedAt: at}); err != nil {
+		var busy *domain.BackupAdmissionBusyError
+		if errors.As(err, &busy) {
+			if busy.Operation {
+				r.FirstSeen = at
+				return skip("OperationInProgress", "Automatic PITR full backup deferred: cluster operation in progress")
+			}
+			return skip("BackupInProgress", "Automatic PITR full backup deferred: another backup is pending or running")
+		}
 		return err
 	}
 	r.LastTriggered = at

@@ -340,7 +340,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 		}
 	}
 	isReanchor := func(b domain.Backup) bool {
-		return mysql && b.Provider == c.Spec.Provider && b.Type == "full" && b.Trigger == "pitr-reanchor"
+		return mysql && b.Provider == c.Spec.Provider && b.Type == "full" && b.Trigger == domain.BackupTriggerPITRReanchor
 	}
 	var candidates []domain.Backup
 	for _, spec := range c.Spec.Backup.Schedules {
@@ -376,7 +376,7 @@ func (s *Scheduler) EnforceRetention(ctx context.Context, cluster domain.Cluster
 	if newestFull != nil {
 		kept := candidates[:0]
 		for _, b := range candidates {
-			if isReanchor(b) && b.Name == newestFull.Name {
+			if b.Name == newestFull.Name {
 				continue
 			}
 			kept = append(kept, b)

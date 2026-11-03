@@ -93,6 +93,31 @@ func TestReanchorRetentionProtectsNewestFullAfterScheduleTypeChange(t *testing.T
 	assertReanchorDeletions(t, db, c, []string{"b1"})
 }
 
+func TestRetentionProtectsNewestScheduledFullWithUnrelatedIncrementals(t *testing.T) {
+	for _, provider := range []string{"mysql", "pxc"} {
+		t.Run(provider, func(t *testing.T) {
+			db, s, c := reanchorFixture(t, provider, []domain.BackupSchedule{{Name: "fulls", Type: "full", RetainCount: 1}})
+			// No registry is installed: newest-full safety cannot depend on the
+			// optional provider chain policy, nor on the automatic-full trigger.
+			addReanchorBackup(t, db, c, 0, "schedule")
+			for i := 1; i < 3; i++ {
+				b := addReanchorBackup(t, db, c, i, "schedule")
+				b.Type = "incremental"
+				b.MySQL.Type = "incremental"
+				b.MySQL.Repository = "unrelated-repository"
+				b.MySQL.ChainRootLabel = "unrelated-lineage"
+				if err := db.UpdateBackup(t.Context(), &b); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.EnforceRetention(t.Context(), c.Ref()); err != nil {
+				t.Fatal(err)
+			}
+			assertReanchorDeletions(t, db, c, []string{"b1"})
+		})
+	}
+}
+
 func TestReanchorRetentionSkipsInflightSources(t *testing.T) {
 	for _, clone := range []bool{false, true} {
 		for _, phase := range []domain.Phase{domain.PhasePending, domain.PhaseRunning} {

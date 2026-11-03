@@ -384,6 +384,24 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 	if backup.Cluster != op.Cluster || domain.NormalizedNamespace(backup.Namespace) != op.Namespace {
 		return ErrConflict
 	}
+	if backup.Trigger == domain.BackupTriggerPITRReanchor {
+		// Recheck under the same writer transaction as insertion: an API or
+		// scheduler enqueue may have won after the engine's observation pass.
+		scope := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key()
+		var operations, backups int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.kind') NOT IN (?,?)`, scope, domain.OperationBackup, domain.OperationDeleteBackup).Scan(&operations); err != nil {
+			return err
+		}
+		if operations != 0 {
+			return &domain.BackupAdmissionBusyError{Operation: true}
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE scope=? AND phase IN ('Pending','Running') AND (kind='backup' OR (kind='operation' AND json_extract(data,'$.kind')=?))`, scope, domain.OperationBackup).Scan(&backups); err != nil {
+			return err
+		}
+		if backups != 0 {
+			return &domain.BackupAdmissionBusyError{}
+		}
+	}
 	if err = admitClusterOperation(ctx, tx, op); err != nil {
 		return err
 	}
