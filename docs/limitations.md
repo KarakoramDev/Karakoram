@@ -72,6 +72,12 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Continuing limitations
 
+- **MySQL/PXC mutation isolation:** slow offline recovery serializes mutations
+  only for its own namespace/cluster, not unrelated clusters. Backup-object
+  deletion remains separately serialized against other deletions and active
+  control-plane backup/restore steps; it can wait for those steps even when
+  their target clusters differ. This does not lock asynchronous agent uploads
+  or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
 - **PostgreSQL administrator password rotation remains unavailable.** The
   `postgres` administrator password cannot be rotated in place; follow
   [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).

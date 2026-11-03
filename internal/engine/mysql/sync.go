@@ -138,8 +138,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	if engine.ObservationPassCache(ctx) == nil {
 		ctx = engine.WithObservationPass(ctx)
 	}
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return result, err
+	}
+	defer p.mutations.release(lock)
 	if intent, e := loadAccessIntent(ctx, rc); e != nil || intent != nil {
 		if e != nil {
 			return result, e

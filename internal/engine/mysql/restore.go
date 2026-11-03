@@ -256,6 +256,8 @@ func stopRestoreDataMembers(ctx context.Context, rc *engine.Context, s *state, o
 	return nil
 }
 func (p *Core) runRestore(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	p.backupCleanupMu.RLock()
+	defer p.backupCleanupMu.RUnlock()
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
 	defer invalidateMySQLReadObservation(ctx, rc)
