@@ -119,13 +119,17 @@ These cross-engine constraints define the operating model; engine-specific limit
   the original writer with provably contiguous history, can preserve or resume
   coverage; do not rely on that instead of verifying the window.
   See [replay-lineage requirements](mysql/backups.md).
-- **Existing MySQL/PXC agents are not automatically replaced.** The v0.4.3
-  PITR memory and coverage-convergence corrections require corrected member
-  agents, not just a control-plane upgrade. A real resource change stops and
-  redeploys members; relaunching v0.4.3 agents this way was verified live on
-  Nomad (Group Replication), while upgrading in place from v0.4.2 agents is
-  verified by tests only. `clusters restart` does not relaunch agents, and MySQL/PXC have no
-  `upgrade-agents` command. Follow [agent rollout and PITR re-enablement](upgrade.md#existing-clusters-and-member-artifacts).
+- **Agent deployment is not necessarily zero-downtime.** v0.4.4 supports
+  `upgrade-agents` for every member-agent engine, including MySQL/PXC and
+  ProxySQL; a control-plane-only upgrade or native process restart still does
+  not replace deployed agents. Singletons have downtime. ProxySQL is deployed
+  as a logical service: backends that replace all instances may briefly
+  interrupt its entire endpoint even with replicas. Temporal component
+  availability likewise depends on platform instance replacement behavior.
+  With `--include-current`, receipt loss for an already-current member can
+  cause another gated same-build deployment and interruption because the
+  backend has no deployment lookup by member/request identity. See
+  [agent rollout](upgrade.md#agent-rollout-now-covers-every-member-agent-engine).
 - **Memory minimums are not workload guarantees.** Single-member MySQL keeps
   its 1 GiB admission floor; GR/PXC keep 2 GiB. At least **3 GiB per GR/PXC
   member** is recommended for backups, plus workload headroom. With PITR off,

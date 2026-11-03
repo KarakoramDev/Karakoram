@@ -57,6 +57,7 @@ Decision priorities are: **(1) database correctness and recoverability, (2) simp
 | [0055](0055-neo4j-community-engine.md) | Neo4j Community singleton, TLS-only access, administrative native users and offline system/graph dumps |
 | [0057](0057-fleet-operations.md) | Build-aware rolling member upgrades, maintenance windows and capability-aware relocation |
 | [0058](0058-control-plane-resilience-and-signals.md) | Control-plane snapshots and rebuild, durable notifications, backup drills and operational signals |
+| [0065](0065-agent-upgrade-all-member-engines.md) | Native-gated agent upgrades for every member-agent engine, durable replay and service-level deployment limits |
 | [0067](0067-mysql-lost-volume-replacement.md) | Native surviving-data admission for MySQL/PXC automatic lost-volume replacement |
 
 ## References and verification
