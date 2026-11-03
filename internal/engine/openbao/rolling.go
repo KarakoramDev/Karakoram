@@ -173,6 +173,15 @@ func (p *Provider) changeStep(ctx context.Context, rc *engine.Context, s *intern
 			if err != nil {
 				return err
 			}
+			if c.Kind == "agent" && !c.Started {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return nil
+				}
+				c.Started = true
+				if err = s.save(rc.Cluster); err != nil {
+					return err
+				}
+			}
 			if err = client.StepDown(ctx); err != nil {
 				return err
 			}
@@ -388,6 +397,15 @@ func (p *Provider) allowDisruption(ctx context.Context, rc *engine.Context, s *i
 		return false, nil
 	}
 	if len(s.Members) > 1 && leader.IsSelf {
+		if target.Change != nil && target.Change.Kind == "agent" && !target.Change.Started {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return false, nil
+			}
+			target.Change.Started = true
+			if err = s.save(rc.Cluster); err != nil {
+				return false, err
+			}
+		}
 		if err = client.StepDown(ctx); err != nil {
 			return false, err
 		}

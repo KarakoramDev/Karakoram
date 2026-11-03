@@ -13,10 +13,11 @@ import (
 )
 
 type agentUpgradeCheckpoint struct {
-	Target  engine.AgentUpgradePayload `json:"target"`
-	Order   []string                   `json:"order"`
-	Done    []string                   `json:"done,omitempty"`
-	Waiting string                     `json:"waiting,omitempty"`
+	Target        engine.AgentUpgradePayload `json:"target"`
+	Order         []string                   `json:"order"`
+	Done          []string                   `json:"done,omitempty"`
+	Waiting       string                     `json:"waiting,omitempty"`
+	PreviousBuild string                     `json:"previousBuild,omitempty"`
 }
 
 func agentUpgradeResult(cp agentUpgradeCheckpoint, done bool) (engine.OpResult, error) {
@@ -140,8 +141,35 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if m == nil {
 			return result, engine.ErrNotFound
 		}
+		if m.Change != nil && !m.Change.Started {
+			if cancel {
+				m.Change = nil
+				cp.Waiting = ""
+				return agentUpgradeResult(cp, true)
+			}
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return agentUpgradeResult(cp, false)
+			}
+		}
 		if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
 			return agentUpgradeResultError(cp, e)
+		}
+		if cancel && s.Retry != nil && s.Retry.Action == "deploy" && s.Retry.Member == m.Name && s.Retry.Op.ID == "" {
+			// An ambiguous submission error is not proof that the runtime stayed
+			// untouched. Retire only the unreceipted retry, then settle natively.
+			s.Retry = nil
+			if m.Change != nil {
+				m.Change.Step = "deploy"
+			}
+		}
+		if s.Retry != nil && s.Retry.Action == "deploy" {
+			p.observeMembers(ctx, rc, s)
+			if busy, e := p.recoverEstablishedPeers(ctx, rc, s, m); busy || e != nil {
+				return agentUpgradeResultError(cp, e)
+			}
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return agentUpgradeResult(cp, false)
+			}
 		}
 		if mismatch && s.Retry != nil && s.Retry.Action == "deploy" {
 			return result, engine.Invalid("agent upgrade retry requires the frozen target control-plane build")
@@ -165,7 +193,12 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		// A sealed single member has no active API yet: unseal before querying Raft.
 		p.observeMembers(ctx, rc, s)
-		if m.Change != nil && m.Change.Step == "wait" && m.Observed && m.Sealed {
+		if s.Unsealing != "" && s.Unsealing != m.Name {
+			if busy, e := p.recoverEstablishedPeers(ctx, rc, s, m); busy || e != nil {
+				return agentUpgradeResultError(cp, e)
+			}
+		}
+		if m.Change != nil && m.Change.Started && m.Observed && m.Sealed {
 			if !p.autoUnseal(rc.Cluster) {
 				if s.Unsealing != m.Name {
 					s.Unsealing = m.Name
@@ -181,8 +214,31 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if e != nil {
 			return result, e
 		}
+		if s.Unsealing == m.Name && m.Healthy {
+			s.Unsealing = ""
+			return agentUpgradeResult(cp, false)
+		}
+		if busy, e := p.recoverEstablishedPeers(ctx, rc, s, m); busy || e != nil {
+			return agentUpgradeResultError(cp, e)
+		}
 		if m.Change != nil {
 			c := m.Change
+			// Started with no receipt may mean the deploy was accepted immediately
+			// before a crash. Cancellation settles either the old or target build,
+			// never submits another deployment merely to cancel.
+			if cancel && c.Started && c.Step != "wait" && m.ResumeDeploy == nil && s.Pending == nil && s.Retry == nil {
+				st, e := p.agentStatus(ctx, rc, m.Name)
+				if e != nil {
+					return result, e
+				}
+				if !healthy || !m.Healthy || st.Processes["openbao"].State != "running" || st.Agent.Build != cp.PreviousBuild && st.Agent.Build != cp.Target.TargetBuild {
+					return agentUpgradeResult(cp, false)
+				}
+				m.Change = nil
+				m.Stage = "ready"
+				cp.Waiting = ""
+				return agentUpgradeResult(cp, true)
+			}
 			if c.Step != "wait" && mismatch {
 				return result, engine.Invalid("agent upgrade target build differs from running control-plane build; restore the target control plane to finish this member")
 			}
@@ -205,6 +261,24 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 			if c.Step == "apply" {
 				c.Step = "deploy"
 				return agentUpgradeResult(cp, false)
+			}
+			if c.Step == "deploy" {
+				// Replaying an intent without a receipt cannot bypass a newly closed
+				// window or changed quorum before resubmission.
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return agentUpgradeResult(cp, false)
+				}
+				allowed, e := p.allowDisruption(ctx, rc, s, m)
+				if e != nil {
+					return result, e
+				}
+				if !allowed {
+					return agentUpgradeResult(cp, false)
+				}
+				c.Started = true
+				if err = s.save(rc.Cluster); err != nil {
+					return result, err
+				}
 			}
 			if err = p.changeStep(ctx, rc, s, m, healthy); err != nil {
 				return result, err
@@ -253,8 +327,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		}
 		// Journal before deployment. Reuse rolling step-down, receipt and unseal gates,
 		// but never activate desired config or change the engine version.
-		m.Change = &memberChange{Kind: "agent", Version: m.DesiredVersion, Fingerprint: m.RestartFingerprint, Started: true}
+		m.Change = &memberChange{Kind: "agent", Version: m.DesiredVersion, Fingerprint: m.RestartFingerprint}
 		cp.Waiting = name
+		cp.PreviousBuild = st.Agent.Build
 		return agentUpgradeResult(cp, false)
 	}
 	return agentUpgradeResult(cp, true)

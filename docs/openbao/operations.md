@@ -146,9 +146,15 @@ skipped unless `--include-current` is supplied. A control-plane build change can
 retarget an existing rollout: restore the target build to finish an in-flight
 deployment, or start a new rollout after recovery.
 
-Maintenance windows gate each new member. Cancellation finishes recovery of the
-already-started member, then stops between members; it is not rollback. Shamir
-unseal reuses control-plane-held shares; auto-unseal still depends on the configured
+Maintenance windows are rechecked immediately before the first step-down or deploy,
+including after a controller restart with a journaled but undisrupted member.
+Cancellation discards that undisrupted journal; after disruption it finishes recovery
+before stopping between members. If a deployment intent has no receipt, cancellation
+settles the member on its previous or target build without submitting another deploy.
+Replaying that intent rechecks the window and quorum before any resubmission.
+Other established Shamir peers that seal during the operation are recovered serially,
+including during cancellation. Cancellation is not rollback. Shamir unseal reuses
+control-plane-held shares; auto-unseal still depends on the configured
 external seal service. **A single-member cluster is supported with downtime**:
 OpenBao is unavailable during redeployment and remains sealed until unseal completes.
 

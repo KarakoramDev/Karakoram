@@ -196,7 +196,15 @@ func TestAgentUpgradeIncludeCurrentAndWindowCancellation(t *testing.T) {
 			t.Fatal("deployed outside window")
 		}
 		rc.Cluster.Spec.Maintenance = nil
-		upgradeTick(t, p, rc, op, false) // Persist the in-flight member before cancellation.
+		for range 10 {
+			upgradeTick(t, p, rc, op, false)
+			if len(b.deploys) > 0 {
+				break
+			}
+		}
+		if len(b.deploys) != 1 {
+			t.Fatal("member was not submitted")
+		}
 		rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1h"}}}
 		for i := range 50 {
 			if upgradeTick(t, p, rc, op, true) {
@@ -273,5 +281,152 @@ func TestAgentUpgradeRefusesLossOfVoterMajority(t *testing.T) {
 	}
 	if len(b.deploys) != 0 {
 		t.Fatalf("lost voter majority: %v", b.deploys)
+	}
+}
+
+func TestAgentUpgradeWindowClosesAfterJournal(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		t.Run(map[bool]string{false: "resume", true: "cancel"}[cancel], func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			f.log.clear()
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			upgradeTick(t, p, rc, op, false) // frozen order
+			upgradeTick(t, p, rc, op, false) // undisrupted member journal
+			rc.Clock = &testClock{at: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)}
+			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1h"}}}
+			for range 3 {
+				p = New(p.options)
+				a.p = p
+				done := upgradeTick(t, p, rc, op, cancel)
+				if cancel && !done {
+					t.Fatal("undisrupted cancellation did not finish")
+				}
+			}
+			if len(b.deploys) != 0 {
+				t.Fatal("deployment started after window closed")
+			}
+			for _, call := range f.log.snapshot() {
+				if strings.HasPrefix(call, "step-down:") {
+					t.Fatal("stepped down after window closed")
+				}
+			}
+			if cancel {
+				for _, m := range state(t, rc).Members {
+					if m.Change != nil {
+						t.Fatal("cancel retained undisrupted journal")
+					}
+				}
+				return
+			}
+			rc.Cluster.Spec.Maintenance = nil
+			for i := range 100 {
+				if upgradeTick(t, p, rc, op, false) {
+					break
+				}
+				if i == 99 {
+					t.Fatal("resumed rollout did not finish")
+				}
+			}
+			if len(b.deploys) != 3 {
+				t.Fatalf("resumed deploys: %v", b.deploys)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeRecoversOtherSealedVoter(t *testing.T) {
+	for _, cancel := range []bool{false, true} {
+		t.Run(map[bool]string{false: "rolling", true: "cancelling"}[cancel], func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			for range 10 {
+				upgradeTick(t, p, rc, op, false)
+				if len(b.deploys) > 0 {
+					break
+				}
+			}
+			if len(b.deploys) != 1 {
+				t.Fatal("member was not submitted")
+			}
+			// A different established voter restarts sealed while this deployment
+			// is recovering. Operation-owned sync must recover both serially.
+			a.member("demom2").sealed = true
+			a.member("demom2").healthy = false
+			for i := range 100 {
+				p = New(p.options)
+				a.p = p
+				if upgradeTick(t, p, rc, op, cancel) {
+					break
+				}
+				if i == 99 {
+					t.Fatal("other sealed voter stranded recovery")
+				}
+			}
+			if a.member("demom2").sealed {
+				t.Fatal("other voter remained sealed")
+			}
+			if cancel && len(b.deploys) != 1 {
+				t.Fatalf("cancel advanced members: %v", b.deploys)
+			}
+			if !cancel && len(b.deploys) != 3 {
+				t.Fatalf("rollout incomplete: %v", b.deploys)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeMissingReceiptSettlesBeforeCancellation(t *testing.T) {
+	for _, accepted := range []bool{false, true} {
+		t.Run(map[bool]string{false: "old-build", true: "target-build"}[accepted], func(t *testing.T) {
+			p, rc, f, a := setup(t)
+			ready(t, p, rc)
+			b := &upgradeBackend{Backend: f, agents: a, target: engine.CurrentAgentBuild().Build}
+			rc.Backend = b
+			op := upgradeOperation(t, false)
+			upgradeTick(t, p, rc, op, false)
+			upgradeTick(t, p, rc, op, false)
+			s := state(t, rc)
+			m := s.find("demom1")
+			m.Change.Step = "deploy"
+			m.Change.Started = true // persisted submission intent, receipt was lost
+			if err := s.save(rc.Cluster); err != nil {
+				t.Fatal(err)
+			}
+			if accepted {
+				a.redeploy(m.Name)
+				a.member(m.Name).build = b.target
+			}
+			rc.Clock = &testClock{at: time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)}
+			rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1h"}}}
+			for range 8 {
+				upgradeTick(t, p, rc, op, false)
+			}
+			if len(b.deploys) != 0 {
+				t.Fatal("replay resubmitted outside window")
+			}
+			for i := range 50 {
+				p = New(p.options)
+				a.p = p
+				if upgradeTick(t, p, rc, op, true) {
+					break
+				}
+				if i == 49 {
+					t.Fatal("uncertain member did not settle")
+				}
+			}
+			if len(b.deploys) != 0 {
+				t.Fatal("cancel resubmitted missing receipt")
+			}
+			m = state(t, rc).find(m.Name)
+			if m.Change != nil || !m.Healthy || m.Sealed {
+				t.Fatalf("cancel left unsafe member: %+v", m)
+			}
+		})
 	}
 }
