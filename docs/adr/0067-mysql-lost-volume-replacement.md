@@ -15,6 +15,13 @@ Use the shared runtime recovery journal and `ReconcileRuntime`. It restores only
 runtime services against retained storage. Only confirmed `VolumeLost` evidence
 may enter the deterministic `RecoverLostVolume` queue. Errors, unavailable nodes,
 unknown inventory and stale observations do not authorize replacement.
+Persist affirmative physical/agent loss separately from the shared journal's
+broader identity-conflict status flag. Only that confirmed-loss receipt permits
+queueing or retiring a member without local native evidence. Restoring the
+original volume after an identity conflict must not authorize replacement of
+its retained data. A confirmed-lost predecessor is excluded from disk-growth
+preflight and from replacement join-certification capability negotiation;
+survivors, the joiner and deployed proxies still negotiate normally.
 
 For GR, freshly observe every survivor ONLINE in the configured native group,
 with a writable primary and a survivor majority of configured membership. At

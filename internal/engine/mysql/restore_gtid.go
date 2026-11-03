@@ -434,6 +434,13 @@ func negotiatePXCMapping(ctx context.Context, rc *engine.Context, s *state, cp *
 			if m.Removing || m.Role != "data" && m.Role != "proxy" {
 				continue
 			}
+			// Only an affirmatively lost replacement predecessor is exempt:
+			// it cannot participate in SST certification or own a live hold.
+			// Survivors, the joiner and every deployed proxy still negotiate.
+			if owner.Formation != nil && owner.Formation.JoinOnly && s.Replacement != nil &&
+				s.Replacement.Old == m.Name && m.ConfirmedVolumeLost {
+				continue
+			}
 			// Unprovisioned initial-restore proxies cannot serve clients or own a hold.
 			// They are deployed only after the restored writer becomes available.
 			if m.ServiceID == "" && m.Role == "proxy" {

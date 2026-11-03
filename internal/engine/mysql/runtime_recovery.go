@@ -43,7 +43,7 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 		if m.Removing || m.Offline || m.Retirement != "" || m.Stage != "joined" && !m.RuntimeRecovery.Initialized || desiredComponent(rc, m).Replicas == 0 {
 			continue
 		}
-		if s.Replacement != nil && s.Replacement.Old == m.Name && m.RuntimeRecovery.VolumeLost {
+		if s.Replacement != nil && s.Replacement.Old == m.Name && m.ConfirmedVolumeLost {
 			continue
 		}
 		m.RuntimeRecovery.Initialized = m.Initialized || m.Stage == "joined"
@@ -54,11 +54,17 @@ func (p *Core) recoverRuntimes(ctx context.Context, rc *engine.Context, s *state
 		if tok == nil {
 			return true, engine.ErrNotFound
 		}
-		out, err := engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery})
-		if err != nil {
-			return true, err
+		var out engine.RuntimeRecoveryResult
+		if !m.ConfirmedVolumeLost {
+			out, err = engine.ReconcileRuntime(ctx, rc, engine.RuntimeMember{MemberService: engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: m.Resources, Containers: max(1, m.Replicas)}, ServiceID: &m.ServiceID, VolumeID: m.VolumeID, Recovery: &m.RuntimeRecovery})
+			if err != nil {
+				return true, err
+			}
 		}
-		if out.VolumeLost || m.RuntimeRecovery.VolumeLost {
+		if out.VolumeLost {
+			m.ConfirmedVolumeLost = true
+		}
+		if m.ConfirmedVolumeLost {
 			replicated := clustered(s.Topology) && m.Role == "data"
 			if replicated {
 				if err = p.volumeRecoverySafe(ctx, rc, s, m); err != nil {

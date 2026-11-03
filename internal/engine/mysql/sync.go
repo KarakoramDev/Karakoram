@@ -50,7 +50,7 @@ func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
 		if entry.name == "" {
 			continue
 		}
-		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, *entry.id, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
+		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, *entry.id, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return err
 		}
@@ -184,7 +184,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, e
 	}
 	for _, m := range s.Members {
-		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing {
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && !m.ConfirmedVolumeLost {
 			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, desiredComponent(rc, m).Resources)
 			if e != nil {
 				return result, e
@@ -302,7 +302,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	// Import every data identity before waiting for engine-level readiness.
 	for _, m := range s.Members {
-		if m.RuntimeRecovery.VolumeLost {
+		if m.ConfirmedVolumeLost {
 			continue
 		}
 		if m.Role == "proxy" && !writer {
@@ -387,7 +387,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		return result, nil
 	}
 	for _, m := range s.Members {
-		if m.RuntimeRecovery.VolumeLost {
+		if m.ConfirmedVolumeLost {
 			continue
 		}
 		if m.Role == "proxy" && !writer {
@@ -423,7 +423,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	}
 	deploymentsBusy := false
 	for _, m := range s.Members {
-		if m.RuntimeRecovery.VolumeLost {
+		if m.ConfirmedVolumeLost {
 			continue
 		}
 		// A proxy started by an earlier reconciliation may still be waiting
@@ -490,7 +490,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 	parameters := restartParameters(options.Parameters)
 	converged := s.Rolling == nil && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas
 	for _, m := range s.Members {
-		if m.RuntimeRecovery.VolumeLost {
+		if m.ConfirmedVolumeLost {
 			converged = false
 			continue
 		}

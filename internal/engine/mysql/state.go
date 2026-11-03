@@ -128,6 +128,9 @@ type member struct {
 	RuntimeRecovery       engine.RuntimeRecovery `json:"runtimeRecovery,omitempty"`
 	RuntimeRecoveryReason string                 `json:"runtimeRecoveryReason,omitempty"`
 	LastGTIDExecuted      string                 `json:"lastGTIDExecuted,omitempty"`
+	// ConfirmedVolumeLost is affirmative physical/agent loss evidence, not the
+	// shared journal's broader identity-conflict status flag.
+	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`
 
 	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
 	// Missing legacy receipts deliberately require redeployment before scaling.

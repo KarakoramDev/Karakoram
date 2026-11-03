@@ -403,6 +403,11 @@ replacement only after **confirmed** loss of a member's initialized volume.
 An unreachable agent, storage API failure or unknown mount is not confirmed
 loss and never authorizes an empty data directory. `VolumeLost` / `VOLUME_LOST`
 keeps the cluster Degraded while evidence or replacement is pending.
+An identity-conflict status is not affirmative loss evidence: restoring the
+original retained volume after such a conflict does not authorize replacement.
+Confirmed-lost predecessors cannot restart/rejoin while replacement is pending.
+Their absence does not block disk-growth preflight or PXC capability negotiation;
+survivors, the new joiner and deployed proxies must still negotiate certification.
 
 - GR requires fresh ONLINE observations of every survivor in the configured
   group, a writable primary and a survivor majority of configured membership.

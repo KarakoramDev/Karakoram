@@ -110,7 +110,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		if s.Replacement == nil && rc.WaitForWindow().RequeueAfter > 0 {
 			return false, nil
 		}
-		if !m.RuntimeRecovery.VolumeLost {
+		if !m.ConfirmedVolumeLost {
 			st, err := live(ctx, rc, m.Name)
 			if err != nil {
 				return false, err
@@ -142,7 +142,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
-		if m.RuntimeRecovery.VolumeLost {
+		if m.ConfirmedVolumeLost {
 			// Never start or contact the old data process. Fence its exact
 			// runtime, then require native membership removal before deletion.
 			m.Retirement = "runtime-stop"
@@ -186,7 +186,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 				}
 			}
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -230,7 +230,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 		if !status.Done {
 			return false, nil
 		}
-		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
+		runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 		if err != nil {
 			return false, err
 		}
@@ -247,7 +247,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, err
 		}
 		if m.ServiceID != "" {
-			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
+			runtime, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Name, m.ServiceID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 			if err != nil {
 				return false, err
 			}
@@ -270,7 +270,7 @@ func (p *Core) retireMember(ctx context.Context, rc *engine.Context, s *state, m
 			return false, nil
 		}
 		if m.VolumeID != "" {
-			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.RuntimeRecovery.VolumeLost)
+			volume, err := engine.ObserveRetiringService(ctx, rc.Backend, m.Volume, m.VolumeID, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
 			if err != nil {
 				return false, err
 			}

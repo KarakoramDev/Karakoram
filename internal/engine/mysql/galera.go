@@ -201,7 +201,7 @@ func (p *Core) reconcileGaleraFormation(ctx context.Context, rc *engine.Context,
 	// Joined members restart/rejoin through Galera IST/SST, never GR clone/start.
 	if f.State == "formed" {
 		for _, m := range s.data() {
-			if m.Offline || m.Removing || m.Stage != "deployed" && m.Stage != "joined" {
+			if m.Offline || m.Removing || m.ConfirmedVolumeLost || m.Stage != "deployed" && m.Stage != "joined" {
 				continue
 			}
 			st, err := live(ctx, rc, m.Name)
