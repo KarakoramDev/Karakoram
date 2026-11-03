@@ -41,8 +41,22 @@ func TestRecoverAdminPasswordAlreadyRestored(t *testing.T) {
 					Statement  string            `json:"statement"`
 					Parameters map[string]string `json:"parameters"`
 				}
-				if r.URL.Path != "/db/system/query/v2" || r.Header.Get("Authorization") != "" || json.NewDecoder(r.Body).Decode(&body) != nil || body.Statement != "ALTER USER neo4j SET PASSWORD $p CHANGE NOT REQUIRED" || body.Parameters["p"] != "private-password" {
+				if r.URL.Path != "/db/system/query/v2" || r.Header.Get("Authorization") != "" || json.NewDecoder(r.Body).Decode(&body) != nil {
 					t.Error("unexpected recovery request")
+				}
+				switch body.Statement {
+				case "ALTER USER neo4j SET PASSWORD CHANGE NOT REQUIRED":
+					_, _ = w.Write([]byte(`{"data":{"fields":[],"values":[]}}`))
+					return
+				case "SHOW USERS YIELD user, passwordChangeRequired WHERE user = 'neo4j' RETURN passwordChangeRequired":
+					_, _ = w.Write([]byte(`{"data":{"fields":["passwordChangeRequired"],"values":[[false]]}}`))
+					return
+				case "ALTER USER neo4j SET PASSWORD $p CHANGE NOT REQUIRED":
+					if body.Parameters["p"] != "private-password" {
+						t.Error("unexpected recovery password")
+					}
+				default:
+					t.Error("unexpected recovery statement")
 				}
 				w.WriteHeader(tc.status)
 				if tc.code == "" {
