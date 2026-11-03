@@ -23,6 +23,7 @@ Freeze the target build in the checkpoint when the operation is claimed. Redeplo
 - [Elasticsearch](https://www.elastic.co/elasticsearch) uses its rolling allocation, flush and recovery gates.
 - [PostgreSQL](https://www.postgresql.org) rolls replicas first, switches away from a primary and waits for streaming replication.
 - [Supabase](https://supabase.com) rolls optional component runtimes after the PostgreSQL core.
+- MySQL/PXC (including ProxySQL), OpenBao, Keycloak, Temporal, Neo4j and Weaviate use the engine-specific order, native gates and replay rules in [ADR 0065](0065-agent-upgrade-all-member-engines.md).
 
 Engine driver implementations decode the enqueue-frozen `engine.AgentUpgradePayload` (`includeCurrent`, `targetBuild`, `targetVersion`) with `engine.AgentUpgradeTarget(op)` and persist it in their rolling checkpoint at claim. `engine.MemberNeedsAgentUpgrade(member, target)` selects outdated or unreported members, or all initial candidates when `includeCurrent` is set. The checkpoint's completed-member journal takes precedence over selection, so an explicit refresh never repeats completed members. Compare the frozen build with `engine.CurrentAgentBuild().Build` before starting a deployment; if the control plane has changed again, fail before disruption rather than deploying different bytes under the old identity.
 
@@ -79,6 +80,12 @@ Pass the exclusion as `VolumeService.SpreadAvoid`. [Nomad](https://developer.has
 Fleet identity and database readiness remain distinct. Safe rolling progress can pause for native health, placement capacity or maintenance; a window is permission to start disruption, not a deadline to finish it. Automatic rollout is opt-in and bounded, and failures require an explicit retry rather than repeatedly disrupting a cluster.
 
 All rollout and relocation deployment work uses normal engine driver reconciliation and provider admission caps, ownership checks and bounded retry accounting. Neither automatic scheduling nor a maintenance override bypasses those safeguards. Maintenance waiting does not exhaust execution budgets.
+
+Agent rollout now covers every member-agent engine as specified in ADR 0065.
+Singletons incur downtime; service-level ProxySQL/Temporal deployments can
+interrupt endpoints even with replicas. Receipt loss during an explicit
+same-build refresh can require another gated deployment. Rollout support is not
+a zero-downtime guarantee.
 
 This refines ADR 0016 for placement-capable providers without strengthening Zerops' contract. Moving a member requires temporary replacement capacity and native data-transfer safety; it is not a generic host-migration primitive. Unknown placement remains usable but uncertain.
 
