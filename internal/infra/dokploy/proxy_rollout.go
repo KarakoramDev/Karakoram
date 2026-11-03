@@ -43,6 +43,13 @@ func (b *Backend) LookupProxyDeployment(ctx context.Context, hostname, requestID
 		return nil, nil
 	}
 	o := m.Pending
+	// Released legacy deployment receipts have neither request identity nor a
+	// serving gate. They cannot be an ambiguous serving upgrade, so cancellation
+	// may retain native-readiness settlement. Check the gate explicitly: an
+	// unidentified health-gated receipt is not evidence of a legacy deployment.
+	if o.RequestID == "" && !o.HealthGated {
+		return nil, nil
+	}
 	if requestID == "" || o.RequestID != requestID || o.Action != "deploy" || !o.HealthGated {
 		return nil, restoreConflict("cannot attribute pending proxy deployment to the cancelled operation; manual recovery required")
 	}

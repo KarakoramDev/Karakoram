@@ -1020,15 +1020,16 @@ func TestAgentUpgradePXCDetectsWriterOnAnyProxyInstance(t *testing.T) {
 
 type servingAgentRolloutBackend struct {
 	*agentRolloutBackend
-	capable     bool
-	marked      bool
-	approvalErr error
-	choices     []bool
-	receipt     *infra.Op
-	fail        bool
-	waiting     bool
-	requestID   string
-	lookupCalls int
+	capable       bool
+	marked        bool
+	approvalErr   error
+	choices       []bool
+	receipt       *infra.Op
+	fail          bool
+	waiting       bool
+	requestID     string
+	lookupCalls   int
+	legacyReceipt bool
 }
 
 func (b *servingAgentRolloutBackend) Capabilities() infra.Capabilities {
@@ -1072,6 +1073,10 @@ func (b *servingAgentRolloutBackend) OpStatus(ctx context.Context, op infra.Op) 
 
 func (b *servingAgentRolloutBackend) LookupProxyDeployment(_ context.Context, name, requestID string) (*infra.Op, error) {
 	b.lookupCalls++
+	if b.legacyReceipt {
+		// Dokploy excludes legacy non-health-gated receipts from serving lookup.
+		return nil, nil
+	}
 	if b.receipt != nil && (name != "demomx" || requestID != b.requestID) {
 		return nil, errors.New("proxy rollout request identity mismatch")
 	}
@@ -1187,7 +1192,7 @@ func TestAgentUpgradeProxyServingLostReceiptRetainsFailure(t *testing.T) {
 
 func TestAgentUpgradeCancelLostServingReceipt(t *testing.T) {
 	for _, include := range []bool{false, true} {
-		for _, outcome := range []string{"updating", "paused", "not-submitted"} {
+		for _, outcome := range []string{"updating", "paused", "not-submitted", "legacy-receipt"} {
 			t.Run(fmt.Sprintf("%s/include=%v", outcome, include), func(t *testing.T) {
 				p, rc, b := setupAgentRollout(t, "group")
 				if include {
@@ -1213,6 +1218,7 @@ func TestAgentUpgradeCancelLostServingReceipt(t *testing.T) {
 				}
 				op.Checkpoint = intent
 				backend.waiting, backend.fail = outcome == "updating", outcome == "paused"
+				backend.legacyReceipt = outcome == "legacy-receipt"
 				result, err := p.CancelOperation(t.Context(), rc, op)
 				if outcome == "paused" {
 					if err == nil || !result.Done || !strings.Contains(err.Error(), "manual recovery required") || !strings.Contains(err.Error(), "proxy rollout paused") {

@@ -150,6 +150,9 @@ A matching receipt is adopted and polled to terminal backend status before
 native readiness is settled. A paused or rolled-back update fails with manual
 recovery guidance; it is not reported as successfully cancelled merely because
 an incumbent still serves or already reports the target build.
+Legacy receipts without a request identity retain digest-only deployment replay;
+when not health-gated they do not block native-readiness cancellation settlement.
+An unidentified health-gated receipt is not treated as legacy and fails closed.
 
 Admission or supervisor-liveness failure **pauses** the rollout, retaining the
 remaining incumbents. The healthcheck runs every five seconds, with a ten-second

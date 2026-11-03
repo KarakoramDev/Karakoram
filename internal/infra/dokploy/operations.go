@@ -176,7 +176,9 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	defer os.Remove(zipPath)
 	if m.Pending != nil && m.Pending.Action == "deploy" && m.Pending.Digest == digest && (!m.Pending.Failed || m.Pending.Uncertain) {
-		if d.ProxyPreserveServing != nil && *d.ProxyPreserveServing && d.RequestID != m.Pending.RequestID {
+		// Pre-request journals retain digest-only adoption. An absent identity
+		// does not justify resubmitting an already accepted legacy deployment.
+		if m.Pending.RequestID != "" && d.ProxyPreserveServing != nil && *d.ProxyPreserveServing && d.RequestID != m.Pending.RequestID {
 			return infra.Op{}, restoreConflict("pending serving proxy deployment belongs to a different operation; manual recovery required")
 		}
 		return encodeOp(*m.Pending), nil

@@ -501,3 +501,66 @@ func TestProxyDeploymentLookupRejectsMismatchedRequest(t *testing.T) {
 		t.Fatal("mismatched lookup submitted or changed work")
 	}
 }
+
+func TestLegacyDeploymentReceiptAdoptsSameDigestReplay(t *testing.T) {
+	for _, policy := range []string{"ordinary", "redeploy", "serving"} {
+		t.Run(policy, func(t *testing.T) {
+			f := newFakeAPI(t)
+			b := fakeBackend(t, f, nil)
+			importFake(t, b, runtimeSpec("proxy", ""))
+			loseCommittedReply(b, func(r *http.Request) bool {
+				return r.URL.Path == "/api/application.dropDeployment"
+			})
+			if _, err := b.Deploy(t.Context(), "proxy", testDeployment(t, "")); err == nil {
+				t.Fatal("missing lost legacy upload reply")
+			}
+			legacy := fakeMeta(t, f, "proxy").Pending
+			if legacy == nil || legacy.RequestID != "" || legacy.HealthGated {
+				t.Fatalf("not a legacy ordinary deployment receipt: %+v", legacy)
+			}
+			d := testDeployment(t, "")
+			d.RequestID = "upgraded-operation"
+			if policy != "ordinary" {
+				serving := policy == "serving"
+				d.ProxyPreserveServing = &serving
+			}
+			restarted := fakeBackend(t, f, nil)
+			op, err := restarted.Deploy(t.Context(), "proxy", d)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recovered, err := decodeOp(op)
+			if err != nil || !sameOperation(legacy, recovered) || fakeCalls(f, "application.dropDeployment") != 1 {
+				t.Fatalf("legacy replay did not adopt original deployment: %+v %v", recovered, err)
+			}
+		})
+	}
+}
+
+func TestLegacyDeploymentReceiptDoesNotBlockCancellationLookup(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("proxy", ""))
+	if _, err := b.Deploy(t.Context(), "proxy", testDeployment(t, "")); err != nil {
+		t.Fatal(err)
+	}
+	uploads := fakeCalls(f, "application.dropDeployment")
+	updates := fakeCalls(f, "application.update")
+	op, err := b.LookupProxyDeployment(t.Context(), "proxy", "upgraded-operation")
+	if err != nil || op != nil {
+		t.Fatalf("legacy receipt blocked native-readiness settlement: %+v %v", op, err)
+	}
+	if fakeCalls(f, "application.dropDeployment") != uploads || fakeCalls(f, "application.update") != updates {
+		t.Fatal("legacy lookup resubmitted or changed deployment")
+	}
+}
+
+func TestUnidentifiedServingDeploymentLookupFailsClosed(t *testing.T) {
+	_, b, _ := markedProxyFake(t, 1)
+	if _, err := b.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.LookupProxyDeployment(t.Context(), "proxy", "upgraded-operation"); err == nil {
+		t.Fatal("unidentified health-gated rollout was mistaken for legacy deployment")
+	}
+}
