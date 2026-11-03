@@ -138,11 +138,25 @@ These cross-engine constraints define the operating model; engine-specific limit
   measured full-backup peaks were 84.4% of 1 GiB for single MySQL, 85.0% of
   2 GiB for PXC and 90.7% of 2 GiB for GR. These are scoped measurements, not
   guaranteed safe limits; see [upgrade memory guidance](upgrade.md#fixed-in-v043).
-- **ProxySQL changes can interrupt clients.** On Nomad, count-only replica
-  changes preserve existing serving replicas. Zerops and Dokploy still stop
-  and redeploy the whole proxy for count changes; proxy resource, version and
-  runtime changes remain disruptive on all providers. Existing GR clusters need
-  the [proxy TLS redeployment](upgrade.md#proxysql-monitor-tls).
+- **ProxySQL serving preservation is request- and backend-specific.** Nomad
+  retains count-only incumbent-preserving scaling, but does not guarantee
+  serving-preserving resource rollouts: MySQL/PXC retain stop/redeploy, while
+  PostgreSQL/Supabase use maintenance-gated provider resource rollouts.
+  Zerops count changes and same-CPU-mode CPU/RAM resizes retain incumbent
+  Linux containers; CPU-mode and disk-bound changes are excluded, and unexpected
+  incumbent replacement fails with `INCUMBENTS_REPLACED`. Dokploy count/resource
+  updates require a successfully deployed serving-probe marker and use serial,
+  native-health-gated start-first replacement with spare capacity; unmarked
+  legacy proxies retain their disruptive/maintenance-gated path until redeployed.
+  Replacing or removing an instance can disconnect its existing sessions.
+  Version/startup-runtime changes do not acquire a serving guarantee from these
+  capabilities. Live-provider acceptance remains pending; see
+  [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
+  [Zerops resources](zerops.md#resources-and-autoscaling),
+  [Dokploy proxy updates](dokploy.md#proxysql-count-and-resource-updates) and
+  [Nomad resource limitations](nomad.md#proxy-resource-changes-are-not-a-zero-outage-contract).
+  Existing GR clusters still need the
+  [proxy TLS redeployment](upgrade.md#proxysql-monitor-tls).
 - **Nomad live coverage remains incomplete:** PXC, Neo4j, Weaviate, Citus,
   Temporal, OpenBao, Keycloak/bindings, Supabase and fleet operations have not
   been live-verified in the current release campaign. Earlier scoped evidence
