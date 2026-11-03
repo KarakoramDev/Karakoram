@@ -39,7 +39,7 @@ kernel UID, never environment-supplied USER/LOGNAME. No other OS account is
 mapped, and remote TCP authentication remains SCRAM/TLS. This changes neither
 the runtime-owner trust boundary nor customer authentication.
 
-Activation preserves the existing native `ident_file` path. Before publishing
+Warm activation keeps the existing native identity file valid. Before publishing
 either a single-server HBA or Patroni `pg_hba`, connect using the current working
 authentication, read the live identity-file path, atomically add only the
 reserved map while retaining other native mappings, and signal configuration
@@ -50,15 +50,28 @@ replay uses the same map without duplicate grants. Subsequent passwordless
 connections provide direct live activation evidence. Do not infer activation
 merely from a new binary, rendered file, or reload request acceptance.
 
-The renderer preserves that observed path in member-local PostgreSQL/Patroni
-parameters, avoiding the postmaster-only path transition entirely. The agent
-does not configure a Patroni `pg_ident` list, so Patroni does not replace the
-staged mappings ([Patroni configuration implementation](https://github.com/patroni/patroni/blob/v4.0.6/patroni/postgresql/config.py)).
-An unobservable live server blocks activation before any peer HBA publication.
-For stopped existing data, inspect the configured path with `postgres -C` and
-stage its map before rendering; fresh servers receive fully staged matching
-identity and HBA files before either PostgreSQL or Patroni starts. This also
-preserves password-independent startup after an offline restore.
+For **every future start**, single-server and Patroni parameters point instead
+to the agent-managed `pg_ident.conf` outside PGDATA. Stage that file too before
+publishing the configuration; never make the startup identity depend on a
+backed-up/restored PGDATA file. Patroni can recreate a replica autonomously from
+an old pgBackRest backup or basebackup without another agent Apply in between.
+Single restore/clone likewise replaces PGDATA without removing the external map.
+The currently active map stays valid until the next restart adopts the stable
+external path. The agent does not configure a Patroni `pg_ident` list, so Patroni
+does not replace these mappings ([Patroni configuration implementation](https://github.com/patroni/patroni/blob/v4.0.6/patroni/postgresql/config.py)).
+
+For stopped existing data, also inspect the previously configured identity path
+with `postgres -C` and stage its map before rendering, covering a Patroni parent
+still using its older configuration. Fresh servers receive fully staged matching
+identity/HBA files before either PostgreSQL or Patroni starts.
+
+If an already-running server loses its map, recover without first needing SQL:
+re-stage the durable last-observed active file and the external startup file,
+signal `pg_ctl reload`, and require a fresh passwordless connection before
+re-observing/persisting native activation. A vanished old directory does not
+authorize a guessed credential or native role change; the live peer probe must
+prove recovery. An unobservable server without a trustworthy local observation
+remains blocked rather than overwriting an unknown authentication file.
 
 
 The agent's local connection/recovery rekey first uses that socket with no
@@ -117,10 +130,11 @@ or Supabase component that still needs acknowledgement.
 ## Consequences
 
 Rotation itself requires no database restart, including on a single member.
-Peer activation during the preceding agent upgrade uses the existing identity
-path and a reload, not an identity-path database restart. Complete that rollout
-first; admission stays closed until every member proves password-independent
-local authentication.
+Warm peer activation during the preceding agent upgrade loads the current map
+with a reload. Adopting the stable external `ident_file` startup path can require
+the ordinary pending configuration restart during that preceding rollout.
+Complete the rollout first; admission stays closed until every member proves
+password-independent local authentication.
 Supabase component refreshes restart their processes and may interrupt service.
 Citus can have transient cross-group authentication failures while the node-local
 transactions and outbound authentication converge. This is recoverable but not an

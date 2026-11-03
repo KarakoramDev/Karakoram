@@ -56,7 +56,7 @@ func (s *peerActivationSession) QueryRow(_ context.Context, sql string, args ...
 	}}
 }
 
-func TestLocalPeerExistingClusterActivationPreservesIdentityPath(t *testing.T) {
+func TestLocalPeerExistingClusterActivationStagesLiveAndStartupMaps(t *testing.T) {
 	for _, patroni := range []bool{false, true} {
 		t.Run(map[bool]string{false: "single", true: "patroni-managed"}[patroni], func(t *testing.T) {
 			s := testSpec()
@@ -88,8 +88,8 @@ func TestLocalPeerExistingClusterActivationPreservesIdentityPath(t *testing.T) {
 			if err := activateLocalPeerMap(t.Context(), fixture, &p, owner, mapping); err != nil {
 				t.Fatal(err)
 			}
-			if p.ident != active || parameters(s, p)["ident_file"] != active || fixture.reloads != 1 || fixture.observations == 0 {
-				t.Fatal("activation changed the postmaster identity path or skipped native observation")
+			if p.ident != filepath.Join(p.root, "pg_ident.conf") || parameters(s, p)["ident_file"] != p.ident || fixture.reloads != 1 || fixture.observations == 0 {
+				t.Fatal("activation skipped native observation or left startup dependent on PGDATA")
 			}
 			data, err := os.ReadFile(active)
 			if err != nil || string(data) != original+mapping {
@@ -122,8 +122,8 @@ func TestLocalPeerExistingClusterActivationPreservesIdentityPath(t *testing.T) {
 					if err := yaml.Unmarshal([]byte(file.content), &config); err != nil {
 						t.Fatal(err)
 					}
-					if config.Postgresql.Parameters["ident_file"] != active || len(config.Postgresql.Ident) != 0 || config.Postgresql.HBA[0] != hba(s)[0] {
-						t.Fatal("Patroni changed the identity path or would replace the staged native map")
+					if config.Postgresql.Parameters["ident_file"] != p.ident || len(config.Postgresql.Ident) != 0 || config.Postgresql.HBA[0] != hba(s)[0] {
+						t.Fatal("Patroni startup lost its stable identity file or would replace staged native maps")
 					}
 				}
 			}
@@ -170,7 +170,7 @@ func TestLocalPeerInterruptedActivationRetainsSCRAMAndReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(active)
-	if err != nil || strings.Count(string(data), "karakoram-local") != 1 || p.ident != active {
-		t.Fatal("activation replay duplicated mappings or changed the native path")
+	if err != nil || strings.Count(string(data), "karakoram-local") != 1 || p.ident != filepath.Join(p.root, "pg_ident.conf") {
+		t.Fatal("activation replay duplicated mappings or lost the stable startup map")
 	}
 }

@@ -88,6 +88,10 @@ func activateLocalPeerMap(ctx context.Context, c peerAuthSession, p *paths, owne
 	if err := stageLocalPeerMap(active, mapping); err != nil {
 		return err
 	}
+	target := filepath.Join(p.root, "pg_ident.conf")
+	if err := stageLocalPeerMap(target, mapping); err != nil {
+		return err
+	}
 	var signaled bool
 	if err := c.QueryRow(ctx, "SELECT pg_catalog.pg_reload_conf()").Scan(&signaled); err != nil || !signaled {
 		return errors.New("cannot reload PostgreSQL identity map before peer activation")
@@ -105,7 +109,7 @@ func activateLocalPeerMap(ctx context.Context, c peerAuthSession, p *paths, owne
 			if err := durableJSON(filepath.Join(p.root, "peer-auth.json"), localPeerObservation{IdentFile: active, Owner: owner, LoadedAt: time.Now()}); err != nil {
 				return err
 			}
-			p.ident = active
+			p.ident = target
 			p.identStaged = true
 			return nil
 		}
@@ -130,6 +134,13 @@ func prepareLocalPeerAuthentication(ctx context.Context, s pgspec.Spec, p *paths
 	if err != nil {
 		return err
 	}
+	// Future starts must never depend on PGDATA's backed-up identity file:
+	// Patroni can materialize it without another agent Apply in between.
+	p.ident = filepath.Join(p.root, "pg_ident.conf")
+	if err := stageLocalPeerMap(p.ident, mapping); err != nil {
+		return err
+	}
+	p.identStaged = true
 	if peer, err := localPeerConnect(ctx, s, *p); err == nil {
 		defer peer.Close(ctx)
 		var active string
@@ -141,8 +152,6 @@ func prepareLocalPeerAuthentication(ctx context.Context, s pgspec.Spec, p *paths
 		data, readErr := os.ReadFile(filepath.Join(p.root, "peer-auth.json"))
 		var prior localPeerObservation
 		if readErr == nil && json.Unmarshal(data, &prior) == nil && prior.Owner == owner && prior.IdentFile == active {
-			p.ident = active
-			p.identStaged = true
 			return nil
 		}
 		return activateLocalPeerMap(ctx, peer, p, owner, mapping)
@@ -166,7 +175,17 @@ func prepareLocalPeerAuthentication(ctx context.Context, s pgspec.Spec, p *paths
 			return errors.New("cannot establish PostgreSQL stopped state before peer activation")
 		}
 		if err := syscall.Kill(pid, 0); err == nil || !errors.Is(err, syscall.ESRCH) {
-			return errors.New("running PostgreSQL must acknowledge its identity map before peer activation")
+			recovered, repairErr := repairLocalPeerMapWith(ctx, *p, owner, mapping, func(ctx context.Context) error {
+				_, err := command(ctx, filepath.Join(s.BinDir, "pg_ctl"), "reload", "-D", p.pgdata)
+				return err
+			}, func(ctx context.Context) (*pgx.Conn, error) {
+				return localPeerConnect(ctx, s, *p)
+			})
+			if repairErr != nil {
+				return repairErr
+			}
+			defer recovered.Close(ctx)
+			return activateLocalPeerMap(ctx, recovered, p, owner, mapping)
 		}
 	} else if !os.IsNotExist(pidErr) {
 		return errors.New("cannot inspect PostgreSQL stopped state before peer activation")
@@ -178,8 +197,8 @@ func prepareLocalPeerAuthentication(ctx context.Context, s pgspec.Spec, p *paths
 		if err != nil {
 			return errors.New("cannot inspect stopped PostgreSQL identity configuration")
 		}
-		p.ident = strings.TrimSpace(string(output))
-		if err := stageLocalPeerMap(p.ident, mapping); err != nil {
+		active := strings.TrimSpace(string(output))
+		if err := stageLocalPeerMap(active, mapping); err != nil {
 			return err
 		}
 		p.identStaged = true
@@ -189,4 +208,49 @@ func prepareLocalPeerAuthentication(ctx context.Context, s pgspec.Spec, p *paths
 	// A fresh/stopped server consumes the fully staged matching ident_file/HBA
 	// together at startup; no existing backend can observe half the transition.
 	return nil
+}
+
+// Repair already-published peer authentication without first needing SQL.
+// Stage both the last observed live file and the stable future-start file:
+// a restart may have switched between them since the durable observation.
+func repairLocalPeerMapWith(ctx context.Context, p paths, owner, mapping string, reload func(context.Context) error, connect func(context.Context) (*pgx.Conn, error)) (*pgx.Conn, error) {
+	raw, err := os.ReadFile(filepath.Join(p.root, "peer-auth.json"))
+	var prior localPeerObservation
+	if err != nil || json.Unmarshal(raw, &prior) != nil || prior.Owner != owner || !filepath.IsAbs(prior.IdentFile) {
+		return nil, errors.New("running PostgreSQL requires an observed identity file before SQL-independent peer repair")
+	}
+	if err := stageLocalPeerMap(filepath.Join(p.root, "pg_ident.conf"), mapping); err != nil {
+		return nil, err
+	}
+	// A vanished directory may belong to the pre-restart configuration. Other
+	// write failures remain errors; only a passwordless probe proves recovery.
+	if prior.IdentFile != filepath.Join(p.root, "pg_ident.conf") {
+		if _, err := os.Stat(filepath.Dir(prior.IdentFile)); err == nil {
+			if err := stageLocalPeerMap(prior.IdentFile, mapping); err != nil {
+				return nil, err
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, errors.New("cannot inspect previously active PostgreSQL identity directory")
+		}
+	}
+	if ctx.Err() != nil {
+		return nil, errors.New("PostgreSQL peer authentication repair interrupted before reload")
+	}
+	if err := reload(ctx); err != nil {
+		return nil, errors.New("cannot signal PostgreSQL identity-map repair")
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if c, err := connect(waitCtx); err == nil {
+			return c, nil
+		}
+		select {
+		case <-waitCtx.Done():
+			return nil, errors.New("waiting for PostgreSQL password-independent authentication after identity-map repair")
+		case <-ticker.C:
+		}
+	}
 }

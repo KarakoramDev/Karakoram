@@ -35,8 +35,11 @@ Every data member must advertise administrator-rotation support; an old or
 unreachable agent causes a **409** explaining that `upgrade-agents` is required.
 Complete agent upgrades and structural/rolling maintenance first. The upgrade
 stages and observes the exact-owner map in the existing native identity file
-before publishing peer HBA rules; it requires a reload, not an identity-path
-database restart. Rotation is refused until local authentication is active.
+before publishing peer HBA rules, using a reload for that live activation.
+Future starts use an agent-managed map outside PGDATA so old backups cannot
+remove local management access during rebuild/restore. Adopting that stable
+startup path may require the ordinary configuration restart during the preceding
+agent rollout. Rotation is refused until local authentication is active.
 
 The control plane seals the previous password, selected replacement and stable
 native request before changing PostgreSQL. Members first acknowledge a
