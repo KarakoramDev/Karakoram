@@ -80,16 +80,6 @@ func proxyAppliedChecks(ctx context.Context, rc *engine.Context, m *member, vers
 	return all && (!requireRunning || count > 0), err
 }
 
-func proxyResourcesPreserveServing(rc *engine.Context, current, target domain.Resources) bool {
-	if !rc.Backend.Capabilities().ResourceUpdatePreservesServing {
-		return false
-	}
-	if backend, ok := rc.Backend.(infra.ServingResourceUpdate); ok {
-		return backend.ResourceUpdatePreservesServingFor(current, target)
-	}
-	return true
-}
-
 // A backend may require a readiness-capable deployed agent before its general
 // serving-preservation capabilities apply to this particular proxy runtime.
 func proxyRuntimePreservesServing(ctx context.Context, rc *engine.Context, name string) (bool, error) {

@@ -106,31 +106,6 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	if q == nil {
 		return false, nil
 	}
-	// A stateless scale operation must not make an obsolete larger count a
-	// prerequisite for a newer, smaller count. Nomad may be waiting for the
-	// very host-port/canary slot that the reduction releases. Keep the already
-	// published surge budget until the superseding operation completes; an
-	// increase still takes the normal all-instance configuration barrier below.
-	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
-		replicas := desiredComponent(rc, m).Replicas
-		if replicas > 0 && replicas < q.Replicas {
-			serving, err := proxyRuntimePreservesServing(ctx, rc, m.Name)
-			if err != nil {
-				return true, err
-			}
-			if !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || replicas < m.Replicas {
-				if rc.WaitForWindow().RequeueAfter > 0 {
-					return true, nil
-				}
-			}
-			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
-			if err != nil {
-				return true, err
-			}
-			q.Op, q.Replicas = op, replicas
-			return true, nil
-		}
-	}
 	if q.Action == "import" {
 		m := s.find(q.Member)
 		if m == nil {
@@ -156,6 +131,33 @@ func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state)
 	}
 	if err != nil {
 		return true, err
+	}
+	// Poll before attempting supersession: some backends retain an exclusive
+	// autoscaling receipt until its terminal status is consumed by OpStatus.
+	// A stateless scale operation must not make an obsolete larger count a
+	// prerequisite for a newer, smaller count. Nomad may be waiting for the
+	// very host-port/canary slot that the reduction releases. Keep the already
+	// published surge budget until the superseding operation completes; an
+	// increase still takes the normal all-instance configuration barrier below.
+	if m := s.find(q.Member); q.Action == "scale" && m != nil && m.Role == "proxy" {
+		replicas := desiredComponent(rc, m).Replicas
+		if replicas > 0 && replicas < q.Replicas {
+			serving, err := proxyRuntimePreservesServing(ctx, rc, m.Name)
+			if err != nil {
+				return true, err
+			}
+			if !serving || !rc.Backend.Capabilities().ReplicaScalePreservesServing || replicas < m.Replicas {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
+			}
+			op, err := rc.Backend.SetContainerCount(ctx, m.Name, replicas, replicas)
+			if err != nil {
+				return true, err
+			}
+			q.Op, q.Replicas = op, replicas
+			return true, nil
+		}
 	}
 	if rc.Cluster.Deleting {
 		rc.Cluster.Status.Message = fmt.Sprintf("Waiting for PostgreSQL member %s %s process %s: %s", q.Member, q.Action, q.Op.ID, st.Status)
@@ -941,9 +943,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 				if e != nil || !applied {
 					return result, e
 				}
-				proxyServing, e = proxyRuntimePreservesServing(ctx, rc, m.Name)
-				if e != nil {
-					return result, e
+				if m.Replicas != desired.Replicas {
+					proxyServing, e = proxyRuntimePreservesServing(ctx, rc, m.Name)
+					if e != nil {
+						return result, e
+					}
 				}
 			}
 		}
@@ -980,7 +984,7 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		if !changed {
 			continue
 		}
-		if needsDisruption(p, rc, m, desired) || (m.Role == "proxy" && !proxyServing && !reflect.DeepEqual(m.Resources, desired.Resources)) {
+		if needsDisruption(p, rc, m, desired) {
 			if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
 				return wait, nil
 			}

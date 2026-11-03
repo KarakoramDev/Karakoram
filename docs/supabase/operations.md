@@ -110,8 +110,9 @@ convergence, including extension preload changes.
 
 The embedded PostgreSQL core's ProxySQL count/resource updates follow
 [PostgreSQL maintenance and readiness rules](../postgres/operations.md#agent-rollout-and-maintenance-windows):
-scale-in always waits for a maintenance window, and scale-out/resource changes
-also wait when the backend cannot guarantee serving preservation for that request.
+scale-in and resource changes always wait for a maintenance window, including
+serving-preserving resource updates. Count scale-out also waits unless the backend
+guarantees serving preservation for the deployed proxy runtime.
 Every requested live proxy must apply the configuration and report native
 readiness with an ONLINE writer before applied bounds are committed, including
 after a control-plane restart. This is separate from optional Supabase component

@@ -91,7 +91,7 @@ func TestProxyUpdateMaintenanceCapabilities(t *testing.T) {
 						break
 					}
 				}
-				allowed := serving && action != "down" && action != "excluded-resources" && !b.legacy
+				allowed := serving && action == "up" && !b.legacy
 				if got := b.countCalls+b.resourceCalls > 0; got != allowed {
 					t.Fatalf("update issued=%t want=%t wait=%s", got, allowed, rc.SyncWait)
 				}
@@ -244,5 +244,61 @@ func TestProxyLegacyProbeMarkerDoesNotRedeployIdleRuntime(t *testing.T) {
 		if action == "deploy:demopx" || action == "runtime-stop:demopx" {
 			t.Fatal("new marker disrupted an existing runtime", action)
 		}
+	}
+}
+
+type receiptProxyScaleBackend struct {
+	*pendingProxyScaleBackend
+	held     bool
+	terminal bool
+	failed   bool
+	polls    int
+}
+
+func (b *receiptProxyScaleBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	b.polls++
+	if op.ID == "previous-scale" {
+		if b.terminal {
+			b.held = false
+		}
+		return infra.OpState{Done: b.terminal && !b.failed, Failed: b.terminal && b.failed}, nil
+	}
+	return b.pendingProxyScaleBackend.OpStatus(ctx, op)
+}
+
+func (b *receiptProxyScaleBackend) SetContainerCount(ctx context.Context, name string, min, max int) (infra.Op, error) {
+	if b.held {
+		return infra.Op{}, infra.ErrConflict
+	}
+	return b.pendingProxyScaleBackend.SetContainerCount(ctx, name, min, max)
+}
+
+func TestPendingProxyScaleConsumesPreviousReceiptBeforeSuperseding(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("failed=%t", failed), func(t *testing.T) {
+			p, rc, base := setup(t, "ha")
+			s := converge(t, p, rc)
+			m := s.find("demopx")
+			desired := rc.Cluster.Spec.Components.Extra["proxy"]
+			desired.Replicas = 2
+			rc.Cluster.Spec.Components.Extra["proxy"] = desired
+			s.Pending = &pending{Action: "scale", Member: m.Name, Replicas: 3, Op: infra.Op{ID: "previous-scale"}}
+			b := &receiptProxyScaleBackend{pendingProxyScaleBackend: &pendingProxyScaleBackend{fakeBackend: base}, held: true, terminal: true, failed: failed}
+			rc.Backend = b
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			s, err = load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if busy, err := p.observePending(t.Context(), rc, s); err != nil || !busy {
+				t.Fatal("previous receipt blocked supersession", busy, err)
+			}
+			if b.polls != 1 || b.calls != 1 || s.Pending == nil || s.Pending.Replicas != 2 || s.Pending.Op.ID != "superseding-scale" {
+				t.Fatal("previous terminal receipt was not consumed before the new target", b.polls, b.calls, s.Pending)
+			}
+		})
 	}
 }

@@ -22,13 +22,14 @@ to start the next disruption. Re-enqueue against the new build instead.
 Deploy admission caps and deployment retry budgets still apply.
 
 `spec.maintenance` gates the start of desired engine-version changes, major
-offline upgrades, disruptive resource changes, restart-required settings (including
+offline upgrades, resource changes, restart-required settings (including
 directional shared-memory restarts), and scale-in. Proxy scale-out also waits
 unless the backend explicitly guarantees serving-preserving count updates.
-Proxy resource updates bypass this gate only when the backend guarantees
-serving-preserving updates for the particular resource transition. Otherwise the
-existing backend update runs in the maintenance window and may interrupt clients;
-multiple proxy replicas alone do not make it non-disruptive.
+Proxy resource updates always wait for the maintenance window, including updates
+that the backend guarantees will preserve serving traffic. Without a guarantee
+for the deployed runtime and particular resource transition, the existing backend
+update may interrupt clients; multiple proxy replicas alone do not make it
+non-disruptive.
 Each new member disruption waits independently; admitted infrastructure work
 continues to readiness after the window closes. Automatic database leaf renewal
 waits only while more than seven days remain. Agent transport renewal, emergency
