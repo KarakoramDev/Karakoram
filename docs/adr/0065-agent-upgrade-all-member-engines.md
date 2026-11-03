@@ -98,15 +98,24 @@ build without submitting another deployment merely to cancel. Ordinary
 reconciliation may settle operation-owned recovery, not start another member or
 silently retarget the rollout.
 
+For an ambiguous serving-preserving ProxySQL deployment, cancellation performs
+a non-submitting lookup using the persisted deployment request identity. It
+adopts a matching backend receipt and waits for terminal operation status before
+settling native readiness. A paused or rolled-back deployment fails with manual
+recovery guidance rather than reporting successful cancellation. Cancellation
+never submits another deployment to recover that receipt.
+
 On receipt-missing replay, adopt a native-ready target deployment when the
 engine's persisted build transition and expected instance inventory prove it
 completed; Temporal checks every expected instance and Weaviate also requires
 synchronized native statistics. Recheck maintenance, native safety and the frozen
 build before any resubmission. For an explicit `includeCurrent` refresh of a
 member already on the target build, unchanged build identity cannot prove that
-deployment occurred. The backend offers deployment status for a known receipt,
-not deployment lookup by member/request identity. Conservatively redeploy that
-same build under the normal gates rather than falsely declaring completion.
+deployment occurred. Ordinary member deployments offer status for a known receipt,
+not lookup by member/request identity; the serving-preserving ProxySQL receipt
+lookup above is a specific exception. Without authoritative completion evidence,
+conservatively redeploy the same build under the normal gates rather than falsely
+declaring completion.
 This can cause an additional interruption after receipt loss.
 
 ProxySQL is one logical service with multiple instances, not independently

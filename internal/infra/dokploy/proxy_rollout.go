@@ -13,6 +13,7 @@ import (
 )
 
 var _ infra.ServingProxyUpdates = (*Backend)(nil)
+var _ infra.ProxyDeploymentLookup = (*Backend)(nil)
 
 // Legacy images retain the ordinary redeploy path, including their first agent
 // upgrade: installing policy before uploading the new image must be safe for the
@@ -24,6 +25,36 @@ func (b *Backend) ProxyUpdatesPreserveServing(ctx context.Context, hostname stri
 	}
 	m, ok := parseMetadata(a.Description)
 	return ok && m.Kind == infra.KindRuntime && m.Volume == "" && m.Deployed && m.ProxyServingProbe && m.Desired != "stopped" && m.Desired != "deleting", nil
+}
+
+// LookupProxyDeployment reads only the pre-upload journal. Request identity
+// remains valid even after the control-plane build changes; no artifact render,
+// policy update, upload or provider mutation is allowed during cancellation.
+func (b *Backend) LookupProxyDeployment(ctx context.Context, hostname, requestID string) (*infra.Op, error) {
+	if err := b.mu.Lock(ctx); err != nil {
+		return nil, err
+	}
+	defer b.mu.Unlock()
+	_, m, err := b.require(ctx, hostname)
+	if err != nil {
+		return nil, err
+	}
+	if m.Pending == nil {
+		return nil, nil
+	}
+	o := m.Pending
+	// Released legacy deployment receipts have neither request identity nor a
+	// serving gate. They cannot be an ambiguous serving upgrade, so cancellation
+	// may retain native-readiness settlement. Check the gate explicitly: an
+	// unidentified health-gated receipt is not evidence of a legacy deployment.
+	if o.RequestID == "" && !o.HealthGated {
+		return nil, nil
+	}
+	if requestID == "" || o.RequestID != requestID || o.Action != "deploy" || !o.HealthGated {
+		return nil, restoreConflict("cannot attribute pending proxy deployment to the cancelled operation; manual recovery required")
+	}
+	op := encodeOp(*o)
+	return &op, nil
 }
 
 func (b *Backend) prepareProxyRollout(ctx context.Context, a *application, m metadata, settings map[string]any, o *operation) error {

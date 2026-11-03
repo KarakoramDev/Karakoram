@@ -82,10 +82,23 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 	if cp.Member == "" && (cancel || cp.Order != nil && cp.Index >= len(cp.Order)) {
 		return engine.OpResult{Done: true}, nil
 	}
+	if cancel && cp.Member != "" && cp.Deploy == nil && cp.ProxyServing != nil && *cp.ProxyServing {
+		if lookup, ok := rc.Backend.(infra.ProxyDeploymentLookup); ok {
+			deployment, e := lookup.LookupProxyDeployment(ctx, cp.Member, op.ID)
+			if e != nil {
+				return result, e
+			}
+			if deployment != nil {
+				cp.Deploy = deployment
+				cp.Started = true
+				cp.Stage = "waiting"
+			}
+		}
+	}
 	if cancel && cp.Member != "" && cp.Stage != "waiting" {
-		// A pre-deploy intent may have lost an accepted backend reply. Do not
-		// submit anything on cancellation: settle native health (old or target
-		// build) instead. A persisted receipt still requires exact target build.
+		// Cancellation never submits a deployment. A recovered serving receipt
+		// above must finish backend admission and exact-build acknowledgement;
+		// only an intent without a receipt may settle on incumbent native health.
 		cp.Stage = "settling"
 	}
 	// Never deploy different bytes under a frozen identity. Recovery of a member
@@ -357,7 +370,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			// Old journals without a rollout decision keep their original redeploy
 			// policy. Never reselect a policy after an ambiguous submission.
 			serving := cp.ProxyServing != nil && *cp.ProxyServing
-			deployment, e = engine.DeployProxy(ctx, rc, m.Name, spec, serving)
+			deployment, e = engine.DeployProxy(ctx, rc, m.Name, spec, serving, op.ID)
 		} else {
 			deployment, e = engine.Deploy(ctx, rc, m.Name, spec)
 		}
@@ -374,7 +387,13 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			if e != nil {
 				return result, e
 			}
-			if status.Failed && cp.StopReason == "" {
+			servingProxy := m.Role == "proxy" && cp.ProxyServing != nil && *cp.ProxyServing
+			if status.Failed && (cp.StopReason == "" || servingProxy) {
+				if cancel && servingProxy {
+					result, err = agentUpgradeResult(&cp, "Proxy rollout failed; manual recovery required before cancelling")
+					result.Done = true
+					return result, errors.Join(err, fmt.Errorf("agent deployment failed for %s: %s; manual recovery required; cancellation cannot settle a failed serving rollout", m.Name, status.Message))
+				}
 				return result, fmt.Errorf("agent deployment failed for %s: %s", m.Name, status.Message)
 			}
 			if !status.Done && !status.Failed {
