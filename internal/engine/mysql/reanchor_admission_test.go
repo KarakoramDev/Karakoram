@@ -27,7 +27,7 @@ func (s *interleavedReanchorStore) EnqueueBackup(ctx context.Context, b *domain.
 }
 
 func TestPITRReanchorTransactionalAdmission(t *testing.T) {
-	for _, scenario := range []string{"manual-backup", "maintenance", "cancelled-maintenance"} {
+	for _, scenario := range []string{"manual-backup", "maintenance", "cancelled-maintenance", "upgrade-agents", "replace-member"} {
 		t.Run(scenario, func(t *testing.T) {
 			maintenance := scenario != "manual-backup"
 			p, rc, _ := backupFixture(t, "single")
@@ -55,6 +55,12 @@ func TestPITRReanchorTransactionalAdmission(t *testing.T) {
 				op := &domain.Operation{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name}
 				if maintenance {
 					op.Kind = domain.OperationRestart
+					switch scenario {
+					case "upgrade-agents":
+						op.Kind = domain.OperationUpgradeAgents
+					case "replace-member":
+						op.Kind = domain.OperationReplaceMember
+					}
 					if err := db.EnqueueOperation(t.Context(), op); err != nil {
 						t.Fatal(err)
 					}

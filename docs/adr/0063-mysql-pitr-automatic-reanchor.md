@@ -28,6 +28,13 @@ latest such operation finished. In-progress maintenance and unavailable writer
 identity restart stability observation. Unknown operation or baseline evidence
 fails closed without queuing a full.
 
+Agent upgrades and member replacements, including automatic lost-volume
+replacement, use the same operation deferral and post-completion stability
+period. Confirmed or observed member volume loss and unsettled proxy drain
+flags also defer re-anchoring independently of operation inventory. Runtime
+recovery and orphaned-drain settlement run first; a busy or failed pass resets
+writer stability observation before returning.
+
 Deduplicate by cluster, physical writer UUID and newest-full name. Use trigger
 `pitr-reanchor`, block while any backup is pending/running, and permit at most one
 automatic re-anchor full per cluster per hour. Failed attempts remain deduplicated
