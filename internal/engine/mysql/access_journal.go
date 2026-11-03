@@ -215,8 +215,11 @@ func (p *Core) finishPendingAccess(ctx context.Context, rc *engine.Context) erro
 	return err
 }
 func (p *Core) mutateUser(ctx context.Context, rc *engine.Context, req myspec.AccessRequest) (string, error) {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return "", err
+	}
+	defer p.mutations.release(lock)
 	if err := accessFence(ctx, rc); err != nil {
 		return "", err
 	}

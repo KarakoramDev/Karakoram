@@ -146,14 +146,17 @@ func handoffBlockedRestore(ctx context.Context, rc *engine.Context, op *domain.O
 
 // RunOperation's closed dispatch prevents unsupported maintenance from mutating data.
 func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return result, err
+	}
+	defer p.mutations.release(lock)
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
 	defer invalidateMySQLReadObservation(ctx, rc)
 	previousOperation := rc.Operation
 	rc.Operation = op
 	defer func() { rc.Operation = previousOperation }()
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
 	if err := p.finishPendingAccess(ctx, rc); err != nil {
 		return engine.OpResult{}, err
 	}

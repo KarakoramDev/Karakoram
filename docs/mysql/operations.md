@@ -440,6 +440,21 @@ invalid or timed-out members without exposing native error payloads. Every membe
 must supply valid evidence in the same sweep before seed selection; partial
 observations never authorize bootstrap or substitute for fresh evidence on retry.
 
+Control-plane mutations are serialized by namespace and cluster name, including
+access changes, reconciliation, operations and cluster cleanup. A slow native
+recovery probe holds only that cluster's mutation gate; access changes and
+operations for unrelated clusters can proceed. Waiting for this gate honors the
+caller's context deadline. Idle gates are removed after their last holder/waiter
+leaves.
+
+Backup-object deletion has separate coordination: retained-backup deletion,
+live-cluster backup deletion and repository cleanup exclude each other and active
+control-plane backup/restore steps, including clones reading another cluster's
+sealed backup credentials. Backup/restore steps can otherwise run concurrently.
+This is in-process coordination, not an S3 transaction or a lock on asynchronous
+agent uploads. Existing incarnation-scoped repository paths and backup/restore
+admission still apply; do not delete storage objects manually during recovery.
+
 PXC state transfer uses upstream SST behavior rather than custom keep-list overrides. Managed data-identity tracking permits UUID regeneration only for an explicitly authorized state transfer and records the accepted identity after Synced state. Re-formation/restoration may explicitly reset a stopped joiner's own dataset for SST; an arbitrary identity mismatch is not permission to erase or initialize it. This is distinct from independent [backup restore](backups.md#offline-restore-and-clone), which creates new replication history.
 
 If recovery is blocked, preserve all remaining data and position evidence, isolate application traffic and resolve the missing observations or recover from a verified backup. Never reset GTIDs, invent a Galera position or edit bootstrap flags across multiple members to force a green status.
