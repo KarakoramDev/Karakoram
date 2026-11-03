@@ -177,6 +177,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	if m == nil {
 		return fmt.Errorf("rolling member is missing")
 	}
+	if r.Reason == "upgrade-agents" {
+		return p.agentUpgradeStep(ctx, rc, s)
+	}
 	raw, e := secret(ctx, rc, "target/"+m.Name)
 	if e != nil {
 		return e
