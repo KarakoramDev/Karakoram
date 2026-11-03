@@ -57,6 +57,59 @@ plane does not repair an older member's bootstrap implementation.
 
 The server uses SIGTERM and declares a **45-second graceful stop budget** for checkpointing during agent shutdown, bounded by the remaining overall shutdown deadline. A timeout is an error, not proof of a stopped JVM; the supervisor does not turn it into successful shutdown or immediately SIGKILL that child. The infrastructure may subsequently terminate the runtime according to its own grace period. The temporary credential-recovery child has a separate 45-second stop wait and is force-killed if it cannot exit. Check runtime/platform stop grace and allow crash recovery after forced termination.
 
+### Legacy bootstrap marker with expired credentials
+
+A v0.4.3 member could record `credentials-initialized.json` after an
+unchanged-password rejection even though `neo4j.passwordChangeRequired` remained
+true. Upgrading the member prevents new false completions but does **not** validate
+or invalidate an existing marker. With both that marker and the system store
+present, `BeforeStart` skips recovery. The normal server can therefore run while
+authenticated readiness and other managed queries fail with
+`Neo.ClientError.Security.CredentialsExpired`; this is not necessarily an
+incorrect password. Repeated reloads or restarts alone do not repair it.
+
+Automatic repair is not performed: readiness and metrics are observations outside
+the node action lock, and a failed observation cannot authorize a singleton
+outage or release a restore/backup/recovery job's stop hold. Moving the mutation
+into apply would also require durable attempt/admission state to prevent repeated
+stop/recovery/start cycles on persistent failure. Ordinary system-user rotation
+does not enter offline repair for `CredentialsExpired`: its recovery admission
+requires explicit credential rejection, not the change-required signal.
+
+For this specific legacy-marker condition, arrange a maintenance outage and
+support-assisted access to the member's authenticated private agent API and
+volume (there is no public CLI bootstrap-repair command):
+
+1. Upgrade the member agent to the fixed version. Preserve the volume and sealed
+   managed password; retain a copy of the marker and relevant redacted diagnostics.
+   Confirm that no backup, restore, administrator recovery or other lifecycle
+   operation is active or recovery-pending. Resolve any such operation first;
+   never release its hold or alter its receipts.
+   Prevent new scheduled backups and lifecycle submissions for the duration of
+   this procedure; an operator stop hold alone does not exclude offline jobs.
+2. Explicitly stop `neo4j` through the agent process API
+   (`POST /v1/processes/neo4j/stop`). This persists the operator stop hold.
+   Confirm successful stop and absence of a server/recovery JVM before touching
+   the volume. A timeout or a merely unreachable connector is not proof of stop.
+3. Only after confirming this legacy condition and the stopped state, remove
+   `karakoram/neo4j/credentials-initialized.json` from the member volume. Do not
+   remove the system database, `applied.json`, controls, job receipts or any store
+   directory, and do not seed `auth.ini` or launch a separate JVM.
+4. Explicitly start through the agent process API
+   (`POST /v1/processes/neo4j/start`), releasing only the operator hold just taken.
+   The upgraded agent replays the bounded loopback-only recovery against the
+   existing store, clears and verifies the change-required flag, then records a
+   new completion marker before normal launch. Allow the engine-action request
+   budget for recovery rather than an ordinary short request timeout.
+5. Confirm authenticated readiness, matching configuration/restart token and
+   application queries. If recovery fails, stop retrying starts, retain the
+   volume and inspect the categorized diagnostic; missing metadata, TLS, store
+   or resource failures require their own repair, not repeated marker deletion.
+
+This narrowly scoped stopped-member procedure is an exception to the general
+instruction not to remove bootstrap markers; it is not a lost-password recovery
+shortcut or a remedy for arbitrary readiness failures.
+
 ## Upgrades
 
 The supported transition is **2026.09.0 → 2026.10.0**, requested by changing `spec.version`. It requires a fresh successful backup and restarts on the new pinned artifacts; the store and system database upgrade in place. Plan an outage, verify the dump and recovery destination first, and do not combine this with an assumed rollback-by-downgrade strategy. Downgrades and other version paths are rejected. See [shared upgrade admission](../clusters.md) and [offline dumps](backups.md).
