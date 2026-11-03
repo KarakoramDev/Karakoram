@@ -289,6 +289,9 @@ func (b *Backend) versionStatus(ctx context.Context, op infra.Op) (infra.OpState
 	if state.Done {
 		err = b.clearReceipt(ctx, op)
 	}
+	if state.Done && !state.Failed && err == nil && op.ServiceID != "" {
+		err = b.clearAutoscalingFailures(ctx, op.ServiceID)
+	}
 	return state, err
 }
 func (b *Backend) deployWithReceipt(ctx context.Context, s *ServiceStack, name, artifactName, runtimeYAML string, reader io.Reader, size int64, retryEpoch int64) (infra.Op, error) {

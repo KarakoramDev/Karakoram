@@ -39,6 +39,16 @@ func (b *Backend) servingAutoscaling(ctx context.Context, s *ServiceStack, confi
 		}
 		return servingAutoscalingOp(s.ID, receipt), nil
 	}
+	failures, _, err := b.autoscalingFailures(ctx, s.ID)
+	if err != nil {
+		return infra.Op{}, err
+	}
+	for _, failure := range failures {
+		if !failure.Observed && failure.Receipt.AutoscalingConfig == string(raw) {
+			// Unobserved failures are replays, not permission to retry.
+			return servingAutoscalingOp(s.ID, failure.Receipt), nil
+		}
+	}
 	containers, err := b.client.Containers(ctx, s.ID)
 	if err != nil {
 		return infra.Op{}, err
@@ -104,6 +114,16 @@ func (b *Backend) servingAutoscalingStatus(ctx context.Context, op infra.Op) (in
 	if !strings.HasPrefix(op.ID, "serving:") || json.Unmarshal([]byte(strings.TrimPrefix(op.ID, "serving:")), &receipt) != nil || receipt.Action != "autoscaling" || receipt.Incumbents == "" {
 		return infra.OpState{}, &infra.RejectedError{Message: "zerops: invalid serving autoscaling receipt"}
 	}
+	failures, _, err := b.autoscalingFailures(ctx, op.ServiceID)
+	if err != nil {
+		return infra.OpState{}, err
+	}
+	if failure, ok := failures[op.ID]; ok {
+		if err := b.replaceReceipt(ctx, op.ServiceID, operationReceipt{}, &failure.Receipt); err != nil {
+			return infra.OpState{}, err
+		}
+		return failure.State, nil
+	}
 	process := receipt.Process
 	if process == "" {
 		var baseline []string
@@ -131,8 +151,11 @@ func (b *Backend) servingAutoscalingStatus(ctx context.Context, op infra.Op) (in
 		}
 	}
 	status, err := b.OpStatus(ctx, processOp(&Process{ID: process}, "autoscaling", op.ServiceID))
-	if err != nil || !status.Done || status.Failed {
+	if err != nil || !status.Done {
 		return status, err
+	}
+	if status.Failed {
+		return b.finishFailedAutoscaling(ctx, op, receipt, status)
 	}
 	containers, err := b.client.Containers(ctx, op.ServiceID)
 	if err != nil {
@@ -149,7 +172,8 @@ func (b *Backend) servingAutoscalingStatus(ctx context.Context, op infra.Op) (in
 		}
 	}
 	failed := func() (infra.OpState, error) {
-		return infra.OpState{Done: true, Failed: true, Status: "INCUMBENTS_REPLACED", Message: "zerops: autoscaling replaced incumbent Linux containers; serving preservation could not be established; inspect platform processes and proxy readiness before retrying"}, nil
+		status := infra.OpState{Done: true, Failed: true, Status: "INCUMBENTS_REPLACED", Message: "zerops: autoscaling replaced incumbent Linux containers; serving preservation could not be established; inspect platform processes and proxy readiness before retrying"}
+		return b.finishFailedAutoscaling(ctx, op, receipt, status)
 	}
 	if receipt.MinContainers >= len(incumbents) {
 		for _, id := range incumbents {
@@ -168,6 +192,9 @@ func (b *Backend) servingAutoscalingStatus(ctx context.Context, op infra.Op) (in
 		return infra.OpState{Status: "WAITING_CONTAINERS", Message: "waiting for requested running container count"}, nil
 	}
 	if err = b.replaceReceipt(ctx, op.ServiceID, operationReceipt{}, &receipt); err != nil {
+		return infra.OpState{}, err
+	}
+	if err = b.clearAutoscalingFailures(ctx, op.ServiceID); err != nil {
 		return infra.OpState{}, err
 	}
 	return status, nil

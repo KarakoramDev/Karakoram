@@ -826,6 +826,13 @@ func (b *Backend) resources(ctx context.Context, name string, r *infra.Resources
 			return b.servingAutoscaling(ctx, s, config)
 		}
 	}
+	prior, err := b.receipt(ctx, s.ID)
+	if err != nil {
+		return infra.Op{}, err
+	}
+	if prior.Action == "autoscaling" {
+		return infra.Op{}, unknownOutcome(prior.Action, prior.Stage)
+	}
 	p, err := b.client.Autoscaling(ctx, s.ID, config)
 	attempted := attemptedResources(config)
 	op := processOp(p, "autoscaling", s.ID)
@@ -1077,6 +1084,11 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		defer lock.Unlock()
 	}
 	if op.ID == "" {
+		if receiptAction(op.Kind) && op.ServiceID != "" {
+			if err := b.clearAutoscalingFailures(ctx, op.ServiceID); err != nil {
+				return infra.OpState{}, err
+			}
+		}
 		return infra.OpState{Done: true, Status: "FINISHED"}, nil
 	}
 	if strings.HasPrefix(op.ID, "version:") {
@@ -1172,6 +1184,11 @@ func (b *Backend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if state.Done && !state.Expired {
 		if err := b.clearReceipt(ctx, op); err != nil {
 			return infra.OpState{}, err
+		}
+		if receiptAction(op.Kind) {
+			if err := b.clearAutoscalingFailures(ctx, op.ServiceID); err != nil {
+				return infra.OpState{}, err
+			}
 		}
 	}
 	return state, nil
