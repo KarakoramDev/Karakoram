@@ -53,6 +53,10 @@ it remain on the maintenance-gated disruptive path even when the backend general
 supports serving-preserving updates. Upgrade/redeploy their agents deliberately before
 relying on that backend guarantee; a control-plane-only upgrade does not install
 the probe into an existing runtime.
+The serving probe checks the live supervisor's applied configuration and holds,
+then native ProxySQL writer admission and managed-user readiness. This is stricter
+than the ordinary bootstrap frontend-listener check: an open TCP port without
+an ONLINE writer cannot promote a serving-preserving replacement.
 
 Exposure admission is retained separately from runtime routes. Resume and runtime
 recovery restore the previously admitted TCP exposure even when the maintenance

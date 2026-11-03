@@ -213,3 +213,36 @@ func TestProxySupersedingScaleRespectsLegacyMaintenance(t *testing.T) {
 		t.Fatal("override did not admit superseding scale")
 	}
 }
+
+func TestProxyLegacyProbeMarkerDoesNotRedeployIdleRuntime(t *testing.T) {
+	p, rc, inventory, s, _, _ := replicatedProxyFixture(t)
+	b := &proxyUpdateBackend{proxyInventoryBackend: inventory, serving: true, legacy: true}
+	rc.Backend = b
+	m := s.find("demopx")
+	// A newly rendered deployment has the probe marker, but the existing
+	// runtime deliberately does not. CP restart must not deploy that difference.
+	spec, err := p.runtimeSpec(rc, m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] != "1" {
+		t.Fatal("new deployments lack serving probe support marker")
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	b.actions = nil
+	for range 4 {
+		if _, err := p.Sync(t.Context(), rc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b.countCalls != 0 || b.resourceCalls != 0 {
+		t.Fatal("idle legacy runtime was resized")
+	}
+	for _, action := range b.actions {
+		if action == "deploy:demopx" || action == "runtime-stop:demopx" {
+			t.Fatal("new marker disrupted an existing runtime", action)
+		}
+	}
+}
