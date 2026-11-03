@@ -20,7 +20,7 @@ type agentUpgradeCheckpoint struct {
 	Submitted bool                       `json:"submitted,omitempty"`
 }
 
-func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain.Operation, cancel bool) (result engine.OpResult, err error) {
 	var cp agentUpgradeCheckpoint
 	out := func(done bool) engine.OpResult {
 		raw, _ := json.Marshal(cp)
@@ -35,6 +35,9 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if err != nil {
 			return out(false), err
 		}
+	}
+	if cancel && !cp.Submitted {
+		return out(true), nil
 	}
 	s, err := loadState(rc.Cluster)
 	if err != nil {
@@ -151,7 +154,7 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 		if m.Component == tspec.History || m.Component == tspec.Server {
 			cp.SettleUntil = clockNow(rc).Add(time.Minute)
 		}
-		return out(false), nil
+		return out(cancel), nil
 	}
 	agent.Healthy = !agent.LastSeen.IsZero()
 	if !engine.MemberNeedsAgentUpgrade(domain.MemberStatus{Agent: agent}, cp.Target) {
@@ -169,4 +172,21 @@ func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *do
 	// Its receipt and all-instance readiness fence advancement to the next role.
 	cp.Waiting = true
 	return out(false), nil
+}
+
+func (*Provider) CanCancelOperation(_ context.Context, op *domain.Operation) error {
+	if op.Kind != domain.OperationUpgradeAgents {
+		return engine.Invalid("operation does not support cancellation")
+	}
+	return nil
+}
+
+func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if err := p.CanCancelOperation(ctx, op); err != nil {
+		return engine.OpResult{}, err
+	}
+	previous := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previous }()
+	return p.upgradeAgents(ctx, rc, op, true)
 }

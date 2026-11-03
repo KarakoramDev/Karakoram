@@ -13,6 +13,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func TestAgentUpgradeReplayAndGates(t *testing.T) {
@@ -133,5 +134,103 @@ func TestAgentUpgradeBuildFenceAndSkip(t *testing.T) {
 	}
 	if backend.deploys != deploys {
 		t.Fatal("current agent redeployed")
+	}
+}
+
+func TestAgentUpgradeCancellation(t *testing.T) {
+	for _, phase := range []string{"window", "intent", "deploy", "readiness"} {
+		t.Run(phase, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			backend := rc.Backend.(*backendFake)
+			rc.Backend = idleBackend{backend}
+			build, ready := "old", true
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				s, _ := load(rc.Cluster)
+				if r.URL.Path == "/v1/status" {
+					json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: s.ConfigVersion, Agent: agentapi.AgentBuild{Build: build}})
+					return
+				}
+				json.NewEncoder(w).Encode(map[string]bool{"ready": ready})
+			}))
+			defer server.Close()
+			rc.Agents = idleAgents{server}
+			converge(t, p, rc)
+			baseline := backend.deploys
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
+			step := func(cancel bool) engine.OpResult {
+				t.Helper()
+				var out engine.OpResult
+				var err error
+				if cancel {
+					out, err = p.CancelOperation(t.Context(), rc, op)
+				} else {
+					out, err = p.RunOperation(t.Context(), rc, op)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Checkpoint = out.Checkpoint
+				return out
+			}
+			if err := p.CanCancelOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			step(false)
+			if phase == "window" {
+				rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1m"}}}
+			}
+			step(false)
+			if phase == "deploy" || phase == "readiness" {
+				step(false)
+				backend.pending = phase == "deploy"
+				ready = false
+				if step(true).Done {
+					t.Fatal("cancel abandoned disrupted runtime")
+				}
+				backend.pending = false
+				ready = true
+				if step(true).Done {
+					t.Fatal("cancel ignored target build")
+				}
+				build = engine.CurrentAgentBuild().Build
+				if !step(true).Done {
+					t.Fatal("cancel did not finish recovered member")
+				}
+				if backend.deploys != baseline+1 {
+					t.Fatal("cancel redeployed member")
+				}
+			} else {
+				if !step(true).Done || backend.deploys != baseline {
+					t.Fatal("cancel disrupted runtime")
+				}
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeRecoveryAdmission(t *testing.T) {
+	for _, action := range []string{"restart", "import"} {
+		t.Run(action, func(t *testing.T) {
+			p, rc, _, _ := setup(t)
+			converge(t, p, rc)
+			s, _ := load(rc.Cluster)
+			s.Recovery.Action = action
+			if action == "restart" {
+				s.Recovery.Op = &infra.Op{}
+			} else {
+				s.Recovery.ImportPlan = &engine.ImportPlan{}
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			if allowed, err := p.CanClaimOperation(rc.Cluster); err != nil || allowed {
+				t.Fatalf("recovery claim allowed: %v %v", allowed, err)
+			}
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}); err == nil {
+				t.Fatal("recovery passed defensive admission")
+			}
+		})
 	}
 }

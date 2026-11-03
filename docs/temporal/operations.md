@@ -72,6 +72,13 @@ The next component never starts until all expected instances are ready on the
 target build. A different control-plane executable cannot replace the frozen
 target; re-run the operation using the intended build.
 
+Cancellation stops between components or before deployment submission, including
+while waiting for a maintenance window. A submitted component finishes native
+readiness and exact target-build acknowledgement before cancellation completes;
+no subsequent component is deployed, and completed work is not rolled back.
+Component recovery/import journals defer operation admission until normal
+recovery finishes.
+
 
 ## Server upgrades and schema
 

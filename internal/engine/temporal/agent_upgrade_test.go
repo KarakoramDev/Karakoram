@@ -158,3 +158,100 @@ func TestAgentUpgradeBuildFenceAndCurrentSkip(t *testing.T) {
 		t.Fatal("current agents redeployed")
 	}
 }
+
+func TestAgentUpgradeCancellation(t *testing.T) {
+	for _, phase := range []string{"window", "intent", "deploy", "readiness", "between"} {
+		t.Run(phase, func(t *testing.T) {
+			p, rc, _, agents := fixture(t, "split")
+			converge(t, p, rc)
+			backend := &agentUpgradeBackend{testBackend: rc.Backend.(*testBackend)}
+			rc.Backend = backend
+			agents.builds = map[string]string{}
+			s, _ := loadState(rc.Cluster)
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			op := &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}
+			step := func(cancel bool) engine.OpResult {
+				t.Helper()
+				var out engine.OpResult
+				var err error
+				if cancel {
+					out, err = p.CancelOperation(t.Context(), rc, op)
+				} else {
+					out, err = p.RunOperation(t.Context(), rc, op)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				op.Checkpoint = out.Checkpoint
+				return out
+			}
+			if err := p.CanCancelOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			step(false)
+			if phase == "window" {
+				rc.Cluster.Spec.Maintenance = &domain.MaintenancePolicy{Windows: []domain.MaintenanceWindow{{Schedule: "0 0 1 1 *", Duration: "1m"}}}
+			}
+			step(false)
+			if phase == "deploy" || phase == "readiness" || phase == "between" {
+				step(false)
+				agents.unready = "history"
+				if phase == "readiness" {
+					step(false)
+				}
+				if phase != "between" {
+					if step(true).Done {
+						t.Fatal("cancel abandoned disrupted component")
+					}
+					agents.unready = ""
+					if step(true).Done {
+						t.Fatal("cancel ignored exact build")
+					}
+				}
+				agents.unready = ""
+				agents.builds[s.Members["history"].Name] = engine.CurrentAgentBuild().Build
+				if phase == "between" {
+					step(false)
+				}
+				if !step(true).Done {
+					t.Fatal("cancel did not complete safely")
+				}
+				if len(backend.order) != 1 {
+					t.Fatal("cancel started another component", backend.order)
+				}
+			} else {
+				if !step(true).Done || len(backend.order) != 0 {
+					t.Fatal("cancel disrupted component")
+				}
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeRecoveryAdmission(t *testing.T) {
+	for _, action := range []string{"recovering", "import"} {
+		t.Run(action, func(t *testing.T) {
+			p, rc, _, _ := fixture(t, "combined")
+			converge(t, p, rc)
+			s, _ := loadState(rc.Cluster)
+			for _, m := range s.Members {
+				if action == "recovering" {
+					m.Recovering = true
+				} else {
+					m.ImportBatch = &engine.ImportPlan{}
+				}
+				break
+			}
+			if err := saveState(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			if allowed, err := p.CanClaimOperation(rc.Cluster); err != nil || allowed {
+				t.Fatalf("recovery claim allowed: %v %v", allowed, err)
+			}
+			payload, _ := json.Marshal(engine.AgentUpgradePayload{TargetBuild: engine.CurrentAgentBuild().Build})
+			if _, err := p.RunOperation(t.Context(), rc, &domain.Operation{Kind: domain.OperationUpgradeAgents, Payload: payload}); err == nil {
+				t.Fatal("recovery passed defensive admission")
+			}
+		})
+	}
+}

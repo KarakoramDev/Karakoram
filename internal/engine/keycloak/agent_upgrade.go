@@ -24,10 +24,34 @@ type agentUpgradeCheckpoint struct {
 // SyncDuringOperation prevents normal convergence from changing the frozen runtime.
 func (*Provider) SyncDuringOperation(*domain.Operation) bool { return false }
 
+// CanClaimOperation lets normal recovery finish before maintenance owns the runtime.
+func (*Provider) CanClaimOperation(c *domain.Cluster) (bool, error) {
+	s, err := load(c)
+	return err == nil && s.Pending == nil && s.Import == nil && s.Recovery.Op == nil && s.Recovery.ImportPlan == nil, err
+}
+
+func (*Provider) CanCancelOperation(_ context.Context, op *domain.Operation) error {
+	if op.Kind != domain.OperationUpgradeAgents {
+		return engine.Invalid("operation does not support cancellation")
+	}
+	return nil
+}
+
+func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if err := p.CanCancelOperation(ctx, op); err != nil {
+		return engine.OpResult{}, err
+	}
+	return p.upgradeAgents(ctx, rc, op, true)
+}
+
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
 	if op.Kind != domain.OperationUpgradeAgents {
 		return engine.OpResult{}, engine.ErrNotSupported
 	}
+	return p.upgradeAgents(ctx, rc, op, false)
+}
+
+func (p *Provider) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain.Operation, cancel bool) (engine.OpResult, error) {
 	previous := rc.Operation
 	rc.Operation = op
 	defer func() { rc.Operation = previous }()
@@ -47,6 +71,9 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 		cp.Target = target
 	}
+	if cancel && !cp.Submitted {
+		return result(true), nil
+	}
 	if len(cp.Done) > 0 {
 		return result(true), nil
 	}
@@ -58,7 +85,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result(false), engine.Invalid("agent upgrade target build differs from running control-plane build; re-run upgrade-agents")
 	}
 	if cp.Order == nil {
-		if s.Pending != nil || s.Import != nil || !s.Deployed || s.ConfigVersion == 0 {
+		if s.Pending != nil || s.Import != nil || s.Recovery.Op != nil || s.Recovery.ImportPlan != nil || !s.Deployed || s.ConfigVersion == 0 {
 			return result(false), engine.Invalid("Keycloak agent upgrade requires a formed runtime with no pending structural work")
 		}
 		cp.Order = []string{s.Member}

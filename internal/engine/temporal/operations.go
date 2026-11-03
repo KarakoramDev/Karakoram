@@ -48,7 +48,15 @@ func (*Provider) SyncDuringOperation(*domain.Operation) bool { return false }
 // CanClaimOperation defers new maintenance while lifecycle or recovery owns runtimes.
 func (*Provider) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	s, e := loadState(c)
-	return e == nil && s.Pending == nil && s.Upgrade == nil && s.RestoreRecovery == nil, e
+	if e != nil {
+		return false, e
+	}
+	for _, m := range s.Members {
+		if m.Recovering || m.ImportBatch != nil {
+			return false, nil
+		}
+	}
+	return s.Pending == nil && s.Upgrade == nil && s.RestoreRecovery == nil, nil
 }
 
 // RunOperation advances checkpointed restart, CA rotation, backup and restore work.
@@ -57,7 +65,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	rc.Operation = op
 	defer func() { rc.Operation = previousOperation }()
 	if op.Kind == domain.OperationUpgradeAgents {
-		return p.upgradeAgents(ctx, rc, op)
+		return p.upgradeAgents(ctx, rc, op, false)
 	}
 	s, err := loadState(rc.Cluster)
 	if err != nil {
