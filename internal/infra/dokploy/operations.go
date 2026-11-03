@@ -223,6 +223,22 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	settings["updateConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
 	settings["rollbackConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
+	// Both images must support serving admission. Legacy/cold deployments keep
+	// ordinary policy; their successful marked deployment enables later rollouts.
+	preserveServing := m.Deployed && m.ProxyServingProbe && m.Volume == "" &&
+		m.Desired != "stopped" && m.Desired != "deleting" &&
+		d.Runtime.Env["KARAKORAM_PROXY_SERVING_PROBE"] == "1"
+	if d.ProxyPreserveServing != nil {
+		if *d.ProxyPreserveServing && !preserveServing {
+			return infra.Op{}, restoreConflict("proxy deployment no longer supports serving-preserving rollout")
+		}
+		preserveServing = *d.ProxyPreserveServing
+	}
+	if preserveServing {
+		if err = b.prepareProxyRollout(ctx, a, m, settings, &o); err != nil {
+			return infra.Op{}, err
+		}
+	}
 	settings["stopGracePeriodSwarm"] = int64(120 * time.Second)
 	settings["ulimitsSwarm"] = []map[string]any{{"Name": "nofile", "Soft": 65535, "Hard": 65535}}
 	settings["restartPolicySwarm"] = map[string]any{"Condition": "any"}
@@ -561,6 +577,18 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 		}
 	}
 	if o.HealthGated {
+		// The Swarm policy may still describe the incumbent while an uploaded
+		// image is building. Never complete or time out task admission before the
+		// deployment itself has finished.
+		if !deploymentDone {
+			return state, nil
+		}
+		if o.Action == "deploy" {
+			o.Issued, err = time.Parse(time.RFC3339Nano, finishedAt)
+			if err != nil {
+				return state, silentFailure("completed deployment has no valid finish timestamp")
+			}
+		}
 		return b.proxyRolloutStatus(ctx, o, a, ts, state)
 	}
 	ready := 0

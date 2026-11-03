@@ -323,7 +323,12 @@ func (f *fakeAPI) advanceDeployments(a *fakeApplication) {
 			if d.polls >= 2 {
 				d.status = "done"
 				d.finishedAt = time.Now().UTC().Format(time.RFC3339Nano)
-				f.apply(a)
+				update, _ := a.row["updateConfigSwarm"].(map[string]any)
+				if a.row["healthCheckSwarm"] != nil && fakeString(update, "FailureAction") == "pause" && fakeString(update, "Order") == "start-first" {
+					f.beginProxyRollout(a)
+				} else {
+					f.apply(a)
+				}
 				if a.queued > 0 {
 					a.queued--
 					f.deploy(a)

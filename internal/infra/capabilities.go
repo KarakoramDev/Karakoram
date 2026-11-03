@@ -33,9 +33,9 @@ type ServingResourceUpdate interface {
 	ResourceUpdatePreservesServingFor(current, target Resources) bool
 }
 
-// ServingProxyUpdates optionally narrows both serving-preserving capabilities
-// to deployed proxy runtimes with the required platform readiness integration.
-// A false result or an error forbids the serving-preserving engine path.
+// ServingProxyUpdates optionally narrows serving-preserving count, resource and
+// new-build deployment capabilities to deployed proxy runtimes with the required
+// platform readiness integration. False or an error forbids the preserving path.
 type ServingProxyUpdates interface {
 	ProxyUpdatesPreserveServing(context.Context, string) (bool, error)
 }
@@ -83,6 +83,11 @@ type Capabilities struct {
 	// start-first rules as ReplicaScalePreservesServing. ServingResourceUpdate
 	// may exclude disruptive requests. Engine readiness remains mandatory.
 	ResourceUpdatePreservesServing bool `json:"-"`
+	// ProxyDeploymentPreservesServing: a new-build proxy Deploy preserves serving
+	// under the same health-gated, serial start-first rules. Count/resource
+	// guarantees alone do not imply this. ServingProxyUpdates must also approve
+	// the deployed runtime.
+	ProxyDeploymentPreservesServing bool `json:"-"`
 	// EnvChangeRestarts: writing variables restarts or redeploys the runtime.
 	EnvChangeRestarts bool `json:"envChangeRestarts"`
 	// StatelessRolloutSurge bounds extra serving instances during a stateless
