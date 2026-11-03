@@ -157,7 +157,7 @@ make lint
 make openapi-check
 ```
 
-Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2025.1.1 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
+Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2026.2.2 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
 
 Live tests are opt-in and destructive to their resources:
 
