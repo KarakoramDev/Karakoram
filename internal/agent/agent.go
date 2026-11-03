@@ -34,6 +34,7 @@ type Options struct {
 	ControlPlaneURL, InternalCAPEM, Token, Cluster, Member, DataDir string
 	Listen                                                          string
 	Engine                                                          string
+	ProxyServingProbe                                               bool
 	Logger                                                          *slog.Logger
 }
 
@@ -41,6 +42,7 @@ type Options struct {
 func OptionsFromEnv() (Options, error) {
 	o := Options{ControlPlaneURL: os.Getenv("KARAKORAM_URL"), InternalCAPEM: os.Getenv("KARAKORAM_INTERNAL_CA"), Token: os.Getenv("KARAKORAM_AGENT_TOKEN"), Cluster: os.Getenv("KARAKORAM_CLUSTER"), Member: os.Getenv("KARAKORAM_MEMBER"), DataDir: os.Getenv("KARAKORAM_DATA_DIR"), Listen: ":9443"}
 	o.Engine = os.Getenv("KARAKORAM_ENGINE")
+	o.ProxyServingProbe = os.Getenv("KARAKORAM_PROXY_SERVING_PROBE") == "1"
 	if o.ControlPlaneURL == "" || o.InternalCAPEM == "" || o.Token == "" || o.Cluster == "" || o.Member == "" || o.DataDir == "" {
 		return o, errors.New("all KARAKORAM_URL, INTERNAL_CA, AGENT_TOKEN, CLUSTER, MEMBER and DATA_DIR environment variables are required")
 	}
@@ -354,11 +356,9 @@ func Run(ctx context.Context, o Options, engines ...Engine) error {
 		return fmt.Errorf("agent startup listener: %w", err)
 	}
 	defer startup.Close()
-	proxyServing, err := a.serveProxyServing()
-	if err != nil {
-		return fmt.Errorf("agent proxy serving listener: %w", err)
+	if proxyServing := a.startProxyServing(); proxyServing != nil {
+		defer proxyServing.Close()
 	}
-	defer proxyServing.Close()
 	retryCtx, cancelRetries := context.WithCancel(ctx)
 	retriesDone := make(chan struct{})
 	go func() {

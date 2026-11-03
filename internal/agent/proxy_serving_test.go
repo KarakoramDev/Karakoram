@@ -7,8 +7,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -263,5 +266,81 @@ func TestProxyAdmissionUsesStableContainerProvenanceOutsideDataDir(t *testing.T)
 	}
 	if filepath.Dir(filepath.Dir(first.path)) != "/tmp" || first.path == filepath.Join(dir, filepath.Base(first.path)) {
 		t.Fatal("admission marker can live in an engine data volume")
+	}
+}
+
+func TestNonProxyStartupDoesNotInitializeAdmission(t *testing.T) {
+	a := &nodeAgent{o: Options{DataDir: t.TempDir()}}
+	if listener := a.startProxyServing(); listener != nil {
+		listener.Close()
+		t.Fatal("non-proxy agent started a serving listener")
+	}
+	if _, err := os.Lstat(filepath.Dir(proxyAdmissionPath(a.o.DataDir))); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("non-proxy agent created admission state: %v", err)
+	}
+	if err := proxyServingReadiness(t.Context(), a.o.DataDir); err == nil {
+		t.Fatal("non-proxy agent exposed serving readiness")
+	}
+}
+
+func TestProxyAdmissionSetupFailureHoldsReadinessNotStartup(t *testing.T) {
+	a, _ := proxyServingLatchFixture(t, "mysql", t.TempDir())
+	a.o.ProxyServingProbe = true
+	var logs strings.Builder
+	a.o.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	// A pre-created, non-private directory is rejected without weakening any
+	// inode, ownership, or no-follow checks, even for an otherwise healthy proxy.
+	private := filepath.Dir(proxyAdmissionPath(a.o.DataDir))
+	if err := os.Mkdir(private, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(private, 0755); err != nil {
+		t.Fatal(err)
+	}
+	listener := a.startProxyServing()
+	if listener == nil {
+		t.Fatal("admission setup failure prevented not-ready listener startup")
+	}
+	defer listener.Close()
+	for range 2 {
+		err := proxyServingReadiness(t.Context(), a.o.DataDir)
+		if err == nil || !strings.Contains(err.Error(), "initialize proxy admission") || !strings.Contains(err.Error(), "mode 0700") {
+			t.Fatalf("admission setup failure missing from probe diagnostic: %v", err)
+		}
+	}
+	if !strings.Contains(logs.String(), "initialize proxy admission") {
+		t.Fatal("admission setup failure was not logged")
+	}
+	if _, err := os.Lstat(proxyAdmissionPath(a.o.DataDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed setup published admission: %v", err)
+	}
+}
+
+func TestProxyServingBindFailureDoesNotAbortStartup(t *testing.T) {
+	a, _ := proxyServingLatchFixture(t, "mysql", t.TempDir())
+	a.o.ProxyServingProbe = true
+	var logs strings.Builder
+	a.o.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	blocker, err := net.Listen("unix", proxyServingAddress(a.o.DataDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Close()
+	if listener := a.startProxyServing(); listener != nil {
+		listener.Close()
+		t.Fatal("agent bound an occupied serving socket")
+	}
+	if !strings.Contains(logs.String(), "proxy serving readiness unavailable") {
+		t.Fatal("bind failure was not diagnosed")
+	}
+	// The process holding the address exits without a serving response.
+	go func() {
+		conn, err := blocker.Accept()
+		if err == nil {
+			conn.Close()
+		}
+	}()
+	if err := proxyServingReadiness(t.Context(), a.o.DataDir); err == nil {
+		t.Fatal("bind failure admitted the proxy")
 	}
 }
