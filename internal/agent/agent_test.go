@@ -275,9 +275,17 @@ func TestOptionsFromEnv(t *testing.T) {
 	for name, value := range map[string]string{"URL": "https://cp:9443", "INTERNAL_CA": "pem", "AGENT_TOKEN": "token", "CLUSTER": "demo", "MEMBER": "m0", "DATA_DIR": "/data"} {
 		t.Setenv("KARAKORAM_"+name, value)
 	}
+	t.Setenv("KARAKORAM_PROXY_SERVING_PROBE", "")
 	o, err := OptionsFromEnv()
 	if err != nil || o.Listen != ":9443" {
 		t.Fatal(o, err)
+	}
+	for _, marker := range []string{"", "0", "1", "true"} {
+		t.Setenv("KARAKORAM_PROXY_SERVING_PROBE", marker)
+		o, err := OptionsFromEnv()
+		if err != nil || o.ProxyServingProbe != (marker == "1") {
+			t.Fatalf("serving marker %q: enabled=%v, err=%v", marker, o.ProxyServingProbe, err)
+		}
 	}
 	t.Setenv("KARAKORAM_MEMBER", "")
 	if _, err := OptionsFromEnv(); err == nil {

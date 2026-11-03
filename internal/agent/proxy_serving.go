@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"slices"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // proxyServingAddress is container-local; neither service DNS nor a persisted
@@ -32,6 +35,9 @@ func proxyServingReadiness(ctx context.Context, dir string) error {
 		return err
 	}
 	defer conn.Close()
+	if err := proxyServingPeer(conn.(*net.UnixConn)); err != nil {
+		return err
+	}
 	deadline, _ := ctx.Deadline()
 	if err = conn.SetReadDeadline(deadline); err != nil {
 		return err
@@ -41,23 +47,74 @@ func proxyServingReadiness(ctx context.Context, dir string) error {
 		return err
 	}
 	if response[0] != 1 {
+		diagnostic, err := io.ReadAll(io.LimitReader(conn, 4096))
+		if err == nil && len(diagnostic) > 0 {
+			return fmt.Errorf("proxy serving readiness unavailable: %s", diagnostic)
+		}
 		return errors.New("proxy has not applied a serving configuration and admitted an online writer")
 	}
 	return nil
 }
 
+func proxyServingPeerUID(cred *unix.Ucred) error {
+	if cred == nil || cred.Uid != uint32(os.Geteuid()) {
+		return errors.New("proxy serving listener is not owned by the agent effective UID")
+	}
+	return nil
+}
+
+func proxyServingPeer(conn *net.UnixConn) error {
+	raw, err := conn.SyscallConn()
+	if err != nil {
+		return fmt.Errorf("proxy serving peer credentials: %w", err)
+	}
+	var cred *unix.Ucred
+	var credentialErr error
+	if err := raw.Control(func(fd uintptr) {
+		cred, credentialErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}); err != nil {
+		return fmt.Errorf("proxy serving peer credentials: %w", err)
+	}
+	if credentialErr != nil {
+		return fmt.Errorf("proxy serving peer credentials: %w", credentialErr)
+	}
+	return proxyServingPeerUID(cred)
+}
+
+func (a *nodeAgent) startProxyServing() net.Listener {
+	// The runtime marker is available before the first config pull; ordinary
+	// data agents must not depend on or create proxy admission state.
+	if !a.o.ProxyServingProbe {
+		return nil
+	}
+	listener, err := a.serveProxyServing()
+	if err != nil {
+		a.o.Logger.Error("proxy serving readiness unavailable", "error", err)
+	}
+	return listener
+}
+
 func (a *nodeAgent) serveProxyServing() (net.Listener, error) {
 	admission, err := proxyAdmissionForContainer(a.o.DataDir)
 	if err != nil {
-		return nil, err
+		return a.serveProxyServingState(admission, false, fmt.Errorf("initialize proxy admission: %w", err))
 	}
 	return a.serveProxyServingAdmission(admission)
 }
 
 func (a *nodeAgent) serveProxyServingAdmission(admission proxyContainerAdmission) (net.Listener, error) {
-	admitted, err := admission.admitted()
-	if err != nil {
-		return nil, err
+	admitted, admissionErr := admission.admitted()
+	if admissionErr != nil {
+		admissionErr = fmt.Errorf("initialize proxy admission: %w", admissionErr)
+	}
+	return a.serveProxyServingState(admission, admitted, admissionErr)
+}
+
+func (a *nodeAgent) serveProxyServingState(admission proxyContainerAdmission, admitted bool, admissionErr error) (net.Listener, error) {
+	// Keep provenance in the container writable layer, not a persistent data
+	// volume. Pre-emption or corruption must hold admission, never agent startup.
+	if admissionErr != nil && a.o.Logger != nil {
+		a.o.Logger.Error("proxy serving readiness unavailable", "error", admissionErr)
 	}
 	listener, err := net.Listen("unix", proxyServingAddress(a.o.DataDir))
 	if err != nil {
@@ -72,7 +129,7 @@ func (a *nodeAgent) serveProxyServingAdmission(admission proxyContainerAdmission
 			if err != nil {
 				return
 			}
-			if !admitted {
+			if !admitted && admissionErr == nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 				if a.proxyServingHealth(ctx) == nil {
 					admitted = admission.record() == nil
@@ -89,6 +146,9 @@ func (a *nodeAgent) serveProxyServingAdmission(admission proxyContainerAdmission
 			}
 			_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
 			_, _ = conn.Write([]byte{response})
+			if admissionErr != nil {
+				_, _ = io.WriteString(conn, admissionErr.Error())
+			}
 			_ = conn.Close()
 		}
 	}()
