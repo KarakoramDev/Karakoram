@@ -104,14 +104,18 @@ service DNS/VIP and retires its predecessor. Fresh agents pull configuration
 themselves; this does not depend on reconciliation pushing configuration while
 the platform operation is in progress.
 
-Successful native admission is **latched in memory for that agent/container
-lifetime**. The persistent Swarm healthcheck then checks only that the agent's
-supervisor is alive. Writer failover/loss, intentional maintenance or stop holds,
-and later configuration-apply failures do not turn every admitted proxy unhealthy
-or trigger a fleet-wide Swarm restart. Ongoing native readiness remains the
-engine's responsibility, including its every-instance check before committing an
-update. The latch is never stored in a data volume or inherited from another
-task: an agent/container restart must pass native admission again.
+Successful native admission is **latched for that Swarm task/container lifetime**.
+An atomic admission record lives in the container's fixed `/tmp` writable layer,
+never its engine data volume. Provenance binds the record to the PID namespace,
+PID 1 start identity, kernel boot ID and hostname. Agent-only restart/re-exec
+preserves established admission; a new task or container restart must earn
+admission again, even if an old marker was copied into its filesystem.
+The persistent Swarm healthcheck then checks only agent/supervisor liveness,
+using a lock-free shutdown flag rather than a process-management mutex.
+Writer failover/loss, intentional maintenance or stop holds, and later
+configuration-apply failures do not turn every admitted proxy unhealthy or
+trigger a fleet-wide Swarm restart. Ongoing native readiness remains the engine's
+responsibility, including its every-instance check before committing an update.
 
 The backend completes only after exactly the requested number of new healthy
 tasks is Running, no previous task is still Running, the expected Swarm
@@ -121,7 +125,7 @@ readiness again before committing. Scale-in remains maintenance-window gated.
 Version, startup/runtime and combined count/resource changes retain the
 engine's disruptive deployment path.
 
-An admission or supervisor-liveness failure **pauses** the rollout rather than continuing through the
+Admission or supervisor-liveness failure **pauses** the rollout, retaining the
 remaining incumbents. The healthcheck runs every five seconds, with a ten-second
 timeout, a sixty-second start period and three retries; Swarm monitors updates
 for thirty seconds with zero tolerated failures. A paused or rolled-back update

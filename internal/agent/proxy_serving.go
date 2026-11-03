@@ -47,15 +47,26 @@ func proxyServingReadiness(ctx context.Context, dir string) error {
 }
 
 func (a *nodeAgent) serveProxyServing() (net.Listener, error) {
+	admission, err := proxyAdmissionForContainer(a.o.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	return a.serveProxyServingAdmission(admission)
+}
+
+func (a *nodeAgent) serveProxyServingAdmission(admission proxyContainerAdmission) (net.Listener, error) {
+	admitted, err := admission.admitted()
+	if err != nil {
+		return nil, err
+	}
 	listener, err := net.Listen("unix", proxyServingAddress(a.o.DataDir))
 	if err != nil {
 		return nil, err
 	}
 	go func() {
-		// Admission belongs to this running agent, not the data directory. Once
-		// admitted, dependency loss or an intentional hold must not make Swarm
-		// kill every proxy. A new agent/container must earn admission again.
-		admitted := false
+		// Admission belongs to this container/task, not an agent process. Its
+		// provenance-bound writable-layer record survives an agent-only re-exec,
+		// but a new task must earn native admission before receiving traffic.
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
@@ -63,15 +74,15 @@ func (a *nodeAgent) serveProxyServing() (net.Listener, error) {
 			}
 			if !admitted {
 				ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-				admitted = a.proxyServingHealth(ctx) == nil
+				if a.proxyServingHealth(ctx) == nil {
+					admitted = admission.record() == nil
+				}
 				cancel()
 			}
 			// Post-admission health is supervisor liveness only. In particular,
 			// do not take applyMu: a long config apply/maintenance operation is
 			// not evidence that this already admitted agent has died.
-			a.sup.mu.Lock()
-			alive := !a.sup.closed
-			a.sup.mu.Unlock()
+			alive := !a.sup.closing.Load()
 			response := byte(0)
 			if admitted && alive {
 				response = 1

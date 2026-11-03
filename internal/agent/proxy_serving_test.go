@@ -7,7 +7,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 )
@@ -26,6 +29,7 @@ func TestProxyServingReadinessFailsClosed(t *testing.T) {
 			t.Run(engine+"/"+condition, func(t *testing.T) {
 				e := &servingProxyEngine{name: engine}
 				a := &nodeAgent{o: Options{Engine: engine, DataDir: t.TempDir()}, engine: e, sup: newSupervisor(io.Discard), c: agentapi.MemberConfig{Role: "proxy", ConfigVersion: 4, DesiredProcesses: []string{"proxysql"}}}
+				t.Cleanup(func() { _ = os.Remove(proxyAdmissionPath(a.o.DataDir)) })
 				a.acceptedVersion = 4
 				a.sup.children["proxysql"] = &child{status: agentapi.ProcessStatus{State: "running", PID: 123}}
 				switch condition {
@@ -81,6 +85,7 @@ func TestProxyServingReadinessOldAgentAndArgumentsFailClosed(t *testing.T) {
 
 func proxyServingLatchFixture(t *testing.T, engine, dir string) (*nodeAgent, *servingProxyEngine) {
 	t.Helper()
+	t.Cleanup(func() { _ = os.Remove(proxyAdmissionPath(dir)) })
 	e := &servingProxyEngine{name: engine}
 	a := &nodeAgent{o: Options{Engine: engine, DataDir: dir}, engine: e, sup: newSupervisor(io.Discard),
 		c: agentapi.MemberConfig{Role: "proxy", ConfigVersion: 4, DesiredProcesses: []string{"proxysql"}}, acceptedVersion: 4}
@@ -140,7 +145,7 @@ func TestProxyServingAdmissionLatch(t *testing.T) {
 	}
 }
 
-func TestProxyServingAdmissionResetsWithAgentLifetime(t *testing.T) {
+func TestProxyServingAdmissionSurvivesAgentOnlyRestart(t *testing.T) {
 	dir := t.TempDir()
 	a, _ := proxyServingLatchFixture(t, "mysql", dir)
 	listener, err := a.serveProxyServing()
@@ -157,17 +162,17 @@ func TestProxyServingAdmissionResetsWithAgentLifetime(t *testing.T) {
 		t.Fatal("dead agent retained healthy admission")
 	}
 
-	// Even reusing the data directory/config does not inherit an earlier
-	// container/agent's successful admission. No latch is stored on disk.
+	// Restart/re-exec the agent inside the same container during writer loss.
+	// Its already-admitted Swarm task must not lose established admission.
 	restarted, e := proxyServingLatchFixture(t, "mysql", dir)
-	e.readinessErr = errors.New("new instance has not admitted a writer")
+	e.readinessErr = errors.New("writer is temporarily unavailable")
 	listener, err = restarted.serveProxyServing()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	if err := proxyServingReadiness(t.Context(), dir); err == nil {
-		t.Fatal("new agent inherited the retired instance's admission")
+	if err := proxyServingReadiness(t.Context(), dir); err != nil {
+		t.Fatal("agent-only restart lost this container's admission:", err)
 	}
 }
 
@@ -189,9 +194,74 @@ func TestAdmittedProxyChecksSupervisorLivenessWithoutApplyLock(t *testing.T) {
 		t.Fatal("admitted proxy depended on in-flight config application:", err)
 	}
 	a.sup.mu.Lock()
-	a.sup.closed = true
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	err = proxyServingReadiness(ctx, a.o.DataDir)
+	cancel()
 	a.sup.mu.Unlock()
+	if err != nil {
+		t.Fatal("admitted proxy health blocked on process management:", err)
+	}
+	a.sup.closeLaunches()
 	if err := proxyServingReadiness(t.Context(), a.o.DataDir); err == nil {
 		t.Fatal("closed supervisor remained healthy")
+	}
+}
+
+func TestProxyServingNewTaskCannotInheritContainerAdmission(t *testing.T) {
+	dir := t.TempDir()
+	a, _ := proxyServingLatchFixture(t, "mysql", dir)
+	listener, err := a.serveProxyServing()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proxyServingReadiness(t.Context(), dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	admission, err := proxyAdmissionForContainer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker, err := os.ReadFile(admission.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Model a fresh task's changed PID namespace/PID1-start provenance, even
+	// when an old writable-layer marker was copied to the new task unchanged.
+	admission.identity = "different-container-task"
+	replacement, e := proxyServingLatchFixture(t, "mysql", dir)
+	e.readinessErr = errors.New("replacement has not admitted a writer")
+	listener, err = replacement.serveProxyServingAdmission(admission)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	if err := proxyServingReadiness(t.Context(), dir); err == nil {
+		t.Fatal("replacement task inherited another container's admission")
+	}
+	current, err := os.ReadFile(admission.path)
+	if err != nil || string(current) != string(marker) {
+		t.Fatal("failed native admission overwrote the provenance record")
+	}
+}
+
+func TestProxyAdmissionUsesStableContainerProvenanceOutsideDataDir(t *testing.T) {
+	dir := t.TempDir()
+	first, err := proxyAdmissionForContainer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := proxyAdmissionForContainer(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("agent-only re-exec would change container provenance")
+	}
+	if filepath.Dir(first.path) != "/tmp" || first.path == filepath.Join(dir, filepath.Base(first.path)) {
+		t.Fatal("admission marker can live in an engine data volume")
 	}
 }

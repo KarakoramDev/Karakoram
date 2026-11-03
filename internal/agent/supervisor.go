@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -71,18 +72,21 @@ type supervisor struct {
 	mu                  sync.Mutex
 	children            map[string]*child
 	maintenance, closed bool
-	logs                map[string][]agentapi.LogLine
-	output              io.Writer
-	backoff             time.Duration
-	pipe                func() (*os.File, *os.File, error)
-	outputOnce          sync.Once
-	outputStop          sync.Once
-	outputQueue         chan agentapi.LogLine
-	outputDone          chan struct{}
-	ownershipDir        string
-	beforeStart         func() error
-	starts              int
-	session             string
+	// closing is published before taking mu so liveness never waits on process
+	// management or filesystem/exec work performed under that mutex.
+	closing      atomic.Bool
+	logs         map[string][]agentapi.LogLine
+	output       io.Writer
+	backoff      time.Duration
+	pipe         func() (*os.File, *os.File, error)
+	outputOnce   sync.Once
+	outputStop   sync.Once
+	outputQueue  chan agentapi.LogLine
+	outputDone   chan struct{}
+	ownershipDir string
+	beforeStart  func() error
+	starts       int
+	session      string
 }
 
 func newSupervisor(output io.Writer) *supervisor {
@@ -421,6 +425,7 @@ func (s *supervisor) snapshot() (map[string]agentapi.ProcessStatus, bool) {
 // closeLaunches fences automatic retries and concurrent starts before engine
 // handoff begins, without signalling the processes needed for that handoff.
 func (s *supervisor) closeLaunches() {
+	s.closing.Store(true)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true
