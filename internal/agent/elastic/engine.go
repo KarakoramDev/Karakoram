@@ -129,13 +129,13 @@ func (e *Engine) Readiness(ctx context.Context, opts agent.Options, args []strin
 	if len(args) > 0 && args[0] == agentspec.ComponentLogstash {
 		data, err := os.ReadFile(filepath.Join(opts.DataDir, "karakoram", "config", "pipelines.yml"))
 		if err != nil {
-			return errors.New("Logstash configured pipelines unavailable")
+			return errors.New("configured Logstash pipelines unavailable")
 		}
 		var entries []struct {
 			ID string `yaml:"pipeline.id"`
 		}
 		if yaml.Unmarshal(data, &entries) != nil || len(entries) == 0 {
-			return errors.New("Logstash configured pipelines invalid")
+			return errors.New("configured Logstash pipelines invalid")
 		}
 		for _, entry := range entries {
 			pipelines = append(pipelines, agentspec.Pipeline{ID: entry.ID})

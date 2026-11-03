@@ -319,7 +319,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 			if err = r.save(ctx, n); err != nil {
 				return err
 			}
-			return errors.New("Relay operation failed")
+			return errors.New("relay operation failed")
 		}
 		if kind == "deploy" {
 			n.DeployedExecutableHash = n.PendingExecutableHash
@@ -332,20 +332,20 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	service, err := b.GetService(ctx, n.Relay.Hostname)
 	if err != nil {
-		return errors.New("Cannot inspect relay service")
+		return errors.New("cannot inspect relay service")
 	}
 	if service != nil && !owned(n, service) {
 		if service.Masked && service.Ownership["KARAKORAM_RELAY_OWNER"] == "" && n.Relay.ServiceID == "" {
 			return errors.New("relay ownership cannot be verified: the relay was created by an earlier version and the namespace backend masks sensitive variables for the current credentials; delete the relay service in the namespace backend so Karakoram recreates it, or run one reconciliation with credentials that can read sensitive variables (a sudo-mode token on Zerops)")
 		}
-		return errors.New("Relay hostname belongs to a service this namespace does not own")
+		return errors.New("relay hostname belongs to a service this namespace does not own")
 	}
 	if service != nil {
 		n.Relay.ServiceID = service.ID
 		// A relay about to be deleted needs no marker.
 		if n.Phase != "Deleting" && !service.Importing && (service.Ownership["KARAKORAM_RELAY_OWNER"] != n.OwnershipMarker || n.SecretsPending) {
 			if err = b.SetEnvVars(ctx, n.Relay.Hostname, map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}); err != nil {
-				return errors.New("Cannot update relay ownership marker")
+				return errors.New("cannot update relay ownership marker")
 			}
 		}
 	}
@@ -370,7 +370,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	if (service == nil || !service.Importing) && relay.NeedsRenewal(leaf, time.Now()) {
 		key, err := r.issue(n)
 		if err != nil {
-			return errors.New("Cannot renew relay certificate")
+			return errors.New("cannot renew relay certificate")
 		}
 		token, err := r.o.Store.GetNamespaceTokenForUpdate(ctx, n.Name)
 		if err != nil {
@@ -393,7 +393,7 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 		n.SecretsPending = false
 		op, err := b.ImportServices(ctx, []infra.ServiceSpec{{Hostname: n.Relay.Hostname, Kind: infra.KindRuntime, Base: infra.BaseUbuntu2404, MinContainers: 1, MaxContainers: 1, Resources: domain.Resources{MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 1, MinDisk: 1, MaxDisk: 3}, Env: secrets, Vars: map[string]string{"KARAKORAM_RELAY_OWNER": n.OwnershipMarker}}})
 		if err != nil {
-			return errors.New("Cannot import relay service")
+			return errors.New("cannot import relay service")
 		}
 		op.Kind = "import"
 		n.Relay.ServiceID = op.Services[n.Relay.Hostname]
@@ -401,11 +401,11 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	}
 	if n.SecretsPending {
 		if err = b.SetEnvSecrets(ctx, n.Relay.Hostname, secrets); err != nil {
-			return errors.New("Cannot update relay enrollment secrets")
+			return errors.New("cannot update relay enrollment secrets")
 		}
 		op, err := b.Restart(ctx, n.Relay.Hostname)
 		if err != nil {
-			return errors.New("Cannot restart relay after certificate renewal")
+			return errors.New("cannot restart relay after certificate renewal")
 		}
 		n.SecretsPending = false
 		op.Kind = "restart"
@@ -416,12 +416,12 @@ func (r *Registry) reconcile(ctx context.Context, n *domain.Namespace, b Backend
 	if n.DeployedExecutableHash != r.o.ExecutableHash || mismatch || service.Status == infra.StatusReadyToDeploy {
 		artifact, err := r.o.Artifact.Open(ctx)
 		if err != nil {
-			return errors.New("Cannot open relay executable artifact")
+			return errors.New("cannot open relay executable artifact")
 		}
 		defer artifact.Close()
 		op, err := b.Deploy(ctx, n.Relay.Hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: engine.ArtifactName, Binary: engine.ArtifactBinary}, Runtime: RelayRuntime(r.o.PublicURL, n.Name)})
 		if err != nil {
-			return errors.New("Cannot deploy relay executable")
+			return errors.New("cannot deploy relay executable")
 		}
 		if service.Status == infra.StatusReadyToDeploy && n.DeployedExecutableHash == r.o.ExecutableHash {
 			n.RetryAt = time.Now().Add(time.Minute)

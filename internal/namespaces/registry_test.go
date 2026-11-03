@@ -743,7 +743,7 @@ func TestRelayOwnershipRejectsForeignServices(t *testing.T) {
 				t.Fatal("foreign relay accepted")
 			}
 			err := r.reconcile(t.Context(), n, b)
-			if err == nil || err.Error() != "Relay hostname belongs to a service this namespace does not own" {
+			if err == nil || err.Error() != "relay hostname belongs to a service this namespace does not own" {
 				t.Fatal("foreign relay ownership error changed", err)
 			}
 			if b.deletes != 0 || b.envVarWrites != 0 || b.restarts != 0 || b.deploys != 0 {
@@ -783,7 +783,7 @@ func TestRelayOwnershipMigrationFailureIsRetried(t *testing.T) {
 	n.SecretsPending = false
 	b.service = &infra.Service{Kind: infra.KindRuntime, ID: n.Relay.ServiceID, Hostname: n.Relay.Hostname, Masked: true}
 	b.envVarError = errors.New("write failed")
-	if err := r.reconcile(t.Context(), n, b); err == nil || err.Error() != "Cannot update relay ownership marker" {
+	if err := r.reconcile(t.Context(), n, b); err == nil || err.Error() != "cannot update relay ownership marker" {
 		t.Fatal("ownership migration failure was ignored", err)
 	}
 	b.envVarError = nil

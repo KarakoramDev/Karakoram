@@ -109,7 +109,7 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 		return s, errors.New("management listener required")
 	}
 	if s.PrometheusPort == 0 {
-		return s, errors.New("Prometheus listener required")
+		return s, errors.New("a Prometheus listener is required")
 	}
 	if s.MemoryHighWatermarkBytes <= 0 || s.TotalMemoryBytes <= 0 || s.DiskFreeLimitBytes <= 0 || s.DefaultQueueType != "quorum" {
 		return s, errors.New("invalid resource limits or queue type")

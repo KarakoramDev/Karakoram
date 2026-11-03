@@ -159,6 +159,11 @@ make openapi-check
 
 Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2026.2.2 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
 
+Keep error strings lower-case at the start; when a product name leads the message,
+rephrase it without changing the product's capitalization. Use `http.Status*`
+constants for HTTP status codes and remove unused test assignments without
+dropping the assertions that exercise failure and recovery behavior.
+
 Live tests are opt-in and destructive to their resources:
 
 ```sh

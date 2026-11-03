@@ -446,7 +446,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			_ = json.NewEncoder(w).Encode(rmqspec.StreamReplicasResponse{Replicas: json.RawMessage(`[]`)})
 		default:
 			if r.Method != "POST" {
-				http.Error(w, "POST required", 405)
+				http.Error(w, "POST required", http.StatusMethodNotAllowed)
 				return
 			}
 			switch action {
