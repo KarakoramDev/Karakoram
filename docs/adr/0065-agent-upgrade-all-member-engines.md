@@ -111,10 +111,20 @@ This can cause an additional interruption after receipt loss.
 
 ProxySQL is one logical service with multiple instances, not independently
 addressable deployment members. Use one service-level deployment and wait for all
-instances before touching data. Backends that replace all instances can briefly
-interrupt the whole proxy endpoint, even with multiple replicas. Temporal also
-deploys logical component services; platform instance replacement policy, not the
-engine rollout, controls availability inside each component.
+instances before touching data. MySQL/PXC freeze the backend's new-build serving
+capability and deployed-runtime approval in the pre-submission checkpoint.
+Eligible Dokploy proxies use serial, health-gated start-first replacement with
+pause-on-failure; receipt-missing submission reuses the same policy and backend
+in-flight receipt, including `includeCurrent`. Legacy/unmarked Dokploy proxies
+retain ordinary redeployment once: the incumbent image must already support the
+serving probe before installing its rollout policy. A successful marked upgrade
+enables the next preserving rollout. Cold/stopped proxies do not qualify.
+Zerops count/resource incumbent retention does not establish a new-build rollout
+guarantee; Nomad's TCP-gated canary and subsequent destructive replacements also
+do not qualify. Both retain whole-service deployment with native acknowledgement,
+not a serving-preservation claim. See [ADR 0070](0070-proxysql-serving-scale-and-resource-changes.md).
+Temporal also deploys logical component services; platform instance replacement
+policy, not the engine rollout, controls availability inside each component.
 
 ## Consequences
 

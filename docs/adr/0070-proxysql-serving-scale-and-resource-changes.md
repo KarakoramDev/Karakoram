@@ -30,6 +30,11 @@ Dokploy reload increments Swarm `ForceUpdate`, including replica-only updates, s
 
 The healthcheck invokes `agent readiness --serving-proxy`. Initial task/container admission fails closed unless the latest accepted nonzero configuration revision was successfully applied, the supervised proxy process is running, maintenance/stop holds are absent, and native writer readiness succeeds. PostgreSQL additionally uses its native proxy-serving hook, including frontend availability, an ONLINE writer and active managed users; ordinary readiness is unchanged. Swarm initial health admission must precede service DNS/VIP binding and predecessor retirement. Successful admission persists in a provenance-bound container-local marker across agent-only restart/re-exec. The marker binds the PID namespace, PID 1 start time, boot ID and hostname, and resides in container `/tmp`, never the engine volume. New task/container identities require fresh native admission. Subsequent persistent Swarm healthchecks use lock-free agent/supervisor liveness only; dependency failures, configuration failures and intentional holds remain engine-managed rather than provoking Swarm replacement cascades. Engine observations continue to enforce native/configuration health independently. Fresh stateless agents pull their configuration autonomously while the platform operation is pending.
 
+Only probe-marked agents initialize the local admission state/listener. The
+readiness client authenticates its local server using kernel peer credentials
+for the same effective UID. Setup or bind failure preserves agent startup for
+diagnostics but fails serving admission closed.
+
 A durable receipt binds completion to the exact expected `ForceUpdate`, the requested new Running tasks, retirement of all previous Running tasks and completed Swarm update state. Paused, rolled-back, superseded and timed-out updates fail rather than commit; lost reload replies adopt the original operation. Cold deployment clears this serving healthcheck so bootstrap discovery is not deadlocked on unformed dependencies. See [Dokploy proxy updates](../dokploy.md#proxysql-count-and-resource-updates).
 
 ### Nomad: retain count-only scaling, not resource preservation
@@ -45,6 +50,20 @@ MySQL/PXC no-stop resource changes require unchanged version, replica count and 
 PostgreSQL and the embedded Supabase core similarly require the exact requested live fleet to acknowledge configuration and run with an ONLINE writer before committing count/resources. Count reductions always wait for maintenance; increases now also wait when serving-preserving count capability or runtime approval is absent. All proxy resource changes remain maintenance-window gated, even when serving-preserving, just as for MySQL/PXC. Only serving-preserving count scale-out bypasses that window. Pending operations are polled first, allowing terminal backend submission fences to be finalized before submitting a superseding count. Existing failure receipts remain authoritative rather than becoming success from observing one healthy task. See [MySQL/PXC operations](../mysql/operations.md#restart-configuration-and-scale), [PostgreSQL maintenance](../postgres/operations.md#agent-rollout-and-maintenance-windows) and [Supabase operations](../supabase/operations.md).
 
 Control-plane upgrade does not automatically redeploy proxies or update their executables. The new serving-probe marker is excluded from MySQL's acknowledged runtime hash, preserving existing Nomad count-only eligibility without manufacturing a rollout. Dokploy independently checks successfully deployed metadata: legacy unmarked runtimes keep the disruptive/maintenance-gated path until an intended redeployment installs the marker and supporting agent. For MySQL/PXC, the next requested count/resource update uses stop/redeploy once; PostgreSQL retains its legacy maintenance-gated provider path. An unsupported old agent fails the new serving probe closed, not healthy by default.
+
+Agent-only ProxySQL upgrades additionally require
+`ProxyDeploymentPreservesServing`; count/resource capabilities never imply
+new-build preservation. Dokploy enables it for running, deployed, volume-less,
+probe-marked proxies when the incoming deployment also carries the probe marker.
+Its build deployment uses the same serial start-first healthcheck, pause policy
+and exact Swarm receipt as count/resource updates. Build completion is required
+before checking rollout completion or starting the task-admission timeout.
+MySQL/PXC persist the selected policy before submission and reuse it on replay;
+the backend adopts the original digest-bound in-flight deploy after a lost reply.
+Legacy unmarked images retain ordinary deployment once, because installing a
+serving policy must be safe for the incumbent image as well as the new one.
+Zerops and Nomad leave the new-build capability disabled: permitted overlap or a
+TCP-gated canary alone does not meet the serving-preservation contract.
 
 ## Consequences
 

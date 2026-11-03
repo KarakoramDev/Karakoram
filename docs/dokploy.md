@@ -112,6 +112,11 @@ records fail closed without blocking or unbounded reads. Provenance binds it to 
 PID 1 start identity, kernel boot ID and hostname. Agent-only restart/re-exec
 preserves established admission; a new task or container restart must earn
 admission again, even if an old marker was copied into its filesystem.
+Only agents launched with `KARAKORAM_PROXY_SERVING_PROBE=1` initialize this
+admission state and its local readiness listener. The readiness client verifies
+the listener's kernel-reported peer credentials against its effective UID.
+State/listener setup failures leave startup running but fail serving admission
+closed with diagnostics; they never certify the task as ready.
 The persistent Swarm healthcheck then checks only agent/supervisor liveness,
 using a lock-free shutdown flag rather than a process-management mutex.
 Writer failover/loss, intentional maintenance or stop holds, and later
@@ -127,6 +132,18 @@ readiness again before committing. Scale-in remains maintenance-window gated.
 Version, startup/runtime and combined count/resource changes retain the
 engine's disruptive deployment path.
 
+Agent-only proxy deployments also use this serving-preserving rollout when both
+the running, deployed, volume-less incumbent and the incoming build carry
+`KARAKORAM_PROXY_SERVING_PROBE=1`. This applies to MySQL/PXC and the shared backend
+deploy path used by PostgreSQL/Supabase. MySQL/PXC checkpoint this policy before
+submission and preserve it when recovering a lost receipt, including same-build
+`--include-current` refreshes. A legacy unmarked proxy's first agent upgrade keeps
+ordinary whole-service deployment: the incumbent must support the probe before
+its policy is installed. Once that marked upgrade succeeds, later deployments
+qualify. Cold/stopped deployment still clears the serving barrier for bootstrap.
+All agent-upgrade maintenance, exact-build, configuration and writer-health
+acknowledgements remain required.
+
 Admission or supervisor-liveness failure **pauses** the rollout, retaining the
 remaining incumbents. The healthcheck runs every five seconds, with a ten-second
 timeout, a sixty-second start period and three retries; Swarm monitors updates
@@ -139,9 +156,9 @@ to the larger of the old and desired fleet; insufficient capacity can leave the
 update pending. Lost reload replies reuse the persisted exact operation rather
 than starting another replacement.
 
-The serving-probe healthcheck is installed only for running count/resource
-updates, not cold deployments, so it cannot hold initial bootstrap admission on
-unformed dependencies. An old agent lacks the local probe socket and fails
+The serving-probe healthcheck is installed for eligible running count/resource
+updates and agent-only deployments, not cold deployments, so initial bootstrap
+cannot deadlock on unformed dependencies. An old agent lacks the local probe socket and fails
 closed. Older deployed runtimes without the marker retain their previous
 disruptive reload policy; the control plane does not claim serving preservation
 for them. MySQL takes its stop/redeploy path on the next requested update to

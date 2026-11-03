@@ -171,6 +171,13 @@ fail/revert the rollout. Count-only updates below retain their separate
 incumbent-preservation path; engines requiring serving-preserving resource
 updates must keep their maintenance/redeployment path.
 
+ProxySQL `upgrade-agents` likewise uses ordinary job redeployment: a canary
+followed by potentially destructive replacements with TCP-only promotion checks.
+Count-only incumbent preservation does not establish a new-build serving
+guarantee. Plan maintenance and endpoint interruption even with replicas; the
+engine still waits for every instance's exact build, configuration and writer
+readiness before moving to data members.
+
 Count-only changes (including increases and cancelling an unplaceable scale-up
 back to the serving count) do not require canary capacity. The provider compares
 the current owned job with the jobs embedded in healthy serving allocations,

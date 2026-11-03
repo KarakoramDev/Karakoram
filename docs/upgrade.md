@@ -6,11 +6,44 @@ Upgrade the control plane and recover its state; engine-version changes are sepa
 
 ## Upgrading to v0.4.4
 
-Back up control-plane state using the
-[consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
-the original `KARAKORAM_MASTER_KEY` separately, and retain the previous executable
-with its pre-upgrade state before deploying the new control plane. Engine
-versions and deployed member agents are separate from the control-plane upgrade.
+1. Back up control-plane state using the
+   [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup), preserve
+   the original `KARAKORAM_MASTER_KEY` separately, and retain the previous
+   executable with its pre-upgrade state. Review backup capacity and maintenance
+   windows before proceeding.
+2. Upgrade the control plane to v0.4.4. Engine versions and deployed member
+   agents are separate from this upgrade; rollback does not undo engine or
+   infrastructure changes.
+3. Run `karactl -n NS clusters upgrade-agents NAME --wait --timeout 30m` for each
+   cluster, observing its native safety gates and maintenance window. New agents
+   are required for Temporal on Zerops private IPv6, PostgreSQL `postgres`
+   rotation, GR lost-volume admission and the proxy serving probe. Follow the
+   [rollout guidance](#agent-rollout-now-covers-every-member-agent-engine) below;
+   native process restart does not install an agent.
+4. Verify every member's build, native readiness/replication and client
+   reconnection. Update PITR API consumers and PXC condition-reason alert filters.
+   Resolve any legacy Neo4j expired-credential marker using the explicit
+   [maintenance procedure](#neo4j-legacy-credential-recovery), not repeated restarts.
+
+### Behaviour changes
+
+- `upgrade-agents` now covers every member-agent engine; availability still
+  depends on engine topology and backend rollout semantics.
+- PostgreSQL, Citus and Supabase support restart-free `postgres` rotation after
+  agent upgrades. Peer-auth activation may need one configuration restart first.
+- MySQL GR and PXC automatically replace confirmed lost volumes only after
+  native survivor/donor proof; MySQL single still requires storage recovery or restore.
+- MySQL/PXC automatic PITR re-anchoring is **ON by default**. Opt out with
+  `spec.backup.pitr.autoReanchor: false`; additional fulls consume storage and IO.
+- PITR responses add `intervals`; legacy summaries remain unchanged.
+- PXC adds `GTIDHistoryPersistenceUnavailable`; update reason-based alerts.
+- Eligible ProxySQL count/resource changes preserve serving on Zerops and
+  Dokploy under [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md).
+  PostgreSQL/Supabase proxy count increases now wait for maintenance when
+  serving cannot be preserved; legacy runtimes keep their maintenance-gated path.
+- Temporal supports Zerops private IPv6 with upgraded agents. MySQL/PXC mutation
+  isolation is per cluster, and Neo4j verifies credential recovery before marking
+  bootstrap complete; existing false-completion markers need explicit repair.
 
 ### Agent rollout now covers every member-agent engine
 
@@ -36,9 +69,18 @@ fixes; a native process restart still does not replace its agent.
   majority and GTID-safe election with proxy reader/writer admission. PXC checks
   Primary/Synced/ready/connected membership, full component size and history
   continuity, then excludes the routed writer only after a safe successor is
-  available and waits for proxy handoff before deployment. The ProxySQL rollout
-  is service-level: on backends replacing all instances, the entire endpoint
-  can briefly fail even with multiple replicas. MySQL single has database downtime.
+  available and waits for proxy handoff before deployment. ProxySQL uses serial,
+  native-serving-gated start-first replacement on Dokploy only when the running,
+  deployed, volume-less incumbent and incoming build both carry the serving-probe
+  marker; spare capacity is required. A legacy/unmarked first upgrade uses
+  ordinary whole-service deployment and installs the marker for subsequent
+  rollouts. Cold/stopped proxies also use ordinary deployment. Zerops uses
+  ordinary whole-service deployment; its count/resource preservation contract
+  does not cover new builds. Nomad uses a canary followed by potentially
+  destructive replacements with TCP-only admission. Those ordinary paths can
+  interrupt the whole proxy endpoint even with replicas. MySQL/PXC persist the
+  chosen policy before submission and retain it on receipt-missing replay,
+  including `--include-current`. MySQL single has database downtime.
   If runtime recovery or confirmed loss appears mid-rollout, the serialized
   operation settles its current member/routing drain without a new deployment,
   then retires with a recovery diagnostic so lost-volume replacement can proceed.
@@ -222,6 +264,88 @@ Cancellation before journal loading/allowance evaluation completes does not
 reclassify an acknowledged frozen-history difference as new divergence.
 Full backups remain admitted on typed comparison unavailability, but persistence
 failures still fail closed; incrementals/PITR cannot gain unproven continuity.
+
+### Proxy count and resource changes
+
+Serving preservation is an explicit backend, request and deployed-runtime
+contract, not a general zero-downtime guarantee. Every requested live proxy must
+acknowledge configuration and native writer readiness before count/resources
+commit. All resource changes and count reductions still wait for maintenance;
+only serving-preserving count increases bypass the window. PostgreSQL and the
+Supabase core now also defer increases when capability or runtime approval is absent.
+
+- **Zerops:** count-only changes retain incumbent Linux containers. Resource-only
+  CPU/RAM changes qualify only with unchanged CPU mode and disk bounds.
+  Unexpected incumbent replacement fails with `INCUMBENTS_REPLACED`; inspect
+  platform processes and readiness before retrying. Unresolved autoscaling
+  submissions block superseding changes and Stop.
+- **Dokploy:** marked, successfully deployed runtimes use serial start-first
+  replacement with native serving admission and spare capacity. The new probe
+  requires configuration application, a running proxy and a writable database
+  before initial task admission; PostgreSQL additionally verifies frontend
+  availability and active managed users. Old agents fail the probe closed.
+  Legacy unmarked runtimes retain the disruptive/maintenance-gated path until
+  an intended deployment installs the supporting agent and marker.
+- **Nomad:** count-only scaling retains incumbents; resource rollouts do not
+  provide the serving-preservation contract. MySQL/PXC resource changes retain
+  window-gated stop/redeploy; PostgreSQL/Supabase use maintenance-gated provider
+  resource rollouts.
+
+For MySQL/PXC, combined count/resource, version and startup/runtime changes keep
+the disruptive path. Upgrading the control plane alone does not redeploy a proxy;
+the new marker is excluded from its acknowledged runtime hash, preserving
+existing Nomad count-only eligibility. Replacing or removing an instance can
+disconnect existing sessions even on an eligible serving-preserving path.
+Applications must reconnect and handle uncertain transaction outcomes.
+Live-provider acceptance of these paths remains pending. See
+[ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
+[Zerops](zerops.md#resources-and-autoscaling) and
+[Dokploy](dokploy.md#proxysql-count-and-resource-updates).
+
+### Temporal on Zerops private IPv6
+
+Temporal now uses private IPv6 on Zerops; Dokploy and Nomad retain private IPv4.
+Upgrade deployed agents with `upgrade-agents` before expecting IPv6 operation.
+Older agents receive HTTP 409 `AgentUpgradeRequired` with `temporal-ipv6` guidance,
+not a partially compatible configuration. Every replica must reach its peers and
+the bound PostgreSQL writer over private IPv6; application workers must reach
+the private frontend. Public IPv4 is not a substitute. No database, artifact or
+backup migration is required. Live workflow, failover/recovery and optional UI
+OIDC acceptance remain pending. See [Temporal](temporal/README.md#limits) and
+[ADR 0069](adr/0069-temporal-zerops.md).
+
+### MySQL/PXC per-cluster mutation isolation
+
+Slow recovery now holds only the normalized namespace/cluster mutation gate, so
+unrelated cluster access and maintenance can proceed. Backup-object deletion
+and sealed-snapshot cleanup still coordinate separately with active control-plane
+backup/restore steps, including across clusters. This does not lock asynchronous
+agent uploads or external object-storage clients. No agent upgrade is required
+for the control-plane lock change. See
+[recovery coordination](mysql/operations.md#full-outage-recovery).
+
+### Neo4j legacy credential recovery
+
+New agents independently clear and verify `passwordChangeRequired=false` before
+publishing the bootstrap marker, including after an unchanged-password rejection.
+Upgrade both the control plane and member agent. A v0.4.3 false-completion marker
+can survive an upgrade: the server may run while managed queries report
+`Neo.ClientError.Security.CredentialsExpired`. Ordinary reload, restart or
+system-user rotation does not repair that marker.
+
+Arrange a maintenance outage and support-assisted private agent API/volume access.
+Preserve the volume, sealed password, marker copy and redacted diagnostics;
+finish all active/recovery-pending jobs and prevent new scheduled backups and
+lifecycle submissions. Explicitly stop through the agent process API and prove
+the server and recovery JVM are absent. Only for this confirmed legacy condition,
+remove `karakoram/neo4j/credentials-initialized.json`, leaving stores, applied
+state, controls and receipts intact. Explicitly start through the same API,
+releasing only the operator hold just taken; allow the recovery request budget.
+Verify authenticated readiness, matching configuration/restart token and application
+queries. Stop retrying starts on failure and repair the underlying diagnostic.
+Follow the full [stopped-member procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials);
+marker deletion is not a general readiness or lost-password workaround.
+
 
 ## Upgrading to v0.4.3
 
@@ -514,7 +638,7 @@ redeploy the proxy of an existing Group Replication cluster. PXC and
 single-instance clusters are not affected by this discovery defect; Galera
 hostgroup defaults are defensive policy, not evidence of the same defect.
 A native process restart, an unchanged spec, or a control-plane-only upgrade
-does not replace its agent. MySQL/PXC do not support `upgrade-agents`.
+does not replace its agent. v0.4.3 MySQL/PXC do not support `upgrade-agents`.
 
 **v0.4.4 supersedes this workaround:** after upgrading the control plane, use
 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine) to replace
@@ -559,9 +683,9 @@ the correction.
 ### Existing clusters and member artifacts
 
 **MySQL/PXC agents are not automatically upgraded.** A control-plane upgrade
-does not replace running data-member or proxy-agent executables. MySQL/PXC
-do not support `upgrade-agents`, and `karactl clusters restart` restarts native
-database/proxy processes, **not their agents**.
+does not replace running data-member or proxy-agent executables. On v0.4.3,
+MySQL/PXC do not support `upgrade-agents`, and `karactl clusters restart`
+restarts native database/proxy processes, **not their agents**.
 
 For v0.4.4, use [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
 instead of the resource-change/new-target procedures below; their v0.4.3
@@ -635,23 +759,27 @@ certification unavailability rather than gaining the agent-side certificate.
 
 **Weaviate clusters that never formed on Zerops must be re-created.** Preserve
 the create request, confirm there is no valuable imported or external state,
-then deploy with current agents. Weaviate does not support `upgrade-agents`.
-For data-bearing clusters elsewhere, plan a data-preserving lifecycle.
+then deploy with current agents. v0.4.3 Weaviate does not support `upgrade-agents`;
+v0.4.4 rollout requires a formed cluster. Preserve data-bearing clusters and use
+the v0.4.4 [agent rollout](#agent-rollout-now-covers-every-member-agent-engine)
+only when its native safety gates can be satisfied.
 
 **Supabase poolers on IPv6-only backends require the rebuilt Supavisor native
 artifact**, not just a control-plane upgrade. The rebuilt artifact is published
 with the v0.4.3 release; mirrors must serve bytes matching the updated release
 lock. Use the supported [member-agent rollout](#rolling-out-member-agents)
 and verify native SQL pooler connectivity over the private address family.
-For other affected engines, use supported agent rollout where available;
-Neo4j and Keycloak require a reviewed, data-preserving re-creation procedure
-for agent-side listener fixes.
+For v0.4.3, other affected engines use supported agent rollout where available;
+Neo4j and Keycloak need reviewed, data-preserving re-creation for agent-side
+listener fixes. On v0.4.4, use the
+[agent rollout](#agent-rollout-now-covers-every-member-agent-engine) instead.
 
 ### Continuing limitations
 
-PostgreSQL administrator-password rotation remains unavailable, Temporal
-remains unsupported on Zerops, and incomplete Nomad live coverage does not
-change EXPERIMENTAL engine status. See [limitations](limitations.md).
+The following limitations describe v0.4.3. v0.4.4 adds PostgreSQL administrator
+rotation, Temporal on Zerops and full PITR interval lists as described
+[above](#upgrading-to-v044). Incomplete Nomad live coverage still does not change
+EXPERIMENTAL engine status. See current [limitations](limitations.md).
 
 **MySQL/PXC PITR window display:** `karactl ... pitr-window` and cluster status
 show only the restorable interval with the latest end, not every valid interval.
