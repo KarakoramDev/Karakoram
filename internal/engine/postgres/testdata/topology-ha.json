@@ -202,6 +202,7 @@
           "KARAKORAM_ENGINE": "postgres",
           "KARAKORAM_INTERNAL_CA": "",
           "KARAKORAM_MEMBER": "demopx",
+          "KARAKORAM_PROXY_SERVING_PROBE": "1",
           "KARAKORAM_URL": ""
         },
         "args": [

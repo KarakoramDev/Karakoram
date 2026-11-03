@@ -12,8 +12,13 @@ import (
 )
 
 func (p *Core) DeleteRetainedBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup) error {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, domain.ClusterRef{Namespace: b.Namespace, Name: b.Cluster})
+	if err != nil {
+		return err
+	}
+	defer p.mutations.release(lock)
+	p.backupCleanupMu.Lock()
+	defer p.backupCleanupMu.Unlock()
 	if !b.ProviderMatches(p.Name()) {
 		return engine.Invalid("backup provider mismatch")
 	}
@@ -42,6 +47,8 @@ func deleteMySQLBackup(ctx context.Context, store engine.ClusterStore, storage d
 	return nil
 }
 func (p *Core) runDeleteBackup(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	p.backupCleanupMu.Lock()
+	defer p.backupCleanupMu.Unlock()
 	name, err := operationResource(op, "backup")
 	if err != nil {
 		return backupResult(cp, false), err
@@ -74,6 +81,8 @@ func (p *Core) cleanupBackups(ctx context.Context, rc *engine.Context, s *state,
 	if opts.KeepBackups || rc.Store == nil {
 		return true, nil
 	}
+	p.backupCleanupMu.Lock()
+	defer p.backupCleanupMu.Unlock()
 	items, err := rc.Store.ListBackups(ctx, rc.Cluster.Ref())
 	if err != nil {
 		return false, err

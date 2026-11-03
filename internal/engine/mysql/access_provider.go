@@ -208,8 +208,11 @@ func (p *Core) GetDatabase(ctx context.Context, rc *engine.Context, name string)
 	return &db, err
 }
 func (p *Core) plainMutation(ctx context.Context, rc *engine.Context, action string, req myspec.AccessRequest) error {
-	p.accessMu.Lock()
-	defer p.accessMu.Unlock()
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return err
+	}
+	defer p.mutations.release(lock)
 	if err := accessFence(ctx, rc); err != nil {
 		return err
 	}

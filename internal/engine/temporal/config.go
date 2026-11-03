@@ -11,10 +11,12 @@ import (
 	"encoding/pem"
 	"net"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/temporal/tspec"
@@ -132,6 +134,7 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 		InstallDir:    "/opt/karakoram/" + a.Name + "-" + a.Version,
 		ClusterName:   rc.Cluster.Name,
 		HistoryShards: o.HistoryShards,
+		IPv6:          rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv6,
 		FrontendAddress: net.JoinHostPort(
 			memberName(rc.Cluster, frontendComponent(rc.Cluster)),
 			strconv.Itoa(tspec.Ports[tspec.Frontend].GRPC),
@@ -250,7 +253,7 @@ func (p *Provider) configurationNeedsWindow(ctx context.Context, rc *engine.Cont
 // Keep accepted application settings while projecting independently exempt
 // binding material and urgent leaves into the same role's next publication.
 func (p *Provider) exemptConfiguration(ctx context.Context, rc *engine.Context, m *componentMember, desired tspec.Spec) (tspec.Spec, error) {
-	config, err := p.MemberConfig(ctx, rc, m.Name)
+	config, err := p.memberConfig(ctx, rc, m.Name)
 	if err != nil {
 		return tspec.Spec{}, err
 	}
@@ -297,6 +300,18 @@ func deferredConfiguration(active tspec.Spec, generation int64, version, nonce s
 
 // MemberConfig returns a sealed, secret-bearing envelope for a known member.
 func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
+	out, err := p.memberConfig(ctx, rc, name)
+	if err != nil {
+		return out, err
+	}
+	if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv6 && !slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityTemporalIPv6) {
+		return agentapi.MemberConfig{}, domain.Conflict("agent", name, "AgentUpgradeRequired", engine.ErrNotSupported,
+			"Temporal private IPv6 requires agent capability %q; upgrade this member's Karakoram agent before retrying configuration", agentapi.ConfigCapabilityTemporalIPv6)
+	}
+	return out, nil
+}
+
+func (p *Provider) memberConfig(ctx context.Context, rc *engine.Context, name string) (agentapi.MemberConfig, error) {
 	var out agentapi.MemberConfig
 	s, e := loadState(rc.Cluster)
 	if e != nil {

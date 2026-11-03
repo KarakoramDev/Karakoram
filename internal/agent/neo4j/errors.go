@@ -38,8 +38,8 @@ func classifyQueryError(code, message string) error {
 		failure.code = code
 		failure.kind = queryFailureInvalid
 		// Neo4j rejects setting an administrator password to its current value.
-		// Only this exact native diagnostic proves the recovery postcondition;
-		// other argument errors must still fail closed.
+		// Only this exact native diagnostic proves password equality (not that
+		// the password-change requirement is cleared); other errors fail closed.
 		failure.passwordUnchanged = code == "Neo.ClientError.Statement.ArgumentError" &&
 			message == "Failed to alter the specified user 'neo4j': Old password and new password cannot be the same."
 		lower := strings.ToLower(message)

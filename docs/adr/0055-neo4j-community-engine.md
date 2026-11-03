@@ -34,6 +34,13 @@ The managed administrator `neo4j` receives its password through the loopback-onl
 
 The repair entry point is rotation of the `neo4j` system user. Only explicit rejection of both the current and staged next password authorizes the offline recovery job; transport and other server failures do not. The control plane polls an operation-derived receipt, commits the staged password only after recovery succeeds, and records that the repair caused a database outage.
 
+Credential recovery treats an unchanged-password rejection as password equality,
+not proof that the account is usable. It independently clears the password-change
+requirement and observes the managed user's `passwordChangeRequired=false`
+postcondition before graceful recovery shutdown and atomic bootstrap-marker
+publication. A lost response or missing marker safely replays these steps without
+introducing a temporary password. Unverifiable user metadata fails closed.
+
 A native API manages application users (list, create, change password, delete). Community has no role-based access control, so every user is an administrator with full read, write and administrative rights; the API and documentation say so. Passwords are returned once on creation and never stored.
 
 ### Backups, restore and clone

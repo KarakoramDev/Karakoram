@@ -6,14 +6,25 @@ The `temporal` engine driver runs native [Temporal](https://temporal.io/) workfl
 
 ## Prerequisites
 
-- **Provider:** [Zerops](https://zerops.io/) is not supported yet; use [Dokploy](https://dokploy.com/) or [Nomad](https://developer.hashicorp.com/nomad). Temporal membership requires a private IPv4 route to the bound PostgreSQL writer, while Zerops uses private IPv6. Zerops support is pending IPv6 private networking; see [release status and provider availability](../providers.md#engine-availability).
+- **Provider:** [Zerops](https://zerops.io/), [Dokploy](https://dokploy.com/) or [Nomad](https://developer.hashicorp.com/nomad). Zerops uses private IPv6 membership; Dokploy and Nomad use private IPv4. See [release status and provider availability](../providers.md#engine-availability).
 - An existing Karakoram PostgreSQL source cluster, major **12 or later**, reachable from the Temporal members. The PostgreSQL engine driver's own version catalog still applies.
 - The **PostgreSQL binding service** (ADR 0045), which the standard server constructs once and shares with Temporal, [OpenBao](https://openbao.org/), [Keycloak](https://www.keycloak.org/) and the bindings API. A composition without it rejects Temporal clusters with `PostgreSQL bindings are unavailable`.
-- Locked native artifacts and private networking between roles and the source writer. Members advertise the private IPv4 address used to reach that writer.
-- Provider horizontal scaling for component replicas above one; configured Dokploy HTTPS/subdomain routing for a public Web UI. Nomad supports private UI access only.
+- Locked native artifacts and private networking between roles and the source writer. Each replica advertises its own private address used to reach that writer, in the backend's declared address family, not the shared service hostname.
+- Provider horizontal scaling for component replicas above one. Zerops and configured Dokploy support a public Web UI with OIDC; Nomad supports private UI access only.
 
-Create, replace and patch admission (including dry runs) reject providers whose
-runtime layout does not declare private IPv4 networking, before persisting intent.
+Create, replace and patch admission (including dry runs) require a known private
+IPv4 or IPv6 backend layout before persisting intent. On Zerops, members bind
+to `::` and discover their private IPv6 address through the bound PostgreSQL
+writer route. Both combined and split topologies use the same stateless runtime
+and fixed role ports as other backends; no Temporal data volume is required.
+The source writer and every peer must be reachable over private IPv6.
+
+Zerops requires agents with the `temporal-ipv6` configuration-pull capability.
+Older agents receive no IPv6 configuration; configuration pulls return HTTP 409
+with `AgentUpgradeRequired`, the missing capability and an instruction to upgrade
+the member agent, rather than a transient-connectivity diagnostic. A new agent
+receiving an older control plane's payload retains IPv4 behavior; upgrade the
+control plane before creating Temporal on Zerops. See [ADR 0069](../adr/0069-temporal-zerops.md).
 
 The `PostgreSQLBinding` status condition reports `Bound` only after the binding
 has an identity and its source connection has resolved. An unreachable source
@@ -115,9 +126,9 @@ visibility lookups after failover; frontend health alone is insufficient. See
 the [binding failover boundary](../postgres/bindings.md#protocol-compatibility-and-primary-failover).
 
 This fix requires newly deployed consumer agents; a control-plane upgrade or
-ordinary restart does not replace them. See the [v0.4.1 consumer rollout
-procedure](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)
-before recreating any existing consumer with valuable state.
+ordinary restart does not replace them. See the [consumer rollout compatibility
+guidance](../upgrade.md#keycloak-and-temporal-postgresql-proxy-compatibility)
+before replacing existing consumer agents; preserve the bound databases.
 
 The persistence block, `historyShards` and topology are immutable after creation. The Temporal cluster name is the Karakoram cluster name. Choose database names and shard count before admitting production workflows.
 

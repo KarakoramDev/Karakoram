@@ -176,7 +176,9 @@ func fixture(t *testing.T, topology string) (*Provider, *engine.Context, *fakeBi
 			return
 		}
 		member := parts[0]
-		config, e := p.MemberConfig(r.Context(), rc, member)
+		pull := *rc
+		pull.AgentConfigCapabilities = []string{agentapi.ConfigCapabilityTemporalIPv6}
+		config, e := p.MemberConfig(r.Context(), &pull, member)
 		if e != nil {
 			http.Error(w, "not configured", 404)
 			return
@@ -623,14 +625,14 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
-func TestValidateBackendPrivateIPv4(t *testing.T) {
+func TestValidateBackendPrivateNetworking(t *testing.T) {
 	p := New(Options{})
 	for _, tc := range []struct {
 		name    string
 		backend infra.Backend
 		invalid bool
 	}{
-		{"zerops", new(zerops.Backend), true},
+		{"zerops", new(zerops.Backend), false},
 		{"nomad", new(nomad.Backend), false},
 		{"dokploy", new(dokploy.Backend), false},
 		{"unknown-family", infrafake.New(infrafake.Options{}), true},
@@ -639,8 +641,8 @@ func TestValidateBackendPrivateIPv4(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := p.ValidateBackend(tc.backend)
 			if tc.invalid {
-				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "Temporal requires a backend with private IPv4 networking; Zerops is not supported yet") {
-					t.Fatalf("expected private IPv4 admission error, got %v", err)
+				if !errors.Is(err, engine.ErrInvalid) || !strings.Contains(err.Error(), "Temporal requires a backend with a known private address family") {
+					t.Fatalf("expected private networking admission error, got %v", err)
 				}
 			} else if err != nil {
 				t.Fatal(err)

@@ -65,19 +65,30 @@ func (r *Runner) install(s tspec.Spec) string {
 	return s.InstallDir
 }
 
-func memberIPv4(ctx context.Context, database *tspec.Database) (string, error) {
+func memberAddress(ctx context.Context, database *tspec.Database, ipv6 bool, dial func(context.Context, string, string) (net.Conn, error)) (string, error) {
 	// A service DNS name may represent several replicas. Ask the kernel which
 	// local address routes to the bound writer; UDP connect sends no packets.
-	connection, err := (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "udp4", net.JoinHostPort(database.Host, strconv.Itoa(database.Port)))
+	network := "udp4"
+	if ipv6 {
+		network = "udp6"
+	}
+	connection, err := dial(ctx, network, net.JoinHostPort(database.Host, strconv.Itoa(database.Port)))
 	if err != nil {
 		return "", errors.New("discover Temporal member route failed")
 	}
 	defer connection.Close()
 	address, ok := connection.LocalAddr().(*net.UDPAddr)
-	if !ok || address.IP.To4() == nil || !address.IP.IsPrivate() {
-		return "", errors.New("temporal persistence route has no private local IPv4")
+	if !ok || !address.IP.IsPrivate() || (address.IP.To4() == nil) != ipv6 {
+		return "", errors.New("temporal persistence route has no private local address in the configured family")
 	}
 	return address.IP.String(), nil
+}
+
+func loopback(ipv6 bool) string {
+	if ipv6 {
+		return "::1"
+	}
+	return "127.0.0.1"
 }
 
 // Apply installs private configuration and reconciles the component process.
@@ -94,15 +105,18 @@ func (r *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 	}
 	address, bind := r.bindAddress, r.bindAddress
 	if address == "" {
-		address = "127.0.0.1"
+		address = loopback(s.IPv6)
 		if s.Component != tspec.UI {
 			var err error
-			address, err = memberIPv4(ctx, s.Persistence)
+			address, err = memberAddress(ctx, s.Persistence, s.IPv6, (&net.Dialer{Timeout: 3 * time.Second}).DialContext)
 			if err != nil {
 				return nil, err
 			}
 		}
 		bind = "0.0.0.0"
+		if s.IPv6 {
+			bind = "::"
+		}
 	}
 	p, files, err := render(s, n.DataDir(), address, bind, r.install(s))
 	if err != nil {
@@ -184,7 +198,7 @@ func (r *Runner) BeforeStart(ctx context.Context, n *agent.Node, name string) er
 
 func readiness(ctx context.Context, component, address string) error {
 	if component == tspec.UI {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://127.0.0.1:8080/", nil)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+net.JoinHostPort(address, "8080")+"/", nil)
 		if err != nil {
 			return err
 		}
@@ -248,7 +262,7 @@ func (r *Runner) status(ctx context.Context, n *agent.Node) tspec.Status {
 	}
 	address := r.bindAddress
 	if address == "" {
-		address = "127.0.0.1"
+		address = loopback(s.IPv6)
 	}
 	if err := readiness(ctx, s.Component, address); err != nil {
 		status.Detail = err.Error()

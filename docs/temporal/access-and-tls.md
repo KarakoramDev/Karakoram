@@ -4,7 +4,7 @@
 
 See the [overview](README.md) for prerequisites and [operations](operations.md) for maintenance. Karakoram project namespaces and [Temporal](https://temporal.io/) workflow namespaces are separate concepts; `karactl -n NS` selects the former.
 
-These access paths apply to [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad); [Zerops](https://zerops.io/) is not supported yet because Temporal requires private IPv4 membership networking. Public Web UI HTTPS is available only on configured Dokploy; Nomad UI access remains private.
+These access paths apply to [Zerops](https://zerops.io/), [Dokploy](https://dokploy.com/) and [Nomad](https://developer.hashicorp.com/nomad). Zerops frontend and peer traffic uses private IPv6; SDK clients and application workers must reach that network. Public Web UI HTTPS is available on Zerops and configured Dokploy; Nomad UI access remains private. Public UI routing does not expose the frontend.
 
 ## Trust and authorization
 

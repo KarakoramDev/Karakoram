@@ -209,6 +209,8 @@ func backupMemberIdentity(ctx context.Context, rc *engine.Context, s *state, ide
 	return primary, nil
 }
 func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Operation, cp backupCheckpoint) (engine.OpResult, error) {
+	p.backupCleanupMu.RLock()
+	defer p.backupCleanupMu.RUnlock()
 	ctx = freshMySQLReads(ctx)
 	invalidateMySQLReadObservation(ctx, rc)
 	defer invalidateMySQLReadObservation(ctx, rc)

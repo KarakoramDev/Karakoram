@@ -426,7 +426,7 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context, s *co
 			if e != nil {
 				return true, e
 			}
-			config, e := p.MemberConfig(ctx, rc, m.Name)
+			config, e := p.memberConfig(ctx, rc, m.Name)
 			if e != nil {
 				return true, e
 			}

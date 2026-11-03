@@ -139,7 +139,14 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	if m.Role == "proxy" {
 		runtime.ReadinessArgs = engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=postgres", "--data-dir="+rc.Backend.Layout().DataDir(m.Volume))
 	}
-	return runtime.Spec(rc.Backend.Layout()), nil
+	spec := runtime.Spec(rc.Backend.Layout())
+	if m.Role == "proxy" {
+		if spec.Env == nil {
+			spec.Env = make(map[string]string)
+		}
+		spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] = "1"
+	}
+	return spec, nil
 }
 
 // MemberConfig renders secret-bearing configuration only for an allocated member.

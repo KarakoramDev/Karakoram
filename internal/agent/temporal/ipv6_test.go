@@ -10,8 +10,7 @@ import (
 )
 
 func TestIPv6NativeConfig(t *testing.T) {
-	// Rendering is IPv6-safe; production admission intentionally requires private
-	// IPv4 until Temporal route discovery/membership is qualified on IPv6.
+	// Every server role and the UI support IPv6 listeners and advertisements.
 	for _, role := range []string{tspec.Server, tspec.Frontend, tspec.History, tspec.Matching, tspec.Worker, tspec.UI} {
 		t.Run(role, func(t *testing.T) {
 			s := testSpec()
@@ -23,7 +22,7 @@ func TestIPv6NativeConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			configtest.CheckIPv6Rendered(t, files, p.Args, p.Env, map[string]string{
-				"listenAddress: 127.0.0.1:9090": "node-local metrics endpoint; IPv6 admission remains rejected",
+				"listenAddress: 127.0.0.1:9090": "node-local metrics endpoint",
 			})
 			var v struct {
 				Host   string

@@ -26,6 +26,20 @@ type RuntimeResourceDeployment interface {
 	ResourceUpdatesDeployRuntime() bool
 }
 
+// ServingResourceUpdate optionally narrows ResourceUpdatePreservesServing for a
+// particular request. Backends with disruptive resource transitions must implement
+// this check; engines must require both the capability and this request's approval.
+type ServingResourceUpdate interface {
+	ResourceUpdatePreservesServingFor(current, target Resources) bool
+}
+
+// ServingProxyUpdates optionally narrows both serving-preserving capabilities
+// to deployed proxy runtimes with the required platform readiness integration.
+// A false result or an error forbids the serving-preserving engine path.
+type ServingProxyUpdates interface {
+	ProxyUpdatesPreserveServing(context.Context, string) (bool, error)
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract
@@ -57,11 +71,18 @@ type Capabilities struct {
 	// HorizontalScaling: SetContainerCount runs more than one container of a
 	// stateless service.
 	HorizontalScaling bool `json:"horizontalScaling"`
-	// ReplicaScalePreservesServing: a pure stateless replica-count update
-	// preserves existing serving tasks (apart from replicas removed by scale-in).
-	// HorizontalScaling alone does not imply this: some platforms reload all tasks.
+	// ReplicaScalePreservesServing: a count-only stateless update keeps the service
+	// serving. Incumbents remain serving, or replacements start first, one at a
+	// time, and pass readiness equivalent to the engine's proxy readiness before
+	// receiving traffic or retiring their predecessors. Completion requires the
+	// requested number of running instances. Engine readiness remains mandatory.
 	// Internal execution contract, not a user-selectable feature capability.
 	ReplicaScalePreservesServing bool `json:"-"`
+	// ResourceUpdatePreservesServing: SetResources on a running stateless service
+	// preserves serving under the same incumbent-retention or health-gated,
+	// start-first rules as ReplicaScalePreservesServing. ServingResourceUpdate
+	// may exclude disruptive requests. Engine readiness remains mandatory.
+	ResourceUpdatePreservesServing bool `json:"-"`
 	// EnvChangeRestarts: writing variables restarts or redeploys the runtime.
 	EnvChangeRestarts bool `json:"envChangeRestarts"`
 	// StatelessRolloutSurge bounds extra serving instances during a stateless

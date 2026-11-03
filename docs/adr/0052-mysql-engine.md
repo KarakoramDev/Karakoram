@@ -24,6 +24,16 @@ Formation and whole-group re-formation are journaled, evidence-based control-pla
 
 Frontend proxy authentication requires recoverable credentials. Native MySQL access manages TLS-only accounts, databases and database-level grants, synchronizing sealed managed passwords to proxy configuration. SQL-created identities are not automatically routable. System identities remain separate and protected. [Access and TLS](../mysql/access-and-tls.md) owns the user-facing routes, permissions, password rotation and connection guidance.
 
+Control-plane mutation gates are keyed by normalized namespace and cluster name,
+with canceled waiters and idle entries released. Slow native recovery therefore
+does not serialize unrelated cluster access or maintenance. A separate
+read/write lock coordinates backup/restore steps with destructive backup storage
+and sealed-snapshot cleanup. Acquire one target-cluster gate before this storage
+lock; cross-cluster restores read immutable completed source snapshots without
+acquiring a second cluster gate. This prevents source/target lock-order cycles.
+The storage lock does not extend to asynchronous agent uploads or external S3
+clients; repository incarnation boundaries and existing admission still apply.
+
 ### Backups and recovery
 
 Use XtraBackup physical full/incremental streams to registered [S3](https://aws.amazon.com/s3/) storage and GTID-keyed binary-log archiving from the current writer. PITR coverage is conservative and must be continuous; later successful uploads cannot bridge a gap. Restore is destructive and offline, preserves recovered GTIDs, regenerates server UUIDs and isolates restored groups with a new group identity. Source/target engine driver and server major must match. Retention preserves chain dependencies; managed account recovery additionally requires sealed backup-time credential provenance. [Backups and PITR](../mysql/backups.md) owns repository structure, preparation, transaction boundaries and account caveats.

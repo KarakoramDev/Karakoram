@@ -24,8 +24,16 @@ type Options struct {
 	Provider                       string
 }
 type Core struct {
-	options         Options
-	accessMu        sync.Mutex
+	options   Options
+	mutations clusterMutationLocks
+	// Lock order: one cluster mutation gate, then backupCleanupMu. Backup and
+	// restore steps share the read side; deletion owns the write side across
+	// object deletion, sealed RecoveryIdentity cleanup, and inventory updates.
+	// Cross-cluster restores never acquire the source's mutation gate: completed
+	// source snapshots are immutable and the read side excludes their deletion.
+	// Agent-side uploads outlive these locks; repository incarnation boundaries
+	// and existing backup/restore admission remain their safety mechanisms.
+	backupCleanupMu sync.RWMutex
 	recoveryMu      sync.Mutex
 	recoveryRetries map[string]offlineRecoveryRetry
 }

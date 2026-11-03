@@ -88,7 +88,11 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	}
 	runtime := engine.AgentRuntime{Cluster: rc.Cluster.Name, Member: m.Name, Engine: "mysql", Volume: m.Volume, AgentURL: agentURL, InternalCAPEM: p.options.InternalCAPEM, Ports: ports, Prepare: prepare}
 	// Agent transport readiness is independent of GR quorum and clone completion.
-	return runtime.Spec(rc.Backend.Layout()), nil
+	spec := runtime.Spec(rc.Backend.Layout())
+	if m.Role == "proxy" {
+		spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] = "1"
+	}
+	return spec, nil
 }
 
 func mysqlListenHost(rc *engine.Context) string {

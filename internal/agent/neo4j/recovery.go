@@ -110,17 +110,34 @@ func (e *Engine) recoverAdmin(ctx context.Context, n *agent.Node, s neo4jspec.Sp
 	return nil
 }
 
-// In-place restores can already contain the target's managed password. Treat
-// Neo4j's exact unchanged-password rejection as the satisfied postcondition, not
-// as a failed restore that rolls the successfully loaded store back.
+// Password equality alone does not establish that normal authentication is
+// usable: the existing account may still require a password change. Complete
+// and observe both postconditions before BeforeStart may publish its marker.
 func recoverAdminPassword(ctx context.Context, s neo4jspec.Spec, port int, password string) error {
 	_, err := query(ctx, s, port, "", "system", "ALTER USER neo4j SET PASSWORD $p CHANGE NOT REQUIRED", map[string]any{"p": password})
-	if err == nil {
-		return nil
+	if err != nil {
+		var failure *queryFailure
+		if !errors.As(err, &failure) || !failure.passwordUnchanged {
+			return recoveryFailureDiagnostic(err)
+		}
+		// A previous attempt may have committed the password before its response
+		// or completion marker was persisted. Do not change it to a temporary
+		// value; clearing the expiration flag independently is replay-safe.
+		if _, err = query(ctx, s, port, "", "system", "ALTER USER neo4j SET PASSWORD CHANGE NOT REQUIRED", nil); err != nil {
+			return recoveryFailureDiagnostic(err)
+		}
 	}
-	var failure *queryFailure
-	if errors.As(err, &failure) && failure.passwordUnchanged {
-		return nil
+	result, err := query(ctx, s, port, "", "system", "SHOW USERS YIELD user, passwordChangeRequired WHERE user = 'neo4j' RETURN passwordChangeRequired", nil)
+	if err != nil {
+		return recoveryFailureDiagnostic(err)
 	}
-	return recoveryFailureDiagnostic(err)
+	rows := result.rows()
+	if len(rows) != 1 {
+		return errors.New("Neo4j credential recovery could not verify the managed administrator; preserve the volume and inspect system database user metadata")
+	}
+	required, ok := rows[0]["passwordChangeRequired"].(bool)
+	if !ok || required {
+		return errors.New("Neo4j credential recovery could not clear the managed administrator password-change requirement; preserve the volume and inspect system database user metadata")
+	}
+	return nil
 }

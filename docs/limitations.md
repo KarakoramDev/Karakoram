@@ -72,6 +72,12 @@ These cross-engine constraints define the operating model; engine-specific limit
 
 ## Continuing limitations
 
+- **MySQL/PXC mutation isolation:** slow offline recovery serializes mutations
+  only for its own namespace/cluster, not unrelated clusters. Backup-object
+  deletion remains separately serialized against other deletions and active
+  control-plane backup/restore steps; it can wait for those steps even when
+  their target clusters differ. This does not lock asynchronous agent uploads
+  or external storage clients. See [recovery coordination](mysql/operations.md#full-outage-recovery).
 - **PostgreSQL administrator password rotation remains unavailable.** The
   `postgres` administrator password cannot be rotated in place; follow
   [credential containment](upgrade.md#postgresql-administrator-password-cannot-be-rotated-yet).
@@ -132,17 +138,41 @@ These cross-engine constraints define the operating model; engine-specific limit
   measured full-backup peaks were 84.4% of 1 GiB for single MySQL, 85.0% of
   2 GiB for PXC and 90.7% of 2 GiB for GR. These are scoped measurements, not
   guaranteed safe limits; see [upgrade memory guidance](upgrade.md#fixed-in-v043).
-- **ProxySQL changes can interrupt clients.** On Nomad, count-only replica
-  changes preserve existing serving replicas. Zerops and Dokploy still stop
-  and redeploy the whole proxy for count changes; proxy resource, version and
-  runtime changes remain disruptive on all providers. Existing GR clusters need
-  the [proxy TLS redeployment](upgrade.md#proxysql-monitor-tls).
+- **ProxySQL serving preservation is request- and backend-specific.** Nomad
+  retains count-only incumbent-preserving scaling, but does not guarantee
+  serving-preserving resource rollouts: MySQL/PXC retain stop/redeploy, while
+  PostgreSQL/Supabase use maintenance-gated provider resource rollouts.
+  Zerops count changes and same-CPU-mode CPU/RAM resizes retain incumbent
+  Linux containers; CPU-mode and disk-bound changes are excluded, and unexpected
+  incumbent replacement fails with `INCUMBENTS_REPLACED`. Observed terminal
+  failures release the submission fence; unresolved submissions still block
+  supersession and Stop. A caller crash before checkpointing a returned failure
+  can permit one resubmission. Dokploy count/resource updates require a deployed
+  serving-probe marker and serial start-first replacement with spare capacity.
+  Native readiness gates initial task/container admission. A provenance-bound
+  marker in container `/tmp` (never the engine volume) survives agent-only
+  restart/re-exec; new task/container identities need fresh native admission.
+  Later Swarm checks use lock-free agent/supervisor liveness only; dependency
+  failures and intentional holds remain engine-managed, avoiding replacement
+  cascades. Unmarked legacy proxies retain their
+  disruptive/maintenance-gated path until redeployed. All proxy resource changes
+  and count reductions remain maintenance-window gated; only serving-preserving
+  count scale-out bypasses the window. Replacing or removing an instance can
+  disconnect its existing sessions.
+  Version/startup-runtime changes do not acquire a serving guarantee from these
+  capabilities. Live-provider acceptance remains pending; see
+  [ADR 0070](adr/0070-proxysql-serving-scale-and-resource-changes.md),
+  [Zerops resources](zerops.md#resources-and-autoscaling),
+  [Dokploy proxy updates](dokploy.md#proxysql-count-and-resource-updates) and
+  [Nomad resource limitations](nomad.md#proxy-resource-changes-are-not-a-zero-outage-contract).
+  Existing GR clusters still need the
+  [proxy TLS redeployment](upgrade.md#proxysql-monitor-tls).
 - **Nomad live coverage remains incomplete:** PXC, Neo4j, Weaviate, Citus,
   Temporal, OpenBao, Keycloak/bindings, Supabase and fleet operations have not
   been live-verified in the current release campaign. Earlier scoped evidence
   is not a complete lifecycle/recovery acceptance pass. EXPERIMENTAL status is
   unchanged.
-- **Temporal remains unsupported on Zerops** because it requires private IPv4.
+- **Temporal on Zerops requires IPv6-capable agents and private IPv6 connectivity** to peers and the bound PostgreSQL writer. Implemented admission/rendering is covered offline; live workflow and recovery acceptance remains unverified.
 
 The v0.4.2 PITR memory, singleton backup-memory, PXC retirement and clone,
 PXC post-restore history, ProxySQL TLS and Zerops Weaviate issues are resolved
@@ -159,8 +189,8 @@ not current v0.4.3 limitations. Existing history latches are not silently cleare
 - [PostgreSQL limits](postgres/README.md#limits): [ProxySQL](https://proxysql.com/) has protocol/driver restrictions; SQL-created users are not automatically proxy-routable. Strict synchronous HA can block writes, and major upgrades are offline and backup-gated.
 - [Supabase limits](supabase/README.md#options-and-limits): PostgreSQL 17 only; missing locked component/extension artifacts are rejected. Standard/full preset definitions do not imply available binaries. Database backups omit Storage objects and control-plane-held function/service secrets.
 - [OpenBao limits](openbao/README.md#options-and-limits): 1/3/5 members, TLS-only, no seal migration, PITR, performance/DR replication or automated lost-quorum recovery. Shamir re-unseal depends on the control plane and its original master key; auto-unseal depends on the external transit/KMS key. PostgreSQL storage uses the control plane's shared PostgreSQL binding service; a server built without that service rejects it and does not advertise the choice. RabbitMQ connection roles must share a default/maximum TTL pair per connection.
-- [Temporal limits](temporal/README.md#limits): Zerops is not supported yet because membership requires private IPv4; use Dokploy or Nomad. Requires a PostgreSQL ≥12 source through the control plane's shared PostgreSQL binding service; no multi-cluster replication or namespace authorization. Namespace descriptions cannot be cleared. Restores require recorded manifests in Temporal cluster state, the original source/database names and shared-source acknowledgement when applicable; deleting Temporal backup records does not remove PostgreSQL archives.
-- [Neo4j Community limits](neo4j/README.md#access-and-limits): one member and one user database; every user is an administrator. No clustering, online backup, RBAC, native metrics endpoint, PITR or incremental backups. Dumps, restores, restarts and upgrades interrupt all service.
+- [Temporal limits](temporal/README.md#limits): Zerops uses private IPv6; Dokploy and Nomad use private IPv4. Requires a PostgreSQL ≥12 source through the control plane's shared PostgreSQL binding service; no multi-cluster replication or namespace authorization. Namespace descriptions cannot be cleared. Restores require recorded manifests in Temporal cluster state, the original source/database names and shared-source acknowledgement when applicable; deleting Temporal backup records does not remove PostgreSQL archives.
+- [Neo4j Community limits](neo4j/README.md#access-and-limits): one member and one user database; every user is an administrator. No clustering, online backup, RBAC, native metrics endpoint, PITR or incremental backups. Dumps, restores, restarts and upgrades interrupt all service. [Interrupted first bootstrap](neo4j/operations.md#availability-and-lifecycle) replays isolated credential recovery before normal startup; persistent store, user-metadata or transport failures require operator repair, not marker deletion or store recreation. A v0.4.3 false-completion marker can survive an agent upgrade with `passwordChangeRequired=true`, leaving a running server's managed queries failing with `Neo.ClientError.Security.CredentialsExpired`; reload/restart and ordinary system-user rotation do not automatically repair this case. Follow the [legacy-marker maintenance procedure](neo4j/operations.md#legacy-bootstrap-marker-with-expired-credentials): after upgrading the member and excluding active/pending offline jobs, explicitly stop and verify the JVM is gone, preserve the volume, remove only the credential completion marker, then explicitly start and verify authenticated readiness. Never remove a marker on a live store or release another operation's hold.
 - [MySQL and PXC limits](mysql/README.md): engine drivers cannot be switched in place; MySQL single-primary Group Replication and PXC [Galera](https://galeracluster.com/) have distinct recovery/provenance rules. TLS is required; private replication ports need operator-enforced isolation.
 - [Keycloak limits](keycloak/README.md): exactly one runtime, maintenance downtime, PostgreSQL binding required; recovery protects source database data separately from the coordinator's sealed administrator state.
 - [Native artifacts](native-artifacts.md) currently target [Linux](https://www.kernel.org/) amd64/[Ubuntu](https://ubuntu.com/) 24.04. Development use of source-built locked artifacts needs a configured mirror; mirrors cannot add absent capabilities.
