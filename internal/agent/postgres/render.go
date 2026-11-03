@@ -6,8 +6,6 @@ package postgres
 import (
 	"fmt"
 	"net"
-	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -23,11 +21,14 @@ type renderedFile struct {
 	name, content string
 	executable    bool
 }
-type paths struct{ root, pgdata, socket, etcd, proxy string }
+type paths struct {
+	root, pgdata, socket, etcd, proxy, ident string
+	identStaged                              bool
+}
 
 func dataPaths(dir string) paths {
 	root := filepath.Join(dir, "karakoram", "postgres")
-	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy")}
+	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy"), ident: filepath.Join(root, "pg_ident.conf")}
 }
 func listenHost(host string) string {
 	if host == "" {
@@ -91,7 +92,7 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 		m[k] = v
 	}
 	if s.LocalPeerAuth {
-		m["ident_file"] = filepath.Join(p.root, "pg_ident.conf")
+		m["ident_file"] = p.ident
 	}
 	if s.ListenHost != "" {
 		m["listen_addresses"] = postgresListenHost(s.ListenHost)
@@ -354,15 +355,12 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		}
 		return files, nil
 	}
-	if s.LocalPeerAuth {
-		// Every supervised child inherits the agent's effective UID. Resolve
-		// the kernel identity, never USER/LOGNAME supplied through environment.
-		owner, err := user.LookupId(strconv.Itoa(os.Geteuid()))
-		if err != nil || owner.Username == "" || strings.ContainsAny(owner.Username, "\r\n\x00") {
-			return nil, fmt.Errorf("cannot resolve runtime owner for PostgreSQL peer authentication")
+	if s.LocalPeerAuth && !p.identStaged {
+		_, mapping, err := localPeerIdentity()
+		if err != nil {
+			return nil, err
 		}
-		identity := `"` + strings.ReplaceAll(owner.Username, `"`, `""`) + `"`
-		files = append(files, renderedFile{"pg_ident.conf", "karakoram-local " + identity + " postgres\n", false})
+		files = append(files, renderedFile{"pg_ident.conf", mapping, false})
 	}
 	if statements == nil {
 		var err error

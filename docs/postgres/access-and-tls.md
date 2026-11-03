@@ -33,9 +33,10 @@ It returns **202** and an operation, not the new password. Follow that operation
 to completion before revealing and distributing the new connection credential.
 Every data member must advertise administrator-rotation support; an old or
 unreachable agent causes a **409** explaining that `upgrade-agents` is required.
-Complete agent upgrades and structural/rolling maintenance first. Activating
-password-independent local authentication during that upgrade can require the
-ordinary configuration restart; rotation is refused until it is active.
+Complete agent upgrades and structural/rolling maintenance first. The upgrade
+stages and observes the exact-owner map in the existing native identity file
+before publishing peer HBA rules; it requires a reload, not an identity-path
+database restart. Rotation is refused until local authentication is active.
 
 The control plane seals the previous password, selected replacement and stable
 native request before changing PostgreSQL. Members first acknowledge a

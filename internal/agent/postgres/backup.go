@@ -193,6 +193,12 @@ func durableJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
+	return durableFile(name, b)
+}
+
+// durableFile atomically replaces an owner-only file without changing the
+// permissions of its existing parent directory.
+func durableFile(name string, b []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(name), ".receipt-")
 	if err != nil {
 		return err

@@ -39,6 +39,28 @@ kernel UID, never environment-supplied USER/LOGNAME. No other OS account is
 mapped, and remote TCP authentication remains SCRAM/TLS. This changes neither
 the runtime-owner trust boundary nor customer authentication.
 
+Activation preserves the existing native `ident_file` path. Before publishing
+either a single-server HBA or Patroni `pg_hba`, connect using the current working
+authentication, read the live identity-file path, atomically add only the
+reserved map while retaining other native mappings, and signal configuration
+reload. Observe a newer `pg_conf_load_time()` plus the exact valid entry in
+`pg_ident_file_mappings`, then persist the observation locally. A failed or
+interrupted observation leaves peer HBA unpublished and working SCRAM unchanged;
+replay uses the same map without duplicate grants. Subsequent passwordless
+connections provide direct live activation evidence. Do not infer activation
+merely from a new binary, rendered file, or reload request acceptance.
+
+The renderer preserves that observed path in member-local PostgreSQL/Patroni
+parameters, avoiding the postmaster-only path transition entirely. The agent
+does not configure a Patroni `pg_ident` list, so Patroni does not replace the
+staged mappings ([Patroni configuration implementation](https://github.com/patroni/patroni/blob/v4.0.6/patroni/postgresql/config.py)).
+An unobservable live server blocks activation before any peer HBA publication.
+For stopped existing data, inspect the configured path with `postgres -C` and
+stage its map before rendering; fresh servers receive fully staged matching
+identity and HBA files before either PostgreSQL or Patroni starts. This also
+preserves password-independent startup after an offline restore.
+
+
 The agent's local connection/recovery rekey first uses that socket with no
 password. Patroni's existing `use_unix_socket` and pgBackRest's `pg1-socket-path`
 use the same HBA map even while their rendered password is temporarily old.
@@ -95,10 +117,10 @@ or Supabase component that still needs acknowledgement.
 ## Consequences
 
 Rotation itself requires no database restart, including on a single member.
-Installing peer authentication during the preceding agent upgrade can require
-the ordinary configuration restart because `ident_file` is a server-start
-setting. Complete that rollout first; admission stays closed until every member
-proves password-independent local authentication.
+Peer activation during the preceding agent upgrade uses the existing identity
+path and a reload, not an identity-path database restart. Complete that rollout
+first; admission stays closed until every member proves password-independent
+local authentication.
 Supabase component refreshes restart their processes and may interrupt service.
 Citus can have transient cross-group authentication failures while the node-local
 transactions and outbound authentication converge. This is recoverable but not an

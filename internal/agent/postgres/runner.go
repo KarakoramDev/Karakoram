@@ -384,6 +384,9 @@ func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConf
 			return nil, err
 		}
 	}
+	if err = prepareLocalPeerAuthentication(ctx, s, &p); err != nil {
+		return nil, err
+	}
 	statements, err := e.systemRoleSQL(s)
 	if err != nil {
 		return nil, err

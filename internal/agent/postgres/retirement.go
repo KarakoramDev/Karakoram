@@ -111,6 +111,9 @@ func (e *Runner) reloadRetirement(ctx context.Context, n *agent.Node, s pgspec.S
 	// Apply may already have written identical files, or the member may have
 	// become primary since Apply. Regenerate and reload from a fresh role view.
 	s = e.retirementConfig(ctx, n, s, p)
+	if err := prepareLocalPeerAuthentication(ctx, s, &p); err != nil {
+		return err
+	}
 	text, err := renderPatroni(s, p)
 	if err != nil {
 		return err
