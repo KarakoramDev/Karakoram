@@ -163,9 +163,11 @@ func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Resu
 		}
 	}()
 	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
 		return result, e
 	}
 	if busy, e := p.reconcileOrphanedAgentDrain(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
 		return result, e
 	}
 	if e := p.reconcilePITRReanchor(ctx, rc, s); e != nil {

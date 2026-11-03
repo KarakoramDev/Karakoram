@@ -4,9 +4,13 @@
 package dokploy
 
 import (
-	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"fmt"
+	"net/http"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
 func markedProxyFake(t *testing.T, count int) (*fakeAPI, *Backend, *fakeApplication) {
@@ -270,5 +274,146 @@ func TestProxyRollbackOrStaleSpecCannotCommit(t *testing.T) {
 			}
 			assertProxyNeverAllDown(t, f, a)
 		})
+	}
+}
+
+func proxyUpgradeDeployment(t *testing.T) infra.Deployment {
+	t.Helper()
+	d := testDeployment(t, "")
+	d.Runtime.Env = map[string]string{"KARAKORAM_PROXY_SERVING_PROBE": "1", "KARAKORAM_TEST_BUILD": "next"}
+	return d
+}
+
+func TestProxyAgentUpgradeDeployPreservesServing(t *testing.T) {
+	for _, count := range []int{1, 3} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			f, b, a := markedProxyFake(t, count)
+			op, err := b.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			o, err := decodeOp(op)
+			if err != nil || !o.HealthGated || o.ExpectedReplicas != count {
+				t.Fatalf("missing serving deployment receipt: %+v %v", o, err)
+			}
+			row := fakeAppSnapshot(t, f, "proxy")
+			for _, key := range []string{"updateConfigSwarm", "rollbackConfigSwarm"} {
+				policy := row[key].(map[string]any)
+				if fakeInt(policy, "Parallelism") != 1 || policy["Order"] != "start-first" || policy["FailureAction"] != "pause" || fakeInt(policy, "MaxFailureRatio") != 0 {
+					t.Fatalf("unsafe %s: %+v", key, policy)
+				}
+			}
+			probe := row["healthCheckSwarm"].(map[string]any)
+			if !reflect.DeepEqual(probe["Test"], []any{"CMD", layout.AppDir + "/karakoram", "agent", "readiness", "--serving-proxy", "--data-dir=" + layout.DataDir("")}) {
+				t.Fatalf("wrong serving healthcheck: %+v", probe)
+			}
+			awaitFake(t, b, op)
+			assertProxyNeverAllDown(t, f, a)
+		})
+	}
+}
+
+func TestProxyAgentUpgradeDeployPausedOrRollbackFails(t *testing.T) {
+	for _, condition := range []string{"paused", "rollback_started", "rollback_paused", "rollback_completed"} {
+		t.Run(condition, func(t *testing.T) {
+			f, b, a := markedProxyFake(t, 1)
+			f.mu.Lock()
+			a.neverHealthyProxy = true
+			f.mu.Unlock()
+			op, err := b.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Finish the build without committing its backend receipt.
+			f.mu.Lock()
+			for range 2 {
+				f.advanceDeployments(a)
+			}
+			a.holdTasks = true
+			f.services[fakeString(a.row, "appName")]["UpdateStatus"] = map[string]any{"State": condition}
+			f.mu.Unlock()
+			state, err := b.OpStatus(t.Context(), op)
+			if err != nil || !state.Failed || state.Done {
+				t.Fatalf("unsafe update accepted: %+v %v", state, err)
+			}
+			if pending := fakeMeta(t, f, "proxy").Pending; pending == nil || !pending.Failed {
+				t.Fatal("deployment failure was not durable")
+			}
+			assertProxyNeverAllDown(t, f, a)
+		})
+	}
+}
+
+func TestProxyAgentUpgradeLostUploadReplyAdoptsRollout(t *testing.T) {
+	f, b, a := markedProxyFake(t, 2)
+	loseCommittedReply(b, func(r *http.Request) bool {
+		return r.URL.Path == "/api/application.dropDeployment"
+	})
+	if _, err := b.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t)); err == nil {
+		t.Fatal("missing lost upload reply")
+	}
+	original := fakeMeta(t, f, "proxy").Pending
+	restarted := fakeBackend(t, f, nil)
+	op, err := restarted.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, _ := decodeOp(op)
+	if original == nil || !original.HealthGated || !sameOperation(original, recovered) || fakeCalls(f, "application.dropDeployment") != 2 {
+		t.Fatal("lost reply duplicated the proxy deployment")
+	}
+	awaitFake(t, restarted, op)
+	assertProxyNeverAllDown(t, f, a)
+}
+
+func TestLegacyProxyAgentUpgradeInstallsMarkerWithoutServingClaim(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("proxy", ""))
+	deployFake(t, b, "proxy", "")
+	op, err := b.Deploy(t.Context(), "proxy", proxyUpgradeDeployment(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, _ := decodeOp(op)
+	if o.HealthGated || fakeAppSnapshot(t, f, "proxy")["healthCheckSwarm"] != nil {
+		t.Fatal("legacy upgrade claimed serving preservation")
+	}
+	awaitFake(t, b, op)
+	preserved, err := b.ProxyUpdatesPreserveServing(t.Context(), "proxy")
+	if err != nil || !preserved {
+		t.Fatalf("successful agent upgrade did not enable later serving updates: %v %v", preserved, err)
+	}
+}
+
+func TestProxyAgentUpgradeFrozenRedeployDoesNotChangePolicy(t *testing.T) {
+	f, b, _ := markedProxyFake(t, 1)
+	d := proxyUpgradeDeployment(t)
+	serving := false
+	d.ProxyPreserveServing = &serving
+	op, err := b.Deploy(t.Context(), "proxy", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, _ := decodeOp(op)
+	if o.HealthGated || fakeAppSnapshot(t, f, "proxy")["healthCheckSwarm"] != nil {
+		t.Fatal("frozen redeploy choice silently became a serving rollout")
+	}
+	awaitFake(t, b, op)
+}
+
+func TestProxyAgentUpgradeServingRequestRejectsLegacyRuntime(t *testing.T) {
+	f := newFakeAPI(t)
+	b := fakeBackend(t, f, nil)
+	importFake(t, b, runtimeSpec("proxy", ""))
+	deployFake(t, b, "proxy", "")
+	d := proxyUpgradeDeployment(t)
+	serving := true
+	d.ProxyPreserveServing = &serving
+	if _, err := b.Deploy(t.Context(), "proxy", d); err == nil {
+		t.Fatal("unsupported serving request silently used ordinary redeploy")
+	}
+	if fakeCalls(f, "application.dropDeployment") != 1 {
+		t.Fatal("unsupported serving request uploaded a build")
 	}
 }

@@ -88,6 +88,12 @@ func (p *Core) reconcilePITRReanchor(ctx context.Context, rc *engine.Context, s 
 			r.FirstSeen = *op.CompletedAt
 		}
 	}
+	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost || m.RuntimeRecovery.VolumeLost || m.ProxyDraining || m.ProxyDrainOperation != "" {
+			r.FirstSeen = at
+			return skip("OperationInProgress", "Automatic PITR full backup deferred: cluster maintenance in progress")
+		}
+	}
 	if s.Rolling != nil || s.Pending != nil || s.Replacement != nil || s.TLSRotation != nil || s.GaleraTLS != nil {
 		r.FirstSeen = at
 		return skip("OperationInProgress", "Automatic PITR full backup deferred: cluster maintenance in progress")

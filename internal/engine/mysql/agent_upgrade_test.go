@@ -1017,3 +1017,155 @@ func TestAgentUpgradePXCDetectsWriterOnAnyProxyInstance(t *testing.T) {
 		t.Fatal("split-routing recovery disrupted another member", b.names)
 	}
 }
+
+type servingAgentRolloutBackend struct {
+	*agentRolloutBackend
+	capable     bool
+	marked      bool
+	approvalErr error
+	choices     []bool
+	receipt     *infra.Op
+	fail        bool
+}
+
+func (b *servingAgentRolloutBackend) Capabilities() infra.Capabilities {
+	c := b.agentRolloutBackend.Capabilities()
+	c.ProxyDeploymentPreservesServing = b.capable
+	return c
+}
+
+func (b *servingAgentRolloutBackend) ProxyUpdatesPreserveServing(context.Context, string) (bool, error) {
+	return b.marked, b.approvalErr
+}
+
+func (b *servingAgentRolloutBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
+	if name != "demomx" {
+		return b.agentRolloutBackend.Deploy(ctx, name, d)
+	}
+	if d.ProxyPreserveServing == nil {
+		return infra.Op{}, errors.New("proxy upgrade did not freeze rollout policy")
+	}
+	b.choices = append(b.choices, *d.ProxyPreserveServing)
+	if b.receipt != nil {
+		return *b.receipt, nil
+	}
+	op, err := b.agentRolloutBackend.Deploy(ctx, name, d)
+	if err == nil {
+		b.receipt = &op
+	}
+	return op, err
+}
+
+func (b *servingAgentRolloutBackend) OpStatus(ctx context.Context, op infra.Op) (infra.OpState, error) {
+	if b.fail {
+		return infra.OpState{Failed: true, Message: "proxy rollout paused"}, nil
+	}
+	return b.agentRolloutBackend.OpStatus(ctx, op)
+}
+
+func TestAgentUpgradeProxyServingDeploymentDecisionAndReplay(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		capable, marked bool
+		want            bool
+	}{
+		{"supported", true, true, true},
+		{"legacy-unmarked", true, false, false},
+		{"count-resource-only", false, true, false},
+		{"unsupported", false, false, false},
+	} {
+		for _, include := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/include=%v", tc.name, include), func(t *testing.T) {
+				_, rc, b := setupAgentRollout(t, "group")
+				if include {
+					b.builds["demomx"] = engine.CurrentAgentBuild().Build
+				}
+				b.holdBuild = true
+				backend := &servingAgentRolloutBackend{agentRolloutBackend: b, capable: tc.capable, marked: tc.marked}
+				rc.Backend = backend
+				op := mysqlAgentRolloutOperation(include)
+				var cp agentUpgradeCheckpoint
+				for {
+					agentRolloutTick(t, rc, b, op, false)
+					json.Unmarshal(op.Checkpoint, &cp)
+					if cp.Stage == "deploy" {
+						break
+					}
+				}
+				if cp.ProxyServing == nil || *cp.ProxyServing != tc.want {
+					t.Fatalf("wrong persisted rollout choice: %+v", cp)
+				}
+				intent := append(json.RawMessage(nil), op.Checkpoint...)
+				agentRolloutTick(t, rc, b, op, false)
+				if tc.want && !include {
+					// Exact changed-build acknowledgement must still recover the
+					// serving receipt and its pause/rollback verdict.
+					b.builds["demomx"] = engine.CurrentAgentBuild().Build
+				}
+				// Lose the receipt, not the backend operation. A later runtime or
+				// capability observation must not change this in-flight policy.
+				op.Checkpoint = intent
+				backend.capable, backend.marked = !tc.capable, !tc.marked
+				agentRolloutTick(t, rc, b, op, false)
+				if !reflect.DeepEqual(backend.choices, []bool{tc.want, tc.want}) || !reflect.DeepEqual(b.names, []string{"demomx"}) {
+					t.Fatalf("replay changed policy or double-deployed: %v %v", backend.choices, b.names)
+				}
+				if b.runtimes["demomx"].Env["KARAKORAM_PROXY_SERVING_PROBE"] != "1" {
+					t.Fatal("agent upgrade omitted the serving probe marker")
+				}
+				b.holdBuild = false
+				b.builds["demomx"] = engine.CurrentAgentBuild().Build
+				finishAgentRollout(t, rc, b, op, false)
+			})
+		}
+	}
+}
+
+func TestAgentUpgradeProxyServingApprovalErrorNeverDeploys(t *testing.T) {
+	p, rc, b := setupAgentRollout(t, "group")
+	backend := &servingAgentRolloutBackend{agentRolloutBackend: b, capable: true, approvalErr: errors.New("runtime evidence unavailable")}
+	rc.Backend = backend
+	op := mysqlAgentRolloutOperation(false)
+	for {
+		agentRolloutTick(t, rc, b, op, false)
+		var cp agentUpgradeCheckpoint
+		json.Unmarshal(op.Checkpoint, &cp)
+		if cp.Stage == "handoff" {
+			break
+		}
+	}
+	if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "runtime evidence unavailable") {
+		t.Fatalf("runtime approval error was ignored: %v", err)
+	}
+	if len(b.names) != 0 {
+		t.Fatal("unverified serving deployment was submitted")
+	}
+}
+
+func TestAgentUpgradeProxyServingLostReceiptRetainsFailure(t *testing.T) {
+	p, rc, b := setupAgentRollout(t, "group")
+	backend := &servingAgentRolloutBackend{agentRolloutBackend: b, capable: true, marked: true}
+	rc.Backend = backend
+	op := mysqlAgentRolloutOperation(false)
+	for {
+		agentRolloutTick(t, rc, b, op, false)
+		var cp agentUpgradeCheckpoint
+		json.Unmarshal(op.Checkpoint, &cp)
+		if cp.Stage == "deploy" {
+			break
+		}
+	}
+	intent := append(json.RawMessage(nil), op.Checkpoint...)
+	agentRolloutTick(t, rc, b, op, false)
+	op.Checkpoint = intent
+	backend.fail = true
+	// The build already changed, but native readiness cannot override a paused
+	// provider receipt. Replay must adopt it before progressing to data.
+	agentRolloutTick(t, rc, b, op, false)
+	if _, err := p.RunOperation(t.Context(), rc, op); err == nil || !strings.Contains(err.Error(), "proxy rollout paused") {
+		t.Fatalf("lost receipt bypassed provider failure: %v", err)
+	}
+	if !reflect.DeepEqual(b.names, []string{"demomx"}) {
+		t.Fatalf("failed proxy rollout touched data: %v", b.names)
+	}
+}

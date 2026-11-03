@@ -98,6 +98,10 @@ type Deployment struct {
 	Runtime  RuntimeSpec
 	// RetryEpoch grants one fresh deployment retry budget when increased.
 	RetryEpoch int64
+	// ProxyPreserveServing freezes a proxy deployment's rollout choice. Nil lets
+	// the backend select its normal policy; true requires serving preservation,
+	// false retains the ordinary redeploy path. It is not part of runtime bytes.
+	ProxyPreserveServing *bool
 }
 
 // Validate rejects a deployment no backend can render safely.

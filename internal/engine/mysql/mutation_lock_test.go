@@ -153,6 +153,14 @@ func TestMutationLockSameCluster(t *testing.T) {
 		func(ctx context.Context) error {
 			return p.DeleteRetainedBackup(ctx, domain.BackupStorage{}, domain.Backup{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Provider: "mysql"})
 		},
+		func(ctx context.Context) error {
+			_, err := p.CancelOperation(ctx, rc, &domain.Operation{Kind: domain.OperationUpgradeAgents})
+			return err
+		},
+		func(ctx context.Context) error {
+			_, err := p.CancelOperation(ctx, rc, &domain.Operation{Kind: domain.OperationReplaceMember})
+			return err
+		},
 	}
 	for i, call := range calls {
 		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)

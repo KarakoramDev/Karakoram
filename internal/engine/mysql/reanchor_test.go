@@ -205,3 +205,121 @@ func TestPITRAutoReanchorDeferrals(t *testing.T) {
 		})
 	}
 }
+
+func TestPITRAutoReanchorMemberMaintenance(t *testing.T) {
+	for _, scenario := range []string{"confirmed-volume-lost", "runtime-volume-lost", "proxy-draining", "proxy-drain-operation"} {
+		t.Run(scenario, func(t *testing.T) {
+			p, rc, _ := backupFixture(t, "group")
+			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			at := time.Now().UTC()
+			rc.Clock = trafficRenewalClock{at: at}
+			s, err := load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pass := func() {
+				t.Helper()
+				if err := p.reconcilePITRReanchor(engine.WithObservationPass(t.Context()), rc, s); err != nil {
+					t.Fatal(err)
+				}
+			}
+			pass()
+			s.PITRReanchor.FirstSeen = at.Add(-time.Hour)
+			m := s.data()[0]
+			switch scenario {
+			case "confirmed-volume-lost":
+				m.ConfirmedVolumeLost = true
+			case "runtime-volume-lost":
+				m.RuntimeRecovery.VolumeLost = true
+			case "proxy-draining":
+				m.ProxyDraining = true
+			case "proxy-drain-operation":
+				m.ProxyDrainOperation = "orphaned-rollout"
+			}
+			pass()
+			if s.PITRReanchor.LastReason != "PITRReanchorSkippedOperationInProgress" || !s.PITRReanchor.FirstSeen.Equal(at) {
+				t.Fatalf("maintenance did not reset stability: %+v", s.PITRReanchor)
+			}
+			backups, err := rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
+			if err != nil || len(backups) != 0 {
+				t.Fatalf("maintenance queued backup: %+v, %v", backups, err)
+			}
+		})
+	}
+}
+
+func TestPITRAutoReanchorLifecycleOperations(t *testing.T) {
+	for _, kind := range []string{domain.OperationUpgradeAgents, domain.OperationReplaceMember} {
+		for _, phase := range []domain.Phase{domain.PhasePending, domain.PhaseRunning, domain.PhaseSucceeded, domain.PhaseFailed, domain.PhaseCancelled} {
+			t.Run(kind+"/"+string(phase), func(t *testing.T) {
+				p, rc, _ := backupFixture(t, "group")
+				rc.Cluster.Spec.Backup.PITR.Enabled = true
+				at := time.Now().UTC()
+				rc.Clock = trafficRenewalClock{at: at}
+				s, err := load(rc.Cluster)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := p.reconcilePITRReanchor(engine.WithObservationPass(t.Context()), rc, s); err != nil {
+					t.Fatal(err)
+				}
+				s.PITRReanchor.FirstSeen = at.Add(-time.Hour)
+				op := &domain.Operation{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: kind, Phase: phase}
+				active := phase == domain.PhasePending || phase == domain.PhaseRunning
+				if !active {
+					op.CompletedAt = &at
+				}
+				if err := rc.Store.EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+				for _, elapsed := range []time.Duration{0, domain.PITRReanchorStabilityPeriod - time.Second} {
+					rc.Clock = trafficRenewalClock{at: at.Add(elapsed)}
+					if err := p.reconcilePITRReanchor(engine.WithObservationPass(t.Context()), rc, s); err != nil {
+						t.Fatal(err)
+					}
+					reason := "PITRReanchorSkippedWriterNotStable"
+					if active {
+						reason = "PITRReanchorSkippedOperationInProgress"
+					}
+					if s.PITRReanchor.LastReason != reason {
+						t.Fatalf("got %s, want %s", s.PITRReanchor.LastReason, reason)
+					}
+					backups, err := rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
+					if err != nil || len(backups) != 0 {
+						t.Fatalf("operation grace period queued backup: %+v, %v", backups, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPITRReanchorOrphanDrainRestartsStability(t *testing.T) {
+	p, rc, _ := backupFixture(t, "group")
+	rc.Cluster.Spec.Backup.PITR.Enabled = true
+	at := time.Now().UTC()
+	rc.Clock = trafficRenewalClock{at: at}
+	op := &domain.Operation{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Kind: domain.OperationUpgradeAgents, Phase: domain.PhasePending}
+	if err := rc.Store.EnqueueOperation(t.Context(), op); err != nil {
+		t.Fatal(err)
+	}
+	s, err := load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.PITRReanchor.FirstSeen = at.Add(-time.Hour)
+	s.data()[0].ProxyDrainOperation = op.ID
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Sync(t.Context(), rc); err != nil {
+		t.Fatal(err)
+	}
+	s, err = load(rc.Cluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.PITRReanchor.FirstSeen.IsZero() {
+		t.Fatalf("busy orphan drain retained stale stability: %+v", s.PITRReanchor)
+	}
+}

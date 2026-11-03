@@ -29,6 +29,7 @@ type agentUpgradeCheckpoint struct {
 	HandoffTarget string                     `json:"handoffTarget,omitempty"`
 	Deploy        *infra.Op                  `json:"deploy,omitempty"`
 	StopReason    string                     `json:"stopReason,omitempty"`
+	ProxyServing  *bool                      `json:"proxyServing,omitempty"`
 }
 
 func agentUpgradeResult(cp *agentUpgradeCheckpoint, message string) (engine.OpResult, error) {
@@ -262,6 +263,13 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 				}
 			}
 		}
+		if m.Role == "proxy" && cp.ProxyServing == nil {
+			serving, e := proxyAgentDeploymentPreservesServing(ctx, rc, m)
+			if e != nil {
+				return result, e
+			}
+			cp.ProxyServing = &serving
+		}
 		// Persist the in-flight identity before the first runtime side effect.
 		cp.Stage = "deploy"
 		return agentUpgradeResult(&cp, "Deploying unchanged runtime for "+m.Name)
@@ -285,7 +293,10 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			changed = changed || build != cp.Target.TargetBuild
 		}
 		current, e := agentUpgradeBuildCurrent(ctx, rc, m, cp.Target)
-		if e == nil && current && changed {
+		// Serving rollouts must recover the backend receipt even if every build
+		// changed: native observations cannot disprove paused/rollback state.
+		servingProxy := m.Role == "proxy" && cp.ProxyServing != nil && *cp.ProxyServing
+		if e == nil && current && changed && !servingProxy {
 			if m.Role == "data" && clustered(s.Topology) {
 				if _, e = p.reconcileFormation(ctx, rc, s); e != nil {
 					return agentUpgradeWait(&cp, "Waiting for recovered deployment of "+m.Name, e)
@@ -341,7 +352,15 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 				}
 			}
 		}
-		deployment, e := engine.Deploy(ctx, rc, m.Name, spec)
+		var deployment infra.Op
+		if m.Role == "proxy" {
+			// Old journals without a rollout decision keep their original redeploy
+			// policy. Never reselect a policy after an ambiguous submission.
+			serving := cp.ProxyServing != nil && *cp.ProxyServing
+			deployment, e = engine.DeployProxy(ctx, rc, m.Name, spec, serving)
+		} else {
+			deployment, e = engine.Deploy(ctx, rc, m.Name, spec)
+		}
 		if e != nil {
 			return result, e
 		}
@@ -428,11 +447,24 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		cp.HandoffTarget = ""
 		cp.Deploy = nil
 		cp.Started = false
+		cp.ProxyServing = nil
 		cp.Stage = "select"
 		return agentUpgradeResult(&cp, "Completed agent rollout for "+m.Name)
 	default:
 		return result, engine.Invalid("unknown MySQL agent rollout checkpoint %s", cp.Stage)
 	}
+}
+
+func proxyAgentDeploymentPreservesServing(ctx context.Context, rc *engine.Context, m *member) (bool, error) {
+	if !rc.Backend.Capabilities().ProxyDeploymentPreservesServing {
+		return false, nil
+	}
+	// Unlike count-only incumbent retention, new-build replacement always needs
+	// affirmative deployed-runtime admission support.
+	if _, ok := rc.Backend.(infra.ServingProxyUpdates); !ok {
+		return false, nil
+	}
+	return proxyUpdatesPreserveServing(ctx, rc, m)
 }
 
 func agentUpgradeWait(cp *agentUpgradeCheckpoint, message string, err error) (engine.OpResult, error) {

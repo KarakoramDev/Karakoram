@@ -14,15 +14,16 @@ import (
 
 var _ infra.ServingProxyUpdates = (*Backend)(nil)
 
-// Legacy images must retain the disruptive path: a global capability cannot
-// establish that a previously deployed agent implements the local serving probe.
+// Legacy images retain the ordinary redeploy path, including their first agent
+// upgrade: installing policy before uploading the new image must be safe for the
+// incumbent image too. Only a successfully deployed probe marker proves that.
 func (b *Backend) ProxyUpdatesPreserveServing(ctx context.Context, hostname string) (bool, error) {
 	a, err := b.application(ctx, hostname)
 	if err != nil || a == nil {
 		return false, err
 	}
 	m, ok := parseMetadata(a.Description)
-	return ok && m.Kind == infra.KindRuntime && m.Volume == "" && m.Deployed && m.ProxyServingProbe, nil
+	return ok && m.Kind == infra.KindRuntime && m.Volume == "" && m.Deployed && m.ProxyServingProbe && m.Desired != "stopped" && m.Desired != "deleting", nil
 }
 
 func (b *Backend) prepareProxyRollout(ctx context.Context, a *application, m metadata, settings map[string]any, o *operation) error {

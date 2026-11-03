@@ -29,6 +29,11 @@ func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
 // group UUID and receipt remain owned by reconciliation rather than un-fencing
 // partially restored data or choosing another source after a crash.
 func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return engine.OpResult{}, err
+	}
+	defer p.mutations.release(lock)
 	if op.Kind == domain.OperationUpgradeAgents {
 		return p.upgradeAgents(ctx, rc, op, true)
 	}
