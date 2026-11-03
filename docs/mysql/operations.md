@@ -333,6 +333,10 @@ an outage. The Nomad count-only scale optimization is not an agent upgrade and
 does not establish a zero-outage executable rollout. Plan a maintenance window
 and client reconnection accordingly.
 
+An already current proxy is not redeployed, but still must pass the same
+all-instance configuration/credentials and healthy-writer checks before data
+maintenance starts.
+
 Data secondaries/non-writers follow, with the initially observed writer last.
 Before each Group Replication data restart, all configured members must be
 `ONLINE`, the group must have a primary, and removing that member must retain a
@@ -363,6 +367,23 @@ submits that deployment again: it waits for native health and proxy routing to
 settle at the old or target build, then stops. Normal replay rechecks the window
 and native safety before resubmission. The operation also reuses retained-member
 native rejoin for peers while ordinary synchronization is paused.
+
+The checkpoint records the member's pre-upgrade instance builds. On normal
+replay after a lost deployment reply, native readiness and the exact frozen
+target on every expected instance prove completion when that target differs
+from the recorded pre-upgrade build, regardless of `--include-current`.
+For an explicit refresh whose instances already reported that same target,
+build identity cannot prove whether the deployment was accepted: the backend
+contract has no deployment lookup. That ambiguous case conservatively redeploys
+through the maintenance and native-safety gates and can repeat an accepted
+same-build refresh. Cancellation still never submits another deployment.
+
+If an operation becomes terminal without running its cleanup, ordinary
+synchronization settles any orphaned PXC writer-routing withdrawal using native
+readiness and a healthy routed writer, readmits the member, then releases its
+owner marker. This recovery accepts the old or target build, never starts an
+agent deployment, and must complete before another operation is admitted.
+
 Cancellation is not rollback. Single topology has no writer handoff and incurs
 **database downtime** while its sole runtime is redeployed.
 

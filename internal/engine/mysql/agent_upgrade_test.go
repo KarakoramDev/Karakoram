@@ -21,6 +21,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type agentRolloutBackend struct {
@@ -30,7 +31,6 @@ type agentRolloutBackend struct {
 	builds    map[string]string
 	runtimes  map[string]infra.RuntimeSpec
 	holdBuild bool
-	writer    string
 }
 
 func (b *agentRolloutBackend) Deploy(ctx context.Context, name string, d infra.Deployment) (infra.Op, error) {
@@ -40,7 +40,7 @@ func (b *agentRolloutBackend) Deploy(ctx context.Context, name string, d infra.D
 		if s.Topology == "group" && b.leader == name {
 			return infra.Op{}, fmt.Errorf("writer %s was not handed off", name)
 		}
-		if s.Topology == "cluster" && name == b.writer && !m.ProxyDraining {
+		if s.Topology == "cluster" && name == b.leader && !m.ProxyDraining {
 			return infra.Op{}, fmt.Errorf("PXC writer %s was not drained", name)
 		}
 	}
@@ -64,7 +64,7 @@ func setupAgentRollout(t *testing.T, topology string) (*Core, *engine.Context, *
 		p, rc, fake = setup(t, topology)
 	}
 	converge(t, p, rc, fake)
-	b := &agentRolloutBackend{fakeBackend: fake, rc: rc, builds: map[string]string{}, runtimes: map[string]infra.RuntimeSpec{}, writer: fake.leader}
+	b := &agentRolloutBackend{fakeBackend: fake, rc: rc, builds: map[string]string{}, runtimes: map[string]infra.RuntimeSpec{}}
 	prior := fake.action
 	fake.action = func(w http.ResponseWriter, r *http.Request, name string) bool {
 		if r.URL.Path == "/v1/status" {
@@ -734,5 +734,286 @@ func TestAgentUpgradeWindowDistinguishesWriterSelectionFromHandoff(t *testing.T)
 	finishAgentRollout(t, rc, b, op, false)
 	if !reflect.DeepEqual(b.names, []string{"demom0"}) {
 		t.Fatal("window closure stranded handed-off writer", b.names)
+	}
+}
+
+func agentRolloutTwoProxyInstances(t *testing.T, rc *engine.Context, b *agentRolloutBackend, stale *[2]bool) *[2]string {
+	t.Helper()
+	s, _ := load(rc.Cluster)
+	proxy := s.find("demomx")
+	proxy.Replicas = 2
+	component := rc.Cluster.Spec.Components.Extra["proxy"]
+	component.Replicas = 2
+	rc.Cluster.Spec.Components.Extra["proxy"] = component
+	if err := save(rc.Cluster, s); err != nil {
+		t.Fatal(err)
+	}
+	writers := new([2]string)
+	agents := admissionAgents{fakeAgents: rc.Agents.(fakeAgents), proxy: proxy.Name, peers: map[string]string{}}
+	for i, instance := range []string{"first", "second"} {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v1/status":
+				current, _ := load(rc.Cluster)
+				version := current.find(proxy.Name).ConfigVersion
+				if stale[i] {
+					version = 0
+				}
+				json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Build: b.builds[proxy.Name]}, ConfigVersion: version})
+			case "/v1/reload":
+				json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
+			default:
+				var status myspec.ProxyStatusResponse
+				current, _ := load(rc.Cluster)
+				writer := b.leader
+				if writers[i] != "" {
+					writer = writers[i]
+				}
+				for name, native := range b.native {
+					if native.MemberState != "ONLINE" || current.find(name).ProxyDraining {
+						continue
+					}
+					group := myspec.ProxyReaderGroup
+					if name == writer {
+						group = myspec.ProxyWriterGroup
+					}
+					status.Backends = append(status.Backends, admitted(name, group, "ONLINE"))
+				}
+				json.NewEncoder(w).Encode(status)
+			}
+		}))
+		t.Cleanup(server.Close)
+		agents.ca = append(agents.ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})...)
+		agents.peers[instance] = server.Listener.Addr().String()
+	}
+	rc.Agents = agents
+	rc.Backend = &admissionBackend{Backend: b, proxy: proxy.Name, count: 2, stops: map[string]int{}}
+	return writers
+}
+
+func TestAgentUpgradeLostReceiptUsesRecordedBuildRegardlessOfIncludeCurrent(t *testing.T) {
+	for _, role := range []string{"data", "proxy"} {
+		for _, include := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/include=%v", role, include), func(t *testing.T) {
+				topology := "single"
+				if role == "proxy" {
+					topology = "group"
+				}
+				_, rc, b := setupAgentRollout(t, topology)
+				if role == "proxy" {
+					agentRolloutTwoProxyInstances(t, rc, b, new([2]bool))
+				}
+				op := mysqlAgentRolloutOperation(include)
+				for {
+					agentRolloutTick(t, rc, b, op, false)
+					var cp agentUpgradeCheckpoint
+					json.Unmarshal(op.Checkpoint, &cp)
+					if cp.Stage == "deploy" {
+						if len(cp.BeforeBuilds) != map[string]int{"data": 1, "proxy": 2}[role] {
+							t.Fatalf("missing pre-upgrade instance builds: %+v", cp)
+						}
+						break
+					}
+				}
+				intent := slices.Clone(op.Checkpoint)
+				agentRolloutTick(t, rc, b, op, false)
+				op.Checkpoint = intent // backend accepted, operation receipt was lost
+				agentRolloutTick(t, rc, b, op, false)
+				finishAgentRollout(t, rc, b, op, true)
+				if len(b.names) != 1 {
+					t.Fatal("IncludeCurrent repeated a proven changed-build deployment", b.names)
+				}
+			})
+		}
+	}
+}
+
+func TestAgentUpgradeCurrentRefreshLostReceiptConservativelyRedeploys(t *testing.T) {
+	for _, role := range []string{"data", "proxy"} {
+		t.Run(role, func(t *testing.T) {
+			topology, member := "single", "demom0"
+			if role == "proxy" {
+				topology, member = "group", "demomx"
+			}
+			_, rc, b := setupAgentRollout(t, topology)
+			if role == "proxy" {
+				agentRolloutTwoProxyInstances(t, rc, b, new([2]bool))
+			}
+			b.builds[member] = engine.CurrentAgentBuild().Build
+			op := mysqlAgentRolloutOperation(true)
+			for {
+				agentRolloutTick(t, rc, b, op, false)
+				var cp agentUpgradeCheckpoint
+				json.Unmarshal(op.Checkpoint, &cp)
+				if cp.Stage == "deploy" {
+					break
+				}
+			}
+			intent := slices.Clone(op.Checkpoint)
+			agentRolloutTick(t, rc, b, op, false)
+			op.Checkpoint = intent
+			closeMySQLAgentWindow(rc)
+			result := agentRolloutTick(t, rc, b, op, false)
+			if len(b.names) != 1 || !strings.Contains(result.Message, "maintenance window") {
+				t.Fatal("ambiguous same-build refresh bypassed window")
+			}
+			rc.Cluster.Spec.Maintenance = nil
+			agentRolloutTick(t, rc, b, op, false)
+			finishAgentRollout(t, rc, b, op, true)
+			if !reflect.DeepEqual(b.names, []string{member, member}) {
+				t.Fatal("same-build refresh was incorrectly adopted without evidence", b.names)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradeCurrentProxyWaitsForConfigBeforeData(t *testing.T) {
+	_, rc, b := setupAgentRollout(t, "group")
+	stale := &[2]bool{false, true}
+	agentRolloutTwoProxyInstances(t, rc, b, stale)
+	b.builds["demomx"] = engine.CurrentAgentBuild().Build
+	op := mysqlAgentRolloutOperation(false)
+	agentRolloutTick(t, rc, b, op, false)
+	for range 3 {
+		result := agentRolloutTick(t, rc, b, op, false)
+		var cp agentUpgradeCheckpoint
+		json.Unmarshal(result.Checkpoint, &cp)
+		if cp.Index != 0 || len(b.names) != 0 {
+			t.Fatal("current proxy build bypassed stale credentials/config acknowledgement")
+		}
+	}
+	stale[1] = false
+	for len(b.names) == 0 {
+		agentRolloutTick(t, rc, b, op, false)
+	}
+	finishAgentRollout(t, rc, b, op, true)
+	if !reflect.DeepEqual(b.names, []string{"demom1"}) {
+		t.Fatal("proxy readiness gate redeployed a current proxy or skipped data", b.names)
+	}
+}
+
+func TestAgentUpgradePXCRechecksWriterAfterDeployIntent(t *testing.T) {
+	_, rc, b := setupAgentRollout(t, "cluster")
+	b.builds["demomx"] = engine.CurrentAgentBuild().Build
+	op := mysqlAgentRolloutOperation(false)
+	for {
+		agentRolloutTick(t, rc, b, op, false)
+		var cp agentUpgradeCheckpoint
+		json.Unmarshal(op.Checkpoint, &cp)
+		if cp.Stage == "deploy" && cp.Member == "demom1" {
+			break
+		}
+	}
+	b.leader = "demom1"
+	result := agentRolloutTick(t, rc, b, op, false)
+	var cp agentUpgradeCheckpoint
+	json.Unmarshal(result.Checkpoint, &cp)
+	if cp.Stage != "handoff" || len(b.names) != 0 {
+		t.Fatal("new PXC routed writer was disrupted without handoff", b.names, cp)
+	}
+	for len(b.names) == 0 {
+		agentRolloutTick(t, rc, b, op, false)
+	}
+	s, _ := load(rc.Cluster)
+	if !s.find("demom1").ProxyDraining || b.leader == "demom1" {
+		t.Fatal("new routed writer was deployed before withdrawal and successor admission")
+	}
+	finishAgentRollout(t, rc, b, op, true)
+}
+
+func TestAgentUpgradeOrphanedPXCDrainSettlesWithoutDeployment(t *testing.T) {
+	for _, phase := range []domain.Phase{domain.PhaseFailed, domain.PhaseCancelled, "missing"} {
+		t.Run(string(phase), func(t *testing.T) {
+			p, rc, b := setupAgentRollout(t, "cluster")
+			for name := range b.builds {
+				b.builds[name] = engine.CurrentAgentBuild().Build
+			}
+			b.builds["demom0"] = "old"
+			op := mysqlAgentRolloutOperation(false)
+			op.Namespace, op.Cluster = rc.Cluster.Namespace, rc.Cluster.Name
+			if phase != "missing" {
+				if err := rc.Store.(*store.Store).EnqueueOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+				op.Phase = domain.PhaseRunning
+				if err := rc.Store.(*store.Store).UpdateOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for {
+				agentRolloutTick(t, rc, b, op, false)
+				s, _ := load(rc.Cluster)
+				if s.find("demom0").ProxyDraining {
+					break
+				}
+			}
+			if phase != "missing" {
+				op.Phase = phase
+				if err := rc.Store.(*store.Store).UpdateOperation(t.Context(), op); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for range 10 {
+				if _, err := p.Sync(t.Context(), rc); err != nil {
+					t.Fatal(err)
+				}
+				b.apply(t, p, rc)
+				s, _ := load(rc.Cluster)
+				if !s.find("demom0").ProxyDraining && s.find("demom0").ProxyDrainOperation == "" {
+					break
+				}
+			}
+			s, _ := load(rc.Cluster)
+			if s.find("demom0").ProxyDraining || s.find("demom0").ProxyDrainOperation != "" || len(b.names) != 0 {
+				t.Fatal("orphan recovery stranded routing or submitted an executable", b.names)
+			}
+			if b.builds["demom0"] != "old" {
+				t.Fatal("orphan recovery replaced the old agent")
+			}
+			if allowed, err := p.CanClaimOperation(rc.Cluster); err != nil || !allowed {
+				t.Fatal("orphan recovery did not release operation admission", allowed, err)
+			}
+			if err := proxyRejoinReady(t.Context(), rc, s, "demom0"); err != nil {
+				t.Fatal("orphan recovery completed before writer routing/readmission", err)
+			}
+		})
+	}
+}
+
+func TestAgentUpgradePXCDetectsWriterOnAnyProxyInstance(t *testing.T) {
+	_, rc, b := setupAgentRollout(t, "cluster")
+	writers := agentRolloutTwoProxyInstances(t, rc, b, new([2]bool))
+	b.builds["demomx"] = engine.CurrentAgentBuild().Build
+	op := mysqlAgentRolloutOperation(false)
+	for {
+		agentRolloutTick(t, rc, b, op, false)
+		var cp agentUpgradeCheckpoint
+		json.Unmarshal(op.Checkpoint, &cp)
+		if cp.Stage == "deploy" && cp.Member == "demom1" {
+			break
+		}
+	}
+	// The logical service still reports m0; one instance now routes m1.
+	writers[1] = "demom1"
+	result := agentRolloutTick(t, rc, b, op, false)
+	var cp agentUpgradeCheckpoint
+	json.Unmarshal(result.Checkpoint, &cp)
+	if cp.Stage != "handoff" || len(b.names) != 0 {
+		t.Fatal("logical proxy observation concealed another instance's writer")
+	}
+	result = agentRolloutTick(t, rc, b, op, false)
+	json.Unmarshal(result.Checkpoint, &cp)
+	if cp.HandoffTarget == "" {
+		t.Fatal("split proxy routing did not select a safe survivor")
+	}
+	// Both monitors converge to the selected survivor after withdrawal.
+	b.leader = cp.HandoffTarget
+	writers[1] = ""
+	for len(b.names) == 0 {
+		agentRolloutTick(t, rc, b, op, false)
+	}
+	finishAgentRollout(t, rc, b, op, true)
+	if !reflect.DeepEqual(b.names, []string{"demom1"}) {
+		t.Fatal("split-routing recovery disrupted another member", b.names)
 	}
 }

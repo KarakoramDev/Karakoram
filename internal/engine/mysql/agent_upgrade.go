@@ -5,6 +5,7 @@ package mysql
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 type agentUpgradeCheckpoint struct {
@@ -23,6 +25,7 @@ type agentUpgradeCheckpoint struct {
 	Member        string                     `json:"member,omitempty"`
 	Stage         string                     `json:"stage,omitempty"`
 	Started       bool                       `json:"started,omitempty"`
+	BeforeBuilds  map[string]string          `json:"beforeBuilds,omitempty"`
 	HandoffTarget string                     `json:"handoffTarget,omitempty"`
 	Deploy        *infra.Op                  `json:"deploy,omitempty"`
 }
@@ -87,7 +90,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			return result, engine.Invalid("agent rollout cannot start during rolling maintenance, replacement, scale or TLS rotation")
 		}
 		for _, m := range s.Members {
-			if m.Stage != "joined" || m.ImportBatch != nil || m.Removing || m.Retirement != "" || m.Offline {
+			if m.Stage != "joined" || m.ImportBatch != nil || m.Removing || m.Retirement != "" || m.Offline || m.ProxyDraining || m.ProxyDrainOperation != "" {
 				return result, engine.Invalid("agent rollout requires joined members with no pending structural work: %s", m.Name)
 			}
 			if m.Role == "proxy" && m.Replicas != rc.Cluster.Spec.Components.Extra["proxy"].Replicas {
@@ -119,8 +122,14 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			}
 		}
 		// Unknown agent metadata is selected for repair, not treated as current.
-		current, _ := agentUpgradeBuildCurrent(ctx, rc, m, cp.Target)
+		before, current, _ := agentUpgradeInitialBuilds(ctx, rc, m, cp.Target)
 		if current && !cp.Target.IncludeCurrent {
+			if m.Role == "proxy" {
+				ok, observeErr := ready(ctx, rc, m)
+				if observeErr != nil || !ok {
+					return agentUpgradeWait(&cp, "Waiting for current proxy "+m.Name+" to acknowledge configuration and healthy writer", observeErr)
+				}
+			}
 			cp.Done = append(cp.Done, m.Name)
 			cp.Index++
 			return agentUpgradeResult(&cp, "Skipping current agent "+m.Name)
@@ -134,6 +143,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			return result, err
 		}
 		cp.Member = m.Name
+		cp.BeforeBuilds = before
 		cp.Stage = "handoff"
 		return agentUpgradeResult(&cp, "Preparing agent rollout for "+m.Name)
 	}
@@ -168,7 +178,14 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 				cp.Started = cp.Started || selected
 				return agentUpgradeResult(&cp, fmt.Sprintf("handoff writer %s→%s", m.Name, cp.HandoffTarget))
 			}
-			if s.Topology == "cluster" && onlinePrimary(st) && !m.ProxyDraining {
+			routedWriter := false
+			if s.Topology == "cluster" {
+				routedWriter, err = agentUpgradePXCWriter(ctx, rc, s, m.Name)
+				if err != nil {
+					return result, err
+				}
+			}
+			if s.Topology == "cluster" && routedWriter && !m.ProxyDraining {
 				// Use the retirement routing exclusion, without retiring the data identity.
 				// Select a caught-up, admitted peer before withdrawing the old writer.
 				for _, peer := range s.data() {
@@ -193,6 +210,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 					return result, fmt.Errorf("no caught-up proxy-eligible PXC writer successor for %s: %w", m.Name, engine.ErrUnavailable)
 				}
 				m.ProxyDraining = true
+				m.ProxyDrainOperation = op.ID
 				cp.Started = true
 				publishRevision(s)
 				return agentUpgradeResult(&cp, fmt.Sprintf("handoff writer %s→%s", m.Name, cp.HandoffTarget))
@@ -228,10 +246,25 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		if engine.DeploymentBlocked(rc, m.Name, spec) {
 			return result, engine.ErrUnavailable
 		}
-		// A crash can lose the deployment response. A native-ready exact-build
-		// acknowledgement proves that submission completed without redeploying it.
+		// A changed build on every expected instance can prove a lost-receipt
+		// deployment completed, even with IncludeCurrent. An initially current
+		// refresh has no distinguishable submission evidence: the backend has
+		// no deployment lookup, so retain the fully gated redeploy in that case.
+		changed := false
+		for _, build := range cp.BeforeBuilds {
+			changed = changed || build != cp.Target.TargetBuild
+		}
 		current, e := agentUpgradeBuildCurrent(ctx, rc, m, cp.Target)
-		if e == nil && current && !cp.Target.IncludeCurrent {
+		if e == nil && current && changed {
+			if m.Role == "data" && clustered(s.Topology) {
+				if _, e = p.reconcileFormation(ctx, rc, s); e != nil {
+					return agentUpgradeWait(&cp, "Waiting for recovered deployment of "+m.Name, e)
+				}
+			}
+			ok, observeErr := ready(ctx, rc, m)
+			if observeErr != nil || !ok {
+				return agentUpgradeWait(&cp, "Waiting for native readiness of recovered deployment "+m.Name, observeErr)
+			}
 			cp.Stage = "waiting"
 			return agentUpgradeResult(&cp, "Observing recovered deployment for "+m.Name)
 		}
@@ -245,17 +278,37 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		if err = agentUpgradeGate(ctx, rc, s, m); err != nil {
 			return result, err
 		}
-		if m.Role == "data" && s.Topology == "group" {
+		if m.Role == "data" && clustered(s.Topology) {
 			native, observeErr := live(ctx, rc, m.Name)
 			if observeErr != nil {
 				return result, observeErr
 			}
-			if onlinePrimary(native) {
+			writer := onlinePrimary(native)
+			if s.Topology == "cluster" {
+				writer, err = agentUpgradePXCWriter(ctx, rc, s, m.Name)
+				if err != nil {
+					return result, err
+				}
+			}
+			if writer {
 				cp.Stage = "handoff"
 				return agentUpgradeResult(&cp, "Writer changed; handing off "+m.Name+" before deployment")
 			}
 			if err = proxyHandoffReady(ctx, rc, s, m.Name, &cp.HandoffTarget); err != nil {
 				return agentUpgradeWait(&cp, s.ProxyAdmissionWait, err)
+			}
+			if m.ProxyDraining {
+				for _, proxy := range s.Members {
+					if proxy.Role == "proxy" {
+						ok, observeErr := ready(ctx, rc, proxy)
+						if observeErr != nil || !ok {
+							return agentUpgradeWait(&cp, "Waiting for current proxy configuration before writer deployment", observeErr)
+						}
+					}
+				}
+				if err = proxyAdmission(ctx, rc, s, cp.HandoffTarget, myspec.ProxyWriterGroup); err != nil {
+					return result, err
+				}
 			}
 		}
 		deployment, e := engine.Deploy(ctx, rc, m.Name, spec)
@@ -320,6 +373,7 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 				return agentUpgradeWait(&cp, "Waiting for proxy admission of "+m.Name, e)
 			}
 		}
+		m.ProxyDrainOperation = ""
 		cp.Done = append(cp.Done, m.Name)
 		cp.Index++
 		cp.Member = ""
@@ -339,6 +393,21 @@ func agentUpgradeWait(cp *agentUpgradeCheckpoint, message string, err error) (en
 		return result, marshalErr
 	}
 	return result, err
+}
+
+func agentUpgradeInitialBuilds(ctx context.Context, rc *engine.Context, m *member, target engine.AgentUpgradePayload) (map[string]string, bool, error) {
+	builds := map[string]string{}
+	if m.Role == "proxy" {
+		all, count, err := engine.VisitLiveInstancesWithIdentity(ctx, rc, m.Name, func(a *agentapi.Client, id string) (bool, error) {
+			status, err := a.Status(ctx)
+			builds[id] = status.Agent.Build
+			return !engine.MemberNeedsAgentUpgrade(domain.MemberStatus{Agent: domain.AgentStatus{Healthy: err == nil, Build: status.Agent.Build}}, engine.AgentUpgradePayload{TargetBuild: target.TargetBuild}), err
+		})
+		return builds, all && count >= proxyExpectedReplicas(m), err
+	}
+	status, _, err := mysqlAgentStatus(ctx, rc, m.Name)
+	builds[m.Name] = status.Agent.Build
+	return builds, !engine.MemberNeedsAgentUpgrade(domain.MemberStatus{Agent: domain.AgentStatus{Healthy: err == nil, Build: status.Agent.Build}}, engine.AgentUpgradePayload{TargetBuild: target.TargetBuild}), err
 }
 
 func agentUpgradeBuildCurrent(ctx context.Context, rc *engine.Context, m *member, target engine.AgentUpgradePayload) (bool, error) {
@@ -398,4 +467,104 @@ func agentUpgradeGate(ctx context.Context, rc *engine.Context, s *state, m *memb
 		return fmt.Errorf("GR agent rollout requires an ONLINE primary: %w", engine.ErrUnavailable)
 	}
 	return nil
+}
+
+// Only the temporary PXC routing withdrawal survives outside the operation
+// checkpoint. A terminal/missing owner must not strand that control forever.
+// Recovery here never submits an executable, including after a CP build change.
+func (p *Core) reconcileOrphanedAgentDrain(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	for _, m := range s.Members {
+		if !m.ProxyDraining && m.ProxyDrainOperation == "" {
+			continue
+		}
+		ctx = freshMySQLReads(ctx)
+		invalidateMySQLReadObservation(ctx, rc)
+		defer invalidateMySQLReadObservation(ctx, rc)
+		if m.ProxyDrainOperation != "" {
+			if rc.Store == nil {
+				return true, engine.ErrUnavailable
+			}
+			owner, err := rc.Store.GetOperation(ctx, m.ProxyDrainOperation)
+			if err != nil && !errors.Is(err, store.ErrNotFound) {
+				return true, err
+			}
+			if owner != nil && owner.Kind == domain.OperationUpgradeAgents &&
+				owner.Cluster == rc.Cluster.Name && domain.NormalizedNamespace(owner.Namespace) == domain.NormalizedNamespace(rc.Cluster.Namespace) &&
+				(owner.Phase == domain.PhasePending || owner.Phase == domain.PhaseRunning) {
+				return true, nil
+			}
+		}
+		if _, err := p.reconcileFormation(ctx, rc, s); err != nil {
+			return true, err
+		}
+		ok, err := ready(ctx, rc, m)
+		if err != nil || !ok {
+			return true, err
+		}
+		for _, proxy := range s.Members {
+			if proxy.Role != "proxy" {
+				continue
+			}
+			ok, err := ready(ctx, rc, proxy)
+			if err != nil || !ok {
+				return true, err
+			}
+		}
+		if m.ProxyDraining {
+			writer := false
+			for _, peer := range s.data() {
+				if peer.Name == m.Name {
+					continue
+				}
+				native, err := live(ctx, rc, peer.Name)
+				if err == nil && onlinePrimary(native) {
+					if err := proxyAdmission(ctx, rc, s, peer.Name, myspec.ProxyWriterGroup); err == nil {
+						writer = true
+						break
+					}
+				}
+			}
+			if !writer {
+				return true, fmt.Errorf("waiting for an admitted writer while settling orphaned agent rollout of %s: %w", m.Name, engine.ErrUnavailable)
+			}
+			m.ProxyDraining = false
+			publishRevision(s)
+			return true, nil
+		}
+		if err := proxyRejoinReady(ctx, rc, s, m.Name); err != nil {
+			return true, err
+		}
+		m.ProxyDrainOperation = ""
+		return true, nil
+	}
+	return false, nil
+}
+
+// A logical service probe can land on a proxy whose writer already moved.
+// A member is still a routed writer while any expected instance serves it.
+func agentUpgradePXCWriter(ctx context.Context, rc *engine.Context, s *state, name string) (bool, error) {
+	found := false
+	writer := false
+	for _, proxy := range s.Members {
+		if proxy.Role != "proxy" || proxy.Removing || proxy.Offline {
+			continue
+		}
+		found = true
+		notWriter, count, err := engine.VisitLiveInstancesConcurrent(ctx, rc, proxy.Name, func(a *agentapi.Client) (bool, error) {
+			var status myspec.ProxyStatusResponse
+			err := mysqlReadClientAction(ctx, rc, proxy.Name, a, myspec.ActionProxyStatus, struct{}{}, &status)
+			return !proxyTargetOnline(status, name, myspec.ProxyWriterGroup), err
+		})
+		if err != nil {
+			return false, err
+		}
+		if count < proxyExpectedReplicas(proxy) {
+			return false, fmt.Errorf("waiting for all proxy instances before PXC writer disruption: %w", engine.ErrUnavailable)
+		}
+		writer = writer || !notWriter
+	}
+	if !found {
+		return false, fmt.Errorf("PXC agent rollout requires a serving proxy: %w", engine.ErrUnavailable)
+	}
+	return writer, nil
 }

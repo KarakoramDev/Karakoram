@@ -133,7 +133,8 @@ type member struct {
 	ConfirmedVolumeLost bool `json:"confirmedVolumeLost,omitempty"`
 	// ProxyDraining temporarily withdraws a PXC writer for an agent rollout.
 	// Unlike Removing, it does not change Galera peers or retire its identity.
-	ProxyDraining bool `json:"proxyDraining,omitempty"`
+	ProxyDraining       bool   `json:"proxyDraining,omitempty"`
+	ProxyDrainOperation string `json:"proxyDrainOperation,omitempty"`
 
 	// ProxyRuntimeHash acknowledges the submitted runtime/startup specification.
 	// Missing legacy receipts deliberately require redeployment before scaling.

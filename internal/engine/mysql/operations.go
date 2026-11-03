@@ -32,7 +32,7 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 		return false, nil
 	}
 	for _, m := range s.Members {
-		if m.Stage != "joined" || m.ImportBatch != nil {
+		if m.Stage != "joined" || m.ImportBatch != nil || m.ProxyDraining || m.ProxyDrainOperation != "" {
 			return false, nil
 		}
 	}
