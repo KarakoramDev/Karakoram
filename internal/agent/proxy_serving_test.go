@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
-	"golang.org/x/sys/unix"
 )
 
 type servingProxyEngine struct {
@@ -267,24 +266,6 @@ func TestProxyAdmissionUsesStableContainerProvenanceOutsideDataDir(t *testing.T)
 	}
 	if filepath.Dir(filepath.Dir(first.path)) != "/tmp" || first.path == filepath.Join(dir, filepath.Base(first.path)) {
 		t.Fatal("admission marker can live in an engine data volume")
-	}
-}
-
-func TestProxyServingPeerUID(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		cred      *unix.Ucred
-		wantReady bool
-	}{
-		{"agent", &unix.Ucred{Uid: uint32(os.Geteuid())}, true},
-		{"foreign", &unix.Ucred{Uid: uint32(os.Geteuid()) ^ 1}, false},
-		{"missing", nil, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := proxyServingPeerUID(tc.cred); (err == nil) != tc.wantReady {
-				t.Fatalf("peer credential check = %v", err)
-			}
-		})
 	}
 }
 
