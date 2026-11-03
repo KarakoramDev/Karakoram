@@ -40,6 +40,11 @@ Future starts use an agent-managed map outside PGDATA so old backups cannot
 remove local management access during rebuild/restore. Adopting that stable
 startup path may require the ordinary configuration restart during the preceding
 agent rollout. Rotation is refused until local authentication is active.
+Map staging rejects symlinked parent directories and requires the parent and any
+existing regular map to belong to the runtime owner without group/other write
+permission. Unsafe existing maps (including symlinks) fail closed, even when their
+contents would otherwise be unchanged. Publication uses an owner-only temporary
+file and durable rename relative to the verified parent directory descriptor.
 
 The control plane seals the previous password, selected replacement and stable
 native request before changing PostgreSQL. Members first acknowledge a

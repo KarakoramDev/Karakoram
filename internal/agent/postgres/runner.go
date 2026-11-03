@@ -24,6 +24,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sys/unix"
 )
 
 type Runner struct {
@@ -73,14 +74,20 @@ func privateDir(path string) error {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return err
 	}
-	info, err := os.Lstat(path)
+	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return err
 	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("postgres directory must not be a symlink")
+	d := os.NewFile(uintptr(fd), path)
+	defer d.Close()
+	info, err := d.Stat()
+	if err != nil {
+		return err
 	}
-	return os.Chmod(path, 0700)
+	if !postgresFileOwned(info) {
+		return errors.New("postgres directory must be agent-owned")
+	}
+	return d.Chmod(0700)
 }
 func command(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)

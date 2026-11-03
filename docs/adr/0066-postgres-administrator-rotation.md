@@ -49,6 +49,13 @@ interrupted observation leaves peer HBA unpublished and working SCRAM unchanged;
 replay uses the same map without duplicate grants. Subsequent passwordless
 connections provide direct live activation evidence. Do not infer activation
 merely from a new binary, rendered file, or reload request acceptance.
+Open the map's parent once with directory/no-follow flags and verify its owner
+and lack of group/other write permission using the opened inode. Read existing
+maps relative to that descriptor without following symlinks; require a regular,
+runtime-owned file without group/other write permission before preserving even
+unchanged content. Unsafe maps fail closed. Publish a mode-0600 exclusive
+temporary file relative to the same descriptor, fsync it, rename within that
+directory and fsync the directory; pathname replacement cannot redirect publication.
 
 For **every future start**, single-server and Patroni parameters point instead
 to the agent-managed `pg_ident.conf` outside PGDATA. Stage that file too before

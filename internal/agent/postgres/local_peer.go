@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sys/unix"
 )
 
 func localPeerIdentity() (string, string, error) {
@@ -48,9 +51,14 @@ func stageLocalPeerMap(name, mapping string) error {
 	if !filepath.IsAbs(name) {
 		return errors.New("PostgreSQL active identity file is not absolute")
 	}
-	previous, err := os.ReadFile(name)
-	if err != nil && !os.IsNotExist(err) {
-		return errors.New("cannot read PostgreSQL active identity file")
+	d, err := openDurableDirectory(filepath.Dir(name))
+	if err != nil {
+		return fmt.Errorf("cannot open PostgreSQL identity directory: %w", err)
+	}
+	defer d.Close()
+	previous, err := readLocalPeerMapAt(d, filepath.Base(name))
+	if err != nil {
+		return fmt.Errorf("cannot read PostgreSQL active identity file: %w", err)
 	}
 	var b strings.Builder
 	// Preserve native mappings owned by other callers. Only this reserved map is
@@ -73,10 +81,31 @@ func stageLocalPeerMap(name, mapping string) error {
 	if string(previous) == b.String() {
 		return nil
 	}
-	if err := durableFile(name, []byte(b.String())); err != nil {
-		return errors.New("cannot stage PostgreSQL active identity map")
+	if err := durableFileAt(d, filepath.Base(name), []byte(b.String())); err != nil {
+		return fmt.Errorf("cannot stage PostgreSQL active identity map: %w", err)
 	}
 	return nil
+}
+
+func readLocalPeerMapAt(d *os.File, name string) ([]byte, error) {
+	// O_NONBLOCK also prevents an untrusted FIFO from blocking before fstat.
+	fd, err := unix.Openat(int(d.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	f := os.NewFile(uintptr(fd), name)
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || !postgresFileOwned(info) || info.Mode().Perm()&0022 != 0 {
+		return nil, errors.New("identity map must be regular, agent-owned and not writable by other users")
+	}
+	return io.ReadAll(f)
 }
 
 func activateLocalPeerMap(ctx context.Context, c peerAuthSession, p *paths, owner, mapping string) error {
@@ -225,12 +254,8 @@ func repairLocalPeerMapWith(ctx context.Context, p paths, owner, mapping string,
 	// A vanished directory may belong to the pre-restart configuration. Other
 	// write failures remain errors; only a passwordless probe proves recovery.
 	if prior.IdentFile != filepath.Join(p.root, "pg_ident.conf") {
-		if _, err := os.Stat(filepath.Dir(prior.IdentFile)); err == nil {
-			if err := stageLocalPeerMap(prior.IdentFile, mapping); err != nil {
-				return nil, err
-			}
-		} else if !os.IsNotExist(err) {
-			return nil, errors.New("cannot inspect previously active PostgreSQL identity directory")
+		if err := stageLocalPeerMap(prior.IdentFile, mapping); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
 		}
 	}
 	if ctx.Err() != nil {
