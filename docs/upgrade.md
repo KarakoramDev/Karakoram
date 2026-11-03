@@ -4,6 +4,35 @@
 
 Upgrade the control plane and recover its state; engine-version changes are separate operations documented under each engine.
 
+## Upgrading to v0.4.4
+
+### MySQL and PXC automatic PITR re-anchoring
+
+With PITR and backup storage configured, the control plane now automatically
+takes a full backup after a physical archive-writer change (including failover,
+rolling maintenance and resource relaunch). This is **ON by default** when
+`spec.backup.pitr.autoReanchor` is omitted. Extra full backups consume storage
+and IO and can increase the writer's peak memory; review capacity before upgrade.
+Set `spec.backup.pitr.autoReanchor: false` to retain manual baseline management.
+
+The writer must remain stable for five minutes after non-backup cluster
+operations finish. A pending/running backup blocks the automatic full, and a
+one-hour cooldown limits re-anchor fulls. Returning to the newest full's source
+does not queue another full. Coverage stays frozen until a new full succeeds
+and verifies; the gap between the old safe endpoint and new baseline cannot be
+restored. Foreign-writer binary logs remain ineligible for replay.
+
+Successful re-anchor fulls count toward the full schedule with the largest
+positive `retainCount` (schedule name breaks ties), or retain the newest two
+when no full schedule supplies a count. Normal deletion preserves backup
+chains, the newest full anchoring the live/extending interval, and active restore/
+clone references, so protected backups can temporarily exceed retention. Older
+recovery ranges expire with the fulls removed by retention. Post-restore full
+behavior does not change. `PITRReanchorTriggered` and reason-specific
+`PITRReanchorSkipped…` cluster events explain enqueue and deferral; skips are
+emitted on reason change rather than every reconcile.
+See [MySQL backups](mysql/backups.md#automatic-writer-re-anchoring).
+
 ## Upgrading to v0.4.3
 
 Back up control-plane state using the [consistent pre-upgrade backup](#consistent-pre-upgrade-state-backup),

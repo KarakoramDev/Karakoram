@@ -11327,6 +11327,10 @@ components:
       properties:
         enabled:
           type: boolean
+        autoReanchor:
+          type: boolean
+          default: true
+          description: MySQL and PXC only. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
         oplogSpanMinutes:
           type: integer
           minimum: 1
@@ -14480,6 +14484,10 @@ components:
         enabled:
           type: boolean
           nullable: true
+        autoReanchor:
+          type: boolean
+          nullable: true
+          description: MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change.
         oplogSpanMinutes:
           type: integer
           minimum: 1

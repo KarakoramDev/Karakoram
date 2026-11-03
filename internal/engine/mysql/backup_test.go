@@ -380,6 +380,29 @@ func TestBackupStatusWriterChangeAndFreshFull(t *testing.T) {
 			currentUUID = promotedUUID
 			foreignEnd = time.Unix(65, 0)
 			check("WindowFrozenWriterChanged", oldEnd)
+			// Automatic enqueue is not recovery evidence. Coverage stays frozen
+			// while the new writer's full is merely pending.
+			start := time.Now().UTC()
+			rc.Clock = trafficRenewalClock{at: start}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			rc.Clock = trafficRenewalClock{at: start.Add(5 * time.Minute)}
+			if _, err := p.Sync(t.Context(), rc); err != nil {
+				t.Fatal(err)
+			}
+			items, err := rc.Store.ListBackups(t.Context(), rc.Cluster.Ref())
+			if err != nil {
+				t.Fatal(err)
+			}
+			queued := false
+			for _, item := range items {
+				queued = queued || item.Trigger == "pitr-reanchor" && item.Phase == domain.PhasePending
+			}
+			if !queued {
+				t.Fatal("writer change did not queue automatic full")
+			}
+			check("WindowFrozenWriterChanged", oldEnd)
 			inventoryBackup(t, rc, "new-writer", "full", "", 20, time.Unix(70, 0))
 			check("WindowAvailable", time.Unix(90, 0))
 			for _, target := range []int64{15, 80} {

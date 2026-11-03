@@ -2648,12 +2648,16 @@ type OrphanedVolumeList struct {
 
 // PITRSpec defines model for PITRSpec.
 type PITRSpec struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes *int `json:"oplogSpanMinutes,omitempty"`
+	// AutoReanchor MySQL and PXC only. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	Enabled          bool  `json:"enabled"`
+	OplogSpanMinutes *int  `json:"oplogSpanMinutes,omitempty"`
 }
 
 // PITRSpecPatch defines model for PITRSpecPatch.
 type PITRSpecPatch struct {
+	// AutoReanchor MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change.
+	AutoReanchor     *bool `json:"autoReanchor"`
 	Enabled          *bool `json:"enabled"`
 	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
 }

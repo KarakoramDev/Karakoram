@@ -138,7 +138,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 			}
 		}
 		if a.Backup.Pitr != nil {
-			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
+			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, AutoReanchor: a.Backup.Pitr.AutoReanchor, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
 		}
 	}
 	if a.Tls != nil {
@@ -232,8 +232,8 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	}
 	a.Backup = &api.BackupSpec{Storage: optionalString(s.Backup.Storage), Schedules: &schedules}
 	a.Backup.Drill = drillPolicyAPI(s.Backup.Drill)
-	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 {
-		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled}
+	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 || s.Backup.PITR.AutoReanchor != nil {
+		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled, AutoReanchor: s.Backup.PITR.AutoReanchor}
 		if s.Backup.PITR.OplogSpanMinutes != 0 {
 			a.Backup.Pitr.OplogSpanMinutes = &s.Backup.PITR.OplogSpanMinutes
 		}

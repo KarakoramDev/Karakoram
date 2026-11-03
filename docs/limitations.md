@@ -101,24 +101,22 @@ These cross-engine constraints define the operating model; engine-specific limit
   backup chain and archived coverage remain valid. This is a display limitation,
   not evidence that the earlier recovery points were removed. A display fix is
   planned for a later release.
-- **PITR does not bridge archive-writer changes.** On MySQL Group Replication
-  with PITR, treat **any primary change** as a fresh-full-backup boundary,
-  including automatic failover and rolling maintenance such as a resource
-  change. A move to a different physical archive source freezes the old
-  baseline's window at its last provable endpoint; newer-writer uploads alone
-  cannot extend it. v0.4.3 reports `WindowFrozenWriterChanged` when those uploads
-  extend beyond the frozen end. Restores within the proven old window, up to
-  that end, keep working. PXC has the same physical-source restriction when
-  its archive writer/source changes; changing proxy routing alone is not
-  evidence of a new replay lineage. Take a successful full backup from the
-  current writer before relying on newer PITR targets.
-  Schedule regular **full** backups so re-anchoring normally occurs by the next
-  schedule period; failed backups or another writer change can extend the wait.
-  The new full does not fill the gap between the old endpoint and the new
-  snapshot. A previously valid baseline for the current source, or a return to
-  the original writer with provably contiguous history, can preserve or resume
-  coverage; do not rely on that instead of verifying the window.
-  See [replay-lineage requirements](mysql/backups.md).
+- **PITR does not bridge archive-writer changes.** A different physical writer
+  freezes the old MySQL/PXC baseline at its last proven endpoint; newer-writer
+  uploads alone cannot extend it. `WindowFrozenWriterChanged` identifies foreign
+  uploads beyond that endpoint. In v0.4.4, automatic full re-anchoring is enabled
+  by default: with PITR/storage configured, the writer must remain stable for
+  five minutes, with no non-backup operation active and five minutes since the
+  last finished. Pending backups and a one-hour cooldown defer the full.
+  Set `spec.backup.pitr.autoReanchor: false` to opt out and take full backups
+  manually. Coverage remains frozen until the new full succeeds and its coverage
+  is verified. **The gap between the old endpoint and the new snapshot remains
+  unrestorable.** Full backups add storage, IO and memory peaks; failed backups
+  or further writer changes can extend the wait. Returning to the newest full's
+  original writer may resume its trusted continuous history without a new full.
+  Automatic backups follow count retention with chain, newest-full anchor and
+  in-use protection. Older recovery ranges expire with their retained fulls;
+  see [automatic writer re-anchoring](mysql/backups.md#automatic-writer-re-anchoring).
 - **Existing MySQL/PXC agents are not automatically replaced.** The v0.4.3
   PITR memory and coverage-convergence corrections require corrected member
   agents, not just a control-plane upgrade. A real resource change stops and

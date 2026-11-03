@@ -144,8 +144,9 @@ type BackupSchedule struct {
 
 // PITRConfig controls oplog capture and slicing.
 type PITRConfig struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes int  `json:"oplogSpanMinutes"`
+	Enabled          bool  `json:"enabled"`
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	OplogSpanMinutes int   `json:"oplogSpanMinutes"`
 }
 
 // TLSConfig configures transport encryption and certificate material.

@@ -4686,11 +4686,18 @@ export type components = {
             subject: string;
         };
         PITRSpec: {
+            /**
+             * @description MySQL and PXC only. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
+             * @default true
+             */
+            autoReanchor: boolean;
             enabled: boolean;
             /** @default 10 */
             oplogSpanMinutes: number;
         };
         PITRSpecPatch: {
+            /** @description MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change. */
+            autoReanchor?: boolean | null;
             enabled?: boolean | null;
             /** @default 10 */
             oplogSpanMinutes: number | null;
