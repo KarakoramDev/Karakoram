@@ -323,12 +323,18 @@ If the control-plane executable changes again, finish recovery of an already
 submitted member, then submit a new rollout for the new build; the original
 operation never silently retargets.
 
-Admission and every member boundary wait for outstanding runtime recovery,
+Admission and every new disruption wait for outstanding runtime recovery,
 confirmed volume loss, identity conflicts and queued/running member replacement.
 A stale `ONLINE` report never makes a lost member a healthy rollout peer.
 Operations are serialized per cluster: automatic replacement queueing cannot
-preempt an active rollout. Replacement admission also refuses any outstanding
-rollout drain, including the readmission acknowledgement phase.
+preempt an active rollout. If recovery appears mid-rollout, settle the current
+member and its routing withdrawal without submitting another executable, then
+retire the rollout with a recovery diagnostic so replacement can claim ownership.
+A known deployment receipt still requires its exact target build; confirmed
+storage loss instead releases the drain without native readmission and retains
+the independent loss routing fence. Cancellation follows the same cleanup path.
+Replacement admission refuses outstanding rollout drains, including the
+readmission acknowledgement phase.
 
 The proxy phase comes first: redeploy the ProxySQL **service**, then require
 every live instance to acknowledge the published configuration/credentials,

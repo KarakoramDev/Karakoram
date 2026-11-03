@@ -28,6 +28,7 @@ type agentUpgradeCheckpoint struct {
 	BeforeBuilds  map[string]string          `json:"beforeBuilds,omitempty"`
 	HandoffTarget string                     `json:"handoffTarget,omitempty"`
 	Deploy        *infra.Op                  `json:"deploy,omitempty"`
+	StopReason    string                     `json:"stopReason,omitempty"`
 }
 
 func agentUpgradeResult(cp *agentUpgradeCheckpoint, message string) (engine.OpResult, error) {
@@ -62,6 +63,10 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			err = e
 		}
 	}()
+	if cp.Member == "" && cp.StopReason != "" {
+		raw, e := json.Marshal(&cp)
+		return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
+	}
 	if cp.Member == "" && (cancel || cp.Order != nil && cp.Index >= len(cp.Order)) {
 		return engine.OpResult{Done: true}, nil
 	}
@@ -82,8 +87,20 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 		}
 		return result, engine.Invalid("agent upgrade target build %q differs from running control-plane build %q; re-run upgrade-agents", cp.Target.TargetBuild, engine.CurrentAgentBuild().Build)
 	}
-	if err = agentUpgradeRecoveryGate(ctx, rc, s); err != nil {
-		return result, err
+	if recoveryErr := agentUpgradeRecoveryGate(ctx, rc, s); recoveryErr != nil {
+		if cp.Order == nil {
+			return result, recoveryErr
+		}
+		cp.StopReason = "Agent rollout retired for recovery: " + recoveryErr.Error()
+		if cp.Member == "" {
+			raw, e := json.Marshal(&cp)
+			return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
+		}
+		// Settle the already selected identity without another deployment.
+		// Keep a known receipt in waiting so its exact build is acknowledged.
+		if cp.Stage != "waiting" {
+			cp.Stage = "settling"
+		}
 	}
 	if cp.Order == nil {
 		if err = maintenanceAllowed(ctx, rc, s); err != nil {
@@ -328,12 +345,23 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			if e != nil {
 				return result, e
 			}
-			if status.Failed {
+			if status.Failed && cp.StopReason == "" {
 				return result, fmt.Errorf("agent deployment failed for %s: %s", m.Name, status.Message)
 			}
-			if !status.Done {
+			if !status.Done && !status.Failed {
 				return agentUpgradeResult(&cp, "Waiting for deployment of "+m.Name)
 			}
+		}
+		if m.ConfirmedVolumeLost {
+			// Storage loss supersedes native rejoin and routing readmission.
+			// The independent loss fence keeps the released identity unrouted.
+			m.ProxyDraining = false
+			m.ProxyDrainOperation = ""
+			publishRevision(s)
+			cp.Member = ""
+			cp.Index = len(cp.Order)
+			raw, e := json.Marshal(&cp)
+			return engine.OpResult{Done: true, Checkpoint: raw, Message: cp.StopReason}, e
 		}
 		if m.Role == "data" && clustered(s.Topology) {
 			// Ordinary Sync is disabled during imperative maintenance. Reuse its
@@ -351,7 +379,15 @@ func (p *Core) upgradeAgents(ctx context.Context, rc *engine.Context, op *domain
 			}
 			if s.Topology == "cluster" {
 				native, e := galeraStatus(ctx, rc, m.Name)
-				if e != nil || !native.Eligible() || native.ClusterSize != len(s.data()) {
+				expected := len(s.data())
+				if cp.StopReason != "" {
+					for _, peer := range s.data() {
+						if peer.ConfirmedVolumeLost {
+							expected--
+						}
+					}
+				}
+				if e != nil || !native.Eligible() || native.ClusterSize != expected {
 					return agentUpgradeWait(&cp, "Waiting for "+m.Name+" Synced in full Primary component", e)
 				}
 			}

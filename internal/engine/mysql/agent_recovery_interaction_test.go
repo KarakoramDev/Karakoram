@@ -70,8 +70,15 @@ func TestAgentUpgradeBlocksOutstandingRecovery(t *testing.T) {
 							}
 							op.Checkpoint, _ = json.Marshal(cp)
 						}
-						if _, err := p.RunOperation(t.Context(), rc, op); !errors.Is(err, engine.ErrUnavailable) {
+						result, err := p.RunOperation(t.Context(), rc, op)
+						if stage == "admission" && !errors.Is(err, engine.ErrUnavailable) {
 							t.Fatalf("%s: %v", stage, err)
+						}
+						if stage != "admission" && err != nil {
+							t.Fatalf("settlement blocked at %s: %v", stage, err)
+						}
+						if stage == "select" && !result.Done {
+							t.Fatal("undisrupted rollout retained queue ownership")
 						}
 					}
 					if len(b.names) != 0 {
@@ -175,5 +182,75 @@ func TestLostVolumeQueuePreservesActiveRolloutOwnership(t *testing.T) {
 	claimed, err = st.ClaimOperation(t.Context(), rc.Cluster.Ref())
 	if err != nil || claimed.Kind != domain.OperationReplaceMember {
 		t.Fatalf("replacement not serialized behind rollout: %+v %v", claimed, err)
+	}
+}
+
+func TestAgentUpgradeRecoveryRetiresInflightOwner(t *testing.T) {
+	for _, tc := range []struct {
+		name, topology, stage string
+		cancel, lost          bool
+	}{
+		{"queued GR waiting cancel", "group", "waiting", true, false},
+		{"queued PXC waiting cancel", "cluster", "waiting", true, false},
+		{"queued PXC withdrawn handoff", "cluster", "handoff", false, false},
+		{"lost PXC waiting cancel", "cluster", "waiting", true, true},
+		{"lost PXC deploy intent", "cluster", "deploy", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, rc, b := setupAgentRollout(t, tc.topology)
+			s, _ := load(rc.Cluster)
+			m := s.find(b.leader)
+			op := mysqlAgentRolloutOperation(true)
+			op.Cluster, op.Namespace, op.Phase = rc.Cluster.Name, rc.Cluster.Namespace, domain.PhaseRunning
+			var target engine.AgentUpgradePayload
+			json.Unmarshal(op.Payload, &target)
+			cp := agentUpgradeCheckpoint{Target: target, Order: []string{m.Name, s.data()[1].Name}, Member: m.Name, Stage: tc.stage, Started: true}
+			if tc.stage == "waiting" {
+				cp.Deploy = &infra.Op{ID: "accepted-rollout"}
+				b.builds[m.Name] = target.TargetBuild
+			}
+			if tc.topology == "cluster" {
+				m.ProxyDraining, m.ProxyDrainOperation = true, op.ID
+			}
+			if tc.lost {
+				m.ConfirmedVolumeLost, m.RuntimeRecovery.VolumeLost = true, true
+				delete(b.native, m.Name)
+			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			op.Checkpoint, _ = json.Marshal(&cp)
+			st := rc.Store.(*store.Store)
+			if err := st.EnqueueOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			replacement := &domain.Operation{ID: "queued-replacement", Cluster: rc.Cluster.Name, Namespace: rc.Cluster.Namespace, Kind: domain.OperationReplaceMember, Phase: domain.PhasePending}
+			if err := st.EnqueueOperation(t.Context(), replacement); err != nil {
+				t.Fatal(err)
+			}
+			finishAgentRollout(t, rc, b, op, tc.cancel)
+			if len(b.names) != 0 {
+				t.Fatal("recovery settlement submitted another executable", b.names)
+			}
+			final, _ := load(rc.Cluster)
+			if current := final.find(m.Name); current.ProxyDraining || current.ProxyDrainOperation != "" {
+				t.Fatal("retired rollout retained drain ownership")
+			}
+			json.Unmarshal(op.Checkpoint, &cp)
+			if cp.StopReason == "" {
+				t.Fatal("missing durable retirement diagnostic")
+			}
+			op.Phase = domain.PhaseSucceeded
+			if tc.cancel {
+				op.Phase = domain.PhaseCancelled
+			}
+			if err := st.UpdateOperation(t.Context(), op); err != nil {
+				t.Fatal(err)
+			}
+			claimed, err := st.ClaimOperation(t.Context(), rc.Cluster.Ref())
+			if err != nil || claimed.ID != replacement.ID {
+				t.Fatalf("replacement blocked after settlement: %+v %v", claimed, err)
+			}
+		})
 	}
 }
