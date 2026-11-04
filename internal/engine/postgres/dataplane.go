@@ -32,7 +32,15 @@ func (p *Core) Connection(ctx context.Context, rc *engine.Context) (domain.Conne
 		return domain.ConnectionDetails{}, err
 	}
 	u.User = url.UserPassword("postgres", string(password))
-	return domain.ConnectionDetails{Connection: conn, CACertificate: string(ca), Credentials: []domain.ConnectionCredential{{Username: "postgres", Password: string(password), Database: "postgres", URI: u.String()}}}, nil
+	database := "postgres"
+	if s.Topology == "distributed" {
+		options, err := p.parseOptions(rc.Cluster.Spec.EngineOptions)
+		if err != nil {
+			return domain.ConnectionDetails{}, err
+		}
+		database = options.citusOptions().Database
+	}
+	return domain.ConnectionDetails{Connection: conn, CACertificate: string(ca), Credentials: []domain.ConnectionCredential{{Username: "postgres", Password: string(password), Database: database, URI: u.String()}}}, nil
 }
 func (*Core) SystemUsers(_ context.Context, rc *engine.Context) ([]domain.SystemUser, error) {
 	users := make([]domain.SystemUser, 0, len(systemNames))

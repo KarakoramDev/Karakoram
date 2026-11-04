@@ -139,6 +139,21 @@ func TestRuntimeRecoveryOwnershipClassifiesPhysicalLoss(t *testing.T) {
 	}
 }
 
+func TestDistributedVolumeRecoveryRequiresSameGroupPrimary(t *testing.T) {
+	p, rc, _ := setup(t, "ha")
+	s := converge(t, p, rc)
+	s.Topology = "distributed"
+	lost := s.data()[1]
+	lost.Group = 1
+	if err := p.volumeRecoverySafe(t.Context(), rc, s, lost); !errors.Is(err, engine.ErrConflict) {
+		t.Fatalf("another group's primary must not authorize recovery: %v", err)
+	}
+	s.data()[0].Group = 1
+	if err := p.volumeRecoverySafe(t.Context(), rc, s, lost); err != nil {
+		t.Fatalf("same-group primary should authorize recovery: %v", err)
+	}
+}
+
 func TestRuntimeRecoveryReplicatedVolumeAdmission(t *testing.T) {
 	for _, healthySource := range []bool{false, true} {
 		t.Run(map[bool]string{false: "no_writable_source", true: "retained_primary"}[healthySource], func(t *testing.T) {

@@ -1,10 +1,10 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <!-- Copyright 2026 The Karakoram Authors -->
-# Dokploy backend
+# Dokploy provider
 
-The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed Docker Swarm that you operate. It is **experimental**: it passes the shared backend conformance suite and was exercised with MongoDB, RabbitMQ and Elasticsearch on a three-node test Swarm, but it has no production track record. Zerops remains the reference backend. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
+The `dokploy` provider runs Karakoram clusters on a [Dokploy](https://dokploy.com)-managed [Docker Swarm](https://docs.docker.com/engine/swarm/) that you operate. It is **experimental**: it passes the shared provider conformance suite and was exercised with [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/) and [Elasticsearch](https://www.elastic.co/elasticsearch) on a three-node test Swarm, but it has no production track record. [Zerops](https://zerops.io/) remains the reference provider. Design rationale: [ADR 0032](adr/0032-dokploy-backend.md).
 
-[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same backend-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered S3 destinations. Public PostgreSQL TCP has no backend CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the backend's domain capability; unavailable component artifacts are still rejected.
+[PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) use the same provider-neutral runtime contract and have not been accepted on Dokploy. Members need access to locked native artifacts (including an operator mirror for source-built development entries) and registered [S3](https://aws.amazon.com/s3/) destinations. Public PostgreSQL TCP has no provider CIDR enforcement and needs explicit allow-all acknowledgement plus an external firewall. Supabase gateway public HTTPS uses the provider's domain capability; unavailable component artifacts are still rejected.
 
 ## How it maps
 
@@ -19,9 +19,9 @@ The `dokploy` backend runs Karakoram clusters on a [Dokploy](https://dokploy.com
 |Public TCP|Swarm ingress-published ports (routing mesh); exposed services switch to VIP endpoint mode, returning to DNSRR after port removal|
 |Public HTTPS (Kibana, RabbitMQ management)|Dokploy domains served by Dokploy's Traefik|
 
-Docker is used on this backend only because Dokploy runs Swarm services. Each member image is a pinned Ubuntu 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
+[Docker](https://www.docker.com/) is used on this provider only because Dokploy runs Swarm services. Each member image is a pinned [Ubuntu](https://ubuntu.com/) 24.04 base with the same package installation steps as on Zerops, and the engine processes run under the same `karakoram agent` binary as everywhere else. There is no Docker-in-Docker and no Docker socket in member containers.
 
-Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking Bash with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
+Engine prepare commands use exec-form Dockerfile `RUN` instructions invoking [Bash](https://cgit.git.savannah.gnu.org/cgit/bash.git/) with `pipefail`; embedded newlines, shell quoting and heredocs are preserved rather than parsed as Dockerfile instructions.
 
 ### Platform deployment admission
 
@@ -59,38 +59,138 @@ The cap also applies during initial cluster bootstrap; there is no quorum-group
 exception. Initial member deployment readiness means the agent supervisor is
 running and initialising, not that the database has formed a quorum. Stateless
 day-2 replacements retain native readiness when dependencies are healthy; the
-engine persists that choice for stable retries. Dokploy does not map either
-probe to a Docker `HEALTHCHECK`, because Swarm service
-discovery must be available to bootstrapping tasks. Application/native health,
-configuration acknowledgement and rolling-replacement catch-up remain enforced
-by Karakoram's engine-level convergence gates. See
+engine persists that choice for stable retries. Cold deployments do not map
+either probe to a Docker `HEALTHCHECK`, because Swarm service discovery must be
+available to bootstrapping tasks. Running, marker-backed ProxySQL count/resource
+updates instead install the separate serving healthcheck described below.
+Application/native health, configuration acknowledgement and rolling-replacement
+catch-up remain enforced by Karakoram's engine-level convergence gates. See
 [member startup and admission](operations.md#deployment-admission-and-member-startup).
 
 
 Synchronous Swarm `application.reload` operations reuse an existing image and do not
 enter Dokploy's build queue, so they do not consume deployment slots. Existing pending
-build/lost-delivery fences still protect lifecycle operations. Failed runtime builds
-already require explicit operator action; a failed volume-wipe deployment/task now
-also remains terminal, retaining the holder, rather than resubmitting on every delete
-reconciliation. Ambiguous wipe submission responses retain their original fence.
+build/lost-delivery fences still protect lifecycle operations. A terminal failed
+runtime build is returned as a service with `Failed` status, not as an identity
+lookup error. Engines can verify ownership and submit a fresh admitted deployment
+within their retry budget; observation alone never retries the build. A stalled
+or unknown-outcome build remains fenced and must not be superseded. A failed
+volume-wipe deployment/task remains terminal, retaining the holder, rather than
+resubmitting on every delete reconciliation. Ambiguous wipe submission responses
+retain their original fence.
+
+Runtime archive uploads and retained-source builds reserve attempts durably in
+the application description before delivery, with at most **four attempts**
+for the same rendered desired deployment and retry epoch. Submission acceptance,
+waiting, control-plane restart and a failed create operation do not reset this
+budget. A successful completed deployment clears the consecutive attempt count;
+a changed rendered runtime/artifact or `clusters retry-deployments` grants a new
+budget. An authoritative enqueue refusal does not consume an attempt. Once
+exhausted, a subsequent deployment request reports `DeploymentRetriesExhausted`;
+the engine retains the failure status and emits a warning with the last safe
+platform error. Fix the platform/build cause before explicitly re-arming.
+
+### ProxySQL count and resource updates
 
 Dokploy reloads increment Swarm's task `ForceUpdate`, even for a replica-only
-change. A pure count reduction back to an already-running count therefore uses
-temporary `stop-first`, `Parallelism=1` when at least two replicas remain running.
-This frees one replacement slot without deliberately stopping the entire service.
-The saved policy returns to `start-first` after the operation becomes terminal,
-without another reload; superseding specification changes and Start/Restart/Stop
-also restore it before replacing the pending operation, including Stop→Start.
-Singleton reductions retain `start-first` because `stop-first` would retire the
-only remaining serving task before its replacement starts.
+change: these are rolling replacements, not an in-place replica-count mutation.
+For newly deployed MySQL/PXC and PostgreSQL/Supabase ProxySQL runtimes carrying
+the serving-probe marker, count-only and resource-only updates keep the service
+running with **start-first, parallelism one, and a native serving healthcheck**.
+The local agent must have successfully applied its latest accepted nonzero
+configuration revision, have a running ProxySQL process without maintenance or
+stop holds, and report an ONLINE writer before Swarm admits the replacement to
+service DNS/VIP and retires its predecessor. Fresh agents pull configuration
+themselves; this does not depend on reconciliation pushing configuration while
+the platform operation is in progress.
 
-This exception requires a matching application-specification receipt from a
-successful deployment or reload. Staged environment, resource, port or image
-changes cannot use the count-only exception; older records without that receipt
-conservatively keep their existing policy until an ordinary rollout establishes
-it. Unlike Nomad's count-only reconciliation, Dokploy still replaces tasks because
-its API exposes no count-only Swarm update. Runtime Running is not native SQL/API
-readiness; the engine's application-health and every-instance gates still apply.
+Successful native admission is **latched for that Swarm task/container lifetime**.
+An atomic admission record lives in an agent-owned, mode-0700 directory in the
+container's fixed `/tmp` writable layer, never its engine data volume. Directory
+and opened-record ownership/type/mode are validated; symlinks, FIFOs and oversized
+records fail closed without blocking or unbounded reads. Provenance binds it to the PID namespace,
+PID 1 start identity, kernel boot ID and hostname. Agent-only restart/re-exec
+preserves established admission; a new task or container restart must earn
+admission again, even if an old marker was copied into its filesystem.
+Only agents launched with `KARAKORAM_PROXY_SERVING_PROBE=1` initialize this
+admission state and its local readiness listener. The readiness client verifies
+the listener's kernel-reported peer credentials against its effective UID.
+State/listener setup failures leave startup running but fail serving admission
+closed with diagnostics; they never certify the task as ready.
+The persistent Swarm healthcheck then checks only agent/supervisor liveness,
+using a lock-free shutdown flag rather than a process-management mutex.
+Writer failover/loss, intentional maintenance or stop holds, and later
+configuration-apply failures do not turn every admitted proxy unhealthy or
+trigger a fleet-wide Swarm restart. Ongoing native readiness remains the engine's
+responsibility, including its every-instance check before committing an update.
+
+The backend completes only after exactly the requested number of new healthy
+tasks is Running, no previous task is still Running, the expected Swarm
+`ForceUpdate` is still applied, and Swarm reports the update completed. The
+engine then checks every live instance's configuration and native writer
+readiness again before committing. Scale-in remains maintenance-window gated.
+Version, startup/runtime and combined count/resource changes retain the
+engine's disruptive deployment path.
+
+Agent-only proxy deployments also use this serving-preserving rollout when both
+the running, deployed, volume-less incumbent and the incoming build carry
+`KARAKORAM_PROXY_SERVING_PROBE=1`. This applies to MySQL/PXC and the shared backend
+deploy path used by PostgreSQL/Supabase. MySQL/PXC checkpoint this policy before
+submission and preserve it when recovering a lost receipt, including same-build
+`--include-current` refreshes. A legacy unmarked proxy's first agent upgrade keeps
+ordinary whole-service deployment: the incumbent must support the probe before
+its policy is installed. Once that marked upgrade succeeds, later deployments
+qualify. Cold/stopped deployment still clears the serving barrier for bootstrap.
+All agent-upgrade maintenance, exact-build, configuration and writer-health
+acknowledgements remain required.
+
+Cancelling an ambiguous MySQL/PXC serving-preserving proxy deployment looks up
+the persisted deployment request identity without submitting another deployment.
+A matching receipt is adopted and polled to terminal backend status before
+native readiness is settled. A paused or rolled-back update fails with manual
+recovery guidance; it is not reported as successfully cancelled merely because
+an incumbent still serves or already reports the target build.
+Legacy receipts without a request identity retain digest-only deployment replay;
+when not health-gated they do not block native-readiness cancellation settlement.
+An unidentified health-gated receipt is not treated as legacy and fails closed.
+
+Admission or supervisor-liveness failure **pauses** the rollout, retaining the
+remaining incumbents. The healthcheck runs every five seconds, with a ten-second
+timeout, a sixty-second start period and three retries; Swarm monitors updates
+for thirty seconds with zero tolerated failures. A paused or rolled-back update
+is reported as failed. If spare capacity or native readiness never arrives, the
+operation reports failure after fifteen minutes without switching to stop-first.
+Inspect task health, config-pull connectivity, writer availability and surge
+capacity before retrying. A single extra replacement slot is required in addition
+to the larger of the old and desired fleet; insufficient capacity can leave the
+update pending. Lost reload replies reuse the persisted exact operation rather
+than starting another replacement.
+
+The serving-probe healthcheck is installed for eligible running count/resource
+updates and agent-only deployments, not cold deployments, so initial bootstrap
+cannot deadlock on unformed dependencies. An old agent lacks the local probe socket and fails
+closed. Older deployed runtimes without the marker retain their previous
+disruptive reload policy; the control plane does not claim serving preservation
+for them. MySQL takes its stop/redeploy path on the next requested update to
+establish the new runtime; PostgreSQL retains its maintenance-gated legacy path.
+Non-proxy runtimes are unchanged.
+
+For unmarked legacy runtimes, a pure count reduction back to an already-running
+count still temporarily uses `stop-first`, `Parallelism=1` when at least two
+replicas remain, with the saved policy restored after completion. Marked proxies
+never use that capacity workaround. Runtime Running alone, a transport-only
+probe, and start-first without the serving healthcheck are not native readiness.
+The serving contract preserves availability for new connections; replacing a
+task can still disconnect client sessions attached to that task. It is not a
+connection-draining or independent-host availability guarantee.
+
+The application-specification receipt prevents staged environment, resource,
+port or image changes from being mistaken for a legacy count-only exception.
+The platform behavior is defined by Dokploy's
+[Swarm service builder](https://github.com/Dokploy/dokploy/blob/canary/packages/server/src/utils/builders/index.ts),
+[Swarm settings mapping](https://github.com/Dokploy/dokploy/blob/canary/packages/server/src/utils/docker/utils.ts),
+and Docker's [health-gated service binding](https://github.com/moby/moby/blob/master/daemon/cluster/executor/container/controller.go).
+
 Specification receipts use the shared versioned HMAC-SHA256 helper, keyed by the
 control-plane-held Dokploy API credential with a dedicated value domain. This
 prevents a metadata reader from guessing low-entropy environment secrets offline.
@@ -170,9 +270,9 @@ destructive deployment.
 |`publicHttps`|yes, with `domainSuffix`|Dokploy domains `<service>-<port>-<target hash>.<domainSuffix>`; needs wildcard DNS to the Traefik node(s).|
 |`diskGrowth`, `volumeQuota`|no|Docker local volumes live on the node filesystem without a size limit; size requests are not enforced and disk growth is rejected. Monitor node disks.|
 |`placement`|yes|Authoritative node per member (`placementGroup` = Swarm node hostname).|
-|`logs`|yes|Platform logs through Dokploy.|
+|`logs`|yes|Platform logs through Dokploy. Swarm output can include current and retained tasks; Karakoram orders records before selecting the newest global tail, preserving source order for equal timestamps. Untimestamped/malformed records inherit their preceding transport neighbour's timestamp (leading records use the first known timestamp); these timestamps are approximate. An entirely untimestamped response retains transport order. A quiet current task can still have older retained records in its tail.|
 |`horizontalScaling`|yes|Stateless components (Kibana, Logstash, APM, mongos) scale by replicas.|
-|`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this backend needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
+|`scopedTokens`|no|Dokploy API keys inherit the user's rights; a member user restricted to one environment cannot read the registry or nodes this provider needs. Use an admin key of a Dokploy installation dedicated to Karakoram.|
 |`exec`, `metrics`, `dedicatedCpu`, `envChangeRestarts`|no|Variable writes apply at the next restart.|
 
 Swarm ownership checks resolve the service ID from `swarm.getNodeApps` before
@@ -190,10 +290,10 @@ back to ambiguous name inspection. Use hostnames outside this reserved prefix.
 
 - Dokploy **v0.30.8** (the tested version) on an amd64 Docker Swarm; the API is unversioned, so test upgrades first.
 - For more than one node: a container registry configured in Dokploy (Settings → Registry) that every node can pull from. Single-node Swarms may omit it.
-- Outbound HTTPS from the manager during builds (Ubuntu, Percona, RabbitMQ and Elastic package sources), from every node to Docker Hub (volume deletion runs a one-shot task from the pinned `ubuntu:24.04` digest on the volume's node), and from members to your S3 storage.
+- Outbound HTTPS from the manager during builds (Ubuntu, [Percona](https://www.percona.com/), RabbitMQ and Elastic package sources), from every node to [Docker Hub](https://hub.docker.com/) (volume deletion runs a one-shot task from the pinned `ubuntu:24.04` digest on the volume's node), and from members to your S3 storage.
 - Elasticsearch: `vm.max_map_count=262144` on every node (`/etc/sysctl.d`).
 - Enough free disk on every node for volumes and images (each engine image is roughly 0.3–1.7 GB).
-- An overlay network for Karakoram, normally a dedicated attachable one (the backend creates it through Dokploy when it is missing).
+- An overlay network for Karakoram, normally a dedicated attachable one (the provider creates it through Dokploy when it is missing).
 
 Optional node label: if any node carries `karakoram.data=true`, only labelled nodes receive data volumes (`docker node update --label-add karakoram.data=true <node>`).
 
@@ -220,14 +320,14 @@ Optional node label: if any node carries `karakoram.data=true`, only labelled no
 
 The control plane runs as one Dokploy application with a persistent volume; its default namespace manages one Dokploy environment directly over the shared overlay network.
 
-1. In Dokploy create a project (for example `karakoram`) and, for clusters, a project or environment for the default namespace; note its environment ID (Dokploy UI URL or `GET /api/project.all`). Create an admin API key with rate limiting disabled (see [API key rate limit](#target-settings)) and, for multi-node Swarms, a registry. Before deploying the control plane, create its dedicated **attachable overlay** network (for example `karakoram`, via Dokploy's network settings or `POST /api/network.create` with `{"name":"karakoram","driver":"overlay","attachable":true}`); its Swarm service needs the network before the backend can start.
+1. In Dokploy create a project (for example `karakoram`) and, for clusters, a project or environment for the default namespace; note its environment ID (Dokploy UI URL or `GET /api/project.all`). Create an admin API key with rate limiting disabled (see [API key rate limit](#target-settings)) and, for multi-node Swarms, a registry. Before deploying the control plane, create its dedicated **attachable overlay** network (for example `karakoram`, via Dokploy's network settings or `POST /api/network.create` with `{"name":"karakoram","driver":"overlay","attachable":true}`); its Swarm service needs the network before the provider can start.
 2. Create an application `karakoram` with build type **Dockerfile**, Dockerfile path `deploy/dokploy/Dockerfile` and context `.`, from this repository (Git provider) — it downloads and verifies the signed release pinned in `deploy/zerops/RELEASE`. To deploy an unreleased build, upload a zip containing that Dockerfile as **`Dockerfile` at the zip root** and a linux `karakoram` binary alongside it (Drop source); set Dockerfile path **`Dockerfile`**, context `.`, and build argument `KARAKORAM_SOURCE=local`.
 3. Advanced settings:
    - Volume mount: named volume (for example `karakoram-data`) at `/var/lib/karakoram`.
    - Swarm placement: pin to the Dokploy manager node (`node.hostname==<manager>`): the named volume is node-local, and the control plane then talks to Dokploy's plain-HTTP service URL without leaving the host (Swarm overlay traffic between nodes is unencrypted). If it must run elsewhere, point `KARAKORAM_DOKPLOY_URL` at Dokploy's HTTPS domain instead.
    - Environment settings: turn off **Create .env file**, so Dokploy does not write the control plane's secrets into the build directory.
-   - Swarm update and rollback config: `{"Parallelism": 1, "Order": "stop-first"}` — SQLite allows one writer.
-   - Swarm network: `[{"Target": "<network>", "Aliases": ["karakoram"]}, {"Target": "dokploy-network"}]`. Members reach the control plane as `https://karakoram:9443`; `dokploy-network` lets Traefik and the control plane reach Dokploy.
+   - Swarm update and rollback config: `{"Parallelism": 1, "Order": "stop-first"}` — [SQLite](https://www.sqlite.org/) allows one writer.
+   - Swarm network: `[{"Target": "<network>", "Aliases": ["karakoram"]}, {"Target": "dokploy-network"}]`. Members reach the control plane as `https://karakoram:9443`; `dokploy-network` lets [Traefik](https://traefik.io/traefik/) and the control plane reach Dokploy.
    - Registry: your registry (multi-node).
 4. Environment:
 
@@ -276,7 +376,7 @@ one rebuild from the retained Drop Dockerfile source. Application identity,
 mounts, node placement, environment and configured replica count are retained.
 
 The application description durably records desired state and the current
-lifecycle operation. A target-wide lock serializes backend instances within the
+lifecycle operation. A target-wide lock serializes provider instances within the
 control-plane process. Restoration submissions have a ten-second request deadline;
 an ambiguous response retains a one-minute delivery fence. Stop/Delete record
 their intent before waiting on that fence. A queued/running build must complete
@@ -316,6 +416,26 @@ Missing or null replica counts are unknown, never proof of zero.
 Resolve the original queue/build and obtain a terminal deployment receipt before
 retrying; never clear the receipt merely to force a second build. Failed terminal
 deployments require an explicit corrected deployment, not an automatic retry loop.
+
+Cluster deletion does not require a failed runtime build to become healthy.
+Cleanup observes the recorded application identity without restoring or rebuilding
+it, and deletion supersedes the obsolete engine deployment wait. A queued/running
+mutation still retains its exact receipt: deletion waits for terminal delivery
+without submitting another build, then removes the owned application even when
+that deployment failed or was cancelled. An uncertain/stalled delivery remains
+fenced and requires the operator inspection described above.
+This observation mode is installed by shared cluster teardown for every engine,
+including suspension; it is not limited to PostgreSQL. Providers still verify
+resource ownership before removal. PostgreSQL's stronger exact-ID intent remains
+required for its escalated-removal path. Public-route withdrawal records deletion
+intent before waiting on an active build, so that wait does not consume the
+ordinary consecutive-failure budget.
+
+The ordinary operation failure budget is distinct from the exact-version
+`DeploymentRetriesExhausted` budget. A failed Dokploy build or an exhausted
+create/delete operation alone does not qualify for `retry-deployments`; its `409`
+does not mean deletion requires another deployment attempt. Use cluster deletion
+to remove a failed initial application.
 
 An authoritative enqueue refusal (HTTP 4xx other than a request timeout) is
 different from lost/ambiguous acceptance: archive uploads, retained-source rebuilds

@@ -32,9 +32,6 @@ func WithSpecUpdateAudit(ctx context.Context, audit *SpecUpdateAudit) context.Co
 
 func specAuditBefore(ctx context.Context, tx *sql.Tx, ref domain.ClusterRef) (domain.ClusterSpec, error) {
 	var before domain.ClusterSpec
-	if ctx.Value(specAuditKey{}) == nil {
-		return before, nil
-	}
 	var data []byte
 	err := tx.QueryRowContext(ctx, "SELECT spec FROM clusters WHERE namespace=? AND name=?", domain.NormalizedNamespace(ref.Namespace), ref.Name).Scan(&data)
 	if err != nil {

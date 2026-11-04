@@ -10,6 +10,12 @@ if [ "$name" = mongodb-mcp-server ]; then
 fi
 stage=/stage/$name
 rm -rf "$stage"
+case "$name" in
+    timescaledb-pg16|timescaledb-pg17|timescaledb-pg18|citus-pg16|citus-pg17|citus-pg18)
+        cd "$source"
+        exec python3 /root/pgextension.py
+        ;;
+esac
 if [ "$name" = supabase-pg17-extensions ]; then
     mkdir -p "$stage/usr/share/postgresql/17/karakoram-native-artifacts/LICENSES"
     license_dir="$stage/usr/share/postgresql/17/karakoram-native-artifacts/LICENSES"

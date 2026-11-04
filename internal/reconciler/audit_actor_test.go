@@ -134,12 +134,12 @@ func TestDesiredGenerationEventsKeepRequesterAcrossRestart(t *testing.T) {
 	if _, err := m.reconcile(ctx, c.Ref()); !errors.Is(err, syncFailure) {
 		t.Fatal(err)
 	}
-	last = assertAttributedEvents(t, s, last, "reconciler", "ProviderSync", "PhaseChanged")
+	last = assertAttributedEvents(t, s, last, "reconciler", "ProviderSync", "ClusterDegraded", "PhaseChanged")
 	phase, syncFailure = domain.PhaseReady, nil
 	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
 		t.Fatal(err)
 	}
-	last = assertAttributedEvents(t, s, last, "reconciler", "ProviderSync", "PhaseChanged")
+	last = assertAttributedEvents(t, s, last, "reconciler", "ProviderSync", "ClusterRecovered", "PhaseChanged")
 	got, err = s.GetCluster(ctx, c.Ref())
 	if err != nil || got.RequestedBy != "editor" {
 		t.Fatalf("automatic update overwrote requester: %+v err=%v", got, err)
@@ -379,5 +379,5 @@ func TestFailedOperationLifecycleUsesOperationActor(t *testing.T) {
 	if _, err := m.reconcile(ctx, c.Ref()); err != nil {
 		t.Fatal(err)
 	}
-	assertAttributedEvents(t, s, 0, "operator", "ProviderOperation", "PhaseChanged", "OperationFailed")
+	assertAttributedEvents(t, s, 0, "operator", "ProviderOperation", "ClusterDegraded", "PhaseChanged", "OperationFailed")
 }

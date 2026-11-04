@@ -26,11 +26,12 @@ import (
 
 // Client performs bearer-authenticated requests over pinned-CA HTTPS.
 type Client struct {
-	base         *url.URL
-	token        string
-	http         *http.Client
-	engine       *http.Client
-	dialInstance func(context.Context, string, string, string) (net.Conn, error)
+	base                *url.URL
+	token               string
+	http                *http.Client
+	engine              *http.Client
+	dialInstance        func(context.Context, string, string, string) (net.Conn, error)
+	observationInstance string
 }
 
 // HTTPError exposes the response status for protocol capability negotiation.
@@ -125,8 +126,12 @@ func (c *Client) ForInstance(host string) (*Client, error) {
 		client.Transport = transport
 		return &client
 	}
-	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine)}, nil
+	return &Client{base: c.base, token: c.token, http: pin(c.http), engine: pin(c.engine), observationInstance: host}, nil
 }
+
+// ObservationInstance distinguishes pinned replicas when read-only results are
+// reused within one observation pass. The logical unpinned member returns "".
+func (c *Client) ObservationInstance() string { return c.observationInstance }
 
 // DialContext uses this client's namespace transport and instance pin for a
 // native application probe. The caller retains the logical host for TLS.
@@ -205,7 +210,7 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 		return err
 	}
 	limit := int64(16 << 20)
-	if path == "/internal/agent/v1/config" {
+	if parts[0] == "/internal/agent/v1/config" {
 		// Supabase permits 100 functions with 1 MiB of source each. JSON escaping
 		// and source-file names can expand the admitted 7 MiB function envelope.
 		// Keep this larger allowance confined to the pinned control-plane pull.
@@ -217,7 +222,7 @@ func (c *Client) requestWith(ctx context.Context, hc *http.Client, method, path 
 // Config pulls the member configuration from the control plane.
 func (c *Client) Config(ctx context.Context) (MemberConfig, error) {
 	var v MemberConfig
-	err := c.request(ctx, "GET", "/internal/agent/v1/config", nil, &v)
+	err := c.request(ctx, "GET", "/internal/agent/v1/config?capability="+ConfigCapabilityGaleraListenHost+"&capability="+ConfigCapabilityMySQLListenHost+"&capability="+ConfigCapabilityTemporalIPv6+"&capability="+ConfigCapabilityPostgresLocalPeer, nil, &v)
 	return v, err
 }
 
@@ -228,9 +233,10 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return v, err
 }
 
-// Reload requests an immediate configuration pull.
+// Reload requests an immediate configuration pull. Applying it can include
+// database startup and credential recovery, so it uses the engine-action budget.
 func (c *Client) Reload(ctx context.Context) error {
-	return c.request(ctx, "POST", "/v1/reload", struct{}{}, nil)
+	return c.requestWith(ctx, c.engine, "POST", "/v1/reload", struct{}{}, nil)
 }
 
 // Process executes a whitelisted supervisor process action.

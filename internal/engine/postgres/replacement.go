@@ -19,11 +19,13 @@ import (
 // and its predecessor has been retired. Every transition is persisted with the
 // cluster, so a lost operation response cannot allocate a second replacement.
 type replacementState struct {
-	Operation string `json:"operation"`
-	Old       string `json:"old"`
-	New       string `json:"new"`
-	Stage     string `json:"stage"`
-	Recovery  string `json:"recovery,omitempty"`
+	Operation  string `json:"operation"`
+	Old        string `json:"old"`
+	New        string `json:"new"`
+	Stage      string `json:"stage"`
+	Recovery   string `json:"recovery,omitempty"`
+	Relocate   bool   `json:"relocate,omitempty"`
+	AvoidGroup string `json:"avoidGroup,omitempty"`
 }
 
 // SyncDuringOperation permits provisioning only while a replacement joins.
@@ -46,8 +48,8 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 			err = e
 		}
 	}()
-	if s.Topology != "ha" {
-		return result, engine.Invalid("member replacement requires an HA cluster")
+	if !patroniTopology(s.Topology) || rc.Cluster.Spec.Components.Engine.Replicas < 2 {
+		return result, engine.Invalid("member replacement requires a replicated group")
 	}
 	if s.Replacement == nil {
 		// A completed checkpoint is authoritative if the final response was lost.
@@ -61,7 +63,9 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 			}
 		}
 		var payload struct {
-			Member string `json:"member"`
+			Member     string `json:"member"`
+			Relocate   bool   `json:"relocate"`
+			AvoidGroup string `json:"avoidGroup"`
 		}
 		if err := json.Unmarshal(op.Payload, &payload); err != nil {
 			return result, engine.Invalid("invalid replacement request")
@@ -70,11 +74,11 @@ func (p *Core) replaceMember(ctx context.Context, rc *engine.Context, op *domain
 		if old == nil || old.Role != "data" {
 			return result, engine.Invalid("replacement target must be a data member")
 		}
-		if !s.Formed || s.Pending != nil || len(s.data()) != rc.Cluster.Spec.Components.Engine.Replicas {
+		if !s.Formed || s.Pending != nil || len(s.group(old.Group).data()) != rc.Cluster.Spec.Components.Engine.Replicas {
 			return result, engine.ErrUnavailable
 		}
-		m := s.newDataMember(rc.Cluster)
-		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join"}
+		m := s.newGroupMember(rc.Cluster, old.Group)
+		s.Replacement = &replacementState{Operation: op.ID, Old: old.Name, New: m.Name, Stage: "join", Relocate: payload.Relocate, AvoidGroup: payload.AvoidGroup}
 	}
 	cp := s.Replacement
 	if cp.Operation != op.ID {
@@ -189,17 +193,53 @@ func replacementResult(cp *replacementState) engine.OpResult {
 // started, completing that same cutover is safer than trying to undo stop holds
 // or an etcd removal whose response may have been lost.
 func (*Core) SupportsFailureCleanup(op *domain.Operation) bool {
-	return op.Kind == domain.OperationReplaceMember || restoreOperation(op)
+	return op.Kind == domain.OperationReplaceMember || op.Kind == "rebalance" || op.Kind == domain.OperationBackup || restoreOperation(op) || administratorRotationOperation(op)
 }
 
 func (*Core) CanCancelOperation(_ context.Context, op *domain.Operation) error {
-	if op.Kind != domain.OperationReplaceMember {
+	if op.Kind != domain.OperationReplaceMember && op.Kind != "rebalance" && op.Kind != domain.OperationUpgradeAgents {
 		return engine.Invalid("operation does not support cancellation")
 	}
 	return nil
 }
 
-func (p *Core) CancelOperation(_ context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+func (p *Core) CancelOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
+	if administratorRotationOperation(op) {
+		journal, err := readAdminRotation(ctx, rc)
+		if err != nil {
+			return engine.OpResult{}, err
+		}
+		if journal == nil || journal.Operation != op.ID || journal.Stage == "rejected" {
+			return engine.OpResult{Done: true}, nil
+		}
+		if journal.Stage == "transition" || journal.Stage == "native" && journal.Completed == 0 && !journal.InFlight {
+			// Failure before dispatch is definitive: retire the pending
+			// credential, rather than beginning native SQL during cleanup.
+			journal.Stage = "rollback"
+			journal.Previous, journal.Password, journal.Verifier = "", "", ""
+			if err = saveAdminRotation(ctx, rc, journal); err != nil {
+				return engine.OpResult{}, err
+			}
+		}
+		// Once dispatch may have committed, retain forward-only recovery.
+		result, err := p.rotateAdministrator(ctx, rc, op)
+		if errors.Is(err, engine.ErrInvalid) {
+			current, readErr := readAdminRotation(ctx, rc)
+			if readErr == nil && current != nil && current.Stage == "rejected" {
+				return engine.OpResult{Done: true, Message: "Pending administrator rotation discarded; original credential retained"}, nil
+			}
+		}
+		return result, err
+	}
+	if op.Kind == "rebalance" {
+		return p.runCitusRebalance(ctx, rc, op, true)
+	}
+	if op.Kind == domain.OperationBackup {
+		return handoffCitusBackupRecovery(rc, op)
+	}
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, op, true)
+	}
 	if restoreOperation(op) {
 		return handoffRestoreRecovery(rc, op)
 	}
@@ -314,7 +354,7 @@ func switchAwayConfigured(ctx context.Context, rc *engine.Context, s *state, old
 		return engine.Invalid("invalid synchronous replication options")
 	}
 	candidate := ""
-	for _, m := range s.data() {
+	for _, m := range s.memberGroup(old).data() {
 		if m.Name == old || m.Removing || m.Retirement != "" || m.EtcdLearner || m.DeployOp != nil || m.Stage != "joined" || currentConfig && m.ConfigVersion != s.ConfigVersion {
 			continue
 		}
@@ -371,4 +411,23 @@ func switchAwayConfigured(ctx context.Context, rc *engine.Context, s *state, old
 func blockedSwitchover(s *state, message string) error {
 	s.SwitchoverBlocked = message
 	return engine.Invalid("%s", message)
+}
+
+// ValidateMemberReplacement is also promoted by the Supabase provider.
+func (*Core) ValidateMemberReplacement(c *domain.Cluster, name string) error {
+	s, err := load(c)
+	if err != nil {
+		return err
+	}
+	if !patroniTopology(s.Topology) {
+		return engine.Invalid("member replacement requires a replicated group")
+	}
+	m := s.find(name)
+	if m == nil || m.Role != "data" {
+		return engine.Invalid("replacement target must be a data member")
+	}
+	if len(s.group(m.Group).data()) < 2 {
+		return engine.Invalid("member replacement requires a replicated group")
+	}
+	return nil
 }

@@ -200,6 +200,33 @@ func nativeMetadata(root *os.Root, name string, limit int64) ([]byte, error) {
 // Unknown I/O and unbounded layouts are not evidence of data loss.
 func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 	switch engineName(c.Engine) {
+	case "openbao":
+		// Both Raft log and barrier databases are bbolt files. Require the
+		// native meta-page magic, not merely nonempty files or a config cache.
+		for _, name := range []string{"openbao/raft/raft.db", "openbao/raft/vault.db"} {
+			f, err := root.Open(name)
+			if errors.Is(err, fs.ErrNotExist) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			st, statErr := f.Stat()
+			var header [24]byte
+			_, readErr := io.ReadFull(f, header[:])
+			f.Close()
+			if statErr != nil {
+				return false, statErr
+			}
+			if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
+				return false, readErr
+			}
+			if readErr != nil || !st.Mode().IsRegular() || st.Size() < 8192 ||
+				!bytes.Equal(header[16:24], []byte{0xed, 0xda, 0x0c, 0xed, 2, 0, 0, 0}) {
+				return false, nil
+			}
+		}
+		return true, nil
 	case "psmdb":
 		header, err := nativeMetadata(root, "db/WiredTiger", 8192)
 		if err != nil {
@@ -209,6 +236,12 @@ func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 			return false, nil
 		}
 		return nonemptyVolumeFile(root, "db/WiredTiger.wt", 4096)
+	case "weaviate":
+		raft, err := nonemptyVolumeFile(root, "weaviate/raft/raft.db", 1)
+		if err != nil || !raft {
+			return false, err
+		}
+		return nonemptyVolumeFile(root, "weaviate/schema.db", 1)
 	case "postgres":
 		version, err := nativeMetadata(root, "postgres/PG_VERSION", 16)
 		if err != nil {
@@ -224,6 +257,47 @@ func legacyVolumeData(root *os.Root, c agentapi.MemberConfig) (bool, error) {
 			}
 		}
 		return nonemptyVolumeFile(root, "postgres/global/pg_control", 8192)
+	case "mysql":
+		auto, err := nativeMetadata(root, "mysql/auto.cnf", 4096)
+		if err != nil {
+			return false, err
+		}
+		serverUUID := ""
+		for _, line := range strings.Split(string(auto), "\n") {
+			key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+			if ok && strings.TrimSpace(key) == "server-uuid" {
+				serverUUID = strings.TrimSpace(value)
+			}
+		}
+		if len(serverUUID) != 36 || strings.Trim(serverUUID, "0-") == "" {
+			return false, nil
+		}
+		for i, ch := range serverUUID {
+			if i == 8 || i == 13 || i == 18 || i == 23 {
+				if ch != '-' {
+					return false, nil
+				}
+			} else if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f' || ch >= 'A' && ch <= 'F') {
+				return false, nil
+			}
+		}
+		return nonemptyVolumeFile(root, "mysql/mysql.ibd", 16384)
+	case "neo4j":
+		dir := "karakoram/neo4j/data/databases/system"
+		metadata, err := nativeMetadata(root, filepath.Join(dir, "neostore"), 65536)
+		if err != nil {
+			return false, err
+		}
+		// The pinned Community record store writes its format names into
+		// neostore; a lock file or a directory alone is not native evidence.
+		if len(metadata) < 8192 || !bytes.Contains(metadata, []byte("record")) || !bytes.Contains(metadata, []byte("aligned")) {
+			return false, nil
+		}
+		nodes, err := nonemptyVolumeFile(root, filepath.Join(dir, "neostore.nodestore.db"), 8192)
+		if err != nil || !nodes {
+			return false, err
+		}
+		return nonemptyVolumeFile(root, filepath.Join(dir, "database_lock"), 0)
 	case "elasticsearch":
 		for _, dir := range []string{"karakoram/data/_state", "karakoram/data/nodes/0/_state"} {
 			f, err := root.Open(dir)

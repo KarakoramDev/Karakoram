@@ -25,6 +25,8 @@ func (b *Backend) allocationDiskMB(spec infra.RuntimeSpec) int {
 		switch spec.Env["KARAKORAM_ENGINE"] {
 		case "rabbitmq":
 			size = 2048
+		case "neo4j":
+			size = 4096 // Rootfs, two Neo4j releases and the pinned JRE during upgrade.
 		case "postgres":
 			if spec.Volume == "" {
 				size = 1024 // ProxySQL; data nodes retain the larger budget.

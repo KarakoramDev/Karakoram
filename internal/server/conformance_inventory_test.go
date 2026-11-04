@@ -18,9 +18,11 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/apispec"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
+	"github.com/KarakoramDev/Karakoram/internal/engine/weaviate"
 	"github.com/KarakoramDev/Karakoram/pkg/client"
 )
 
@@ -45,7 +47,7 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	ctx := t.Context()
 	var err error
 	inventoryElastic := newInventoryElasticProvider(t, s)
-	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	s.Registry, err = engine.NewRegistry(&fakeElasticAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}), weaviate.New(weaviate.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,17 +56,64 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	weaviateRegistry, err := engine.NewRegistry(&fakeWeaviateAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	postgresRegistry, err := engine.NewRegistry(&fakePostgresAccess{roles: []postgres.Role{{Name: "custom", Login: true, ConnectionLimit: -1, MemberOf: []string{}}}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := postgresRegistry.Register(&bindingAccessProvider{fakePostgresAccess: &fakePostgresAccess{}}); err != nil {
+		t.Fatal(err)
+	}
+	bindingSource := domain.Cluster{Name: "bindingsrc", Spec: domain.ClusterSpec{Provider: "postgres", Version: "17.11.1"}}
+	(&fakeProvider{}).ApplyDefaults(&bindingSource.Spec)
+	if err := s.Store.CreateCluster(ctx, &bindingSource); err != nil {
+		t.Fatal(err)
+	}
+	binding := domain.PostgresBinding{ID: "identity-binding", SourceCluster: bindingSource.Name, ConsumerKind: "keycloak", ConsumerName: "identity", Databases: []string{"identity"}, Extensions: []string{}, RoleName: "kb_identity", State: "ready"}
+	if _, err := s.Store.EnsurePostgresBinding(ctx, &binding); err != nil {
+		t.Fatal(err)
+	}
+	mysqlRegistry, err := engine.NewRegistry(&fakeMySQLAccess{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	neo4jRegistry, err := engine.NewRegistry(&fakeNeo4jAccess{}, &fakeProvider{}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	neo4jCluster := domain.Cluster{Name: "graph", Spec: domain.ClusterSpec{Provider: "neo4j", Version: "2026.10.0", Topology: domain.Topology{Type: "single"}}}
+	(&fakeProvider{}).ApplyDefaults(&neo4jCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &neo4jCluster); err != nil {
 		t.Fatal(err)
 	}
 	supabaseRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeSupabaseAccess{names: []string{"hello"}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
 	if err != nil {
 		t.Fatal(err)
 	}
+	openbaoRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeOpenBaoAccess{connections: []openbao.DatabaseConnection{{Name: "app", TargetCluster: "prod", TargetProvider: "psmdb", MountPath: "database", Phase: "ready", Roles: []openbao.DatabaseRole{}, CreatedAt: time.Now()}}}, psmdb.New(psmdb.Options{}), inventoryElastic, rabbitmq.New(rabbitmq.Options{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	openbaoCluster := domain.Cluster{Name: "bao", Spec: domain.ClusterSpec{Provider: "openbao", Version: "2.7.1", Topology: domain.Topology{Type: "cluster"}}}
+	(&fakeProvider{}).ApplyDefaults(&openbaoCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &openbaoCluster); err != nil {
+		t.Fatal(err)
+	}
 	supabaseCluster := domain.Cluster{Name: "supabase", Spec: domain.ClusterSpec{Provider: "supabase", Version: "17.11", Topology: domain.Topology{Type: "single"}}}
 	(&fakeProvider{}).ApplyDefaults(&supabaseCluster.Spec)
 	if err := s.Store.CreateCluster(ctx, &supabaseCluster); err != nil {
+		t.Fatal(err)
+	}
+	temporalRegistry, err := engine.NewRegistry(&fakeProvider{}, &fakeTemporalAccess{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporalCluster := domain.Cluster{Name: "temporal", Spec: domain.ClusterSpec{Provider: "temporal", Version: "1.32.1", Topology: domain.Topology{Type: "combined"}}}
+	(&fakeProvider{}).ApplyDefaults(&temporalCluster.Spec)
+	if err := s.Store.CreateCluster(ctx, &temporalCluster); err != nil {
 		t.Fatal(err)
 	}
 	cluster, err := s.Store.GetCluster(ctx, domain.ClusterRef{Name: "prod"})
@@ -89,6 +138,37 @@ func TestEveryGETResponseConforms(t *testing.T) {
 	}
 	restore := domain.Restore{Name: "restored", Cluster: "prod", Source: domain.RestoreSource{Backup: "saved", SourceCluster: "prod"}, Phase: domain.PhaseSucceeded}
 	if err := s.Store.CreateRestore(ctx, &restore); err != nil {
+		t.Fatal(err)
+	}
+	completed := time.Now().UTC()
+	started := completed.Add(-time.Minute)
+	drill := domain.BackupDrill{
+		ID: "drill", Namespace: domain.DefaultNamespace, Cluster: "prod",
+		Backup: backup.Name, BackupType: backup.Type, Trigger: "manual", Phase: "Succeeded",
+		CreatedAt: started, StartedAt: &started, ReadyAt: &completed, CompletedAt: &completed,
+		RestoreDurationSeconds: 60, TotalDurationSeconds: 60,
+		Checks:  []domain.BackupDrillCheck{{Name: "restore-ready", Passed: true}},
+		Cleanup: domain.BackupDrillCleanup{Phase: "Done", OrphanedVolumes: []string{}},
+	}
+	if err := s.Store.CreateBackupDrill(ctx, drill); err != nil {
+		t.Fatal(err)
+	}
+	controlPlaneBackup := domain.ControlPlaneBackup{
+		ID: "control-plane", Trigger: "manual", Phase: domain.PhaseSucceeded,
+		Storage:   domain.ControlPlaneBackupStorage{Namespace: domain.DefaultNamespace, Name: storage.Name},
+		ObjectKey: "control-plane/backup.tar", SizeBytes: 1024,
+		CreatedAt: started, StartedAt: &started, CompletedAt: &completed,
+	}
+	if err := s.Store.EnqueueControlPlaneBackup(ctx, &controlPlaneBackup, nil); err != nil {
+		t.Fatal(err)
+	}
+	channel := domain.NotificationChannel{
+		Name: "channel", Type: "webhook", Enabled: false,
+		Webhook:   &domain.NotificationWebhook{URLConfigured: true, Host: "hooks.example"},
+		Secrets:   domain.NotificationChannelSecrets{WebhookURL: "https://hooks.example/notify"},
+		CreatedAt: started, UpdatedAt: started,
+	}
+	if err := s.Store.SaveNotificationChannel(ctx, &channel, true); err != nil {
 		t.Fatal(err)
 	}
 	operation := domain.Operation{Cluster: "prod", Kind: "restart"}
@@ -128,12 +208,28 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if strings.Contains(path, "/rabbitmq/") {
 				s.Registry = rabbitRegistry
 			}
-			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app").Replace(path)
+			if strings.Contains(path, "/weaviate/") {
+				s.Registry = weaviateRegistry
+			}
+			url := "/api/v1" + strings.NewReplacer("{account}", "admin", "{token}", apiToken.ID, "{cluster}", "prod", "{backup}", "saved", "{restore}", "restored", "{storage}", "archive", "{operation}", operation.ID, "{provider}", "fake", "{namespace}", "default", "{member}", "prodm0", "{database}", "app", "{username}", "app", "{role}", "custom", "{vhost}", "app", "{user}", "app", "{name}", "app", "{drill}", drill.ID, "{channel}", channel.Name).Replace(path)
 			if strings.Contains(path, "/postgres/") {
 				s.Registry = postgresRegistry
+				if operationID == "listPostgresBindings" {
+					url = strings.Replace(url, "/clusters/prod/", "/clusters/bindingsrc/", 1)
+				}
 				if operationID == "listPostgresGrants" {
 					url += "?database=app"
 				}
+			}
+			if strings.Contains(path, "/mysql/") {
+				s.Registry = mysqlRegistry
+				if operationID == "listMySQLGrants" {
+					url += "?database=app"
+				}
+			}
+			if strings.Contains(path, "/neo4j/") {
+				s.Registry = neo4jRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/graph/", 1)
 			}
 			if strings.Contains(path, "/elasticsearch/") {
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/search/", 1)
@@ -141,6 +237,15 @@ func TestEveryGETResponseConforms(t *testing.T) {
 			if strings.Contains(path, "/supabase/") {
 				s.Registry = supabaseRegistry
 				url = strings.Replace(url, "/clusters/prod/", "/clusters/supabase/", 1)
+			}
+			if strings.Contains(path, "/openbao/") {
+				s.Registry = openbaoRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/bao/", 1)
+				url = strings.ReplaceAll(url, "{connection}", "app")
+			}
+			if strings.Contains(path, "/temporal/") {
+				s.Registry = temporalRegistry
+				url = strings.Replace(url, "/clusters/prod/", "/clusters/temporal/", 1)
 			}
 			if path == "/healthz" || path == "/metrics" {
 				url = path
@@ -187,6 +292,10 @@ func TestEveryGETResponseConforms(t *testing.T) {
 				}
 			}
 		})
+	}
+	s.Registry = elasticRegistry
+	if w := call(s, "GET", "/api/v1/providers/weaviate", "", token); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
 	}
 	// Exercise the real provider's presets as well as the fake DataPlane catalog.
 	if w := call(s, "GET", "/api/v1/providers/psmdb", "", token); w.Code != 200 {

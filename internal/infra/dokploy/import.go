@@ -193,6 +193,19 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	if !resume && len(specs) > 0 {
 		return op, restoreConflict("matching import already completed; observe its returned service identities instead of recreating resources")
 	}
+	// Reject unsatisfiable exclusions before creating any application in the batch.
+	for _, spec := range specs {
+		if spec.Kind != infra.KindVolume || len(spec.SpreadAvoid) == 0 || candidates[spec.Hostname] != nil {
+			continue
+		}
+		nodes, err := b.nodes(ctx)
+		if err != nil {
+			return op, err
+		}
+		if _, err = chooseNode(nodes, ms, spec.SpreadGroup, spec.SpreadReplaces, spec.SpreadAvoid...); err != nil {
+			return op, err
+		}
+	}
 	ordered := append([]infra.ServiceSpec(nil), specs...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Kind == infra.KindVolume && ordered[j].Kind != infra.KindVolume })
 	var pending []struct {
@@ -243,7 +256,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 				if err != nil {
 					return op, err
 				}
-				m.Node, err = chooseNode(ns, ms, m.SpreadGroup, s.SpreadReplaces)
+				m.Node, err = chooseNode(ns, ms, m.SpreadGroup, s.SpreadReplaces, s.SpreadAvoid...)
 				if err != nil {
 					return op, err
 				}

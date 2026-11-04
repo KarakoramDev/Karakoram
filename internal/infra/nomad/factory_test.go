@@ -152,3 +152,18 @@ func TestFactoryConfigAndEnvironment(t *testing.T) {
 		t.Fatal("backend aliases caller config")
 	}
 }
+
+func TestReplicaScalingPreservesServingCapability(t *testing.T) {
+	if !nomadCapabilities.ReplicaScalePreservesServing {
+		t.Fatal("pure-count retained-job scaling must advertise preserving serving replicas")
+	}
+}
+
+func TestResourceUpdatesDoNotAdvertiseServingPreservation(t *testing.T) {
+	if nomadCapabilities.ResourceUpdatePreservesServing {
+		t.Fatal("TCP-gated canary followed by destructive replacements does not prove serving-preserving resource updates")
+	}
+	if nomadCapabilities.StatelessRolloutSurge != 1 {
+		t.Fatal("stateless canary placement must budget one extra instance independently of serving preservation")
+	}
+}

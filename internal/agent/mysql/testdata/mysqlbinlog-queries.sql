@@ -1,0 +1,34 @@
+-- Run on a fresh MySQL/Percona 8.4 server with GTIDs and binary logging enabled.
+-- Decode with mysqlbinlog --base64-output=DECODE-ROWS --verbose (TZ=UTC).
+CREATE DATABASE example;
+ALTER DATABASE example CHARACTER SET utf8mb4;
+CREATE TABLE example.items (id INT PRIMARY KEY, value VARCHAR(100));
+ALTER TABLE example.items ADD COLUMN extra INT;
+BEGIN;
+INSERT INTO example.items VALUES (1, 'first', NULL);
+UPDATE example.items SET value='second' WHERE id=1;
+COMMIT;
+CREATE USER 'fixture_user'@'localhost';
+GRANT SELECT ON example.* TO 'fixture_user'@'localhost';
+ALTER USER 'fixture_user'@'localhost' ACCOUNT LOCK;
+SET PASSWORD FOR 'fixture_user'@'localhost' = 'fixture-only-not-a-secret';
+SET SESSION binlog_transaction_compression=ON;
+BEGIN;
+INSERT INTO example.items VALUES (2, REPEAT('x', 100), NULL);
+INSERT INTO example.items VALUES (3, REPEAT('y', 100), NULL);
+COMMIT;
+SET SESSION binlog_transaction_compression=OFF;
+XA START 'fixture_xa';
+INSERT INTO example.items VALUES (4, 'prepared', NULL);
+XA END 'fixture_xa';
+XA PREPARE 'fixture_xa';
+XA COMMIT 'fixture_xa';
+XA START 'fixture_rollback';
+INSERT INTO example.items VALUES (5, 'rolled back', NULL);
+XA END 'fixture_rollback';
+XA PREPARE 'fixture_rollback';
+XA ROLLBACK 'fixture_rollback';
+DROP USER 'fixture_user'@'localhost';
+DROP TABLE example.items;
+DROP DATABASE example;
+FLUSH BINARY LOGS;

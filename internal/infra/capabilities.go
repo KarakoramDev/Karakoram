@@ -26,6 +26,27 @@ type RuntimeResourceDeployment interface {
 	ResourceUpdatesDeployRuntime() bool
 }
 
+// ServingResourceUpdate optionally narrows ResourceUpdatePreservesServing for a
+// particular request. Backends with disruptive resource transitions must implement
+// this check; engines must require both the capability and this request's approval.
+type ServingResourceUpdate interface {
+	ResourceUpdatePreservesServingFor(current, target Resources) bool
+}
+
+// ServingProxyUpdates optionally narrows serving-preserving count, resource and
+// new-build deployment capabilities to deployed proxy runtimes with the required
+// platform readiness integration. False or an error forbids the preserving path.
+type ServingProxyUpdates interface {
+	ProxyUpdatesPreserveServing(context.Context, string) (bool, error)
+}
+
+// ProxyDeploymentLookup recovers only an existing proxy deployment receipt for
+// the caller's immutable request identity. It must never submit or upload work.
+// Nil means no pending deployment; ambiguous or mismatched ownership must fail.
+type ProxyDeploymentLookup interface {
+	LookupProxyDeployment(context.Context, string, string) (*Op, error)
+}
+
 // Capabilities declares the optional features a backend provides, so engines
 // can refuse unsupported requests with a clear error and the UI can show what
 // a namespace's backend supports. Every backend provides the core contract
@@ -57,6 +78,23 @@ type Capabilities struct {
 	// HorizontalScaling: SetContainerCount runs more than one container of a
 	// stateless service.
 	HorizontalScaling bool `json:"horizontalScaling"`
+	// ReplicaScalePreservesServing: a count-only stateless update keeps the service
+	// serving. Incumbents remain serving, or replacements start first, one at a
+	// time, and pass readiness equivalent to the engine's proxy readiness before
+	// receiving traffic or retiring their predecessors. Completion requires the
+	// requested number of running instances. Engine readiness remains mandatory.
+	// Internal execution contract, not a user-selectable feature capability.
+	ReplicaScalePreservesServing bool `json:"-"`
+	// ResourceUpdatePreservesServing: SetResources on a running stateless service
+	// preserves serving under the same incumbent-retention or health-gated,
+	// start-first rules as ReplicaScalePreservesServing. ServingResourceUpdate
+	// may exclude disruptive requests. Engine readiness remains mandatory.
+	ResourceUpdatePreservesServing bool `json:"-"`
+	// ProxyDeploymentPreservesServing: a new-build proxy Deploy preserves serving
+	// under the same health-gated, serial start-first rules. Count/resource
+	// guarantees alone do not imply this. ServingProxyUpdates must also approve
+	// the deployed runtime.
+	ProxyDeploymentPreservesServing bool `json:"-"`
 	// EnvChangeRestarts: writing variables restarts or redeploys the runtime.
 	EnvChangeRestarts bool `json:"envChangeRestarts"`
 	// StatelessRolloutSurge bounds extra serving instances during a stateless

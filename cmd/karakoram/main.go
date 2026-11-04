@@ -12,9 +12,15 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/agent"
 	datamcpagent "github.com/KarakoramDev/Karakoram/internal/agent/datamcp"
 	elasticagent "github.com/KarakoramDev/Karakoram/internal/agent/elastic"
+	keycloakagent "github.com/KarakoramDev/Karakoram/internal/agent/keycloak"
+	mysqlagent "github.com/KarakoramDev/Karakoram/internal/agent/mysql"
+	neo4jagent "github.com/KarakoramDev/Karakoram/internal/agent/neo4j"
+	openbaoagent "github.com/KarakoramDev/Karakoram/internal/agent/openbao"
 	postgresagent "github.com/KarakoramDev/Karakoram/internal/agent/postgres"
 	rabbitmqagent "github.com/KarakoramDev/Karakoram/internal/agent/rabbitmq"
 	supabaseagent "github.com/KarakoramDev/Karakoram/internal/agent/supabase"
+	temporalagent "github.com/KarakoramDev/Karakoram/internal/agent/temporal"
+	weaviateagent "github.com/KarakoramDev/Karakoram/internal/agent/weaviate"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
 	"github.com/KarakoramDev/Karakoram/internal/relay"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
@@ -31,7 +37,7 @@ import (
 	"syscall"
 )
 
-const usage = "Usage: karakoram server | agent [readiness [args...]] | version | admin reset-password <account>\nServer recovery reads KARAKORAM_RECOVERY_PASSWORD and optional KARAKORAM_RECOVERY_ACCOUNT (default admin) once per changed value.\nOffline reset reads KARAKORAM_RESET_PASSWORD, or prompts securely on a terminal. Stop the server first.\n"
+const usage = "Usage: karakoram server | agent [readiness [args...]] | version | admin reset-password <account> | admin backup-state --out FILE | admin restore-state (--file FILE | --s3-endpoint URL --bucket B --key KEY [--region R] [--path-style]) [--replace]\nServer recovery reads KARAKORAM_RECOVERY_PASSWORD and optional KARAKORAM_RECOVERY_ACCOUNT (default admin) once per changed value.\nOffline reset reads KARAKORAM_RESET_PASSWORD, or prompts securely on a terminal. Stop the server first.\nState administration reads KARAKORAM_DATA_DIR and KARAKORAM_MASTER_KEY. Stop the server before restoring.\n"
 
 // errUsage reports invalid command-line arguments; main prints the usage text.
 var errUsage = errors.New("invalid arguments")
@@ -85,13 +91,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		if len(args) > 1 {
 			opts, rest := readinessOptions(args[2:])
-			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New())
+			return agent.Readiness(ctx, opts, rest, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{}, weaviateagent.New())
 		}
 		o, err := agent.OptionsFromEnv()
 		if err != nil {
 			return err
 		}
-		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), &supabaseagent.Runner{}, datamcpagent.New())
+		return agent.Run(ctx, o, rabbitmqagent.New(), elasticagent.NewEngine(), postgresagent.New(), mysqlagent.New(), neo4jagent.New(), &supabaseagent.Runner{}, datamcpagent.New(), &keycloakagent.Runner{}, openbaoagent.New(), &temporalagent.Runner{}, weaviateagent.New())
 	case "relay":
 		if len(args) > 2 || (len(args) == 2 && args[1] != "readiness") {
 			return errUsage
@@ -106,6 +112,9 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		o.Logger = slog.New(slog.NewJSONHandler(errOut, nil))
 		return relay.Run(ctx, o)
 	case "admin":
+		if len(args) >= 2 && (args[1] == "backup-state" || args[1] == "restore-state") {
+			return stateAdmin(ctx, args[1], args[2:], out, errOut)
+		}
 		if len(args) != 3 || args[1] != "reset-password" {
 			return errUsage
 		}

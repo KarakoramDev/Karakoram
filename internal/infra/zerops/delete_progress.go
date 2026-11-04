@@ -16,7 +16,7 @@ import (
 // acquiring its deploy lock, cancelling running work, or submitting it again.
 func (b *Backend) deleteProgress(ctx context.Context, op infra.Op, p Process) (string, error) {
 	message := fmt.Sprintf("waiting for Zerops delete process %s for service %s: %s%s", op.ID, op.ServiceID, p.Status, processAge(p))
-	if p.Status != "PENDING" && p.Status != "WAITING" {
+	if p.Status != processPending && p.Status != processWaiting {
 		return boundedDiagnostic(message), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, b.waitTimeout)
@@ -30,7 +30,7 @@ func (b *Backend) deleteProgress(ctx context.Context, op infra.Op, p Process) (s
 		return message, fmt.Errorf("%s: %w", message, err)
 	}
 	for _, other := range processes {
-		if other.ID == "" || other.ID == p.ID || other.Status != "RUNNING" ||
+		if other.ID == "" || other.ID == p.ID || other.Status != processRunning ||
 			other.ServiceStackID != "" && other.ServiceStackID != op.ServiceID ||
 			other.ProjectID != "" && other.ProjectID != b.client.project {
 			continue

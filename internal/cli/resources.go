@@ -19,9 +19,45 @@ import (
 )
 
 func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
+	openBaoFlags(c, s.operation)
+	notificationFlags(c, s.operation)
 	switch {
 	case s.operation == "createAPIToken":
 		tokenFlags(c)
+	case s.operation == "createPostgresDatabase":
+		c.Flags().StringArray("extension", nil, "Extension to create in the database (repeatable; added to the request file)")
+	case s.operation == "listMySQLGrants":
+		validateArgs := c.Args
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := validateArgs(cmd, args); err != nil {
+				return err
+			}
+			user, _ := cmd.Flags().GetString("user")
+			database, _ := cmd.Flags().GetString("database")
+			if strings.TrimSpace(user) == "" && strings.TrimSpace(database) == "" {
+				return usageError("--user or --database is required")
+			}
+			return nil
+		}
+	case s.operation == "rotateMySQLUserPassword":
+		c.Flags().Bool("retain-current", false, "Retain the current password until explicitly discarded")
+	case s.operation == "createMySQLDatabase":
+		c.Flags().String("character-set", "", "Database character set (creation only)")
+		c.Flags().String("collation", "", "Database collation (creation only)")
+	case s.operation == "createNeo4jUser" || s.operation == "setNeo4jUserPassword":
+		c.Flags().Bool("password-stdin", false, "Read password from standard input; omit to generate a password returned once")
+	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
+		weaviateUserFlags(c)
+	case s.operation == "updateAgentRolloutSettings":
+		c.Flags().Bool("automatic", false, "Automatically roll out outdated agents")
+		c.Flags().Int("max-concurrent-clusters", 1, "Maximum concurrent cluster rollouts (1–5)")
+	case s.operation == "upgradeClusterAgents":
+		c.Flags().Bool("include-current", false, "Redeploy agents even when already current")
+	case s.operation == "updateControlPlaneBackupPolicy":
+		c.Flags().Bool("enabled", false, "Enable scheduled control-plane backups")
+		c.Flags().String("storage", "", "S3 storage reference [namespace/]name")
+		c.Flags().String("schedule", "0 3 * * *", "UTC five-field cron schedule")
+		c.Flags().Int("retain-count", 14, "Successful backups to retain (1–1000)")
 	case s.operation == "listPostgresGrants":
 		_ = c.MarkFlagRequired("database")
 		validateArgs := c.Args
@@ -35,6 +71,8 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			}
 			return nil
 		}
+	case s.operation == "rebalancePostgres":
+		c.Flags().String("strategy", "", "Installed Citus rebalance strategy (default: Citus default)")
 	case strings.HasPrefix(s.path, "namespaces "):
 		a.namespaceFlags(c, s.operation)
 	case strings.HasPrefix(s.path, "clusters create"), strings.HasPrefix(s.path, "clusters scale"):
@@ -77,14 +115,14 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 			c.Flags().String("engine-options", "", "Provider options as a JSON object or @file.json")
 			c.Flags().Bool("monitoring", true, "Enable monitoring")
 		}
-	case strings.HasPrefix(s.path, "clusters upgrade"), s.operation == "raiseClusterFCV":
+	case s.path == "clusters upgrade <cluster>", s.operation == "raiseClusterFCV":
 		c.Flags().String("version", "", "Target version")
 	case s.operation == "getClusterConnection":
 		c.Flags().Bool("reveal", false, "Explicitly display database credentials")
 	case s.operation == "replaceClusterBalancer":
 		c.Flags().Bool("enabled", true, "Enable balancing")
 	case s.operation == "createBackup":
-		c.Flags().String("type", "logical", "Backup type (logical, physical, definitions, snapshot, full, diff or incr)")
+		c.Flags().String("type", "logical", "Backup type supported by the cluster's provider (see `providers get PROVIDER`: e.g. logical, physical, snapshot, full, incremental, diff, incr, dump)")
 		c.Flags().String("storage", "", "Backup storage (defaults to cluster configuration)")
 		c.Annotations[operationAnnotation] += ",getCluster"
 	case s.operation == "createRestore":
@@ -93,6 +131,7 @@ func (a *app) specialFlags(c *cobra.Command, s commandSpec) {
 		c.Flags().String("source-cluster", "", "Source cluster (defaults to target)")
 		c.Flags().String("source-namespace", "", "Source namespace (defaults to target namespace)")
 		c.Flags().String("into-new", "", "Clone source spec and restore into a new cluster")
+		c.Flags().Bool("acknowledge-bound-consumers", false, "Acknowledge the impact of an in-place restore on bound consumers")
 	case strings.HasPrefix(s.path, "operations wait"), s.path == "clusters wait <cluster>":
 		c.Flags().Duration("timeout", 30*time.Minute, "Maximum wait duration")
 	case s.operation == "checkPermission":
@@ -110,11 +149,49 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 	if s.operation == "createAPIToken" {
 		return a.tokenBody(cmd)
 	}
+	if strings.Contains(s.operation, "OpenBao") {
+		return a.openBaoBody(cmd, s.operation)
+	}
+	if strings.HasPrefix(s.path, "neo4j ") {
+		return a.neo4jBody(cmd, s.operation, args)
+	}
 	if strings.HasPrefix(s.path, "namespaces ") {
 		return a.namespaceBody(cmd, s.operation)
 	}
+	if s.operation == "rotateMySQLUserPassword" {
+		retain, _ := cmd.Flags().GetBool("retain-current")
+		return map[string]any{"retainCurrent": retain}, nil
+	}
+	if s.operation == "createMySQLDatabase" {
+		body, err := a.fileBody(cmd)
+		if err != nil {
+			return nil, err
+		}
+		for flag, field := range map[string]string{"character-set": "characterSet", "collation": "collation"} {
+			if cmd.Flags().Changed(flag) {
+				value, _ := cmd.Flags().GetString(flag)
+				body[field] = value
+			}
+		}
+		return body, nil
+	}
 	if !s.body {
 		return nil, nil
+	}
+	if s.operation == "createPostgresDatabase" {
+		body, err := a.fileBody(cmd)
+		if err != nil {
+			return nil, err
+		}
+		extensions, _ := cmd.Flags().GetStringArray("extension")
+		if len(extensions) > 0 {
+			existing, _ := body["extensions"].([]any)
+			for _, name := range extensions {
+				existing = append(existing, name)
+			}
+			body["extensions"] = existing
+		}
+		return body, nil
 	}
 	file, _ := cmd.Flags().GetString("file")
 	if file != "" {
@@ -164,6 +241,35 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 		return a.fileBody(cmd)
 	}
 	switch {
+	case s.operation == "rebalancePostgres":
+		strategy, _ := cmd.Flags().GetString("strategy")
+		if strategy != "" {
+			return map[string]any{"strategy": strategy}, nil
+		}
+		return map[string]any{}, nil
+	case s.operation == "createWeaviateUser" || s.operation == "updateWeaviateUser":
+		return weaviateUserBody(cmd, args)
+	case s.operation == "createBackupDrill":
+		backup, _ := cmd.Flags().GetString("backup")
+		body := map[string]any{}
+		if backup != "" {
+			body["backup"] = backup
+		}
+		return body, nil
+	case s.operation == "createNotificationChannel" || s.operation == "replaceNotificationChannel":
+		return a.notificationBody(cmd, args)
+	case s.operation == "updateAgentRolloutSettings":
+		automatic, _ := cmd.Flags().GetBool("automatic")
+		concurrent, _ := cmd.Flags().GetInt("max-concurrent-clusters")
+		if concurrent < 1 || concurrent > 5 {
+			return nil, usageError("--max-concurrent-clusters must be between 1 and 5")
+		}
+		return map[string]any{"automatic": automatic, "maxConcurrentClusters": concurrent}, nil
+	case s.operation == "upgradeClusterAgents":
+		include, _ := cmd.Flags().GetBool("include-current")
+		return map[string]any{"includeCurrent": include}, nil
+	case s.operation == "updateControlPlaneBackupPolicy":
+		return a.controlPlaneBackupPolicyBody(cmd)
 	case strings.HasPrefix(s.path, "clusters create"):
 		if len(args) != 1 {
 			return nil, usageError("cluster name is required without -f")
@@ -212,11 +318,11 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			}
 			spec["topology"] = map[string]any{"shards": n}
 		}
-		if len(spec) == 0 {
+		if len(spec) == 0 && !cmd.Flags().Changed("maintenance-window") && !cmd.Flags().Changed("maintenance-time-zone") && !drillPolicyChanged(cmd) {
 			return nil, usageError("set a replica, shard or resource flag to scale")
 		}
 		return map[string]any{"spec": spec}, nil
-	case strings.HasPrefix(s.path, "clusters upgrade"):
+	case s.path == "clusters upgrade <cluster>":
 		version, _ := cmd.Flags().GetString("version")
 		if version == "" {
 			return nil, usageError("--version is required")
@@ -239,8 +345,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		typ, _ := cmd.Flags().GetString("type")
-		if typ != "logical" && typ != "physical" && typ != "definitions" && typ != "snapshot" && typ != "full" && typ != "diff" && typ != "incr" {
-			return nil, usageError("backup type must be logical, physical, definitions, snapshot, full, diff or incr")
+		if strings.TrimSpace(typ) == "" {
+			return nil, usageError("--type is required; supported types are listed in the provider's backupTypes")
 		}
 		storage, _ := cmd.Flags().GetString("storage")
 		if storage == "" {
@@ -270,6 +376,9 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			name = args[1]
 		}
 		body := map[string]any{"name": name, "source": source}
+		if acknowledge, _ := cmd.Flags().GetBool("acknowledge-bound-consumers"); acknowledge {
+			body["acknowledgeBoundConsumers"] = true
+		}
 		if ns, _ := cmd.Flags().GetString("source-namespace"); ns != "" {
 			body["sourceNamespace"] = ns
 		}
@@ -287,6 +396,8 @@ func (a *app) body(cmd *cobra.Command, s commandSpec, args []string) (any, error
 			body["subject"] = subject
 		}
 		return body, nil
+	case s.operation == "patchCluster" && (cmd.Flags().Changed("maintenance-window") || cmd.Flags().Changed("maintenance-time-zone") || drillPolicyChanged(cmd)):
+		return map[string]any{"spec": map[string]any{}}, nil
 	default:
 		return nil, usageError("--file is required")
 	}
@@ -582,7 +693,11 @@ func (a *app) clone(cmd *cobra.Command, cluster, name string, body any) error {
 	if dryRun {
 		op = dryRunOperation(op)
 	}
-	result, err := a.request(cmd.Context(), op, nil, nil, map[string]any{"name": name, "spec": spec})
+	request := map[string]any{"name": name, "spec": spec}
+	if shares := nested(body, "openbaoUnsealShares"); shares != nil {
+		request["openbaoUnsealShares"] = shares
+	}
+	result, err := a.request(cmd.Context(), op, nil, nil, request)
 	if err != nil {
 		return err
 	}

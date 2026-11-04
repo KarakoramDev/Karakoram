@@ -51,6 +51,11 @@ type operation struct {
 	ServiceIdentity     string            `json:"serviceIdentity,omitempty"`
 	RestoreUpdateConfig json.RawMessage   `json:"restoreUpdateConfig,omitempty"`
 	Specification       string            `json:"specification,omitempty"`
+	ProxyServingProbe   bool              `json:"proxyServingProbe,omitempty"`
+	HealthGated         bool              `json:"healthGated,omitempty"`
+	ExpectedReplicas    int               `json:"expectedReplicas,omitempty"`
+	ForceUpdate         uint64            `json:"forceUpdate,omitempty"`
+	RequestID           string            `json:"requestId,omitempty"`
 }
 
 // UnmarshalJSON migrates journals and opaque handles written before exact
@@ -171,9 +176,17 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	}
 	defer os.Remove(zipPath)
 	if m.Pending != nil && m.Pending.Action == "deploy" && m.Pending.Digest == digest && (!m.Pending.Failed || m.Pending.Uncertain) {
+		// Pre-request journals retain digest-only adoption. An absent identity
+		// does not justify resubmitting an already accepted legacy deployment.
+		if m.Pending.RequestID != "" && d.ProxyPreserveServing != nil && *d.ProxyPreserveServing && d.RequestID != m.Pending.RequestID {
+			return infra.Op{}, restoreConflict("pending serving proxy deployment belongs to a different operation; manual recovery required")
+		}
 		return encodeOp(*m.Pending), nil
 	}
 	if err = b.mutationReady(ctx, a, &m); err != nil {
+		return infra.Op{}, err
+	}
+	if err = prepareDeploymentBudget(&m, digest, d.RetryEpoch); err != nil {
 		return infra.Op{}, err
 	}
 	releaseSlot, err := b.deploymentSlot(ctx, a.ID)
@@ -207,12 +220,31 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	settings["networkSwarm"] = b.serviceNetworks(m)
 	settings["createEnvFile"] = false
 	settings["replicas"] = m.Max
+	// A serving-only healthcheck installed by a prior running update must not
+	// turn a later cold deployment into a bootstrap dependency barrier.
+	settings["healthCheckSwarm"] = nil
 	order := "stop-first"
 	if m.Volume == "" && (len(d.Runtime.Args) == 0 || d.Runtime.Args[0] != "relay") {
 		order = "start-first"
 	}
 	settings["updateConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
 	settings["rollbackConfigSwarm"] = map[string]any{"Parallelism": 1, "Order": order, "FailureAction": "continue"}
+	// Both images must support serving admission. Legacy/cold deployments keep
+	// ordinary policy; their successful marked deployment enables later rollouts.
+	preserveServing := m.Deployed && m.ProxyServingProbe && m.Volume == "" &&
+		m.Desired != "stopped" && m.Desired != "deleting" &&
+		d.Runtime.Env["KARAKORAM_PROXY_SERVING_PROBE"] == "1"
+	if d.ProxyPreserveServing != nil {
+		if *d.ProxyPreserveServing && !preserveServing {
+			return infra.Op{}, restoreConflict("proxy deployment no longer supports serving-preserving rollout")
+		}
+		preserveServing = *d.ProxyPreserveServing
+	}
+	if preserveServing {
+		if err = b.prepareProxyRollout(ctx, a, m, settings, &o); err != nil {
+			return infra.Op{}, err
+		}
+	}
 	settings["stopGracePeriodSwarm"] = int64(120 * time.Second)
 	settings["ulimitsSwarm"] = []map[string]any{{"Name": "nofile", "Soft": 65535, "Hard": 65535}}
 	settings["restartPolicySwarm"] = map[string]any{"Condition": "any"}
@@ -230,8 +262,11 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 	if err != nil {
 		return infra.Op{}, err
 	}
+	o.ProxyServingProbe = m.Volume == "" && d.Runtime.Env["KARAKORAM_PROXY_SERVING_PROBE"] == "1"
 	o.Digest = digest
+	o.RequestID = d.RequestID
 	m.Pending = &o
+	m.DeploymentBudget.Attempts++
 	if err = b.update(ctx, a, m, settings); err != nil {
 		return encodeOp(o), err
 	}
@@ -241,6 +276,7 @@ func (b *Backend) Deploy(ctx context.Context, hostname string, d infra.Deploymen
 			// An authoritative refusal did not enqueue a build. Retire only this
 			// attempt under target exclusion; transport/5xx ambiguity stays fenced.
 			m.Pending = nil
+			m.DeploymentBudget.Attempts--
 			submitted = false
 			if saveErr := b.update(ctx, a, m, nil); saveErr != nil {
 				return encodeOp(o), errors.Join(err, saveErr)
@@ -361,6 +397,9 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 	if state.Failed {
 		m.Pending.Failed = true
 		m.Pending.Uncertain = state.Status == "stalled"
+		if o.Action == "deploy" && !m.Pending.Uncertain && m.DeploymentBudget != nil && m.DeploymentBudget.Digest == o.Digest {
+			m.DeploymentBudget.LastError = state.Message
+		}
 	} else {
 		m.Pending = nil
 		if o.Action != "stop" && o.Specification != "" {
@@ -368,7 +407,12 @@ func (b *Backend) pollOperation(ctx context.Context, op infra.Op) (infra.OpState
 		}
 		m.MutationUntil = time.Time{}
 		if o.Action == "deploy" {
+			if m.DeploymentBudget != nil && m.DeploymentBudget.Digest == o.Digest {
+				m.DeploymentBudget.Attempts = 0
+				m.DeploymentBudget.LastError = ""
+			}
 			m.Deployed = true
+			m.ProxyServingProbe = o.ProxyServingProbe
 			m.WriterFenced = o.WriterFenced
 		}
 		if o.Action != "stop" {
@@ -538,6 +582,21 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 				state.Message = "Dokploy deployment made no terminal progress within 6 hours; inspect and resolve the queue/build before retrying; automatic resubmission is refused because the original attempt may still commit"
 			}
 		}
+	}
+	if o.HealthGated {
+		// The Swarm policy may still describe the incumbent while an uploaded
+		// image is building. Never complete or time out task admission before the
+		// deployment itself has finished.
+		if !deploymentDone {
+			return state, nil
+		}
+		if o.Action == "deploy" {
+			o.Issued, err = time.Parse(time.RFC3339Nano, finishedAt)
+			if err != nil {
+				return state, silentFailure("completed deployment has no valid finish timestamp")
+			}
+		}
+		return b.proxyRolloutStatus(ctx, o, a, ts, state)
 	}
 	ready := 0
 	for _, t := range ts {

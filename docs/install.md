@@ -2,23 +2,23 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Install Karakoram
 
-Choose an infrastructure backend before installing. Karakoram is multi-platform; backend capabilities and operator responsibilities differ. See [Backends](backends.md) and [Pricing and cost estimates](pricing.md).
+Choose an infrastructure provider before installing. Karakoram is multi-platform; provider capabilities and operator responsibilities differ. See [Providers](providers.md) and [Operating costs](operating-costs.md).
 
-| Backend | Installation path |
+| Provider | Installation path |
 | --- | --- |
-| Zerops — reference backend | [Zerops backend guide](zerops.md); follow this page or the dashboard-only [Quick start](quickstart.md) to install. |
+| Zerops — reference provider | [Zerops provider guide](zerops.md); follow this page or the dashboard-only [Quick start](quickstart.md) to install. |
 | Dokploy | [Install the control plane on Dokploy](dokploy.md#install-the-control-plane-on-dokploy). |
 | Nomad | [Install the control plane on Nomad](nomad.md#install-the-control-plane-on-nomad). |
 
-The deployment steps below are for the **Zerops backend**, in an existing Zerops project. CLI installation is shared across backends.
+The deployment steps below are for the **[Zerops](https://zerops.io/) provider**, in an existing Zerops project. CLI installation is shared across providers.
 
 ## Prerequisites
 
 - Permission to import services and deploy code in an existing project. Organization Owner/Admin access and project-creation rights are not required.
-- **Control-plane capacity:** one Ubuntu 24.04 container, shared CPU, 0.5–1 GiB RAM, 1–2 GiB runtime disk and a separate 5 GiB Local Storage volume. A LIGHT project can host this footprint; cluster services require additional capacity. Review engine minimums ([MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md)) and the wizard's aggregate footprint before creating clusters.
+- **Control-plane capacity:** one [Ubuntu](https://ubuntu.com/) 24.04 container, shared CPU, 0.5–1 GiB RAM, 1–2 GiB runtime disk and a separate 5 GiB Local Storage volume. A LIGHT project can host this footprint; cluster services require additional capacity. Review engine minimums ([MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md), [Elasticsearch](elasticsearch/README.md)) and the wizard's aggregate footprint before creating clusters.
 - A Zerops token: **Settings → Access Tokens Management → Custom access per project → Full access**, for this project only, **sudo mode off**. Read-only access cannot provision, update secrets, grow storage or configure routing. Save the one-time value in a password manager; see [Security](security.md) and [Zerops permissions](https://docs.zerops.io/features/rbac#integration-tokens).
 - Free service names `karakoram` and `karakoramdata`, or customize them below.
-- For local deployment: authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt setup needs no Go or Node toolchain locally or on Zerops.
+- For local deployment: authenticated [zcli](https://docs.zerops.io/references/cli) with deployment access. The default prebuilt setup needs no [Go](https://go.dev/) or [Node](https://nodejs.org/) toolchain locally or on Zerops.
 
 ## Setups: prebuilt release or source build
 
@@ -27,7 +27,7 @@ Both setups in root `zerops.yaml` use the same runtime and state volume:
 | Setup | Build and use |
 | --- | --- |
 | `karakoram` (default) | Downloads the upstream pinned binary; verifies the checksum manifest's SSH signature, archive SHA-256 and binary version. Seconds; no Go/Node. Download or verification failure fails the build. |
-| `karakoram-source` | Builds the exact deployed commit and UI with Node 22 and Go; allow minutes. For forks, development and unreleased fixes. Requires the complete checkout, including `ui/package-lock.json`, and outbound Go toolchain/module registry and npm access. Zerops `go@1` starts with Go 1.22; `go 1.25.0` selects the required toolchain automatically. |
+| `karakoram-source` | Builds the exact deployed commit and UI with Node 22 and Go; allow minutes. For forks, development and unreleased fixes. Requires the complete checkout, including `ui/package-lock.json`, and outbound Go toolchain/module registry and npm access. Zerops `go@1` starts with Go 1.22; `go 1.26.0` selects the required toolchain automatically. |
 
 [`deploy/zerops/RELEASE`](../deploy/zerops/RELEASE) contains the pinned SemVer tag. The v0.2.0 release checkout pins `v0.2.0`; a development checkout can still pin the previous published release. **Never edit it by hand:** only the [release tool](../CONTRIBUTING.md#releasing) updates it. A published tag pins itself; `main` between releases pins the latest published release, not newer source. Prebuilt binaries already embed release version, tagged commit and reproducible build date.
 
@@ -90,7 +90,7 @@ The local template has neither `buildFromGit` nor an inline pipeline: it creates
 
 ### Build provenance for local pushes
 
-Only `karakoram-source` needs these inputs. `--no-git` source uploads lack Git metadata; obtain:
+Only `karakoram-source` needs these inputs. `--no-git` source uploads lack [Git](https://git-scm.com/) metadata; obtain:
 
 ```sh
 git describe --tags --always
@@ -110,7 +110,7 @@ zerops:
 
 Refresh both values for each push. These are remote **build** inputs; workstation exports, `run.envVariables` and post-deploy runtime edits cannot relink the executable. The explicit commit overrides Git discovery; the pipeline records a UTC build date. Without provenance the API/UI show `unknown (built without git metadata)`.
 
-Local builds accept the same inputs (or explicit Make `VERSION`/`COMMIT` overrides):
+Local builds accept the same inputs (or explicit [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/) `VERSION`/`COMMIT` overrides):
 
 ```sh
 KARAKORAM_VERSION="$(git describe --tags --always)" \
@@ -170,7 +170,7 @@ To build the exact checkout:
 
 ## Import YAML installation from a public repository
 
-1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Its `buildFromGit` points to `https://github.com/KarakoramDev/Karakoram`; no fork required. Forks need a plain **public** GitHub/GitLab URL without trailing `.git` and `zeropsSetup: karakoram-source`; private repositories are unsupported.
+1. Obtain [`deploy/zerops/import.yaml`](../deploy/zerops/import.yaml). Its `buildFromGit` points to `https://github.com/KarakoramDev/Karakoram`; no fork required. Forks need a plain **public** [GitHub](https://github.com/)/[GitLab](https://about.gitlab.com/) URL without trailing `.git` and `zeropsSetup: karakoram-source`; private repositories are unsupported.
 2. Set the empty token in a private copy, or add it in the GUI immediately after import.
 3. Choose **Import services** in the existing project's dashboard, or run:
 
@@ -187,10 +187,10 @@ Both templates require `#yamlPreprocessor=on` to generate secrets. Multi-argumen
 
 Match the CLI release to the **deployed control-plane version**, not the latest release independently. Read `https://example.com/api/v1/version`; with an existing CLI, `karactl --server https://example.com version` shows client/server versions. If the server reports unknown provenance, identify its deployed release/revision before choosing a binary.
 
-[Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover Linux/macOS (`linux`/`darwin`, `amd64`/`arm64`) and Windows (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
+[Release assets](https://github.com/KarakoramDev/Karakoram/releases) cover [Linux](https://www.kernel.org/)/[macOS](https://www.apple.com/macos/) (`linux`/`darwin`, `amd64`/`arm64`) and [Windows](https://learn.microsoft.com/en-us/windows/) (`windows-amd64.exe`) from v0.1.0; signed manifests start at **v0.1.2**. Linux amd64:
 
 ```sh
-RELEASE=v0.2.0
+RELEASE=v0.4.3   # replace with the release your server reports
 ASSET=karactl-linux-amd64
 BASE="https://github.com/KarakoramDev/Karakoram/releases/download/$RELEASE"
 curl --fail --location --proto '=https' --proto-redir '=https' \
@@ -205,9 +205,9 @@ sha256sum --ignore-missing -c checksums.txt &&
   install -Dm755 "$ASSET" "$HOME/.local/bin/karactl"
 ```
 
-Authenticate the signing key against a trusted checkout or independently trusted fingerprint: downloading it beside the binary does not establish authenticity. Verify in the download directory; proceed only after signature success and the selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for checksums; Windows needs OpenSSH signature verification and SHA-256 verification. Add `$HOME/.local/bin` to `PATH`.
+Authenticate the signing key against a trusted checkout or independently trusted fingerprint: downloading it beside the binary does not establish authenticity. Verify in the download directory; proceed only after signature success and the selected asset reports `OK`. On macOS use `shasum -a 256 --check --ignore-missing checksums.txt` for checksums; Windows needs [OpenSSH](https://www.openssh.com/) signature verification and SHA-256 verification. Add `$HOME/.local/bin` to `PATH`.
 
-Alternatively build the matching checkout with Go 1.25+:
+Alternatively build the matching checkout with Go 1.26+:
 
 ```sh
 go build -o /tmp/karactl ./cmd/karactl

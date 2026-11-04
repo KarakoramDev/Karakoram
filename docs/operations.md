@@ -2,7 +2,190 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Operations and troubleshooting
 
-Operate the control plane, managed engines and backend infrastructure as separate systems; each has its own health and recovery signals. Backend-specific procedures below are labelled Zerops; [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
+Operate the control plane, managed engines and provider infrastructure as separate systems; each has its own health and recovery signals. Provider-specific procedures below are labelled [Zerops](https://zerops.io/); [Dokploy](dokploy.md#operations-and-limitations) and [Nomad](nomad.md#operations-and-limitations) have their own operational guides.
+
+The fleet Ops features below are **verified offline** (tests without a live provider). See also [notifications](notifications.md), [control-plane backup/recovery](control-plane-backup.md) and [backup drills](backup-drills.md).
+
+## Maintenance windows
+
+Set `spec.maintenance` to permit new member disruptions only during explicit
+windows. The time zone is an IANA name and defaults to `UTC`; at most 16 windows
+are accepted. Each schedule is a five-field cron **start time**, paired with a
+[Go](https://go.dev/) duration from `15m` through `168h`:
+
+```yaml
+spec:
+  maintenance:
+    timeZone: Europe/Prague
+    windows:
+      - schedule: "0 2 * * 0"
+        duration: 2h
+      - schedule: "0 23 * * 3"
+        duration: 45m
+```
+
+Starts follow the selected zone's daylight-saving rules: nonexistent local
+times do not fire, repeated times may fire twice. Durations measure elapsed time,
+not local clock hours. A window includes its start and excludes its end.
+Overlapping or touching windows merge. Omitting the policy or using `windows: []`
+permits disruption at any time.
+
+The disruption gate covers restart, TLS rotation, agent upgrades, FCV changes,
+and user-requested member replacement or move. Engine drivers consult the same gate
+before starting each new engine upgrade, rolling resource/configuration change
+or scale-in disruption. Automatic database leaf-certificate renewal is gated only
+while more than seven days remain. A window is permission to **start**, not a
+deadline to finish: work already past a member's stop/drain boundary continues
+through recovery and rejoin.
+
+Public HTTPS enable/disable changes on existing Keycloak, Temporal UI, Supabase
+gateway, Elasticsearch Kibana/APM and RabbitMQ management runtimes also wait for
+the window (or a generation override). A backend may replace tasks to change
+ingress networks or service labels, so routing is not a non-disruptive exemption.
+This includes explicit route revocation; for urgent revocation use an override.
+Initial provisioning and deletion remain exempt.
+The same rule covers public TCP publication, withdrawal and allowlist changes
+for MongoDB, RabbitMQ, Elasticsearch, PostgreSQL (including Supabase),
+MySQL/PXC, Neo4j, OpenBao and Weaviate. Existing matching routes remain
+idempotent observations; maintenance does not require restarting them or prevent
+an otherwise converged generation from being acknowledged solely because its
+unchanged public route is still present.
+
+Exposure recovery uses a durable admitted-policy receipt separate from runtime
+route application. Resume and lost-runtime recovery restore that policy even
+outside a window; a newer desired exposure still waits for admission and keeps
+its generation unacknowledged. Legacy recovery first uses retained applied or
+acknowledged exposure evidence. If none remains, it conservatively restores
+private access rather than guessing that current desired public access was
+admitted. To authorize the desired public policy in that case, wait for/open the
+maintenance window or explicitly submit the desired-state action with
+`--ignore-maintenance-window`; do not edit internal receipts.
+
+Healing and system lost-volume replacement, delete/suspend/resume, create and
+scale-out, backup/restore/initial restore, credential rotation, agent transport
+certificate renewal, and certificates with at most seven days remaining are
+exempt. A queued disruptive operation does not block exempt queued work behind
+it. Never-started closed-window operations remain Pending without attempts or
+execution-budget consumption, with a durable `MaintenanceWindowWait` event and
+next-start message. This includes desired-generation PUT/PATCH receipts when
+convergence defers their disruptive change: a healthy engine's Ready message
+does not replace the operation's `WaitingForWindow` diagnostic. An operation
+already Running retains that phase while waiting for its next member disruption.
+Provider execution is recorded durably before a convergence sweep begins. A
+first sweep that discovers only a window deferral returns its newly evaluated
+receipt to Pending; subsequent known closed-window waits stay Pending until
+opening or override. It never rewinds an operation started by an earlier sweep.
+An in-flight sweep of an older generation does not start or consume attempts
+for a PUT/PATCH receipt created concurrently; its first evaluation belongs to a
+sweep that loaded that generation.
+Engine driver waits publish `MaintenanceWindow=False/WaitingForWindow`. A running
+imperative operation pauses its execution budget only when that invocation
+actually waits at its own next-disruption gate; a stale cluster-wide condition
+cannot pause unrelated backup/restore work. Recovery after a member disruption,
+cancellation and failure cleanup continue consuming their applicable budgets,
+and an override does not create a maintenance pause.
+
+Cluster responses calculate `status.maintenance.open`, `currentWindowEnd` and
+`nextWindowStart` at response time. The `MaintenanceWindow` condition uses that
+same evaluation on every response: `True/Open` while open and `False/Closed`
+while closed, retaining `False/WaitingForWindow` when a provider has reported a
+disruption wait. A policy-only change can succeed while the window is closed;
+closure alone does not mean an operation is waiting. Per-request and generation
+overrides permit their own work without making the policy appear open. No
+maintenance status or condition is emitted for an empty policy.
+Its `lastTransitionTime` is the current policy schedule's most recent merged
+opening or closing boundary, not the request time or a historical disruption
+receipt. It therefore stays stable across reads and advances on reopening.
+Karakoram does not retain a separate policy-installation timestamp; this
+schedule-derived boundary can predate the policy edit. A zero timestamp denotes
+continuous coverage or no prior scheduled window. Calendar boundary lookup
+accounts for leap-day gaps, including non-leap centuries.
+An absent current end while open means continuously overlapping weekly coverage.
+The next start is the next cron occurrence, which may lie inside an already open
+merged window.
+
+Use `ignoreMaintenanceWindow=true` on a gated action or cluster PUT/PATCH for an
+explicit override. Imperative overrides belong to that operation; desired-state
+overrides apply only to the accepted generation, not future spec changes. They
+never bypass engine driver quorum, health, placement or deployment-admission checks:
+
+```sh
+karactl clusters restart demo --ignore-maintenance-window
+karactl clusters patch demo -f maintenance.yaml
+karactl clusters edit demo --ignore-maintenance-window
+karactl clusters create demo --maintenance-time-zone UTC \
+  --maintenance-window '0 2 * * 0;2h'
+```
+
+The same desired-state gate applies to Keycloak, Neo4j, MySQL/PXC, Temporal,
+OpenBao and Weaviate, including auxiliary-component scale-in and restart-required
+configuration. PostgreSQL profile preparation/restarts and Citus worker-group
+drain/retirement follow it too. A binding credential-generation roll in Keycloak
+or Temporal is credential rotation and remains exempt, even when applying those
+credentials restarts the consumer. An unrelated desired application change in
+the same reconciliation still needs its own maintenance permission.
+Deferring that change does not stop reconciliation of accepted running state:
+lost runtimes are redeployed at their accepted version/resources, sealed peers
+can recover, and rotated binding credentials or renewed transport certificates
+can be published while pending application settings remain unchanged. A deferred
+change in one application component must not hold another component's exempt
+credential roll behind its maintenance gate.
+Retiring members are not lost serving runtimes: their scale-in workflow retains
+exclusive ownership of stopping, any drain-required restart, and runtime/volume
+deletion. Ordinary recovery must not recreate a runtime during its retirement.
+Urgent database leaf renewal bypasses the time window, not native quorum or
+one-member-at-a-time readiness/acknowledgement gates. Accepted application
+settings and resource bounds remain frozen during that renewal.
+An already-admitted retirement finishes before a new native-leaf rolling journal
+is installed; independent transport-certificate renewal can still proceed.
+
+## Moving a member
+
+```sh
+karactl clusters placement demo
+karactl clusters members move demo MEMBER --wait
+# Only when an immediate disruption is intended:
+karactl clusters members move demo MEMBER --ignore-maintenance-window --wait
+```
+
+Moving is a native **replacement**, not an in-place disk migration: it creates a
+new runtime and volume, synchronizes data using the engine's replacement safety
+gates, and retires the predecessor only after it is safe. Allow temporary capacity
+for the extra member. Supported targets are [MongoDB](https://www.mongodb.com/) data/config members, [RabbitMQ](https://www.rabbitmq.com/)
+members, [Elasticsearch](https://www.elastic.co/elasticsearch) data/master nodes, and [PostgreSQL](https://www.postgresql.org/) HA data members
+(including [Supabase](https://supabase.com/)'s PostgreSQL core). Routers, proxies, standalone PostgreSQL,
+and auxiliary Elasticsearch/Supabase components cannot be moved this way.
+
+Move admission is limited to the `psmdb`, `rabbitmq`, `elasticsearch`, `postgres`
+and `supabase` engines whose replacement workflows honor relocation constraints.
+[MySQL](https://www.oracle.com/mysql/)/[PXC](https://www.percona.com/mysql/software/percona-xtradb-cluster), [Neo4j](https://neo4j.com/), [Weaviate](https://weaviate.io/), [Keycloak](https://www.keycloak.org/), [OpenBao](https://openbao.org/) and [Temporal](https://temporal.io/) moves are rejected
+before an operation is queued, even when an engine supports ordinary member
+replacement. Placement reads remain advisory and available independently of
+move support; reported groups do not establish that an engine can relocate.
+
+The API is `POST /clusters/{cluster}/members/{member}/move`; it returns a durable
+`replace-member` operation with `relocate:true` and the observed `avoidGroup`.
+It shares replacement admission, authorization and maintenance-window rules.
+Use the returned operation ID rather than repeating a request after a timeout.
+
+| Provider | Placement and move guarantee |
+| --- | --- |
+| Zerops | Best-effort runtime/volume replacement only: there is **no host placement guarantee**. Re-observe fingerprints afterwards; do not repeatedly recreate members to chase a different fingerprint. |
+| Nomad / Dokploy | Authoritative node placement. Move excludes the predecessor's node; it fails with “no other eligible node” before retiring the old member if capacity is unavailable. An unknown current group returns HTTP 409. |
+
+`placement.source` is `backend` for authoritative node evidence, `best-effort`
+for agent fingerprints only, or `unavailable` when no usable evidence exists.
+`guaranteedAntiAffinity` is true only when the provider supports Placement,
+**every** member has an authoritative group, and those groups are all distinct.
+[Nomad](https://developer.hashicorp.com/nomad)/[Dokploy](https://dokploy.com/) can therefore guarantee distinct hosts when eligible capacity and
+observed separation allow it; neither this flag nor fingerprints certify rack
+or zone independence. Missing observations never establish separation.
+
+Durable `Warning MembersCoLocated` events report a newly observed co-located
+group set; unchanged sets are deduplicated across reconciliations and restarts.
+`Normal MembersSeparated` records when co-location is no longer observed.
+Unknown groups (including unknown fingerprints) are not co-location evidence,
+and a cleared warning alone is not proof of host separation.
 
 ## Health and logs
 
@@ -15,9 +198,9 @@ karactl operations cluster demo
 karactl events list --cluster demo
 ```
 
-`/healthz` checks the control-plane store, not engine health. Inspect cluster conditions, observed generation, member health, agent connectivity, allocations, disk headroom and backup status. An active infrastructure runtime (for example Zerops ACTIVE) alone is insufficient. Operation success is not a health guarantee; see [operations and status](clusters.md#operations-and-status).
+`/healthz` checks the control-plane store, not engine health. Inspect cluster conditions, observed generation, member health, agent connectivity, allocations, disk headroom and backup status. An active infrastructure runtime (for example [Zerops](https://zerops.io/) ACTIVE) alone is insufficient. Operation success is not a health guarantee; see [operations and status](clusters.md#operations-and-status).
 
-PostgreSQL health and desired-generation application are separate signals. A
+[PostgreSQL](https://www.postgresql.org/) health and desired-generation application are separate signals. A
 healthy cluster can still be applying an exposure or configuration change.
 While its observed generation lags, the cluster and tracking-operation message
 reports `waiting for generation N: <barrier>`, naming the current deployment,
@@ -30,15 +213,15 @@ observation through the advertised private service's logical agent endpoint.
 When that endpoint is unavailable, readiness is false even if pinned tasks are
 healthy; inspect the private DNS alias/VIP, overlay network and member agent.
 
-Cluster restart is a provider-owned application-process operation, not a member
+Cluster restart is a engine driver-owned application-process operation, not a member
 agent/artifact upgrade. Upgrading only the control plane leaves existing member
-executables in place. Supabase restart includes PostgreSQL/ProxySQL and every
+executables in place. [Supabase](https://supabase.com/) restart includes PostgreSQL/[ProxySQL](https://proxysql.com/) and every
 enabled application component, with per-instance restart evidence and readiness;
 allocation IDs need not change. For component artifact rolls after an upgrade,
 see [Supabase restart and member software](supabase/operations.md#cluster-restart-and-member-software).
 
 Agent connectivity records a successful agent response, not native database
-readiness. Elasticsearch observes each native endpoint independently with a
+readiness. [Elasticsearch](https://www.elastic.co/elasticsearch) observes each native endpoint independently with a
 two-second budget and uses `/_nodes/_local` for that member's identity, so a
 stopped JVM cannot consume every peer's observation budget. A missing response
 produces `NativeObservation/<member>` = `Unknown` with JVM/port guidance; missing
@@ -55,9 +238,9 @@ operation-owned native backup inventory. Unavailable namespace dependencies
 withdraw freshness without falling back to the default project's resources.
 Their polling delay
 is capped at the normal readiness interval; restore and other lifecycle phases
-remain authoritative even when a health probe succeeds. A blocking provider call
+remain authoritative even when a health probe succeeds. A blocking engine driver call
 can still expire the readiness lease: an in-flight mutation is not evidence of
-health. MongoDB backup polling uses PBM's heartbeat-aware snapshot status as well
+health. [MongoDB](https://www.mongodb.com/) backup polling uses [PBM](https://docs.percona.com/percona-backup-mongodb/latest/)'s heartbeat-aware snapshot status as well
 as `describe-backup`, so an owner's death cannot leave raw `running` metadata
 hiding PBM's terminal stale-heartbeat failure.
 During error backoff, the same serialized cluster worker also takes read-only,
@@ -65,7 +248,7 @@ availability-only samples at the normal readiness interval. These samples do not
 retry the failed operation, run ordinary convergence, consume native receipts,
 or shorten platform retry deadlines. Thus a fenced backup can remain Running
 without making reachable member agents appear disconnected solely because its
-mutation retry delay exceeds the readiness lease. In-flight provider calls can
+mutation retry delay exceeds the readiness lease. In-flight engine driver calls can
 still expire that lease; stale observations never certify availability.
 An accepted cancellation remains cooperative: active PBM backups receive the
 durable native cancel request and remain nonterminal until PBM confirms a terminal
@@ -76,18 +259,18 @@ prevents the first requested cancel after describe confirms nonterminal metadata
 
 Use two log sources:
 
-- **Zerops deployment/application logs:** preparation, readiness, startup, supervisor diagnostics and forwarded child output, including failures before the agent is reachable. Signed project-log URLs/tokens are credentials.
-- **Karakoram member logs:** authenticated, bounded process tails, not a historical archive:
+- **Backend deployment/application logs:** preparation, readiness, startup, supervisor diagnostics and forwarded child output, including failures before the agent is reachable. `karactl clusters logs demo <member> --process agent --lines 100` reads the member runtime's application log tail through the namespace backend (Zerops, Dokploy or Nomad). Zerops selects the newest requested records, then returns them oldest-first before redaction; equal-timestamp records retain their platform source order. Runtime messages pass through the shared credential redactor, including multiline values, before the API returns them. Redaction can replace suppressed continuations with omission markers. It is not filtered to supervisor-only messages; retention and timestamps are platform-dependent. A backend without log support rejects the request; an unavailable backend returns 503 and a missing runtime returns 404. Signed project-log URLs/tokens are credentials.
+- **Karakoram child-process logs:** authenticated, bounded process tails, not a historical archive:
 
   ```sh
   karactl clusters logs demo <member> --process <process> --lines 100
   ```
 
-  `GET /api/v1/clusters/{cluster}/members/{member}/logs` accepts `process` and `lines` (default 100; accepted range 1–10000). The default process is the provider's first declared process. Each process retains at most **1000 in-memory lines and 1 MiB of message bytes**, lost on restart; individual lines are truncated to 16 KiB while the stream continues draining. External collector output is best effort through a bounded queue: a stalled collector can drop output, but cannot block process control. **`cursor` and `since` are currently ignored; no `nextCursor` is returned.** Requesting more lines cannot recover older history.
+  `GET /api/v1/clusters/{cluster}/members/{member}/logs` accepts `process` and `lines` (default 100; accepted range 1–10000). The default process is the engine driver's first declared process. Each process retains at most **1000 in-memory lines and 1 MiB of message bytes**, lost on restart; individual lines are truncated to 16 KiB while the stream continues draining. External collector output is best effort through a bounded queue: a stalled collector can drop output, but cannot block process control. **`cursor` and `since` are currently ignored; no `nextCursor` is returned.** Requesting more lines cannot recover older history.
 
 The agent drains engine stdout and stderr through agent-owned pipes. If the whole
 agent process is frozen (for example, by SIGSTOP), an engine's logging writes
-block once the kernel pipe buffer fills and can stall the engine. On Linux the
+block once the kernel pipe buffer fills and can stall the engine. On [Linux](https://www.kernel.org/) the
 default capacity is typically **64 KiB per stream**, but can be smaller when the
 shared UID exceeds `pipe-user-pages-soft`. In one observed mongos incident, the
 engine stalled about **95 seconds** after the agent was frozen; the delay depends
@@ -95,7 +278,7 @@ on output volume and available pipe capacity, not a guaranteed grace period.
 The member is reported unhealthy while the agent is unresponsive. Recover by
 resuming the agent or restarting the allocation.
 
-Process names, readiness checks and engine diagnostics: [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md).
+Process names, readiness checks and engine diagnostics: [MongoDB](mongodb/operations.md), [RabbitMQ](rabbitmq/operations.md), [Elasticsearch](elasticsearch/operations.md), [Neo4j Community](neo4j/operations.md).
 
 Platform failures expose a Zerops error code and sanitized field/reason summary in events and conditions. Inspect the named resource bound or missing service before changing the spec; rejected resource updates/imports have [resource diagnostics](clusters.md#resources-and-autoscaling). For `serviceStackNotFound`, check whether the recorded service was removed externally; do not delete unrelated services. Use the Zerops dashboard when details are missing/truncated.
 
@@ -105,7 +288,7 @@ Persisted diagnostic messages are sanitized again when read and served, includin
 operation progress, backup/restore errors, events and cluster conditions. Startup
 migration `012_sanitize_diagnostics.sql` also rewrites legacy diagnostic fields in
 bounded, restart-safe batches before recording completion. Resource identities,
-phases and timestamps are unchanged. This does not securely erase old SQLite
+phases and timestamps are unchanged. This does not securely erase old [SQLite](https://sqlite.org/)
 pages/WAL, external logs or archived state snapshots: restrict their access and
 coordinate credential rotation and retention remediation separately.
 Event detail documents additionally redact credential-bearing keys, including
@@ -123,11 +306,11 @@ Zerops honors future `Retry-After` timestamps for reconciliation retries, includ
 
 Zerops records non-secret operation receipts in the service variable `KARAKORAM_PLATFORM_OPERATION` before creating an app version or submitting a start, stop or restart. An accepted upload/deployment with a lost reply resumes using the original app-version identity; an already completed start/stop is recovered from the service state. Retrying after control-plane restart does not allocate another artifact or blindly restart the runtime. Deployment submission returns the durable app-version handle without waiting for a post-deployment environment update: Zerops queues those updates behind deployment, and waiting would prevent quorum peers from being deployed. Completion is observed separately, not inferred from submission.
 
-Receipt consumption and new submissions share **service-scoped, context-cancelable exclusion** across backend instances within the single control-plane process. A slow upload or receipt operation on one member does not block another member's deployment or lifecycle observation; canceled callers stop waiting without interrupting the active mutation. Completion clears only the exact observed receipt; a delayed terminal observer cannot consume a successor's uncertain deployment/restart receipt. Receipt-write process polling does not consume lifecycle receipts.
+Receipt consumption and new submissions share **service-scoped, context-cancelable exclusion** across provider instances within the single control-plane process. A slow upload or receipt operation on one member does not block another member's deployment or lifecycle observation; canceled callers stop waiting without interrupting the active mutation. Completion clears only the exact observed receipt; a delayed terminal observer cannot consume a successor's uncertain deployment/restart receipt. Receipt-write process polling does not consume lifecycle receipts.
 
 After a lost app-version allocation response, Zerops recovery compares complete, service-scoped app-version and process listings against the exact immutable version IDs saved **before** allocation. With exclusive mutation ownership of the managed service, one new `UPLOADING` version is adopted and uploaded/deployed using that same ID; pre-existing versions are never selected by name, recency or status. The allocation API accepts a display name, but its documented version-list/detail response does not return that name as a request identity.
 
-If no new version exists, recovery requires all service processes terminal and two successful complete observations separated by at least the backend polling interval. Before each allocation, receipt persistence and the allocation request share one HTTP-client timeout budget; the durable settle deadline adds one more timeout budget for delivery/visibility (four minutes total with the default two-minute client timeout). The wait diagnostic includes its UTC deadline and carries a retry timestamp. A control-plane restart retains the inventory, deadline and first negative observation. Legacy uncertain allocation receipts without an inventory can start this observation window only with an empty version list; existing unattributed versions remain fenced.
+If no new version exists, recovery requires all service processes terminal and two successful complete observations separated by at least the provider polling interval. Before each allocation, receipt persistence and the allocation request share one HTTP-client timeout budget; the durable settle deadline adds one more timeout budget for delivery/visibility (four minutes total with the default two-minute client timeout). The wait diagnostic includes its UTC deadline and carries a retry timestamp. A control-plane restart retains the inventory, deadline and first negative observation. Legacy uncertain allocation receipts without an inventory can start this observation window only with an empty version list; existing unattributed versions remain fenced.
 
 The same pre-send crash boundary exists for artifact upload and deployment submission. Each phase stores its own request/settle bound and first negative observation while retaining the selected version ID. An unchanged `UPLOADING` version with terminal service processes and no attributable version process can retry the same upload after two observations and the settle margin. A matching deployment process is observed instead of resubmitted, including when version status temporarily lags its process.
 
@@ -178,7 +361,7 @@ Diagnostics are sanitized and bounded to 1024 bytes.
 Platform admission and previous-deployment waits are backpressure, not failed
 deployment attempts. `PlatformDeploymentWaiting` retains the current diagnostic
 (including process ages), while events repeat only when the stable blocking
-state changes. Backend retry deadlines survive reconciliation and concurrent
+state changes. Provider retry deadlines survive reconciliation and concurrent
 member failures; the latest applicable deadline wins, and discovery or user
 triggers do not shorten it. These waits do not consume operation failure budgets.
 
@@ -187,7 +370,7 @@ triggers do not shorten it. These waits do not consume operation failure budgets
 Zerops admits at most **two** owned deploy/build processes per project by default,
 shared across namespaces in one control-plane process. Set
 `KARAKORAM_ZEROPS_MAX_INFLIGHT_DEPLOYS` to an integer **>= 1** to change the cap.
-Dokploy applies the corresponding [server-wide cap](dokploy.md#platform-deployment-admission).
+[Dokploy](https://dokploy.com/) applies the corresponding [server-wide cap](dokploy.md#platform-deployment-admission).
 Bootstrap never raises or bypasses either cap, including for five-member clusters.
 
 Initial member deployments and stateful quorum members use `karakoram agent readiness --startup --data-dir=<absolute path>`.
@@ -213,7 +396,7 @@ This separation lets each deployment release its admission slot before peers
 queued behind that slot are started. It applies to PostgreSQL HA (including the
 Supabase HA core), MongoDB replica sets, RabbitMQ clusters, Elasticsearch, and
 their auxiliary member services. Zerops executes the selected probe as deployment
-readiness. Dokploy deliberately does not install a Docker `HEALTHCHECK`: Swarm
+readiness. Dokploy deliberately does not install a [Docker](https://www.docker.com/) `HEALTHCHECK`: Swarm
 must publish service discovery while tasks bootstrap.
 
 For stateless replacements (mongos, ProxySQL, Supabase services and Elastic stack
@@ -242,7 +425,7 @@ The engine's exhausted-deployment fence includes both runtime configuration and
 release identity. A corrected control-plane executable can therefore make the
 same runtime eligible again without an explicit re-arm; an unchanged executable
 or a restart alone cannot. Executable identity uses the artifact name, size and
-Go build ID (file metadata when unavailable), cached without generating or
+[Go](https://go.dev/) build ID (file metadata when unavailable), cached without generating or
 hashing an archive on blocked observations. Platform terminal-process and
 ownership checks still apply before any new submission.
 
@@ -255,7 +438,7 @@ not advance to another rolling target while recovery is outstanding.
 The retry cadence uses persisted wall-clock UTC deadlines, not the monotonic
 CP-observed elapsed budgets used to expire operations. A forward clock
 step can make a retry due early; this never bypasses exact-version/process proof.
-On backend re-entry, a deadline more than sixty seconds plus a five-second margin
+On provider re-entry, a deadline more than sixty seconds plus a five-second margin
 in the future is treated as due, bounding a single backward-step delay at that
 gate. Ordinary deadlines within that bound remain unchanged across restart.
 Engine-owned platform retries, CPU-mode cooldowns, import batches, runtime
@@ -300,15 +483,15 @@ These upload/deploy retries depend on the documented bounded normal-delivery ass
 
 **Timing and ownership boundary:** an HTTP deadline does not cancel work already queued by an upstream proxy/server, and Zerops documents no hard maximum late-delivery or listing-staleness bound. The settle margin is a conservative operational assumption, not proof of exactly-once allocation. Only the durably selected version is ever uploaded/deployed. A late original allocation therefore stays non-serving; an additional unselected version is reported during operation observation without replacing or blocking the selected deployment. No unattributed version is automatically deleted. Multiple new candidates with no acknowledged selected ID, missing baseline entries, non-terminal/unknown processes, inconsistent exact-ID reads, or failed evidence listings keep **automatic replay refused**, with the evidence needed for the next attempt; HTTP 429/5xx evidence failures retain their original retry information. Do not mutate managed app versions concurrently with the control plane.
 
-Other `OUTCOME_UNKNOWN` or **automatic replay refused** outcomes mean the backend cannot independently establish the original outcome. A restart without a process ID, for example, is still not safely attributable from an `ACTIVE` status. Inspect that service's processes/app versions in the Zerops dashboard, preserve identifiers and timestamps, and wait for all pending requests/processes to settle. Only after confirming the outcome, an operator with platform permissions can clear `KARAKORAM_PLATFORM_OPERATION` to permit another submission. Do not clear receipts just to dismiss an error, delete data volumes, or repeatedly resubmit deployments while the outcome is unknown.
+Other `OUTCOME_UNKNOWN` or **automatic replay refused** outcomes mean the provider cannot independently establish the original outcome. A restart without a process ID, for example, is still not safely attributable from an `ACTIVE` status. Inspect that service's processes/app versions in the Zerops dashboard, preserve identifiers and timestamps, and wait for all pending requests/processes to settle. Only after confirming the outcome, an operator with platform permissions can clear `KARAKORAM_PLATFORM_OPERATION` to permit another submission. Do not clear receipts just to dismiss an error, delete data volumes, or repeatedly resubmit deployments while the outcome is unknown.
 
 Owned service imports carry a readable `KARAKORAM_IMPORT_REQUEST` receipt alongside their ownership variables. A lost import response can recover the original service IDs; a same-name foreign, masked or FAILED volume is never adopted automatically.
 
-Full deployments of volume-less runtimes use Zerops rolling deployment (`temporaryShutdown: false`), preserving the selected startup/native readiness check described above. This applies to stateless frontends/components such as mongos, ProxySQL, Supabase services and Kibana; persistent-volume writers retain stop-before-start fencing. Namespace relays are an exception: they retain their relay-specific readiness probe and remain stop-first because overlapping sessions evict one another and a reconnecting predecessor can displace the replacement. Rolling deployment needs platform capacity for overlapping instances and does not guarantee that existing client sessions survive retirement. Resource/count/routing updates and explicit Start/Stop/Restart retain their existing semantics.
+Full deployments of volume-less runtimes use Zerops rolling deployment (`temporaryShutdown: false`), preserving the selected startup/native readiness check described above. This applies to stateless frontends/components such as mongos, ProxySQL, Supabase services and [Kibana](https://www.elastic.co/kibana); persistent-volume writers retain stop-before-start fencing. Namespace relays are an exception: they retain their relay-specific readiness probe and remain stop-first because overlapping sessions evict one another and a reconnecting predecessor can displace the replacement. Rolling deployment needs platform capacity for overlapping instances and does not guarantee that existing client sessions survive retirement. Resource/count/routing updates and explicit Start/Stop/Restart retain their existing semantics.
 
 ## Reviewing audit activity
 
-Events and Operations identify initiating actors, including persisted account names, OIDC issuer suffixes and API-token owner/name/ID. Use the complete actor value when filtering.
+Events and Operations identify initiating actors, including persisted account names, [OIDC](https://openid.net/developers/how-connect-works/) issuer suffixes and API-token owner/name/ID. Use the complete actor value when filtering.
 
 ```sh
 karactl -n dev events list --cluster demo
@@ -333,7 +516,7 @@ Agents pin the internal CA, authenticate with a per-member token and pull only t
 
 Accepted configuration and maintenance/stopped-process holds are atomically persisted as owner-only **0600** files. Configuration contains locally required secrets. The supervisor owns child processes, restart backoff and SIGTERM forwarding; do not start competing supervisors. Maintenance holds suppress automatic restarts. Explicit stop holds survive config pulls and agent restarts until explicitly released by the controller. Do not edit safety files to force recovery. Engine-specific files and recovery holds belong in the engine operations guides above; private agent commands are not arbitrary remote exec.
 
-Graceful agent shutdown stops children in reverse of their first launch-intent order, retaining that order across crashes and restarts. PostgreSQL HA launches etcd before Patroni, so Patroni is stopped first while etcd can still accept its leader-key release. Maintenance resume uses the forward dependency order. Each child gets at most ten seconds and a share of the remaining shutdown deadline; a hung child produces a shutdown error but cannot prevent later children from receiving their graceful stop signals. No timeout triggers an automatic force-kill, and an exhausted deadline does not imply a clean engine shutdown.
+Graceful agent shutdown stops children in reverse of their first launch-intent order, retaining that order across crashes and restarts. [PostgreSQL](https://www.postgresql.org/) HA launches [etcd](https://etcd.io/) before [Patroni](https://patroni.readthedocs.io/), so Patroni is stopped first while etcd can still accept its leader-key release. Maintenance resume uses the forward dependency order. Each child gets at most ten seconds and a share of the remaining shutdown deadline; a hung child produces a shutdown error but cannot prevent later children from receiving their graceful stop signals. No timeout triggers an automatic force-kill, and an exhausted deadline does not imply a clean engine shutdown.
 
 Before child signals or HTTP draining, engines can perform a bounded
 four-second graceful handoff. PostgreSQL HA uses Patroni's validated switchover
@@ -346,7 +529,7 @@ The authenticated member status includes an `error` diagnosis when local storage
 - **Lost/corrupt local controls:** an established new-format member does not treat missing `karakoram/controls.json` as permission to run. Recover that file from trusted state for the same member, preserving stop/maintenance holds. Do not replace it with an empty object or remove `controls.initialized` to bypass fencing. Ordinary older members legitimately had only `config.json`: without new-format provenance, a valid legacy cache migrates automatically, retaining cached maintenance and desired-process intent; existing legacy controls remain authoritative. Interrupted first publication carries the exact initial controls in a recoverable initialization record, rather than requiring restoration of a file that never existed. Valid TLS configuration from cache or the control plane still enables authenticated diagnosis while starts remain blocked.
 - **Damaged configuration cache or full/read-only storage:** malformed cached configuration is retried from the control plane rather than aborting before a pull. Identical files do not require publication. When writes are necessary but fail, status remains reachable once valid member TLS material is available; repair storage capacity/writability and let configuration refresh retry. This is not permission to initialize replacement database storage.
 - **Surviving engine after supervisor death:** persisted `karakoram/processes/<process>.json` records bind ownership to PID, kernel start time and boot identity. A matching survivor blocks a competing start with an unmanaged-process conflict. Inspect the named process and use the engine's supported safe shutdown/fencing procedure; after that owner exits, the supervisor retries automatically. New interrupted-launch receipts also record the kernel boot identity: after a proven host reboot, no previous child can survive, so startup retries automatically without clearing safety files. Same-boot ambiguity, older receipts without a boot identity, and corrupt ownership records still require operator reconciliation of surviving processes. A task or agent restart alone is not reboot evidence. Never clear a record merely because the control plane cannot reach the engine.
-- **Paused process:** a SIGSTOP/ptrace-stopped child is reported as `paused`, not `running`, with guidance to investigate and resume with SIGCONT. For MongoDB, `status.members[].state` is `paused` and `status.conditions[]` includes `Process/<member>/<process>` (or `Process/<member>/<process>/<instance>` for pinned instance observations), with reason `ProcessPaused` and explicit recovery guidance. Every observed router instance contributes diagnostics: a healthy instance cannot hide a paused peer. Process errors are unhealthy with reason `ProcessError` and investigation guidance; consult the authenticated agent process status and logs for details. Independently observed database roles are preserved when publishing a process diagnostic. A reachable agent remains connected independently of child health or configuration-apply errors; these errors still prevent database health/readiness. A paused router's status skips the native metadata probe so the stopped child does not delay process diagnostics. The supervisor does not blindly kill or resume an administratively paused database. A timed-out restart retains desired-running intent and retries after the old child actually exits; descriptor exhaustion also retains bounded-backoff retries.
+- **Paused process:** a SIGSTOP/ptrace-stopped child is reported as `paused`, not `running`, with guidance to investigate and resume with SIGCONT. For [MongoDB](https://www.mongodb.com/), `status.members[].state` is `paused` and `status.conditions[]` includes `Process/<member>/<process>` (or `Process/<member>/<process>/<instance>` for pinned instance observations), with reason `ProcessPaused` and explicit recovery guidance. Every observed router instance contributes diagnostics: a healthy instance cannot hide a paused peer. Process errors are unhealthy with reason `ProcessError` and investigation guidance; consult the authenticated agent process status and logs for details. Independently observed database roles are preserved when publishing a process diagnostic. A reachable agent remains connected independently of child health or configuration-apply errors; these errors still prevent database health/readiness. A paused router's status skips the native metadata probe so the stopped child does not delay process diagnostics. The supervisor does not blindly kill or resume an administratively paused database. A timed-out restart retains desired-running intent and retries after the old child actually exits; descriptor exhaustion also retains bounded-backoff retries.
 - **Uncertain restart response:** updated controllers and member binaries use a stable member-action request identity and durable restart receipt, so a lost response does not restart the recovered child again. Preparation/cancellation/control-write refusals before process mutation remain retryable under the same identity. An accepted restart that times out can acknowledge the supervisor's eventual replacement generation without stopping it again. A supervisor interruption across an uncertain execution boundary, or corrupt receipt, remains explicitly fenced for reconciliation. Older callers without identities and older member binaries retain legacy, non-idempotent semantics; a control-plane upgrade alone does not upgrade member binaries. Do not blindly replay uncertain legacy restart requests. Receipts and safety state must survive member restart.
 - **Restart receipt retention:** each member retains at most 128 active receipts; unresolved outcomes are never evicted. Completed receipts are retired automatically before admitting a new identity at that bound. A durable, fixed-size 64 KiB conservative retirement filter refuses stale retired identities rather than re-executing them; a filter match may also conservatively refuse a new identity. Retirement is limited to 32,768 identities per member incarnation, with an explicit actionable refusal before filter saturation. Exhausting that allowance or filling the active quota with unresolved outcomes requires reconciliation or supported member replacement, not deleting replay history. Preserve `karakoram/restarts`, `restarts.retired` and `restarts.initialized`; missing established retirement metadata also fences new restarts. Invalid/unconfigured actions do not create execution receipts.
 
@@ -355,7 +538,7 @@ The authenticated member status includes an `error` diagnosis when local storage
 - Review health, current allocations/disk headroom, failed Operations/events and generation convergence.
 - Verify successful backups and storage capacity/access; rehearse data recovery, not just backup creation. See [backups](backups.md) and engine recovery guides.
 - Preserve consistent state backups and the original master key; monitor credential/certificate expiry.
-- Drain disruptive work before [upgrading Karakoram](upgrade.md). Existing member executables roll out on later provider-driven deployments, not control-plane restart alone.
+- Drain disruptive work before [upgrading Karakoram](upgrade.md). Existing member executables roll out on later engine driver-driven deployments, not control-plane restart alone.
 - For project-token, relay or cross-namespace incidents, use [namespace operations](namespaces.md) and [relay health](namespaces.md#relay-health) before restarting members.
 
 ## Orphaned platform volumes
@@ -373,18 +556,18 @@ The control-plane janitor retries after **two minutes**, doubling delays to **on
 
 An in-flight delete retains its service-ID and process-ID fence. After 15 minutes
 without completion, `lastError` and `OrphanedVolumeDeleteStuck` identify the
-process to inspect or cancel in the namespace backend. A polling failure also
+process to inspect or cancel in the namespace provider. A polling failure also
 retains that fence. Neither elapsed time nor a disconnected control plane
 authorizes another destructive request; confirmed service absence/replacement or
-a terminal backend outcome permits normal reconciliation to continue.
+a terminal provider outcome permits normal reconciliation to continue.
 
-The inventory has **no force-delete action**. With separate Zerops project permissions, delete in the original namespace's Zerops GUI or use authenticated `zcli service delete <hostname>`. Persistent refusals need Zerops support: provide `serviceId` and failing `lastProcessId`, not secrets. The janitor drops manually removed volumes on its next attempt; do not edit state.
+The inventory has **no force-delete action**. With separate [Zerops](https://zerops.io/) project permissions, delete in the original namespace's Zerops GUI or use authenticated `zcli service delete <hostname>`. Persistent refusals need Zerops support: provide `serviceId` and failing `lastProcessId`, not secrets. The janitor drops manually removed volumes on its next attempt; do not edit state.
 
 Recreated clusters/members skip orphaned and already occupied runtime/volume hostnames, allocating a new index. See [resource naming](adr/0009-resource-naming.md).
 
 ## Control-plane state backup and recovery
 
-SQLite WAL state lives at `KARAKORAM_DATA_DIR/karakoram.db` (normally `/mnt/karakoramdata/karakoram.db`). It includes desired/observed state, ownership, checkpoints, events, identities/sessions/token hashes, policy/settings, metric history and encrypted credentials/PKI.
+[SQLite](https://sqlite.org/) WAL state lives at `KARAKORAM_DATA_DIR/karakoram.db` (normally `/mnt/karakoramdata/karakoram.db`). It includes desired/observed state, ownership, checkpoints, events, identities/sessions/token hashes, policy/settings, metric history and encrypted credentials/PKI.
 
 **Warning:** a state backup without its original `KARAKORAM_MASTER_KEY` cannot recover encrypted secrets. Preserve the key separately in a restricted secret manager, plus project identity and a replaceable integration token. Never replace the key on existing state. There is no `admin backup-db`, managed state-backup schedule or master-key re-encryption CLI.
 
@@ -456,7 +639,7 @@ RPO is the consistent snapshot interval. RTO includes replacement, secrets and e
 Keep the state volume, original master key and singleton (`maxContainers: 1`).
 
 1. In **karakoram → Environment variables → Secret variables**, set `KARAKORAM_RECOVERY_PASSWORD` to a strong temporary value: **12 Unicode characters minimum, 1024 bytes maximum**. Optional `KARAKORAM_RECOVERY_ACCOUNT` defaults to `admin`. Use service secrets, not shared project/pipeline variables or CLI password arguments. Authorized platform automation can use `PUT /service-stack/{id}/user-data`: preserve unrelated entries, follow the current secret-variable schema and never log bodies/tokens.
-2. Restart. Before listeners start, recovery resets/re-enables the local account, requires password change and revokes its sessions, refresh families and API tokens. A missing account becomes a local administrator. Recovery restores unrestricted `role:admin`, repairs this account's binding, clears conflicting denies/outgoing inheritance and replaces its previous roles; unrelated policy remains. It does not convert OIDC accounts: choose a local name. Review customized admin restrictions afterward.
+2. Restart. Before listeners start, recovery resets/re-enables the local account, requires password change and revokes its sessions, refresh families and API tokens. A missing account becomes a local administrator. Recovery restores unrestricted `role:admin`, repairs this account's binding, clears conflicting denies/outgoing inheritance and replaces its previous roles; unrelated policy remains. It does not convert [OIDC](https://openid.net/developers/how-connect-works/) accounts: choose a local name. Review customized admin restrictions afterward.
 3. Check the secret-free **“Local administrator access recovered; password change required”** log and `AdminAccessRecovered` event. Sign in over HTTPS, change the password, then sign in again. Reissue automation tokens deliberately.
 4. Remove recovery variables and restart again to clear the process environment. Store only the final password.
 
@@ -487,15 +670,15 @@ Use its terminal prompt or protected `KARAKORAM_RESET_PASSWORD` environment, nev
 | API 403 or missing UI controls | Account/RBAC, required password change or cookie CSRF | Reauthenticate and check effective permissions; credential reveal has a separate grant. |
 | Metrics denied/stale or charts empty | Authorization, disabled collection or failed scrape | Use [monitoring troubleshooting](monitoring.md). |
 | Live events arrive in batches | Proxy buffering | Preserve cursors; read durable status/events before retrying work. See [event transport](api.md#pagination-and-events). |
-| Engine health/recovery/placement warning | Provider-specific condition or platform constraint | Use the engine operations guides and [limitations](limitations.md); preserve evidence rather than clearing safety holds. |
+| Engine health/recovery/placement warning | Engine driver-specific condition or platform constraint | Use the engine operations guides and [limitations](limitations.md); preserve evidence rather than clearing safety holds. |
 
 ## Externally stopped or deleted member services
 
-Karakoram reconciles deployed member services against the cluster's running intent. An externally stopped runtime is started again. A confirmed-deleted logical runtime is imported with the same hostname and member identity, then deployed through the normal engine workflow, **without creating a new data volume**. Its original retained volume must still have the recorded identity. This applies to MongoDB, RabbitMQ, Elasticsearch, PostgreSQL and the stateless Elastic Stack/Supabase components; Supabase's database storage follows PostgreSQL rules.
+Karakoram reconciles deployed member services against the cluster's running intent. An externally stopped runtime is started again. A confirmed-deleted logical runtime is imported with the same hostname and member identity, then deployed through the normal engine workflow, **without creating a new data volume**. Its original retained volume must still have the recorded identity. This applies to [MongoDB](https://www.mongodb.com/), [RabbitMQ](https://www.rabbitmq.com/), [Elasticsearch](https://www.elastic.co/elasticsearch), [PostgreSQL](https://www.postgresql.org/) and the stateless Elastic Stack/[Supabase](https://supabase.com/) components; Supabase's database storage follows PostgreSQL rules.
 
-Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later backend `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete backend reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
+Recovery records an infrastructure operation and a `RuntimeRecovery` event. Failed or ambiguous submissions have a one-minute per-member cooldown, extended by any later provider `Retry-After` deadline and retained across control-plane restarts. Accepted recovery work must drain before MongoDB, RabbitMQ or Elasticsearch cleanup/suspension or a queued imperative operation can take ownership. Absent or stale inventory does not release an accepted import handle. Runtime imports first persist their exact secret-free batch; incomplete provider reservations resume that original batch, not a new subset or changed resource request. Deliberate cluster cleanup/suspension, removal and restore/maintenance workflows retain ownership of their stops; a stopped service is not a supported way to suspend an otherwise desired-running cluster.
 
-Nomad and Dokploy may restore an absent derived job/Docker service from their durable logical record before the engine acts. The engine helper leaves those transitional observations alone. Zerops runtime recreation imports the runtime service only, then deploys it with the existing volume-service mount. An API error or unavailable storage/node is not treated as absence.
+[Nomad](https://developer.hashicorp.com/nomad) and [Dokploy](https://dokploy.com/) may restore an absent derived job/[Docker](https://www.docker.com/) service from their durable logical record before the engine acts. The engine helper leaves those transitional observations alone. [Zerops](https://zerops.io/) runtime recreation imports the runtime service only, then deploys it with the existing volume-service mount. An API error or unavailable storage/node is not treated as absence.
 
 MongoDB router readiness requires authenticated majority metadata access from every live router instance. An upgraded control plane probes older agents without the additive `mongoReady` observation using the same native read over that instance's pinned namespace transport; a newer agent's explicit failure remains authoritative. No member rollout is required solely to obtain this observation. Existing active MongoDB member state is also migrated to an initialized-data receipt before physical-loss ownership checks, preserving its recorded volume incarnation.
 
@@ -505,7 +688,7 @@ An initialized member's data volume carries `karakoram/volume-identity.json`, bo
 
 Native emptiness excludes exact infrastructure-owned paths: Nomad/Dokploy's regular `.karakoram-writer.lock` file, known agent configuration, and the root ext4 `lost+found` directory (which may be unreadable by the member UID). These entries alone permit first initialization on a fresh authorized volume; they do not count as retained engine data on an initialized volume. The sentinel is validated before this classification, so corrupt or foreign sentinels remain fenced. Same-name symlinks and all other unknown native files/journals remain unknown, not permission to initialize or replace. All durable engine families share this gate; Supabase database members use the PostgreSQL core, while stateless Supabase components have no volume identity to initialize.
 
-When storage is confirmed lost, status includes a `VolumeLost` condition and the member is `VOLUME_LOST`, not healthy merely because its platform service exists. For replicated engines, automatic recovery queues the existing safe `replace-member` workflow only when native surviving-data/quorum checks permit it. The replacement gets a new member/storage identity and must join/catch up before the old identity is retired. A singleton, lost primary-shard copy, missing writable source, or unverified surviving quorum refuses fresh initialization.
+When storage is confirmed lost, status includes a `VolumeLost` condition and the member is `VOLUME_LOST`, not healthy merely because its platform service exists. For Elasticsearch, Percona Server for MongoDB, RabbitMQ, PostgreSQL (including Supabase's database core), OpenBao, Weaviate, MySQL Group Replication and PXC, automatic recovery queues the existing safe `replace-member` workflow only when native surviving-data/quorum checks permit it. MySQL/PXC require fresh healthy survivor-majority and GTID-containing donor evidence; PXC additionally refuses a latched history divergence and retains join certification. See [MySQL/PXC recovery](mysql/operations.md#confirmed-volume-loss). The replacement gets a new member/storage identity and must join/catch up before the old identity is retired. A singleton, lost primary-shard copy, missing writable source, or unverified surviving quorum refuses fresh initialization.
 
 1. Preserve the affected storage and capture the named member, volume identity, condition and replacement-operation details. Do not delete or copy sentinels to bypass a refusal.
 2. If the original volume/node is recoverable, restore that original storage and platform access. Do not substitute an empty same-name volume.

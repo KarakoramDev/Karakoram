@@ -78,6 +78,17 @@ func TestDataMcpVocabulary(t *testing.T) {
 	}
 }
 
+func TestOpenBaoRevealVocabulary(t *testing.T) {
+	spec := strings.Replace(validSpec, "resource: cluster-credentials, action: read", "resource: openbao-unseal-keys, action: reveal", 1)
+	generated, err := generate([]byte(spec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(generated), `Resource: "openbao-unseal-keys", Action: "reveal", ObjectParam: "cluster"`) {
+		t.Fatal("unseal reveal authorization was lost")
+	}
+}
+
 func TestRejectInvalidMetadata(t *testing.T) {
 	tests := []struct{ name, source, message string }{
 		{"wrong version", strings.Replace(validSpec, "3.0.3", "3.1.0", 1), "expected OpenAPI"},
@@ -88,7 +99,7 @@ func TestRejectInvalidMetadata(t *testing.T) {
 		{"invalid scalar", strings.Replace(validSpec, "x-karakoram-rbac: public", "x-karakoram-rbac: anonymous", 1), "scalar must be public"},
 		{"secured public route", strings.Replace(validSpec, "security: []", "security: [{bearerAuth: []}]", 1), "security: []"},
 		{"unknown resource", strings.Replace(validSpec, "cluster-credentials", "unknown", 1), "unknown resource/action"},
-		{"unknown action", strings.Replace(validSpec, "action: read", "action: reveal", 1), "unknown resource/action"},
+		{"unknown action", strings.Replace(validSpec, "action: read", "action: execute", 1), "unknown resource/action"},
 		{"missing scope", strings.Replace(validSpec, ", object: cluster", "", 1), "object must be"},
 		{"incorrect parameter", strings.Replace(validSpec, "object: cluster", "object: member", 1), "object must be"},
 		{"incorrect wildcard", strings.Replace(validSpec, "object: cluster", "object: '*'", 1), "cluster-scoped operation"},
@@ -172,7 +183,7 @@ func TestAdditionalAuditPermission(t *testing.T) {
 	}
 	for _, invalid := range []string{
 		strings.Replace(spec, "resource: audit", "resource: unknown", 1),
-		strings.Replace(spec, "resource: audit, action: read", "resource: audit, action: reveal", 1),
+		strings.Replace(spec, "resource: audit, action: read", "resource: audit, action: execute", 1),
 		strings.Replace(spec, "resource: audit, action: read, object: '*'", "resource: audit, action: read, object: cluster", 1),
 	} {
 		if _, err := generate([]byte(invalid)); err == nil {

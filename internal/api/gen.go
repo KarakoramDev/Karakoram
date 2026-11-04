@@ -36,6 +36,7 @@ const (
 
 // Defines values for BackupTrigger.
 const (
+	BackupTriggerPITR    BackupTrigger = "pitr"
 	BackupTriggerRestore BackupTrigger = "restore"
 	Manual               BackupTrigger = "manual"
 	Schedule             BackupTrigger = "schedule"
@@ -43,35 +44,68 @@ const (
 
 // Defines values for BackupType.
 const (
-	BackupTypeDefinitions BackupType = "definitions"
-	BackupTypeDiff        BackupType = "diff"
-	BackupTypeFull        BackupType = "full"
-	BackupTypeIncr        BackupType = "incr"
-	BackupTypeLogical     BackupType = "logical"
-	BackupTypePhysical    BackupType = "physical"
-	BackupTypeSnapshot    BackupType = "snapshot"
+	BackupTypeDefinitions  BackupType = "definitions"
+	BackupTypeDiff         BackupType = "diff"
+	BackupTypeDump         BackupType = "dump"
+	BackupTypeFull         BackupType = "full"
+	BackupTypeIncr         BackupType = "incr"
+	BackupTypeIncremental  BackupType = "incremental"
+	BackupTypeLogical      BackupType = "logical"
+	BackupTypePhysical     BackupType = "physical"
+	BackupTypeRaftSnapshot BackupType = "raft-snapshot"
+	BackupTypeSnapshot     BackupType = "snapshot"
+)
+
+// Defines values for BackupDrillPhase.
+const (
+	BackupDrillPhaseCleaningUp   BackupDrillPhase = "CleaningUp"
+	BackupDrillPhaseFailed       BackupDrillPhase = "Failed"
+	BackupDrillPhasePending      BackupDrillPhase = "Pending"
+	BackupDrillPhaseProvisioning BackupDrillPhase = "Provisioning"
+	BackupDrillPhaseRestoring    BackupDrillPhase = "Restoring"
+	BackupDrillPhaseSucceeded    BackupDrillPhase = "Succeeded"
+	BackupDrillPhaseVerifying    BackupDrillPhase = "Verifying"
+)
+
+// Defines values for BackupDrillTrigger.
+const (
+	BackupDrillTriggerManual   BackupDrillTrigger = "manual"
+	BackupDrillTriggerSchedule BackupDrillTrigger = "schedule"
+)
+
+// Defines values for BackupDrillCleanupPhase.
+const (
+	BackupDrillCleanupPhaseDone    BackupDrillCleanupPhase = "Done"
+	BackupDrillCleanupPhaseFailed  BackupDrillCleanupPhase = "Failed"
+	BackupDrillCleanupPhasePending BackupDrillCleanupPhase = "Pending"
 )
 
 // Defines values for BackupScheduleType.
 const (
-	BackupScheduleTypeDefinitions BackupScheduleType = "definitions"
-	BackupScheduleTypeDiff        BackupScheduleType = "diff"
-	BackupScheduleTypeFull        BackupScheduleType = "full"
-	BackupScheduleTypeIncr        BackupScheduleType = "incr"
-	BackupScheduleTypeLogical     BackupScheduleType = "logical"
-	BackupScheduleTypePhysical    BackupScheduleType = "physical"
-	BackupScheduleTypeSnapshot    BackupScheduleType = "snapshot"
+	BackupScheduleTypeDefinitions  BackupScheduleType = "definitions"
+	BackupScheduleTypeDiff         BackupScheduleType = "diff"
+	BackupScheduleTypeDump         BackupScheduleType = "dump"
+	BackupScheduleTypeFull         BackupScheduleType = "full"
+	BackupScheduleTypeIncr         BackupScheduleType = "incr"
+	BackupScheduleTypeIncremental  BackupScheduleType = "incremental"
+	BackupScheduleTypeLogical      BackupScheduleType = "logical"
+	BackupScheduleTypePhysical     BackupScheduleType = "physical"
+	BackupScheduleTypeRaftSnapshot BackupScheduleType = "raft-snapshot"
+	BackupScheduleTypeSnapshot     BackupScheduleType = "snapshot"
 )
 
 // Defines values for BackupScheduleInputType.
 const (
-	BackupScheduleInputTypeDefinitions BackupScheduleInputType = "definitions"
-	BackupScheduleInputTypeDiff        BackupScheduleInputType = "diff"
-	BackupScheduleInputTypeFull        BackupScheduleInputType = "full"
-	BackupScheduleInputTypeIncr        BackupScheduleInputType = "incr"
-	BackupScheduleInputTypeLogical     BackupScheduleInputType = "logical"
-	BackupScheduleInputTypePhysical    BackupScheduleInputType = "physical"
-	BackupScheduleInputTypeSnapshot    BackupScheduleInputType = "snapshot"
+	BackupScheduleInputTypeDefinitions  BackupScheduleInputType = "definitions"
+	BackupScheduleInputTypeDiff         BackupScheduleInputType = "diff"
+	BackupScheduleInputTypeDump         BackupScheduleInputType = "dump"
+	BackupScheduleInputTypeFull         BackupScheduleInputType = "full"
+	BackupScheduleInputTypeIncr         BackupScheduleInputType = "incr"
+	BackupScheduleInputTypeIncremental  BackupScheduleInputType = "incremental"
+	BackupScheduleInputTypeLogical      BackupScheduleInputType = "logical"
+	BackupScheduleInputTypePhysical     BackupScheduleInputType = "physical"
+	BackupScheduleInputTypeRaftSnapshot BackupScheduleInputType = "raft-snapshot"
+	BackupScheduleInputTypeSnapshot     BackupScheduleInputType = "snapshot"
 )
 
 // Defines values for BackupStorageType.
@@ -86,6 +120,7 @@ const (
 	CanRequestActionDelete   CanRequestAction = "delete"
 	CanRequestActionExport   CanRequestAction = "export"
 	CanRequestActionRead     CanRequestAction = "read"
+	CanRequestActionReveal   CanRequestAction = "reveal"
 	CanRequestActionUpdate   CanRequestAction = "update"
 )
 
@@ -126,6 +161,20 @@ const (
 	ConditionStatusFalse   ConditionStatus = "False"
 	ConditionStatusTrue    ConditionStatus = "True"
 	ConditionStatusUnknown ConditionStatus = "Unknown"
+)
+
+// Defines values for ControlPlaneBackupPhase.
+const (
+	ControlPlaneBackupPhaseFailed    ControlPlaneBackupPhase = "Failed"
+	ControlPlaneBackupPhasePending   ControlPlaneBackupPhase = "Pending"
+	ControlPlaneBackupPhaseRunning   ControlPlaneBackupPhase = "Running"
+	ControlPlaneBackupPhaseSucceeded ControlPlaneBackupPhase = "Succeeded"
+)
+
+// Defines values for ControlPlaneBackupTrigger.
+const (
+	ControlPlaneBackupTriggerManual   ControlPlaneBackupTrigger = "manual"
+	ControlPlaneBackupTriggerSchedule ControlPlaneBackupTrigger = "schedule"
 )
 
 // Defines values for CreateBackupStorageRequestType.
@@ -231,6 +280,11 @@ const (
 	Ok HealthStatus = "ok"
 )
 
+// Defines values for ManagedByKind.
+const (
+	ManagedByKindBackupDrill ManagedByKind = "backup-drill"
+)
+
 // Defines values for MemberRole.
 const (
 	MemberRoleAnalytics       MemberRole = "analytics"
@@ -264,12 +318,118 @@ const (
 	MemberRoleVector          MemberRole = "vector"
 )
 
+// Defines values for MySQLBackupType.
+const (
+	MySQLBackupTypeFull        MySQLBackupType = "full"
+	MySQLBackupTypeIncremental MySQLBackupType = "incremental"
+)
+
+// Defines values for MySQLGrantPrivileges.
+const (
+	MySQLGrantPrivilegesALL                   MySQLGrantPrivileges = "ALL"
+	MySQLGrantPrivilegesALTER                 MySQLGrantPrivileges = "ALTER"
+	MySQLGrantPrivilegesALTERROUTINE          MySQLGrantPrivileges = "ALTER_ROUTINE"
+	MySQLGrantPrivilegesCREATE                MySQLGrantPrivileges = "CREATE"
+	MySQLGrantPrivilegesCREATEROUTINE         MySQLGrantPrivileges = "CREATE_ROUTINE"
+	MySQLGrantPrivilegesCREATETEMPORARYTABLES MySQLGrantPrivileges = "CREATE_TEMPORARY_TABLES"
+	MySQLGrantPrivilegesCREATEVIEW            MySQLGrantPrivileges = "CREATE_VIEW"
+	MySQLGrantPrivilegesDELETE                MySQLGrantPrivileges = "DELETE"
+	MySQLGrantPrivilegesDROP                  MySQLGrantPrivileges = "DROP"
+	MySQLGrantPrivilegesEVENT                 MySQLGrantPrivileges = "EVENT"
+	MySQLGrantPrivilegesEXECUTE               MySQLGrantPrivileges = "EXECUTE"
+	MySQLGrantPrivilegesINDEX                 MySQLGrantPrivileges = "INDEX"
+	MySQLGrantPrivilegesINSERT                MySQLGrantPrivileges = "INSERT"
+	MySQLGrantPrivilegesLOCKTABLES            MySQLGrantPrivileges = "LOCK_TABLES"
+	MySQLGrantPrivilegesREFERENCES            MySQLGrantPrivileges = "REFERENCES"
+	MySQLGrantPrivilegesSELECT                MySQLGrantPrivileges = "SELECT"
+	MySQLGrantPrivilegesSHOWVIEW              MySQLGrantPrivileges = "SHOW_VIEW"
+	MySQLGrantPrivilegesTRIGGER               MySQLGrantPrivileges = "TRIGGER"
+	MySQLGrantPrivilegesUPDATE                MySQLGrantPrivileges = "UPDATE"
+)
+
+// Defines values for MySQLQuorumRecoveryRequestConfirmation.
+const (
+	AllAbsentMembersFenced MySQLQuorumRecoveryRequestConfirmation = "all-absent-members-fenced"
+)
+
+// Defines values for MySQLUserHost.
+const (
+	MySQLUserHostPercent MySQLUserHost = "%"
+)
+
+// Defines values for MySQLUserCreatedHost.
+const (
+	MySQLUserCreatedHostPercent MySQLUserCreatedHost = "%"
+)
+
 // Defines values for NamespacePhase.
 const (
 	NamespacePhaseDeleting NamespacePhase = "Deleting"
 	NamespacePhaseError    NamespacePhase = "Error"
 	NamespacePhasePending  NamespacePhase = "Pending"
 	NamespacePhaseReady    NamespacePhase = "Ready"
+)
+
+// Defines values for NotificationCategory.
+const (
+	NotificationCategoryAgentsOutdated             NotificationCategory = "agents-outdated"
+	NotificationCategoryBackupDrillFailed          NotificationCategory = "backup-drill-failed"
+	NotificationCategoryBackupFailed               NotificationCategory = "backup-failed"
+	NotificationCategoryCertificateExpiring        NotificationCategory = "certificate-expiring"
+	NotificationCategoryClusterDegraded            NotificationCategory = "cluster-degraded"
+	NotificationCategoryClusterRecovered           NotificationCategory = "cluster-recovered"
+	NotificationCategoryControlPlaneBackupFailed   NotificationCategory = "control-plane-backup-failed"
+	NotificationCategoryDeploymentRetriesExhausted NotificationCategory = "deployment-retries-exhausted"
+	NotificationCategoryMembersCoLocated           NotificationCategory = "members-co-located"
+	NotificationCategoryOperationFailed            NotificationCategory = "operation-failed"
+	NotificationCategoryVolumeDeletionRefused      NotificationCategory = "volume-deletion-refused"
+)
+
+// Defines values for NotificationChannelType.
+const (
+	NotificationChannelTypeEmail   NotificationChannelType = "email"
+	NotificationChannelTypeSlack   NotificationChannelType = "slack"
+	NotificationChannelTypeWebhook NotificationChannelType = "webhook"
+)
+
+// Defines values for NotificationEmailSecurity.
+const (
+	NotificationEmailSecurityStarttls NotificationEmailSecurity = "starttls"
+	NotificationEmailSecurityTls      NotificationEmailSecurity = "tls"
+)
+
+// Defines values for OpenBaoDatabaseConnectionPhase.
+const (
+	OpenBaoConnectionDeleting OpenBaoDatabaseConnectionPhase = "deleting"
+	OpenBaoConnectionFailed   OpenBaoDatabaseConnectionPhase = "failed"
+	OpenBaoConnectionPending  OpenBaoDatabaseConnectionPhase = "pending"
+	OpenBaoConnectionReady    OpenBaoDatabaseConnectionPhase = "ready"
+)
+
+// Defines values for OpenBaoDatabaseRoleAccess.
+const (
+	OpenBaoDatabaseRoleAccessReadonly  OpenBaoDatabaseRoleAccess = "readonly"
+	OpenBaoDatabaseRoleAccessReadwrite OpenBaoDatabaseRoleAccess = "readwrite"
+)
+
+// Defines values for OpenBaoDatabaseRoleWriteAccess.
+const (
+	OpenBaoDatabaseRoleWriteAccessReadonly  OpenBaoDatabaseRoleWriteAccess = "readonly"
+	OpenBaoDatabaseRoleWriteAccessReadwrite OpenBaoDatabaseRoleWriteAccess = "readwrite"
+)
+
+// Defines values for OpenBaoRestoreUnsealSharesSealType.
+const (
+	OpenBaoRestoreUnsealSharesSealTypeAwskms  OpenBaoRestoreUnsealSharesSealType = "awskms"
+	OpenBaoRestoreUnsealSharesSealTypeShamir  OpenBaoRestoreUnsealSharesSealType = "shamir"
+	OpenBaoRestoreUnsealSharesSealTypeTransit OpenBaoRestoreUnsealSharesSealType = "transit"
+)
+
+// Defines values for OpenBaoUnsealKeysSealType.
+const (
+	OpenBaoUnsealKeysSealTypeAwskms  OpenBaoUnsealKeysSealType = "awskms"
+	OpenBaoUnsealKeysSealTypeShamir  OpenBaoUnsealKeysSealType = "shamir"
+	OpenBaoUnsealKeysSealTypeTransit OpenBaoUnsealKeysSealType = "transit"
 )
 
 // Defines values for OperationPhase.
@@ -288,6 +448,8 @@ const (
 	OperationTypeDelete           OperationType = "delete"
 	OperationTypeDeleteBackup     OperationType = "delete-backup"
 	OperationTypeRaiseFcv         OperationType = "raise-fcv"
+	OperationTypeRebalance        OperationType = "rebalance"
+	OperationTypeRecoverQuorum    OperationType = "recover-quorum"
 	OperationTypeReplaceMember    OperationType = "replace-member"
 	OperationTypeRestart          OperationType = "restart"
 	OperationTypeRestore          OperationType = "restore"
@@ -298,6 +460,7 @@ const (
 	OperationTypeTls              OperationType = "tls"
 	OperationTypeUpdate           OperationType = "update"
 	OperationTypeUpgrade          OperationType = "upgrade"
+	OperationTypeUpgradeAgents    OperationType = "upgrade-agents"
 )
 
 // Defines values for PermissionEffect.
@@ -306,39 +469,48 @@ const (
 	Deny  PermissionEffect = "deny"
 )
 
-// Defines values for PlacementGuaranteedAntiAffinity.
+// Defines values for PlacementSource.
 const (
-	False PlacementGuaranteedAntiAffinity = false
+	PlacementSourceBackend     PlacementSource = "backend"
+	PlacementSourceBestEffort  PlacementSource = "best-effort"
+	PlacementSourceUnavailable PlacementSource = "unavailable"
 )
 
 // Defines values for PostgresGrantPrivileges.
 const (
-	CONNECT   PostgresGrantPrivileges = "CONNECT"
-	CREATE    PostgresGrantPrivileges = "CREATE"
-	TEMP      PostgresGrantPrivileges = "TEMP"
-	TEMPORARY PostgresGrantPrivileges = "TEMPORARY"
-	USAGE     PostgresGrantPrivileges = "USAGE"
+	PostgresGrantPrivilegesCONNECT   PostgresGrantPrivileges = "CONNECT"
+	PostgresGrantPrivilegesCREATE    PostgresGrantPrivileges = "CREATE"
+	PostgresGrantPrivilegesTEMP      PostgresGrantPrivileges = "TEMP"
+	PostgresGrantPrivilegesTEMPORARY PostgresGrantPrivileges = "TEMPORARY"
+	PostgresGrantPrivilegesUSAGE     PostgresGrantPrivileges = "USAGE"
 )
 
 // Defines values for ProviderBackupTypes.
 const (
-	ProviderBackupTypesDefinitions ProviderBackupTypes = "definitions"
-	ProviderBackupTypesDiff        ProviderBackupTypes = "diff"
-	ProviderBackupTypesFull        ProviderBackupTypes = "full"
-	ProviderBackupTypesIncr        ProviderBackupTypes = "incr"
-	ProviderBackupTypesLogical     ProviderBackupTypes = "logical"
-	ProviderBackupTypesPhysical    ProviderBackupTypes = "physical"
-	ProviderBackupTypesSnapshot    ProviderBackupTypes = "snapshot"
+	Definitions  ProviderBackupTypes = "definitions"
+	Diff         ProviderBackupTypes = "diff"
+	Dump         ProviderBackupTypes = "dump"
+	Full         ProviderBackupTypes = "full"
+	Incr         ProviderBackupTypes = "incr"
+	Incremental  ProviderBackupTypes = "incremental"
+	Logical      ProviderBackupTypes = "logical"
+	Physical     ProviderBackupTypes = "physical"
+	RaftSnapshot ProviderBackupTypes = "raft-snapshot"
+	Snapshot     ProviderBackupTypes = "snapshot"
 )
 
 // Defines values for ProviderTopologyType.
 const (
 	ProviderTopologyTypeCluster          ProviderTopologyType = "cluster"
+	ProviderTopologyTypeCombined         ProviderTopologyType = "combined"
 	ProviderTopologyTypeDedicatedMasters ProviderTopologyType = "dedicatedMasters"
+	ProviderTopologyTypeDistributed      ProviderTopologyType = "distributed"
+	ProviderTopologyTypeGroup            ProviderTopologyType = "group"
 	ProviderTopologyTypeHa               ProviderTopologyType = "ha"
 	ProviderTopologyTypeReplicaSet       ProviderTopologyType = "replicaSet"
 	ProviderTopologyTypeSharded          ProviderTopologyType = "sharded"
 	ProviderTopologyTypeSingle           ProviderTopologyType = "single"
+	ProviderTopologyTypeSplit            ProviderTopologyType = "split"
 )
 
 // Defines values for ProviderVersionStatus.
@@ -501,31 +673,43 @@ const (
 // Defines values for TopologyType.
 const (
 	TopologyTypeCluster          TopologyType = "cluster"
+	TopologyTypeCombined         TopologyType = "combined"
 	TopologyTypeDedicatedMasters TopologyType = "dedicatedMasters"
+	TopologyTypeDistributed      TopologyType = "distributed"
+	TopologyTypeGroup            TopologyType = "group"
 	TopologyTypeHa               TopologyType = "ha"
 	TopologyTypeReplicaSet       TopologyType = "replicaSet"
 	TopologyTypeSharded          TopologyType = "sharded"
 	TopologyTypeSingle           TopologyType = "single"
+	TopologyTypeSplit            TopologyType = "split"
 )
 
 // Defines values for TopologyInputType.
 const (
 	TopologyInputTypeCluster          TopologyInputType = "cluster"
+	TopologyInputTypeCombined         TopologyInputType = "combined"
 	TopologyInputTypeDedicatedMasters TopologyInputType = "dedicatedMasters"
+	TopologyInputTypeDistributed      TopologyInputType = "distributed"
+	TopologyInputTypeGroup            TopologyInputType = "group"
 	TopologyInputTypeHa               TopologyInputType = "ha"
 	TopologyInputTypeReplicaSet       TopologyInputType = "replicaSet"
 	TopologyInputTypeSharded          TopologyInputType = "sharded"
 	TopologyInputTypeSingle           TopologyInputType = "single"
+	TopologyInputTypeSplit            TopologyInputType = "split"
 )
 
 // Defines values for TopologyPatchType.
 const (
 	TopologyPatchTypeCluster          TopologyPatchType = "cluster"
+	TopologyPatchTypeCombined         TopologyPatchType = "combined"
 	TopologyPatchTypeDedicatedMasters TopologyPatchType = "dedicatedMasters"
+	TopologyPatchTypeDistributed      TopologyPatchType = "distributed"
+	TopologyPatchTypeGroup            TopologyPatchType = "group"
 	TopologyPatchTypeHa               TopologyPatchType = "ha"
 	TopologyPatchTypeReplicaSet       TopologyPatchType = "replicaSet"
 	TopologyPatchTypeSharded          TopologyPatchType = "sharded"
 	TopologyPatchTypeSingle           TopologyPatchType = "single"
+	TopologyPatchTypeSplit            TopologyPatchType = "split"
 )
 
 // Defines values for UpdateBackupStorageRequestType.
@@ -570,6 +754,8 @@ const (
 	ListEventsParamsResourceRbac                     ListEventsParamsResource = "rbac"
 	ListEventsParamsResourceRestores                 ListEventsParamsResource = "restores"
 	ListEventsParamsResourceSettings                 ListEventsParamsResource = "settings"
+	ListEventsParamsResourceWeaviateRoles            ListEventsParamsResource = "weaviate-roles"
+	ListEventsParamsResourceWeaviateUsers            ListEventsParamsResource = "weaviate-users"
 )
 
 // Defines values for StreamEventsParamsType.
@@ -603,6 +789,8 @@ const (
 	StreamEventsParamsResourceRbac                     StreamEventsParamsResource = "rbac"
 	StreamEventsParamsResourceRestores                 StreamEventsParamsResource = "restores"
 	StreamEventsParamsResourceSettings                 StreamEventsParamsResource = "settings"
+	StreamEventsParamsResourceWeaviateRoles            StreamEventsParamsResource = "weaviate-roles"
+	StreamEventsParamsResourceWeaviateUsers            StreamEventsParamsResource = "weaviate-users"
 )
 
 // APIToken Only metadata and a non-sensitive identifying prefix; the token value is never returned here.
@@ -662,8 +850,32 @@ type AccountName = string
 // AccountPassword At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 type AccountPassword = string
 
+// AgentBuild defines model for AgentBuild.
+type AgentBuild struct {
+	Build   string `json:"build"`
+	Commit  string `json:"commit"`
+	Version string `json:"version"`
+}
+
+// AgentRolloutSettings defines model for AgentRolloutSettings.
+type AgentRolloutSettings struct {
+	Automatic             bool        `json:"automatic"`
+	CurrentBuild          *AgentBuild `json:"currentBuild,omitempty"`
+	MaxConcurrentClusters int         `json:"maxConcurrentClusters"`
+}
+
+// AgentRolloutStatus defines model for AgentRolloutStatus.
+type AgentRolloutStatus struct {
+	Outdated      []string `json:"outdated"`
+	TargetBuild   string   `json:"targetBuild"`
+	TargetVersion string   `json:"targetVersion"`
+	Unknown       []string `json:"unknown"`
+}
+
 // AgentStatus defines model for AgentStatus.
 type AgentStatus struct {
+	Build         *string    `json:"build,omitempty"`
+	Commit        *string    `json:"commit,omitempty"`
 	ConfigVersion *int64     `json:"configVersion,omitempty"`
 	Connected     bool       `json:"connected"`
 	LastSeenAt    *time.Time `json:"lastSeenAt,omitempty"`
@@ -696,7 +908,10 @@ type Backup struct {
 	LastWriteTime *time.Time `json:"lastWriteTime,omitempty"`
 
 	// Location Complete snapshot-time object key, prefix, or snapshot reference.
-	Location  *string        `json:"location,omitempty"`
+	Location *string `json:"location,omitempty"`
+
+	// Mysql Immutable XtraBackup dependency chain and repository incarnation provenance.
+	Mysql     *MySQLBackup   `json:"mysql,omitempty"`
 	Name      string         `json:"name"`
 	Namespace *NamespaceName `json:"namespace,omitempty"`
 
@@ -726,6 +941,79 @@ type BackupTrigger string
 
 // BackupType defines model for Backup.Type.
 type BackupType string
+
+// BackupDrill defines model for BackupDrill.
+type BackupDrill struct {
+	Backup         *string             `json:"backup,omitempty"`
+	BackupType     *string             `json:"backupType,omitempty"`
+	Checks         *[]BackupDrillCheck `json:"checks,omitempty"`
+	Cleanup        *BackupDrillCleanup `json:"cleanup,omitempty"`
+	Cluster        string              `json:"cluster"`
+	CompletedAt    *time.Time          `json:"completedAt,omitempty"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	DataAgeSeconds *int64              `json:"dataAgeSeconds,omitempty"`
+	Error          *string             `json:"error,omitempty"`
+	Id             string              `json:"id"`
+	Limitations    *string             `json:"limitations,omitempty"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace              NamespaceName      `json:"namespace"`
+	Phase                  BackupDrillPhase   `json:"phase"`
+	ReadyAt                *time.Time         `json:"readyAt,omitempty"`
+	RestoreDurationSeconds *int64             `json:"restoreDurationSeconds,omitempty"`
+	StartedAt              *time.Time         `json:"startedAt,omitempty"`
+	TargetCluster          *string            `json:"targetCluster,omitempty"`
+	TotalDurationSeconds   *int64             `json:"totalDurationSeconds,omitempty"`
+	Trigger                BackupDrillTrigger `json:"trigger"`
+}
+
+// BackupDrillPhase defines model for BackupDrill.Phase.
+type BackupDrillPhase string
+
+// BackupDrillTrigger defines model for BackupDrill.Trigger.
+type BackupDrillTrigger string
+
+// BackupDrillCheck defines model for BackupDrillCheck.
+type BackupDrillCheck struct {
+	Message *string `json:"message,omitempty"`
+	Name    string  `json:"name"`
+	Passed  bool    `json:"passed"`
+}
+
+// BackupDrillCleanup defines model for BackupDrillCleanup.
+type BackupDrillCleanup struct {
+	OrphanedVolumes []string                `json:"orphanedVolumes"`
+	Phase           BackupDrillCleanupPhase `json:"phase"`
+}
+
+// BackupDrillCleanupPhase defines model for BackupDrillCleanup.Phase.
+type BackupDrillCleanupPhase string
+
+// BackupDrillList defines model for BackupDrillList.
+type BackupDrillList struct {
+	Items      []BackupDrill `json:"items"`
+	NextCursor *string       `json:"nextCursor,omitempty"`
+}
+
+// BackupDrillPolicy defines model for BackupDrillPolicy.
+type BackupDrillPolicy struct {
+	BackupSchedule *string `json:"backupSchedule,omitempty"`
+	Enabled        bool    `json:"enabled"`
+	Schedule       string  `json:"schedule"`
+
+	// Timeout Go duration between 30m and 48h.
+	Timeout *string `json:"timeout,omitempty"`
+}
+
+// BackupDrillPolicyPatch defines model for BackupDrillPolicyPatch.
+type BackupDrillPolicyPatch struct {
+	BackupSchedule *string `json:"backupSchedule"`
+	Enabled        *bool   `json:"enabled"`
+	Schedule       *string `json:"schedule"`
+
+	// Timeout Go duration between 30m and 48h.
+	Timeout *string `json:"timeout"`
+}
 
 // BackupList defines model for BackupList.
 type BackupList struct {
@@ -767,13 +1055,15 @@ type BackupScheduleInputType string
 
 // BackupSpec defines model for BackupSpec.
 type BackupSpec struct {
-	Pitr      *PITRSpec         `json:"pitr,omitempty"`
-	Schedules *[]BackupSchedule `json:"schedules,omitempty"`
-	Storage   *string           `json:"storage,omitempty"`
+	Drill     *BackupDrillPolicy `json:"drill,omitempty"`
+	Pitr      *PITRSpec          `json:"pitr,omitempty"`
+	Schedules *[]BackupSchedule  `json:"schedules,omitempty"`
+	Storage   *string            `json:"storage,omitempty"`
 }
 
 // BackupSpecInput defines model for BackupSpecInput.
 type BackupSpecInput struct {
+	Drill     *BackupDrillPolicy     `json:"drill,omitempty"`
 	Pitr      *PITRSpec              `json:"pitr,omitempty"`
 	Schedules *[]BackupScheduleInput `json:"schedules,omitempty"`
 	Storage   *string                `json:"storage,omitempty"`
@@ -781,9 +1071,10 @@ type BackupSpecInput struct {
 
 // BackupSpecPatch defines model for BackupSpecPatch.
 type BackupSpecPatch struct {
-	Pitr      *PITRSpecPatch         `json:"pitr"`
-	Schedules *[]BackupScheduleInput `json:"schedules"`
-	Storage   *string                `json:"storage"`
+	Drill     *BackupDrillPolicyPatch `json:"drill"`
+	Pitr      *PITRSpecPatch          `json:"pitr"`
+	Schedules *[]BackupScheduleInput  `json:"schedules"`
+	Storage   *string                 `json:"storage"`
 }
 
 // BackupStorage defines model for BackupStorage.
@@ -857,6 +1148,7 @@ type ChangePasswordRequest struct {
 type Cluster struct {
 	CreatedAt  time.Time      `json:"createdAt"`
 	Generation int64          `json:"generation"`
+	ManagedBy  *ManagedBy     `json:"managedBy,omitempty"`
 	Name       string         `json:"name"`
 	Namespace  *NamespaceName `json:"namespace,omitempty"`
 
@@ -871,7 +1163,7 @@ type Cluster struct {
 type ClusterBackupStatus struct {
 	LastBackup *string `json:"lastBackup,omitempty"`
 
-	// PitrWindow Only a continuous engine-verified restorable interval is reported.
+	// PitrWindow Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range.
 	PitrWindow *PITRWindow `json:"pitrWindow,omitempty"`
 }
 
@@ -890,6 +1182,7 @@ type ClusterInputSpec struct {
 	EngineConfig  *string                 `json:"engineConfig,omitempty"`
 	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
 	Exposure      *ExposureInput          `json:"exposure,omitempty"`
+	Maintenance   *MaintenancePolicy      `json:"maintenance,omitempty"`
 	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -936,6 +1229,7 @@ type ClusterPatchSpec struct {
 	EngineConfig  *string                 `json:"engineConfig"`
 	EngineOptions *map[string]interface{} `json:"engineOptions"`
 	Exposure      *ExposurePatch          `json:"exposure"`
+	Maintenance   *MaintenancePolicyPatch `json:"maintenance"`
 	Monitoring    *MonitoringSpecPatch    `json:"monitoring"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -962,6 +1256,7 @@ type ClusterSpec struct {
 	EngineConfig  *string                 `json:"engineConfig,omitempty"`
 	EngineOptions *map[string]interface{} `json:"engineOptions,omitempty"`
 	Exposure      *Exposure               `json:"exposure,omitempty"`
+	Maintenance   *MaintenancePolicy      `json:"maintenance,omitempty"`
 	Monitoring    *MonitoringSpec         `json:"monitoring,omitempty"`
 
 	// Provider Required provider identifier; list providers with GET /api/v1/providers.
@@ -978,11 +1273,13 @@ type ClusterSpec struct {
 
 // ClusterStatus defines model for ClusterStatus.
 type ClusterStatus struct {
+	Agents             *AgentRolloutStatus  `json:"agents,omitempty"`
 	Backup             *ClusterBackupStatus `json:"backup,omitempty"`
 	Conditions         []Condition          `json:"conditions"`
 	Connection         *ConnectionSummary   `json:"connection,omitempty"`
 	DataMcp            *DataMcpStatus       `json:"dataMcp,omitempty"`
 	Fcv                *string              `json:"fcv,omitempty"`
+	Maintenance        *MaintenanceStatus   `json:"maintenance,omitempty"`
 	Members            []Member             `json:"members"`
 	Message            *string              `json:"message,omitempty"`
 	ObservedGeneration int64                `json:"observedGeneration"`
@@ -990,7 +1287,7 @@ type ClusterStatus struct {
 	// Phase Restoring means an in-place recovery operation is executing and normal traffic may be unavailable; Ready is False with reason Restoring. After completion, Ready remains False with reason RestoreFinished until ordinary reconciliation observes database health. Suspended means runtime services are removed; member allocation is historical and agents are not connected.
 	Phase ClusterStatusPhase `json:"phase"`
 
-	// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
+	// Placement Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct.
 	Placement *Placement `json:"placement,omitempty"`
 
 	// Version Observed binary version from runtime members, not the desired spec.version. Absent when no version can be observed; during a mixed-version rollout it reports the oldest observed version.
@@ -1098,6 +1395,52 @@ type ConnectionSummary struct {
 	Uri string `json:"uri"`
 }
 
+// ControlPlaneBackup defines model for ControlPlaneBackup.
+type ControlPlaneBackup struct {
+	CompletedAt      *time.Time                `json:"completedAt,omitempty"`
+	CreatedAt        time.Time                 `json:"createdAt"`
+	Error            *string                   `json:"error,omitempty"`
+	Id               string                    `json:"id"`
+	KarakoramVersion *string                   `json:"karakoramVersion,omitempty"`
+	KeyFingerprint   *string                   `json:"keyFingerprint,omitempty"`
+	ObjectKey        *string                   `json:"objectKey,omitempty"`
+	Phase            ControlPlaneBackupPhase   `json:"phase"`
+	SchemaVersion    *string                   `json:"schemaVersion,omitempty"`
+	Sha256           *string                   `json:"sha256,omitempty"`
+	SizeBytes        *int64                    `json:"sizeBytes,omitempty"`
+	StartedAt        *time.Time                `json:"startedAt,omitempty"`
+	Storage          ControlPlaneBackupStorage `json:"storage"`
+	Trigger          ControlPlaneBackupTrigger `json:"trigger"`
+}
+
+// ControlPlaneBackupPhase defines model for ControlPlaneBackup.Phase.
+type ControlPlaneBackupPhase string
+
+// ControlPlaneBackupTrigger defines model for ControlPlaneBackup.Trigger.
+type ControlPlaneBackupTrigger string
+
+// ControlPlaneBackupList defines model for ControlPlaneBackupList.
+type ControlPlaneBackupList struct {
+	Items      []ControlPlaneBackup `json:"items"`
+	NextCursor *string              `json:"nextCursor,omitempty"`
+}
+
+// ControlPlaneBackupPolicy defines model for ControlPlaneBackupPolicy.
+type ControlPlaneBackupPolicy struct {
+	Enabled     bool                      `json:"enabled"`
+	RetainCount int                       `json:"retainCount"`
+	Schedule    string                    `json:"schedule"`
+	Storage     ControlPlaneBackupStorage `json:"storage"`
+}
+
+// ControlPlaneBackupStorage defines model for ControlPlaneBackupStorage.
+type ControlPlaneBackupStorage struct {
+	Name string `json:"name"`
+
+	// Namespace Project namespace name, 2–32 lowercase letters, digits or hyphens; starts with a letter and ends with a letter or digit. The existing default namespace is reserved.
+	Namespace NamespaceName `json:"namespace"`
+}
+
 // CreateAPITokenRequest defines model for CreateAPITokenRequest.
 type CreateAPITokenRequest struct {
 	// ExpiresAt Optional RFC 3339 timestamp, strictly in the future.
@@ -1120,6 +1463,11 @@ type CreateAccountRequest struct {
 
 	// Password At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
 	Password *AccountPassword `json:"password,omitempty"`
+}
+
+// CreateBackupDrillRequest defines model for CreateBackupDrillRequest.
+type CreateBackupDrillRequest struct {
+	Backup *string `json:"backup,omitempty"`
 }
 
 // CreateBackupRequest defines model for CreateBackupRequest.
@@ -1154,7 +1502,8 @@ type CreateBackupStorageRequestType string
 
 // CreateClusterRequest defines model for CreateClusterRequest.
 type CreateClusterRequest struct {
-	Name string `json:"name"`
+	Name                string                      `json:"name"`
+	OpenbaoUnsealShares *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
 
 	// Spec Provider is required. Omitted version, topology, components and resource fields use provider catalog defaults. Explicit zero values are invalid except for provider-supported optional components.
 	Spec ClusterInputSpec `json:"spec"`
@@ -1172,9 +1521,15 @@ type CreateDatabaseUserRequest struct {
 
 // CreateRestoreRequest defines model for CreateRestoreRequest.
 type CreateRestoreRequest struct {
-	Name string `json:"name"`
+	// AcknowledgeBoundConsumers Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials.
+	AcknowledgeBoundConsumers *bool `json:"acknowledgeBoundConsumers,omitempty"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// AcknowledgeSharedSource Only Temporal reads this flag. Explicitly acknowledge that restoring its shared PostgreSQL source rolls back every consumer.
+	AcknowledgeSharedSource *bool                       `json:"acknowledgeSharedSource,omitempty"`
+	Name                    string                      `json:"name"`
+	OpenbaoUnsealShares     *OpenBaoRestoreUnsealShares `json:"openbaoUnsealShares,omitempty"`
+
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source RestoreSource `json:"source"`
 
 	// SourceNamespace Source namespace; defaults to the target cluster namespace.
@@ -1687,6 +2042,46 @@ type LoginRequest struct {
 	Username string  `json:"username"`
 }
 
+// MaintenancePolicy defines model for MaintenancePolicy.
+type MaintenancePolicy struct {
+	// TimeZone IANA time zone.
+	TimeZone *string              `json:"timeZone,omitempty"`
+	Windows  *[]MaintenanceWindow `json:"windows,omitempty"`
+}
+
+// MaintenancePolicyPatch defines model for MaintenancePolicyPatch.
+type MaintenancePolicyPatch struct {
+	// TimeZone IANA time zone.
+	TimeZone *string              `json:"timeZone"`
+	Windows  *[]MaintenanceWindow `json:"windows"`
+}
+
+// MaintenanceStatus defines model for MaintenanceStatus.
+type MaintenanceStatus struct {
+	CurrentWindowEnd *time.Time `json:"currentWindowEnd,omitempty"`
+	NextWindowStart  *time.Time `json:"nextWindowStart,omitempty"`
+	Open             bool       `json:"open"`
+}
+
+// MaintenanceWindow defines model for MaintenanceWindow.
+type MaintenanceWindow struct {
+	// Duration Go duration between 15m and 168h.
+	Duration string `json:"duration"`
+
+	// Schedule Five-field cron expression specifying window start times.
+	Schedule string `json:"schedule"`
+}
+
+// ManagedBy defines model for ManagedBy.
+type ManagedBy struct {
+	Cluster string        `json:"cluster"`
+	Id      string        `json:"id"`
+	Kind    ManagedByKind `json:"kind"`
+}
+
+// ManagedByKind defines model for ManagedBy.Kind.
+type ManagedByKind string
+
 // Member defines model for Member.
 type Member struct {
 	Agent *AgentStatus `json:"agent,omitempty"`
@@ -1695,15 +2090,18 @@ type Member struct {
 	Autoscaling *Resources `json:"autoscaling,omitempty"`
 
 	// ComponentVersion Service-component version, independent of the PostgreSQL data-member version.
-	ComponentVersion *string    `json:"componentVersion,omitempty"`
-	CpuUsage         *float32   `json:"cpuUsage,omitempty"`
-	DiskTotalBytes   *int64     `json:"diskTotalBytes,omitempty"`
-	DiskUsageBytes   *int64     `json:"diskUsageBytes,omitempty"`
-	Health           bool       `json:"health"`
-	LagSeconds       *float32   `json:"lagSeconds,omitempty"`
-	Name             string     `json:"name"`
-	Optime           *time.Time `json:"optime,omitempty"`
-	PlacementGroup   *string    `json:"placementGroup,omitempty"`
+	ComponentVersion *string  `json:"componentVersion,omitempty"`
+	CpuUsage         *float32 `json:"cpuUsage,omitempty"`
+	DiskTotalBytes   *int64   `json:"diskTotalBytes,omitempty"`
+	DiskUsageBytes   *int64   `json:"diskUsageBytes,omitempty"`
+
+	// Group Distributed PostgreSQL group; 0 is coordinator, positive groups are workers. Absent for other members.
+	Group          *int       `json:"group,omitempty"`
+	Health         bool       `json:"health"`
+	LagSeconds     *float32   `json:"lagSeconds,omitempty"`
+	Name           string     `json:"name"`
+	Optime         *time.Time `json:"optime,omitempty"`
+	PlacementGroup *string    `json:"placementGroup,omitempty"`
 
 	// PublicHost Member public host:port when public exposure is enabled.
 	PublicHost    *string `json:"publicHost,omitempty"`
@@ -1765,6 +2163,110 @@ type MonitoringSpec struct {
 // MonitoringSpecPatch defines model for MonitoringSpecPatch.
 type MonitoringSpecPatch struct {
 	Enabled *bool `json:"enabled"`
+}
+
+// MySQLBackup Immutable XtraBackup dependency chain and repository incarnation provenance.
+type MySQLBackup struct {
+	ChainRootLabel string    `json:"chainRootLabel"`
+	ClusterUID     string    `json:"clusterUID"`
+	EndTime        time.Time `json:"endTime"`
+	FromLSN        uint64    `json:"fromLSN"`
+	Generation     int       `json:"generation"`
+	GtidSet        string    `json:"gtidSet"`
+	Label          string    `json:"label"`
+	ObjectPaths    []string  `json:"objectPaths"`
+	ParentLabel    *string   `json:"parentLabel,omitempty"`
+
+	// PhysicalIdentity Opaque source agent/data incarnation binding local InnoDB LSNs. Absent on legacy backups, which cannot parent incrementals.
+	PhysicalIdentity *string         `json:"physicalIdentity,omitempty"`
+	Repository       string          `json:"repository"`
+	ServerVersion    string          `json:"serverVersion"`
+	ToLSN            uint64          `json:"toLSN"`
+	ToolVersion      string          `json:"toolVersion"`
+	Type             MySQLBackupType `json:"type"`
+}
+
+// MySQLBackupType defines model for MySQLBackup.Type.
+type MySQLBackupType string
+
+// MySQLDatabase defines model for MySQLDatabase.
+type MySQLDatabase struct {
+	CharacterSet string `json:"characterSet"`
+	Collation    string `json:"collation"`
+	Name         string `json:"name"`
+}
+
+// MySQLDatabaseWrite defines model for MySQLDatabaseWrite.
+type MySQLDatabaseWrite struct {
+	CharacterSet *string `json:"characterSet,omitempty"`
+	Collation    *string `json:"collation,omitempty"`
+	Name         string  `json:"name"`
+}
+
+// MySQLGrant defines model for MySQLGrant.
+type MySQLGrant struct {
+	Database   string                 `json:"database"`
+	Privileges []MySQLGrantPrivileges `json:"privileges"`
+	User       string                 `json:"user"`
+}
+
+// MySQLGrantPrivileges defines model for MySQLGrantPrivileges.
+type MySQLGrantPrivileges string
+
+// MySQLPasswordRotation defines model for MySQLPasswordRotation.
+type MySQLPasswordRotation struct {
+	GeneratedPassword string `json:"generatedPassword"`
+}
+
+// MySQLQuorumRecoveryRequest defines model for MySQLQuorumRecoveryRequest.
+type MySQLQuorumRecoveryRequest struct {
+	// Confirmation Explicit acknowledgement that absent members must be fenced before quorum recovery.
+	Confirmation MySQLQuorumRecoveryRequestConfirmation `json:"confirmation"`
+}
+
+// MySQLQuorumRecoveryRequestConfirmation Explicit acknowledgement that absent members must be fenced before quorum recovery.
+type MySQLQuorumRecoveryRequestConfirmation string
+
+// MySQLUser defines model for MySQLUser.
+type MySQLUser struct {
+	Host                 MySQLUserHost `json:"host"`
+	Locked               bool          `json:"locked"`
+	MaxUserConnections   int           `json:"maxUserConnections"`
+	Name                 string        `json:"name"`
+	PasswordRetained     bool          `json:"passwordRetained"`
+	RoutableThroughProxy bool          `json:"routableThroughProxy"`
+}
+
+// MySQLUserHost defines model for MySQLUser.Host.
+type MySQLUserHost string
+
+// MySQLUserCreated defines model for MySQLUserCreated.
+type MySQLUserCreated struct {
+	// GeneratedPassword Returned only when the password was generated.
+	GeneratedPassword    *string              `json:"generatedPassword,omitempty"`
+	Host                 MySQLUserCreatedHost `json:"host"`
+	Locked               bool                 `json:"locked"`
+	MaxUserConnections   int                  `json:"maxUserConnections"`
+	Name                 string               `json:"name"`
+	PasswordRetained     bool                 `json:"passwordRetained"`
+	RoutableThroughProxy bool                 `json:"routableThroughProxy"`
+}
+
+// MySQLUserCreatedHost defines model for MySQLUserCreated.Host.
+type MySQLUserCreatedHost string
+
+// MySQLUserPatch defines model for MySQLUserPatch.
+type MySQLUserPatch struct {
+	Locked             *bool `json:"locked,omitempty"`
+	MaxUserConnections *int  `json:"maxUserConnections,omitempty"`
+}
+
+// MySQLUserWrite defines model for MySQLUserWrite.
+type MySQLUserWrite struct {
+	Locked             *bool   `json:"locked,omitempty"`
+	MaxUserConnections *int    `json:"maxUserConnections,omitempty"`
+	Name               string  `json:"name"`
+	Password           *string `json:"password,omitempty"`
 }
 
 // Namespace defines model for Namespace.
@@ -1834,6 +2336,115 @@ type NamespaceUpdate struct {
 	Description string `json:"description"`
 }
 
+// Neo4jUser A Neo4j Community user. Every user has full administrative privileges.
+type Neo4jUser struct {
+	Name                   string `json:"name"`
+	PasswordChangeRequired bool   `json:"passwordChangeRequired"`
+}
+
+// Neo4jUserCreate defines model for Neo4jUserCreate.
+type Neo4jUserCreate struct {
+	// Name The managed neo4j administrator is reserved.
+	Name string `json:"name"`
+
+	// Password Omit to generate a password returned once.
+	Password *string `json:"password,omitempty"`
+}
+
+// Neo4jUserCreated defines model for Neo4jUserCreated.
+type Neo4jUserCreated struct {
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
+
+	// User A Neo4j Community user. Every user has full administrative privileges.
+	User Neo4jUser `json:"user"`
+}
+
+// Neo4jUserPassword defines model for Neo4jUserPassword.
+type Neo4jUserPassword struct {
+	// Password Omit to generate a password returned once.
+	Password *string `json:"password,omitempty"`
+}
+
+// Neo4jUserPasswordChanged defines model for Neo4jUserPasswordChanged.
+type Neo4jUserPasswordChanged struct {
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
+}
+
+// NotificationCategory defines model for NotificationCategory.
+type NotificationCategory string
+
+// NotificationChannel defines model for NotificationChannel.
+type NotificationChannel struct {
+	// Categories Empty means all categories.
+	Categories *[]NotificationCategory `json:"categories,omitempty"`
+	CreatedAt  *time.Time              `json:"createdAt,omitempty"`
+	Email      *NotificationEmail      `json:"email,omitempty"`
+	Enabled    bool                    `json:"enabled"`
+	Name       string                  `json:"name"`
+
+	// Namespaces Empty means all namespaces, including installation-wide events.
+	Namespaces *[]string                  `json:"namespaces,omitempty"`
+	Slack      *NotificationSlack         `json:"slack,omitempty"`
+	Status     *NotificationChannelStatus `json:"status,omitempty"`
+	Type       NotificationChannelType    `json:"type"`
+	UpdatedAt  *time.Time                 `json:"updatedAt,omitempty"`
+	Webhook    *NotificationWebhook       `json:"webhook,omitempty"`
+}
+
+// NotificationChannelType defines model for NotificationChannel.Type.
+type NotificationChannelType string
+
+// NotificationChannelList defines model for NotificationChannelList.
+type NotificationChannelList struct {
+	Items      []NotificationChannel `json:"items"`
+	NextCursor *string               `json:"nextCursor,omitempty"`
+}
+
+// NotificationChannelStatus defines model for NotificationChannelStatus.
+type NotificationChannelStatus struct {
+	Failed         *int64     `json:"failed,omitempty"`
+	LastDeliveryAt *time.Time `json:"lastDeliveryAt,omitempty"`
+	LastError      *string    `json:"lastError,omitempty"`
+	LastErrorAt    *time.Time `json:"lastErrorAt,omitempty"`
+	Pending        *int64     `json:"pending,omitempty"`
+}
+
+// NotificationEmail defines model for NotificationEmail.
+type NotificationEmail struct {
+	From               string                    `json:"from"`
+	Host               string                    `json:"host"`
+	Password           *string                   `json:"password,omitempty"`
+	PasswordConfigured *bool                     `json:"passwordConfigured,omitempty"`
+	Port               int                       `json:"port"`
+	Security           NotificationEmailSecurity `json:"security"`
+	To                 []string                  `json:"to"`
+	Username           *string                   `json:"username,omitempty"`
+}
+
+// NotificationEmailSecurity defines model for NotificationEmail.Security.
+type NotificationEmailSecurity string
+
+// NotificationSlack defines model for NotificationSlack.
+type NotificationSlack struct {
+	WebhookUrl           *string `json:"webhookUrl,omitempty"`
+	WebhookUrlConfigured *bool   `json:"webhookUrlConfigured,omitempty"`
+}
+
+// NotificationTestResult defines model for NotificationTestResult.
+type NotificationTestResult struct {
+	Delivered bool    `json:"delivered"`
+	Error     *string `json:"error,omitempty"`
+}
+
+// NotificationWebhook defines model for NotificationWebhook.
+type NotificationWebhook struct {
+	Host                    *string `json:"host,omitempty"`
+	SigningSecret           *string `json:"signingSecret,omitempty"`
+	SigningSecretConfigured *bool   `json:"signingSecretConfigured,omitempty"`
+	Url                     *string `json:"url,omitempty"`
+	UrlConfigured           *bool   `json:"urlConfigured,omitempty"`
+}
+
 // OAuthGrant defines model for OAuthGrant.
 type OAuthGrant struct {
 	ClientHost string     `json:"clientHost"`
@@ -1875,6 +2486,88 @@ type ObservedResources struct {
 
 	// MemoryGB Memory limit in GiB.
 	MemoryGB float32 `json:"memoryGB"`
+}
+
+// OpenBaoDatabaseConnection defines model for OpenBaoDatabaseConnection.
+type OpenBaoDatabaseConnection struct {
+	CreatedAt      time.Time                      `json:"createdAt"`
+	Message        *string                        `json:"message,omitempty"`
+	MountPath      string                         `json:"mountPath"`
+	Name           string                         `json:"name"`
+	Phase          OpenBaoDatabaseConnectionPhase `json:"phase"`
+	Roles          []OpenBaoDatabaseRole          `json:"roles"`
+	TargetCluster  string                         `json:"targetCluster"`
+	TargetProvider string                         `json:"targetProvider"`
+}
+
+// OpenBaoDatabaseConnectionPhase defines model for OpenBaoDatabaseConnection.Phase.
+type OpenBaoDatabaseConnectionPhase string
+
+// OpenBaoDatabaseConnectionList defines model for OpenBaoDatabaseConnectionList.
+type OpenBaoDatabaseConnectionList struct {
+	Items []OpenBaoDatabaseConnection `json:"items"`
+}
+
+// OpenBaoDatabaseConnectionWrite defines model for OpenBaoDatabaseConnectionWrite.
+type OpenBaoDatabaseConnectionWrite struct {
+	Name          string                     `json:"name"`
+	Roles         []OpenBaoDatabaseRoleWrite `json:"roles"`
+	TargetCluster string                     `json:"targetCluster"`
+}
+
+// OpenBaoDatabaseRole defines model for OpenBaoDatabaseRole.
+type OpenBaoDatabaseRole struct {
+	Access            OpenBaoDatabaseRoleAccess `json:"access"`
+	CredentialsPath   string                    `json:"credentialsPath"`
+	Database          *string                   `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                    `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                    `json:"maxTtlSeconds,omitempty"`
+	Name              string                    `json:"name"`
+}
+
+// OpenBaoDatabaseRoleAccess defines model for OpenBaoDatabaseRole.Access.
+type OpenBaoDatabaseRoleAccess string
+
+// OpenBaoDatabaseRoleWrite defines model for OpenBaoDatabaseRoleWrite.
+type OpenBaoDatabaseRoleWrite struct {
+	Access            OpenBaoDatabaseRoleWriteAccess `json:"access"`
+	Database          *string                        `json:"database,omitempty"`
+	DefaultTtlSeconds *int64                         `json:"defaultTtlSeconds,omitempty"`
+	MaxTtlSeconds     *int64                         `json:"maxTtlSeconds,omitempty"`
+	Name              string                         `json:"name"`
+}
+
+// OpenBaoDatabaseRoleWriteAccess defines model for OpenBaoDatabaseRoleWrite.Access.
+type OpenBaoDatabaseRoleWriteAccess string
+
+// OpenBaoRestoreUnsealShares Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted.
+type OpenBaoRestoreUnsealShares struct {
+	Recovery  *bool                               `json:"recovery,omitempty"`
+	SealType  *OpenBaoRestoreUnsealSharesSealType `json:"sealType,omitempty"`
+	Shares    []string                            `json:"shares"`
+	Threshold int                                 `json:"threshold"`
+}
+
+// OpenBaoRestoreUnsealSharesSealType defines model for OpenBaoRestoreUnsealShares.SealType.
+type OpenBaoRestoreUnsealSharesSealType string
+
+// OpenBaoUnsealKeys defines model for OpenBaoUnsealKeys.
+type OpenBaoUnsealKeys struct {
+	InitialRootToken string                    `json:"initialRootToken"`
+	InitializedAt    time.Time                 `json:"initializedAt"`
+	RecoveryShares   bool                      `json:"recoveryShares"`
+	SealType         OpenBaoUnsealKeysSealType `json:"sealType"`
+	Shares           []string                  `json:"shares"`
+	Threshold        int                       `json:"threshold"`
+}
+
+// OpenBaoUnsealKeysSealType defines model for OpenBaoUnsealKeys.SealType.
+type OpenBaoUnsealKeysSealType string
+
+// OpenBaoUnsealKeysReveal defines model for OpenBaoUnsealKeysReveal.
+type OpenBaoUnsealKeysReveal struct {
+	// Confirm Must equal the OpenBao cluster name.
+	Confirm string `json:"confirm"`
 }
 
 // Operation defines model for Operation.
@@ -1953,24 +2646,39 @@ type OrphanedVolumeList struct {
 	Items []OrphanedVolume `json:"items"`
 }
 
+// PITRInterval A continuous engine-verified restorable interval, optionally attributed to its anchoring full backup.
+type PITRInterval struct {
+	// Backup Name of the full backup anchoring this interval; omitted when provenance is unavailable.
+	Backup *string   `json:"backup,omitempty"`
+	End    time.Time `json:"end"`
+	Start  time.Time `json:"start"`
+}
+
 // PITRSpec defines model for PITRSpec.
 type PITRSpec struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes *int `json:"oplogSpanMinutes,omitempty"`
+	// AutoReanchor MySQL and PXC only. Defaults to true when omitted. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually.
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	Enabled          bool  `json:"enabled"`
+	OplogSpanMinutes *int  `json:"oplogSpanMinutes,omitempty"`
 }
 
 // PITRSpecPatch defines model for PITRSpecPatch.
 type PITRSpecPatch struct {
+	// AutoReanchor MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change.
+	AutoReanchor     *bool `json:"autoReanchor"`
 	Enabled          *bool `json:"enabled"`
 	OplogSpanMinutes *int  `json:"oplogSpanMinutes"`
 }
 
-// PITRWindow Only a continuous engine-verified restorable interval is reported.
+// PITRWindow Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range.
 type PITRWindow struct {
 	Available bool       `json:"available"`
 	End       *time.Time `json:"end,omitempty"`
-	Message   *string    `json:"message,omitempty"`
-	Start     *time.Time `json:"start,omitempty"`
+
+	// Intervals All engine-verified restorable intervals, sorted by start, end, then backup name. Intervals anchored by different full backups are not merged. Omitted or empty when unavailable.
+	Intervals *[]PITRInterval `json:"intervals,omitempty"`
+	Message   *string         `json:"message,omitempty"`
+	Start     *time.Time      `json:"start,omitempty"`
 }
 
 // Permission defines model for Permission.
@@ -1991,15 +2699,16 @@ type Permissions struct {
 	Subject     string       `json:"subject"`
 }
 
-// Placement Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee.
+// Placement Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct.
 type Placement struct {
-	Groups                 []PlacementGroup                `json:"groups"`
-	GuaranteedAntiAffinity PlacementGuaranteedAntiAffinity `json:"guaranteedAntiAffinity"`
-	Warning                string                          `json:"warning"`
+	Groups                 []PlacementGroup `json:"groups"`
+	GuaranteedAntiAffinity bool             `json:"guaranteedAntiAffinity"`
+	Source                 *PlacementSource `json:"source,omitempty"`
+	Warning                string           `json:"warning"`
 }
 
-// PlacementGuaranteedAntiAffinity defines model for Placement.GuaranteedAntiAffinity.
-type PlacementGuaranteedAntiAffinity bool
+// PlacementSource defines model for Placement.Source.
+type PlacementSource string
 
 // PlacementGroup defines model for PlacementGroup.
 type PlacementGroup struct {
@@ -2009,13 +2718,20 @@ type PlacementGroup struct {
 
 // PostgresBackup Immutable pgBackRest backup-set provenance and dependency metadata.
 type PostgresBackup struct {
-	Label      string    `json:"label"`
-	Prior      *string   `json:"prior,omitempty"`
+	Groups *[]PostgresBackupGroup `json:"groups,omitempty"`
+	Label  string                 `json:"label"`
+	Prior  *string                `json:"prior,omitempty"`
+
+	// Profiles Normalized snapshot-time runtime profile requirements. Physical recovery targets must select a superset; absent legacy metadata requires no profiles.
+	Profiles   *[]string `json:"profiles,omitempty"`
 	References *[]string `json:"references,omitempty"`
 	RepoBytes  int64     `json:"repoBytes"`
 
 	// Repository Snapshot-time repository object prefix, excluding bucket.
 	Repository string `json:"repository"`
+
+	// RestorePoint Coordinated Citus named recovery target.
+	RestorePoint *string `json:"restorePoint,omitempty"`
 
 	// SystemId PostgreSQL system identifier, encoded as a string without precision loss.
 	SystemId string `json:"systemId"`
@@ -2026,13 +2742,45 @@ type PostgresBackup struct {
 	WalStop  *string `json:"walStop,omitempty"`
 }
 
+// PostgresBackupGroup defines model for PostgresBackupGroup.
+type PostgresBackupGroup struct {
+	// Backup Immutable pgBackRest backup-set provenance and dependency metadata.
+	Backup PostgresBackup `json:"backup"`
+	Group  int            `json:"group"`
+
+	// Lsn Archive fence; worker positions are conservative post-marker upper bounds.
+	Lsn      string  `json:"lsn"`
+	Primary  *string `json:"primary,omitempty"`
+	Timeline *int    `json:"timeline,omitempty"`
+}
+
+// PostgresBinding defines model for PostgresBinding.
+type PostgresBinding struct {
+	Consumer struct {
+		Kind      string `json:"kind"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	} `json:"consumer"`
+	CreatedAt            time.Time `json:"createdAt"`
+	CredentialGeneration int64     `json:"credentialGeneration"`
+	Databases            []string  `json:"databases"`
+	Extensions           []string  `json:"extensions"`
+	Id                   string    `json:"id"`
+	MaxMajor             *int      `json:"maxMajor,omitempty"`
+	MinMajor             *int      `json:"minMajor,omitempty"`
+	Role                 string    `json:"role"`
+	State                string    `json:"state"`
+	UpdatedAt            time.Time `json:"updatedAt"`
+}
+
 // PostgresDatabase defines model for PostgresDatabase.
 type PostgresDatabase struct {
-	AllowConnections *bool   `json:"allowConnections,omitempty"`
-	Encoding         *string `json:"encoding,omitempty"`
-	Locale           *string `json:"locale,omitempty"`
-	Name             string  `json:"name"`
-	Owner            string  `json:"owner"`
+	AllowConnections *bool     `json:"allowConnections,omitempty"`
+	Encoding         *string   `json:"encoding,omitempty"`
+	Extensions       *[]string `json:"extensions,omitempty"`
+	Locale           *string   `json:"locale,omitempty"`
+	Name             string    `json:"name"`
+	Owner            string    `json:"owner"`
 }
 
 // PostgresGrant defines model for PostgresGrant.
@@ -2290,6 +3038,12 @@ type RaiseFCVRequest struct {
 	Version string `json:"version"`
 }
 
+// RebalanceRequest defines model for RebalanceRequest.
+type RebalanceRequest struct {
+	// Strategy Optional installed Citus rebalance strategy; omitted uses the Citus default.
+	Strategy *string `json:"strategy,omitempty"`
+}
+
 // RelayStatus Relay health; the default namespace uses direct networking.
 type RelayStatus struct {
 	CertNotAfter   *time.Time       `json:"certNotAfter,omitempty"`
@@ -2359,14 +3113,14 @@ type ResourcesInput struct {
 	CpuMode *ResourcesInputCpuMode `json:"cpuMode,omitempty"`
 	MaxCpu  *float32               `json:"maxCpu,omitempty"`
 
-	// MaxDisk GiB
+	// MaxDisk GiB; must be at least minDisk and meet provider/component floors.
 	MaxDisk *float32 `json:"maxDisk,omitempty"`
 
 	// MaxRam GiB
 	MaxRam *float32 `json:"maxRam,omitempty"`
 	MinCpu *float32 `json:"minCpu,omitempty"`
 
-	// MinDisk GiB
+	// MinDisk GiB; provider/component floors may be higher.
 	MinDisk *float32 `json:"minDisk,omitempty"`
 
 	// MinRam GiB
@@ -2382,14 +3136,14 @@ type ResourcesPatch struct {
 	CpuMode *ResourcesPatchCpuMode `json:"cpuMode"`
 	MaxCpu  *float32               `json:"maxCpu"`
 
-	// MaxDisk GiB
+	// MaxDisk GiB; must be at least minDisk and meet provider/component floors.
 	MaxDisk *float32 `json:"maxDisk"`
 
 	// MaxRam GiB
 	MaxRam *float32 `json:"maxRam"`
 	MinCpu *float32 `json:"minCpu"`
 
-	// MinDisk GiB
+	// MinDisk GiB; provider/component floors may be higher.
 	MinDisk *float32 `json:"minDisk"`
 
 	// MinRam GiB
@@ -2412,7 +3166,7 @@ type Restore struct {
 	OperationId *string      `json:"operationId,omitempty"`
 	Phase       RestorePhase `json:"phase"`
 
-	// Source Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+	// Source Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 	Source    RestoreSource `json:"source"`
 	StartedAt *time.Time    `json:"startedAt,omitempty"`
 }
@@ -2428,10 +3182,11 @@ type RestoreList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// RestoreSource Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict.
+// RestoreSource Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps.
 type RestoreSource struct {
 	Backup        *string    `json:"backup,omitempty"`
 	PitrTime      *time.Time `json:"pitrTime,omitempty"`
+	RestorePoint  *string    `json:"restorePoint,omitempty"`
 	SourceCluster *string    `json:"sourceCluster,omitempty"`
 	union         json.RawMessage
 }
@@ -2441,6 +3196,9 @@ type RestoreSource0 = interface{}
 
 // RestoreSource1 defines model for .
 type RestoreSource1 = interface{}
+
+// RestoreSource2 defines model for .
+type RestoreSource2 = interface{}
 
 // RoleReference defines model for RoleReference.
 type RoleReference struct {
@@ -2579,6 +3337,67 @@ type TLSPatchCa string
 // TLSPatchMode defines model for TLSPatch.Mode.
 type TLSPatchMode string
 
+// TemporalClientCertificate defines model for TemporalClientCertificate.
+type TemporalClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	Serial            string    `json:"serial"`
+}
+
+// TemporalClientCertificateList defines model for TemporalClientCertificateList.
+type TemporalClientCertificateList struct {
+	Items []TemporalClientCertificate `json:"items"`
+}
+
+// TemporalClientCertificateRequest defines model for TemporalClientCertificateRequest.
+type TemporalClientCertificateRequest struct {
+	CommonName string `json:"commonName"`
+	TtlHours   *int   `json:"ttlHours,omitempty"`
+}
+
+// TemporalIssuedClientCertificate defines model for TemporalIssuedClientCertificate.
+type TemporalIssuedClientCertificate struct {
+	CaFingerprintSha256 string `json:"caFingerprintSha256"`
+	CaPem               string `json:"caPem"`
+	CertificatePem      string `json:"certificatePem"`
+	CommonName          string `json:"commonName"`
+
+	// CurrentCa Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap).
+	CurrentCa         bool      `json:"currentCa"`
+	FingerprintSha256 string    `json:"fingerprintSha256"`
+	FrontendAddress   string    `json:"frontendAddress"`
+	IssuedAt          time.Time `json:"issuedAt"`
+	NotAfter          time.Time `json:"notAfter"`
+	PrivateKeyPem     string    `json:"privateKeyPem"`
+	Serial            string    `json:"serial"`
+	ServerName        string    `json:"serverName"`
+}
+
+// TemporalNamespace defines model for TemporalNamespace.
+type TemporalNamespace struct {
+	Description *string `json:"description,omitempty"`
+	Managed     bool    `json:"managed"`
+	Name        string  `json:"name"`
+	Retention   string  `json:"retention"`
+	State       string  `json:"state"`
+}
+
+// TemporalNamespaceList defines model for TemporalNamespaceList.
+type TemporalNamespaceList struct {
+	Items []TemporalNamespace `json:"items"`
+}
+
+// TemporalUIOIDCClientSecret defines model for TemporalUIOIDCClientSecret.
+type TemporalUIOIDCClientSecret struct {
+	ClientSecret *string `json:"clientSecret,omitempty"`
+}
+
 // TokenStatus Secret-safe token health; never contains a token or fingerprint.
 type TokenStatus struct {
 	LastError       *string           `json:"lastError,omitempty"`
@@ -2664,6 +3483,11 @@ type UpdateDatabaseUserRequest struct {
 	Roles    []RoleReference `json:"roles"`
 }
 
+// UpgradeAgentsRequest defines model for UpgradeAgentsRequest.
+type UpgradeAgentsRequest struct {
+	IncludeCurrent *bool `json:"includeCurrent,omitempty"`
+}
+
 // UpgradePath defines model for UpgradePath.
 type UpgradePath struct {
 	From string `json:"from"`
@@ -2695,6 +3519,147 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// WeaviateAPIKey defines model for WeaviateAPIKey.
+type WeaviateAPIKey struct {
+	ApiKey *string `json:"apiKey,omitempty"`
+}
+
+// WeaviatePermission defines model for WeaviatePermission.
+type WeaviatePermission struct {
+	Action               string                          `json:"action"`
+	Aliases              *WeaviatePermission_Aliases     `json:"aliases,omitempty"`
+	Backups              *WeaviatePermission_Backups     `json:"backups,omitempty"`
+	Collections          *WeaviatePermission_Collections `json:"collections,omitempty"`
+	Data                 *WeaviatePermission_Data        `json:"data,omitempty"`
+	Groups               *WeaviatePermission_Groups      `json:"groups,omitempty"`
+	Namespaces           *WeaviatePermission_Namespaces  `json:"namespaces,omitempty"`
+	Nodes                *WeaviatePermission_Nodes       `json:"nodes,omitempty"`
+	Replicate            *WeaviatePermission_Replicate   `json:"replicate,omitempty"`
+	Roles                *WeaviatePermission_Roles       `json:"roles,omitempty"`
+	Tenants              *WeaviatePermission_Tenants     `json:"tenants,omitempty"`
+	Users                *WeaviatePermission_Users       `json:"users,omitempty"`
+	AdditionalProperties map[string]interface{}          `json:"-"`
+}
+
+// WeaviatePermission_Aliases defines model for WeaviatePermission.Aliases.
+type WeaviatePermission_Aliases struct {
+	Alias                *string                `json:"alias,omitempty"`
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Backups defines model for WeaviatePermission.Backups.
+type WeaviatePermission_Backups struct {
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Collections defines model for WeaviatePermission.Collections.
+type WeaviatePermission_Collections struct {
+	Collection           *string                `json:"collection,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Data defines model for WeaviatePermission.Data.
+type WeaviatePermission_Data struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Object               *string                `json:"object,omitempty"`
+	Tenant               *string                `json:"tenant,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Groups defines model for WeaviatePermission.Groups.
+type WeaviatePermission_Groups struct {
+	Group                *string                `json:"group,omitempty"`
+	GroupType            *string                `json:"groupType,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Namespaces defines model for WeaviatePermission.Namespaces.
+type WeaviatePermission_Namespaces struct {
+	Namespace            *string                `json:"namespace,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Nodes defines model for WeaviatePermission.Nodes.
+type WeaviatePermission_Nodes struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Verbosity            *string                `json:"verbosity,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Replicate defines model for WeaviatePermission.Replicate.
+type WeaviatePermission_Replicate struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Shard                *string                `json:"shard,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Roles defines model for WeaviatePermission.Roles.
+type WeaviatePermission_Roles struct {
+	Role                 *string                `json:"role,omitempty"`
+	Scope                *string                `json:"scope,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Tenants defines model for WeaviatePermission.Tenants.
+type WeaviatePermission_Tenants struct {
+	Collection           *string                `json:"collection,omitempty"`
+	Tenant               *string                `json:"tenant,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviatePermission_Users defines model for WeaviatePermission.Users.
+type WeaviatePermission_Users struct {
+	Users                *string                `json:"users,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// WeaviateRole defines model for WeaviateRole.
+type WeaviateRole struct {
+	Name        string               `json:"name"`
+	Permissions []WeaviatePermission `json:"permissions"`
+}
+
+// WeaviateRoleList defines model for WeaviateRoleList.
+type WeaviateRoleList struct {
+	Items []WeaviateRole `json:"items"`
+}
+
+// WeaviateUser defines model for WeaviateUser.
+type WeaviateUser struct {
+	Active     bool       `json:"active"`
+	CreatedAt  *time.Time `json:"createdAt,omitempty"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	Name       string     `json:"name"`
+	Roles      []string   `json:"roles"`
+	UserType   string     `json:"userType"`
+}
+
+// WeaviateUserCreate defines model for WeaviateUserCreate.
+type WeaviateUserCreate struct {
+	Name  string   `json:"name"`
+	Roles []string `json:"roles"`
+}
+
+// WeaviateUserCreated defines model for WeaviateUserCreated.
+type WeaviateUserCreated struct {
+	// ApiKey Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it.
+	ApiKey *string      `json:"apiKey,omitempty"`
+	User   WeaviateUser `json:"user"`
+}
+
+// WeaviateUserList defines model for WeaviateUserList.
+type WeaviateUserList struct {
+	Items []WeaviateUser `json:"items"`
+}
+
+// WeaviateUserUpdate defines model for WeaviateUserUpdate.
+type WeaviateUserUpdate struct {
+	Active *bool    `json:"active,omitempty"`
+	Roles  []string `json:"roles"`
+}
+
 // CSRF defines model for CSRF.
 type CSRF = string
 
@@ -2706,6 +3671,9 @@ type Cursor = string
 
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
+
+// IgnoreMaintenanceWindow defines model for IgnoreMaintenanceWindow.
+type IgnoreMaintenanceWindow = bool
 
 // Limit defines model for Limit.
 type Limit = int
@@ -2751,6 +3719,12 @@ type MethodNotAllowed = Error
 // `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
 // `message` is a human-readable explanation that names the rejected field or resource.
 type NotFound = Error
+
+// NotImplemented Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
+// `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
+// `payload_too_large`, `password_change_required`, `rate_limited`, `internal_error`);
+// `message` is a human-readable explanation that names the rejected field or resource.
+type NotImplemented = Error
 
 // PayloadTooLarge Every error response. `code` is a stable category (`invalid_request`, `unauthorized`,
 // `forbidden`, `not_found`, `conflict`, `method_not_allowed`, `unsupported_media_type`,
@@ -3048,6 +4022,9 @@ type GetClusterParams struct {
 
 // PatchClusterParams defines parameters for PatchCluster.
 type PatchClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -3072,6 +4049,9 @@ type PatchClusterParams struct {
 
 // ReplaceClusterParams defines parameters for ReplaceCluster.
 type ReplaceClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -3092,6 +4072,72 @@ type ReplaceClusterParams struct {
 	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
 	// the original mutation failed. Use a fresh key for each intended mutation.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RebalancePostgresParams defines parameters for RebalancePostgres.
+type RebalancePostgresParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListBackupDrillsParams defines parameters for ListBackupDrills.
+type ListBackupDrillsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateBackupDrillParams defines parameters for CreateBackupDrill.
+type CreateBackupDrillParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetBackupDrillParams defines parameters for GetBackupDrill.
+type GetBackupDrillParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
 // ListBackupsParams defines parameters for ListBackups.
@@ -3534,8 +4580,38 @@ type GetMemberLogsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// MoveClusterMemberParams defines parameters for MoveClusterMember.
+type MoveClusterMemberParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ReplaceClusterMemberParams defines parameters for ReplaceClusterMember.
 type ReplaceClusterMemberParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -3570,6 +4646,319 @@ type GetClusterMetricsParams struct {
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
+// ListMySQLDatabasesParams defines parameters for ListMySQLDatabases.
+type ListMySQLDatabasesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateMySQLDatabaseParams defines parameters for CreateMySQLDatabase.
+type CreateMySQLDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// DeleteMySQLDatabaseParams defines parameters for DeleteMySQLDatabase.
+type DeleteMySQLDatabaseParams struct {
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetMySQLDatabaseParams defines parameters for GetMySQLDatabase.
+type GetMySQLDatabaseParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevokeMySQLPrivilegesParams defines parameters for RevokeMySQLPrivileges.
+type RevokeMySQLPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListMySQLGrantsParams defines parameters for ListMySQLGrants.
+type ListMySQLGrantsParams struct {
+	User     *string `form:"user,omitempty" json:"user,omitempty"`
+	Database *string `form:"database,omitempty" json:"database,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// GrantMySQLPrivilegesParams defines parameters for GrantMySQLPrivileges.
+type GrantMySQLPrivilegesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RecoverMySQLQuorumParams defines parameters for RecoverMySQLQuorum.
+type RecoverMySQLQuorumParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListMySQLUsersParams defines parameters for ListMySQLUsers.
+type ListMySQLUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateMySQLUserParams defines parameters for CreateMySQLUser.
+type CreateMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteMySQLUserParams defines parameters for DeleteMySQLUser.
+type DeleteMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetMySQLUserParams defines parameters for GetMySQLUser.
+type GetMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// PatchMySQLUserParams defines parameters for PatchMySQLUser.
+type PatchMySQLUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// RotateMySQLUserPasswordJSONBody defines parameters for RotateMySQLUserPassword.
+type RotateMySQLUserPasswordJSONBody struct {
+	RetainCurrent *bool `json:"retainCurrent,omitempty"`
+}
+
+// RotateMySQLUserPasswordParams defines parameters for RotateMySQLUserPassword.
+type RotateMySQLUserPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DiscardMySQLUserOldPasswordParams defines parameters for DiscardMySQLUserOldPassword.
+type DiscardMySQLUserOldPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListNeo4jUsersParams defines parameters for ListNeo4jUsers.
+type ListNeo4jUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateNeo4jUserParams defines parameters for CreateNeo4jUser.
+type CreateNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteNeo4jUserParams defines parameters for DeleteNeo4jUser.
+type DeleteNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// GetNeo4jUserParams defines parameters for GetNeo4jUser.
+type GetNeo4jUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// SetNeo4jUserPasswordParams defines parameters for SetNeo4jUserPassword.
+type SetNeo4jUserPasswordParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListOpenBaoDatabaseConnectionsParams defines parameters for ListOpenBaoDatabaseConnections.
+type ListOpenBaoDatabaseConnectionsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateOpenBaoDatabaseConnectionParams defines parameters for CreateOpenBaoDatabaseConnection.
+type CreateOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteOpenBaoDatabaseConnectionParams defines parameters for DeleteOpenBaoDatabaseConnection.
+type DeleteOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetOpenBaoDatabaseConnectionParams defines parameters for GetOpenBaoDatabaseConnection.
+type GetOpenBaoDatabaseConnectionParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RevealOpenBaoUnsealKeysParams defines parameters for RevealOpenBaoUnsealKeys.
+type RevealOpenBaoUnsealKeysParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
 // ListClusterOperationsParams defines parameters for ListClusterOperations.
 type ListClusterOperationsParams struct {
 	// Limit Maximum results per page. Results are authorization-filtered before pagination.
@@ -3593,6 +4982,36 @@ type GetPITRWindowParams struct {
 type GetClusterPlacementParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// ListPostgresBindingsParams defines parameters for ListPostgresBindings.
+type ListPostgresBindingsParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// RotatePostgresBindingParams defines parameters for RotatePostgresBinding.
+type RotatePostgresBindingParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ListPostgresDatabasesParams defines parameters for ListPostgresDatabases.
@@ -4216,6 +5635,9 @@ type ReplaceRabbitMQVhostParams struct {
 
 // RaiseClusterFCVParams defines parameters for RaiseClusterFCV.
 type RaiseClusterFCVParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -4240,6 +5662,9 @@ type RaiseClusterFCVParams struct {
 
 // RestartClusterParams defines parameters for RestartCluster.
 type RestartClusterParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -4354,6 +5779,9 @@ type RetryClusterDeploymentsParams struct {
 
 // RotateClusterTLSParams defines parameters for RotateClusterTLS.
 type RotateClusterTLSParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
@@ -4492,6 +5920,300 @@ type RotateSystemUserParams struct {
 	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
 	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
 
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListTemporalClientCertificatesParams defines parameters for ListTemporalClientCertificates.
+type ListTemporalClientCertificatesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// IssueTemporalClientCertificateParams defines parameters for IssueTemporalClientCertificate.
+type IssueTemporalClientCertificateParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// ListTemporalNamespacesParams defines parameters for ListTemporalNamespaces.
+type ListTemporalNamespacesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// DeleteTemporalNamespaceParams defines parameters for DeleteTemporalNamespace.
+type DeleteTemporalNamespaceParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// SetTemporalUIOIDCClientSecretParams defines parameters for SetTemporalUIOIDCClientSecret.
+type SetTemporalUIOIDCClientSecretParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpgradeClusterAgentsParams defines parameters for UpgradeClusterAgents.
+type UpgradeClusterAgentsParams struct {
+	// IgnoreMaintenanceWindow Explicitly bypass the cluster maintenance window for this request.
+	IgnoreMaintenanceWindow *IgnoreMaintenanceWindow `form:"ignoreMaintenanceWindow,omitempty" json:"ignoreMaintenanceWindow,omitempty"`
+
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListWeaviateRolesParams defines parameters for ListWeaviateRoles.
+type ListWeaviateRolesParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateWeaviateRoleParams defines parameters for CreateWeaviateRole.
+type CreateWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteWeaviateRoleParams defines parameters for DeleteWeaviateRole.
+type DeleteWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetWeaviateRoleParams defines parameters for GetWeaviateRole.
+type GetWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateWeaviateRoleParams defines parameters for UpdateWeaviateRole.
+type UpdateWeaviateRoleParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListWeaviateUsersParams defines parameters for ListWeaviateUsers.
+type ListWeaviateUsersParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// CreateWeaviateUserParams defines parameters for CreateWeaviateUser.
+type CreateWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteWeaviateUserParams defines parameters for DeleteWeaviateUser.
+type DeleteWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+}
+
+// GetWeaviateUserParams defines parameters for GetWeaviateUser.
+type GetWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+}
+
+// UpdateWeaviateUserParams defines parameters for UpdateWeaviateUser.
+type UpdateWeaviateUserParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RotateWeaviateUserKeyParams defines parameters for RotateWeaviateUserKey.
+type RotateWeaviateUserKeyParams struct {
+	// Namespace Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter.
+	Namespace *NamespaceQuery `form:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateControlPlaneBackupPolicyParams defines parameters for UpdateControlPlaneBackupPolicy.
+type UpdateControlPlaneBackupPolicyParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListControlPlaneBackupsParams defines parameters for ListControlPlaneBackups.
+type ListControlPlaneBackupsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateControlPlaneBackupParams defines parameters for CreateControlPlaneBackup.
+type CreateControlPlaneBackupParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 
@@ -4672,6 +6394,99 @@ type ValidateNamespaceParams struct {
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// ListNotificationChannelsParams defines parameters for ListNotificationChannels.
+type ListNotificationChannelsParams struct {
+	// Limit Maximum results per page. Results are authorization-filtered before pagination.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor returned by the preceding page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreateNotificationChannelParams defines parameters for CreateNotificationChannel.
+type CreateNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteNotificationChannelParams defines parameters for DeleteNotificationChannel.
+type DeleteNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReplaceNotificationChannelParams defines parameters for ReplaceNotificationChannel.
+type ReplaceNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// TestNotificationChannelParams defines parameters for TestNotificationChannel.
+type TestNotificationChannelParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // DeleteOAuthGrantParams defines parameters for DeleteOAuthGrant.
 type DeleteOAuthGrantParams struct {
 	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
@@ -4722,6 +6537,27 @@ type ReplaceSettingsParams struct {
 	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
 }
 
+// UpdateAgentRolloutSettingsParams defines parameters for UpdateAgentRolloutSettings.
+type UpdateAgentRolloutSettingsParams struct {
+	// XKarakoramCSRF Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login.
+	XKarakoramCSRF *CSRF `json:"X-Karakoram-CSRF,omitempty"`
+
+	// IdempotencyKey Optional retry key scoped to the authenticated account's name and creation
+	// identity (including OIDC issuer), or the specific bearer token identity,
+	// plus method, route, namespace and path parameters. Deleting and recreating
+	// an account never shares its replays. Retained for 24 hours after
+	// a successful response. The same key and canonical JSON body replay the
+	// original status, body and relevant headers, including one-time secrets
+	// and Karakoram-Operation-Id when present. Different bodies conflict with
+	// HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+	// in-flight duplicates return 409 with reason invalid_state. Reservations
+	// use a five-minute lease renewed every minute while the handler runs;
+	// after a crash, an expired reservation can be reclaimed. Only successful
+	// 2xx responses are retained for 24 hours. Lease expiry does not prove that
+	// the original mutation failed. Use a fresh key for each intended mutation.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
@@ -4758,6 +6594,12 @@ type PatchClusterApplicationMergePatchPlusJSONRequestBody = ClusterMergePatch
 // ReplaceClusterJSONRequestBody defines body for ReplaceCluster for application/json ContentType.
 type ReplaceClusterJSONRequestBody = ReplaceClusterRequest
 
+// RebalancePostgresJSONRequestBody defines body for RebalancePostgres for application/json ContentType.
+type RebalancePostgresJSONRequestBody = RebalanceRequest
+
+// CreateBackupDrillJSONRequestBody defines body for CreateBackupDrill for application/json ContentType.
+type CreateBackupDrillJSONRequestBody = CreateBackupDrillRequest
+
 // CreateBackupJSONRequestBody defines body for CreateBackup for application/json ContentType.
 type CreateBackupJSONRequestBody = CreateBackupRequest
 
@@ -4790,6 +6632,39 @@ type CreateElasticUserJSONRequestBody = ElasticUserCreate
 
 // UpdateElasticUserJSONRequestBody defines body for UpdateElasticUser for application/json ContentType.
 type UpdateElasticUserJSONRequestBody = ElasticUserWrite
+
+// CreateMySQLDatabaseJSONRequestBody defines body for CreateMySQLDatabase for application/json ContentType.
+type CreateMySQLDatabaseJSONRequestBody = MySQLDatabaseWrite
+
+// RevokeMySQLPrivilegesJSONRequestBody defines body for RevokeMySQLPrivileges for application/json ContentType.
+type RevokeMySQLPrivilegesJSONRequestBody = MySQLGrant
+
+// GrantMySQLPrivilegesJSONRequestBody defines body for GrantMySQLPrivileges for application/json ContentType.
+type GrantMySQLPrivilegesJSONRequestBody = MySQLGrant
+
+// RecoverMySQLQuorumJSONRequestBody defines body for RecoverMySQLQuorum for application/json ContentType.
+type RecoverMySQLQuorumJSONRequestBody = MySQLQuorumRecoveryRequest
+
+// CreateMySQLUserJSONRequestBody defines body for CreateMySQLUser for application/json ContentType.
+type CreateMySQLUserJSONRequestBody = MySQLUserWrite
+
+// PatchMySQLUserJSONRequestBody defines body for PatchMySQLUser for application/json ContentType.
+type PatchMySQLUserJSONRequestBody = MySQLUserPatch
+
+// RotateMySQLUserPasswordJSONRequestBody defines body for RotateMySQLUserPassword for application/json ContentType.
+type RotateMySQLUserPasswordJSONRequestBody RotateMySQLUserPasswordJSONBody
+
+// CreateNeo4jUserJSONRequestBody defines body for CreateNeo4jUser for application/json ContentType.
+type CreateNeo4jUserJSONRequestBody = Neo4jUserCreate
+
+// SetNeo4jUserPasswordJSONRequestBody defines body for SetNeo4jUserPassword for application/json ContentType.
+type SetNeo4jUserPasswordJSONRequestBody = Neo4jUserPassword
+
+// CreateOpenBaoDatabaseConnectionJSONRequestBody defines body for CreateOpenBaoDatabaseConnection for application/json ContentType.
+type CreateOpenBaoDatabaseConnectionJSONRequestBody = OpenBaoDatabaseConnectionWrite
+
+// RevealOpenBaoUnsealKeysJSONRequestBody defines body for RevealOpenBaoUnsealKeys for application/json ContentType.
+type RevealOpenBaoUnsealKeysJSONRequestBody = OpenBaoUnsealKeysReveal
 
 // CreatePostgresDatabaseJSONRequestBody defines body for CreatePostgresDatabase for application/json ContentType.
 type CreatePostgresDatabaseJSONRequestBody = PostgresDatabase
@@ -4857,6 +6732,30 @@ type PutSupabaseFunctionJSONRequestBody = SupabaseFunction
 // SetSupabaseSMTPPasswordJSONRequestBody defines body for SetSupabaseSMTPPassword for application/json ContentType.
 type SetSupabaseSMTPPasswordJSONRequestBody = SupabaseSMTPPassword
 
+// IssueTemporalClientCertificateJSONRequestBody defines body for IssueTemporalClientCertificate for application/json ContentType.
+type IssueTemporalClientCertificateJSONRequestBody = TemporalClientCertificateRequest
+
+// SetTemporalUIOIDCClientSecretJSONRequestBody defines body for SetTemporalUIOIDCClientSecret for application/json ContentType.
+type SetTemporalUIOIDCClientSecretJSONRequestBody = TemporalUIOIDCClientSecret
+
+// UpgradeClusterAgentsJSONRequestBody defines body for UpgradeClusterAgents for application/json ContentType.
+type UpgradeClusterAgentsJSONRequestBody = UpgradeAgentsRequest
+
+// CreateWeaviateRoleJSONRequestBody defines body for CreateWeaviateRole for application/json ContentType.
+type CreateWeaviateRoleJSONRequestBody = WeaviateRole
+
+// UpdateWeaviateRoleJSONRequestBody defines body for UpdateWeaviateRole for application/json ContentType.
+type UpdateWeaviateRoleJSONRequestBody = WeaviateRole
+
+// CreateWeaviateUserJSONRequestBody defines body for CreateWeaviateUser for application/json ContentType.
+type CreateWeaviateUserJSONRequestBody = WeaviateUserCreate
+
+// UpdateWeaviateUserJSONRequestBody defines body for UpdateWeaviateUser for application/json ContentType.
+type UpdateWeaviateUserJSONRequestBody = WeaviateUserUpdate
+
+// UpdateControlPlaneBackupPolicyJSONRequestBody defines body for UpdateControlPlaneBackupPolicy for application/json ContentType.
+type UpdateControlPlaneBackupPolicyJSONRequestBody = ControlPlaneBackupPolicy
+
 // DryRunCreateClusterJSONRequestBody defines body for DryRunCreateCluster for application/json ContentType.
 type DryRunCreateClusterJSONRequestBody = CreateClusterRequest
 
@@ -4878,6 +6777,12 @@ type UpdateNamespaceJSONRequestBody = NamespaceUpdate
 // RotateNamespaceTokenJSONRequestBody defines body for RotateNamespaceToken for application/json ContentType.
 type RotateNamespaceTokenJSONRequestBody = NamespaceTokenRotate
 
+// CreateNotificationChannelJSONRequestBody defines body for CreateNotificationChannel for application/json ContentType.
+type CreateNotificationChannelJSONRequestBody = NotificationChannel
+
+// ReplaceNotificationChannelJSONRequestBody defines body for ReplaceNotificationChannel for application/json ContentType.
+type ReplaceNotificationChannelJSONRequestBody = NotificationChannel
+
 // CheckPermissionJSONRequestBody defines body for CheckPermission for application/json ContentType.
 type CheckPermissionJSONRequestBody = CanRequest
 
@@ -4886,6 +6791,9 @@ type ReplaceRBACPolicyJSONRequestBody = RBACPolicy
 
 // ReplaceSettingsJSONRequestBody defines body for ReplaceSettings for application/json ContentType.
 type ReplaceSettingsJSONRequestBody = Settings
+
+// UpdateAgentRolloutSettingsJSONRequestBody defines body for UpdateAgentRolloutSettings for application/json ContentType.
+type UpdateAgentRolloutSettingsJSONRequestBody = AgentRolloutSettings
 
 // Getter for additional properties for EventDetails. Returns the specified
 // element and whether it was found
@@ -4970,6 +6878,1105 @@ func (a EventDetails) MarshalJSON() ([]byte, error) {
 	return json.Marshal(object)
 }
 
+// Getter for additional properties for WeaviatePermission. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission
+func (a *WeaviatePermission) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission to handle AdditionalProperties
+func (a *WeaviatePermission) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["action"]; found {
+		err = json.Unmarshal(raw, &a.Action)
+		if err != nil {
+			return fmt.Errorf("error reading 'action': %w", err)
+		}
+		delete(object, "action")
+	}
+
+	if raw, found := object["aliases"]; found {
+		err = json.Unmarshal(raw, &a.Aliases)
+		if err != nil {
+			return fmt.Errorf("error reading 'aliases': %w", err)
+		}
+		delete(object, "aliases")
+	}
+
+	if raw, found := object["backups"]; found {
+		err = json.Unmarshal(raw, &a.Backups)
+		if err != nil {
+			return fmt.Errorf("error reading 'backups': %w", err)
+		}
+		delete(object, "backups")
+	}
+
+	if raw, found := object["collections"]; found {
+		err = json.Unmarshal(raw, &a.Collections)
+		if err != nil {
+			return fmt.Errorf("error reading 'collections': %w", err)
+		}
+		delete(object, "collections")
+	}
+
+	if raw, found := object["data"]; found {
+		err = json.Unmarshal(raw, &a.Data)
+		if err != nil {
+			return fmt.Errorf("error reading 'data': %w", err)
+		}
+		delete(object, "data")
+	}
+
+	if raw, found := object["groups"]; found {
+		err = json.Unmarshal(raw, &a.Groups)
+		if err != nil {
+			return fmt.Errorf("error reading 'groups': %w", err)
+		}
+		delete(object, "groups")
+	}
+
+	if raw, found := object["namespaces"]; found {
+		err = json.Unmarshal(raw, &a.Namespaces)
+		if err != nil {
+			return fmt.Errorf("error reading 'namespaces': %w", err)
+		}
+		delete(object, "namespaces")
+	}
+
+	if raw, found := object["nodes"]; found {
+		err = json.Unmarshal(raw, &a.Nodes)
+		if err != nil {
+			return fmt.Errorf("error reading 'nodes': %w", err)
+		}
+		delete(object, "nodes")
+	}
+
+	if raw, found := object["replicate"]; found {
+		err = json.Unmarshal(raw, &a.Replicate)
+		if err != nil {
+			return fmt.Errorf("error reading 'replicate': %w", err)
+		}
+		delete(object, "replicate")
+	}
+
+	if raw, found := object["roles"]; found {
+		err = json.Unmarshal(raw, &a.Roles)
+		if err != nil {
+			return fmt.Errorf("error reading 'roles': %w", err)
+		}
+		delete(object, "roles")
+	}
+
+	if raw, found := object["tenants"]; found {
+		err = json.Unmarshal(raw, &a.Tenants)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenants': %w", err)
+		}
+		delete(object, "tenants")
+	}
+
+	if raw, found := object["users"]; found {
+		err = json.Unmarshal(raw, &a.Users)
+		if err != nil {
+			return fmt.Errorf("error reading 'users': %w", err)
+		}
+		delete(object, "users")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission to handle AdditionalProperties
+func (a WeaviatePermission) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["action"], err = json.Marshal(a.Action)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'action': %w", err)
+	}
+
+	if a.Aliases != nil {
+		object["aliases"], err = json.Marshal(a.Aliases)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'aliases': %w", err)
+		}
+	}
+
+	if a.Backups != nil {
+		object["backups"], err = json.Marshal(a.Backups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'backups': %w", err)
+		}
+	}
+
+	if a.Collections != nil {
+		object["collections"], err = json.Marshal(a.Collections)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collections': %w", err)
+		}
+	}
+
+	if a.Data != nil {
+		object["data"], err = json.Marshal(a.Data)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'data': %w", err)
+		}
+	}
+
+	if a.Groups != nil {
+		object["groups"], err = json.Marshal(a.Groups)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'groups': %w", err)
+		}
+	}
+
+	if a.Namespaces != nil {
+		object["namespaces"], err = json.Marshal(a.Namespaces)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'namespaces': %w", err)
+		}
+	}
+
+	if a.Nodes != nil {
+		object["nodes"], err = json.Marshal(a.Nodes)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'nodes': %w", err)
+		}
+	}
+
+	if a.Replicate != nil {
+		object["replicate"], err = json.Marshal(a.Replicate)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'replicate': %w", err)
+		}
+	}
+
+	if a.Roles != nil {
+		object["roles"], err = json.Marshal(a.Roles)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'roles': %w", err)
+		}
+	}
+
+	if a.Tenants != nil {
+		object["tenants"], err = json.Marshal(a.Tenants)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenants': %w", err)
+		}
+	}
+
+	if a.Users != nil {
+		object["users"], err = json.Marshal(a.Users)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'users': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Aliases. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Aliases) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Aliases
+func (a *WeaviatePermission_Aliases) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Aliases to handle AdditionalProperties
+func (a *WeaviatePermission_Aliases) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["alias"]; found {
+		err = json.Unmarshal(raw, &a.Alias)
+		if err != nil {
+			return fmt.Errorf("error reading 'alias': %w", err)
+		}
+		delete(object, "alias")
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Aliases to handle AdditionalProperties
+func (a WeaviatePermission_Aliases) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Alias != nil {
+		object["alias"], err = json.Marshal(a.Alias)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'alias': %w", err)
+		}
+	}
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Backups. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Backups) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Backups
+func (a *WeaviatePermission_Backups) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Backups to handle AdditionalProperties
+func (a *WeaviatePermission_Backups) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Backups to handle AdditionalProperties
+func (a WeaviatePermission_Backups) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Collections. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Collections) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Collections
+func (a *WeaviatePermission_Collections) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Collections to handle AdditionalProperties
+func (a *WeaviatePermission_Collections) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Collections to handle AdditionalProperties
+func (a WeaviatePermission_Collections) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Data. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Data) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Data
+func (a *WeaviatePermission_Data) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Data to handle AdditionalProperties
+func (a *WeaviatePermission_Data) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["object"]; found {
+		err = json.Unmarshal(raw, &a.Object)
+		if err != nil {
+			return fmt.Errorf("error reading 'object': %w", err)
+		}
+		delete(object, "object")
+	}
+
+	if raw, found := object["tenant"]; found {
+		err = json.Unmarshal(raw, &a.Tenant)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenant': %w", err)
+		}
+		delete(object, "tenant")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Data to handle AdditionalProperties
+func (a WeaviatePermission_Data) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Object != nil {
+		object["object"], err = json.Marshal(a.Object)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'object': %w", err)
+		}
+	}
+
+	if a.Tenant != nil {
+		object["tenant"], err = json.Marshal(a.Tenant)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenant': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Groups. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Groups) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Groups
+func (a *WeaviatePermission_Groups) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Groups to handle AdditionalProperties
+func (a *WeaviatePermission_Groups) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["group"]; found {
+		err = json.Unmarshal(raw, &a.Group)
+		if err != nil {
+			return fmt.Errorf("error reading 'group': %w", err)
+		}
+		delete(object, "group")
+	}
+
+	if raw, found := object["groupType"]; found {
+		err = json.Unmarshal(raw, &a.GroupType)
+		if err != nil {
+			return fmt.Errorf("error reading 'groupType': %w", err)
+		}
+		delete(object, "groupType")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Groups to handle AdditionalProperties
+func (a WeaviatePermission_Groups) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Group != nil {
+		object["group"], err = json.Marshal(a.Group)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'group': %w", err)
+		}
+	}
+
+	if a.GroupType != nil {
+		object["groupType"], err = json.Marshal(a.GroupType)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'groupType': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Namespaces. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Namespaces) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Namespaces
+func (a *WeaviatePermission_Namespaces) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Namespaces to handle AdditionalProperties
+func (a *WeaviatePermission_Namespaces) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["namespace"]; found {
+		err = json.Unmarshal(raw, &a.Namespace)
+		if err != nil {
+			return fmt.Errorf("error reading 'namespace': %w", err)
+		}
+		delete(object, "namespace")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Namespaces to handle AdditionalProperties
+func (a WeaviatePermission_Namespaces) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Namespace != nil {
+		object["namespace"], err = json.Marshal(a.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'namespace': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Nodes. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Nodes) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Nodes
+func (a *WeaviatePermission_Nodes) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Nodes to handle AdditionalProperties
+func (a *WeaviatePermission_Nodes) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["verbosity"]; found {
+		err = json.Unmarshal(raw, &a.Verbosity)
+		if err != nil {
+			return fmt.Errorf("error reading 'verbosity': %w", err)
+		}
+		delete(object, "verbosity")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Nodes to handle AdditionalProperties
+func (a WeaviatePermission_Nodes) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Verbosity != nil {
+		object["verbosity"], err = json.Marshal(a.Verbosity)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'verbosity': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Replicate. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Replicate) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Replicate
+func (a *WeaviatePermission_Replicate) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Replicate to handle AdditionalProperties
+func (a *WeaviatePermission_Replicate) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["shard"]; found {
+		err = json.Unmarshal(raw, &a.Shard)
+		if err != nil {
+			return fmt.Errorf("error reading 'shard': %w", err)
+		}
+		delete(object, "shard")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Replicate to handle AdditionalProperties
+func (a WeaviatePermission_Replicate) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Shard != nil {
+		object["shard"], err = json.Marshal(a.Shard)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'shard': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Roles. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Roles) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Roles
+func (a *WeaviatePermission_Roles) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Roles to handle AdditionalProperties
+func (a *WeaviatePermission_Roles) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["role"]; found {
+		err = json.Unmarshal(raw, &a.Role)
+		if err != nil {
+			return fmt.Errorf("error reading 'role': %w", err)
+		}
+		delete(object, "role")
+	}
+
+	if raw, found := object["scope"]; found {
+		err = json.Unmarshal(raw, &a.Scope)
+		if err != nil {
+			return fmt.Errorf("error reading 'scope': %w", err)
+		}
+		delete(object, "scope")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Roles to handle AdditionalProperties
+func (a WeaviatePermission_Roles) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Role != nil {
+		object["role"], err = json.Marshal(a.Role)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'role': %w", err)
+		}
+	}
+
+	if a.Scope != nil {
+		object["scope"], err = json.Marshal(a.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'scope': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Tenants. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Tenants) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Tenants
+func (a *WeaviatePermission_Tenants) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Tenants to handle AdditionalProperties
+func (a *WeaviatePermission_Tenants) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["collection"]; found {
+		err = json.Unmarshal(raw, &a.Collection)
+		if err != nil {
+			return fmt.Errorf("error reading 'collection': %w", err)
+		}
+		delete(object, "collection")
+	}
+
+	if raw, found := object["tenant"]; found {
+		err = json.Unmarshal(raw, &a.Tenant)
+		if err != nil {
+			return fmt.Errorf("error reading 'tenant': %w", err)
+		}
+		delete(object, "tenant")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Tenants to handle AdditionalProperties
+func (a WeaviatePermission_Tenants) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Collection != nil {
+		object["collection"], err = json.Marshal(a.Collection)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'collection': %w", err)
+		}
+	}
+
+	if a.Tenant != nil {
+		object["tenant"], err = json.Marshal(a.Tenant)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tenant': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for WeaviatePermission_Users. Returns the specified
+// element and whether it was found
+func (a WeaviatePermission_Users) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for WeaviatePermission_Users
+func (a *WeaviatePermission_Users) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for WeaviatePermission_Users to handle AdditionalProperties
+func (a *WeaviatePermission_Users) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["users"]; found {
+		err = json.Unmarshal(raw, &a.Users)
+		if err != nil {
+			return fmt.Errorf("error reading 'users': %w", err)
+		}
+		delete(object, "users")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for WeaviatePermission_Users to handle AdditionalProperties
+func (a WeaviatePermission_Users) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Users != nil {
+		object["users"], err = json.Marshal(a.Users)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'users': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // AsRestoreSource0 returns the union data inside the RestoreSource as a RestoreSource0
 func (t RestoreSource) AsRestoreSource0() (RestoreSource0, error) {
 	var body RestoreSource0
@@ -5022,6 +8029,32 @@ func (t *RestoreSource) MergeRestoreSource1(v RestoreSource1) error {
 	return err
 }
 
+// AsRestoreSource2 returns the union data inside the RestoreSource as a RestoreSource2
+func (t RestoreSource) AsRestoreSource2() (RestoreSource2, error) {
+	var body RestoreSource2
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromRestoreSource2 overwrites any union data inside the RestoreSource as the provided RestoreSource2
+func (t *RestoreSource) FromRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeRestoreSource2 performs a merge with any union data inside the RestoreSource, using the provided RestoreSource2
+func (t *RestoreSource) MergeRestoreSource2(v RestoreSource2) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RestoreSource) MarshalJSON() ([]byte, error) {
 	b, err := t.union.MarshalJSON()
 	if err != nil {
@@ -5046,6 +8079,13 @@ func (t RestoreSource) MarshalJSON() ([]byte, error) {
 		object["pitrTime"], err = json.Marshal(t.PitrTime)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'pitrTime': %w", err)
+		}
+	}
+
+	if t.RestorePoint != nil {
+		object["restorePoint"], err = json.Marshal(t.RestorePoint)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'restorePoint': %w", err)
 		}
 	}
 
@@ -5081,6 +8121,13 @@ func (t *RestoreSource) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.PitrTime)
 		if err != nil {
 			return fmt.Errorf("error reading 'pitrTime': %w", err)
+		}
+	}
+
+	if raw, found := object["restorePoint"]; found {
+		err = json.Unmarshal(raw, &t.RestorePoint)
+		if err != nil {
+			return fmt.Errorf("error reading 'restorePoint': %w", err)
 		}
 	}
 
@@ -5189,6 +8236,18 @@ type ServerInterface interface {
 	// Replace the full cluster desired spec
 	// (PUT /clusters/{cluster})
 	ReplaceCluster(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ReplaceClusterParams)
+	// Rebalance shards across distributed PostgreSQL worker groups
+	// (POST /clusters/{cluster}/actions/rebalance)
+	RebalancePostgres(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RebalancePostgresParams)
+	// List backup drills
+	// (GET /clusters/{cluster}/backup-drills)
+	ListBackupDrills(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupDrillsParams)
+	// Create backup drill
+	// (POST /clusters/{cluster}/backup-drills)
+	CreateBackupDrill(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateBackupDrillParams)
+	// Get backup drill
+	// (GET /clusters/{cluster}/backup-drills/{drill})
+	GetBackupDrill(w http.ResponseWriter, r *http.Request, cluster ClusterPath, drill string, params GetBackupDrillParams)
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupsParams)
@@ -5288,21 +8347,105 @@ type ServerInterface interface {
 	// Read logs for a member process
 	// (GET /clusters/{cluster}/members/{member}/logs)
 	GetMemberLogs(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params GetMemberLogsParams)
+	// Move cluster member
+	// (POST /clusters/{cluster}/members/{member}/move)
+	MoveClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params MoveClusterMemberParams)
 	// Replace a member with a new monotonic index
 	// (POST /clusters/{cluster}/members/{member}/replace)
 	ReplaceClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params ReplaceClusterMemberParams)
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterMetricsParams)
+	// List MySQL application databases
+	// (GET /clusters/{cluster}/mysql/databases)
+	ListMySQLDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLDatabasesParams)
+	// Create a MySQL application database
+	// (POST /clusters/{cluster}/mysql/databases)
+	CreateMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLDatabaseParams)
+	// Delete a MySQL application database
+	// (DELETE /clusters/{cluster}/mysql/databases/{database})
+	DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeleteMySQLDatabaseParams)
+	// Read a MySQL application database
+	// (GET /clusters/{cluster}/mysql/databases/{database})
+	GetMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetMySQLDatabaseParams)
+	// Revoke MySQL database privileges
+	// (DELETE /clusters/{cluster}/mysql/grants)
+	RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokeMySQLPrivilegesParams)
+	// List MySQL grants filtered by user or database
+	// (GET /clusters/{cluster}/mysql/grants)
+	ListMySQLGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLGrantsParams)
+	// Grant bounded MySQL database privileges
+	// (POST /clusters/{cluster}/mysql/grants)
+	GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantMySQLPrivilegesParams)
+	// Explicitly recover a fenced PXC minority component
+	// (POST /clusters/{cluster}/mysql/recover-quorum)
+	RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RecoverMySQLQuorumParams)
+	// List MySQL application users
+	// (GET /clusters/{cluster}/mysql/users)
+	ListMySQLUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLUsersParams)
+	// Create a MySQL application user
+	// (POST /clusters/{cluster}/mysql/users)
+	CreateMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLUserParams)
+	// Delete a MySQL application user
+	// (DELETE /clusters/{cluster}/mysql/users/{user})
+	DeleteMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteMySQLUserParams)
+	// Read a MySQL application user
+	// (GET /clusters/{cluster}/mysql/users/{user})
+	GetMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetMySQLUserParams)
+	// Update selected MySQL user attributes
+	// (PATCH /clusters/{cluster}/mysql/users/{user})
+	PatchMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params PatchMySQLUserParams)
+	// Rotate a MySQL user password, optionally retaining the current password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password)
+	RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateMySQLUserPasswordParams)
+	// Discard a MySQL user's retained password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
+	DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DiscardMySQLUserOldPasswordParams)
+	// List Neo4j Community users
+	// (GET /clusters/{cluster}/neo4j/users)
+	ListNeo4jUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListNeo4jUsersParams)
+	// Create a Neo4j Community user
+	// (POST /clusters/{cluster}/neo4j/users)
+	CreateNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateNeo4jUserParams)
+	// Delete a Neo4j Community user
+	// (DELETE /clusters/{cluster}/neo4j/users/{user})
+	DeleteNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteNeo4jUserParams)
+	// Read a Neo4j Community user
+	// (GET /clusters/{cluster}/neo4j/users/{user})
+	GetNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetNeo4jUserParams)
+	// Set or generate a Neo4j Community user password
+	// (POST /clusters/{cluster}/neo4j/users/{user}/password)
+	SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params SetNeo4jUserPasswordParams)
+	// List managed database connections
+	// (GET /clusters/{cluster}/openbao/database-connections)
+	ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams)
+	// Create a managed database connection
+	// (POST /clusters/{cluster}/openbao/database-connections)
+	CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateOpenBaoDatabaseConnectionParams)
+	// Delete a managed database connection
+	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
+	DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params DeleteOpenBaoDatabaseConnectionParams)
+	// getOpenBaoDatabaseConnection
+	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
+	GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params GetOpenBaoDatabaseConnectionParams)
+	// Reveal OpenBao initialization material
+	// (POST /clusters/{cluster}/openbao/unseal-keys/reveal)
+	RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevealOpenBaoUnsealKeysParams)
 	// List cluster operations
 	// (GET /clusters/{cluster}/operations)
 	ListClusterOperations(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListClusterOperationsParams)
-	// Read the continuous restorable PITR window
+	// Read restorable PITR intervals
 	// (GET /clusters/{cluster}/pitr)
 	GetPITRWindow(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetPITRWindowParams)
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GetClusterPlacementParams)
+	// List inbound PostgreSQL consumer bindings without credentials
+	// (GET /clusters/{cluster}/postgres/bindings)
+	ListPostgresBindings(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresBindingsParams)
+	// Rotate binding credentials and refresh the consumer
+	// (POST /clusters/{cluster}/postgres/bindings/{binding}/rotate)
+	RotatePostgresBinding(w http.ResponseWriter, r *http.Request, cluster ClusterPath, binding string, params RotatePostgresBindingParams)
 	// List PostgreSQL application databases
 	// (GET /clusters/{cluster}/postgres/databases)
 	ListPostgresDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresDatabasesParams)
@@ -5489,6 +8632,69 @@ type ServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateSystemUserParams)
+	// List non-secret Temporal client certificate metadata
+	// (GET /clusters/{cluster}/temporal/client-certificates)
+	ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalClientCertificatesParams)
+	// Issue a Temporal client certificate and return its private key once
+	// (POST /clusters/{cluster}/temporal/client-certificates)
+	IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params IssueTemporalClientCertificateParams)
+	// List Temporal namespaces
+	// (GET /clusters/{cluster}/temporal/namespaces)
+	ListTemporalNamespaces(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalNamespacesParams)
+	// Request asynchronous deletion of an unmanaged Temporal namespace
+	// (DELETE /clusters/{cluster}/temporal/namespaces/{temporalNamespace})
+	DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request, cluster ClusterPath, temporalNamespace string, params DeleteTemporalNamespaceParams)
+	// Seal the write-only Temporal UI OIDC client secret
+	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
+	SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetTemporalUIOIDCClientSecretParams)
+	// Upgrade cluster agents
+	// (POST /clusters/{cluster}/upgrade-agents)
+	UpgradeClusterAgents(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params UpgradeClusterAgentsParams)
+	// List Weaviate RBAC roles
+	// (GET /clusters/{cluster}/weaviate/roles)
+	ListWeaviateRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateRolesParams)
+	// Create a Weaviate RBAC role
+	// (POST /clusters/{cluster}/weaviate/roles)
+	CreateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateRoleParams)
+	// Delete a Weaviate RBAC role
+	// (DELETE /clusters/{cluster}/weaviate/roles/{role})
+	DeleteWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteWeaviateRoleParams)
+	// Get a Weaviate RBAC role
+	// (GET /clusters/{cluster}/weaviate/roles/{role})
+	GetWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetWeaviateRoleParams)
+	// Replace a Weaviate RBAC role
+	// (PUT /clusters/{cluster}/weaviate/roles/{role})
+	UpdateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateWeaviateRoleParams)
+	// List Weaviate database users
+	// (GET /clusters/{cluster}/weaviate/users)
+	ListWeaviateUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateUsersParams)
+	// Create a Weaviate database user
+	// (POST /clusters/{cluster}/weaviate/users)
+	CreateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateUserParams)
+	// Delete a Weaviate database user
+	// (DELETE /clusters/{cluster}/weaviate/users/{user})
+	DeleteWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteWeaviateUserParams)
+	// Get a Weaviate database user
+	// (GET /clusters/{cluster}/weaviate/users/{user})
+	GetWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetWeaviateUserParams)
+	// Update Weaviate database user roles and activation
+	// (PUT /clusters/{cluster}/weaviate/users/{user})
+	UpdateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params UpdateWeaviateUserParams)
+	// Rotate a Weaviate database user API key
+	// (POST /clusters/{cluster}/weaviate/users/{user}/rotate-key)
+	RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateWeaviateUserKeyParams)
+	// Get control plane backup policy
+	// (GET /control-plane/backup-policy)
+	GetControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request)
+	// Update control plane backup policy
+	// (PUT /control-plane/backup-policy)
+	UpdateControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request, params UpdateControlPlaneBackupPolicyParams)
+	// List control plane backups
+	// (GET /control-plane/backups)
+	ListControlPlaneBackups(w http.ResponseWriter, r *http.Request, params ListControlPlaneBackupsParams)
+	// Create control plane backup
+	// (POST /control-plane/backups)
+	CreateControlPlaneBackup(w http.ResponseWriter, r *http.Request, params CreateControlPlaneBackupParams)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams)
@@ -5534,6 +8740,24 @@ type ServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(w http.ResponseWriter, r *http.Request, namespace NamespacePath, params ValidateNamespaceParams)
+	// List notification channels
+	// (GET /notification-channels)
+	ListNotificationChannels(w http.ResponseWriter, r *http.Request, params ListNotificationChannelsParams)
+	// Create notification channel
+	// (POST /notification-channels)
+	CreateNotificationChannel(w http.ResponseWriter, r *http.Request, params CreateNotificationChannelParams)
+	// Delete notification channel
+	// (DELETE /notification-channels/{channel})
+	DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params DeleteNotificationChannelParams)
+	// Get notification channel
+	// (GET /notification-channels/{channel})
+	GetNotificationChannel(w http.ResponseWriter, r *http.Request, channel string)
+	// Replace notification channel
+	// (PUT /notification-channels/{channel})
+	ReplaceNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params ReplaceNotificationChannelParams)
+	// Test notification channel
+	// (POST /notification-channels/{channel}/test)
+	TestNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params TestNotificationChannelParams)
 	// List connected OAuth applications (own grants unless administrator)
 	// (GET /oauth-grants)
 	ListOAuthGrants(w http.ResponseWriter, r *http.Request)
@@ -5579,6 +8803,12 @@ type ServerInterface interface {
 	// Replace OIDC configuration
 	// (PUT /settings)
 	ReplaceSettings(w http.ResponseWriter, r *http.Request, params ReplaceSettingsParams)
+	// Get agent rollout settings
+	// (GET /settings/agent-rollout)
+	GetAgentRolloutSettings(w http.ResponseWriter, r *http.Request)
+	// Update agent rollout settings
+	// (PUT /settings/agent-rollout)
+	UpdateAgentRolloutSettings(w http.ResponseWriter, r *http.Request, params UpdateAgentRolloutSettingsParams)
 	// Read server build and API version
 	// (GET /version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
@@ -7128,6 +10358,14 @@ func (siw *ServerInterfaceWrapper) PatchCluster(w http.ResponseWriter, r *http.R
 	// Parameter object where we will unmarshal all parameters from the context
 	var params PatchClusterParams
 
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "namespace" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
@@ -7212,6 +10450,14 @@ func (siw *ServerInterfaceWrapper) ReplaceCluster(w http.ResponseWriter, r *http
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceClusterParams
 
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "namespace" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
@@ -7262,6 +10508,287 @@ func (siw *ServerInterfaceWrapper) ReplaceCluster(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceCluster(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RebalancePostgres operation middleware
+func (siw *ServerInterfaceWrapper) RebalancePostgres(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RebalancePostgresParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RebalancePostgres(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBackupDrills operation middleware
+func (siw *ServerInterfaceWrapper) ListBackupDrills(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBackupDrillsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBackupDrills(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateBackupDrill operation middleware
+func (siw *ServerInterfaceWrapper) CreateBackupDrill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateBackupDrillParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateBackupDrill(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBackupDrill operation middleware
+func (siw *ServerInterfaceWrapper) GetBackupDrill(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "drill" -------------
+	var drill string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "drill", r.PathValue("drill"), &drill, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "drill", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBackupDrillParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBackupDrill(w, r, cluster, drill, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9605,6 +13132,107 @@ func (siw *ServerInterfaceWrapper) GetMemberLogs(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// MoveClusterMember operation middleware
+func (siw *ServerInterfaceWrapper) MoveClusterMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "member" -------------
+	var member string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MoveClusterMemberParams
+
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveClusterMember(w, r, cluster, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReplaceClusterMember operation middleware
 func (siw *ServerInterfaceWrapper) ReplaceClusterMember(w http.ResponseWriter, r *http.Request) {
 
@@ -9638,6 +13266,14 @@ func (siw *ServerInterfaceWrapper) ReplaceClusterMember(w http.ResponseWriter, r
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ReplaceClusterMemberParams
+
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "namespace" -------------
 
@@ -9749,6 +13385,1707 @@ func (siw *ServerInterfaceWrapper) GetClusterMetrics(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterMetrics(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLDatabases operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLDatabases(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLDatabasesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLDatabases(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) CreateMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMySQLDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMySQLDatabase(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMySQLDatabaseParams
+
+	// ------------- Optional query parameter "force" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "force", r.URL.Query(), &params.Force)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "force", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySQLDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySQLDatabase operation middleware
+func (siw *ServerInterfaceWrapper) GetMySQLDatabase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "database" -------------
+	var database string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "database", r.PathValue("database"), &database, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMySQLDatabaseParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySQLDatabase(w, r, cluster, database, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeMySQLPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeMySQLPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeMySQLPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLGrants operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLGrants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLGrantsParams
+
+	// ------------- Optional query parameter "user" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "user", r.URL.Query(), &params.User)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "database" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "database", r.URL.Query(), &params.Database)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "database", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLGrants(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantMySQLPrivileges operation middleware
+func (siw *ServerInterfaceWrapper) GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GrantMySQLPrivilegesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantMySQLPrivileges(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecoverMySQLQuorum operation middleware
+func (siw *ServerInterfaceWrapper) RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecoverMySQLQuorumParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecoverMySQLQuorum(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySQLUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListMySQLUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMySQLUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySQLUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMySQLUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) GetMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchMySQLUser operation middleware
+func (siw *ServerInterfaceWrapper) PatchMySQLUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PatchMySQLUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchMySQLUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateMySQLUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateMySQLUserPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateMySQLUserPassword(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscardMySQLUserOldPassword operation middleware
+func (siw *ServerInterfaceWrapper) DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DiscardMySQLUserOldPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscardMySQLUserOldPassword(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNeo4jUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListNeo4jUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNeo4jUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNeo4jUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNeo4jUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNeo4jUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNeo4jUser operation middleware
+func (siw *ServerInterfaceWrapper) GetNeo4jUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetNeo4jUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNeo4jUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetNeo4jUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetNeo4jUserPasswordParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetNeo4jUserPassword(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOpenBaoDatabaseConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOpenBaoDatabaseConnectionsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOpenBaoDatabaseConnections(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOpenBaoDatabaseConnection(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection" -------------
+	var connection string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection", r.PathValue("connection"), &connection, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOpenBaoDatabaseConnection(w, r, cluster, connection, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOpenBaoDatabaseConnection operation middleware
+func (siw *ServerInterfaceWrapper) GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connection" -------------
+	var connection string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connection", r.PathValue("connection"), &connection, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOpenBaoDatabaseConnectionParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOpenBaoDatabaseConnection(w, r, cluster, connection, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevealOpenBaoUnsealKeys operation middleware
+func (siw *ServerInterfaceWrapper) RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevealOpenBaoUnsealKeysParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevealOpenBaoUnsealKeys(w, r, cluster, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -9905,6 +15242,143 @@ func (siw *ServerInterfaceWrapper) GetClusterPlacement(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClusterPlacement(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPostgresBindings operation middleware
+func (siw *ServerInterfaceWrapper) ListPostgresBindings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPostgresBindingsParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPostgresBindings(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotatePostgresBinding operation middleware
+func (siw *ServerInterfaceWrapper) RotatePostgresBinding(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "binding" -------------
+	var binding string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "binding", r.PathValue("binding"), &binding, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "binding", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotatePostgresBindingParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotatePostgresBinding(w, r, cluster, binding, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13140,6 +18614,14 @@ func (siw *ServerInterfaceWrapper) RaiseClusterFCV(w http.ResponseWriter, r *htt
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RaiseClusterFCVParams
 
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "namespace" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
@@ -13223,6 +18705,14 @@ func (siw *ServerInterfaceWrapper) RestartCluster(w http.ResponseWriter, r *http
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RestartClusterParams
+
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "namespace" -------------
 
@@ -13672,6 +19162,14 @@ func (siw *ServerInterfaceWrapper) RotateClusterTLS(w http.ResponseWriter, r *ht
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params RotateClusterTLSParams
+
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "namespace" -------------
 
@@ -14380,6 +19878,1397 @@ func (siw *ServerInterfaceWrapper) RotateSystemUser(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RotateSystemUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTemporalClientCertificates operation middleware
+func (siw *ServerInterfaceWrapper) ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTemporalClientCertificatesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTemporalClientCertificates(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueTemporalClientCertificate operation middleware
+func (siw *ServerInterfaceWrapper) IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssueTemporalClientCertificateParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueTemporalClientCertificate(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTemporalNamespaces operation middleware
+func (siw *ServerInterfaceWrapper) ListTemporalNamespaces(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTemporalNamespacesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTemporalNamespaces(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTemporalNamespace operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "temporalNamespace" -------------
+	var temporalNamespace string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "temporalNamespace", r.PathValue("temporalNamespace"), &temporalNamespace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "temporalNamespace", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTemporalNamespaceParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTemporalNamespace(w, r, cluster, temporalNamespace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTemporalUIOIDCClientSecret operation middleware
+func (siw *ServerInterfaceWrapper) SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetTemporalUIOIDCClientSecretParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTemporalUIOIDCClientSecret(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpgradeClusterAgents operation middleware
+func (siw *ServerInterfaceWrapper) UpgradeClusterAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpgradeClusterAgentsParams
+
+	// ------------- Optional query parameter "ignoreMaintenanceWindow" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "ignoreMaintenanceWindow", r.URL.Query(), &params.IgnoreMaintenanceWindow)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ignoreMaintenanceWindow", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpgradeClusterAgents(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWeaviateRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListWeaviateRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWeaviateRolesParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWeaviateRoles(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) CreateWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWeaviateRole(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) GetWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWeaviateRole operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWeaviateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var role string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &role, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWeaviateRoleParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWeaviateRole(w, r, cluster, role, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWeaviateUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListWeaviateUsers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWeaviateUsersParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWeaviateUsers(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWeaviateUser(w, r, cluster, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) GetWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWeaviateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWeaviateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWeaviateUserParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWeaviateUser(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RotateWeaviateUserKey operation middleware
+func (siw *ServerInterfaceWrapper) RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster ClusterPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "user" -------------
+	var user string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "user", r.PathValue("user"), &user, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "user", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RotateWeaviateUserKeyParams
+
+	// ------------- Optional query parameter "namespace" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "namespace", r.URL.Query(), &params.Namespace)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "namespace", Err: err})
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RotateWeaviateUserKey(w, r, cluster, user, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetControlPlaneBackupPolicy operation middleware
+func (siw *ServerInterfaceWrapper) GetControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetControlPlaneBackupPolicy(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateControlPlaneBackupPolicy operation middleware
+func (siw *ServerInterfaceWrapper) UpdateControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateControlPlaneBackupPolicyParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateControlPlaneBackupPolicy(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListControlPlaneBackups operation middleware
+func (siw *ServerInterfaceWrapper) ListControlPlaneBackups(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListControlPlaneBackupsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListControlPlaneBackups(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateControlPlaneBackup operation middleware
+func (siw *ServerInterfaceWrapper) CreateControlPlaneBackup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateControlPlaneBackupParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateControlPlaneBackup(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15263,6 +22152,377 @@ func (siw *ServerInterfaceWrapper) ValidateNamespace(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListNotificationChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationChannelsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationChannels(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateNotificationChannelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationChannel(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "channel" -------------
+	var channel string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteNotificationChannelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNotificationChannel(w, r, channel, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) GetNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "channel" -------------
+	var channel string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetNotificationChannel(w, r, channel)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "channel" -------------
+	var channel string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceNotificationChannelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceNotificationChannel(w, r, channel, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) TestNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "channel" -------------
+	var channel string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TestNotificationChannelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestNotificationChannel(w, r, channel, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOAuthGrants operation middleware
 func (siw *ServerInterfaceWrapper) ListOAuthGrants(w http.ResponseWriter, r *http.Request) {
 
@@ -15813,6 +23073,95 @@ func (siw *ServerInterfaceWrapper) ReplaceSettings(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetAgentRolloutSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentRolloutSettings(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentRolloutSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgentRolloutSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgentRolloutSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerAuthScopes, []string{})
+
+	ctx = context.WithValue(ctx, CookieSessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAgentRolloutSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Karakoram-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Karakoram-CSRF")]; found {
+		var XKarakoramCSRF CSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Karakoram-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Karakoram-CSRF", valueList[0], &XKarakoramCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Karakoram-CSRF", Err: err})
+			return
+		}
+
+		params.XKarakoramCSRF = &XKarakoramCSRF
+
+	}
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgentRolloutSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetVersion operation middleware
 func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Request) {
 
@@ -15978,6 +23327,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}", wrapper.GetCluster)
 	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}", wrapper.PatchCluster)
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}", wrapper.ReplaceCluster)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/actions/rebalance", wrapper.RebalancePostgres)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/backup-drills", wrapper.ListBackupDrills)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/backup-drills", wrapper.CreateBackupDrill)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/backup-drills/{drill}", wrapper.GetBackupDrill)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/backups", wrapper.ListBackups)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/backups", wrapper.CreateBackup)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/backups/{backup}", wrapper.DeleteBackup)
@@ -16011,11 +23364,39 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members", wrapper.ListClusterMembers)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}", wrapper.GetClusterMember)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/members/{member}/logs", wrapper.GetMemberLogs)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/members/{member}/move", wrapper.MoveClusterMember)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/members/{member}/replace", wrapper.ReplaceClusterMember)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/metrics", wrapper.GetClusterMetrics)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/databases", wrapper.ListMySQLDatabases)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/databases", wrapper.CreateMySQLDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/databases/{database}", wrapper.DeleteMySQLDatabase)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/databases/{database}", wrapper.GetMySQLDatabase)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.RevokeMySQLPrivileges)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.ListMySQLGrants)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/grants", wrapper.GrantMySQLPrivileges)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/recover-quorum", wrapper.RecoverMySQLQuorum)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/users", wrapper.ListMySQLUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users", wrapper.CreateMySQLUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.DeleteMySQLUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.GetMySQLUser)
+	m.HandleFunc("PATCH "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}", wrapper.PatchMySQLUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password", wrapper.RotateMySQLUserPassword)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/mysql/users/{user}/password/discard-old", wrapper.DiscardMySQLUserOldPassword)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/neo4j/users", wrapper.ListNeo4jUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/neo4j/users", wrapper.CreateNeo4jUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}", wrapper.DeleteNeo4jUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}", wrapper.GetNeo4jUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/neo4j/users/{user}/password", wrapper.SetNeo4jUserPassword)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.ListOpenBaoDatabaseConnections)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections", wrapper.CreateOpenBaoDatabaseConnection)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.DeleteOpenBaoDatabaseConnection)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/openbao/database-connections/{connection}", wrapper.GetOpenBaoDatabaseConnection)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/openbao/unseal-keys/reveal", wrapper.RevealOpenBaoUnsealKeys)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/operations", wrapper.ListClusterOperations)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/pitr", wrapper.GetPITRWindow)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/placement", wrapper.GetClusterPlacement)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/bindings", wrapper.ListPostgresBindings)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/bindings/{binding}/rotate", wrapper.RotatePostgresBinding)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.ListPostgresDatabases)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/postgres/databases", wrapper.CreatePostgresDatabase)
 	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/postgres/databases/{database}", wrapper.DeletePostgresDatabase)
@@ -16078,6 +23459,27 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/supabase/smtp-password", wrapper.SetSupabaseSMTPPassword)
 	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/system-users", wrapper.ListSystemUsers)
 	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/system-users/{user}/rotate", wrapper.RotateSystemUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/temporal/client-certificates", wrapper.ListTemporalClientCertificates)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/temporal/client-certificates", wrapper.IssueTemporalClientCertificate)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces", wrapper.ListTemporalNamespaces)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/temporal/namespaces/{temporalNamespace}", wrapper.DeleteTemporalNamespace)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/temporal/ui/oidc-client-secret", wrapper.SetTemporalUIOIDCClientSecret)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/upgrade-agents", wrapper.UpgradeClusterAgents)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/roles", wrapper.ListWeaviateRoles)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/roles", wrapper.CreateWeaviateRole)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.DeleteWeaviateRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.GetWeaviateRole)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/weaviate/roles/{role}", wrapper.UpdateWeaviateRole)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/users", wrapper.ListWeaviateUsers)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/users", wrapper.CreateWeaviateUser)
+	m.HandleFunc("DELETE "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.DeleteWeaviateUser)
+	m.HandleFunc("GET "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.GetWeaviateUser)
+	m.HandleFunc("PUT "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}", wrapper.UpdateWeaviateUser)
+	m.HandleFunc("POST "+options.BaseURL+"/clusters/{cluster}/weaviate/users/{user}/rotate-key", wrapper.RotateWeaviateUserKey)
+	m.HandleFunc("GET "+options.BaseURL+"/control-plane/backup-policy", wrapper.GetControlPlaneBackupPolicy)
+	m.HandleFunc("PUT "+options.BaseURL+"/control-plane/backup-policy", wrapper.UpdateControlPlaneBackupPolicy)
+	m.HandleFunc("GET "+options.BaseURL+"/control-plane/backups", wrapper.ListControlPlaneBackups)
+	m.HandleFunc("POST "+options.BaseURL+"/control-plane/backups", wrapper.CreateControlPlaneBackup)
 	m.HandleFunc("POST "+options.BaseURL+"/dry-run/clusters", wrapper.DryRunCreateCluster)
 	m.HandleFunc("PATCH "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunPatchCluster)
 	m.HandleFunc("PUT "+options.BaseURL+"/dry-run/clusters/{cluster}", wrapper.DryRunReplaceCluster)
@@ -16093,6 +23495,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PATCH "+options.BaseURL+"/namespaces/{namespace}", wrapper.UpdateNamespace)
 	m.HandleFunc("PUT "+options.BaseURL+"/namespaces/{namespace}/token", wrapper.RotateNamespaceToken)
 	m.HandleFunc("POST "+options.BaseURL+"/namespaces/{namespace}/validate", wrapper.ValidateNamespace)
+	m.HandleFunc("GET "+options.BaseURL+"/notification-channels", wrapper.ListNotificationChannels)
+	m.HandleFunc("POST "+options.BaseURL+"/notification-channels", wrapper.CreateNotificationChannel)
+	m.HandleFunc("DELETE "+options.BaseURL+"/notification-channels/{channel}", wrapper.DeleteNotificationChannel)
+	m.HandleFunc("GET "+options.BaseURL+"/notification-channels/{channel}", wrapper.GetNotificationChannel)
+	m.HandleFunc("PUT "+options.BaseURL+"/notification-channels/{channel}", wrapper.ReplaceNotificationChannel)
+	m.HandleFunc("POST "+options.BaseURL+"/notification-channels/{channel}/test", wrapper.TestNotificationChannel)
 	m.HandleFunc("GET "+options.BaseURL+"/oauth-grants", wrapper.ListOAuthGrants)
 	m.HandleFunc("DELETE "+options.BaseURL+"/oauth-grants/{grant}", wrapper.DeleteOAuthGrant)
 	m.HandleFunc("GET "+options.BaseURL+"/openapi.yaml", wrapper.GetOpenAPISpec)
@@ -16108,6 +23516,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("PUT "+options.BaseURL+"/rbac/policy", wrapper.ReplaceRBACPolicy)
 	m.HandleFunc("GET "+options.BaseURL+"/settings", wrapper.GetSettings)
 	m.HandleFunc("PUT "+options.BaseURL+"/settings", wrapper.ReplaceSettings)
+	m.HandleFunc("GET "+options.BaseURL+"/settings/agent-rollout", wrapper.GetAgentRolloutSettings)
+	m.HandleFunc("PUT "+options.BaseURL+"/settings/agent-rollout", wrapper.UpdateAgentRolloutSettings)
 	m.HandleFunc("GET "+options.BaseURL+"/version", wrapper.GetVersion)
 
 	return m
@@ -16166,6 +23576,15 @@ type NotFoundJSONResponse struct {
 	Body Error
 
 	Headers NotFoundResponseHeaders
+}
+
+type NotImplementedResponseHeaders struct {
+	XRequestID string
+}
+type NotImplementedJSONResponse struct {
+	Body Error
+
+	Headers NotImplementedResponseHeaders
 }
 
 type PayloadTooLargeResponseHeaders struct {
@@ -19914,6 +27333,515 @@ func (response ReplaceCluster500JSONResponse) VisitReplaceClusterResponse(w http
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type RebalancePostgresRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RebalancePostgresParams
+	Body    *RebalancePostgresJSONRequestBody
+}
+
+type RebalancePostgresResponseObject interface {
+	VisitRebalancePostgresResponse(w http.ResponseWriter) error
+}
+
+type RebalancePostgres202ResponseHeaders struct {
+	KarakoramOperationId string
+}
+
+type RebalancePostgres202JSONResponse struct {
+	Body    Operation
+	Headers RebalancePostgres202ResponseHeaders
+}
+
+func (response RebalancePostgres202JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RebalancePostgres400JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RebalancePostgres401JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RebalancePostgres403JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RebalancePostgres404JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RebalancePostgres405JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RebalancePostgres409JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RebalancePostgres413JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RebalancePostgres415JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RebalancePostgres500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RebalancePostgres500JSONResponse) VisitRebalancePostgresResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrillsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListBackupDrillsParams
+}
+
+type ListBackupDrillsResponseObject interface {
+	VisitListBackupDrillsResponse(w http.ResponseWriter) error
+}
+
+type ListBackupDrills200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListBackupDrills200JSONResponse struct {
+	Body    BackupDrillList
+	Headers ListBackupDrills200ResponseHeaders
+}
+
+func (response ListBackupDrills200JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListBackupDrills400JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListBackupDrills401JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListBackupDrills403JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListBackupDrills404JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListBackupDrills405JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListBackupDrills409JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListBackupDrills413JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListBackupDrills415JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListBackupDrills500JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListBackupDrills501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response ListBackupDrills501JSONResponse) VisitListBackupDrillsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrillRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateBackupDrillParams
+	Body    *CreateBackupDrillJSONRequestBody
+}
+
+type CreateBackupDrillResponseObject interface {
+	VisitCreateBackupDrillResponse(w http.ResponseWriter) error
+}
+
+type CreateBackupDrill202ResponseHeaders struct {
+	XRequestID string
+}
+
+type CreateBackupDrill202JSONResponse struct {
+	Body    BackupDrill
+	Headers CreateBackupDrill202ResponseHeaders
+}
+
+func (response CreateBackupDrill202JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateBackupDrill400JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateBackupDrill401JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateBackupDrill403JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateBackupDrill404JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateBackupDrill405JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateBackupDrill409JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateBackupDrill413JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateBackupDrill415JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateBackupDrill500JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateBackupDrill501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response CreateBackupDrill501JSONResponse) VisitCreateBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrillRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Drill   string      `json:"drill"`
+	Params  GetBackupDrillParams
+}
+
+type GetBackupDrillResponseObject interface {
+	VisitGetBackupDrillResponse(w http.ResponseWriter) error
+}
+
+type GetBackupDrill200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetBackupDrill200JSONResponse struct {
+	Body    BackupDrill
+	Headers GetBackupDrill200ResponseHeaders
+}
+
+func (response GetBackupDrill200JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetBackupDrill400JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetBackupDrill401JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetBackupDrill403JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetBackupDrill404JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetBackupDrill405JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetBackupDrill409JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetBackupDrill413JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetBackupDrill415JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetBackupDrill500JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetBackupDrill501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetBackupDrill501JSONResponse) VisitGetBackupDrillResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ListBackupsRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Params  ListBackupsParams
@@ -23419,6 +31347,147 @@ func (response GetMemberLogs500JSONResponse) VisitGetMemberLogsResponse(w http.R
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetMemberLogs503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMemberLogs503JSONResponse) VisitGetMemberLogsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type MoveClusterMemberRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Member  string      `json:"member"`
+	Params  MoveClusterMemberParams
+}
+
+type MoveClusterMemberResponseObject interface {
+	VisitMoveClusterMemberResponse(w http.ResponseWriter) error
+}
+
+type MoveClusterMember202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type MoveClusterMember202JSONResponse struct {
+	Body    Operation
+	Headers MoveClusterMember202ResponseHeaders
+}
+
+func (response MoveClusterMember202JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response MoveClusterMember400JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response MoveClusterMember401JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response MoveClusterMember403JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response MoveClusterMember404JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response MoveClusterMember405JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember409JSONResponse struct{ ConflictJSONResponse }
+
+func (response MoveClusterMember409JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response MoveClusterMember413JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response MoveClusterMember415JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response MoveClusterMember500JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type MoveClusterMember501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response MoveClusterMember501JSONResponse) VisitMoveClusterMemberResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ReplaceClusterMemberRequestObject struct {
 	Cluster ClusterPath `json:"cluster"`
 	Member  string      `json:"member"`
@@ -23658,6 +31727,2588 @@ func (response GetClusterMetrics500JSONResponse) VisitGetClusterMetricsResponse(
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabasesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLDatabasesParams
+}
+
+type ListMySQLDatabasesResponseObject interface {
+	VisitListMySQLDatabasesResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLDatabases200JSONResponse struct {
+	Items []MySQLDatabase `json:"items"`
+}
+
+func (response ListMySQLDatabases200JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLDatabases400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLDatabases400JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLDatabases401JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLDatabases403JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLDatabases404JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLDatabases409JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLDatabases500JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLDatabases503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLDatabases503JSONResponse) VisitListMySQLDatabasesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLDatabaseRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateMySQLDatabaseParams
+	Body    *CreateMySQLDatabaseJSONRequestBody
+}
+
+type CreateMySQLDatabaseResponseObject interface {
+	VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type CreateMySQLDatabase201JSONResponse MySQLDatabase
+
+func (response CreateMySQLDatabase201JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateMySQLDatabase400JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateMySQLDatabase401JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMySQLDatabase403JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateMySQLDatabase404JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateMySQLDatabase409JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateMySQLDatabase413JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateMySQLDatabase415JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateMySQLDatabase500JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateMySQLDatabase503JSONResponse) VisitCreateMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMySQLDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   DeleteMySQLDatabaseParams
+}
+
+type DeleteMySQLDatabaseResponseObject interface {
+	VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type DeleteMySQLDatabase204Response struct {
+}
+
+func (response DeleteMySQLDatabase204Response) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteMySQLDatabase400JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteMySQLDatabase401JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteMySQLDatabase403JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteMySQLDatabase404JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteMySQLDatabase409JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteMySQLDatabase500JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteMySQLDatabase503JSONResponse) VisitDeleteMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLDatabaseRequestObject struct {
+	Cluster  ClusterPath `json:"cluster"`
+	Database string      `json:"database"`
+	Params   GetMySQLDatabaseParams
+}
+
+type GetMySQLDatabaseResponseObject interface {
+	VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error
+}
+
+type GetMySQLDatabase200JSONResponse MySQLDatabase
+
+func (response GetMySQLDatabase200JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLDatabase400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetMySQLDatabase400JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMySQLDatabase401JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetMySQLDatabase403JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMySQLDatabase404JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetMySQLDatabase409JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetMySQLDatabase500JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLDatabase503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMySQLDatabase503JSONResponse) VisitGetMySQLDatabaseResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevokeMySQLPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RevokeMySQLPrivilegesParams
+	Body    *RevokeMySQLPrivilegesJSONRequestBody
+}
+
+type RevokeMySQLPrivilegesResponseObject interface {
+	VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type RevokeMySQLPrivileges204Response struct {
+}
+
+func (response RevokeMySQLPrivileges204Response) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeMySQLPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RevokeMySQLPrivileges400JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokeMySQLPrivileges401JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevokeMySQLPrivileges403JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeMySQLPrivileges404JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevokeMySQLPrivileges409JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RevokeMySQLPrivileges413JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RevokeMySQLPrivileges415JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevokeMySQLPrivileges500JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevokeMySQLPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RevokeMySQLPrivileges503JSONResponse) VisitRevokeMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLGrantsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLGrantsParams
+}
+
+type ListMySQLGrantsResponseObject interface {
+	VisitListMySQLGrantsResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLGrants200JSONResponse struct {
+	Items []MySQLGrant `json:"items"`
+}
+
+func (response ListMySQLGrants200JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLGrants400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLGrants400JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLGrants401JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLGrants403JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLGrants404JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLGrants409JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLGrants500JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLGrants503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLGrants503JSONResponse) VisitListMySQLGrantsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GrantMySQLPrivilegesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  GrantMySQLPrivilegesParams
+	Body    *GrantMySQLPrivilegesJSONRequestBody
+}
+
+type GrantMySQLPrivilegesResponseObject interface {
+	VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error
+}
+
+type GrantMySQLPrivileges204Response struct {
+}
+
+func (response GrantMySQLPrivileges204Response) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantMySQLPrivileges400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GrantMySQLPrivileges400JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GrantMySQLPrivileges401JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GrantMySQLPrivileges403JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GrantMySQLPrivileges404JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GrantMySQLPrivileges409JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GrantMySQLPrivileges413JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GrantMySQLPrivileges415JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GrantMySQLPrivileges500JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GrantMySQLPrivileges503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GrantMySQLPrivileges503JSONResponse) VisitGrantMySQLPrivilegesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RecoverMySQLQuorumRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RecoverMySQLQuorumParams
+	Body    *RecoverMySQLQuorumJSONRequestBody
+}
+
+type RecoverMySQLQuorumResponseObject interface {
+	VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error
+}
+
+type RecoverMySQLQuorum202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type RecoverMySQLQuorum202JSONResponse struct {
+	Body    Operation
+	Headers RecoverMySQLQuorum202ResponseHeaders
+}
+
+func (response RecoverMySQLQuorum202JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RecoverMySQLQuorum400JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RecoverMySQLQuorum401JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RecoverMySQLQuorum403JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RecoverMySQLQuorum404JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response RecoverMySQLQuorum405JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RecoverMySQLQuorum409JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RecoverMySQLQuorum413JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RecoverMySQLQuorum415JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RecoverMySQLQuorum500JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RecoverMySQLQuorum503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RecoverMySQLQuorum503JSONResponse) VisitRecoverMySQLQuorumResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListMySQLUsersParams
+}
+
+type ListMySQLUsersResponseObject interface {
+	VisitListMySQLUsersResponse(w http.ResponseWriter) error
+}
+
+type ListMySQLUsers200JSONResponse struct {
+	Items []MySQLUser `json:"items"`
+}
+
+func (response ListMySQLUsers200JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListMySQLUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListMySQLUsers400JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMySQLUsers401JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListMySQLUsers403JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListMySQLUsers404JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListMySQLUsers409JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListMySQLUsers500JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListMySQLUsers503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListMySQLUsers503JSONResponse) VisitListMySQLUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateMySQLUserParams
+	Body    *CreateMySQLUserJSONRequestBody
+}
+
+type CreateMySQLUserResponseObject interface {
+	VisitCreateMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type CreateMySQLUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateMySQLUser201JSONResponse struct {
+	Body    MySQLUserCreated
+	Headers CreateMySQLUser201ResponseHeaders
+}
+
+func (response CreateMySQLUser201JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateMySQLUser400JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateMySQLUser401JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateMySQLUser403JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateMySQLUser404JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateMySQLUser409JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateMySQLUser413JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateMySQLUser415JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateMySQLUser500JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateMySQLUser503JSONResponse) VisitCreateMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteMySQLUserParams
+}
+
+type DeleteMySQLUserResponseObject interface {
+	VisitDeleteMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteMySQLUser204Response struct {
+}
+
+func (response DeleteMySQLUser204Response) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteMySQLUser400JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteMySQLUser401JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteMySQLUser403JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteMySQLUser404JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteMySQLUser409JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteMySQLUser500JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteMySQLUser503JSONResponse) VisitDeleteMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetMySQLUserParams
+}
+
+type GetMySQLUserResponseObject interface {
+	VisitGetMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type GetMySQLUser200JSONResponse MySQLUser
+
+func (response GetMySQLUser200JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetMySQLUser400JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetMySQLUser401JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetMySQLUser403JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetMySQLUser404JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetMySQLUser409JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetMySQLUser500JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetMySQLUser503JSONResponse) VisitGetMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchMySQLUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  PatchMySQLUserParams
+	Body    *PatchMySQLUserJSONRequestBody
+}
+
+type PatchMySQLUserResponseObject interface {
+	VisitPatchMySQLUserResponse(w http.ResponseWriter) error
+}
+
+type PatchMySQLUser200JSONResponse MySQLUser
+
+func (response PatchMySQLUser200JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PatchMySQLUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PatchMySQLUser400JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PatchMySQLUser401JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PatchMySQLUser403JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PatchMySQLUser404JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PatchMySQLUser409JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response PatchMySQLUser413JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response PatchMySQLUser415JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response PatchMySQLUser500JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type PatchMySQLUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response PatchMySQLUser503JSONResponse) VisitPatchMySQLUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotateMySQLUserPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  RotateMySQLUserPasswordParams
+	Body    *RotateMySQLUserPasswordJSONRequestBody
+}
+
+type RotateMySQLUserPasswordResponseObject interface {
+	VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type RotateMySQLUserPassword200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type RotateMySQLUserPassword200JSONResponse struct {
+	Body    MySQLPasswordRotation
+	Headers RotateMySQLUserPassword200ResponseHeaders
+}
+
+func (response RotateMySQLUserPassword200JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateMySQLUserPassword400JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateMySQLUserPassword401JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateMySQLUserPassword403JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateMySQLUserPassword404JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateMySQLUserPassword409JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RotateMySQLUserPassword413JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RotateMySQLUserPassword415JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateMySQLUserPassword500JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateMySQLUserPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotateMySQLUserPassword503JSONResponse) VisitRotateMySQLUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DiscardMySQLUserOldPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DiscardMySQLUserOldPasswordParams
+}
+
+type DiscardMySQLUserOldPasswordResponseObject interface {
+	VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error
+}
+
+type DiscardMySQLUserOldPassword204Response struct {
+}
+
+func (response DiscardMySQLUserOldPassword204Response) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DiscardMySQLUserOldPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DiscardMySQLUserOldPassword400JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DiscardMySQLUserOldPassword401JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DiscardMySQLUserOldPassword403JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DiscardMySQLUserOldPassword404JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DiscardMySQLUserOldPassword409JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DiscardMySQLUserOldPassword500JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DiscardMySQLUserOldPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DiscardMySQLUserOldPassword503JSONResponse) VisitDiscardMySQLUserOldPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNeo4jUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListNeo4jUsersParams
+}
+
+type ListNeo4jUsersResponseObject interface {
+	VisitListNeo4jUsersResponse(w http.ResponseWriter) error
+}
+
+type ListNeo4jUsers200JSONResponse struct {
+	Items []Neo4jUser `json:"items"`
+}
+
+func (response ListNeo4jUsers200JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListNeo4jUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListNeo4jUsers400JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListNeo4jUsers401JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNeo4jUsers403JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListNeo4jUsers404JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListNeo4jUsers409JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListNeo4jUsers500JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNeo4jUsers503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListNeo4jUsers503JSONResponse) VisitListNeo4jUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateNeo4jUserParams
+	Body    *CreateNeo4jUserJSONRequestBody
+}
+
+type CreateNeo4jUserResponseObject interface {
+	VisitCreateNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type CreateNeo4jUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateNeo4jUser201JSONResponse struct {
+	Body    Neo4jUserCreated
+	Headers CreateNeo4jUser201ResponseHeaders
+}
+
+func (response CreateNeo4jUser201JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateNeo4jUser400JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateNeo4jUser401JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateNeo4jUser403JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateNeo4jUser404JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateNeo4jUser409JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateNeo4jUser413JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateNeo4jUser415JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateNeo4jUser500JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateNeo4jUser503JSONResponse) VisitCreateNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteNeo4jUserParams
+}
+
+type DeleteNeo4jUserResponseObject interface {
+	VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteNeo4jUser204ResponseHeaders struct {
+	IdempotentReplayed bool
+}
+
+type DeleteNeo4jUser204Response struct {
+	Headers DeleteNeo4jUser204ResponseHeaders
+}
+
+func (response DeleteNeo4jUser204Response) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteNeo4jUser400JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteNeo4jUser401JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteNeo4jUser403JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteNeo4jUser404JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteNeo4jUser409JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteNeo4jUser500JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteNeo4jUser503JSONResponse) VisitDeleteNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNeo4jUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetNeo4jUserParams
+}
+
+type GetNeo4jUserResponseObject interface {
+	VisitGetNeo4jUserResponse(w http.ResponseWriter) error
+}
+
+type GetNeo4jUser200JSONResponse Neo4jUser
+
+func (response GetNeo4jUser200JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetNeo4jUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetNeo4jUser400JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetNeo4jUser401JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetNeo4jUser403JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetNeo4jUser404JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetNeo4jUser409JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetNeo4jUser500JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNeo4jUser503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetNeo4jUser503JSONResponse) VisitGetNeo4jUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetNeo4jUserPasswordRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  SetNeo4jUserPasswordParams
+	Body    *SetNeo4jUserPasswordJSONRequestBody
+}
+
+type SetNeo4jUserPasswordResponseObject interface {
+	VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type SetNeo4jUserPassword200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type SetNeo4jUserPassword200JSONResponse struct {
+	Body    Neo4jUserPasswordChanged
+	Headers SetNeo4jUserPassword200ResponseHeaders
+}
+
+func (response SetNeo4jUserPassword200JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetNeo4jUserPassword400JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetNeo4jUserPassword401JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetNeo4jUserPassword403JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetNeo4jUserPassword404JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetNeo4jUserPassword409JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response SetNeo4jUserPassword413JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response SetNeo4jUserPassword415JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response SetNeo4jUserPassword500JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetNeo4jUserPassword503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response SetNeo4jUserPassword503JSONResponse) VisitSetNeo4jUserPasswordResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListOpenBaoDatabaseConnectionsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListOpenBaoDatabaseConnectionsParams
+}
+
+type ListOpenBaoDatabaseConnectionsResponseObject interface {
+	VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error
+}
+
+type ListOpenBaoDatabaseConnections200JSONResponse OpenBaoDatabaseConnectionList
+
+func (response ListOpenBaoDatabaseConnections200JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListOpenBaoDatabaseConnections400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections400JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections401JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections403JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections404JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections409JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections413JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListOpenBaoDatabaseConnections415JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections500JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListOpenBaoDatabaseConnections503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListOpenBaoDatabaseConnections503JSONResponse) VisitListOpenBaoDatabaseConnectionsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateOpenBaoDatabaseConnectionParams
+	Body    *CreateOpenBaoDatabaseConnectionJSONRequestBody
+}
+
+type CreateOpenBaoDatabaseConnectionResponseObject interface {
+	VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type CreateOpenBaoDatabaseConnection201JSONResponse OpenBaoDatabaseConnection
+
+func (response CreateOpenBaoDatabaseConnection201JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection400JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection401JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection403JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection404JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection409JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection413JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateOpenBaoDatabaseConnection415JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection500JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response CreateOpenBaoDatabaseConnection503JSONResponse) VisitCreateOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster    ClusterPath `json:"cluster"`
+	Connection string      `json:"connection"`
+	Params     DeleteOpenBaoDatabaseConnectionParams
+}
+
+type DeleteOpenBaoDatabaseConnectionResponseObject interface {
+	VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type DeleteOpenBaoDatabaseConnection204Response struct {
+}
+
+func (response DeleteOpenBaoDatabaseConnection204Response) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection400JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection401JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection403JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection404JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection409JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection413JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteOpenBaoDatabaseConnection415JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection500JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteOpenBaoDatabaseConnection503JSONResponse) VisitDeleteOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenBaoDatabaseConnectionRequestObject struct {
+	Cluster    ClusterPath `json:"cluster"`
+	Connection string      `json:"connection"`
+	Params     GetOpenBaoDatabaseConnectionParams
+}
+
+type GetOpenBaoDatabaseConnectionResponseObject interface {
+	VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error
+}
+
+type GetOpenBaoDatabaseConnection200JSONResponse OpenBaoDatabaseConnection
+
+func (response GetOpenBaoDatabaseConnection200JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetOpenBaoDatabaseConnection400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection400JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection401JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection403JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection404JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection409JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection413JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetOpenBaoDatabaseConnection415JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection500JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetOpenBaoDatabaseConnection503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response GetOpenBaoDatabaseConnection503JSONResponse) VisitGetOpenBaoDatabaseConnectionResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RevealOpenBaoUnsealKeysRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  RevealOpenBaoUnsealKeysParams
+	Body    *RevealOpenBaoUnsealKeysJSONRequestBody
+}
+
+type RevealOpenBaoUnsealKeysResponseObject interface {
+	VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error
+}
+
+type RevealOpenBaoUnsealKeys200ResponseHeaders struct {
+	CacheControl string
+}
+
+type RevealOpenBaoUnsealKeys200JSONResponse struct {
+	Body    OpenBaoUnsealKeys
+	Headers RevealOpenBaoUnsealKeys200ResponseHeaders
+}
+
+func (response RevealOpenBaoUnsealKeys200JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys400JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys401JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys403JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys404JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys409JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys413JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response RevealOpenBaoUnsealKeys415JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys500JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RevealOpenBaoUnsealKeys503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RevealOpenBaoUnsealKeys503JSONResponse) VisitRevealOpenBaoUnsealKeysResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListClusterOperationsRequestObject struct {
@@ -24015,6 +34666,191 @@ func (response GetClusterPlacement500JSONResponse) VisitGetClusterPlacementRespo
 	w.WriteHeader(500)
 
 	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindingsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListPostgresBindingsParams
+}
+
+type ListPostgresBindingsResponseObject interface {
+	VisitListPostgresBindingsResponse(w http.ResponseWriter) error
+}
+
+type ListPostgresBindings200JSONResponse struct {
+	Items []PostgresBinding `json:"items"`
+}
+
+func (response ListPostgresBindings200JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListPostgresBindings400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListPostgresBindings400JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPostgresBindings401JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListPostgresBindings403JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPostgresBindings404JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListPostgresBindings409JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListPostgresBindings500JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListPostgresBindings503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListPostgresBindings503JSONResponse) VisitListPostgresBindingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type RotatePostgresBindingRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Binding string      `json:"binding"`
+	Params  RotatePostgresBindingParams
+}
+
+type RotatePostgresBindingResponseObject interface {
+	VisitRotatePostgresBindingResponse(w http.ResponseWriter) error
+}
+
+type RotatePostgresBinding200ResponseHeaders struct {
+	IdempotentReplayed bool
+}
+
+type RotatePostgresBinding200JSONResponse struct {
+	Body    PostgresBinding
+	Headers RotatePostgresBinding200ResponseHeaders
+}
+
+func (response RotatePostgresBinding200JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotatePostgresBinding400JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotatePostgresBinding401JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotatePostgresBinding403JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotatePostgresBinding404JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotatePostgresBinding409JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotatePostgresBinding500JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotatePostgresBinding503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response RotatePostgresBinding503JSONResponse) VisitRotatePostgresBindingResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type ListPostgresDatabasesRequestObject struct {
@@ -29797,6 +40633,1946 @@ func (response RotateSystemUser500JSONResponse) VisitRotateSystemUserResponse(w 
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListTemporalClientCertificatesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListTemporalClientCertificatesParams
+}
+
+type ListTemporalClientCertificatesResponseObject interface {
+	VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error
+}
+
+type ListTemporalClientCertificates200JSONResponse TemporalClientCertificateList
+
+func (response ListTemporalClientCertificates200JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalClientCertificates401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTemporalClientCertificates401JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTemporalClientCertificates403JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTemporalClientCertificates404JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalClientCertificates503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListTemporalClientCertificates503JSONResponse) VisitListTemporalClientCertificatesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type IssueTemporalClientCertificateRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  IssueTemporalClientCertificateParams
+	Body    *IssueTemporalClientCertificateJSONRequestBody
+}
+
+type IssueTemporalClientCertificateResponseObject interface {
+	VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error
+}
+
+type IssueTemporalClientCertificate201ResponseHeaders struct {
+	CacheControl string
+}
+
+type IssueTemporalClientCertificate201JSONResponse struct {
+	Body    TemporalIssuedClientCertificate
+	Headers IssueTemporalClientCertificate201ResponseHeaders
+}
+
+func (response IssueTemporalClientCertificate201JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response IssueTemporalClientCertificate400JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response IssueTemporalClientCertificate401JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response IssueTemporalClientCertificate403JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response IssueTemporalClientCertificate404JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response IssueTemporalClientCertificate409JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response IssueTemporalClientCertificate422JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type IssueTemporalClientCertificate503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response IssueTemporalClientCertificate503JSONResponse) VisitIssueTemporalClientCertificateResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalNamespacesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListTemporalNamespacesParams
+}
+
+type ListTemporalNamespacesResponseObject interface {
+	VisitListTemporalNamespacesResponse(w http.ResponseWriter) error
+}
+
+type ListTemporalNamespaces200JSONResponse TemporalNamespaceList
+
+func (response ListTemporalNamespaces200JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListTemporalNamespaces401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTemporalNamespaces401JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTemporalNamespaces403JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTemporalNamespaces404JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListTemporalNamespaces503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response ListTemporalNamespaces503JSONResponse) VisitListTemporalNamespacesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteTemporalNamespaceRequestObject struct {
+	Cluster           ClusterPath `json:"cluster"`
+	TemporalNamespace string      `json:"temporalNamespace"`
+	Params            DeleteTemporalNamespaceParams
+}
+
+type DeleteTemporalNamespaceResponseObject interface {
+	VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error
+}
+
+type DeleteTemporalNamespace202Response struct {
+}
+
+func (response DeleteTemporalNamespace202Response) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type DeleteTemporalNamespace401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteTemporalNamespace401JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteTemporalNamespace403JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTemporalNamespace404JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteTemporalNamespace409JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response DeleteTemporalNamespace422JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteTemporalNamespace503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response DeleteTemporalNamespace503JSONResponse) VisitDeleteTemporalNamespaceResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type SetTemporalUIOIDCClientSecretRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  SetTemporalUIOIDCClientSecretParams
+	Body    *SetTemporalUIOIDCClientSecretJSONRequestBody
+}
+
+type SetTemporalUIOIDCClientSecretResponseObject interface {
+	VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error
+}
+
+type SetTemporalUIOIDCClientSecret204ResponseHeaders struct {
+	CacheControl string
+}
+
+type SetTemporalUIOIDCClientSecret204Response struct {
+	Headers SetTemporalUIOIDCClientSecret204ResponseHeaders
+}
+
+func (response SetTemporalUIOIDCClientSecret204Response) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(204)
+	return nil
+}
+
+type SetTemporalUIOIDCClientSecret400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret400JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret401JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret403JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret404JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret409JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response SetTemporalUIOIDCClientSecret422JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type SetTemporalUIOIDCClientSecret503JSONResponse struct{ UnavailableJSONResponse }
+
+func (response SetTemporalUIOIDCClientSecret503JSONResponse) VisitSetTemporalUIOIDCClientSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpgradeClusterAgentsRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  UpgradeClusterAgentsParams
+	Body    *UpgradeClusterAgentsJSONRequestBody
+}
+
+type UpgradeClusterAgentsResponseObject interface {
+	VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error
+}
+
+type UpgradeClusterAgents202ResponseHeaders struct {
+	KarakoramOperationId string
+	XRequestID           string
+}
+
+type UpgradeClusterAgents202JSONResponse struct {
+	Body    Operation
+	Headers UpgradeClusterAgents202ResponseHeaders
+}
+
+func (response UpgradeClusterAgents202JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Karakoram-Operation-Id", fmt.Sprint(response.Headers.KarakoramOperationId))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpgradeClusterAgents400JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpgradeClusterAgents401JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpgradeClusterAgents403JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpgradeClusterAgents404JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response UpgradeClusterAgents405JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpgradeClusterAgents409JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response UpgradeClusterAgents413JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response UpgradeClusterAgents415JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpgradeClusterAgents500JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpgradeClusterAgents501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response UpgradeClusterAgents501JSONResponse) VisitUpgradeClusterAgentsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRolesRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListWeaviateRolesParams
+}
+
+type ListWeaviateRolesResponseObject interface {
+	VisitListWeaviateRolesResponse(w http.ResponseWriter) error
+}
+
+type ListWeaviateRoles200JSONResponse WeaviateRoleList
+
+func (response ListWeaviateRoles200JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWeaviateRoles400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWeaviateRoles400JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWeaviateRoles401JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWeaviateRoles403JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWeaviateRoles404JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListWeaviateRoles409JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateRoles500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListWeaviateRoles500JSONResponse) VisitListWeaviateRolesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateWeaviateRoleParams
+	Body    *CreateWeaviateRoleJSONRequestBody
+}
+
+type CreateWeaviateRoleResponseObject interface {
+	VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type CreateWeaviateRole201JSONResponse WeaviateRole
+
+func (response CreateWeaviateRole201JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type CreateWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateWeaviateRole400JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateWeaviateRole401JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWeaviateRole403JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateWeaviateRole404JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateWeaviateRole409JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateWeaviateRole500JSONResponse) VisitCreateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  DeleteWeaviateRoleParams
+}
+
+type DeleteWeaviateRoleResponseObject interface {
+	VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type DeleteWeaviateRole204Response struct {
+}
+
+func (response DeleteWeaviateRole204Response) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteWeaviateRole400JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWeaviateRole401JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWeaviateRole403JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWeaviateRole404JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteWeaviateRole409JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteWeaviateRole500JSONResponse) VisitDeleteWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  GetWeaviateRoleParams
+}
+
+type GetWeaviateRoleResponseObject interface {
+	VisitGetWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type GetWeaviateRole200JSONResponse WeaviateRole
+
+func (response GetWeaviateRole200JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetWeaviateRole400JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWeaviateRole401JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWeaviateRole403JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWeaviateRole404JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetWeaviateRole409JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetWeaviateRole500JSONResponse) VisitGetWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRoleRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Role    string      `json:"role"`
+	Params  UpdateWeaviateRoleParams
+	Body    *UpdateWeaviateRoleJSONRequestBody
+}
+
+type UpdateWeaviateRoleResponseObject interface {
+	VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error
+}
+
+type UpdateWeaviateRole200JSONResponse WeaviateRole
+
+func (response UpdateWeaviateRole200JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type UpdateWeaviateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateWeaviateRole400JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateWeaviateRole401JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWeaviateRole403JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateWeaviateRole404JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateWeaviateRole409JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateRole500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateWeaviateRole500JSONResponse) VisitUpdateWeaviateRoleResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsersRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  ListWeaviateUsersParams
+}
+
+type ListWeaviateUsersResponseObject interface {
+	VisitListWeaviateUsersResponse(w http.ResponseWriter) error
+}
+
+type ListWeaviateUsers200JSONResponse WeaviateUserList
+
+func (response ListWeaviateUsers200JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type ListWeaviateUsers400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListWeaviateUsers400JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListWeaviateUsers401JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListWeaviateUsers403JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListWeaviateUsers404JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListWeaviateUsers409JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListWeaviateUsers500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListWeaviateUsers500JSONResponse) VisitListWeaviateUsersResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	Params  CreateWeaviateUserParams
+	Body    *CreateWeaviateUserJSONRequestBody
+}
+
+type CreateWeaviateUserResponseObject interface {
+	VisitCreateWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type CreateWeaviateUser201ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type CreateWeaviateUser201JSONResponse struct {
+	Body    WeaviateUserCreated
+	Headers CreateWeaviateUser201ResponseHeaders
+}
+
+func (response CreateWeaviateUser201JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateWeaviateUser400JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateWeaviateUser401JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateWeaviateUser403JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateWeaviateUser404JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateWeaviateUser409JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateWeaviateUser500JSONResponse) VisitCreateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  DeleteWeaviateUserParams
+}
+
+type DeleteWeaviateUserResponseObject interface {
+	VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteWeaviateUser204Response struct {
+}
+
+func (response DeleteWeaviateUser204Response) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteWeaviateUser400JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteWeaviateUser401JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteWeaviateUser403JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteWeaviateUser404JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteWeaviateUser409JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteWeaviateUser500JSONResponse) VisitDeleteWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  GetWeaviateUserParams
+}
+
+type GetWeaviateUserResponseObject interface {
+	VisitGetWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type GetWeaviateUser200JSONResponse WeaviateUser
+
+func (response GetWeaviateUser200JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetWeaviateUser400JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetWeaviateUser401JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetWeaviateUser403JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetWeaviateUser404JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetWeaviateUser409JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetWeaviateUser500JSONResponse) VisitGetWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUserRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  UpdateWeaviateUserParams
+	Body    *UpdateWeaviateUserJSONRequestBody
+}
+
+type UpdateWeaviateUserResponseObject interface {
+	VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error
+}
+
+type UpdateWeaviateUser204Response struct {
+}
+
+func (response UpdateWeaviateUser204Response) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UpdateWeaviateUser400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateWeaviateUser400JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateWeaviateUser401JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateWeaviateUser403JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateWeaviateUser404JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateWeaviateUser409JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateWeaviateUser500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateWeaviateUser500JSONResponse) VisitUpdateWeaviateUserResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKeyRequestObject struct {
+	Cluster ClusterPath `json:"cluster"`
+	User    string      `json:"user"`
+	Params  RotateWeaviateUserKeyParams
+}
+
+type RotateWeaviateUserKeyResponseObject interface {
+	VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error
+}
+
+type RotateWeaviateUserKey200ResponseHeaders struct {
+	CacheControl       string
+	IdempotentReplayed bool
+}
+
+type RotateWeaviateUserKey200JSONResponse struct {
+	Body    WeaviateAPIKey
+	Headers RotateWeaviateUserKey200ResponseHeaders
+}
+
+func (response RotateWeaviateUserKey200JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Idempotent-Replayed", fmt.Sprint(response.Headers.IdempotentReplayed))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RotateWeaviateUserKey400JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RotateWeaviateUserKey401JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RotateWeaviateUserKey403JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RotateWeaviateUserKey404JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RotateWeaviateUserKey409JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type RotateWeaviateUserKey500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response RotateWeaviateUserKey500JSONResponse) VisitRotateWeaviateUserKeyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicyRequestObject struct {
+}
+
+type GetControlPlaneBackupPolicyResponseObject interface {
+	VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error
+}
+
+type GetControlPlaneBackupPolicy200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetControlPlaneBackupPolicy200JSONResponse struct {
+	Body    ControlPlaneBackupPolicy
+	Headers GetControlPlaneBackupPolicy200ResponseHeaders
+}
+
+func (response GetControlPlaneBackupPolicy200JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetControlPlaneBackupPolicy400JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetControlPlaneBackupPolicy401JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetControlPlaneBackupPolicy403JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetControlPlaneBackupPolicy404JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetControlPlaneBackupPolicy405JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetControlPlaneBackupPolicy409JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetControlPlaneBackupPolicy413JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetControlPlaneBackupPolicy415JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetControlPlaneBackupPolicy500JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetControlPlaneBackupPolicy501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetControlPlaneBackupPolicy501JSONResponse) VisitGetControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicyRequestObject struct {
+	Params UpdateControlPlaneBackupPolicyParams
+	Body   *UpdateControlPlaneBackupPolicyJSONRequestBody
+}
+
+type UpdateControlPlaneBackupPolicyResponseObject interface {
+	VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error
+}
+
+type UpdateControlPlaneBackupPolicy200ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateControlPlaneBackupPolicy200JSONResponse struct {
+	Body    ControlPlaneBackupPolicy
+	Headers UpdateControlPlaneBackupPolicy200ResponseHeaders
+}
+
+func (response UpdateControlPlaneBackupPolicy200JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy400JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy401JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy403JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy404JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy405JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy409JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy413JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response UpdateControlPlaneBackupPolicy415JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response UpdateControlPlaneBackupPolicy422JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy500JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateControlPlaneBackupPolicy501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response UpdateControlPlaneBackupPolicy501JSONResponse) VisitUpdateControlPlaneBackupPolicyResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackupsRequestObject struct {
+	Params ListControlPlaneBackupsParams
+}
+
+type ListControlPlaneBackupsResponseObject interface {
+	VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error
+}
+
+type ListControlPlaneBackups200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListControlPlaneBackups200JSONResponse struct {
+	Body    ControlPlaneBackupList
+	Headers ListControlPlaneBackups200ResponseHeaders
+}
+
+func (response ListControlPlaneBackups200JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListControlPlaneBackups400JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListControlPlaneBackups401JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListControlPlaneBackups403JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListControlPlaneBackups404JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListControlPlaneBackups405JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListControlPlaneBackups409JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListControlPlaneBackups413JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListControlPlaneBackups415JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListControlPlaneBackups500JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListControlPlaneBackups501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response ListControlPlaneBackups501JSONResponse) VisitListControlPlaneBackupsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackupRequestObject struct {
+	Params CreateControlPlaneBackupParams
+}
+
+type CreateControlPlaneBackupResponseObject interface {
+	VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error
+}
+
+type CreateControlPlaneBackup202ResponseHeaders struct {
+	XRequestID string
+}
+
+type CreateControlPlaneBackup202JSONResponse struct {
+	Body    ControlPlaneBackup
+	Headers CreateControlPlaneBackup202ResponseHeaders
+}
+
+func (response CreateControlPlaneBackup202JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(202)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateControlPlaneBackup400JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateControlPlaneBackup401JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateControlPlaneBackup403JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateControlPlaneBackup404JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateControlPlaneBackup405JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateControlPlaneBackup409JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateControlPlaneBackup413JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateControlPlaneBackup415JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup422JSONResponse struct {
+	UnprocessableEntityJSONResponse
+}
+
+func (response CreateControlPlaneBackup422JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(422)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateControlPlaneBackup500JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateControlPlaneBackup501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response CreateControlPlaneBackup501JSONResponse) VisitCreateControlPlaneBackupResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type DryRunCreateClusterRequestObject struct {
 	Params DryRunCreateClusterParams
 	Body   *DryRunCreateClusterJSONRequestBody
@@ -31548,6 +44324,776 @@ func (response ValidateNamespace500JSONResponse) VisitValidateNamespaceResponse(
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type ListNotificationChannelsRequestObject struct {
+	Params ListNotificationChannelsParams
+}
+
+type ListNotificationChannelsResponseObject interface {
+	VisitListNotificationChannelsResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationChannels200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ListNotificationChannels200JSONResponse struct {
+	Body    NotificationChannelList
+	Headers ListNotificationChannels200ResponseHeaders
+}
+
+func (response ListNotificationChannels200JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListNotificationChannels400JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListNotificationChannels401JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNotificationChannels403JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListNotificationChannels404JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListNotificationChannels405JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ListNotificationChannels409JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ListNotificationChannels413JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ListNotificationChannels415JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ListNotificationChannels500JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ListNotificationChannels501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response ListNotificationChannels501JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannelRequestObject struct {
+	Params CreateNotificationChannelParams
+	Body   *CreateNotificationChannelJSONRequestBody
+}
+
+type CreateNotificationChannelResponseObject interface {
+	VisitCreateNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type CreateNotificationChannel201ResponseHeaders struct {
+	XRequestID string
+}
+
+type CreateNotificationChannel201JSONResponse struct {
+	Body    NotificationChannel
+	Headers CreateNotificationChannel201ResponseHeaders
+}
+
+func (response CreateNotificationChannel201JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(201)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateNotificationChannel400JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateNotificationChannel401JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateNotificationChannel403JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CreateNotificationChannel404JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response CreateNotificationChannel405JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateNotificationChannel409JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response CreateNotificationChannel413JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response CreateNotificationChannel415JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response CreateNotificationChannel500JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type CreateNotificationChannel501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response CreateNotificationChannel501JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannelRequestObject struct {
+	Channel string `json:"channel"`
+	Params  DeleteNotificationChannelParams
+}
+
+type DeleteNotificationChannelResponseObject interface {
+	VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type DeleteNotificationChannel204ResponseHeaders struct {
+	XRequestID string
+}
+
+type DeleteNotificationChannel204Response struct {
+	Headers DeleteNotificationChannel204ResponseHeaders
+}
+
+func (response DeleteNotificationChannel204Response) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteNotificationChannel400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeleteNotificationChannel400JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeleteNotificationChannel401JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteNotificationChannel403JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteNotificationChannel404JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response DeleteNotificationChannel405JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeleteNotificationChannel409JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response DeleteNotificationChannel413JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response DeleteNotificationChannel415JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response DeleteNotificationChannel500JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type DeleteNotificationChannel501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response DeleteNotificationChannel501JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannelRequestObject struct {
+	Channel string `json:"channel"`
+}
+
+type GetNotificationChannelResponseObject interface {
+	VisitGetNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type GetNotificationChannel200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetNotificationChannel200JSONResponse struct {
+	Body    NotificationChannel
+	Headers GetNotificationChannel200ResponseHeaders
+}
+
+func (response GetNotificationChannel200JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetNotificationChannel400JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetNotificationChannel401JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetNotificationChannel403JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetNotificationChannel404JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetNotificationChannel405JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetNotificationChannel409JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetNotificationChannel413JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetNotificationChannel415JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetNotificationChannel500JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetNotificationChannel501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetNotificationChannel501JSONResponse) VisitGetNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannelRequestObject struct {
+	Channel string `json:"channel"`
+	Params  ReplaceNotificationChannelParams
+	Body    *ReplaceNotificationChannelJSONRequestBody
+}
+
+type ReplaceNotificationChannelResponseObject interface {
+	VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type ReplaceNotificationChannel200ResponseHeaders struct {
+	XRequestID string
+}
+
+type ReplaceNotificationChannel200JSONResponse struct {
+	Body    NotificationChannel
+	Headers ReplaceNotificationChannel200ResponseHeaders
+}
+
+func (response ReplaceNotificationChannel200JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplaceNotificationChannel400JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplaceNotificationChannel401JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplaceNotificationChannel403JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceNotificationChannel404JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ReplaceNotificationChannel405JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceNotificationChannel409JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response ReplaceNotificationChannel413JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response ReplaceNotificationChannel415JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response ReplaceNotificationChannel500JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type ReplaceNotificationChannel501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response ReplaceNotificationChannel501JSONResponse) VisitReplaceNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannelRequestObject struct {
+	Channel string `json:"channel"`
+	Params  TestNotificationChannelParams
+}
+
+type TestNotificationChannelResponseObject interface {
+	VisitTestNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type TestNotificationChannel200ResponseHeaders struct {
+	XRequestID string
+}
+
+type TestNotificationChannel200JSONResponse struct {
+	Body    NotificationTestResult
+	Headers TestNotificationChannel200ResponseHeaders
+}
+
+func (response TestNotificationChannel200JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response TestNotificationChannel400JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TestNotificationChannel401JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestNotificationChannel403JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TestNotificationChannel404JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response TestNotificationChannel405JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response TestNotificationChannel409JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response TestNotificationChannel413JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response TestNotificationChannel415JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response TestNotificationChannel500JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type TestNotificationChannel501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response TestNotificationChannel501JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type ListOAuthGrantsRequestObject struct {
 }
 
@@ -33046,6 +46592,262 @@ func (response ReplaceSettings500JSONResponse) VisitReplaceSettingsResponse(w ht
 	return json.NewEncoder(w).Encode(response.Body)
 }
 
+type GetAgentRolloutSettingsRequestObject struct {
+}
+
+type GetAgentRolloutSettingsResponseObject interface {
+	VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetAgentRolloutSettings200ResponseHeaders struct {
+	XRequestID string
+}
+
+type GetAgentRolloutSettings200JSONResponse struct {
+	Body    AgentRolloutSettings
+	Headers GetAgentRolloutSettings200ResponseHeaders
+}
+
+func (response GetAgentRolloutSettings200JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetAgentRolloutSettings400JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAgentRolloutSettings401JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAgentRolloutSettings403JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAgentRolloutSettings404JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetAgentRolloutSettings405JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings409JSONResponse struct{ ConflictJSONResponse }
+
+func (response GetAgentRolloutSettings409JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response GetAgentRolloutSettings413JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response GetAgentRolloutSettings415JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response GetAgentRolloutSettings500JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type GetAgentRolloutSettings501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetAgentRolloutSettings501JSONResponse) VisitGetAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettingsRequestObject struct {
+	Params UpdateAgentRolloutSettingsParams
+	Body   *UpdateAgentRolloutSettingsJSONRequestBody
+}
+
+type UpdateAgentRolloutSettingsResponseObject interface {
+	VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateAgentRolloutSettings200ResponseHeaders struct {
+	XRequestID string
+}
+
+type UpdateAgentRolloutSettings200JSONResponse struct {
+	Body    AgentRolloutSettings
+	Headers UpdateAgentRolloutSettings200ResponseHeaders
+}
+
+func (response UpdateAgentRolloutSettings200JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response UpdateAgentRolloutSettings400JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response UpdateAgentRolloutSettings401JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(401)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response UpdateAgentRolloutSettings403JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response UpdateAgentRolloutSettings404JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(404)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response UpdateAgentRolloutSettings405JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Allow", fmt.Sprint(response.Headers.Allow))
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(405)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings409JSONResponse struct{ ConflictJSONResponse }
+
+func (response UpdateAgentRolloutSettings409JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(409)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings413JSONResponse struct{ PayloadTooLargeJSONResponse }
+
+func (response UpdateAgentRolloutSettings413JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(413)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings415JSONResponse struct {
+	UnsupportedMediaTypeJSONResponse
+}
+
+func (response UpdateAgentRolloutSettings415JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(415)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings500JSONResponse struct{ InternalErrorJSONResponse }
+
+func (response UpdateAgentRolloutSettings500JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
+type UpdateAgentRolloutSettings501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response UpdateAgentRolloutSettings501JSONResponse) VisitUpdateAgentRolloutSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", fmt.Sprint(response.Headers.XRequestID))
+	w.WriteHeader(501)
+
+	return json.NewEncoder(w).Encode(response.Body)
+}
+
 type GetVersionRequestObject struct {
 }
 
@@ -33258,6 +47060,18 @@ type StrictServerInterface interface {
 	// Replace the full cluster desired spec
 	// (PUT /clusters/{cluster})
 	ReplaceCluster(ctx context.Context, request ReplaceClusterRequestObject) (ReplaceClusterResponseObject, error)
+	// Rebalance shards across distributed PostgreSQL worker groups
+	// (POST /clusters/{cluster}/actions/rebalance)
+	RebalancePostgres(ctx context.Context, request RebalancePostgresRequestObject) (RebalancePostgresResponseObject, error)
+	// List backup drills
+	// (GET /clusters/{cluster}/backup-drills)
+	ListBackupDrills(ctx context.Context, request ListBackupDrillsRequestObject) (ListBackupDrillsResponseObject, error)
+	// Create backup drill
+	// (POST /clusters/{cluster}/backup-drills)
+	CreateBackupDrill(ctx context.Context, request CreateBackupDrillRequestObject) (CreateBackupDrillResponseObject, error)
+	// Get backup drill
+	// (GET /clusters/{cluster}/backup-drills/{drill})
+	GetBackupDrill(ctx context.Context, request GetBackupDrillRequestObject) (GetBackupDrillResponseObject, error)
 	// List backup inventory
 	// (GET /clusters/{cluster}/backups)
 	ListBackups(ctx context.Context, request ListBackupsRequestObject) (ListBackupsResponseObject, error)
@@ -33357,21 +47171,105 @@ type StrictServerInterface interface {
 	// Read logs for a member process
 	// (GET /clusters/{cluster}/members/{member}/logs)
 	GetMemberLogs(ctx context.Context, request GetMemberLogsRequestObject) (GetMemberLogsResponseObject, error)
+	// Move cluster member
+	// (POST /clusters/{cluster}/members/{member}/move)
+	MoveClusterMember(ctx context.Context, request MoveClusterMemberRequestObject) (MoveClusterMemberResponseObject, error)
 	// Replace a member with a new monotonic index
 	// (POST /clusters/{cluster}/members/{member}/replace)
 	ReplaceClusterMember(ctx context.Context, request ReplaceClusterMemberRequestObject) (ReplaceClusterMemberResponseObject, error)
 	// Read aggregated per-member metric time series
 	// (GET /clusters/{cluster}/metrics)
 	GetClusterMetrics(ctx context.Context, request GetClusterMetricsRequestObject) (GetClusterMetricsResponseObject, error)
+	// List MySQL application databases
+	// (GET /clusters/{cluster}/mysql/databases)
+	ListMySQLDatabases(ctx context.Context, request ListMySQLDatabasesRequestObject) (ListMySQLDatabasesResponseObject, error)
+	// Create a MySQL application database
+	// (POST /clusters/{cluster}/mysql/databases)
+	CreateMySQLDatabase(ctx context.Context, request CreateMySQLDatabaseRequestObject) (CreateMySQLDatabaseResponseObject, error)
+	// Delete a MySQL application database
+	// (DELETE /clusters/{cluster}/mysql/databases/{database})
+	DeleteMySQLDatabase(ctx context.Context, request DeleteMySQLDatabaseRequestObject) (DeleteMySQLDatabaseResponseObject, error)
+	// Read a MySQL application database
+	// (GET /clusters/{cluster}/mysql/databases/{database})
+	GetMySQLDatabase(ctx context.Context, request GetMySQLDatabaseRequestObject) (GetMySQLDatabaseResponseObject, error)
+	// Revoke MySQL database privileges
+	// (DELETE /clusters/{cluster}/mysql/grants)
+	RevokeMySQLPrivileges(ctx context.Context, request RevokeMySQLPrivilegesRequestObject) (RevokeMySQLPrivilegesResponseObject, error)
+	// List MySQL grants filtered by user or database
+	// (GET /clusters/{cluster}/mysql/grants)
+	ListMySQLGrants(ctx context.Context, request ListMySQLGrantsRequestObject) (ListMySQLGrantsResponseObject, error)
+	// Grant bounded MySQL database privileges
+	// (POST /clusters/{cluster}/mysql/grants)
+	GrantMySQLPrivileges(ctx context.Context, request GrantMySQLPrivilegesRequestObject) (GrantMySQLPrivilegesResponseObject, error)
+	// Explicitly recover a fenced PXC minority component
+	// (POST /clusters/{cluster}/mysql/recover-quorum)
+	RecoverMySQLQuorum(ctx context.Context, request RecoverMySQLQuorumRequestObject) (RecoverMySQLQuorumResponseObject, error)
+	// List MySQL application users
+	// (GET /clusters/{cluster}/mysql/users)
+	ListMySQLUsers(ctx context.Context, request ListMySQLUsersRequestObject) (ListMySQLUsersResponseObject, error)
+	// Create a MySQL application user
+	// (POST /clusters/{cluster}/mysql/users)
+	CreateMySQLUser(ctx context.Context, request CreateMySQLUserRequestObject) (CreateMySQLUserResponseObject, error)
+	// Delete a MySQL application user
+	// (DELETE /clusters/{cluster}/mysql/users/{user})
+	DeleteMySQLUser(ctx context.Context, request DeleteMySQLUserRequestObject) (DeleteMySQLUserResponseObject, error)
+	// Read a MySQL application user
+	// (GET /clusters/{cluster}/mysql/users/{user})
+	GetMySQLUser(ctx context.Context, request GetMySQLUserRequestObject) (GetMySQLUserResponseObject, error)
+	// Update selected MySQL user attributes
+	// (PATCH /clusters/{cluster}/mysql/users/{user})
+	PatchMySQLUser(ctx context.Context, request PatchMySQLUserRequestObject) (PatchMySQLUserResponseObject, error)
+	// Rotate a MySQL user password, optionally retaining the current password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password)
+	RotateMySQLUserPassword(ctx context.Context, request RotateMySQLUserPasswordRequestObject) (RotateMySQLUserPasswordResponseObject, error)
+	// Discard a MySQL user's retained password
+	// (POST /clusters/{cluster}/mysql/users/{user}/password/discard-old)
+	DiscardMySQLUserOldPassword(ctx context.Context, request DiscardMySQLUserOldPasswordRequestObject) (DiscardMySQLUserOldPasswordResponseObject, error)
+	// List Neo4j Community users
+	// (GET /clusters/{cluster}/neo4j/users)
+	ListNeo4jUsers(ctx context.Context, request ListNeo4jUsersRequestObject) (ListNeo4jUsersResponseObject, error)
+	// Create a Neo4j Community user
+	// (POST /clusters/{cluster}/neo4j/users)
+	CreateNeo4jUser(ctx context.Context, request CreateNeo4jUserRequestObject) (CreateNeo4jUserResponseObject, error)
+	// Delete a Neo4j Community user
+	// (DELETE /clusters/{cluster}/neo4j/users/{user})
+	DeleteNeo4jUser(ctx context.Context, request DeleteNeo4jUserRequestObject) (DeleteNeo4jUserResponseObject, error)
+	// Read a Neo4j Community user
+	// (GET /clusters/{cluster}/neo4j/users/{user})
+	GetNeo4jUser(ctx context.Context, request GetNeo4jUserRequestObject) (GetNeo4jUserResponseObject, error)
+	// Set or generate a Neo4j Community user password
+	// (POST /clusters/{cluster}/neo4j/users/{user}/password)
+	SetNeo4jUserPassword(ctx context.Context, request SetNeo4jUserPasswordRequestObject) (SetNeo4jUserPasswordResponseObject, error)
+	// List managed database connections
+	// (GET /clusters/{cluster}/openbao/database-connections)
+	ListOpenBaoDatabaseConnections(ctx context.Context, request ListOpenBaoDatabaseConnectionsRequestObject) (ListOpenBaoDatabaseConnectionsResponseObject, error)
+	// Create a managed database connection
+	// (POST /clusters/{cluster}/openbao/database-connections)
+	CreateOpenBaoDatabaseConnection(ctx context.Context, request CreateOpenBaoDatabaseConnectionRequestObject) (CreateOpenBaoDatabaseConnectionResponseObject, error)
+	// Delete a managed database connection
+	// (DELETE /clusters/{cluster}/openbao/database-connections/{connection})
+	DeleteOpenBaoDatabaseConnection(ctx context.Context, request DeleteOpenBaoDatabaseConnectionRequestObject) (DeleteOpenBaoDatabaseConnectionResponseObject, error)
+	// getOpenBaoDatabaseConnection
+	// (GET /clusters/{cluster}/openbao/database-connections/{connection})
+	GetOpenBaoDatabaseConnection(ctx context.Context, request GetOpenBaoDatabaseConnectionRequestObject) (GetOpenBaoDatabaseConnectionResponseObject, error)
+	// Reveal OpenBao initialization material
+	// (POST /clusters/{cluster}/openbao/unseal-keys/reveal)
+	RevealOpenBaoUnsealKeys(ctx context.Context, request RevealOpenBaoUnsealKeysRequestObject) (RevealOpenBaoUnsealKeysResponseObject, error)
 	// List cluster operations
 	// (GET /clusters/{cluster}/operations)
 	ListClusterOperations(ctx context.Context, request ListClusterOperationsRequestObject) (ListClusterOperationsResponseObject, error)
-	// Read the continuous restorable PITR window
+	// Read restorable PITR intervals
 	// (GET /clusters/{cluster}/pitr)
 	GetPITRWindow(ctx context.Context, request GetPITRWindowRequestObject) (GetPITRWindowResponseObject, error)
 	// Read detected member co-location and placement warnings
 	// (GET /clusters/{cluster}/placement)
 	GetClusterPlacement(ctx context.Context, request GetClusterPlacementRequestObject) (GetClusterPlacementResponseObject, error)
+	// List inbound PostgreSQL consumer bindings without credentials
+	// (GET /clusters/{cluster}/postgres/bindings)
+	ListPostgresBindings(ctx context.Context, request ListPostgresBindingsRequestObject) (ListPostgresBindingsResponseObject, error)
+	// Rotate binding credentials and refresh the consumer
+	// (POST /clusters/{cluster}/postgres/bindings/{binding}/rotate)
+	RotatePostgresBinding(ctx context.Context, request RotatePostgresBindingRequestObject) (RotatePostgresBindingResponseObject, error)
 	// List PostgreSQL application databases
 	// (GET /clusters/{cluster}/postgres/databases)
 	ListPostgresDatabases(ctx context.Context, request ListPostgresDatabasesRequestObject) (ListPostgresDatabasesResponseObject, error)
@@ -33558,6 +47456,69 @@ type StrictServerInterface interface {
 	// Rotate a generated system-user password
 	// (POST /clusters/{cluster}/system-users/{user}/rotate)
 	RotateSystemUser(ctx context.Context, request RotateSystemUserRequestObject) (RotateSystemUserResponseObject, error)
+	// List non-secret Temporal client certificate metadata
+	// (GET /clusters/{cluster}/temporal/client-certificates)
+	ListTemporalClientCertificates(ctx context.Context, request ListTemporalClientCertificatesRequestObject) (ListTemporalClientCertificatesResponseObject, error)
+	// Issue a Temporal client certificate and return its private key once
+	// (POST /clusters/{cluster}/temporal/client-certificates)
+	IssueTemporalClientCertificate(ctx context.Context, request IssueTemporalClientCertificateRequestObject) (IssueTemporalClientCertificateResponseObject, error)
+	// List Temporal namespaces
+	// (GET /clusters/{cluster}/temporal/namespaces)
+	ListTemporalNamespaces(ctx context.Context, request ListTemporalNamespacesRequestObject) (ListTemporalNamespacesResponseObject, error)
+	// Request asynchronous deletion of an unmanaged Temporal namespace
+	// (DELETE /clusters/{cluster}/temporal/namespaces/{temporalNamespace})
+	DeleteTemporalNamespace(ctx context.Context, request DeleteTemporalNamespaceRequestObject) (DeleteTemporalNamespaceResponseObject, error)
+	// Seal the write-only Temporal UI OIDC client secret
+	// (PUT /clusters/{cluster}/temporal/ui/oidc-client-secret)
+	SetTemporalUIOIDCClientSecret(ctx context.Context, request SetTemporalUIOIDCClientSecretRequestObject) (SetTemporalUIOIDCClientSecretResponseObject, error)
+	// Upgrade cluster agents
+	// (POST /clusters/{cluster}/upgrade-agents)
+	UpgradeClusterAgents(ctx context.Context, request UpgradeClusterAgentsRequestObject) (UpgradeClusterAgentsResponseObject, error)
+	// List Weaviate RBAC roles
+	// (GET /clusters/{cluster}/weaviate/roles)
+	ListWeaviateRoles(ctx context.Context, request ListWeaviateRolesRequestObject) (ListWeaviateRolesResponseObject, error)
+	// Create a Weaviate RBAC role
+	// (POST /clusters/{cluster}/weaviate/roles)
+	CreateWeaviateRole(ctx context.Context, request CreateWeaviateRoleRequestObject) (CreateWeaviateRoleResponseObject, error)
+	// Delete a Weaviate RBAC role
+	// (DELETE /clusters/{cluster}/weaviate/roles/{role})
+	DeleteWeaviateRole(ctx context.Context, request DeleteWeaviateRoleRequestObject) (DeleteWeaviateRoleResponseObject, error)
+	// Get a Weaviate RBAC role
+	// (GET /clusters/{cluster}/weaviate/roles/{role})
+	GetWeaviateRole(ctx context.Context, request GetWeaviateRoleRequestObject) (GetWeaviateRoleResponseObject, error)
+	// Replace a Weaviate RBAC role
+	// (PUT /clusters/{cluster}/weaviate/roles/{role})
+	UpdateWeaviateRole(ctx context.Context, request UpdateWeaviateRoleRequestObject) (UpdateWeaviateRoleResponseObject, error)
+	// List Weaviate database users
+	// (GET /clusters/{cluster}/weaviate/users)
+	ListWeaviateUsers(ctx context.Context, request ListWeaviateUsersRequestObject) (ListWeaviateUsersResponseObject, error)
+	// Create a Weaviate database user
+	// (POST /clusters/{cluster}/weaviate/users)
+	CreateWeaviateUser(ctx context.Context, request CreateWeaviateUserRequestObject) (CreateWeaviateUserResponseObject, error)
+	// Delete a Weaviate database user
+	// (DELETE /clusters/{cluster}/weaviate/users/{user})
+	DeleteWeaviateUser(ctx context.Context, request DeleteWeaviateUserRequestObject) (DeleteWeaviateUserResponseObject, error)
+	// Get a Weaviate database user
+	// (GET /clusters/{cluster}/weaviate/users/{user})
+	GetWeaviateUser(ctx context.Context, request GetWeaviateUserRequestObject) (GetWeaviateUserResponseObject, error)
+	// Update Weaviate database user roles and activation
+	// (PUT /clusters/{cluster}/weaviate/users/{user})
+	UpdateWeaviateUser(ctx context.Context, request UpdateWeaviateUserRequestObject) (UpdateWeaviateUserResponseObject, error)
+	// Rotate a Weaviate database user API key
+	// (POST /clusters/{cluster}/weaviate/users/{user}/rotate-key)
+	RotateWeaviateUserKey(ctx context.Context, request RotateWeaviateUserKeyRequestObject) (RotateWeaviateUserKeyResponseObject, error)
+	// Get control plane backup policy
+	// (GET /control-plane/backup-policy)
+	GetControlPlaneBackupPolicy(ctx context.Context, request GetControlPlaneBackupPolicyRequestObject) (GetControlPlaneBackupPolicyResponseObject, error)
+	// Update control plane backup policy
+	// (PUT /control-plane/backup-policy)
+	UpdateControlPlaneBackupPolicy(ctx context.Context, request UpdateControlPlaneBackupPolicyRequestObject) (UpdateControlPlaneBackupPolicyResponseObject, error)
+	// List control plane backups
+	// (GET /control-plane/backups)
+	ListControlPlaneBackups(ctx context.Context, request ListControlPlaneBackupsRequestObject) (ListControlPlaneBackupsResponseObject, error)
+	// Create control plane backup
+	// (POST /control-plane/backups)
+	CreateControlPlaneBackup(ctx context.Context, request CreateControlPlaneBackupRequestObject) (CreateControlPlaneBackupResponseObject, error)
 	// Preview validation and effects without domain side effects
 	// (POST /dry-run/clusters)
 	DryRunCreateCluster(ctx context.Context, request DryRunCreateClusterRequestObject) (DryRunCreateClusterResponseObject, error)
@@ -33603,6 +47564,24 @@ type StrictServerInterface interface {
 	// Revalidate a namespace token and project
 	// (POST /namespaces/{namespace}/validate)
 	ValidateNamespace(ctx context.Context, request ValidateNamespaceRequestObject) (ValidateNamespaceResponseObject, error)
+	// List notification channels
+	// (GET /notification-channels)
+	ListNotificationChannels(ctx context.Context, request ListNotificationChannelsRequestObject) (ListNotificationChannelsResponseObject, error)
+	// Create notification channel
+	// (POST /notification-channels)
+	CreateNotificationChannel(ctx context.Context, request CreateNotificationChannelRequestObject) (CreateNotificationChannelResponseObject, error)
+	// Delete notification channel
+	// (DELETE /notification-channels/{channel})
+	DeleteNotificationChannel(ctx context.Context, request DeleteNotificationChannelRequestObject) (DeleteNotificationChannelResponseObject, error)
+	// Get notification channel
+	// (GET /notification-channels/{channel})
+	GetNotificationChannel(ctx context.Context, request GetNotificationChannelRequestObject) (GetNotificationChannelResponseObject, error)
+	// Replace notification channel
+	// (PUT /notification-channels/{channel})
+	ReplaceNotificationChannel(ctx context.Context, request ReplaceNotificationChannelRequestObject) (ReplaceNotificationChannelResponseObject, error)
+	// Test notification channel
+	// (POST /notification-channels/{channel}/test)
+	TestNotificationChannel(ctx context.Context, request TestNotificationChannelRequestObject) (TestNotificationChannelResponseObject, error)
 	// List connected OAuth applications (own grants unless administrator)
 	// (GET /oauth-grants)
 	ListOAuthGrants(ctx context.Context, request ListOAuthGrantsRequestObject) (ListOAuthGrantsResponseObject, error)
@@ -33648,6 +47627,12 @@ type StrictServerInterface interface {
 	// Replace OIDC configuration
 	// (PUT /settings)
 	ReplaceSettings(ctx context.Context, request ReplaceSettingsRequestObject) (ReplaceSettingsResponseObject, error)
+	// Get agent rollout settings
+	// (GET /settings/agent-rollout)
+	GetAgentRolloutSettings(ctx context.Context, request GetAgentRolloutSettingsRequestObject) (GetAgentRolloutSettingsResponseObject, error)
+	// Update agent rollout settings
+	// (PUT /settings/agent-rollout)
+	UpdateAgentRolloutSettings(ctx context.Context, request UpdateAgentRolloutSettingsRequestObject) (UpdateAgentRolloutSettingsResponseObject, error)
 	// Read server build and API version
 	// (GET /version)
 	GetVersion(ctx context.Context, request GetVersionRequestObject) (GetVersionResponseObject, error)
@@ -34574,6 +48559,129 @@ func (sh *strictHandler) ReplaceCluster(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceClusterResponseObject); ok {
 		if err := validResponse.VisitReplaceClusterResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RebalancePostgres operation middleware
+func (sh *strictHandler) RebalancePostgres(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RebalancePostgresParams) {
+	var request RebalancePostgresRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RebalancePostgresJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RebalancePostgres(ctx, request.(RebalancePostgresRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RebalancePostgres")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RebalancePostgresResponseObject); ok {
+		if err := validResponse.VisitRebalancePostgresResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBackupDrills operation middleware
+func (sh *strictHandler) ListBackupDrills(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListBackupDrillsParams) {
+	var request ListBackupDrillsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBackupDrills(ctx, request.(ListBackupDrillsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBackupDrills")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBackupDrillsResponseObject); ok {
+		if err := validResponse.VisitListBackupDrillsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateBackupDrill operation middleware
+func (sh *strictHandler) CreateBackupDrill(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateBackupDrillParams) {
+	var request CreateBackupDrillRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateBackupDrillJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateBackupDrill(ctx, request.(CreateBackupDrillRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateBackupDrill")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateBackupDrillResponseObject); ok {
+		if err := validResponse.VisitCreateBackupDrillResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBackupDrill operation middleware
+func (sh *strictHandler) GetBackupDrill(w http.ResponseWriter, r *http.Request, cluster ClusterPath, drill string, params GetBackupDrillParams) {
+	var request GetBackupDrillRequestObject
+
+	request.Cluster = cluster
+	request.Drill = drill
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBackupDrill(ctx, request.(GetBackupDrillRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBackupDrill")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBackupDrillResponseObject); ok {
+		if err := validResponse.VisitGetBackupDrillResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -35572,6 +49680,34 @@ func (sh *strictHandler) GetMemberLogs(w http.ResponseWriter, r *http.Request, c
 	}
 }
 
+// MoveClusterMember operation middleware
+func (sh *strictHandler) MoveClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params MoveClusterMemberParams) {
+	var request MoveClusterMemberRequestObject
+
+	request.Cluster = cluster
+	request.Member = member
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MoveClusterMember(ctx, request.(MoveClusterMemberRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MoveClusterMember")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MoveClusterMemberResponseObject); ok {
+		if err := validResponse.VisitMoveClusterMemberResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ReplaceClusterMember operation middleware
 func (sh *strictHandler) ReplaceClusterMember(w http.ResponseWriter, r *http.Request, cluster ClusterPath, member string, params ReplaceClusterMemberParams) {
 	var request ReplaceClusterMemberRequestObject
@@ -35620,6 +49756,770 @@ func (sh *strictHandler) GetClusterMetrics(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterMetricsResponseObject); ok {
 		if err := validResponse.VisitGetClusterMetricsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLDatabases operation middleware
+func (sh *strictHandler) ListMySQLDatabases(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLDatabasesParams) {
+	var request ListMySQLDatabasesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLDatabases(ctx, request.(ListMySQLDatabasesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLDatabases")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLDatabasesResponseObject); ok {
+		if err := validResponse.VisitListMySQLDatabasesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMySQLDatabase operation middleware
+func (sh *strictHandler) CreateMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLDatabaseParams) {
+	var request CreateMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateMySQLDatabaseJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMySQLDatabase(ctx, request.(CreateMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitCreateMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMySQLDatabase operation middleware
+func (sh *strictHandler) DeleteMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params DeleteMySQLDatabaseParams) {
+	var request DeleteMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMySQLDatabase(ctx, request.(DeleteMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitDeleteMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMySQLDatabase operation middleware
+func (sh *strictHandler) GetMySQLDatabase(w http.ResponseWriter, r *http.Request, cluster ClusterPath, database string, params GetMySQLDatabaseParams) {
+	var request GetMySQLDatabaseRequestObject
+
+	request.Cluster = cluster
+	request.Database = database
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMySQLDatabase(ctx, request.(GetMySQLDatabaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMySQLDatabase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMySQLDatabaseResponseObject); ok {
+		if err := validResponse.VisitGetMySQLDatabaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeMySQLPrivileges operation middleware
+func (sh *strictHandler) RevokeMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevokeMySQLPrivilegesParams) {
+	var request RevokeMySQLPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RevokeMySQLPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeMySQLPrivileges(ctx, request.(RevokeMySQLPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeMySQLPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeMySQLPrivilegesResponseObject); ok {
+		if err := validResponse.VisitRevokeMySQLPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLGrants operation middleware
+func (sh *strictHandler) ListMySQLGrants(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLGrantsParams) {
+	var request ListMySQLGrantsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLGrants(ctx, request.(ListMySQLGrantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLGrants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLGrantsResponseObject); ok {
+		if err := validResponse.VisitListMySQLGrantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantMySQLPrivileges operation middleware
+func (sh *strictHandler) GrantMySQLPrivileges(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params GrantMySQLPrivilegesParams) {
+	var request GrantMySQLPrivilegesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body GrantMySQLPrivilegesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantMySQLPrivileges(ctx, request.(GrantMySQLPrivilegesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantMySQLPrivileges")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantMySQLPrivilegesResponseObject); ok {
+		if err := validResponse.VisitGrantMySQLPrivilegesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RecoverMySQLQuorum operation middleware
+func (sh *strictHandler) RecoverMySQLQuorum(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RecoverMySQLQuorumParams) {
+	var request RecoverMySQLQuorumRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RecoverMySQLQuorumJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RecoverMySQLQuorum(ctx, request.(RecoverMySQLQuorumRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RecoverMySQLQuorum")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RecoverMySQLQuorumResponseObject); ok {
+		if err := validResponse.VisitRecoverMySQLQuorumResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySQLUsers operation middleware
+func (sh *strictHandler) ListMySQLUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListMySQLUsersParams) {
+	var request ListMySQLUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySQLUsers(ctx, request.(ListMySQLUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySQLUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySQLUsersResponseObject); ok {
+		if err := validResponse.VisitListMySQLUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMySQLUser operation middleware
+func (sh *strictHandler) CreateMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateMySQLUserParams) {
+	var request CreateMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateMySQLUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMySQLUser(ctx, request.(CreateMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMySQLUserResponseObject); ok {
+		if err := validResponse.VisitCreateMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMySQLUser operation middleware
+func (sh *strictHandler) DeleteMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteMySQLUserParams) {
+	var request DeleteMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMySQLUser(ctx, request.(DeleteMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMySQLUserResponseObject); ok {
+		if err := validResponse.VisitDeleteMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMySQLUser operation middleware
+func (sh *strictHandler) GetMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetMySQLUserParams) {
+	var request GetMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMySQLUser(ctx, request.(GetMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMySQLUserResponseObject); ok {
+		if err := validResponse.VisitGetMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PatchMySQLUser operation middleware
+func (sh *strictHandler) PatchMySQLUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params PatchMySQLUserParams) {
+	var request PatchMySQLUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body PatchMySQLUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PatchMySQLUser(ctx, request.(PatchMySQLUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PatchMySQLUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PatchMySQLUserResponseObject); ok {
+		if err := validResponse.VisitPatchMySQLUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateMySQLUserPassword operation middleware
+func (sh *strictHandler) RotateMySQLUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateMySQLUserPasswordParams) {
+	var request RotateMySQLUserPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body RotateMySQLUserPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateMySQLUserPassword(ctx, request.(RotateMySQLUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateMySQLUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateMySQLUserPasswordResponseObject); ok {
+		if err := validResponse.VisitRotateMySQLUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DiscardMySQLUserOldPassword operation middleware
+func (sh *strictHandler) DiscardMySQLUserOldPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DiscardMySQLUserOldPasswordParams) {
+	var request DiscardMySQLUserOldPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DiscardMySQLUserOldPassword(ctx, request.(DiscardMySQLUserOldPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DiscardMySQLUserOldPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DiscardMySQLUserOldPasswordResponseObject); ok {
+		if err := validResponse.VisitDiscardMySQLUserOldPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNeo4jUsers operation middleware
+func (sh *strictHandler) ListNeo4jUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListNeo4jUsersParams) {
+	var request ListNeo4jUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNeo4jUsers(ctx, request.(ListNeo4jUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNeo4jUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNeo4jUsersResponseObject); ok {
+		if err := validResponse.VisitListNeo4jUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNeo4jUser operation middleware
+func (sh *strictHandler) CreateNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateNeo4jUserParams) {
+	var request CreateNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateNeo4jUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNeo4jUser(ctx, request.(CreateNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitCreateNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteNeo4jUser operation middleware
+func (sh *strictHandler) DeleteNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteNeo4jUserParams) {
+	var request DeleteNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteNeo4jUser(ctx, request.(DeleteNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitDeleteNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNeo4jUser operation middleware
+func (sh *strictHandler) GetNeo4jUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetNeo4jUserParams) {
+	var request GetNeo4jUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNeo4jUser(ctx, request.(GetNeo4jUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNeo4jUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNeo4jUserResponseObject); ok {
+		if err := validResponse.VisitGetNeo4jUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetNeo4jUserPassword operation middleware
+func (sh *strictHandler) SetNeo4jUserPassword(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params SetNeo4jUserPasswordParams) {
+	var request SetNeo4jUserPasswordRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body SetNeo4jUserPasswordJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetNeo4jUserPassword(ctx, request.(SetNeo4jUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetNeo4jUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetNeo4jUserPasswordResponseObject); ok {
+		if err := validResponse.VisitSetNeo4jUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOpenBaoDatabaseConnections operation middleware
+func (sh *strictHandler) ListOpenBaoDatabaseConnections(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListOpenBaoDatabaseConnectionsParams) {
+	var request ListOpenBaoDatabaseConnectionsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOpenBaoDatabaseConnections(ctx, request.(ListOpenBaoDatabaseConnectionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOpenBaoDatabaseConnections")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOpenBaoDatabaseConnectionsResponseObject); ok {
+		if err := validResponse.VisitListOpenBaoDatabaseConnectionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) CreateOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateOpenBaoDatabaseConnectionParams) {
+	var request CreateOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateOpenBaoDatabaseConnectionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateOpenBaoDatabaseConnection(ctx, request.(CreateOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitCreateOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) DeleteOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params DeleteOpenBaoDatabaseConnectionParams) {
+	var request DeleteOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Connection = connection
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteOpenBaoDatabaseConnection(ctx, request.(DeleteOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitDeleteOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOpenBaoDatabaseConnection operation middleware
+func (sh *strictHandler) GetOpenBaoDatabaseConnection(w http.ResponseWriter, r *http.Request, cluster ClusterPath, connection string, params GetOpenBaoDatabaseConnectionParams) {
+	var request GetOpenBaoDatabaseConnectionRequestObject
+
+	request.Cluster = cluster
+	request.Connection = connection
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOpenBaoDatabaseConnection(ctx, request.(GetOpenBaoDatabaseConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOpenBaoDatabaseConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOpenBaoDatabaseConnectionResponseObject); ok {
+		if err := validResponse.VisitGetOpenBaoDatabaseConnectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevealOpenBaoUnsealKeys operation middleware
+func (sh *strictHandler) RevealOpenBaoUnsealKeys(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params RevealOpenBaoUnsealKeysParams) {
+	var request RevealOpenBaoUnsealKeysRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body RevealOpenBaoUnsealKeysJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevealOpenBaoUnsealKeys(ctx, request.(RevealOpenBaoUnsealKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevealOpenBaoUnsealKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevealOpenBaoUnsealKeysResponseObject); ok {
+		if err := validResponse.VisitRevealOpenBaoUnsealKeysResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -35701,6 +50601,61 @@ func (sh *strictHandler) GetClusterPlacement(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClusterPlacementResponseObject); ok {
 		if err := validResponse.VisitGetClusterPlacementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPostgresBindings operation middleware
+func (sh *strictHandler) ListPostgresBindings(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListPostgresBindingsParams) {
+	var request ListPostgresBindingsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPostgresBindings(ctx, request.(ListPostgresBindingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPostgresBindings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPostgresBindingsResponseObject); ok {
+		if err := validResponse.VisitListPostgresBindingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotatePostgresBinding operation middleware
+func (sh *strictHandler) RotatePostgresBinding(w http.ResponseWriter, r *http.Request, cluster ClusterPath, binding string, params RotatePostgresBindingParams) {
+	var request RotatePostgresBindingRequestObject
+
+	request.Cluster = cluster
+	request.Binding = binding
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotatePostgresBinding(ctx, request.(RotatePostgresBindingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotatePostgresBinding")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotatePostgresBindingResponseObject); ok {
+		if err := validResponse.VisitRotatePostgresBindingResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -37578,6 +52533,631 @@ func (sh *strictHandler) RotateSystemUser(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// ListTemporalClientCertificates operation middleware
+func (sh *strictHandler) ListTemporalClientCertificates(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalClientCertificatesParams) {
+	var request ListTemporalClientCertificatesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTemporalClientCertificates(ctx, request.(ListTemporalClientCertificatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTemporalClientCertificates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTemporalClientCertificatesResponseObject); ok {
+		if err := validResponse.VisitListTemporalClientCertificatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IssueTemporalClientCertificate operation middleware
+func (sh *strictHandler) IssueTemporalClientCertificate(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params IssueTemporalClientCertificateParams) {
+	var request IssueTemporalClientCertificateRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body IssueTemporalClientCertificateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IssueTemporalClientCertificate(ctx, request.(IssueTemporalClientCertificateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IssueTemporalClientCertificate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IssueTemporalClientCertificateResponseObject); ok {
+		if err := validResponse.VisitIssueTemporalClientCertificateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTemporalNamespaces operation middleware
+func (sh *strictHandler) ListTemporalNamespaces(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListTemporalNamespacesParams) {
+	var request ListTemporalNamespacesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTemporalNamespaces(ctx, request.(ListTemporalNamespacesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTemporalNamespaces")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTemporalNamespacesResponseObject); ok {
+		if err := validResponse.VisitListTemporalNamespacesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTemporalNamespace operation middleware
+func (sh *strictHandler) DeleteTemporalNamespace(w http.ResponseWriter, r *http.Request, cluster ClusterPath, temporalNamespace string, params DeleteTemporalNamespaceParams) {
+	var request DeleteTemporalNamespaceRequestObject
+
+	request.Cluster = cluster
+	request.TemporalNamespace = temporalNamespace
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTemporalNamespace(ctx, request.(DeleteTemporalNamespaceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTemporalNamespace")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTemporalNamespaceResponseObject); ok {
+		if err := validResponse.VisitDeleteTemporalNamespaceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetTemporalUIOIDCClientSecret operation middleware
+func (sh *strictHandler) SetTemporalUIOIDCClientSecret(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params SetTemporalUIOIDCClientSecretParams) {
+	var request SetTemporalUIOIDCClientSecretRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body SetTemporalUIOIDCClientSecretJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetTemporalUIOIDCClientSecret(ctx, request.(SetTemporalUIOIDCClientSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetTemporalUIOIDCClientSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetTemporalUIOIDCClientSecretResponseObject); ok {
+		if err := validResponse.VisitSetTemporalUIOIDCClientSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpgradeClusterAgents operation middleware
+func (sh *strictHandler) UpgradeClusterAgents(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params UpgradeClusterAgentsParams) {
+	var request UpgradeClusterAgentsRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body UpgradeClusterAgentsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpgradeClusterAgents(ctx, request.(UpgradeClusterAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpgradeClusterAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpgradeClusterAgentsResponseObject); ok {
+		if err := validResponse.VisitUpgradeClusterAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWeaviateRoles operation middleware
+func (sh *strictHandler) ListWeaviateRoles(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateRolesParams) {
+	var request ListWeaviateRolesRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWeaviateRoles(ctx, request.(ListWeaviateRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWeaviateRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWeaviateRolesResponseObject); ok {
+		if err := validResponse.VisitListWeaviateRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWeaviateRole operation middleware
+func (sh *strictHandler) CreateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateRoleParams) {
+	var request CreateWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateWeaviateRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWeaviateRole(ctx, request.(CreateWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitCreateWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWeaviateRole operation middleware
+func (sh *strictHandler) DeleteWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params DeleteWeaviateRoleParams) {
+	var request DeleteWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWeaviateRole(ctx, request.(DeleteWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitDeleteWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeaviateRole operation middleware
+func (sh *strictHandler) GetWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params GetWeaviateRoleParams) {
+	var request GetWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeaviateRole(ctx, request.(GetWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitGetWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWeaviateRole operation middleware
+func (sh *strictHandler) UpdateWeaviateRole(w http.ResponseWriter, r *http.Request, cluster ClusterPath, role string, params UpdateWeaviateRoleParams) {
+	var request UpdateWeaviateRoleRequestObject
+
+	request.Cluster = cluster
+	request.Role = role
+	request.Params = params
+
+	var body UpdateWeaviateRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWeaviateRole(ctx, request.(UpdateWeaviateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWeaviateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWeaviateRoleResponseObject); ok {
+		if err := validResponse.VisitUpdateWeaviateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListWeaviateUsers operation middleware
+func (sh *strictHandler) ListWeaviateUsers(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params ListWeaviateUsersParams) {
+	var request ListWeaviateUsersRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListWeaviateUsers(ctx, request.(ListWeaviateUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListWeaviateUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListWeaviateUsersResponseObject); ok {
+		if err := validResponse.VisitListWeaviateUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateWeaviateUser operation middleware
+func (sh *strictHandler) CreateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, params CreateWeaviateUserParams) {
+	var request CreateWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.Params = params
+
+	var body CreateWeaviateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateWeaviateUser(ctx, request.(CreateWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitCreateWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteWeaviateUser operation middleware
+func (sh *strictHandler) DeleteWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params DeleteWeaviateUserParams) {
+	var request DeleteWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteWeaviateUser(ctx, request.(DeleteWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitDeleteWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeaviateUser operation middleware
+func (sh *strictHandler) GetWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params GetWeaviateUserParams) {
+	var request GetWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeaviateUser(ctx, request.(GetWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitGetWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateWeaviateUser operation middleware
+func (sh *strictHandler) UpdateWeaviateUser(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params UpdateWeaviateUserParams) {
+	var request UpdateWeaviateUserRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	var body UpdateWeaviateUserJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateWeaviateUser(ctx, request.(UpdateWeaviateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateWeaviateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateWeaviateUserResponseObject); ok {
+		if err := validResponse.VisitUpdateWeaviateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RotateWeaviateUserKey operation middleware
+func (sh *strictHandler) RotateWeaviateUserKey(w http.ResponseWriter, r *http.Request, cluster ClusterPath, user string, params RotateWeaviateUserKeyParams) {
+	var request RotateWeaviateUserKeyRequestObject
+
+	request.Cluster = cluster
+	request.User = user
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RotateWeaviateUserKey(ctx, request.(RotateWeaviateUserKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RotateWeaviateUserKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RotateWeaviateUserKeyResponseObject); ok {
+		if err := validResponse.VisitRotateWeaviateUserKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetControlPlaneBackupPolicy operation middleware
+func (sh *strictHandler) GetControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request) {
+	var request GetControlPlaneBackupPolicyRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetControlPlaneBackupPolicy(ctx, request.(GetControlPlaneBackupPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetControlPlaneBackupPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetControlPlaneBackupPolicyResponseObject); ok {
+		if err := validResponse.VisitGetControlPlaneBackupPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateControlPlaneBackupPolicy operation middleware
+func (sh *strictHandler) UpdateControlPlaneBackupPolicy(w http.ResponseWriter, r *http.Request, params UpdateControlPlaneBackupPolicyParams) {
+	var request UpdateControlPlaneBackupPolicyRequestObject
+
+	request.Params = params
+
+	var body UpdateControlPlaneBackupPolicyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateControlPlaneBackupPolicy(ctx, request.(UpdateControlPlaneBackupPolicyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateControlPlaneBackupPolicy")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateControlPlaneBackupPolicyResponseObject); ok {
+		if err := validResponse.VisitUpdateControlPlaneBackupPolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListControlPlaneBackups operation middleware
+func (sh *strictHandler) ListControlPlaneBackups(w http.ResponseWriter, r *http.Request, params ListControlPlaneBackupsParams) {
+	var request ListControlPlaneBackupsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListControlPlaneBackups(ctx, request.(ListControlPlaneBackupsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListControlPlaneBackups")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListControlPlaneBackupsResponseObject); ok {
+		if err := validResponse.VisitListControlPlaneBackupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateControlPlaneBackup operation middleware
+func (sh *strictHandler) CreateControlPlaneBackup(w http.ResponseWriter, r *http.Request, params CreateControlPlaneBackupParams) {
+	var request CreateControlPlaneBackupRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateControlPlaneBackup(ctx, request.(CreateControlPlaneBackupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateControlPlaneBackup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateControlPlaneBackupResponseObject); ok {
+		if err := validResponse.VisitCreateControlPlaneBackupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DryRunCreateCluster operation middleware
 func (sh *strictHandler) DryRunCreateCluster(w http.ResponseWriter, r *http.Request, params DryRunCreateClusterParams) {
 	var request DryRunCreateClusterRequestObject
@@ -38022,6 +53602,179 @@ func (sh *strictHandler) ValidateNamespace(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ListNotificationChannels operation middleware
+func (sh *strictHandler) ListNotificationChannels(w http.ResponseWriter, r *http.Request, params ListNotificationChannelsParams) {
+	var request ListNotificationChannelsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationChannels(ctx, request.(ListNotificationChannelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationChannels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationChannelsResponseObject); ok {
+		if err := validResponse.VisitListNotificationChannelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNotificationChannel operation middleware
+func (sh *strictHandler) CreateNotificationChannel(w http.ResponseWriter, r *http.Request, params CreateNotificationChannelParams) {
+	var request CreateNotificationChannelRequestObject
+
+	request.Params = params
+
+	var body CreateNotificationChannelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNotificationChannel(ctx, request.(CreateNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitCreateNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteNotificationChannel operation middleware
+func (sh *strictHandler) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params DeleteNotificationChannelParams) {
+	var request DeleteNotificationChannelRequestObject
+
+	request.Channel = channel
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteNotificationChannel(ctx, request.(DeleteNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitDeleteNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetNotificationChannel operation middleware
+func (sh *strictHandler) GetNotificationChannel(w http.ResponseWriter, r *http.Request, channel string) {
+	var request GetNotificationChannelRequestObject
+
+	request.Channel = channel
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetNotificationChannel(ctx, request.(GetNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitGetNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceNotificationChannel operation middleware
+func (sh *strictHandler) ReplaceNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params ReplaceNotificationChannelParams) {
+	var request ReplaceNotificationChannelRequestObject
+
+	request.Channel = channel
+	request.Params = params
+
+	var body ReplaceNotificationChannelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceNotificationChannel(ctx, request.(ReplaceNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitReplaceNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestNotificationChannel operation middleware
+func (sh *strictHandler) TestNotificationChannel(w http.ResponseWriter, r *http.Request, channel string, params TestNotificationChannelParams) {
+	var request TestNotificationChannelRequestObject
+
+	request.Channel = channel
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestNotificationChannel(ctx, request.(TestNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitTestNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListOAuthGrants operation middleware
 func (sh *strictHandler) ListOAuthGrants(w http.ResponseWriter, r *http.Request) {
 	var request ListOAuthGrantsRequestObject
@@ -38416,6 +54169,63 @@ func (sh *strictHandler) ReplaceSettings(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceSettingsResponseObject); ok {
 		if err := validResponse.VisitReplaceSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgentRolloutSettings operation middleware
+func (sh *strictHandler) GetAgentRolloutSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetAgentRolloutSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgentRolloutSettings(ctx, request.(GetAgentRolloutSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgentRolloutSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentRolloutSettingsResponseObject); ok {
+		if err := validResponse.VisitGetAgentRolloutSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAgentRolloutSettings operation middleware
+func (sh *strictHandler) UpdateAgentRolloutSettings(w http.ResponseWriter, r *http.Request, params UpdateAgentRolloutSettingsParams) {
+	var request UpdateAgentRolloutSettingsRequestObject
+
+	request.Params = params
+
+	var body UpdateAgentRolloutSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAgentRolloutSettings(ctx, request.(UpdateAgentRolloutSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAgentRolloutSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAgentRolloutSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateAgentRolloutSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

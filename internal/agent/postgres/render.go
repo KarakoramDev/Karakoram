@@ -21,11 +21,14 @@ type renderedFile struct {
 	name, content string
 	executable    bool
 }
-type paths struct{ root, pgdata, socket, etcd, proxy string }
+type paths struct {
+	root, pgdata, socket, etcd, proxy, ident string
+	identStaged                              bool
+}
 
 func dataPaths(dir string) paths {
 	root := filepath.Join(dir, "karakoram", "postgres")
-	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy")}
+	return paths{root: root, pgdata: filepath.Join(dir, "postgres"), socket: filepath.Join(root, "socket"), etcd: filepath.Join(dir, "etcd"), proxy: filepath.Join(root, "proxy"), ident: filepath.Join(root, "pg_ident.conf")}
 }
 func listenHost(host string) string {
 	if host == "" {
@@ -33,10 +36,29 @@ func listenHost(host string) string {
 	}
 	return host
 }
+
+// PostgreSQL binds IPv6 sockets with IPV6_V6ONLY. An IPv6 wildcard alone
+// therefore cannot serve IPv4 addresses published for the same service name.
+// Use PostgreSQL's all-addresses wildcard without changing other processes'
+// listener policy or widening explicitly restricted addresses.
+func postgresListenHost(host string) string {
+	if host == "::" {
+		return "*"
+	}
+	return host
+}
 func proxyInterfaces(host string, reader bool) string {
 	interfaces := net.JoinHostPort(listenHost(host), "5432")
+	// ProxySQL explicitly sets IPV6_V6ONLY: publish both sockets for a
+	// dual-family layout rather than relying on IPv4-mapped connections.
+	if host == "::" {
+		interfaces = "0.0.0.0:5432;" + interfaces
+	}
 	if reader {
 		interfaces += ";" + net.JoinHostPort(listenHost(host), "5433")
+		if host == "::" {
+			interfaces += ";0.0.0.0:5433"
+		}
 	}
 	return interfaces
 }
@@ -69,11 +91,24 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 	for k, v := range map[string]any{"listen_addresses": "*", "port": 5432, "unix_socket_directories": p.socket, "password_encryption": "scram-sha-256", "archive_mode": "on", "archive_command": "/bin/true", "archive_timeout": archiveTimeout(s), "hba_file": filepath.Join(p.root, "pg_hba.conf")} {
 		m[k] = v
 	}
+	if s.LocalPeerAuth {
+		m["ident_file"] = p.ident
+	}
 	if s.ListenHost != "" {
-		m["listen_addresses"] = s.ListenHost
+		m["listen_addresses"] = postgresListenHost(s.ListenHost)
 	}
 	if len(s.Postgres.SharedPreloadLibraries) > 0 {
 		m["shared_preload_libraries"] = strings.Join(s.Postgres.SharedPreloadLibraries, ",")
+	}
+	if s.Citus != nil {
+		libraries := []string{"citus"}
+		for _, library := range s.Postgres.SharedPreloadLibraries {
+			if library != "citus" {
+				libraries = append(libraries, library)
+			}
+		}
+		m["shared_preload_libraries"] = strings.Join(libraries, ",")
+		m["wal_level"] = "logical"
 	}
 	if s.Backup != nil {
 		m["archive_command"] = pgbackrestCommand(p, "pgbackrest.conf") + " --stanza=" + shellQuote(s.Backup.Repository.Stanza) + " archive-push %p"
@@ -93,6 +128,9 @@ func parameters(s pgspec.Spec, p paths) map[string]any {
 }
 func hba(s pgspec.Spec) []string {
 	lines := []string{"local all all scram-sha-256", "local replication all scram-sha-256", "host replication " + s.Replication.Username + " 127.0.0.1/32 scram-sha-256", "host replication " + s.Replication.Username + " ::1/128 scram-sha-256"}
+	if s.LocalPeerAuth {
+		lines = append([]string{"local all postgres peer map=karakoram-local", "local replication postgres peer map=karakoram-local"}, lines...)
+	}
 	cidrs := s.Postgres.ClientCIDRs
 	if len(cidrs) == 0 {
 		cidrs = []string{"0.0.0.0/0", "::/0"}
@@ -170,6 +208,9 @@ func renderRepository(r pgspec.Repository, p paths, caFile, username string) str
 }
 func restoreArgs(s pgspec.Spec, p paths) ([]string, error) {
 	r := s.Bootstrap.Restore
+	if r.TargetTime != "" && r.TargetName != "" {
+		return nil, fmt.Errorf("restore target time and name are mutually exclusive")
+	}
 	target := ""
 	if r.TargetTime != "" {
 		stamp, err := time.Parse(time.RFC3339Nano, r.TargetTime)
@@ -189,13 +230,15 @@ func restoreArgs(s pgspec.Spec, p paths) ([]string, error) {
 	}
 	if r.TargetTime != "" {
 		args = append(args, "--type=time", "--target="+target)
+	} else if r.TargetName != "" {
+		args = append(args, "--type=name", "--target="+r.TargetName)
 	} else {
 		args = append(args, "--type=immediate")
 	}
 	return append(args, "restore"), nil
 }
 
-var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
+var localParameters = []string{"listen_addresses", "port", "unix_socket_directories", "hba_file", "ident_file", "ssl_cert_file", "ssl_key_file", "ssl_ca_file", "archive_command"}
 
 func dynamicConfig(s pgspec.Spec, p paths) map[string]any {
 	params := parameters(s, p)
@@ -231,8 +274,11 @@ func renderPatroni(s pgspec.Spec, p paths) (string, error) {
 			hosts = append(hosts, net.JoinHostPort(v.Host, "2379"))
 		}
 	}
+	if s.Etcd != nil && len(s.Etcd.Endpoints) > 0 {
+		hosts = append([]string(nil), s.Etcd.Endpoints...)
+	}
 	bootstrap := map[string]any{"dcs": dynamicConfig(s, p), "initdb": []any{"data-checksums", map[string]string{"encoding": "UTF8"}, map[string]string{"locale": "C.UTF-8"}, map[string]string{"auth-host": "scram-sha-256"}, map[string]string{"auth-local": "scram-sha-256"}}, "post_bootstrap": filepath.Join(p.root, "bootstrap-roles.sh")}
-	pg := map[string]any{"listen": net.JoinHostPort(listenHost(s.ListenHost), "5432"), "connect_address": net.JoinHostPort(localHost(s), "5432"), "data_dir": p.pgdata, "bin_dir": s.BinDir, "pgpass": filepath.Join(p.root, "patroni.pgpass"), "authentication": map[string]any{"superuser": auth(s.Superuser), "replication": auth(s.Replication), "rewind": auth(s.Rewind)}, "pg_hba": hba(s), "parameters": parameters(s, p), "remove_data_directory_on_rewind_failure": true, "remove_data_directory_on_diverged_timelines": true, "create_replica_methods": []string{"basebackup"}}
+	pg := map[string]any{"listen": net.JoinHostPort(listenHost(postgresListenHost(s.ListenHost)), "5432"), "connect_address": net.JoinHostPort(localHost(s), "5432"), "data_dir": p.pgdata, "bin_dir": s.BinDir, "pgpass": filepath.Join(p.root, "patroni.pgpass"), "authentication": map[string]any{"superuser": auth(s.Superuser), "replication": auth(s.Replication), "rewind": auth(s.Rewind)}, "pg_hba": hba(s), "parameters": parameters(s, p), "remove_data_directory_on_rewind_failure": true, "remove_data_directory_on_diverged_timelines": true, "create_replica_methods": []string{"basebackup"}}
 	// Keep Patroni's native initdb/password/bootstrap lifecycle, but consume
 	// first-initialization authorization before the real binary can run.
 	pg["bin_name"] = map[string]string{"initdb": filepath.Join(p.root, "bootstrap-initdb.sh")}
@@ -254,6 +300,9 @@ func renderPatroni(s pgspec.Spec, p paths) (string, error) {
 		bootstrap["pgbackrest"] = map[string]any{"command": filepath.Join(p.root, "bootstrap-restore.sh"), "keep_existing_recovery_conf": true, "no_params": true}
 	}
 	m := map[string]any{"scope": s.Scope, "namespace": "/karakoram/", "name": s.Member, "restapi": rest, "etcd3": map[string]any{"hosts": hosts, "protocol": "https", "cacert": filepath.Join(p.root, "ca.pem"), "cert": filepath.Join(p.root, "server.pem"), "key": filepath.Join(p.root, "server.key")}, "bootstrap": bootstrap, "postgresql": pg}
+	if s.Citus != nil {
+		m["citus"] = map[string]any{"group": s.Citus.Group, "database": s.Citus.Database}
+	}
 	if s.Retiring {
 		m["tags"] = map[string]bool{"nofailover": true, "noloadbalance": true, "clonefrom": false}
 	}
@@ -306,6 +355,13 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		}
 		return files, nil
 	}
+	if s.LocalPeerAuth && !p.identStaged {
+		_, mapping, err := localPeerIdentity()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, renderedFile{"pg_ident.conf", mapping, false})
+	}
 	if statements == nil {
 		var err error
 		statements, err = roleStatements(s)
@@ -314,10 +370,14 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		}
 	}
 	rolesSQL := strings.Join(statements, ";\n") + ";\n"
-	if s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
-		// The post-bootstrap psql hook must keep the restore-only SET LOCAL
-		// scoped to the same transaction as the recovered identity writes.
-		rolesSQL = "BEGIN;\nSET LOCAL synchronous_commit = local;\n" + rolesSQL + "COMMIT;\n"
+	if s.Citus != nil || s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+		// SET LOCAL must cover the identity writes in the post-bootstrap hook,
+		// just as it does in bootstrapRoles, without changing later sessions.
+		prefix := "BEGIN;\n"
+		if s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+			prefix += "SET LOCAL synchronous_commit = local;\n"
+		}
+		rolesSQL = prefix + rolesSQL + "COMMIT;\n"
 	}
 	files = append(files, renderedFile{"postgresql.conf", renderPostgres(s, p), false}, renderedFile{"pg_hba.conf", strings.Join(hba(s), "\n") + "\n", false}, renderedFile{"roles.sql", rolesSQL, false})
 	pass := strings.NewReplacer(`\`, `\\`, ":", `\:`)
@@ -360,7 +420,7 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		cmd += "\nsync " + shellQuote(p.root)
 		files = append(files, renderedFile{"bootstrap-restore.sh", cmd + "\n", true})
 	}
-	if s.Topology == pgspec.TopologyHA {
+	if usesPatroni(s) {
 		y, err := renderPatroni(s, p)
 		if err != nil {
 			return nil, err
@@ -370,7 +430,13 @@ func render(s pgspec.Spec, p paths, statements []string) ([]renderedFile, error)
 		pass := strings.NewReplacer(`\`, `\\`, ":", `\:`).Replace(s.Superuser.Password)
 		files = append(files, renderedFile{"bootstrap.pgpass", "*:5432:*:" + s.Superuser.Username + ":" + pass + "\n", false})
 		marker := filepath.Join(p.root, "initialized.json")
-		script := "#!/bin/sh\nset -eu\numask 077\nprintf 'true\\n' > " + shellQuote(marker+".tmp") + "\nsync " + shellQuote(marker+".tmp") + "\nmv " + shellQuote(marker+".tmp") + " " + shellQuote(marker) + "\nsync " + shellQuote(p.root) + "\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d postgres -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
+		database := "postgres"
+		if s.Citus != nil && s.Bootstrap != nil && s.Bootstrap.Method == "restore" {
+			// The recovered Citus database already exists. Use it directly rather
+			// than the non-main-database command forwarding path.
+			database = s.Citus.Database
+		}
+		script := "#!/bin/sh\nset -eu\numask 077\nprintf 'true\\n' > " + shellQuote(marker+".tmp") + "\nsync " + shellQuote(marker+".tmp") + "\nmv " + shellQuote(marker+".tmp") + " " + shellQuote(marker) + "\nsync " + shellQuote(p.root) + "\nexport PGPASSFILE=" + shellQuote(filepath.Join(p.root, "bootstrap.pgpass")) + "\nexec " + shellQuote(filepath.Join(s.BinDir, "psql")) + " -X -h " + shellQuote(p.socket) + " -U " + shellQuote(s.Superuser.Username) + " -d " + shellQuote(database) + " -v ON_ERROR_STOP=1 -f " + shellQuote(filepath.Join(p.root, "roles.sql")) + "\n"
 		files = append(files, renderedFile{"bootstrap-roles.sh", script, true})
 	}
 	return files, nil

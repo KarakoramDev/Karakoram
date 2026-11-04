@@ -128,6 +128,56 @@ func nativeProxy(t *testing.T, p *pgspec.Proxy, host, caPEM string) paths {
 	}
 	return paths
 }
+
+func TestNativeAccessAdminMembership(t *testing.T) {
+	bin := os.Getenv("KARAKORAM_PG_BIN_DIR")
+	if bin == "" {
+		t.Skip("set KARAKORAM_PG_BIN_DIR for native admin membership acceptance")
+	}
+	for _, name := range []string{"postgres", "initdb", "pg_ctl"} {
+		if info, err := os.Stat(filepath.Join(bin, name)); err != nil || info.Mode()&0111 == 0 {
+			t.Skipf("native PostgreSQL binary %s is unavailable", name)
+		}
+	}
+	if os.Geteuid() == 0 {
+		t.Fatal("native PostgreSQL requires an unprivileged runtime user")
+	}
+	s := testSpec()
+	s.BinDir = bin
+	s.Postgres.Parameters = map[string]string{"shared_buffers": "32MB", "max_connections": "30"}
+	h := startNativeAgent(t, s)
+	parents := []string{"pg_read_all_data", "pg_write_all_data"}
+	role := pgspec.RoleWrite{Role: pgspec.Role{Name: "bao_admin", Login: true, Createrole: true, ConnectionLimit: -1, MemberOf: parents, MemberOfAdmin: parents}}
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "create", Role: &role}, nil)
+	check := func(wantAdmin int) {
+		t.Helper()
+		var got pgspec.Role
+		nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "get", Name: role.Name}, &got)
+		if len(got.MemberOf) != 2 || len(got.MemberOfAdmin) != wantAdmin || !got.Login || !got.Createrole {
+			t.Fatalf("membership/admin options did not round trip: %+v", got)
+		}
+	}
+	check(2)
+	// Removing delegation must not revoke ordinary membership.
+	role.MemberOfAdmin = nil
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "update", Name: role.Name, Role: &role}, nil)
+	check(0)
+	role.MemberOfAdmin = parents
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "update", Name: role.Name, Role: &role}, nil)
+	check(2)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	c, err := localConnect(ctx, s, dataPaths(h.dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close(context.Background())
+	if _, err = c.Exec(ctx, `SET ROLE bao_admin; CREATE ROLE bao_dynamic; GRANT pg_read_all_data,pg_write_all_data TO bao_dynamic; DROP ROLE bao_dynamic; RESET ROLE`); err != nil {
+		t.Fatal("OpenBao account cannot create, grant and drop dynamic roles", err)
+	}
+	nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "delete", Name: role.Name}, nil)
+}
+
 func TestNativeAccessLifecycle(t *testing.T) {
 	if os.Getenv("KARAKORAM_PG_BIN_DIR") == "" {
 		t.Skip("set KARAKORAM_PG_BIN_DIR for native access acceptance")
@@ -369,4 +419,51 @@ func TestNativeMajorUpgrade(t *testing.T) {
 		t.Fatal("completed upgrade retry was not idempotent")
 	}
 	t.Log("native Percona16→17: maintenance exclusion, explicit locale, pg_upgrade check/link, durable activation, retained row and idempotent completion passed")
+}
+
+func TestNativeRecoveryPasswordRequiresClientHold(t *testing.T) {
+	if os.Getenv("KARAKORAM_PG_BIN_DIR") == "" {
+		t.Skip("set KARAKORAM_PG_BIN_DIR for native recovery acceptance")
+	}
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprintf("held-%t", held), func(t *testing.T) {
+			s := testSpec()
+			s.BinDir = os.Getenv("KARAKORAM_PG_BIN_DIR")
+			s.Postgres.RecoveryClientsHeld = held
+			h := startNativeAgent(t, s)
+			for _, name := range []string{"recovery_app", "kb_0123456789abcdef0123456789abcdef"} {
+				before, after := "before-recovery-password", "after-recovery-password"
+				verifier := nativeVerifier(t, before)
+				role := pgspec.RoleWrite{Role: pgspec.Role{Name: name, Login: true, ConnectionLimit: 7}, Password: &verifier}
+				nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Binding: bindingRole(name), Operation: "create", Role: &role}, nil)
+				verifier = nativeVerifier(t, after)
+				req := pgspec.AccessRequest{Binding: true, Operation: "recover-password", Role: &pgspec.RoleWrite{Role: pgspec.Role{Name: name}, Password: &verifier}}
+				response, err := h.request(http.MethodPost, "/v1/postgres/roles", req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				response.Body.Close()
+				want := http.StatusConflict
+				password := before
+				if held {
+					want, password = http.StatusOK, after
+				}
+				if response.StatusCode != want {
+					t.Fatalf("recovery password HTTP %d; want %d", response.StatusCode, want)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+				defer cancel()
+				c, err := userConnect(ctx, dataPaths(h.dir).socket, "postgres", name, password)
+				if err != nil {
+					t.Fatal("recovery password did not match expected credential", err)
+				}
+				c.Close(ctx)
+				var got pgspec.Role
+				nativeRequest(t, h, pgspec.ActionRoles, pgspec.AccessRequest{Operation: "get", Name: name}, &got)
+				if !got.Login || got.ConnectionLimit != 7 || len(got.MemberOf) != 0 {
+					t.Fatal("password recovery changed catalog attributes", got)
+				}
+			}
+		})
+	}
 }

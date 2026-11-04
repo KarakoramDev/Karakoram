@@ -2,13 +2,13 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Replica sets
 
-Create and maintain a managed PSMDB replica set named `rs0`.
+Create and maintain a managed [PSMDB](https://docs.percona.com/percona-server-for-mongodb/) replica set named `rs0`.
 
 ## Create
 
 ### Web UI
 
-1. Select the database project's [namespace](../namespaces.md), then **Clusters → Create cluster → MongoDB**.
+1. Select the database project's [namespace](../namespaces.md), then **Clusters → Create cluster → [MongoDB](https://www.mongodb.com/)**.
 2. Choose **replicaSet** and an exact [catalog version](README.md). Select **dev** only for disposable single-member use, or **prod** for three voting members.
 3. Review member resources and total project capacity. Keep private exposure and `requireTLS`; configure [backup storage](../backups.md) if recovery is required.
 4. Review and create. Follow the resulting operation and **Topology** until the desired generation is observed and active members are healthy.
@@ -37,7 +37,7 @@ karactl -n default operations cluster demo
 karactl -n default events list --cluster demo
 ```
 
-Ready means the desired `generation` is observed by `observedGeneration` **and** authenticated member observations show healthy replication. Check phase/message/conditions, role/state/lag, agent connectivity/configVersion and observed binary versions. A caught-up secondary is not merely a Zerops ACTIVE service or an open TCP port. [Operation success alone is not a health guarantee](../clusters.md#operations-and-status).
+Ready means the desired `generation` is observed by `observedGeneration` **and** authenticated member observations show healthy replication. Check phase/message/conditions, role/state/lag, agent connectivity/configVersion and observed binary versions. A caught-up secondary is not merely a [Zerops](https://zerops.io/) ACTIVE service or an open TCP port. [Operation success alone is not a health guarantee](../clusters.md#operations-and-status).
 
 `spec.version` is desired; `status.version` reflects observed binaries, with missing observations unknown. Leaving members remain visible until removed; the UI counts active members and leaving members separately. Condition transition timestamps change on status/reason transitions, not every poll.
 
@@ -62,4 +62,4 @@ Choose an actual inventory name for replacement. Added members join non-voting, 
 
 Unhealthy replication/quorum blocks disruptive work; repair it instead of repeatedly resubmitting. If replacement fails while removing the old member, ordinary convergence finishes removal before promoting the caught-up replacement; failure is not rollback. Inspect voting state before raising FCV. A singleton replacement necessarily interrupts availability.
 
-For resource changes/restarts, see [MongoDB operations](operations.md). For deletion, suspension and resumption, use [Delete or suspend](../clusters.md#delete-or-suspend); for PBM cleanup, see [backups](backups.md).
+For resource changes/restarts, see [MongoDB operations](operations.md). For deletion, suspension and resumption, use [Delete or suspend](../clusters.md#delete-or-suspend); for [PBM](https://docs.percona.com/percona-backup-mongodb/) cleanup, see [backups](backups.md).

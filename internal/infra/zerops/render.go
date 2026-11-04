@@ -14,7 +14,11 @@ import (
 )
 
 var zeropsLayout = infra.Layout{AppDir: "/var/www", VolumeRoot: "/mnt", User: "zerops", PrivateAddressFamily: infra.AddressFamilyIPv6}
-var zeropsCapabilities = infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true}
+
+// New-build deployments do not advertise ProxyDeploymentPreservesServing:
+// temporaryShutdown=false permits overlap, but neither serial replacement nor
+// serving-probe admission before traffic/predecessor retirement is established.
+var zeropsCapabilities = infra.Capabilities{PublicTCP: true, TCPAllowlist: true, PublicHTTPS: true, DiskGrowth: true, VolumeQuota: true, Logs: true, ScopedTokens: true, DedicatedCPU: true, HorizontalScaling: true, ReplicaScalePreservesServing: true, ResourceUpdatePreservesServing: true}
 
 // RenderYAML translates a neutral runtime description into a Zerops deployment.
 func RenderYAML(hostname string, layout infra.Layout, binary string, spec infra.RuntimeSpec) (string, error) {

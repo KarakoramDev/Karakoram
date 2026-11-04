@@ -35,18 +35,35 @@ func legacyNativeVolume(t *testing.T, a *nodeAgent, engine string) {
 	case "":
 		volumeFile(t, a, "db/WiredTiger", []byte("WiredTiger 11.3\n"))
 		volumeFile(t, a, "db/WiredTiger.wt", make([]byte, 4096))
+	case "weaviate":
+		volumeFile(t, a, "weaviate/raft/raft.db", []byte{1})
+		volumeFile(t, a, "weaviate/schema.db", []byte{1})
 	case "postgres":
 		volumeFile(t, a, "postgres/PG_VERSION", []byte("18\n"))
 		volumeFile(t, a, "postgres/global/pg_control", make([]byte, 8192))
+	case "mysql":
+		volumeFile(t, a, "mysql/auto.cnf", []byte("[auto]\nserver-uuid=11111111-2222-3333-4444-555555555555\n"))
+		volumeFile(t, a, "mysql/mysql.ibd", make([]byte, 16384))
+	case "neo4j":
+		metadata := make([]byte, 8192)
+		copy(metadata[65:], []byte("record\x01\x07aligned"))
+		volumeFile(t, a, "karakoram/neo4j/data/databases/system/neostore", metadata)
+		volumeFile(t, a, "karakoram/neo4j/data/databases/system/neostore.nodestore.db", make([]byte, 8192))
+		volumeFile(t, a, "karakoram/neo4j/data/databases/system/database_lock", nil)
 	case "elasticsearch":
 		volumeFile(t, a, "karakoram/data/_state/node-1.st", []byte{0x3f, 0xd7, 0x6c, 0x17, 1})
+	case "openbao":
+		header := make([]byte, 8192)
+		copy(header[16:], []byte{0xed, 0xda, 0x0c, 0xed, 2, 0, 0, 0})
+		volumeFile(t, a, "openbao/raft/raft.db", header)
+		volumeFile(t, a, "openbao/raft/vault.db", header)
 	case "rabbitmq":
 		volumeFile(t, a, "rabbitmq/rabbit@member/rabbitmq_metadata/UID/config", []byte("#{id => {rabbitmq_metadata, 'rabbit@member'}}."))
 		volumeFile(t, a, "rabbitmq/rabbit@member/rabbitmq_metadata/0000000000000001.wal", []byte{'R', 'A', 'W', 'A', 1, 1})
 	}
 }
 func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			if err := a.volumeSafety(t.Context(), c); err == nil || !strings.Contains(err.Error(), "VolumeLost") {
@@ -62,7 +79,7 @@ func TestVolumeSafetyInitializedEmptyVolumeRefusesEveryFamily(t *testing.T) {
 	}
 }
 func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, false)
 			if err := a.volumeSafety(t.Context(), c); err != nil {
@@ -96,7 +113,7 @@ func TestVolumeSafetyFreshLegacyAndChangedIdentity(t *testing.T) {
 	}
 }
 func TestVolumeSafetyLegacyRequiresNativeMetadata(t *testing.T) {
-	for _, engine := range []string{"", "postgres", "elasticsearch", "rabbitmq"} {
+	for _, engine := range []string{"", "postgres", "mysql", "elasticsearch", "rabbitmq", "openbao", "neo4j", "weaviate"} {
 		t.Run(engine, func(t *testing.T) {
 			a, c := volumeFixture(t, engine, true)
 			volumeFile(t, a, "karakoram/config.json", []byte(`{"cluster":"demo"}`))
@@ -104,8 +121,34 @@ func TestVolumeSafetyLegacyRequiresNativeMetadata(t *testing.T) {
 			volumeFile(t, a, "db/WiredTiger.wt", []byte("truncated"))
 			volumeFile(t, a, "karakoram/data/_state/node-1.st", []byte("invalid"))
 			volumeFile(t, a, "rabbitmq/rabbit@member/rabbitmq_metadata/config", []byte("wrong node"))
+			volumeFile(t, a, "mysql/auto.cnf", []byte("[auto]\nserver-uuid=invalid\n"))
+			volumeFile(t, a, "mysql/mysql.ibd", []byte("truncated"))
+			volumeFile(t, a, "karakoram/neo4j/data/databases/system/neostore", []byte("invalid"))
+			volumeFile(t, a, "karakoram/neo4j/data/databases/system/database_lock", nil)
 			if err := a.volumeSafety(t.Context(), c); err == nil {
 				t.Fatal("cache/directory/corrupt marker adopted")
+			}
+		})
+	}
+}
+
+func TestOpenBaoVolumeRequiresBothNativeDatabases(t *testing.T) {
+	for _, scenario := range []string{"missing-vault", "truncated-raft", "invalid-vault"} {
+		t.Run(scenario, func(t *testing.T) {
+			a, c := volumeFixture(t, "openbao", true)
+			legacyNativeVolume(t, a, "openbao")
+			switch scenario {
+			case "missing-vault":
+				if err := os.Remove(filepath.Join(a.o.DataDir, "openbao/raft/vault.db")); err != nil {
+					t.Fatal(err)
+				}
+			case "truncated-raft":
+				volumeFile(t, a, "openbao/raft/raft.db", []byte{0xed, 0xda, 0x0c, 0xed})
+			case "invalid-vault":
+				volumeFile(t, a, "openbao/raft/vault.db", make([]byte, 8192))
+			}
+			if err := a.volumeSafety(t.Context(), c); err == nil {
+				t.Fatal("partial or invalid native data was adopted")
 			}
 		})
 	}

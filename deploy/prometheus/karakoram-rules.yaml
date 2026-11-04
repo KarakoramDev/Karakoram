@@ -1,0 +1,258 @@
+# Scrape the authenticated control-plane /metrics endpoint. Tune thresholds to policy cadence.
+groups:
+  - name: karakoram.control-plane
+    rules:
+      - alert: KarakoramMemberScrapeDown
+        expr: "karakoram_member_scrape_success == 0"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Member metrics unavailable"
+          description: "Check member runtime, agent transport and monitoring credentials; missing engine metrics are unknown, not healthy."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramClusterDegraded
+        expr: "karakoram_cluster_degraded == 1"
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Cluster degraded"
+          description: "Inspect cluster conditions and recent operations before restarting members."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramClusterNotReady
+        expr: "karakoram_cluster_ready == 0"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cluster not ready"
+          description: "Inspect cluster phase and conditions; creation, suspension and maintenance may explain this state."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramBackupStale
+        expr: "time() - karakoram_backup_last_success_timestamp_seconds{schedule!=\"\"} > 26 * 3600"
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scheduled backup has no success in 26 hours"
+          description: "An enabled schedule has never succeeded or its latest success is older than 26 hours. Check schedule cadence, storage and backup errors. Adapt threshold for intentionally infrequent schedules."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramBackupFailed
+        expr: "karakoram_backup_last_failure_timestamp_seconds > on (namespace, cluster) max by (namespace, cluster) (karakoram_backup_last_success_timestamp_seconds)"
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latest backup failed"
+          description: "A backup failure is newer than every recorded successful backup. Inspect backup inventory and storage access."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramCertificateExpires14Days
+        expr: "karakoram_certificate_expiry_timestamp_seconds - time() < 14 * 86400"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Certificate expiring within 14 days"
+          description: "Inspect the certificate label and renewal conditions. Expired certificates also match this alert."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramCertificateExpires3Days
+        expr: "karakoram_certificate_expiry_timestamp_seconds - time() < 3 * 86400"
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Certificate expiring within 3 days"
+          description: "Inspect the certificate label and renewal conditions. Expired certificates also match this alert."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramBackupDrillFailed
+        expr: "karakoram_backup_drill_last_failure_timestamp_seconds > karakoram_backup_drill_last_success_timestamp_seconds"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Latest backup drill failed"
+          description: "Inspect restore verification and cleanup inventory; a successful backup alone does not demonstrate recoverability."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramBackupDrillStale
+        expr: "(time() - karakoram_backup_drill_last_success_timestamp_seconds > 8 * 86400) and (karakoram_backup_drill_enabled == 1)"
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful scheduled drill in eight days"
+          description: "Scheduled drills are enabled but have never succeeded or are stale. Adapt this threshold to the configured drill cadence."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramControlPlaneBackupStale
+        expr: "(time() - karakoram_control_plane_backup_last_success_timestamp_seconds > 26 * 3600) and (karakoram_control_plane_backup_enabled == 1)"
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Control-plane backup stale"
+          description: "Control-plane backups are enabled but no success exists within 26 hours. Check policy, storage access and run history. Preserve the master key separately."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/control-plane-backup.md"
+      - alert: KarakoramNotificationDeliveriesFailing
+        expr: "increase(karakoram_notification_deliveries_failed_total[1h]) > 0"
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification deliveries exhausted retries"
+          description: "Inspect channel configuration and delivery history. This counter counts terminal failures, not successful delivery attempts."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/notifications.md"
+      - alert: KarakoramDeploymentRetriesExhausted
+        expr: "karakoram_deployment_retries_exhausted == 1"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Deployment retries exhausted"
+          description: "Inspect the backend deployment error and correct its cause before explicitly retrying."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/monitoring.md"
+      - alert: KarakoramAgentsOutdated
+        expr: "karakoram_member_agent_outdated == 1"
+        for: 24h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Member agent outdated for a day"
+          description: "Schedule a rolling member-agent upgrade; this informational state does not make the database unready."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/upgrade.md"
+  - name: karakoram.engines
+    rules:
+      - alert: KarakoramMongoReplicationLag
+        expr: "karakoram_repl_lag_seconds > 60"
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB replication lag high"
+          description: "Inspect replica health and workload before lag exceeds the available oplog window."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/mongodb/operations.md"
+      - alert: KarakoramMongoOplogWindow
+        expr: "karakoram_oplog_window_seconds < 3600"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB oplog window below one hour"
+          description: "Review oplog sizing and workload. This metric does not apply to routers."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/mongodb/operations.md"
+      - alert: KarakoramRabbitMQMemoryAlarm
+        expr: "karakoram_rabbitmq_memory_alarm == 1"
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ memory alarm"
+          description: "Inspect native resource limits and usage; publishing may be blocked."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/operations.md"
+      - alert: KarakoramRabbitMQDiskAlarm
+        expr: "karakoram_rabbitmq_disk_alarm == 1"
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "RabbitMQ disk alarm"
+          description: "Inspect native resource limits and usage; publishing may be blocked."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/operations.md"
+      - alert: KarakoramRabbitMQMembersMissing
+        expr: "karakoram_rabbitmq_cluster_members_running < on (namespace, cluster) group_left count by (namespace, cluster) (karakoram_rabbitmq_up)"
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ distribution links missing"
+          description: "A node reports fewer running members than reporting RabbitMQ nodes. Check membership and distribution connectivity; this is not a quorum guarantee."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/rabbitmq/operations.md"
+      - alert: KarakoramElasticsearchRed
+        expr: "max by (namespace, cluster) (karakoram_elasticsearch_cluster_status) == 2"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Elasticsearch cluster red"
+          description: "Inspect allocation explanations and node health; cluster-wide metrics are duplicated per reporter, not additive."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/operations.md"
+      - alert: KarakoramElasticsearchYellow
+        expr: "max by (namespace, cluster) (karakoram_elasticsearch_cluster_status) == 1"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elasticsearch cluster yellow"
+          description: "Inspect allocation explanations and node health; cluster-wide metrics are duplicated per reporter, not additive."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/operations.md"
+      - alert: KarakoramElasticsearchUnassignedShards
+        expr: "max by (namespace, cluster) (karakoram_elasticsearch_unassigned_shards) > 0"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elasticsearch unassigned shards"
+          description: "Inspect allocation explanations, disk watermarks and missing nodes."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/operations.md"
+      - alert: KarakoramElasticsearchHeap
+        expr: "karakoram_elasticsearch_jvm_heap_used_bytes / karakoram_elasticsearch_jvm_heap_max_bytes > 0.9"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elasticsearch heap above 90 percent"
+          description: "Inspect JVM pressure, garbage collection and shard sizing."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/elasticsearch/operations.md"
+      - alert: KarakoramPostgresReplicationLag
+        expr: "karakoram_postgres_replication_lag_bytes > 256 * 1024 * 1024"
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL primary-observed replication lag high"
+          description: "Primary-observed lag includes transport and replay; inspect streaming replicas. Replica replay backlog is a separate measure that excludes transport lag."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/postgres/operations.md"
+      - alert: KarakoramPostgresArchiveFailures
+        expr: "increase(karakoram_postgres_archiver_failed_total[15m]) > 0"
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL WAL archive failures"
+          description: "Inspect archive command errors and backup storage access."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/postgres/operations.md"
+      - alert: KarakoramPostgresArchiveStale
+        expr: "karakoram_postgres_last_archived_age_seconds > 3600"
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL last archived WAL older than one hour"
+          description: "Inspect archive progress and pending segments; an idle database may not generate WAL. Missing archive metrics are unknown."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/postgres/operations.md"
+      - alert: KarakoramPostgresSlotWALUnavailable
+        expr: "karakoram_postgres_slot_wal_unavailable == 1"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL slot WAL unavailable"
+          description: "Inspect the slot and its consumer; the consumer may require resynchronization."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/postgres/operations.md"
+      - alert: KarakoramPostgresConnectionsNearMax
+        expr: "sum by (namespace, cluster, member) (karakoram_postgres_connections) / on (namespace, cluster, member) karakoram_postgres_max_connections > 0.9"
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connections above 90 percent"
+          description: "Inspect connection pools and application connection counts before increasing server limits."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/postgres/operations.md"
+      - alert: KarakoramSupabaseComponentDown
+        expr: "karakoram_supabase_up == 0"
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Supabase component not ready"
+          description: "Inspect the labelled component health and logs. Core PostgreSQL health must be checked separately."
+          runbook_url: "https://github.com/KarakoramDev/Karakoram/blob/main/docs/supabase/operations.md"

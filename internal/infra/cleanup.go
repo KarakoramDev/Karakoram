@@ -10,6 +10,8 @@ type cleanupIntentKey struct{}
 // CleanupIntent binds a cleanup pass to persisted member application identities.
 // FullDelete excludes suspension and retained-volume cleanup. Backends must still
 // prove native ownership and absence of competing work before escalating removal.
+// A nil Services map marks shared cluster cleanup observation only: providers
+// still verify ownership before mutations, and escalation requires exact IDs.
 type CleanupIntent struct {
 	FullDelete bool
 	Services   map[string]string

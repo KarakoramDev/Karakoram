@@ -261,6 +261,7 @@ type fakeBroker struct {
 	membershipError  string
 	runningNodes     []string
 	resources        *agentapi.ContainerResources
+	agentBuild       string
 }
 type fakeAgents struct {
 	mu              sync.Mutex // Broker lookup and client/server caches.
@@ -280,6 +281,7 @@ type fakeAgents struct {
 	joinHandler     func(string, string)
 	legacyFormation map[string]bool
 	volumeStatus    func(string) *agentapi.VolumeStatus
+	configObserver  func(agentapi.MemberConfig)
 }
 
 func (a *fakeAgents) broker(name string) *fakeBroker {
@@ -370,12 +372,15 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			if a.volumeStatus != nil {
 				volume = a.volumeStatus(name)
 			}
-			_ = json.NewEncoder(w).Encode(agentapi.Status{EngineVersion: version, ConfigVersion: configVersion, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources, Volume: volume})
+			_ = json.NewEncoder(w).Encode(agentapi.Status{Agent: agentapi.AgentBuild{Build: b.agentBuild}, EngineVersion: version, ConfigVersion: configVersion, HostFingerprint: "host-" + name, Processes: map[string]agentapi.ProcessStatus{"rabbitmq-server": {State: state}}, Resources: b.resources, Volume: volume})
 		case "/v1/reload":
 			cfg, err := a.p.MemberConfig(r.Context(), a.rc, name)
 			if err != nil {
 				http.Error(w, err.Error(), 500)
 				return
+			}
+			if a.configObserver != nil {
+				a.configObserver(cfg)
 			}
 			b.config = cfg.ConfigVersion
 			_ = json.NewEncoder(w).Encode(agentapi.ActionResponse{Success: true})
@@ -441,7 +446,7 @@ func (a *fakeAgents) Dial(_ context.Context, _ domain.ClusterRef, name string) (
 			_ = json.NewEncoder(w).Encode(rmqspec.StreamReplicasResponse{Replicas: json.RawMessage(`[]`)})
 		default:
 			if r.Method != "POST" {
-				http.Error(w, "POST required", 405)
+				http.Error(w, "POST required", http.StatusMethodNotAllowed)
 				return
 			}
 			switch action {

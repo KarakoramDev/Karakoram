@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,9 +58,13 @@ func eligibleNodes(ns []node) []node {
 	}
 	return out
 }
-func chooseNode(ns []node, ms []metadata, group, replaces string) (string, error) {
+func chooseNode(ns []node, ms []metadata, group, replaces string, avoid ...string) (string, error) {
 	ns = eligibleNodes(ns)
+	ns = slices.DeleteFunc(ns, func(n node) bool { return slices.Contains(avoid, n.Description.Hostname) })
 	if len(ns) == 0 {
+		if len(avoid) != 0 {
+			return "", fmt.Errorf("choose volume node: %w", infra.ErrPlacementUnsatisfiable)
+		}
 		return "", fmt.Errorf("%w: no ready active data nodes", infra.ErrUnavailable)
 	}
 	counts, total := map[string]int{}, map[string]int{}

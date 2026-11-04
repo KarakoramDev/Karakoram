@@ -109,7 +109,7 @@ func spec(c agentapi.MemberConfig) (rmqspec.MemberSpec, error) {
 		return s, errors.New("management listener required")
 	}
 	if s.PrometheusPort == 0 {
-		return s, errors.New("Prometheus listener required")
+		return s, errors.New("a Prometheus listener is required")
 	}
 	if s.MemoryHighWatermarkBytes <= 0 || s.TotalMemoryBytes <= 0 || s.DiskFreeLimitBytes <= 0 || s.DefaultQueueType != "quorum" {
 		return s, errors.New("invalid resource limits or queue type")
@@ -193,11 +193,17 @@ func render(dir string, s rmqspec.MemberSpec, c agentapi.MemberConfig) ([]render
 			line("ssl_options.fail_if_no_peer_cert", "false")
 		}
 	}
+	managementHost := "::"
+	if s.IPv4Distribution {
+		managementHost = "0.0.0.0"
+	}
 	if s.ManagementPort > 0 {
 		line("management.tcp.port", s.ManagementPort)
+		line("management.tcp.ip", managementHost)
 	}
 	if s.ManagementTLSPort > 0 {
 		line("management.ssl.port", s.ManagementTLSPort)
+		line("management.ssl.ip", managementHost)
 	}
 	if s.PrometheusPort > 0 {
 		line("prometheus.tcp.port", s.PrometheusPort)

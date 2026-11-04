@@ -22,7 +22,7 @@ func (p *Core) proxyConnectionLimit(rc *engine.Context, s *state, proxy *member)
 		instances = max(old, desired) + surge
 	}
 	options := []json.RawMessage{rc.Cluster.Spec.EngineOptions}
-	for _, m := range s.data() {
+	for _, m := range s.group(0).data() {
 		options = append(options, m.Options)
 	}
 	if s.Rolling != nil && s.Rolling.Phase < len(s.Rolling.Phases) {

@@ -3,6 +3,10 @@
 
 import { isPostgres, POSTGRES_OFFLINE_UPGRADE, postgresMajorUpgrade } from '../../../engines/postgres/spec.ts';
 
+export function backupPITRDraft(persisted: { autoReanchor?: boolean } | undefined, enabled: boolean, oplogSpanMinutes: number) {
+  return { ...persisted, enabled, oplogSpanMinutes };
+}
+
 export function knownHost(name: string): boolean {
   return Boolean(name.trim()) && !['unknown', 'unavailable', 'pending'].includes(name.trim().toLowerCase());
 }
@@ -18,6 +22,10 @@ export function observedVersion(status: { version?: string; members: { version?:
 
 export function maintenanceCopy(provider: string, replicas: number, current?: string, target?: string): string {
   if (isPostgres(provider) && current && target && postgresMajorUpgrade(current, target)) return POSTGRES_OFFLINE_UPGRADE;
+  if (provider === 'mysql') return replicas === 1
+    ? 'Downtime: single-member MySQL maintenance interrupts database access until it returns.'
+    : 'Group Replication rolls secondaries before moving the primary. A majority is required; writes block on quorum loss, and clients must reconnect after failover.';
+  if (provider === 'pxc') return 'PXC rolls Galera members while preserving a Primary component. Wait for Synced and wsrep_ready before continuing; ProxySQL routes one writer, and a failover timeout can leave commit outcomes unknown.';
   if (provider === 'postgres' || provider === 'supabase') return replicas === 1
     ? 'Downtime: single-member PostgreSQL maintenance interrupts database access until it returns.'
     : 'PostgreSQL replicas restart first, followed by a primary switchover. Failover briefly interrupts writes; availability requires the etcd voting quorum.';
@@ -27,6 +35,7 @@ export function maintenanceCopy(provider: string, replicas: number, current?: st
       : 'Elasticsearch nodes restart one at a time; availability depends on master quorum and redundant shard copies.';
     return `${availability} Elasticsearch nodes restart first, with the elected master last, followed by Kibana, Logstash and APM Server. Kibana restarts separately and its web UI is temporarily unavailable.`;
   }
+  if (provider === 'temporal') return 'Temporal components roll one instance at a time in the order history, matching, frontend, worker, server, Web UI. A component with a single instance is briefly unavailable; SDK clients retry and workflow state is safe in PostgreSQL.';
   if (replicas === 1) return 'Downtime: the only member becomes unavailable during upgrade or restart. Applications cannot use the database until it returns.';
   const neutral = 'Members restart one at a time; the cluster stays available if a majority/quorum remains.';
   return provider === 'psmdb' ? `${neutral} Secondaries restart first; a primary failover can briefly pause writes.` : neutral;

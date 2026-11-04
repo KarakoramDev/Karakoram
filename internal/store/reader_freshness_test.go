@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"modernc.org/sqlite"
@@ -20,6 +21,14 @@ import (
 var readerCancelFunctionID atomic.Uint64
 
 func TestCanceledReaderQueryReleasesSnapshot(t *testing.T) {
+	// The deliberately blocked driver mutex prevents virtual time advancing.
+	// Keep the original cancellation scheduling delay on real time.
+	ticks := time.NewTicker(100 * time.Millisecond)
+	defer ticks.Stop()
+	synctest.Test(t, func(t *testing.T) { canceledReaderQueryReleasesSnapshot(t, ticks.C) })
+}
+
+func canceledReaderQueryReleasesSnapshot(t *testing.T, realTicks <-chan time.Time) {
 	ctx := t.Context()
 	readCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -30,7 +39,11 @@ func TestCanceledReaderQueryReleasesSnapshot(t *testing.T) {
 		<-readCtx.Done()
 		// Let the driver's cancellation watcher mark the query canceled before
 		// its first row returns. Interruption itself is delayed below.
-		time.Sleep(100 * time.Millisecond)
+		// One tick may already be buffered; three retain at least the original
+		// 100ms delay without requiring the fake clock to advance.
+		for range 3 {
+			<-realTicks
+		}
 		return int64(1), nil
 	}); err != nil {
 		t.Fatal(err)
@@ -74,7 +87,13 @@ func TestCanceledReaderQueryReleasesSnapshot(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	defer interruptLock.Unlock()
+	defer func() {
+		interruptLock.Unlock()
+		// The delayed cancellation watcher reads the driver's db handle
+		// before taking this mutex. Join it before Store.Close cleanup, not
+		// while the lock is held. All snapshot/reuse assertions run first.
+		synctest.Wait()
+	}()
 	queryDone := make(chan error, 1)
 	go func() {
 		rows, err := conn.QueryContext(readCtx, "SELECT value, "+function+"() FROM read_freshness")

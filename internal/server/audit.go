@@ -20,7 +20,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		return nil
 	}
 	rule, exists := api.OperationRBAC[operationID(name)]
-	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials") {
+	if !exists || rule.Public || name == "Logout" || name == "RefreshSession" || (rule.Action == "read" && name != "GetClusterConnection" && name != "GetSupabaseCredentials" && name != "RevealOpenBaoUnsealKeys" && name != "IssueTemporalClientCertificate") {
 		return nil
 	}
 	if result.status >= 300 {
@@ -39,6 +39,31 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Operation = op.Id
 	}
 	switch name {
+	case "RevealOpenBaoUnsealKeys":
+		e.Reason = "OpenBaoUnsealKeysRevealed"
+	case "CreateOpenBaoDatabaseConnection":
+		e.Target = in.Cluster + "/" + in.Body.(*api.OpenBaoDatabaseConnectionWrite).Name
+	case "DeleteOpenBaoDatabaseConnection":
+		e.Target = in.Cluster + "/" + in.Name
+	case "IssueTemporalClientCertificate":
+		e.Reason = "TemporalClientCertificateIssued"
+	case "SetTemporalUIOIDCClientSecret":
+		e.Reason = "TemporalUIOIDCClientSecretUpdated"
+	case "DeleteTemporalNamespace":
+		e.Resource = "temporal-namespaces"
+		e.Target = in.Cluster + "/" + in.Name
+	case "UpdateAgentRolloutSettings":
+		e.Target = "agent-rollout"
+	case "UpdateControlPlaneBackupPolicy":
+		e.Target = "control-plane-backup-policy"
+	case "CreateControlPlaneBackup":
+		if b, ok := result.body.(api.ControlPlaneBackup); ok {
+			e.Target = b.Id
+		}
+	case "CreateNotificationChannel":
+		e.Target = in.Body.(*api.NotificationChannel).Name
+	case "ReplaceNotificationChannel", "DeleteNotificationChannel", "TestNotificationChannel":
+		e.Target = in.Name
 	case "GetSupabaseCredentials":
 		e.Reason = "SupabaseCredentialsRevealed"
 	case "PutSupabaseFunction", "DeleteSupabaseFunction":
@@ -77,7 +102,7 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Reason = "ClusterDeleteRequested"
 		q := request(ctx).URL.Query()
 		e.Message = fmt.Sprintf("Cluster deletion requested for %s (keepVolumes=%t, keepBackups=%t)", in.Cluster, q.Get("keepVolumes") == "true", q.Get("keepBackups") == "true")
-	case "ResumeCluster", "RestartCluster", "RotateClusterTLS", "ReplaceClusterMember", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
+	case "ResumeCluster", "RestartCluster", "RebalancePostgres", "RotateClusterTLS", "ReplaceClusterMember", "MoveClusterMember", "UpgradeClusterAgents", "CreateBackupDrill", "RotateSystemUser", "RaiseClusterFCV", "CreateBackup", "DeleteBackup", "CreateRestore":
 		e.Reason = strings.TrimSuffix(name, "Cluster") + "Requested"
 	case "GetClusterConnection":
 		e.Reason = "ConnectionCredentialsRevealed"
@@ -119,10 +144,27 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = "policy"
 	case "ReplaceSettings":
 		e.Target = "oidc"
+	case "CreateMySQLUser":
+		e.Target = in.Cluster + "/" + in.Body.(*api.MySQLUserWrite).Name
+	case "PatchMySQLUser", "DeleteMySQLUser", "RotateMySQLUserPassword", "DiscardMySQLUserOldPassword":
+		e.Target = in.Cluster + "/" + in.User
+	case "CreateMySQLDatabase":
+		e.Target = in.Cluster + "/" + in.Body.(*api.MySQLDatabaseWrite).Name
+	case "DeleteMySQLDatabase":
+		e.Target = in.Cluster + "/" + in.Database
+	case "GrantMySQLPrivileges", "RevokeMySQLPrivileges":
+		body := in.Body.(*api.MySQLGrant)
+		e.Target = in.Cluster + "/" + body.Database + "/" + body.User
+	case "CreateNeo4jUser":
+		e.Target = in.Cluster + "/" + in.Body.(*api.Neo4jUserCreate).Name
+	case "DeleteNeo4jUser", "SetNeo4jUserPassword":
+		e.Target = in.Cluster + "/" + in.User
 	case "CreatePostgresRole", "UpdatePostgresRole":
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresRoleWrite).Name
 	case "PatchPostgresRole", "DeletePostgresRole", "RotatePostgresRolePassword":
 		e.Target = in.Cluster + "/" + in.Role
+	case "RotatePostgresBinding":
+		e.Target = in.Cluster + "/" + in.Name
 	case "CreatePostgresDatabase":
 		e.Target = in.Cluster + "/" + in.Body.(*api.PostgresDatabase).Name
 	case "DeletePostgresDatabase":
@@ -140,6 +182,20 @@ func (s *Server) auditAction(ctx context.Context, name string, in input, result 
 		e.Target = in.Cluster + "/" + b.Database + "/" + b.Name
 	case "ReplaceDatabaseRole", "DeleteDatabaseRole":
 		e.Target = in.Cluster + "/" + in.Database + "/" + in.Role
+	case "CreateWeaviateUser", "UpdateWeaviateUser", "DeleteWeaviateUser", "RotateWeaviateUserKey":
+		e.Resource = "weaviate-users"
+		user := in.Name
+		if body, ok := in.Body.(*api.WeaviateUserCreate); ok {
+			user = body.Name
+		}
+		e.Target = in.Cluster + "/" + user
+	case "CreateWeaviateRole", "UpdateWeaviateRole", "DeleteWeaviateRole":
+		e.Resource = "weaviate-roles"
+		role := in.Name
+		if body, ok := in.Body.(*api.WeaviateRole); ok {
+			role = body.Name
+		}
+		e.Target = in.Cluster + "/" + role
 	case "CreateRabbitMQVhost", "ReplaceRabbitMQVhost", "DeleteRabbitMQVhost":
 		e.Resource = "rabbitmq-vhosts"
 		vhost := in.Name

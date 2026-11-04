@@ -26,6 +26,7 @@ type ShutdownBudgetEngine interface {
 
 func (a *nodeAgent) shutdown(ctx context.Context) error {
 	a.o.Logger.Info("member runtime shutdown started")
+	a.sup.closeLaunches()
 	var handoffErr error
 	if engine, ok := a.engine.(ShutdownEngine); ok {
 		started := time.Now()

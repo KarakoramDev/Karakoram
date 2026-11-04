@@ -40,7 +40,12 @@ func phase(s *internalState) domain.Phase {
 	}
 }
 func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		if status.Placement.Source == "" {
+			engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		}
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	s, err := loadState(rc.Cluster)
 	if err != nil {
 		return domain.ClusterStatus{}, err
@@ -136,28 +141,22 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		return v, errors.Join(inventory.ProjectErr, inventory.ServicesErr)
 	}
 	project := inventory.Project
-	resources := map[string]domain.Resources{}
+	autoscaling := make(map[string]*domain.Resources, len(inventory.Services))
 	for _, service := range inventory.Services {
-		resources[service.Hostname] = service.Resources
+		autoscaling[service.Hostname] = service.Autoscaling
 	}
 	for i, m := range members {
 		ms := domain.MemberStatus{Name: m.Name, Set: "rabbitmq", Role: "broker", Version: m.Version, State: "UNKNOWN"}
-		if r, ok := resources[m.Name]; ok {
-			copy := r
-			ms.Autoscaling = &copy
-		}
+		ms.Autoscaling = autoscaling[m.Name]
 		st, e := samples[i].agent, samples[i].agentErr
 		var allocated *agentapi.ContainerResources
 		if e == nil {
 			allocated = st.Resources
-			ms.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: samples[i].at}
+			ms.Agent = domain.AgentStatus{Version: st.Agent.Version, Commit: st.Agent.Commit, Build: st.Agent.Build, Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: samples[i].at}
 			ms.Uptime = st.UptimeSeconds
 			ms.DiskUsage = float64(st.Disk.UsedBytes)
 			if !rc.Backend.Capabilities().Placement {
 				ms.PlacementGroup = st.HostFingerprint
-				if st.HostFingerprint != "" {
-					v.Placement.Groups[st.HostFingerprint] = append(v.Placement.Groups[st.HostFingerprint], m.Name)
-				}
 			}
 		} else {
 			ms.Agent.Message = e.Error()
@@ -347,17 +346,9 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 	if partition && v.Message == "" {
 		v.Message = joinedDiagnostics(partitionMessages)
 	}
+	engine.ObservePlacement(&v, rc.Backend.Capabilities().Placement)
 	placementCondition := domain.Condition{Type: "Placement", Status: "Unknown", Reason: "BestEffortOnly", Message: v.Placement.Warning, LastTransitionTime: now(rc)}
 	if rc.Backend.Capabilities().Placement {
-		v.Placement.Groups = map[string][]string{}
-		for _, member := range v.Members {
-			group := member.PlacementGroup
-			if group == "" {
-				group = "unknown"
-			}
-			v.Placement.Groups[group] = append(v.Placement.Groups[group], member.Name)
-		}
-		v.Placement = describePlacement(v.Placement, true)
 		placementCondition.Status, placementCondition.Reason, placementCondition.Message = "True", "BackendReported", v.Placement.Warning
 		if len(v.Placement.Groups["unknown"]) > 0 {
 			placementCondition.Status, placementCondition.Reason = "Unknown", "BackendPlacementUnavailable"
@@ -383,29 +374,4 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 		engine.ApplyRuntimeRecoveryStatus(&v, m.Name, m.Volume, m.RuntimeRecovery, now(rc))
 	}
 	return v, nil
-}
-
-func describePlacement(out domain.Placement, authoritative bool) domain.Placement {
-	var warnings []string
-	if !authoritative {
-		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
-	}
-	for group, members := range out.Groups {
-		if group != "unknown" && len(members) > 1 {
-			if authoritative {
-				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(members, ", ")))
-			} else {
-				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(members, ", ")))
-			}
-		}
-	}
-	if len(out.Groups["unknown"]) > 0 {
-		if authoritative {
-			warnings = append(warnings, "backend placement is unknown for some members")
-		} else {
-			warnings = append(warnings, "physical-host placement is unknown for some members")
-		}
-	}
-	out.Warning = strings.Join(warnings, "; ")
-	return out
 }

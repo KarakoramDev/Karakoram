@@ -16,6 +16,16 @@ import (
 // CanCancelOperation refuses any checkpoint that may already have changed data.
 // FCV executes atomically in one call; cancellation is honored before that call.
 func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation) error {
+	if op.Kind == domain.OperationUpgradeAgents {
+		var cp operationState
+		if err := decodeJSON(op.Checkpoint, &cp); err != nil {
+			return err
+		}
+		if cp.Waiting != "" {
+			return fmt.Errorf("agent upgrade can only be cancelled between members")
+		}
+		return nil
+	}
 	if op.Kind == domain.OperationBackup {
 		var payload struct {
 			Backup  string `json:"backup"`
@@ -32,12 +42,12 @@ func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation)
 			if err != nil {
 				// Fail closed: missing legacy inventory cannot prove this is
 				// not a mandatory post-restore base. Never expose store errors.
-				return fmt.Errorf("Operation %s cannot verify backup inventory for safe cancellation; retry after the backup record is available", op.ID)
+				return fmt.Errorf("operation %s cannot verify backup inventory for safe cancellation; retry after the backup record is available", op.ID)
 			}
 			trigger = backup.Trigger
 		}
 		if trigger == "restore" {
-			return fmt.Errorf("Operation %s cannot be cancelled: this post-restore base backup protects PITR continuity; PITR stays disabled until a fresh snapshot succeeds", op.ID)
+			return fmt.Errorf("operation %s cannot be cancelled: this post-restore base backup protects PITR continuity; PITR stays disabled until a fresh snapshot succeeds", op.ID)
 		}
 	}
 	var cp struct {
@@ -71,7 +81,7 @@ func (p *Provider) CanCancelOperation(ctx context.Context, op *domain.Operation)
 	if checkpoint == "" {
 		checkpoint = cp.Stage
 	}
-	return fmt.Errorf("Operation %s (%s) cannot be cancelled safely at checkpoint %q: data mutation or cleanup may already be in progress", op.ID, op.Kind, checkpoint)
+	return fmt.Errorf("operation %s (%s) cannot be cancelled safely at checkpoint %q: data mutation or cleanup may already be in progress", op.ID, op.Kind, checkpoint)
 }
 
 // SupportsFailureCleanup identifies operations whose expired work must restore
@@ -120,6 +130,26 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 			}
 		}
 	}()
+	if op.Kind == domain.OperationUpgradeAgents {
+		var cp operationState
+		if err := decodeJSON(op.Checkpoint, &cp); err != nil {
+			return engine.OpResult{}, err
+		}
+		if cp.Waiting == "" {
+			return opResult(cp, true, "agents-cancelled")
+		}
+		// A request racing the next accepted member finishes that member only.
+		result, err := p.RunOperation(ctx, rc, op)
+		if err != nil {
+			return result, err
+		}
+		cp = operationState{}
+		if err := decodeJSON(result.Checkpoint, &cp); err != nil {
+			return result, err
+		}
+		result.Done = cp.Waiting == ""
+		return result, nil
+	}
 	if op.Kind == domain.OperationReplaceMember {
 		s, err := load(rc.Cluster)
 		if err != nil {
@@ -129,6 +159,20 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 		// outstanding platform action after the replacement gate is released.
 		s.ReplaceActive = false
 		for _, member := range s.Members {
+			if member.PlacementRejected {
+				// A rejected import never deployed or joined native membership.
+				// Reuse retirement cleanup without touching the predecessor.
+				if err := verifyMemberServices(ctx, rc, member); err != nil {
+					return engine.OpResult{}, err
+				}
+				member.Removing = true
+				member.ImportPlan = nil
+				member.Stage = "removed"
+				if member.ServiceID == "" {
+					member.Stage = "delete-volume"
+				}
+				s.resetPlatformRetry(&pending{Action: "import", Member: member.Name})
+			}
 			if member.Stage == "replacement-caught-up" {
 				member.Stage = "syncing"
 			}
@@ -142,7 +186,7 @@ func (p *Provider) CancelOperation(ctx context.Context, rc *engine.Context, op *
 	// in-flight safe step may have advanced once before persisting the request;
 	// the worker must honor it before executing the next (possibly unsafe) step.
 	if op.Kind != domain.OperationBackup && op.Kind != domain.OperationRestore && op.Kind != domain.OperationRaiseFCV {
-		return engine.OpResult{}, fmt.Errorf("Operation kind %s does not support safe cancellation", op.Kind)
+		return engine.OpResult{}, fmt.Errorf("operation kind %s does not support safe cancellation", op.Kind)
 	}
 	if op.Kind == domain.OperationRaiseFCV {
 		return engine.OpResult{Done: true, Step: "before-fcv"}, nil

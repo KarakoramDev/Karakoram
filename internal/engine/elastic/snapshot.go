@@ -175,7 +175,11 @@ func (p *Provider) runBackup(ctx context.Context, rc *engine.Context, s *state, 
 		if err = rc.Store.UpdateBackup(ctx, b); err != nil {
 			return operationResult(cp, false), err
 		}
-		if err = operationEvent(ctx, rc, op, "BackupCompleted", "Elasticsearch snapshot: "+string(b.Phase)); err != nil {
+		reason := "BackupCompleted"
+		if b.Phase == domain.PhaseFailed {
+			reason = "BackupFailed"
+		}
+		if err = operationEvent(ctx, rc, op, reason, "Elasticsearch snapshot: "+string(b.Phase)); err != nil {
 			return operationResult(cp, false), err
 		}
 		cp.Stage = "done"

@@ -32,6 +32,12 @@ versions; individually activated configVersion/TLS/config/cache/ConfigDB; comple
 applied runtime resources, volume bounds and router count; removal/replacement
 flags; and a stable public-port reservation and exposure hash. Each replica
 set records bootstrap/users/ready stage and whether mongos registered it.
+Exposure admission is persisted separately from member route hashes and retained
+across suspension and runtime recovery. Closed maintenance windows defer policy
+changes, not restoration of admitted routes; deferred generations remain
+unacknowledged until admission or override. Legacy receipts seed admission only
+when they prove the desired policy; otherwise unknown legacy exposure defaults
+to private until maintenance admission.
 Pending stores the infrastructure operation ID, action, member and proposed
 version/resources/count. Proposed settings become applied only after an
 observed terminal successful infrastructure operation. Failed and canceled
@@ -262,6 +268,9 @@ target deletion, not liveness-based Ready. Backup provenance (destination prefix
 topology/version and protected recovery-identity reference) survives source deletion.
 Running replacements opt into Sync only for join/removal; other operations,
 especially restore, exclude ordinary convergence.
+A fleet move freezes its relocate/avoid-group intent in the operation checkpoint,
+member journal and import plan. Definitive placement rejection fails before old
+member retirement; failure cleanup retires only the unjoined replacement.
 
 Cleanup deletes snapshots/PITR at all known backup destinations while agents
 are still running. It then deletes public routing and runtimes, observing each

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Definitions backups
 
-RabbitMQ backups recover broker configuration, not queued message data.
+[RabbitMQ](https://www.rabbitmq.com/) backups recover broker configuration, not queued message data.
 
 ## At a glance
 
@@ -14,7 +14,7 @@ RabbitMQ backups recover broker configuration, not queued message data.
 | Restore | Management API import **merges** objects; unrelated objects/existing messages are not rewound or removed |
 | Bound | At most **64 MiB uncompressed** definitions; corrupt/unsupported sources fail |
 
-The **control plane** exports through the broker Management API, filters reserved users/grants, gzips JSON and uploads to S3; payloads do not go directly from the broker to S3. Restore downloads/decompresses in the control plane and repeats the filter, including older backups, preserving target system credentials.
+The **control plane** exports through the broker Management API, filters reserved users/grants, gzips JSON and uploads to [S3](https://aws.amazon.com/s3/); payloads do not go directly from the broker to S3. Restore downloads/decompresses in the control plane and repeats the filter, including older backups, preserving target system credentials.
 
 **Warning:** application password hashes and runtime parameters are sensitive; gzip is not encryption. Restrict bucket/S3 access, use appropriate storage encryption, and keep exports out of logs/issues. Definitions remain trusted administrative input. Message replay/migration needs an independent source.
 
@@ -93,6 +93,6 @@ object location and bucket when available; its inventory is preserved. This mean
 Restore the original storage binding, verify the recorded object's exact ownership,
 remove only that object with object-store tooling, then remove its retained backup
 record. Never guess a missing or ambiguous location or delete a shared prefix.
-Runtime ownership, backend deletion and control-plane persistence failures still
+Runtime ownership, provider deletion and control-plane persistence failures still
 block unsafe cleanup. Active restore/clone dependency fences still reject
 destructive source deletion with HTTP 409 before any cleanup begins.

@@ -55,7 +55,7 @@ func (b *Backend) ResizeUnplacedRuntime(ctx context.Context, name string, expect
 	if err := resourceValidation(r.Resources); err != nil {
 		return infra.Op{}, false, err
 	}
-	op, err := b.beginOperation(ctx, r, "resources", false, &previous)
+	op, err := b.beginOperation(ctx, r, "resources", false, &previous, nil)
 	return op, err == nil, err
 }
 

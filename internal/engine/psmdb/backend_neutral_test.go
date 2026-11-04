@@ -127,13 +127,18 @@ func TestBackendPlacementOverridesAgentFingerprint(t *testing.T) {
 func TestReplacementVolumePlacementHint(t *testing.T) {
 	for _, tc := range []struct {
 		name, topology, set string
+		relocate            bool
 	}{
-		{"replica set", "replicaSet", "rs0"},
-		{"shard", "sharded", "rs1"},
-		{"config servers", "sharded", "cfg"},
+		{"replica set", "replicaSet", "rs0", false},
+		{"shard", "sharded", "rs1", false},
+		{"config servers", "sharded", "cfg", false},
+		{"move replica set", "replicaSet", "rs0", true},
+		{"move shard", "sharded", "rs1", true},
+		{"move config servers", "sharded", "cfg", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, backend, _ := setup(t)
+			rc.Backend = &placementMoveBackend{fakeInfra: backend}
 			rc.Cluster.Spec.Topology = domain.Topology{Type: tc.topology, Shards: 2}
 			p.ApplyDefaults(&rc.Cluster.Spec)
 			s, err := load(rc.Cluster)
@@ -146,7 +151,7 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 			if err := save(rc.Cluster, s); err != nil {
 				t.Fatal(err)
 			}
-			payload, err := json.Marshal(map[string]string{"member": old.Name})
+			payload, err := json.Marshal(map[string]any{"member": old.Name, "relocate": tc.relocate, "avoidGroup": "node-a"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -158,6 +163,9 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 			if err := json.Unmarshal(result.Checkpoint, &checkpoint); err != nil {
 				t.Fatal(err)
 			}
+			if checkpoint.Relocate != tc.relocate || checkpoint.AvoidGroup != "node-a" {
+				t.Fatalf("lost relocation checkpoint: %+v", checkpoint)
+			}
 			// Import after reloading durable state rather than using the planner's pointer.
 			s, err = load(rc.Cluster)
 			if err != nil {
@@ -166,6 +174,9 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 			replacement := s.find(checkpoint.NewMember)
 			if replacement == nil || replacement.ReplacesVolume != old.Volume {
 				t.Fatalf("replacement placement hint was not persisted: %+v", replacement)
+			}
+			if replacement.Relocate != tc.relocate || replacement.AvoidGroup != "node-a" {
+				t.Fatalf("lost durable relocation intent: %+v", replacement)
 			}
 			if err := p.ensureSecrets(t.Context(), rc, s); err != nil {
 				t.Fatal(err)
@@ -176,6 +187,14 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 			if replacement.ImportPlan == nil {
 				t.Fatal("missing durable replacement import plan")
 			}
+			if err := save(rc.Cluster, s); err != nil {
+				t.Fatal(err)
+			}
+			s, err = load(rc.Cluster)
+			if err != nil {
+				t.Fatal(err)
+			}
+			replacement = s.find(checkpoint.NewMember)
 			if err := p.importMember(t.Context(), rc, s, replacement); err != nil {
 				t.Fatal(err)
 			}
@@ -189,6 +208,9 @@ func TestReplacementVolumePlacementHint(t *testing.T) {
 					}
 					if spec.SpreadReplaces != old.Volume || spec.SpreadGroup != wantGroup {
 						t.Fatalf("replacement spread group = %q, replaces = %q; want %q and %q", spec.SpreadGroup, spec.SpreadReplaces, wantGroup, old.Volume)
+					}
+					if tc.relocate && (len(spec.SpreadAvoid) != 1 || spec.SpreadAvoid[0] != "node-a") || !tc.relocate && len(spec.SpreadAvoid) != 0 {
+						t.Fatalf("unexpected move exclusion: %v", spec.SpreadAvoid)
 					}
 				} else if spec.SpreadReplaces != "" {
 					t.Fatal("replacement placement hint belongs only on volumes")

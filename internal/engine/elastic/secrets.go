@@ -205,6 +205,17 @@ func (p *Provider) issueLeafs(ctx context.Context, rc *engine.Context, s *state,
 		if !renew {
 			continue
 		}
+		if !force && len(old) > 0 {
+			urgent, err := NeedsRenewal(old, 7*24*time.Hour, now(rc))
+			if err != nil {
+				return err
+			}
+			if !urgent {
+				if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+					continue
+				}
+			}
+		}
 		var crt, key []byte
 		if kind == "transport" {
 			crt, key, e = IssueTransport(ca, m.Name, nil)

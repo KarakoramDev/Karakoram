@@ -3,6 +3,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
 import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -67,8 +68,22 @@ test('PostgreSQL wizard renders catalog major, HA mode, proxy and distinct state
   assert.deepEqual(validateWizard('newdb', 'default', spec, [], provider), { basics: [], topology: [], resources: [], backups: [], access: [] });
 });
 
+test('PostgreSQL profile selection follows per-major provider availability', () => {
+  const catalog = { ...provider, engineOptions: { profiles: { items: [
+    { id: 'postgis', majors: { '17': { available: true, extensions: [{ name: 'postgis' }, { name: 'postgis_topology' }] } } },
+    { id: 'timescaledb', majors: { '17': { available: false, reason: 'native artifact timescaledb-pg17 is unavailable', extensions: [{ name: 'timescaledb' }] } } },
+  ] } } };
+  const markup = renderToStaticMarkup(createElement(OptionsSection, { provider: catalog, spec: { ...spec, engineOptions: { profiles: ['postgis'] } }, onChange: () => {} }));
+  assert.match(markup, /PostgreSQL profiles/);
+  assert.match(markup, /postgis_topology/);
+  assert.match(markup, /timescaledb-pg17 is unavailable/);
+  assert.match(markup, /disabled/);
+  assert.match(markup, /checked/);
+  assert.doesNotMatch(renderToStaticMarkup(createElement(OptionsSection, { provider: catalog, spec: { ...spec, provider: 'supabase' }, onChange: () => {} })), /PostgreSQL profiles/);
+});
+
 test('descriptors register access/components/functions tabs without Mongo-only tabs', () => {
-  assert.deepEqual(postgresUI.detailTabs?.map((t) => t.id), ['postgres']);
+  assert.deepEqual(postgresUI.detailTabs?.map((t) => t.id), ['postgres', 'bindings']);
   assert.deepEqual(supabaseUI.detailTabs?.map((t) => t.id), ['postgres', 'components', 'functions']);
   assert.equal(tabAvailable(provider, 'postgres'), true);
   assert.equal(tabAvailable(provider, 'users'), false);
@@ -118,6 +133,15 @@ test('native access and function forms render supported controls and write-only 
   assert.deepEqual(validateFunction('hello', { 'index.ts': 'Deno.serve(() => new Response("hello"))' }), []);
   assert.ok(validateFunction('../bad', { '../index.ts': 'x' }).length);
   assert.ok(validateFunction('valid', { 'index.ts': 'x'.repeat(1024 * 1024 + 1) }).length);
+});
+
+test('database extension input preserves raw separators and parses only on submission', () => {
+  const source = readFileSync(new URL('./AccessTab.tsx', import.meta.url), 'utf8');
+  assert.match(source, /const \[extensionsText, setExtensionsText\] = useState\(''\)/);
+  assert.match(source, /label="Extensions \(optional, comma separated\)" value=\{extensionsText\} onChange=\{\(e\) => setExtensionsText\(e.target.value\)\}/);
+  assert.match(source, /const extensions = extensionsText\.split\(','\)\.map\(\(v\) => v\.trim\(\)\)\.filter\(Boolean\); await unwrap\(api\.POST/);
+  assert.match(source, /body: \{ \.\.\.database, extensions \}/);
+  assert.match(source, /useSubmissionKey\(JSON\.stringify\(\{ role, database, extensionsText,/);
 });
 
 test('upgrade table labels both adjacent PostgreSQL major transitions as offline and minors as rolling', () => {

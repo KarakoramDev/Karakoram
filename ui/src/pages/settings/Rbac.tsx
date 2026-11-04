@@ -13,8 +13,8 @@ import { SelectField, TextAreaField, TextField } from '@/components/ui/Field';
 import { Badge, Callout, Card, ErrorBlock, Loading } from '@/components/ui/Primitives';
 import { useToast } from '@/components/ui/Toast';
 
-const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'audit', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
-const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', 'export', '*'];
+const RESOURCES = ['clusters', 'cluster-credentials', 'database-users', 'openbao-unseal-keys', 'backups', 'restores', 'backup-storages', 'operations', 'events', 'audit', 'monitoring', 'namespaces', 'accounts', 'api-tokens', 'rbac', 'settings', 'providers'];
+const ACTIONS: Schemas['CanRequest']['action'][] = ['read', 'create', 'update', 'delete', 'export', 'reveal', '*'];
 const OBJECT_EXAMPLES: Array<[string, string]> = [
   ['**', 'everything in every namespace (a bare * is normalized to this)'],
   ['dev', 'one namespace for the namespaces resource'],

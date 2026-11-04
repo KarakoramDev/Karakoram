@@ -125,6 +125,28 @@ func TestDeploymentWaitingRetainsDiagnosticAndSchedule(t *testing.T) {
 	}
 }
 
+func TestDeploymentEvidenceUnavailableReachesStatusAndEvents(t *testing.T) {
+	cause := &infra.DeploymentWaitError{
+		Reason: "DeploymentEvidenceUnavailable", Key: "service:EVIDENCE_UNAVAILABLE",
+		Detail: "incomplete service process inventory", RetryAt: time.Now().Add(time.Minute),
+	}
+	events := &deploymentGuardEvents{}
+	rc := &Context{Cluster: &domain.Cluster{Name: "demo"}, Backend: &deploymentGuardBackend{err: cause}, Events: events, Artifact: runtimeArtifactSource{artifact: &trackedArtifact{Reader: strings.NewReader("archive")}}}
+	_, err := Deploy(t.Context(), rc, "member", infra.RuntimeSpec{})
+	var wait *PlatformRetryWait
+	if !errors.As(err, &wait) {
+		t.Fatal(err)
+	}
+	status := domain.ClusterStatus{}
+	ApplyDeploymentStatus(rc, &status)
+	if len(status.Conditions) != 1 || status.Conditions[0].Reason != cause.Reason || status.Conditions[0].Key != cause.Key || !strings.Contains(status.Message, cause.Detail) {
+		t.Fatalf("evidence diagnosis lost from status: %+v", status)
+	}
+	if len(events.events) != 1 || !strings.Contains(events.events[0].Message, cause.Error()) {
+		t.Fatalf("evidence diagnosis lost from events: %+v", events.events)
+	}
+}
+
 func TestDeploymentWaitDeduplicatesStableIdentity(t *testing.T) {
 	at := time.Now().Add(time.Minute)
 	b := &deploymentGuardBackend{}

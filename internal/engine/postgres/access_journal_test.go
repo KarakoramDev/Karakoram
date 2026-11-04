@@ -116,3 +116,30 @@ func TestPasswordRotationReplaysSameIntentAfterCrash(t *testing.T) {
 		})
 	}
 }
+
+func TestAccessIntentAdminMembershipJSONCompatibility(t *testing.T) {
+	const legacy = `{"request":{"operation":"create","role":{"name":"app","login":true,"superuser":false,"createdb":false,"createrole":false,"replication":false,"bypassrls":false,"connectionLimit":-1,"memberOf":["pg_read_all_data"]}},"names":["app"],"revision":"revision-1"}`
+	var intent accessIntent
+	if err := json.Unmarshal([]byte(legacy), &intent); err != nil {
+		t.Fatal(err)
+	}
+	for _, empty := range [][]string{nil, {}} {
+		intent.Request.Role.MemberOfAdmin = empty
+		raw, err := json.Marshal(intent)
+		if err != nil || string(raw) != legacy {
+			t.Fatalf("legacy journal bytes changed: %s (%v)", raw, err)
+		}
+	}
+	intent.Request.Role.MemberOfAdmin = []string{"pg_read_all_data"}
+	raw, err := json.Marshal(intent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay accessIntent
+	if err := json.Unmarshal(raw, &replay); err != nil {
+		t.Fatal(err)
+	}
+	if len(replay.Request.Role.MemberOfAdmin) != 1 || replay.Request.Role.MemberOfAdmin[0] != "pg_read_all_data" {
+		t.Fatal("sealed intent lost admin option on replay")
+	}
+}

@@ -64,7 +64,7 @@ func RestrictionAllows(r *domain.TokenRestrictions, resource, action, object str
 	if r == nil {
 		return true
 	}
-	if r.ReadOnly && action != "read" || resource == "cluster-credentials" && !r.AllowCredentialReveal {
+	if r.ReadOnly && action != "read" || (resource == "cluster-credentials" || resource == "openbao-unseal-keys") && !r.AllowCredentialReveal {
 		return false
 	}
 	if len(r.Permissions) > 0 && !slices.Contains(r.Permissions, resource+":"+action) && !slices.Contains(r.Permissions, resource+":*") {

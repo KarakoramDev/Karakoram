@@ -20,7 +20,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 )
 
-var dokployCapabilities = infra.Capabilities{PublicTCP: true, PublicHTTPS: true, Placement: true, Logs: true, HorizontalScaling: true, StatelessRolloutSurge: 1}
+var dokployCapabilities = infra.Capabilities{PublicTCP: true, PublicHTTPS: true, Placement: true, Logs: true, HorizontalScaling: true, ReplicaScalePreservesServing: true, ResourceUpdatePreservesServing: true, ProxyDeploymentPreservesServing: true, StatelessRolloutSurge: 1}
 
 var configEnv = [...]struct{ key, env string }{
 	{"url", "KARAKORAM_DOKPLOY_URL"},

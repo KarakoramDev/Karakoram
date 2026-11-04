@@ -95,6 +95,7 @@ func TestStatusReportsAgentResourcesWithAutoscalingFallback(t *testing.T) {
 	bounds := domain.Resources{CPUMode: "SHARED", MinCPU: 1, MaxCPU: 1, MinRAM: 1, MaxRAM: 2, MinDisk: 5, MaxDisk: 10}
 	for _, service := range f.services {
 		service.Resources = bounds
+		service.Autoscaling = &bounds
 	}
 	resources := func(name string) *domain.ObservedResources {
 		t.Helper()

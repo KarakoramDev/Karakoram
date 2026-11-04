@@ -25,6 +25,7 @@ export function PostgresAccessTab() {
   const [role, setRole] = useState<Schemas['PostgresRoleWrite']>({ ...EMPTY_ROLE });
   const [editing, setEditing] = useState(false);
   const [database, setDatabase] = useState<Schemas['PostgresDatabase']>({ name: '', owner: '', encoding: 'UTF8', locale: 'C.UTF-8', allowConnections: true });
+  const [extensionsText, setExtensionsText] = useState('');
   const [grant, setGrant] = useState<Schemas['PostgresGrant']>({ database: '', role: '', privileges: ['CONNECT'] });
   const [selectedDatabase, setSelectedDatabase] = useState('');
   const [password, setPassword] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export function PostgresAccessTab() {
   const [error, setError] = useState<string | null>(null);
   const [force, setForce] = useState(false);
   const [deletion, setDeletion] = useState<{ kind: 'role' | 'database'; name: string } | null>(null);
-  const submission = useSubmissionKey(JSON.stringify({ role, database, grant, deletion, force }));
+  const submission = useSubmissionKey(JSON.stringify({ role, database, extensionsText, grant, deletion, force }));
   const roles = useQuery({ queryKey: [...key, 'roles'], queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/roles', { params })), enabled: read });
   const databases = useQuery({ queryKey: [...key, 'databases'], queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/databases', { params })), enabled: read });
   const grants = useQuery({ queryKey: [...key, 'grants', selectedDatabase], queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/grants', { params: { ...params, query: { namespace, database: selectedDatabase } } })), enabled: read && Boolean(selectedDatabase) });
@@ -68,8 +69,9 @@ export function PostgresAccessTab() {
       <div className="table-wrap"><table className="table"><thead><tr><th>Database</th><th>Owner</th><th>Encoding / locale</th><th>Connections</th><th /></tr></thead><tbody>{databases.data?.items.map((d) => <tr key={d.name}><td className="mono">{d.name}</td><td>{d.owner}</td><td>{d.encoding} / {d.locale}</td><td>{d.allowConnections ? 'allowed' : 'disabled'}</td><td><Button size="sm" disabled={!writable || busy || !can('delete', 'database-users')} onClick={() => { setForce(false); setDeletion({ kind: 'database', name: d.name }); }}>Delete</Button></td></tr>)}</tbody></table></div>
       <fieldset disabled={!writable || busy || !can('create', 'database-users')} className="stack" style={{ border: 0, padding: 0 }}>
         {(['name', 'owner', 'encoding', 'locale'] as const).map((field) => <TextField key={field} label={`Database ${field}`} value={database[field]} onChange={(e) => setDatabase({ ...database, [field]: e.target.value })} />)}
+        <TextField label="Extensions (optional, comma separated)" value={extensionsText} onChange={(e) => setExtensionsText(e.target.value)} />
         <Switch label="Allow connections" checked={database.allowConnections} onChange={(e) => setDatabase({ ...database, allowConnections: e.target.checked })} />
-        <Button variant="primary" disabled={!database.name.trim() || !database.owner.trim()} onClick={() => void run(async () => { await unwrap(api.POST('/clusters/{cluster}/postgres/databases', { headers, params, body: database })); setDatabase({ ...database, name: '' }); })}>Create database</Button>
+        <Button variant="primary" disabled={!database.name.trim() || !database.owner.trim()} onClick={() => void run(async () => { const extensions = extensionsText.split(',').map((v) => v.trim()).filter(Boolean); await unwrap(api.POST('/clusters/{cluster}/postgres/databases', { headers, params, body: { ...database, extensions } })); setDatabase({ ...database, name: '' }); })}>Create database</Button>
       </fieldset>
     </Card>
     <Card title="Grants">

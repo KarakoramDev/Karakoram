@@ -22,6 +22,24 @@ def jwt(role, secret):
     message = encode({'alg':'HS256','typ':'JWT'})+b'.'+encode({'role':role,'iss':'supabase','exp':int(time.time())+3600})
     return (message+b'.'+base64.urlsafe_b64encode(hmac.new(secret.encode(),message,hashlib.sha256).digest()).rstrip(b'=')).decode()
 
+def supavisor_sql_smoke(pg, env):
+    # Preserve the transaction IPv4 proof and additionally exercise both SQL
+    # listeners in inet6 mode. HTTP health alone cannot prove the Ranch patch.
+    endpoints = [('127.0.0.1', env.get('PROXY_PORT_TRANSACTION', '6543'))]
+    if env.get('ADDR_TYPE') == 'inet6':
+        endpoints += [('::1', env.get('PROXY_PORT_TRANSACTION', '6543')),
+                      ('::1', env.get('PROXY_PORT_SESSION', '5432'))]
+    for host, port in endpoints:
+        authority = f'[{host}]' if ':' in host else host
+        proof = subprocess.check_output(
+            [pg+'psql', '-At', f'postgres://native_pool.native-smoke@{authority}:{port}/smoke?sslmode=disable',
+             '-c', 'SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'],
+            env=env | {'PGPASSWORD': env['NATIVE_POOL_PASSWORD']}, text=True, timeout=30)
+        assert proof.strip() == 't', f'Pooler upstream session is not TLS on {authority}:{port}'
+    print('NATIVE_POOLER_TENANT_TLS_OK')
+    if env.get('ADDR_TYPE') == 'inet6':
+        print('NATIVE_POOLER_IPV6_SQL_OK')
+
 
 name, health = sys.argv[1:]
 if name == 'mongodb-mcp-server':
@@ -40,6 +58,8 @@ if name == 'mongodb-mcp-server':
 env = os.environ | {'NODE_ENV':'production','HOSTNAME':'127.0.0.1','ERL_FLAGS':'+S 2:2 +SDcpu 1 +SDio 1','LANG':'C.UTF-8'}
 fixture = json.loads(Path('/root/smoke-env.json').read_text())
 env['PATH'] = '/opt/artifact/bin:'+env.get('PATH','')
+extension_recipe = fixture.get('pgExtension')
+major = extension_recipe['pgMajor'] if extension_recipe else 17
 if name not in ('supabase-imgproxy','supabase-edge-runtime'):
     url = 'https://repo.percona.com/apt/percona-release_latest.noble_all.deb'
     with urllib.request.urlopen(url, timeout=120) as response:
@@ -49,19 +69,37 @@ if name not in ('supabase-imgproxy','supabase-edge-runtime'):
     Path('/tmp/percona-release.deb').write_bytes(package)
     subprocess.run(['apt-get','install','-y','gnupg','lsb-release'],check=True)
     subprocess.run(['dpkg','-i','/tmp/percona-release.deb'],check=True)
-    subprocess.run(['percona-release','setup','-y','ppg-17'],check=True)
+    subprocess.run(['percona-release','setup','-y','ppg-'+str(major)],check=True)
     subprocess.run(['apt-get','install','-y','postgresql-common'],check=True)
     Path('/etc/postgresql-common/createcluster.conf').write_text('create_main_cluster = false\n')
     Path('/usr/sbin/policy-rc.d').write_text('#!/bin/sh\nexit 101\n'); Path('/usr/sbin/policy-rc.d').chmod(0o755)
-    subprocess.run(['apt-get','install','-y','percona-postgresql-17=2:17.11-1.noble','percona-postgresql-contrib'],check=True)
+    server_version = extension_recipe['pgVersion'] if extension_recipe else '2:17.11-1.noble'
+    server_packages = [f'percona-postgresql-{major}={server_version}']
+    if not extension_recipe:
+        server_packages.append('percona-postgresql-contrib')
+    subprocess.run(['apt-get','install','-y',*server_packages],check=True)
+    if os.environ.get('NATIVE_ARTIFACT_ROOTLESS') == '1':
+        # Package downloads need egress; the actual database probe does not.
+        # Enter a private network before binding any fixture ports.
+        import ctypes
+        subprocess.run(['apt-get','install','-y','iproute2'],check=True)
+        if ctypes.CDLL(None, use_errno=True).unshare(0x40000000) != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+        subprocess.run(['ip','link','set','lo','up'],check=True)
     preload = ''
     if name == 'supabase-pg17-extensions':
         subprocess.run(['cp','-a','/opt/artifact/usr/.','/usr/'],check=True)
         libraries = [lib for lib,flags in fixture['extensionFlags'].items() if flags['preload'] and Path('/usr/lib/postgresql/17/lib/'+lib+'.so').exists()]
         if libraries:
             preload = ' -c shared_preload_libraries='+','.join(libraries)
+    elif extension_recipe:
+        subprocess.run(['cp','-a','/opt/artifact/usr/.','/usr/'],check=True)
+        preload = ' -c shared_preload_libraries='+','.join(extension for extension, flags in extension_recipe['extensions'].items() if flags['preload'])
+        if name.startswith('citus-'):
+            preload += ' -c max_worker_processes=16 -c max_wal_senders=16 -c max_replication_slots=16'
     subprocess.run(['install','-d','-o','postgres','-g','postgres','/var/lib/postgresql/smoke'],check=True)
-    pg = '/usr/lib/postgresql/17/bin/'
+    pg = f'/usr/lib/postgresql/{major}/bin/'
     subprocess.run(['runuser','-u','postgres','--',pg+'initdb','-D','/var/lib/postgresql/smoke','--auth=trust'],check=True,stdout=subprocess.DEVNULL)
     if name in ('supabase-supavisor','supabase-logflare'):
         certificate = '/var/lib/postgresql/smoke/server.crt'
@@ -96,6 +134,51 @@ if name not in ('supabase-imgproxy','supabase-edge-runtime'):
         raise SystemExit(start.returncode)
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-c','CREATE DATABASE smoke;'],check=True)
     env |= {'PG_META_DB_HOST':'127.0.0.1','PG_META_DB_PORT':'5432','PG_META_DB_NAME':'smoke','PG_META_DB_USER':'postgres','PG_META_PORT':'8080','DATABASE_URL':'postgres://postgres@127.0.0.1:5432/smoke','DATABASE_HOST':'127.0.0.1','DATABASE_PORT':'5432','DATABASE_NAME':'smoke','DATABASE_USERNAME':'postgres','DB_HOST':'127.0.0.1','DB_PORT':'5432','DB_NAME':'smoke','DB_USER':'postgres','DB_PASSWORD':'','SECRET_KEY_BASE':secrets.token_hex(64),'JWT_SECRET':secrets.token_hex(32),'API_JWT_SECRET':secrets.token_hex(32),'DB_ENC_KEY':secrets.token_hex(8),'ENCRYPTION_KEY':secrets.token_hex(16),'VAULT_ENC_KEY':secrets.token_hex(16)}
+if extension_recipe:
+    logs = []
+    workers = []
+
+    def sql(statement, port=5432):
+        result = subprocess.run([pg+'psql','-h','127.0.0.1','-p',str(port),'-U','postgres','-d','smoke','-v','ON_ERROR_STOP=1','-At','-c',statement],capture_output=True,text=True,timeout=180)
+        logs.append({'port':port,'sql':statement,'stdout':result.stdout,'stderr':result.stderr})
+        result.check_returncode()
+        return result.stdout.strip()
+
+    try:
+        if name.startswith('timescaledb-'):
+            if list(Path(f'/usr/lib/postgresql/{major}').rglob('*tsl*.so')):
+                raise RuntimeError('Apache-only artifact contains a TSL library')
+            sql('CREATE EXTENSION timescaledb;')
+            if sql('SHOW timescaledb.license;') != 'apache':
+                raise RuntimeError('TimescaleDB license is not apache')
+            sql("CREATE TABLE metrics(ts timestamptz NOT NULL, value integer); SELECT create_hypertable('metrics','ts'); INSERT INTO metrics VALUES ('2026-01-01',42);")
+            if sql('SELECT sum(value) FROM metrics;') != '42':
+                raise RuntimeError('hypertable query returned wrong result')
+        else:
+            sql('CREATE EXTENSION citus;')
+            sql("SELECT citus_set_coordinator_host('127.0.0.1',5432);")
+            for port in (5433, 5434):
+                data = f'/var/lib/postgresql/worker-{port}'
+                subprocess.run(['install','-d','-o','postgres','-g','postgres',data],check=True)
+                subprocess.run(['runuser','-u','postgres','--',pg+'initdb','-D',data,'--auth=trust'],check=True,stdout=subprocess.DEVNULL)
+                subprocess.run(['runuser','-u','postgres','--',pg+'pg_ctl','-D',data,'-o',f'-h 127.0.0.1 -p {port} -c wal_level=logical'+preload,'-l',data+'.log','-w','start'],check=True)
+                workers.append(data)
+                subprocess.run([pg+'createdb','-h','127.0.0.1','-p',str(port),'-U','postgres','smoke'],check=True)
+                sql('CREATE EXTENSION citus;',port)
+            sql("SELECT citus_add_node('127.0.0.1',5433); SET citus.shard_count=8; CREATE TABLE distributed_probe(id integer PRIMARY KEY, value integer); SELECT create_distributed_table('distributed_probe','id'); INSERT INTO distributed_probe SELECT i,i FROM generate_series(1,100) i;")
+            sql("SELECT citus_add_node('127.0.0.1',5434);")
+            sql("SELECT citus_rebalance_start(shard_transfer_mode := 'block_writes');")
+            sql('SELECT citus_rebalance_wait();')
+            if sql('SELECT sum(value) FROM distributed_probe;') != '5050':
+                raise RuntimeError('distributed query returned wrong result')
+            if sql("SELECT count(DISTINCT nodename || ':' || nodeport) FROM citus_shards WHERE table_name='distributed_probe'::regclass;") != '2':
+                raise RuntimeError('rebalance did not place shards on both workers')
+            sql("SELECT * FROM citus_create_restore_point('native_qualification');")
+    finally:
+        Path('/tmp/native-smoke.log').write_text(json.dumps(logs,indent=2)+'\n')
+        for data in reversed(workers+['/var/lib/postgresql/smoke']):
+            subprocess.run(['runuser','-u','postgres','--',pg+'pg_ctl','-D',data,'-m','immediate','-w','stop'],check=False)
+    raise SystemExit(0)
 if name == 'supabase-pg17-extensions':
     extensions = json.loads(Path('/opt/artifact/usr/share/postgresql/17/karakoram-native-artifacts/extensions.json').read_text())
     results = {}
@@ -154,6 +237,7 @@ if name == 'supabase-realtime':
     subprocess.run(['/opt/artifact/bin/pgdelta','schema','lint','--dir',str(lint)],env=env,check=True)
 if name == 'supabase-supavisor':
     env |= {'PORT':'4000','PROXY_PORT_SESSION':'5433','PROXY_PORT_TRANSACTION':'6543','REGION':'local','NODE_IP':'127.0.0.1','CLUSTER_POSTGRES':'true','VAULT_ENC_KEY':secrets.token_urlsafe(24)}
+    env.setdefault('ADDR_TYPE', 'inet6')
     env['NATIVE_POOL_PASSWORD'] = secrets.token_hex(16)
     subprocess.run(['runuser','-u','postgres','--',pg+'psql','-v','ON_ERROR_STOP=1','-d','smoke'],input="CREATE ROLE native_pool LOGIN PASSWORD '"+env['NATIVE_POOL_PASSWORD']+"';",text=True,check=True,stdout=subprocess.DEVNULL)
 if name == 'supabase-logflare':
@@ -246,9 +330,7 @@ try:
                         assert int(proof.strip()) > 0, 'No live TLS database connection'
                         print('NATIVE_TLS_HANDSHAKE_OK '+name)
                     if name == 'supabase-supavisor':
-                        proof = subprocess.check_output([pg+'psql','-At','postgres://native_pool.native-smoke@127.0.0.1:6543/smoke?sslmode=disable','-c','SELECT ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()'],env=env | {'PGPASSWORD':env['NATIVE_POOL_PASSWORD']},text=True,timeout=30)
-                        assert proof.strip() == 't', 'Pooler upstream session is not TLS'
-                        print('NATIVE_POOLER_TENANT_TLS_OK')
+                        supavisor_sql_smoke(pg, env)
                         rejected_ca = """
                         config = Supavisor.Repo.config()
                         :verify_peer = config[:ssl_opts][:verify]

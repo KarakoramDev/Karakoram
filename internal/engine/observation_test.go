@@ -254,10 +254,13 @@ func TestFreshStatusExpiresAllCurrentAvailabilityConditions(t *testing.T) {
 			t.Fatal("expired availability remained positive", name, got.Conditions[i])
 		}
 	}
-	for _, condition := range got.Conditions[len(availability):] {
+	for _, condition := range got.Conditions[len(availability):len(status.Conditions)] {
 		if condition.Status != "True" {
 			t.Fatal("expiry erased durable or negative diagnostic", condition)
 		}
+	}
+	if condition := got.Conditions[len(status.Conditions)]; condition.Type != "AgentsCurrent" || condition.Status != "Unknown" || condition.Reason != "Unreported" || readinessCondition(condition) {
+		t.Fatal("expired agent inventory must be informational and unreported", condition)
 	}
 }
 
@@ -310,5 +313,76 @@ func TestObservationEpochRequiresSuccessfulCurrentSweep(t *testing.T) {
 				t.Fatal("observation stamping rewrote the cached input")
 			}
 		})
+	}
+}
+
+func TestObservationErrorsCannotReplaceLifecycleOrInventory(t *testing.T) {
+	at := time.Now()
+	for _, phase := range []domain.Phase{domain.PhaseReady, domain.PhaseCreating, domain.PhaseInitializing, domain.PhaseUpdating, domain.PhaseRestoring, domain.PhaseDeleting, domain.PhaseSuspended} {
+		t.Run(string(phase), func(t *testing.T) {
+			before := readyObservation(at)
+			before.Phase = phase
+			before.Members = append(before.Members, domain.MemberStatus{Name: "m1", Health: true})
+			rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{Status: before}}
+			p := observationProvider{observe: func(_ context.Context, rc *Context) (domain.ClusterStatus, error) {
+				// Neither partial output nor in-place edits of provider input can
+				// become a new durable observation after a failed read.
+				rc.Cluster.Status.Phase = domain.PhaseCreating
+				rc.Cluster.Status.Members[0].Name = "unpublished"
+				return domain.ClusterStatus{Phase: domain.PhasePending,
+					Conditions: []domain.Condition{{Type: "Storage", Status: "False", Reason: "ReadFailed"}}}, errors.New("platform read failed")
+			}}
+			got, err := ObserveStatus(t.Context(), p, rc)
+			wantPhase := phase
+			if phase == domain.PhaseReady {
+				wantPhase = domain.PhaseDegraded
+			}
+			if err == nil || got.Phase != wantPhase || len(got.Members) != 2 || got.Members[0].Name != "m0" || got.Members[1].Name != "m1" {
+				t.Fatalf("error replaced inspected lifecycle/inventory: %+v %v", got, err)
+			}
+			for _, member := range got.Members {
+				if member.Health || member.Agent.Healthy {
+					t.Fatal("failed observation preserved positive health", member)
+				}
+			}
+			if got.Conditions[0].Reason != "ReadFailed" || !got.ObservedAt.IsZero() || got.ObservationEpoch != "" {
+				t.Fatal("lost fresh failure diagnostic or renewed lease", got)
+			}
+		})
+	}
+}
+
+func TestObservationErrorPreservesAuthoritativeFailure(t *testing.T) {
+	at := time.Now()
+	for _, phase := range []domain.Phase{domain.PhaseFailed, domain.PhaseError} {
+		t.Run(string(phase), func(t *testing.T) {
+			rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{Status: readyObservation(at)}}
+			p := observationProvider{observe: func(context.Context, *Context) (domain.ClusterStatus, error) {
+				return domain.ClusterStatus{Phase: phase,
+					Conditions: []domain.Condition{{Type: "InitialDataSource", Status: "False", Reason: "RestoreAborted"}}}, errors.New("restore aborted")
+			}}
+			got, err := ObserveStatus(t.Context(), p, rc)
+			if err == nil || got.Phase != phase || len(got.Members) != 1 || got.Members[0].Name != "m0" {
+				t.Fatalf("authoritative failure lost: %+v %v", got, err)
+			}
+			if got.Members[0].Health || got.Members[0].Agent.Healthy || !got.ObservedAt.IsZero() || got.ObservationEpoch != "" {
+				t.Fatal("terminal failure retained positive availability", got)
+			}
+			if got.Conditions[0].Reason != "RestoreAborted" {
+				t.Fatal("terminal diagnostic lost", got)
+			}
+		})
+	}
+}
+
+func TestObservationFailureWithoutHistoricalInventoryRetainsObservedIdentities(t *testing.T) {
+	at := time.Now()
+	rc := &Context{Clock: observationClock{at}, Cluster: &domain.Cluster{}}
+	p := observationProvider{observe: func(context.Context, *Context) (domain.ClusterStatus, error) {
+		return readyObservation(at), errors.New("secondary platform read failed")
+	}}
+	got, err := ObserveStatus(t.Context(), p, rc)
+	if err == nil || got.Phase != domain.PhaseDegraded || len(got.Members) != 1 || got.Members[0].Name != "m0" || got.Members[0].Health || got.Members[0].Agent.Healthy {
+		t.Fatalf("first failed observation lost known identity or retained health: %+v %v", got, err)
 	}
 }

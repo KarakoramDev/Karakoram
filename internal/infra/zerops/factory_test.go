@@ -78,3 +78,9 @@ func TestFactoryProjectMismatch(t *testing.T) {
 		t.Fatalf("unsafe mismatch detail: %s", detail)
 	}
 }
+
+func TestLinuxContainerScalingPreservesServing(t *testing.T) {
+	if !zeropsCapabilities.ReplicaScalePreservesServing || !zeropsCapabilities.ResourceUpdatePreservesServing {
+		t.Fatal("Linux-container autoscaling must expose serving-preserving operations")
+	}
+}

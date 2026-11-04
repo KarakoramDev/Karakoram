@@ -105,6 +105,16 @@ func StatelessReadiness(rc *Context, member string, decision **bool, nativeArgs 
 
 // Deploy ships the release artifact with spec to hostname.
 func Deploy(ctx context.Context, rc *Context, hostname string, spec infra.RuntimeSpec) (infra.Op, error) {
+	return deploy(ctx, rc, hostname, spec, nil, "")
+}
+
+// DeployProxy ships a proxy build using the rollout choice persisted by its
+// caller, including when retrying submission after a lost operation receipt.
+func DeployProxy(ctx context.Context, rc *Context, hostname string, spec infra.RuntimeSpec, preserveServing bool, requestID string) (infra.Op, error) {
+	return deploy(ctx, rc, hostname, spec, &preserveServing, requestID)
+}
+
+func deploy(ctx context.Context, rc *Context, hostname string, spec infra.RuntimeSpec, preserveServing *bool, requestID string) (infra.Op, error) {
 	if DeploymentBlocked(rc, hostname, spec) {
 		f := rc.Cluster.Status.DeploymentFailures[hostname]
 		return infra.Op{}, &infra.DeploymentExhaustedError{Service: hostname, Version: f.Version, Attempts: f.Attempts, LastError: f.LastError}
@@ -116,7 +126,7 @@ func Deploy(ctx context.Context, rc *Context, hostname string, spec infra.Runtim
 		return infra.Op{}, err
 	}
 	defer artifact.Close()
-	op, err := rc.Backend.Deploy(ctx, hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: ArtifactName, Binary: ArtifactBinary}, Runtime: spec, RetryEpoch: rc.Cluster.Spec.RetryEpoch})
+	op, err := rc.Backend.Deploy(ctx, hostname, infra.Deployment{Artifact: infra.Artifact{Reader: artifact, Name: ArtifactName, Binary: ArtifactBinary}, Runtime: spec, RetryEpoch: rc.Cluster.Spec.RetryEpoch, ProxyPreserveServing: preserveServing, RequestID: requestID})
 	if err != nil {
 		err = RecordDeploymentExhausted(ctx, rc, hostname, spec, err)
 		if deploymentWaiting(err) {
@@ -192,7 +202,7 @@ func PublicHTTPS(b infra.Backend) (infra.SubdomainAccess, error) {
 // RequireDiskGrowth refuses growing a volume on a backend that cannot.
 func RequireDiskGrowth(b infra.Backend) error {
 	if !b.Capabilities().DiskGrowth {
-		return fmt.Errorf("%w: backend %s cannot grow volumes", ErrNotSupported, b.Name())
+		return fmt.Errorf("%w: backend %s does not provide diskGrowth", ErrNotSupported, b.Name())
 	}
 	return nil
 }

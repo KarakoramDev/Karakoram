@@ -19,6 +19,7 @@ func TestNativeAllocationDiskReservation(t *testing.T) {
 	}{
 		{"mongo", "", "", true, 27017, 3072},
 		{"rabbit", "rabbitmq", "", true, 5672, 2048},
+		{"openbao", "openbao", "", true, 8200, 3072},
 		{"postgres", "postgres", "", true, 5432, 3072},
 		{"proxy", "postgres", "", false, 5432, 1024},
 		{"elasticsearch", "elasticsearch", "", true, 9200, 4096},

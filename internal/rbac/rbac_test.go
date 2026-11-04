@@ -55,6 +55,21 @@ func TestDefaults(t *testing.T) {
 		t.Fatal("missing implicit admin permission")
 	}
 }
+func TestOpenBaoUnsealKeysAdministratorOnly(t *testing.T) {
+	e, _ := fixture(t)
+	for _, subject := range []string{"user:admin", "role:operator", "role:viewer"} {
+		if got := e.Can([]string{subject}, "openbao-unseal-keys", "reveal", "default/prod"); got != (subject == "user:admin") {
+			t.Errorf("%s reveal permission = %t", subject, got)
+		}
+	}
+	for _, subject := range []string{"role:operator", "role:viewer"} {
+		for _, permission := range e.Permissions([]string{subject}) {
+			if permission.Values[1] == "openbao-unseal-keys" {
+				t.Fatalf("%s has unseal material permission", subject)
+			}
+		}
+	}
+}
 func TestDenyGlobsAndPersistence(t *testing.T) {
 	e, st := fixture(t)
 	policy := DefaultPolicy() + "g, user:alice, role:viewer\np, group:blocked, clusters, read, prod*, deny\np, user:alice, cluster*, read, dev?, allow\n"

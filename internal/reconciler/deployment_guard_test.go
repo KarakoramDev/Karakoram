@@ -35,6 +35,18 @@ func TestDeploymentExhaustionFailsTrackingWithoutRetryBudget(t *testing.T) {
 	}
 }
 
+func TestResourcePlacementRejectionFailsTrackingImmediately(t *testing.T) {
+	m, _ := newTestManager(t, lifecycleProvider())
+	op := &domain.Operation{Kind: domain.OperationUpdate, Phase: domain.PhaseRunning}
+	cause := &infra.ResourceUpdateRejectedError{Message: "Nomad resource update rejected for member on node node-a: dimension cpu exhausted; running allocation unchanged"}
+	if !m.operationFailure(op, cause) || op.Phase != domain.PhaseFailed || op.CompletedAt == nil || op.Failures != 1 {
+		t.Fatalf("placement rejection consumed retry budget instead of terminating: %+v", op)
+	}
+	if !strings.Contains(op.Message, "node-a") || !strings.Contains(op.Message, "dimension cpu exhausted") {
+		t.Fatalf("placement diagnostics lost: %s", op.Message)
+	}
+}
+
 func TestEndpointRepairExhaustionFailsTrackingWithoutRetryBudget(t *testing.T) {
 	m, _ := newTestManager(t, lifecycleProvider())
 	op := &domain.Operation{Kind: domain.OperationUpdate, Phase: domain.PhaseRunning}

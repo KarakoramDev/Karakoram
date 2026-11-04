@@ -65,6 +65,12 @@ type OperationClaimPolicy interface {
 	CanClaimOperation(*domain.Cluster) (bool, error)
 }
 
+// RecoveryOperationClaimPolicy may admit one narrowly scoped Pending remedy
+// while ordinary convergence owns maintenance. Running work always resumes first.
+type RecoveryOperationClaimPolicy interface {
+	RecoveryOperationKind(context.Context, *Context) (string, error)
+}
+
 // OperationObservationInvalidator discards transient observation windows before
 // an attempt, including failures resolving dependencies before provider entry.
 // Only a successful fresh provider observation may renew the prior checkpoint.
@@ -216,6 +222,11 @@ type Context struct {
 	Dialer    ContextDialer
 	AgentURL  string
 	Cluster   *domain.Cluster
+	// AgentConfigCapabilities applies only to the authenticated config pull
+	// being served. Unknown/absent capabilities must retain the legacy schema.
+	AgentConfigCapabilities []string
+	// Operation is set only while an imperative operation owns this invocation.
+	Operation *domain.Operation
 	Backend   infra.Backend
 	Secrets   SecretStore
 	Store     ClusterStore
@@ -239,6 +250,8 @@ type Context struct {
 	// SyncWait describes the current generation barrier, independently of health.
 	// Providers replace it on every attempt; it is not an availability condition.
 	SyncWait string
+
+	maintenanceWaitOperation string
 }
 
 // Registry owns providers indexed by their unique names.

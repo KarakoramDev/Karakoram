@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Operations
 
-Operate Elasticsearch nodes and Stack components with health-gated maintenance and shard-aware removal.
+Operate [Elasticsearch](https://www.elastic.co/elasticsearch) nodes and Stack components with health-gated maintenance and shard-aware removal.
 
 Native health, node-membership (`/_nodes`) and elected-master (`/_cat/master`)
 observations are required for Ready. A failed observation withdraws member health,
@@ -62,17 +62,26 @@ karactl clusters replace-member search MEMBER_NAME --wait --yes
 
 Restart/replacement and other maintenance (backups/restores/rotations) reject requests before initial formation; restart/replacement also require an active cluster. Select observed member names, not bootstrap recovery targets.
 
-Rolling disruption requires all planned masters present and green health, or narrowly acceptable yellow: only unplaceable replicas, no initialization/relocation. Red/unexplained yellow blocks progress. Maintenance restricts allocation to primaries, flushes, changes one node, waits for rejoin, restores allocation and waits for stable health. Data-only nodes precede non-elected masters; elected master last. After Elasticsearch: Kibana (all instances stopped together), Logstash, APM. Status/Operation identify current member/component/step. Mixed Kibana versions are unsupported.
+Rolling disruption requires all planned masters present and green health, or narrowly acceptable yellow: only unplaceable replicas, no initialization/relocation. Red/unexplained yellow blocks progress. Maintenance restricts allocation to primaries, flushes, changes one node, waits for rejoin, restores allocation and waits for stable health. Data-only nodes precede non-elected masters; elected master last. After Elasticsearch: [Kibana](https://www.elastic.co/kibana) (all instances stopped together), [Logstash](https://www.elastic.co/logstash), APM. Status/Operation identify current member/component/step. Mixed Kibana versions are unsupported.
 
 A failed deployment retry can recover the same absent target only with every other planned master and committed quorum; it cannot advance to another node while that target remains absent. Replacement joins a new node before draining the old and needs temporary capacity. Single-node replacement is rejected: use snapshots. One data node interrupts service during maintenance even with dedicated-master quorum; two combined nodes cannot preserve quorum with one stopped. Kibana has a separate interruption. [Suspend/delete](../clusters.md#delete-or-suspend) observations are historical: members show suspended/agents offline, not cached live health. [Interrupted restore and snapshot cleanup](snapshots.md) have additional retention rules.
 
-On Zerops, the exact-version deployment retry budget is finite.
+On [Zerops](https://zerops.io/), the exact-version deployment retry budget is finite.
 `DeploymentRetriesExhausted` stops submissions for that node or stateless stack
 component, without hiding other members' observations. The rolling journal and
 quorum checks remain in force. Correct the platform/runtime failure, then run
 `karactl --namespace NS clusters retry-deployments NAME` to re-arm deployment.
 
 If a restarted Elasticsearch node cannot start because of a product-invalid setting, correct `engineOptions.elasticsearch.settings` and reapply it. The in-flight rolling pass publishes the correction to that same node while waiting for rejoin; it does not disrupt the next member. During upgrade, configuration repair keeps the journal's target binary version and never attempts an in-place downgrade.
+
+## Agent rollout and maintenance windows
+
+`karactl clusters upgrade-agents search --wait` refreshes Karakoram agents without changing Elasticsearch or Stack versions, runtime identities or volumes. The durable rollout freezes the control-plane build and skips healthy members already reporting it; `--include-current` explicitly refreshes those members too. Data-only nodes roll first, then non-elected master-eligible nodes, the elected master, Kibana, Logstash and APM. Each node retains the master/quorum, shard-health, primaries-only allocation, flush and recovery gates above, and must report the exact target agent build before advancing. Stack components must also report that build and pass component readiness. Completed members are journaled across control-plane restarts. Cancellation is allowed between members, never while allocation or a stopped member needs recovery. If the control-plane build changes again, re-run the operation for the new build.
+
+`spec.maintenance` windows gate the start of each new disruptive member step: restart, TLS rotation, agent rollout, engine upgrade, restart-required configuration/resource changes and scale-in (including optional component removal). Automatic database leaf renewal waits while more than seven days remain. A member already allocation-restricted or stopped always completes rejoin, allocation restoration and shard recovery even after the window closes.
+
+Healing, create/scale-out, delete/suspend/resume, backup/restore, credential rotation, agent transport-certificate renewal and database certificates with at most seven days remaining are exempt. No windows means always open. Use `--ignore-maintenance-window` on a supported operation or spec update for an explicit override; it does not bypass native safety or deployment admission. See [maintenance policy](../operations.md) for schedules and override scope.
+
 
 ## Readiness and monitoring
 
@@ -115,7 +124,7 @@ Existing undersized 9.x Kibana remains admitted for unchanged same-version updat
 
 When a child exits with a recognized Node/V8 fatal heap-limit marker, Kibana reports heap exhaustion with the configured old-space cap in MiB and directs an increase of `spec.components.extra.kibana.resources.minRam` and `maxRam` together (to at least 1.5 GiB on 9.x). This diagnostic is qualified by the applied configuration and failed child launch, remains available through retries, and clears after a later healthy start. It is not evidence of a cgroup OOM kill and does not depend on cgroup visibility. Status never copies raw fatal log lines into the diagnosis, and observation does not change sizing or restart policy.
 
-With updated member agents on Linux cgroup v2, an unavailable Kibana reports
+With updated member agents on [Linux](https://www.kernel.org/) cgroup v2, an unavailable Kibana reports
 `MemoryPressure=True / CgroupMemoryPressure` when its own cgroup has a fresh
 increase in `memory.events:max` between uninterrupted samples less than ten
 seconds apart (shared only until ten seconds after the earlier sample), or
@@ -133,12 +142,12 @@ normalization; oversized procfs/cgroup reads are rejected rather than truncated.
 Unsupported/unreadable cgroup files produce `MemoryPressure=Unknown` with reason
 `CgroupMemoryEvidenceUnavailable`, instance identity and instructions to inspect
 allocation-scoped host evidence or provide an operator-approved read-only scoped
-cgroup view. Unknown is not a pressure diagnosis. Nomad `exec` tasks can have a
+cgroup view. Unknown is not a pressure diagnosis. [Nomad](https://developer.hashicorp.com/nomad) `exec` tasks can have a
 read-only `/sys` sysfs mount without any cgroup2 submount: host cgroup files then
 exist but are invisible to the member agent. The product does not bypass that
 isolation, add mount privileges, or expose host-wide cgroups automatically.
-Dokploy and Zerops likewise require scoped cgroup visibility for a positive native
-diagnosis; no backend-specific host visibility is assumed. Older agents retain
+[Dokploy](https://dokploy.com/) and Zerops likewise require scoped cgroup visibility for a positive native
+diagnosis; no provider-specific host visibility is assumed. Older agents retain
 ordinary native readiness messages. Pressure is diagnostic, not a
 terminal configuration error or evidence of an OOM kill. Successful native
 readiness takes precedence; the condition disappears on the next fresh healthy

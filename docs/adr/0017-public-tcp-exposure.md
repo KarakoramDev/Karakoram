@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Private project hostnames are not externally resolvable/reachable. Zerops supports runtime public TCP routing with firewall ranges over project IPv6 or dedicated IPv4; shared IPv4 and the HTTP L7 subdomain are not MongoDB TCP endpoints. Replica-set clients discover member addresses beyond the initial seed URI.
+Private project hostnames are not externally resolvable/reachable. [Zerops](https://zerops.io) supports runtime public TCP routing with firewall ranges over project IPv6 or dedicated IPv4; shared IPv4 and the HTTP L7 subdomain are not [MongoDB](https://www.mongodb.com) TCP endpoints. Replica-set clients discover member addresses beyond the initial seed URI.
 
 ## Decision
 

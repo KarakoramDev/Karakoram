@@ -15,6 +15,9 @@ var _ engine.DataMcpProvider = (*Core)(nil)
 
 func (*Core) DataMcp(c *domain.Cluster) (engine.DataMcpBackend, error) {
 	if c != nil && c.Spec.DataMcp != nil {
+		if c.Spec.DataMcp.Enabled && c.Spec.Topology.Type == "distributed" {
+			return engine.DataMcpBackend{}, engine.InvalidField("spec.dataMcp.enabled", domain.ReasonUnsupported, "data MCP is not supported for distributed PostgreSQL topology")
+		}
 		scope := c.Spec.DataMcp.Scope
 		if len(scope.IndexPatterns) != 0 || len(scope.Vhosts) != 0 {
 			return engine.DataMcpBackend{}, engine.Invalid("PostgreSQL data MCP supports only databases and schemas")

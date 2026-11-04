@@ -32,7 +32,7 @@ func (s *Server) unsupportedClusterAction(name string, p engine.Provider) respon
 	}
 	err := domain.Conflict("operation", action, domain.ReasonUnsupported, engine.ErrNotSupported, "Operation %s is not supported by engine %s", action, p.Name())
 	if action == domain.OperationRotateSystemUser && (p.Name() == "postgres" || p.Name() == "supabase") {
-		err.Message += "; for non-reserved PostgreSQL login roles use POST /api/v1/clusters/{cluster}/postgres/roles/{role}/password. Managed roles such as postgres remain engine-owned"
+		err.Message += "; supported PostgreSQL identities are postgres (upgrade-agents required) and enabled Data MCP users. Other managed roles remain engine-owned. For non-reserved login roles use POST /api/v1/clusters/{cluster}/postgres/roles/{role}/password"
 	}
 	return s.failure(err)
 }

@@ -11,17 +11,22 @@ import { Badge, Callout, Card, CodeLine, CopyButton, ErrorBlock, KV, Loading, Me
 import { useClusterContext } from './ClusterDetail';
 import { MemberHealthBadge, MemberRole, resourcesSummary, useMemberRoles } from '../cluster-utils';
 import { memberHealthCounts } from '../member-status';
-import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, knownHost, psmdbConnect } from './detail-state';
+import { certificateDownload, colocatedGroups, credentialDatabaseLabel, elasticHealthNotices, elasticMemberSummary, generationState, psmdbConnect } from './detail-state';
 import { hasCapability, hasReplicaSetDetails } from '@/engines';
 import { QuorumCallout } from '@/engines/rabbitmq/QuorumCallout';
 import { kibanaReady } from '@/engines/elasticsearch/spec';
 import { ConnectionHelp } from '@/engines/elasticsearch/ConnectionHelp';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
 import { ConnectionHelp as PostgresConnectionHelp } from '@/engines/postgres/ConnectionHelp';
+import { ConnectionHelp as MySQLConnectionHelp } from '@/engines/mysql/ConnectionHelp';
+import { ConnectionHelp as Neo4jConnectionHelp } from '@/engines/neo4j/ConnectionHelp';
+import { ConnectionHelp as WeaviateConnectionHelp } from '@/engines/weaviate/ConnectionHelp';
 import { SupabaseCredentialsReveal } from '@/engines/supabase/CredentialsReveal';
 import { isPostgres } from '@/engines/postgres/spec';
 import { DataMcpSection } from './DataMcpSection';
 import { supportsDataMcp } from './datamcp';
+import { isMySQL } from '@/engines/mysql/spec';
+import { agentBuildState, placementCopy } from './ops-state';
 
 export function OverviewTab() {
   const { cluster, provider, namespace, name, base, can } = useClusterContext();
@@ -50,7 +55,7 @@ export function OverviewTab() {
   const conn = cluster.status.connection;
   const pl = placement.data ?? cluster.status.placement;
   const colocated = colocatedGroups(pl?.groups);
-  const placementUnknown = !pl?.groups.length || pl.groups.some((g) => !knownHost(g.name));
+  const placementNotice = placementCopy(pl);
   const suspended = cluster.status.phase === 'Suspended';
   const elasticMembers = spec.provider === 'elasticsearch' ? elasticMemberSummary(spec.components, list) : undefined;
   const healthNotices = spec.provider === 'elasticsearch' && !suspended ? elasticHealthNotices(cluster.status.conditions) : [];
@@ -59,6 +64,7 @@ export function OverviewTab() {
     <div className="stack" style={{ gap: 20 }}>
       {suspended ? <Callout tone="warn" title="Runtime suspended">Endpoints are unavailable. Member health, agent observations and platform allocations below are historical, not live runtime status.</Callout> : null}
       {spec.provider === 'rabbitmq' ? <QuorumCallout cluster={cluster} base={base} /> : null}
+      {spec.provider === 'pxc' ? <Callout tone="info" title="Galera traffic and recovery">ProxySQL routes one writer, but traffic eligibility requires a Primary component, Synced state and wsrep_ready—not just a reachable database. A minority rejects reads and writes. A failed or timed-out commit may have succeeded; retry only with application idempotency. Full-outage recovery compares every stopped member’s recovered state UUID and sequence number; missing or conflicting evidence blocks bootstrap.</Callout> : null}
       {healthNotices.map((notice) => <Callout key={notice.title} tone="warn" title={notice.title}>
         {notice.message} See the <a href="https://karakoram.dev/docs/elasticsearch/operations/#scale-upgrade-restart-and-replace" target="_blank" rel="noreferrer">Elasticsearch scaling guide</a>.
       </Callout>)}
@@ -109,8 +115,9 @@ export function OverviewTab() {
         </Card>
       </div>
 
-      <Callout tone={colocated.length ? 'warn' : 'info'} title={colocated.length ? 'Members share a physical host' : placementUnknown ? 'Placement unknown until members report' : 'Placement is best effort'}>
-        {placementUnknown ? 'Host information has not been reported for every member. Co-location cannot be determined yet. Zerops does not guarantee physical-host anti-affinity.' : pl?.warning || 'Zerops does not guarantee that members are placed on separate physical hosts; Karakoram cannot promise tolerance to a host failure.'}
+      {placement.error ? <ErrorBlock error={placement.error} retry={() => placement.refetch()} /> : null}
+      <Callout tone={colocated.length ? 'warn' : 'info'} title={placementNotice.title}>
+        {placementNotice.message}
         {colocated.length ? (
           <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             {colocated.map((g) => (
@@ -176,21 +183,18 @@ export function OverviewTab() {
                     <td>{m.diskUsageBytes === undefined ? '—' : <Meter value={m.diskUsageBytes / 2 ** 30} max={m.diskTotalBytes ? m.diskTotalBytes / 2 ** 30 : undefined} unit="GiB" />}</td>
                     <td className="small">{formatDuration(m.uptime)}</td>
                     <td>
-                      {m.agent ? (
-                        <Badge tone={suspended ? 'neutral' : m.agent.connected ? 'ok' : 'warn'} plain title={m.agent.lastSeenAt ? `last seen ${m.agent.lastSeenAt}` : undefined}>
-                          {suspended ? 'historical observation' : m.agent.connected ? 'connected' : 'offline'}
-                          {m.agent.version ? ` ${m.agent.version}` : ''}
-                        </Badge>
-                      ) : (
-                        '—'
-                      )}
+                      <Badge tone={suspended ? 'neutral' : agentBuildState(m.agent, cluster.status.agents?.targetBuild) === 'Current' ? 'ok' : 'warn'} plain>
+                        {agentBuildState(m.agent, cluster.status.agents?.targetBuild)}
+                      </Badge>
+                      <div className="xs muted">{suspended ? 'historical observation' : m.agent?.connected ? 'connected' : 'offline'} · {m.agent?.version || 'version unknown'}</div>
+                      {m.agent?.build || m.agent?.commit ? <details className="xs"><summary>Build identity</summary><div style={{ overflowWrap: 'anywhere' }}>Build: <code>{m.agent.build || 'unknown'}</code><br />Commit: <code>{m.agent.commit || 'unknown'}</code><br />Last seen: <Time iso={m.agent.lastSeenAt} /></div></details> : null}
                     </td>
                     <td className="mono xs">{m.placementGroup ?? '—'}</td>
                   </tr>
                 ))}
                 {list.length === 0 ? (
                   <tr>
-                    <td colSpan={replicaSetDetails ? 12 : 10} className="table-empty">
+                    <td colSpan={replicaSetDetails ? 14 : 12} className="table-empty">
                       {members.isPending ? <Loading /> : 'No members reported yet.'}
                     </td>
                   </tr>
@@ -226,6 +230,9 @@ export function OverviewTab() {
           )}
           {spec.provider === 'elasticsearch' ? <ConnectionHelp connection={conn} /> : null}
           {isPostgres(spec.provider) ? <PostgresConnectionHelp connection={conn} tlsMode={spec.tls?.mode} /> : null}
+          {isMySQL(spec.provider) ? <MySQLConnectionHelp connection={conn} /> : null}
+          {spec.provider === 'neo4j' ? <Neo4jConnectionHelp connection={conn} /> : null}
+          {spec.provider === 'weaviate' ? <WeaviateConnectionHelp base={base} tlsMode={spec.tls?.mode} /> : null}
           {spec.provider === 'supabase' ? <SupabaseCredentialsReveal namespace={namespace} name={name} allowed={can('read', 'cluster-credentials')} /> : null}
         </Card>
         <Card title="Specification">
@@ -236,7 +243,7 @@ export function OverviewTab() {
               spec.components.configServer && ['Config servers', `${spec.components.configServer.replicas} × ${resourcesSummary(spec.components.configServer.resources)}`],
               spec.components.router && ['Routers', `${spec.components.router.replicas} × ${resourcesSummary(spec.components.router.resources, true)}`],
               ['Backup storage', spec.backup?.storage ?? 'none'],
-              hasCapability(provider, 'pitr') && ['PITR', spec.backup?.pitr?.enabled ? `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
+              hasCapability(provider, 'pitr') && ['PITR', spec.backup?.pitr?.enabled ? isMySQL(spec.provider) ? 'on, continuous GTID-checked binlog coverage required' : `on, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'off'],
               ['Exposure', spec.exposure?.public ? `public ${spec.exposure.ipType} · allowlist ${(spec.exposure.allowlist ?? []).join(', ') || 'none'}` : 'private'],
               ['Monitoring', spec.monitoring?.enabled === false ? 'disabled' : 'enabled'],
               hasCapability(provider, 'balancer') && balancer.data && ['Balancer', <span>{balancer.data.enabled ? 'enabled' : 'disabled'}{balancer.data.running ? ' · running' : ''}{balancer.data.mode ? ` · ${balancer.data.mode}` : ''}</span>],
@@ -337,7 +344,7 @@ function CredentialsReveal({ namespace, name, base, provider, allowed }: { names
           Hide
         </Button>
       </div>
-      <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : provider === 'elasticsearch' ? 'elastic' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>
+      {provider === 'neo4j' ? <Callout tone="warn">Every Neo4j Community user has full administrative privileges; scoped roles are unavailable. <Link to={`${base}/neo4j-users`}>Manage Neo4j users</Link> separately and rotate the managed neo4j administrator through System users.</Callout> : <Callout tone="warn">These are administrative accounts with broad privileges, not normal application identities. <Link to={`${base}/${isPostgres(provider) ? 'postgres' : isMySQL(provider) ? 'mysql' : provider === 'elasticsearch' ? 'elastic' : provider === 'weaviate' ? 'weaviate' : 'users'}`}>Create a scoped application user</Link> and use its own credentials in your application.</Callout>}
       <div className="table-wrap">
         <table className="table">
           <thead>

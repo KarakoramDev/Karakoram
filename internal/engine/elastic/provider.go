@@ -44,7 +44,7 @@ func (*Provider) Name() string { return "elasticsearch" }
 
 // Describe returns the supported catalog and lifecycle capabilities.
 func (*Provider) Describe() domain.ProviderInfo {
-	info := domain.ProviderInfo{Name: "elasticsearch", DisplayName: "Elasticsearch", Versions: append([]domain.VersionInfo(nil), catalog...), UpgradePaths: catalogUpgradePaths(), BackupTypes: []string{"snapshot"}, Capabilities: []string{"backups", "restores", "publicExposure", "tls", "monitoring", "elasticAccess", "systemUsers"}, Operations: []string{"backup", "delete-backup", "restore", "restart", "replace-member", "rotate-system-user", "rotate-tls"}, Processes: []string{"elasticsearch", "kibana", "logstash", "apm-server"}}
+	info := domain.ProviderInfo{Name: "elasticsearch", DisplayName: "Elasticsearch", Versions: append([]domain.VersionInfo(nil), catalog...), UpgradePaths: catalogUpgradePaths(), BackupTypes: []string{"snapshot"}, Capabilities: []string{"backups", "restores", "publicExposure", "tls", "monitoring", "elasticAccess", "systemUsers"}, Operations: []string{"backup", "delete-backup", "restore", "restart", domain.OperationUpgradeAgents, "replace-member", "rotate-system-user", "rotate-tls"}, Processes: []string{"elasticsearch", "kibana", "logstash", "apm-server"}}
 	ci := func(name string, replicas, min, max int) domain.ComponentInfo {
 		r, _ := DefaultResources(name)
 		return domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: replicas, Resources: r}, MinReplicas: min, MaxReplicas: max}

@@ -17,6 +17,17 @@ func (p *Core) Cleanup(ctx context.Context, rc *engine.Context, opts domain.Dele
 	if err != nil {
 		return false, err
 	}
+	if err := seedExposureAdmission(ctx, rc, s); err != nil {
+		return false, err
+	}
+	// Legacy acknowledged private policy is recoverable before cleanup. If
+	// neither routes nor an acknowledgement survive, Resolve stays fail-closed.
+	if rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+		s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+	}
+	if err := save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	identities := make(map[string]string, len(s.Members))
 	for _, m := range s.Members {
 		identities[m.Name] = m.ServiceID

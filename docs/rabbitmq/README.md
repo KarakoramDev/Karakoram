@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # RabbitMQ
 
-Karakoram operates RabbitMQ on your Zerops runtimes and Local Storage, not a native Zerops managed service.
+Karakoram operates [RabbitMQ](https://www.rabbitmq.com/) on your [Zerops](https://zerops.io/) runtimes and Local Storage, not a native Zerops managed service.
 
 Opt-in [cluster data MCP](../data-mcp.md) provides native Management API tools with `scope.vhosts` and separate data identities, without a companion. Every tool needs a permitted vhost. Message peeking consumes/requeues and is a write; queue purge is destructive and always requires confirmation.
 
@@ -18,11 +18,11 @@ Opt-in [cluster data MCP](../data-mcp.md) provides native Management API tools w
 | Recovery | [Definitions only](backups.md): no messages, physical backups or PITR |
 | Public access | Opt-in AMQPS with CIDR allowlist; separate opt-in management UI/API without that restriction; [exposure rules](access-and-tls.md#public-access) |
 
-Deprecated **4.3.5** is hidden in the creation wizard but accepted explicitly through the API as an upgrade source. Creation returns `DeprecatedVersion` and a Warning event naming stream authorization disclosures [GHSA-6jvc-jx8w-m757](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-6jvc-jx8w-m757) and [GHSA-342v-cj47-c9g8](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-342v-cj47-c9g8), fixed in 4.3.6. Upgrade before enabling stream access. Only **4.3.5 → 4.3.6** is supported; no downgrades, uncataloged series or arbitrary Erlang packages.
+Deprecated **4.3.5** is hidden in the creation wizard but accepted explicitly through the API as an upgrade source. Creation returns `DeprecatedVersion` and a Warning event naming stream authorization disclosures [GHSA-6jvc-jx8w-m757](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-6jvc-jx8w-m757) and [GHSA-342v-cj47-c9g8](https://github.com/rabbitmq/rabbitmq-server/security/advisories/GHSA-342v-cj47-c9g8), fixed in 4.3.6. Upgrade before enabling stream access. Only **4.3.5 → 4.3.6** is supported; no downgrades, uncataloged series or arbitrary [Erlang](https://www.erlang.org/) packages.
 
 ## Topology, cost and runtime
 
-Each broker uses one singleton Ubuntu 24.04 runtime and one single-host Local Storage volume; runtime disk is separate. Replacement temporarily adds a runtime/volume. Retained/orphaned volumes continue consuming storage and may incur charges. Separate services/volumes and the `prod` preset do not guarantee separate hosts; see [placement limitations](../limitations.md).
+Each broker uses one singleton [Ubuntu](https://ubuntu.com/) 24.04 runtime and one single-host Local Storage volume; runtime disk is separate. Replacement temporarily adds a runtime/volume. Retained/orphaned volumes continue consuming storage and may incur charges. Separate services/volumes and the `prod` preset do not guarantee separate hosts; see [placement limitations](../limitations.md).
 
 Broker identity is `rabbit@<service hostname>` plus its persistent data directory. Node indexes increase monotonically and are never reused. Exact Team RabbitMQ apt packages are installed with package-triggered startup disabled; an `erlang*` apt preference at priority 1001 pins transitive dependencies too. The node agent supervises the broker on its volume. `classic_config` discovery is supplemented by explicit observed joins; discovery changes alone do not restart running brokers.
 
@@ -67,7 +67,7 @@ A timeout does not cancel provisioning: resume with `karactl -n NS clusters wait
 
 ## Engine options and overrides
 
-Inspect `karactl providers get rabbitmq -o json` (`GET /api/v1/providers/rabbitmq`) for current versions, plugin dependencies, public-management restrictions and configuration metadata. `engineOptions` must be one JSON/YAML object; unknown fields, `null`, unsupported/duplicate plugins are rejected. Management and Prometheus are always enabled, not optional-list entries.
+Inspect `karactl providers get rabbitmq -o json` (`GET /api/v1/providers/rabbitmq`) for current versions, plugin dependencies, public-management restrictions and configuration metadata. `engineOptions` must be one JSON/YAML object; unknown fields, `null`, unsupported/duplicate plugins are rejected. Management and [Prometheus](https://prometheus.io/) are always enabled, not optional-list entries.
 
 | Plugin group | What it enables |
 | --- | --- |

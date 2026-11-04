@@ -112,12 +112,11 @@ func TestPartialImportProcessRetryAdoptsUntaggedVolume(t *testing.T) {
 
 func TestPartialImportCleanupCheckpointsThenDeletesUntaggedVolume(t *testing.T) {
 	p, rc, f := failedMemberImport(t)
-	m := retryState(t, rc).Members[0]
 	done, err := p.Cleanup(t.Context(), rc, domain.DeleteOptions{KeepBackups: true})
 	if err != nil || done {
 		t.Fatal(done, err)
 	}
-	m = retryState(t, rc).Members[0]
+	m := retryState(t, rc).Members[0]
 	if m.ServiceID != f.services[m.Name].ID || m.VolumeID != f.services[m.Volume].ID || retryState(t, rc).Retry != nil {
 		t.Fatal("ownership not checkpointed before runtime removal", m)
 	}

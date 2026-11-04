@@ -47,6 +47,7 @@ type deploymentReservation struct {
 	at            time.Time
 	finishedAt    time.Time
 	live          bool
+	observed      bool
 	baseline      map[string]struct{}
 }
 type deploymentAdmission struct {
@@ -55,6 +56,7 @@ type deploymentAdmission struct {
 	observedAt   time.Time
 	processes    []Process
 	names        map[string]string
+	inventories  map[string]*serviceProcessInventory
 }
 
 var projectDeploymentAdmissions sync.Map
@@ -87,7 +89,8 @@ func activeDeploymentProcess(p Process) bool {
 
 // deploymentObservation reads only explicitly owned services. A shared ten-second
 // cache bounds read amplification across namespaces and concurrent submissions.
-// Full service histories are bounded; age never makes a running process safe.
+// Terminal history is indexed once; subsequent reads refresh unfinished work
+// and scan only the newest prefix when its continuity can be established.
 func (b *Backend) deploymentObservation(ctx context.Context, state *deploymentAdmission) ([]Process, map[string]string, error) {
 	if !state.observedAt.IsZero() && time.Since(state.observedAt) < 10*time.Second {
 		return state.processes, state.names, nil
@@ -120,40 +123,219 @@ func (b *Backend) deploymentObservation(ctx context.Context, state *deploymentAd
 		if _, owned := names[service.ID]; !owned {
 			continue
 		}
-		processes, err := b.boundedServiceProcesses(ctx, service.ID)
+		processes, err := b.serviceProcesses(ctx, state, service.ID)
 		if err != nil {
 			return nil, nil, err
 		}
 		all = append(all, processes...)
 	}
+	for service := range state.inventories {
+		if _, owned := names[service]; !owned {
+			delete(state.inventories, service)
+		}
+	}
 	state.processes, state.names, state.observedAt = all, names, time.Now()
 	return all, names, nil
 }
 
-func (b *Backend) boundedServiceProcesses(ctx context.Context, service string) ([]Process, error) {
+type serviceProcessInventory struct {
+	total     int
+	seen      map[string]struct{}
+	active    map[string]Process
+	newest    time.Time
+	rebuiltAt time.Time
+}
+
+var unfinishedProcessFilter = "statuses=" + strings.Join(unfinishedProcessStatuses[:], "&statuses=")
+
+type processEvidenceError string
+
+func (e processEvidenceError) Error() string      { return string(e) }
+func (e processEvidenceError) SafeDetail() string { return string(e) }
+
+func terminalProcess(p Process) bool {
+	switch p.Status {
+	case "FINISHED", "FAILED", "CANCELED", "CANCELLED":
+		return true
+	}
+	return false
+}
+
+// serviceProcesses requires the admission lock. A cold inventory must reach its
+// end: no age cutoff can prove that an older process has finished. Once indexed,
+// terminal records are immutable. The incremental history is advisory for
+// unknown states: known unfinished states are queried independently on every
+// observation. Rebuild history at least every ten minutes to discover late
+// unknown-state arrivals regardless of timestamp ordering or retention.
+func (b *Backend) serviceProcesses(ctx context.Context, state *deploymentAdmission, service string) ([]Process, error) {
+	old := state.inventories[service]
+	rebuiltAt := time.Now()
+	if old != nil && time.Since(old.rebuiltAt) < 10*time.Minute {
+		rebuiltAt = old.rebuiltAt
+	} else {
+		old = nil
+	}
+	seen := make(map[string]struct{})
+	active := make(map[string]Process)
 	var all []Process
-	for offset, pages := 0, 0; pages < 5; pages++ {
-		var p page[Process]
-		path := fmt.Sprintf("/service-stack/%s/process?limit=100&offset=%d&sort=created&order=desc", escape(service), offset)
-		if err := b.client.json(ctx, "GET", path, nil, &p, false); err != nil {
+	total, complete := 0, false
+	incremental := old != nil
+	var newest time.Time
+	unseen := 0
+	validate := func(p Process) (Process, error) {
+		if p.ID == "" || p.ServiceStackID != "" && p.ServiceStackID != service || p.ProjectID != "" && p.ProjectID != b.client.project {
+			return p, processEvidenceError("zerops: missing or inconsistent service process identity")
+		}
+		p.ServiceStackID = service
+		return p, nil
+	}
+	for offset := 0; ; {
+		var page page[Process]
+		path := fmt.Sprintf("/service-stack/%s/process?limit=100&offset=%d&sort=-created", escape(service), offset)
+		if err := b.client.json(ctx, "GET", path, nil, &page, false); err != nil {
 			return nil, err
 		}
-		for _, process := range p.List {
-			if process.ServiceStackID != "" && process.ServiceStackID != service || process.ProjectID != "" && process.ProjectID != b.client.project {
-				return nil, fmt.Errorf("zerops: inconsistent service process identity")
+		if offset == 0 {
+			total = page.Total
+			incremental = incremental && !old.newest.IsZero() && total >= old.total
+		} else if page.Total != total {
+			return nil, processEvidenceError("zerops: service process inventory changed during observation; retry required")
+		}
+		for _, raw := range page.List {
+			p, err := validate(raw)
+			if err != nil {
+				return nil, err
 			}
-			process.ServiceStackID = service
-			all = append(all, process)
+			if p.Created.After(newest) {
+				newest = p.Created
+			}
+			if p.Created.IsZero() {
+				incremental = false
+			}
+			if incremental {
+				_, known := old.seen[p.ID]
+				if p.Created.Before(old.newest) {
+					if known && unseen == total-old.total {
+						complete = true
+						break
+					}
+					incremental = false
+				} else if !known {
+					unseen++
+				}
+			}
+			if _, duplicate := seen[p.ID]; duplicate {
+				return nil, processEvidenceError("zerops: duplicate service process identity during pagination")
+			}
+			seen[p.ID] = struct{}{}
+			if !terminalProcess(p) {
+				active[p.ID] = p
+			}
+			knownTerminal := false
+			if old != nil {
+				_, known := old.seen[p.ID]
+				_, unfinished := old.active[p.ID]
+				knownTerminal = known && !unfinished && terminalProcess(p)
+			}
+			if !knownTerminal && (activeDeploymentProcess(p) || deploymentProcess(p)) {
+				all = append(all, p)
+			}
 		}
-		offset += len(p.List)
-		if offset >= p.Total {
-			return all, nil
+		if complete {
+			break
 		}
-		if len(p.List) == 0 {
-			return nil, fmt.Errorf("zerops: incomplete service process inventory")
+		offset += len(page.List)
+		if offset >= total {
+			break
+		}
+		if len(page.List) == 0 {
+			return nil, processEvidenceError("zerops: incomplete service process inventory")
 		}
 	}
-	return nil, fmt.Errorf("zerops: service process inventory exceeds admission observation bound")
+	if complete {
+		for id := range old.active {
+			if _, scanned := seen[id]; scanned {
+				continue
+			}
+			p, err := b.client.GetProcess(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			if p.ID != id {
+				return nil, processEvidenceError("zerops: inconsistent refreshed process identity")
+			}
+			p, err = validate(p)
+			if err != nil {
+				return nil, err
+			}
+			if !terminalProcess(p) {
+				active[id] = p
+			}
+			if activeDeploymentProcess(p) || deploymentProcess(p) {
+				all = append(all, p)
+			}
+		}
+	}
+	// This filtered inventory, not prefix cardinality, is authoritative for
+	// known unfinished states. Do it after history reads so page shifts and
+	// late-visible processes cannot be hidden by the incremental shortcut.
+	resultIndex := make(map[string]int, len(all))
+	for i, p := range all {
+		resultIndex[p.ID] = i
+	}
+	filteredTotal := 0
+	filteredIDs := make(map[string]struct{})
+	for offset := 0; ; {
+		var page page[Process]
+		path := fmt.Sprintf("/service-stack/%s/process?limit=100&offset=%d&%s", escape(service), offset, unfinishedProcessFilter)
+		if err := b.client.json(ctx, "GET", path, nil, &page, false); err != nil {
+			return nil, err
+		}
+		if offset == 0 {
+			filteredTotal = page.Total
+		} else if page.Total != filteredTotal {
+			return nil, processEvidenceError("zerops: unfinished process inventory changed during observation; retry required")
+		}
+		for _, raw := range page.List {
+			p, err := validate(raw)
+			if err != nil {
+				return nil, err
+			}
+			if _, duplicate := filteredIDs[p.ID]; duplicate {
+				return nil, processEvidenceError("zerops: duplicate unfinished process identity during pagination")
+			}
+			filteredIDs[p.ID] = struct{}{}
+			if !terminalProcess(p) {
+				active[p.ID] = p
+			}
+			if activeDeploymentProcess(p) {
+				if i, exists := resultIndex[p.ID]; exists {
+					all[i] = p
+				} else {
+					resultIndex[p.ID] = len(all)
+					all = append(all, p)
+				}
+			}
+		}
+		offset += len(page.List)
+		if offset >= filteredTotal {
+			break
+		}
+		if len(page.List) == 0 {
+			return nil, processEvidenceError("zerops: incomplete unfinished process inventory")
+		}
+	}
+	if complete {
+		for id := range seen {
+			old.seen[id] = struct{}{}
+		}
+		seen = old.seen
+	}
+	if state.inventories == nil {
+		state.inventories = make(map[string]*serviceProcessInventory)
+	}
+	state.inventories[service] = &serviceProcessInventory{total: total, seen: seen, active: active, newest: newest, rebuiltAt: rebuiltAt}
+	return all, nil
 }
 
 func deploymentWaiting(reason string, keys []string, detail string, cause error) error {
@@ -190,7 +372,7 @@ func (b *Backend) admitDeployment(ctx context.Context, s *ServiceStack) (func(),
 	}
 	processes, names, err := b.deploymentObservation(ctx, state)
 	if err != nil {
-		return waiting("waiting for a platform deployment slot: owned service/process evidence unavailable", err)
+		return nil, deploymentWaiting("DeploymentEvidenceUnavailable", keys, "owned service/process evidence unavailable: "+infra.SafeDetail(err), err)
 	}
 	keys = nil
 	diagnostics := []string{}
@@ -211,7 +393,7 @@ func (b *Backend) admitDeployment(ctx context.Context, s *ServiceStack) (func(),
 	now := time.Now()
 	var reservation *deploymentReservation
 	for pending := range state.reservations {
-		observed := false
+		observed := pending.observed
 		observedActive := false
 		for _, p := range processes {
 			at := p.Created
@@ -224,6 +406,7 @@ func (b *Backend) admitDeployment(ctx context.Context, s *ServiceStack) (func(),
 				observedActive = observedActive || activeDeploymentProcess(p)
 			}
 		}
+		pending.observed = observed
 		if !pending.live && (observed || !pending.finishedAt.IsZero() && now.Sub(pending.finishedAt) >= deploymentReservationTTL) {
 			delete(state.reservations, pending)
 			continue
@@ -293,11 +476,11 @@ func (b *Backend) waitPreviousDeployment(ctx context.Context, s *ServiceStack, s
 			}
 		}
 	} else {
-		processes, err = b.boundedServiceProcesses(ctx, s.ID)
+		processes, err = b.serviceProcesses(ctx, state, s.ID)
 	}
 	state.lock.Unlock()
 	if err != nil {
-		return waiting("process evidence unavailable", err)
+		return deploymentWaiting("DeploymentEvidenceUnavailable", []string{s.ID + ":EVIDENCE_UNAVAILABLE"}, "previous deployment process evidence unavailable: "+infra.SafeDetail(err), err)
 	}
 	var diagnostics []string
 	for _, p := range processes {

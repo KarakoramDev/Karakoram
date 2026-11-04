@@ -23,7 +23,7 @@ func (p *Core) reinitMember(ctx context.Context, rc *engine.Context, op *domain.
 		return engine.OpResult{}, engine.Invalid("invalid reinitialization request")
 	}
 	m := s.find(request.Member)
-	if s.Topology != "ha" || m == nil || m.Role != "data" || m.Removing {
+	if !patroniTopology(s.Topology) || m == nil || m.Role != "data" || m.Removing {
 		return engine.OpResult{}, engine.Invalid("reinitialization requires an active HA data member")
 	}
 	st, err := live(ctx, rc, m.Name)

@@ -335,6 +335,20 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 			}
 		}
 	}
+	// Check every explicit exclusion before publishing any batch reservation.
+	// An impossible later volume must not leave earlier services half allocated.
+	for _, spec := range specs {
+		if spec.Kind != infra.KindVolume || len(spec.SpreadAvoid) == 0 || existing[spec.Hostname] != nil {
+			continue
+		}
+		nodes, err := b.nodes(ctx)
+		if err != nil {
+			return op, err
+		}
+		if _, err = chooseNode(nodes, rs, spec.SpreadGroup, spec.SpreadReplaces, spec.SpreadAvoid...); err != nil {
+			return op, err
+		}
+	}
 	ordered := append([]infra.ServiceSpec(nil), specs...)
 	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Kind == infra.KindVolume && ordered[j].Kind != infra.KindVolume })
 	ids := map[string]string{}

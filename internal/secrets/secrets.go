@@ -47,6 +47,7 @@ type Sealer struct {
 	idempotencyIdentityKey [32]byte
 	mcpConfirmKey          [32]byte
 	mcpIdempotencyKey      [32]byte
+	fingerprint            [16]byte
 }
 
 // New derives a sealer from a master key of at least 32 characters.
@@ -75,6 +76,7 @@ func New(masterKey string) (*Sealer, error) {
 		{"idempotency-identity/HMAC-SHA256", s.idempotencyIdentityKey[:]},
 		{"mcp-confirm/HMAC-SHA256", s.mcpConfirmKey[:]},
 		{"mcp-idempotency/HMAC-SHA256", s.mcpIdempotencyKey[:]},
+		{"karakoram/master-key-fingerprint/v1", s.fingerprint[:]},
 	} {
 		if _, err := io.ReadFull(hkdf.New(sha256.New, []byte(masterKey), []byte("karakoram/secrets/v1"), []byte(subkey.label)), subkey.key); err != nil {
 			return nil, err
@@ -82,6 +84,9 @@ func New(masterKey string) (*Sealer, error) {
 	}
 	return s, nil
 }
+
+// Fingerprint identifies a master key without exposing encryption key material.
+func (s *Sealer) Fingerprint() string { return "kkfp1:" + hex.EncodeToString(s.fingerprint[:]) }
 
 // FromEnv loads the encryption master key from KARAKORAM_MASTER_KEY.
 func FromEnv() (*Sealer, error) { return New(os.Getenv("KARAKORAM_MASTER_KEY")) }

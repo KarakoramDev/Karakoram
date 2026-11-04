@@ -18,10 +18,13 @@ import { RabbitMQBackupNotice, SchedulesEditor } from '../editors/SchedulesEdito
 import { validateSchedules } from '../wizard/schedules';
 import { BackupPhaseBadge } from '../cluster-utils';
 import { useClusterContext } from './ClusterDetail';
-import { latestSuccessfulBackup } from './detail-state';
+import { backupPITRDraft, latestSuccessfulBackup } from './detail-state';
 import { fetchBackupInventory } from './backup-inventory';
 import { useSubmissionKey } from './use-submission-key';
 import { hasCapability, supportsOperation } from '@/engines';
+import { isMySQL } from '@/engines/mysql/spec';
+import { BackupDrills } from './BackupDrills';
+import { pitrIntervals } from '../wizard/restore-point';
 
 type BackupType = Schemas['Provider']['backupTypes'][number];
 
@@ -67,6 +70,8 @@ export function BackupsTab() {
 
   return (
     <div className="stack" style={{ gap: 16 }}>
+      {isMySQL(cluster.spec.provider) ? <Callout tone="warn" title="XtraBackup and binlog recovery">Incremental backups depend on their full backup and complete LSN chain. PITR ends at continuous archived GTID coverage, not the latest application commit; inspect archive lag and gaps. MySQL and PXC backups are not interchangeable. Test recovery before relying on retention or upgrading.</Callout> : null}
+      {cluster.spec.provider === 'weaviate' ? <Callout>Weaviate uses full native S3 backups from every member to the cluster’s bound storage; no incremental backups or PITR. Restore requires the recorded member count, source storage endpoint/bucket and a supported same-or-forward version. In-place restore deletes existing collections; clones preserve fresh target identities rather than restoring source users and keys. <a href="https://karakoram.dev/docs/weaviate/backups/" target="_blank" rel="noreferrer">Weaviate recovery constraints ↗</a></Callout> : null}
       <div className="grid-3">
         <Card flush>
           <div className="stat">
@@ -90,9 +95,9 @@ export function BackupsTab() {
           <div className="stat">
             <span className="stat-label">PITR window</span>
             <span className="stat-value" style={{ fontSize: 'var(--fs-lg)' }}>
-              {win?.available && win.start && win.end ? `${formatTime(win.start)} → ${formatTime(win.end)}` : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
+              {win?.available && pitrIntervals(win).length ? pitrIntervals(win).map((range, index) => <span style={{ display: 'block' }} key={index}>{formatTime(range.start)} → {formatTime(range.end)}{range.backup ? ` · ${range.backup}` : ''}</span>) : cluster.spec.backup?.pitr?.enabled ? 'not yet available' : 'PITR disabled'}
             </span>
-            <span className="stat-sub">{win?.message ?? (win?.available ? 'continuous, PBM-verified' : '')}</span>
+            <span className="stat-sub">{win?.message ?? (win?.available ? isMySQL(cluster.spec.provider) ? 'continuous, GTID-checked archive coverage' : 'continuous, engine-verified' : '')}</span>
           </div>
         </Card> : null}
       </div>
@@ -192,6 +197,7 @@ export function BackupsTab() {
       </Card>
 
       <BackupPolicyCard storageNames={storageNames} backupTypes={backupTypes} />
+      <BackupDrills backups={backups.data?.items ?? []} />
 
       {createOpen ? <CreateBackupDialog namespace={namespace} cluster={name} provider={cluster.spec.provider} storages={storageNames} defaultStorage={cluster.spec.backup?.storage} backupTypes={backupTypes} onClose={() => setCreateOpen(false)} /> : null}
 
@@ -285,7 +291,7 @@ function BackupPolicyCard({ storageNames, backupTypes }: { storageNames: string[
     }
   }, [persistedKey, seed, persisted]);
 
-  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: { enabled: pitrEnabled, oplogSpanMinutes: span } } : {}) };
+  const draft: Schemas['BackupSpec'] = { ...(storage ? { storage } : {}), schedules, ...(pitr ? { pitr: backupPITRDraft(persisted.pitr, pitrEnabled, span) } : {}) };
   const dirty = storage !== (persisted.storage ?? '') || JSON.stringify(schedules) !== JSON.stringify(persisted.schedules ?? []) || pitrEnabled !== (persisted.pitr?.enabled ?? false) || span !== (persisted.pitr?.oplogSpanMinutes ?? 10);
   const errors = validateSchedules(schedules);
   if ((schedules.length || pitrEnabled) && !storage) errors.unshift('Choose a primary storage.');

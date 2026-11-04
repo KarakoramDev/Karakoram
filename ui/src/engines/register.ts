@@ -10,9 +10,23 @@ import { rabbitmqUI } from './rabbitmq/index.ts';
 import { elasticsearchUI } from './elasticsearch';
 import { postgresUI } from './postgres';
 import { supabaseUI } from './supabase';
+import { keycloakUI } from './keycloak';
+import { openbaoUI } from './openbao/index.ts';
+import { temporalUI } from './temporal';
+import { mysqlUI } from './mysql';
+import { pxcUI } from './pxc';
+import { neo4jUI } from './neo4j/ui';
+import { weaviateUI } from './weaviate';
 
 engines.rabbitmq = rabbitmqUI;
 
 engines.elasticsearch = elasticsearchUI;
 engines.postgres = postgresUI;
 engines.supabase = supabaseUI;
+engines.keycloak = keycloakUI;
+engines.openbao = openbaoUI;
+engines.temporal = temporalUI;
+engines.mysql = mysqlUI;
+engines.pxc = pxcUI;
+engines.neo4j = neo4jUI;
+engines.weaviate = weaviateUI;

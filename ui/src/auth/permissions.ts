@@ -8,6 +8,7 @@ export type Resource =
   | 'cluster-credentials'
   | 'cluster-data'
   | 'database-users'
+  | 'openbao-unseal-keys'
   | 'backups'
   | 'restores'
   | 'backup-storages'
@@ -22,7 +23,7 @@ export type Resource =
   | 'settings'
   | 'providers';
 
-export type Action = 'create' | 'read' | 'write' | 'update' | 'delete' | 'export';
+export type Action = 'create' | 'read' | 'write' | 'update' | 'delete' | 'export' | 'reveal';
 
 export const DEFAULT_NAMESPACE = 'default';
 
@@ -78,7 +79,7 @@ export function globMatch(pattern: string, value: string): boolean {
 }
 
 /** Resources whose policy objects normalize to namespace-qualified patterns. */
-const NAMESPACED: Partial<Record<Resource, true>> = { clusters: true, 'cluster-credentials': true, 'database-users': true, backups: true, restores: true, 'backup-storages': true, operations: true, events: true, audit: true, monitoring: true };
+const NAMESPACED: Partial<Record<Resource, true>> = { clusters: true, 'cluster-credentials': true, 'database-users': true, 'openbao-unseal-keys': true, backups: true, restores: true, 'backup-storages': true, operations: true, events: true, audit: true, monitoring: true };
 
 /**
  * Mirrors the server policy effect: allowed when at least one matching allow

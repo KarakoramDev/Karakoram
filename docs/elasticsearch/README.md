@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Elasticsearch
 
-Deploy Elasticsearch and its optional, version-coupled Elastic Stack components on Zerops.
+Deploy [Elasticsearch](https://www.elastic.co/elasticsearch) and its optional, version-coupled Elastic Stack components on [Zerops](https://zerops.io/).
 
 Opt-in [cluster data MCP](../data-mcp.md) provides native scoped Elasticsearch tools without a companion. Configure `scope.indexPatterns`; hidden/system/dot indices, including hidden data-stream backing indices, remain unreachable. Writes require four independent opt-ins.
 
@@ -38,13 +38,13 @@ The UI labels these **Combined master and data nodes** and **Dedicated masters +
 
 Use one combined node for disposable development; usually choose 3/5 for production voting. Even counts are allowed with warnings. Two combined nodes need both voters: losing either stops writes. One data node has no redundant shard copy, regardless of master count. Presets do not establish independent failure domains.
 
-Optional replicas are Kibana 0–3, Logstash 0–5 and APM 0–3. Zero disables a component. Each uses one service with multiple containers and ephemeral disks; components cannot attach to another cluster or upgrade independently. Without a preset, defaults are three combined nodes, or three dedicated masters plus two data nodes, with optional components disabled.
+Optional replicas are [Kibana](https://www.elastic.co/kibana) 0–3, [Logstash](https://www.elastic.co/logstash) 0–5 and APM 0–3. Zero disables a component. Each uses one service with multiple containers and ephemeral disks; components cannot attach to another cluster or upgrade independently. Without a preset, defaults are three combined nodes, or three dedicated masters plus two data nodes, with optional components disabled.
 
 If a restart is waiting for an optional component to become ready, setting that component's replicas to zero skips it in the restart pass. Normal reconciliation then deletes its service without requiring it to recover first. Skipped components are recorded separately from completed restarts, including across control-plane restarts; re-enabling one before the pass finishes requires its restart and readiness before completion. Enabled components and Elasticsearch nodes still retain their restart readiness gates.
 
 ## Sizing and heap
 
-API RAM/disk values use GiB; CPU values use cores. Provider starting resources are:
+API RAM/disk values use GiB; CPU values use cores. Engine driver starting resources are:
 
 | Component | RAM bounds | Disk bounds |
 |---|---|---|
@@ -54,7 +54,7 @@ API RAM/disk values use GiB; CPU values use cores. Provider starting resources a
 | Logstash | 1.5–1.5 GiB | 1–5 GiB ephemeral |
 | APM | 0.5–0.5 GiB | 1–5 GiB ephemeral |
 
-The `dev` preset caps Kibana at 1.5 GiB. All components start with shared CPU bounds 1–2. CPU bounds are whole cores, at least one; maximum bounds cannot be below minima. Omitted resource bounds use provider defaults. Size for replicas, rebalance/recovery, disk watermarks and queues, not just current data size. More nodes cannot drain shards onto disks without headroom. See [resource changes](../clusters.md) for platform growth constraints.
+The `dev` preset caps Kibana at 1.5 GiB. All components start with shared CPU bounds 1–2. CPU bounds are whole cores, at least one; maximum bounds cannot be below minima. Omitted resource bounds use engine driver defaults. Size for replicas, rebalance/recovery, disk watermarks and queues, not just current data size. More nodes cannot drain shards onto disks without headroom. See [resource changes](../clusters.md) for platform growth constraints.
 
 Enabled Kibana 9.x requires at least **1.5 GiB minimum RAM** for creation, enablement, replica increases, intentional RAM changes and every version change (including patch upgrades). Kibana 8.x retains its 1-GiB admission floor; neither floor is a startup-time or workload-capacity guarantee. Disabled Kibana retains structural resource checks.
 
@@ -130,11 +130,11 @@ karactl -n default clusters members search
 
 The API accepts the same body at `POST /api/v1/clusters?namespace=default`; see [API mechanics](../api.md). For dedicated masters, change the topology and add `components.extra.master` with a permitted count; `engine` then means data-only nodes.
 
-Settings belong in `engineOptions.elasticsearch.settings` or `engineOptions.kibana.settings`, not `engineConfig`. Undeclared fields and conflicting dotted/nested settings are rejected. Karakoram reserves roles, discovery, network/path/ports, security/TLS, S3 clients and Kibana connection/encryption/public-URL settings. See [component settings](stack.md). Patch files wrap changes in `{spec: {...}}`; arrays replace complete arrays.
+Settings belong in `engineOptions.elasticsearch.settings` or `engineOptions.kibana.settings`, not `engineConfig`. Undeclared fields and conflicting dotted/nested settings are rejected. Karakoram reserves roles, discovery, network/path/ports, security/TLS, [S3](https://aws.amazon.com/s3/) clients and Kibana connection/encryption/public-URL settings. See [component settings](stack.md). Patch files wrap changes in `{spec: {...}}`; arrays replace complete arrays.
 
 ## How it runs
 
-Each Elasticsearch node has a singleton Ubuntu runtime and a separate Local Storage volume, including dedicated masters. This is not Zerops's managed Elasticsearch service. Official exact-version archives are SHA-512-verified; unprivileged supervised processes use bundled runtimes. Formation bootstraps once, records cluster identity and removes bootstrap configuration; retained-volume resume does not bootstrap a different cluster. Security precedes optional component deployment. Local readiness is separate from formation and shard redundancy.
+Each Elasticsearch node has a singleton [Ubuntu](https://ubuntu.com/) runtime and a separate Local Storage volume, including dedicated masters. This is not Zerops's managed Elasticsearch service. Official exact-version archives are SHA-512-verified; unprivileged supervised processes use bundled runtimes. Formation bootstraps once, records cluster identity and removes bootstrap configuration; retained-volume resume does not bootstrap a different cluster. Security precedes optional component deployment. Local readiness is separate from formation and shard redundancy.
 
 ## Limits
 
@@ -142,6 +142,6 @@ No ML provisioning, arbitrary role pools, hot/warm/cold pools, version skew or d
 
 ## Licensing
 
-Karakoram is Apache-2.0, but contains no Elastic code and downloads rather than redistributes official default builds on user infrastructure. Elasticsearch/Kibana binaries use ELv2; AGPLv3/SSPL source options do not license those binaries. Logstash/APM offer OSS builds, but this provider uses default builds. Provisioning uses Basic-tier security, TLS, API keys, service accounts, snapshots and monitoring without bypassing paid-feature controls.
+Karakoram is Apache-2.0, but contains no Elastic code and downloads rather than redistributes official default builds on user infrastructure. Elasticsearch/Kibana binaries use ELv2; AGPLv3/SSPL source options do not license those binaries. Logstash/APM offer OSS builds, but this engine driver uses default builds. Provisioning uses Basic-tier security, TLS, API keys, service accounts, snapshots and monitoring without bypassing paid-feature controls.
 
-**Warning:** ELv2 restricts hosted/managed resale exposing substantial Elasticsearch/Kibana functionality. User-owned infrastructure and non-redistribution are not blanket exemptions; obtain appropriate Elastic rights and legal review before offering such services. OpenSearch is not this provider. See [ADR 0029](../adr/0029-elastic-licensing.md), [Elastic's FAQ](https://www.elastic.co/pricing/faq/licensing) and [ELv2 examples](https://www.elastic.co/licensing/elastic-license/faq); this is not legal advice.
+**Warning:** ELv2 restricts hosted/managed resale exposing substantial Elasticsearch/Kibana functionality. User-owned infrastructure and non-redistribution are not blanket exemptions; obtain appropriate Elastic rights and legal review before offering such services. OpenSearch is not this engine driver. See [ADR 0029](../adr/0029-elastic-licensing.md), [Elastic's FAQ](https://www.elastic.co/pricing/faq/licensing) and [ELv2 examples](https://www.elastic.co/licensing/elastic-license/faq); this is not legal advice.

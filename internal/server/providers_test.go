@@ -7,22 +7,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/psmdb"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/infra/zerops"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
 
 func TestBuiltInProviderCatalogConforms(t *testing.T) {
 	s, _, token := testServer(t)
 	var err error
-	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store})...)
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: s.postgresBindings})...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,9 +51,160 @@ func TestBuiltInProviderCatalogConforms(t *testing.T) {
 			t.Fatalf("%s: %d %s", provider.Name, w.Code, w.Body.String())
 		}
 	}
-	want := map[string]bool{"psmdb": true, "rabbitmq": true, "elasticsearch": true, "postgres": true, "supabase": true}
+	want := map[string]bool{"psmdb": true, "rabbitmq": true, "openbao": true, "elasticsearch": true, "postgres": true, "supabase": true, "keycloak": true, "temporal": true, "mysql": true, "pxc": true, "neo4j": true, "weaviate": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("built-in providers = %v, want %v", got, want)
+	}
+}
+
+func TestBuiltInProviderPartialResourceDefaults(t *testing.T) {
+	s, _, _ := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	for _, provider := range engineProviders(engineOptions{Store: s.Store, Bindings: bindings}) {
+		for _, topology := range provider.Describe().Topologies {
+			for name, info := range topology.Components {
+				for _, field := range []string{"cpuMode", "minCpu", "maxCpu", "minRam", "maxRam", "minDisk", "maxDisk"} {
+					t.Run(provider.Name()+"/"+topology.Type+"/"+name+"/"+field, func(t *testing.T) {
+						defaults := resourcesAPI(info.Defaults.Resources)
+						encoded, err := json.Marshal(defaults)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var fields map[string]json.RawMessage
+						if err := json.Unmarshal(encoded, &fields); err != nil {
+							t.Fatal(err)
+						}
+						// Supply just one catalog value: all other bounds must
+						// still be filled, including for optional components.
+						partial, err := json.Marshal(map[string]json.RawMessage{field: fields[field]})
+						if err != nil {
+							t.Fatal(err)
+						}
+						var resources api.ResourcesInput
+						if err := json.Unmarshal(partial, &resources); err != nil {
+							t.Fatal(err)
+						}
+						spec := domain.ClusterSpec{Provider: provider.Name(), Topology: domain.Topology{Type: topology.Type}}
+						component := domain.ComponentSpec{Replicas: info.Defaults.Replicas, Resources: resourcesDomain(&resources)}
+						switch name {
+						case "engine":
+							spec.Components.Engine = component
+						case "configServer":
+							spec.Components.ConfigServer = component
+						case "router":
+							spec.Components.Router = component
+						default:
+							spec.Components.Extra = map[string]domain.ComponentSpec{name: component}
+						}
+						provider.ApplyDefaults(&spec)
+						var got domain.Resources
+						switch name {
+						case "engine":
+							got = spec.Components.Engine.Resources
+						case "configServer":
+							got = spec.Components.ConfigServer.Resources
+						case "router":
+							got = spec.Components.Router.Resources
+						default:
+							got = spec.Components.Extra[name].Resources
+						}
+						if !reflect.DeepEqual(got, info.Defaults.Resources) {
+							t.Fatalf("partial %s: got %+v, want catalog defaults %+v", field, got, info.Defaults.Resources)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
+func TestKeycloakCatalogWithBindingService(t *testing.T) {
+	s, _, token := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	var err error
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: bindings})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := call(s, "GET", "/api/v1/providers/keycloak", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var provider api.Provider
+	if err := json.Unmarshal(w.Body.Bytes(), &provider); err != nil {
+		t.Fatal(err)
+	}
+	if provider.Name != "keycloak" || len(provider.Topologies) != 1 {
+		t.Fatal(provider)
+	}
+}
+
+func TestBuiltInProvidersSharePostgresBindingService(t *testing.T) {
+	s, _, _ := testServer(t)
+	var typedNil *pgbinding.Manager
+	for _, tc := range []struct {
+		name      string
+		bindings  pgbinding.Service
+		available bool
+	}{
+		{"manager", pgbinding.New(pgbinding.Options{Store: s.Store}), true},
+		{"nil", nil, false},
+		{"typed-nil-manager", typedNil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			found := map[string]bool{}
+			for _, provider := range engineProviders(engineOptions{Store: s.Store, Bindings: tc.bindings}) {
+				if provider.Name() != "openbao" && provider.Name() != "temporal" {
+					continue
+				}
+				found[provider.Name()] = true
+				t.Run(provider.Name(), func(t *testing.T) {
+					c := domain.Cluster{Name: "consumer", Spec: domain.ClusterSpec{Provider: provider.Name()}}
+					if provider.Name() == "openbao" {
+						c.Spec.EngineOptions = json.RawMessage(`{"storage":{"type":"postgresql","postgresql":{"cluster":"pg"}}}`)
+						var advertised bool
+						for _, capability := range provider.Describe().Capabilities {
+							advertised = advertised || capability == "postgresql-storage"
+						}
+						if advertised != tc.available {
+							t.Fatalf("postgresql-storage advertised = %t, want %t", advertised, tc.available)
+						}
+					} else {
+						c.Spec.EngineOptions = json.RawMessage(`{"persistence":{"postgres":{"cluster":"pg"}}}`)
+					}
+					provider.ApplyDefaults(&c.Spec)
+					if provider.Name() == "openbao" {
+						c.Spec.Components.Engine.Replicas = 1
+					}
+					err := provider.Validate(t.Context(), nil, &c)
+					if tc.available {
+						if err != nil {
+							t.Fatalf("concrete binding manager rejected: %v", err)
+						}
+					} else if err == nil || !strings.Contains(strings.ToLower(err.Error()), "binding") {
+						t.Fatalf("missing binding manager must reject admission: %v", err)
+					}
+				})
+			}
+			if !found["openbao"] || !found["temporal"] {
+				t.Fatalf("binding-backed providers missing from catalog: %v", found)
+			}
+		})
+	}
+}
+
+func TestServerRetainsSuppliedPostgresBindingManager(t *testing.T) {
+	s, _, _ := testServer(t)
+	bindings := pgbinding.New(pgbinding.Options{Store: s.Store})
+	options := s.Options
+	options.Bindings = bindings
+	withBindings, err := New(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { withBindings.Close() })
+	if withBindings.postgresBindings != bindings {
+		t.Fatal("server replaced the supplied PostgreSQL binding manager")
 	}
 }
 
@@ -276,6 +434,239 @@ func TestProviderProcessLogs(t *testing.T) {
 		if w.Code != want {
 			t.Fatal(process, w.Code, w.Body.String())
 		}
+	}
+}
+
+type memberLogsBackend struct {
+	fakeBackend
+	supported bool
+	calls     int
+	member    string
+	query     infra.LogQuery
+	err       error
+	logs      []infra.LogLine
+}
+
+func (b *memberLogsBackend) Capabilities() infra.Capabilities {
+	return infra.Capabilities{Logs: b.supported}
+}
+
+func (b *memberLogsBackend) Logs(_ context.Context, member string, q infra.LogQuery) ([]infra.LogLine, error) {
+	b.calls++
+	b.member, b.query = member, q
+	if b.logs != nil {
+		return b.logs, b.err
+	}
+	return []infra.LogLine{{Message: "configuration applied", Stream: "stderr"}}, b.err
+}
+
+type childLogsProvider struct {
+	fakeProvider
+	calls int
+}
+
+func (p *childLogsProvider) MemberLogs(ctx context.Context, rc *engine.Context, member, process string, lines int) ([]domain.MemberLogLine, error) {
+	p.calls++
+	if process == "agent" {
+		return nil, engine.ErrInvalid
+	}
+	return p.fakeProvider.MemberLogs(ctx, rc, member, process, lines)
+}
+
+func TestMemberAgentLogsUseRuntimeBackend(t *testing.T) {
+	for _, tc := range []struct {
+		name, member, query string
+		supported           bool
+		err                 error
+		want, calls         int
+	}{
+		{"agent", "prodm0", "?process=agent&lines=37", true, nil, 200, 1},
+		{"other-cluster-member", "devm0", "?process=agent", true, nil, 404, 0},
+		{"unknown-member", "missing", "?process=agent", true, nil, 404, 0},
+		{"invalid-lines", "prodm0", "?process=agent&lines=10001", true, nil, 400, 0},
+		{"unsupported", "prodm0", "?process=agent", false, nil, 409, 0},
+		{"backend-missing", "prodm0", "?process=agent", true, infra.ErrNotFound, 404, 1},
+		{"backend-unavailable", "prodm0", "?process=agent", true, infra.ErrUnavailable, 503, 1},
+		{"child", "prodm0", "?process=mongod", true, nil, 200, 0},
+		{"default-child", "prodm0", "", true, nil, 200, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, token := testServer(t)
+			b := &memberLogsBackend{supported: tc.supported, err: tc.err}
+			s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+			p := &childLogsProvider{}
+			var err error
+			s.Registry, err = engine.NewRegistry(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			w := call(s, "GET", "/api/v1/clusters/prod/members/"+tc.member+"/logs"+tc.query, "", token)
+			if w.Code != tc.want || b.calls != tc.calls {
+				t.Fatalf("status=%d backend calls=%d: %s", w.Code, b.calls, w.Body.String())
+			}
+			if tc.name == "agent" {
+				var logs api.MemberLogs
+				if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+					t.Fatal(err)
+				}
+				if p.calls != 0 || b.member != "prodm0" || b.query != (infra.LogQuery{Limit: 37}) {
+					t.Fatalf("provider calls=%d member=%q query=%+v", p.calls, b.member, b.query)
+				}
+				if len(logs.Lines) != 1 || logs.Lines[0].Process != "agent" || logs.Lines[0].Message != "configuration applied" {
+					t.Fatalf("runtime logs not returned: %+v", logs)
+				}
+				if !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+					t.Fatal("logs must not be cached")
+				}
+			}
+			if (tc.name == "child" || tc.name == "default-child") && p.calls != 1 {
+				t.Fatalf("child logs bypassed provider: %d calls", p.calls)
+			}
+		})
+	}
+}
+
+func TestMemberAgentLogsRedactRuntimeOutput(t *testing.T) {
+	s, _, token := testServer(t)
+	b := &memberLogsBackend{supported: true, logs: []infra.LogLine{
+		{Container: "first", Stream: "stdout", Message: `password: "`},
+		{Container: "first", Stream: "stderr", Message: "stderr diagnostic retained"},
+		{Container: "second", Stream: "stdout", Message: "second container retained"},
+		{Container: "first", Stream: "stdout", Message: "multiline-value"},
+		{Container: "first", Stream: "stdout", Message: `closing-value"`},
+		{Container: "first", Stream: "stdout", Message: `token=inline-value progress`},
+		{Container: "first", Stream: "stdout", Message: `{"password":"json-value","message":"ready"}`},
+		{Container: "first", Stream: "stdout", Message: "secret: |\n  yaml-value\n2026-10-27T13:00:00Z recovered"},
+		{Container: "first", Stream: "stdout", Message: "mongodb://user:uri-value@example.invalid/db"},
+		{Container: "first", Stream: "stdout", Message: "password: \"\ntrailing-value"},
+	}}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	w := call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines=100", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var logs api.MemberLogs
+	if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+		t.Fatal(err)
+	}
+	var messages strings.Builder
+	for _, line := range logs.Lines {
+		if line.Process != "agent" {
+			t.Fatalf("unexpected process %q", line.Process)
+		}
+		messages.WriteString(line.Message)
+		messages.WriteByte('\n')
+	}
+	got := messages.String()
+	for _, secret := range []string{"multiline-value", "closing-value", "inline-value", "json-value", "yaml-value", "uri-value", "trailing-value"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("runtime credential %q escaped redaction", secret)
+		}
+	}
+	for _, diagnostic := range []string{"stderr diagnostic retained", "second container retained", "ready", "recovered", "[redacted]", "lines omitted: possible credential material"} {
+		if !strings.Contains(got, diagnostic) {
+			t.Fatalf("missing safe diagnostic %q in %q", diagnostic, got)
+		}
+	}
+	w = call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines=2", "", token)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+		t.Fatal(err)
+	}
+	if len(logs.Lines) > 2 || strings.Contains(w.Body.String(), "trailing-value") {
+		t.Fatal("redaction expanded past the requested limit or leaked a continuation")
+	}
+}
+
+func TestMemberAgentLogsRedactDescendingZeropsTail(t *testing.T) {
+	s, _, token := testServer(t)
+	at := time.Date(2026, 10, 27, 13, 0, 0, 0, time.UTC)
+	records := []zerops.RuntimeLog{
+		{Timestamp: at.Add(4 * time.Second), Content: "safe first"},
+		{Timestamp: at.Add(4 * time.Second), Content: "safe second"},
+		{Timestamp: at.Add(3 * time.Second), Content: `closing-value"`},
+		{Timestamp: at.Add(2 * time.Second), Content: "private-value"},
+		{Timestamp: at.Add(time.Second), Content: `password: "`},
+		{Timestamp: at, Content: "older unselected diagnostic"},
+	}
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/project/project/service-stack":
+			_, _ = w.Write([]byte(`{"list":[{"id":"member-id","name":"prodm0","projectId":"project"}],"total":1}`))
+		case "/service-stack/member-id":
+			_, _ = w.Write([]byte(`{"id":"member-id","name":"prodm0","projectId":"project"}`))
+		case "/project/project/log":
+			_ = json.NewEncoder(w).Encode(map[string]string{"url": "http://" + r.Host + "/signed"})
+		case "/signed":
+			n, err := strconv.Atoi(r.URL.Query().Get("limit"))
+			if err != nil || n < 1 || n > len(records) || r.URL.Query().Get("desc") != "1" {
+				t.Error("incorrect newest-tail query")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": records[:n]})
+		default:
+			t.Errorf("unexpected platform path %q", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer platform.Close()
+	b, err := zerops.New(zerops.Options{BaseURL: platform.URL, ProjectID: "project", Token: "synthetic-token", MaxRetries: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	for _, limit := range []int{5, 2} {
+		w := call(s, "GET", "/api/v1/clusters/prod/members/prodm0/logs?process=agent&lines="+strconv.Itoa(limit), "", token)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		for _, secret := range []string{"private-value", "closing-value", "older unselected diagnostic"} {
+			if strings.Contains(w.Body.String(), secret) {
+				t.Fatalf("descending tail leaked %q", secret)
+			}
+		}
+		var logs api.MemberLogs
+		if err := json.Unmarshal(w.Body.Bytes(), &logs); err != nil {
+			t.Fatal(err)
+		}
+		n := len(logs.Lines)
+		if n < 2 || n > limit || logs.Lines[n-2].Message != "safe first" || logs.Lines[n-1].Message != "safe second" {
+			t.Fatalf("newest selection or equal-timestamp source order lost: %+v", logs)
+		}
+	}
+}
+
+func TestBuiltInProviderAgentLogs(t *testing.T) {
+	s, _, token := testServer(t)
+	var err error
+	s.Registry, err = engine.NewRegistry(engineProviders(engineOptions{Store: s.Store, Bindings: s.postgresBindings})...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := &memberLogsBackend{supported: true}
+	s.namespaces = engine.StaticNamespaces{DefaultBackend: b}
+	for _, info := range s.Registry.List() {
+		t.Run(info.Name, func(t *testing.T) {
+			p, err := s.Registry.Get(info.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := "log" + info.Name[:min(len(info.Name), 9)]
+			member := name + "m0"
+			c := domain.Cluster{Name: name, Spec: domain.ClusterSpec{Provider: info.Name}, Status: domain.ClusterStatus{Members: []domain.MemberStatus{{Name: member}}}}
+			p.ApplyDefaults(&c.Spec)
+			if err := s.Store.CreateCluster(t.Context(), &c); err != nil {
+				t.Fatal(err)
+			}
+			before := b.calls
+			w := call(s, "GET", "/api/v1/clusters/"+c.Name+"/members/"+member+"/logs?process=agent", "", token)
+			if w.Code != 200 || b.calls != before+1 || b.member != member || b.query.Limit != 100 {
+				t.Fatalf("status=%d backend calls=%d member=%q: %s", w.Code, b.calls-before, b.member, w.Body.String())
+			}
+		})
 	}
 }
 

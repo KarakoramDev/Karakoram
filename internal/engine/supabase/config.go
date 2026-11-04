@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,24 +35,76 @@ func (p *Provider) apiURL(ctx context.Context, rc *engine.Context) (string, erro
 	if rc.Cluster.Spec.Components.Extra["gateway"].Replicas == 0 {
 		return "", nil
 	}
-	if o.Gateway.PublicHTTPS {
-		access, err := engine.PublicHTTPS(rc.Backend)
+	s, err := loadState(rc.Cluster)
+	if err != nil {
+		return "", err
+	}
+	public := o.Gateway.PublicHTTPS
+	if s.GatewayAdmission.Admitted != nil {
+		public = s.GatewayAdmission.Admitted.Public
+	}
+	if public {
+		endpoint, err := gatewayPublicURL(ctx, rc)
 		if err != nil {
 			return "", err
 		}
-		urls, err := access.SubdomainURLs(ctx, rc.Cluster.Name+"gw")
-		if err != nil {
-			return "", err
+		if endpoint != "" {
+			return endpoint, nil
 		}
-		for _, raw := range urls {
-			u, e := url.Parse(raw)
-			if e == nil && u.Scheme == "https" && u.Host != "" {
-				return strings.TrimRight(raw, "/"), nil
-			}
+		if s.GatewayURL != "" {
+			return s.GatewayURL, nil
 		}
 		return "", engine.ErrUnavailable
 	}
 	return "http://" + rc.Cluster.Name + "gw:8000", nil
+}
+
+func gatewayPublicURL(ctx context.Context, rc *engine.Context) (string, error) {
+	access, err := engine.PublicHTTPS(rc.Backend)
+	if err != nil {
+		return "", err
+	}
+	urls, err := access.SubdomainURLs(ctx, rc.Cluster.Name+"gw")
+	if err != nil {
+		return "", err
+	}
+	for _, raw := range urls {
+		u, err := url.Parse(raw)
+		if err == nil && u.Scheme == "https" && u.Host != "" {
+			return strings.TrimRight(raw, "/"), nil
+		}
+	}
+	return "", nil
+}
+
+// Retain the applied canonical URL before legacy recovery or suspension removes
+// the runtime/config receipt. Reusing it avoids a public-to-private bootstrap
+// config transition that would otherwise need a window to reverse after healing.
+func retainGatewayURL(ctx context.Context, rc *engine.Context, s *componentState) error {
+	m := s.Members["gateway"]
+	if s.GatewayURL != "" || m == nil || s.GatewayAdmission.Admitted == nil || !s.GatewayAdmission.Admitted.Public {
+		return nil
+	}
+	raw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "supabase/config/"+m.Name)
+	if missing(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var config agentapi.MemberConfig
+	if err := json.Unmarshal(raw, &config); err != nil {
+		return err
+	}
+	var spec sbspec.Spec
+	if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+		return err
+	}
+	u, err := url.Parse(spec.APIExternalURL)
+	if err == nil && u.Scheme == "https" && u.Host != "" {
+		s.GatewayURL = strings.TrimRight(spec.APIExternalURL, "/")
+	}
+	return nil
 }
 func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *componentMember) (sbspec.Spec, error) {
 	var out sbspec.Spec
@@ -82,7 +133,11 @@ func (p *Provider) desiredSpec(ctx context.Context, rc *engine.Context, m *compo
 	api := private
 	// A gateway must first deploy its HTTP port before the backend can publish
 	// HTTPS routing. Other components are provisioned only after that transition.
-	if m.Component != "gateway" || m.Public {
+	state, err := loadState(rc.Cluster)
+	if err != nil {
+		return out, err
+	}
+	if m.Component != "gateway" || m.Public || state.GatewayURL != "" {
 		api, err = p.apiURL(ctx, rc)
 		if err != nil {
 			return out, err
@@ -232,50 +287,7 @@ func (p *Provider) MemberConfig(ctx context.Context, rc *engine.Context, name st
 		err = json.Unmarshal(raw, &out)
 		return out, err
 	}
-	config, err := p.Core.MemberConfig(ctx, rc, name)
-	if err != nil {
-		return config, err
-	}
-	var pg pgspec.Spec
-	if err = json.Unmarshal(config.EngineSpec, &pg); err != nil {
-		return config, err
-	}
-	if pg.Postgres != nil {
-		o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
-		if err != nil {
-			return config, err
-		}
-		bundle, _ := nativeartifacts.Get("supabase-pg17-extensions")
-		for _, extension := range selectedExtensionPreloads(o.Extensions, bundle) {
-			if !slices.Contains(pg.Postgres.SharedPreloadLibraries, extension) {
-				pg.Postgres.SharedPreloadLibraries = append(pg.Postgres.SharedPreloadLibraries, extension)
-			}
-		}
-		raw, err := json.Marshal(pg)
-		if err != nil {
-			return config, err
-		}
-		config.EngineSpec = raw
-	}
-	return config, nil
-}
-
-func selectedExtensionPreloads(selected []string, bundle nativeartifacts.Artifact) []string {
-	var preloads []string
-	for _, extension := range selected {
-		switch extension {
-		case "pg_cron", "pgaudit", "pg_stat_monitor":
-			// Percona packages are qualified independently of the native bundle.
-		default:
-			if !slices.Contains(bundle.Extensions, extension) || !bundle.ExtensionFlags[extension].Preload {
-				continue
-			}
-		}
-		if !slices.Contains(preloads, extension) {
-			preloads = append(preloads, extension)
-		}
-	}
-	return preloads
+	return p.Core.MemberConfig(ctx, rc, name)
 }
 
 func componentCertificateNeedsRenewal(ctx context.Context, rc *engine.Context, m *componentMember) (bool, error) {

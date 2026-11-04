@@ -2,7 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Backups and storage
 
-Register S3 destinations, manage backup inventory and schedules, and recover into existing or new clusters.
+Register [S3](https://aws.amazon.com/s3/) destinations, manage backup inventory and schedules, and recover into existing or new clusters.
+
+Use [backup drills](backup-drills.md) to restore successful backups into disposable same-namespace clusters, record verification and timing, and clean up the target. Drills consume real infrastructure; they do not replace application-level recovery testing.
 
 ## Engine recovery capabilities
 
@@ -11,13 +13,17 @@ Register S3 destinations, manage backup inventory and schedules, and recover int
 | [MongoDB](mongodb/backups.md) | PBM `logical` (CLI default) / `physical`; incremental type not exposed; providerless legacy records belong here | Yes | Members write directly to S3 |
 | [RabbitMQ](rabbitmq/backups.md) | `definitions` only; **no queued messages**; restore merges definitions | No | Control plane exports through Management API, then compresses/uploads to S3 |
 | [Elasticsearch](elasticsearch/snapshots.md) | Native `snapshot` | No | Nodes write directly to S3 |
+| [Weaviate](weaviate/backups.md) | Native `full` via `backup-s3`; topology-preserving recovery | No | Members write directly to the cluster's bound S3 storage |
 | [PostgreSQL / Supabase](postgres/backups.md) | pgBackRest `full`, `diff`, `incr`; PostgreSQL data only | When enabled | Current primary writes backups and WAL directly to S3 |
+| [OpenBao](openbao/backups.md) | Native `raft-snapshot`, up to 4 GiB; requires source seal material for recovery | No | Control plane streams native HTTPS snapshot to S3; unavailable with PostgreSQL storage |
+| [Temporal](temporal/operations.md#backups) | Source PostgreSQL `full`, `diff`, `incr` through the binding plus a manifest in Temporal cluster state | No Temporal timestamp restore | PostgreSQL source owns archives/retention; deleting a Temporal record does not delete source archives |
+| [Neo4j Community](neo4j/backups.md) | Offline `dump` of `system` and `neo4j`; **full outage**; schedules require `acceptBackupDowntime: true` | No | Member streams both dumps to S3, manifest last |
 
-Backup payload transfer to S3 does not use the management relay; remote administration requests may. Control-plane storage verification does not prove member connectivity. Engine backups and [control-plane state backups](operations.md#control-plane-state-backup-and-recovery) protect different assets. Zerops live volume archives are not consistent engine backups.
+Backup payload transfer to [S3](https://aws.amazon.com/s3/) does not use the management relay; remote administration requests may. Control-plane storage verification does not prove member connectivity. Engine backups and [control-plane state backups](operations.md#control-plane-state-backup-and-recovery) protect different assets. [Zerops](https://zerops.io/) live volume archives are not consistent engine backups.
 
 ## Register S3 storage
 
-Create the bucket separately. In **Settings → Backup storages**, register an existing S3-compatible destination in the cluster's namespace. Cluster backup settings and schedules resolve storage names within that namespace.
+Create the bucket separately. In **Settings → Backup storages**, register an existing [S3](https://aws.amazon.com/s3/)-compatible destination in the cluster's namespace. Cluster backup settings and schedules resolve storage names within that namespace.
 
 | Request field | Value / rule |
 | --- | --- |
@@ -56,9 +62,16 @@ an independently successful complete listing and all other native checks. Denied
 or partial listings retain the restore holds; repair the scoped policy rather
 than bypassing the fence.
 
-Storage registration accepts DNS hosts, IPv4 literals and bracketed unscoped IPv6 literals, with an explicit `http://` or `https://` scheme and an optional port from 1–65535. Bare `host` / `host:port`, scoped IPv6, dotted IPv4-mapped IPv6 literals, URL credentials, query strings and fragments are rejected. For mapped IPv6, use hex-only notation or the equivalent IPv4 literal. Endpoint mount paths such as `/s3` are **not supported**: pgBackRest does not preserve the endpoint URL's path. Supply an origin-level S3 endpoint instead. `prefix` scopes **object keys**, not an HTTP reverse-proxy mount, so copying `/s3` into `prefix` does not repair a mounted S3 service.
+Object-store inventory readers release listing resources when an observation is
+cancelled or a metadata/deletion operation returns early. The listing-lifecycle
+fix requires an updated control plane and, for MySQL/PXC PITR observations,
+updated member agents. Older readers can retain a listing page on each failed
+observation, so agent memory can grow while the database is idle; increasing the
+binary-log archive interval does not prevent that polling-path failure.
 
-With `forcePathStyle: true`, requests use `https://endpoint/bucket/key`. With `false`, ordinary DNS endpoints use `https://bucket.endpoint/key`, requiring bucket-subdomain DNS and a matching certificate. Literal IPv4/IPv6 endpoints always use path style; dotted bucket names over HTTPS also use path style to avoid wildcard-certificate mismatch. HTTP dotted buckets may use virtual hosting. The Go object client, PBM, pgBackRest and Supabase Storage share these rules; Elasticsearch intentionally always uses path style. TLS validation still requires a certificate matching the effective hostname (or literal IP), and HTTP remains plaintext.
+Storage registration accepts DNS hosts, IPv4 literals and bracketed unscoped IPv6 literals, with an explicit `http://` or `https://` scheme and an optional port from 1–65535. Bare `host` / `host:port`, scoped IPv6, dotted IPv4-mapped IPv6 literals, URL credentials, query strings and fragments are rejected. For mapped IPv6, use hex-only notation or the equivalent IPv4 literal. Endpoint mount paths such as `/s3` are **not supported**: [pgBackRest](https://pgbackrest.org/) does not preserve the endpoint URL's path. Supply an origin-level S3 endpoint instead. `prefix` scopes **object keys**, not an HTTP reverse-proxy mount, so copying `/s3` into `prefix` does not repair a mounted S3 service.
+
+With `forcePathStyle: true`, requests use `https://endpoint/bucket/key`. With `false`, ordinary DNS endpoints use `https://bucket.endpoint/key`, requiring bucket-subdomain DNS and a matching certificate. Literal IPv4/IPv6 endpoints always use path style; dotted bucket names over HTTPS also use path style to avoid wildcard-certificate mismatch. HTTP dotted buckets may use virtual hosting. The [Go](https://go.dev/) object client, [PBM](https://docs.percona.com/percona-backup-mongodb/latest/), pgBackRest and [Supabase](https://supabase.com/) Storage share these rules; [Elasticsearch](https://www.elastic.co/elasticsearch) intentionally always uses path style. TLS validation still requires a certificate matching the effective hostname (or literal IP), and HTTP remains plaintext.
 
 Old registrations with unsupported endpoint shapes remain readable and deletable. Their get/list response exposes `verification.verified: false`, `failureReason: endpoint_not_allowed` and shape-specific remediation even if a historical check succeeded. This is a current configuration diagnosis, not a new network probe. `storages verify` returns and persists the same actionable failure without making a request; the CLI exits nonzero. Repair the origin with `storages set`, then verify again. No stored endpoint, bucket, object key or retained-backup location is silently rewritten.
 
@@ -96,7 +109,7 @@ Select an explicit type from the engine table. Acceptance is not completion: fol
 An accepted restore or create-from-backup reserves its source backup while the
 operation is in flight, including the clone's initial member-provisioning phase.
 Deleting that backup (live or retained) returns `409 invalid_state` naming the
-dependent operation and target cluster. PostgreSQL expiration also protects
+dependent operation and target cluster. [PostgreSQL](https://www.postgresql.org/) expiration also protects
 referenced differential/incremental descendants of the requested set.
 Deleting the source cluster without retaining backups likewise returns `409`;
 wait for the dependent operation to complete or cancel it safely, or delete the
@@ -126,7 +139,7 @@ retry/compensation behavior; do not delete restore holds or receipts manually.
 
 ## Schedules and count retention
 
-Configure **Backups** policy or patch `spec.backup`: `storage` selects the primary destination; `schedules` entries contain `name`, `cron`, provider-supported `type`, optional override `storage`, `retainCount` (at least 1), and `enabled`.
+Configure **Backups** policy or patch `spec.backup`: `storage` selects the primary destination; `schedules` entries contain `name`, `cron`, engine driver-supported `type`, optional override `storage`, `retainCount` (at least 1), and `enabled`.
 
 ```sh
 karactl -n <namespace> clusters patch <cluster> -f backup-settings.yaml --wait
@@ -163,7 +176,7 @@ restore completion. A terminal restore operation leaves `Ready=False` with reaso
 before publishing `phase=Ready` and `Ready=True`. A successful operation alone is
 not an application-availability guarantee.
 
-1. Select a successful compatible backup, or a provider-supported observed recovery time. Provider must match; topology/version/identity checks are engine-specific. Providerless legacy records are not engine-neutral artifacts; see the engine table.
+1. Select a successful compatible backup, or a engine driver-supported observed recovery time. Engine driver must match; topology/version/identity checks are engine-specific. Providerless legacy records are not engine-neutral artifacts; see the engine table.
 2. Restore into an existing target, or clone into an independent new cluster without stopping the source:
 
    ```sh
@@ -183,7 +196,7 @@ initial restore leaves the target `Failed` with `RestoreIncomplete`; it never
 silently falls back to an empty database. Delete the target and create a new one
 from the preserved source to abandon that failed attempt.
 Failure withdraws readiness, not ownership of safe compensation: already-running
-native cleanup and any retained frozen PostgreSQL recovery journal continue to
+native cleanup and any retained frozen [PostgreSQL](https://www.postgresql.org/) recovery journal continue to
 release their process/maintenance/router holds. Their failure observation cannot
 block that recovery, authorize a fresh restore, or turn the failed target Ready.
 
@@ -198,7 +211,7 @@ a late native success appears. This evidence survives health refresh and
 suspension independently of the native success marker.
 The native claim is the first durable, incarnation-scoped bootstrap/import
 receipt, not the later creation of a bookkeeping Restore operation. Its original
-time is preserved across retries and restart. PostgreSQL/Supabase can therefore
+time is preserved across retries and restart. PostgreSQL/[Supabase](https://supabase.com/) can therefore
 finish an already-claimed bootstrap if the create tracker expires before DATA
 members join and the initial Restore record is enqueued. This continuation
 cannot change the source or reopen conflicting edit admission.
@@ -227,11 +240,11 @@ create tracker is still waiting. Desired proxies remain an independent `Ready`
 requirement; successful data recovery alone does not make an unplaced proxy
 healthy. Supabase optional-service placement likewise does not gate core recovery.
 
-Upgrade behavior: successful pre-marker PostgreSQL/Supabase and MongoDB clones
+Upgrade behavior: successful pre-marker PostgreSQL/Supabase and [MongoDB](https://www.mongodb.com/) clones
 are migrated only from matching completed native restore receipts; an old
 `Cancelled` create tracker caused by PATCH is not itself a failed restore.
-Matching native work already in flight is allowed to finish. Elasticsearch's
-existing completed marker and RabbitMQ's successful definitions-import marker
+Matching native work already in flight is allowed to finish. [Elasticsearch](https://www.elastic.co/elasticsearch)'s
+existing completed marker and [RabbitMQ](https://www.rabbitmq.com/)'s successful definitions-import marker
 remain valid; an Elasticsearch accepted-only native submission is not promoted
 to success.
 
@@ -249,6 +262,7 @@ preserved source; do not discard its live data or force an implicit replay.
 Own backup operations remain queueable because they do not supersede the restore
 owner and share the serialized native worker; this also permits the required
 post-restore fresh-base backup without reopening conflicting mutation admission.
+[OpenBao](https://openbao.org/) foreign/deleted-source recovery additionally needs the source's unseal/recovery material. The top-level write-only `openbaoUnsealShares` field is accepted in restore and cluster-create requests, not persisted in desired spec. See [Raft restore, clone and supplied-share examples](openbao/backups.md); a snapshot alone cannot recover a sealed server.
 
 ### Cross-namespace recovery
 
@@ -263,7 +277,7 @@ New-cluster requests use `spec.dataSource.namespace`; in-place REST requests use
 
 ### PostgreSQL and Supabase recovery
 
-See the focused [PostgreSQL recovery guide](postgres/backups.md) and [Supabase recovery boundaries](supabase/operations.md#recovery-boundaries). The shared rules below apply to both providers.
+See the focused [PostgreSQL recovery guide](postgres/backups.md) and [Supabase recovery boundaries](supabase/operations.md#recovery-boundaries). The shared rules below apply to both engine drivers.
 
 Use an explicit `--type full`, `--type diff` or `--type incr`; the generic CLI
 default `logical` belongs to MongoDB. A differential requires an existing full;
@@ -273,7 +287,7 @@ apply on every potential primary. Repository paths are isolated by namespace and
 cluster incarnation: `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>`,
 with stanza `kk`. Keep storage credentials and the control-plane master key.
 
-pgBackRest automatic expiration is disabled. The Karakoram scheduler controls
+[pgBackRest](https://pgbackrest.org/) automatic expiration is disabled. The Karakoram scheduler controls
 retention through `delete-backup` operations, but defers the newest full until a
 newer full exists and preserves ancestors of retained sets across schedules and
 manual requests. Skipped sets are reconsidered on later passes; actual counts
@@ -300,7 +314,7 @@ objects or externally modified repositories can still make recovery fail.
 
 In-place restore is destructive and offline. Single-member recovery stops
 PostgreSQL, performs a delta restore, starts the server and waits for promotion.
-HA recovery fences and stops every Patroni/PostgreSQL member, resets only that
+HA recovery fences and stops every [Patroni](https://patroni.readthedocs.io/)/PostgreSQL member, resets only that
 cluster's DCS scope, restores a seed through Patroni custom bootstrap, and
 rebuilds the remaining members before completing. Recovery continues archiving
 to the target's stanza on a new timeline. When restoring from a different source
@@ -317,7 +331,7 @@ same-cluster backups taken before a system-password rotation; reveal connection
 credentials again after recovery rather than reusing an earlier password.
 
 A clone's `dataSource` may name a backup or a PITR time in the same or another
-namespace. Source and target providers must match **exactly**:
+namespace. Source and target engine drivers must match **exactly**:
 `postgres` cannot consume a `supabase` backup or vice versa. PostgreSQL major
 versions must match; source and destination topologies may differ. Bootstrap
 reads the source repository with archiving disabled, then switches to the
@@ -341,23 +355,23 @@ by its separate Storage service.
 
 ## Delete or preserve recovery objects
 
-Backup deletion is destructive; live-cluster cleanup is asynchronous and provider-specific. Active matching work can block deletion until cancelled/terminal. Use `backups delete <cluster> <backup> --yes` and follow its outcome. See engine guides for shared-object and continuity rules, especially [MongoDB backup-data cleanup](mongodb/backups.md).
+Backup deletion is destructive; live-cluster cleanup is asynchronous and engine driver-specific. Active matching work can block deletion until cancelled/terminal. Use `backups delete <cluster> <backup> --yes` and follow its outcome. See engine guides for shared-object and continuity rules, especially [MongoDB backup-data cleanup](mongodb/backups.md).
 
 If a backup-deletion operation fails, expires, or is cancelled before completion, its inventory leaves `Deleting` for `Failed` with the cleanup error and its original remote identity preserved. It is not a usable restore base. Repair the reported dependency and submit deletion again; the new operation safely retries cleanup of the same target instead of leaving an unretryable `Deleting` record. Startup also repairs historical inventory stranded by terminal deletion operations.
 
-Suspended clusters still process backup-deletion operations without resuming ordinary runtime reconciliation. Object-store cleanup can therefore finish while runtimes remain absent. A provider whose native cleanup requires a running member can report that dependency failure; preserve the recorded target, resume/repair the dependency where needed, and retry deletion rather than removing inventory by hand.
+Suspended clusters still process backup-deletion operations without resuming ordinary runtime reconciliation. Object-store cleanup can therefore finish while runtimes remain absent. A engine driver whose native cleanup requires a running member can report that dependency failure; preserve the recorded target, resume/repair the dependency where needed, and retry deletion rather than removing inventory by hand.
 
-Namespace/backend failures during suspended cleanup are reported in conditions
+Namespace/provider failures during suspended cleanup are reported in conditions
 and messages without clearing `Suspended`; only an explicit resume or deletion
 changes that lifecycle intent. After source-cluster deletion, failed backups
-with a recorded remote location or PostgreSQL repository metadata retry through
+with a recorded remote location or [PostgreSQL](https://www.postgresql.org/) repository metadata retry through
 direct retained-object cleanup, never through an operation stranded on the
 absent cluster. Inventory is removed only after remote cleanup succeeds.
 
-[Cluster deletion](clusters.md#delete-or-suspend) intentionally preserves backups with `--keep-backups`, independently of volumes. MongoDB, Elasticsearch, RabbitMQ and PostgreSQL/Supabase retire runtime writers and delete (or intentionally retain) volumes before control-plane artifact cleanup. Elasticsearch, RabbitMQ and PostgreSQL/Supabase retry artifact access failures within a durable two-minute cleanup window; restarts do not reset that window. If exact owned cleanup cannot finish safely, cluster removal completes with affected inventory retained and a `BackupArtifactsRetained` warning (`SnapshotsRetained` for Elasticsearch). Successful destinations are checkpointed and are not deleted again after restart. Read-only source repositories and other incarnations remain untouched. Dependency admission still returns `409` before destructive intent when another operation needs the backups. Inspect retained-artifact warnings and exact-prefix removal guidance rather than treating terminal cluster success as proof of empty storage. Retained `backups list/get/delete` use the original name/namespace and source `backups/read`/`delete`. Recovery after source deletion is provider-specific: use an explicit create file where supported, or restore into an existing target following the engine guide. `--into-new` needs a live source spec.
+[Cluster deletion](clusters.md#delete-or-suspend) intentionally preserves backups with `--keep-backups`, independently of volumes. MongoDB, [Elasticsearch](https://www.elastic.co/elasticsearch), [RabbitMQ](https://www.rabbitmq.com/) and PostgreSQL/[Supabase](https://supabase.com/) retire runtime writers and delete (or intentionally retain) volumes before control-plane artifact cleanup. Elasticsearch, RabbitMQ and PostgreSQL/Supabase retry artifact access failures within a durable two-minute cleanup window; restarts do not reset that window. If exact owned cleanup cannot finish safely, cluster removal completes with affected inventory retained and a `BackupArtifactsRetained` warning (`SnapshotsRetained` for Elasticsearch). Successful destinations are checkpointed and are not deleted again after restart. Read-only source repositories and other incarnations remain untouched. Dependency admission still returns `409` before destructive intent when another operation needs the backups. Inspect retained-artifact warnings and exact-prefix removal guidance rather than treating terminal cluster success as proof of empty storage. Retained `backups list/get/delete` use the original name/namespace and source `backups/read`/`delete`. Recovery after source deletion is engine driver-specific: use an explicit create file where supported, or restore into an existing target following the engine guide. `--into-new` needs a live source spec.
 Retained listing returns `404` after the deleted source's final backup record is removed.
 
-Preserve the state database, master key, storage configuration and credentials: S3 objects alone do not reconstruct lost control-plane state. Retained inventory recreates neither the source resource nor its volumes. Storage removal returns `409` while referenced by clusters, schedules or backup records; deleting its registration does not empty the bucket.
+Preserve the state database, master key, storage configuration and credentials: [S3](https://aws.amazon.com/s3/) objects alone do not reconstruct lost control-plane state. Retained inventory recreates neither the source resource nor its volumes. Storage removal returns `409` while referenced by clusters, schedules or backup records; deleting its registration does not empty the bucket.
 
 ### When cluster deletion stays pending
 

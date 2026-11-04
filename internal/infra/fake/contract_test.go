@@ -21,6 +21,7 @@ func TestContract(t *testing.T) {
 		{"polled", fake.Options{Polls: 2}},
 		{"masked", fake.Options{MaskSecrets: true}},
 		{"restricted", fake.Options{Capabilities: infra.Capabilities{VolumeQuota: true}}},
+		{"placement", fake.Options{Capabilities: infra.Capabilities{Placement: true, VolumeQuota: true}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			contracttest.Run(t, func(t *testing.T) contracttest.Harness {

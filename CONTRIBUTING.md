@@ -2,9 +2,9 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Contributing to Karakoram
 
-Contribute to Apache-2.0 orchestration for MongoDB (Percona Server/PBM), RabbitMQ and Elasticsearch on [Zerops](https://zerops.io).
+Contribute to Apache-2.0 orchestration for [MongoDB](https://www.mongodb.com) ([Percona Server](https://www.percona.com/mongodb/software/percona-server-for-mongodb)/[PBM](https://docs.percona.com/percona-backup-mongodb/)), [RabbitMQ](https://www.rabbitmq.com) and [Elasticsearch](https://www.elastic.co/elasticsearch) on [Zerops](https://zerops.io).
 
-Read [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security](docs/security.md) and [limitations](docs/limitations.md). No Kubernetes dependencies or implied vendor/OpenEverest affiliation or endorsement.
+Read [architecture](docs/architecture.md), [ADRs](docs/adr/README.md), [security](docs/security.md) and [limitations](docs/limitations.md). No [Kubernetes](https://kubernetes.io) dependencies or implied vendor/[OpenEverest](https://openeverest.io) affiliation or endorsement.
 
 ## Conduct and contribution process
 
@@ -16,11 +16,20 @@ Follow the [Code of Conduct](CODE_OF_CONDUCT.md): be respectful, critique ideas 
 4. Update affected code, callers, tests and documentation together; remove obsolete paths and run the applicable [checks](#checks).
 5. Sign off every commit. Maintainers review pull requests and decide acceptance.
 
-Every commit requires a `Signed-off-by: Your Name <you@example.com>` line under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). `git commit -s` adds it. This certifies your right to contribute under Apache-2.0; use your real name, not anonymous/bot sign-offs.
+Every commit requires a `Signed-off-by: Your Name <you@example.com>` line under the [Developer Certificate of Origin 1.1](https://developercertificate.org/). `git commit -s` adds it. This certifies your right to contribute under Apache-2.0. Sign off with a known identity, a name or handle you are consistently reachable under; anonymous and bot sign-offs are not accepted.
 
 ## AI/LLM-assisted contributions
 
-AI assistance is allowed, but a human must submit, understand and take responsibility for every line, including correctness, security and licensing. Automated/bot-driven pull requests and unreviewed generated output are not accepted. Large/complex reconciliation, data-safety, backup/restore and security logic must be authored and fully understood by the contributor.
+AI assistance is allowed. A person submits each pull request and takes responsibility for every line in it, including correctness, security and licensing, whether they typed it or a coding agent did. Automated or bot-driven pull requests and generated output that nobody reviewed are not accepted.
+
+Reconciliation, data-safety, backup/restore and security changes carry a higher bar, because a mistake there loses or exposes data. For these, the pull request must:
+
+- explain in your own words which failure cases the change handles and which it leaves alone;
+- include tests for the failure and recovery paths, not just the path where everything works;
+- say which providers and engines it was run on live and which were only tested offline ("not run live" is an acceptable answer; leaving it out is not);
+- come from someone who can answer review questions about it without going back to the tool.
+
+The maintainer may ask for a run on a disposable installation and may decline a change that can't be verified. Karakoram itself is built this way: coding agents write much of the code, their changes are tested live and reviewed by separate review agents, and I decide what ships. Release notes say which fixes were proven against live providers and which only in tests.
 
 Disclose meaningful AI use in the pull request: tool and purpose. Check generated material for incompatible licenses, secrets and private data. Private AI self-review is allowed; do not post AI review bots into human review threads. Maintainers may request clarification or decline contributions. This policy is adapted from [Cloud Hypervisor's guidelines](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/CONTRIBUTING.md#aillm-assistance--generated-code).
 
@@ -28,7 +37,7 @@ Coding agents must also read [AGENTS.md](AGENTS.md) for repository layout, comma
 
 ## Development setup
 
-Requirements: **Go 1.25+**, Make, **Node 22.6+** and npm. The UI test runner uses Node's built-in TypeScript support. Agent integration tests require Docker and Linux host networking; unit tests need no Zerops account.
+Requirements: **[Go](https://go.dev) 1.26+**, [Make](https://cgit.git.savannah.gnu.org/cgit/make.git/), **[Node](https://nodejs.org) 22.6+** and [npm](https://docs.npmjs.com/). The UI test runner uses Node's built-in [TypeScript](https://www.typescriptlang.org) support. Agent integration tests require [Docker](https://www.docker.com) and [Linux](https://kernel.org) host networking; unit tests need no Zerops account.
 
 ```sh
 make ui
@@ -40,7 +49,7 @@ Binaries are `bin/karakoram` and `bin/karactl`. `make build-all` builds UI asset
 
 `make build` is for development. Publish artifacts with `make release`, not by copying `bin/`; see [Releasing](#releasing).
 
-For frontend development, run `npm run dev` in `ui/`: Vite listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another backend; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real backend settings. Do not commit populated environment files or substitute fake production credentials.
+For frontend development, run `npm run dev` in `ui/`: [Vite](https://vite.dev) listens on 5173 and proxies API requests to localhost:8080. `KARAKORAM_API_URL` selects another provider; see [ui/README.md](ui/README.md). Local server configuration is defined in [internal/server/config.go](internal/server/config.go): use a persistent data directory, master key, public origin and real provider settings. Do not commit populated environment files or substitute fake production credentials.
 
 ## Releasing
 
@@ -52,10 +61,18 @@ Default Zerops deploy/run configuration must remain compatible with the binary p
 
 ### Prerequisites and release notes
 
-- Development tools above, Bash, Git, GNU tar/coreutils (`date`, `sha256sum`), gzip, OpenSSH `ssh-keygen` supporting `-Y sign`/`-Y verify`.
+- Development tools above, [Bash](https://www.gnu.org/software/bash/), [Git](https://git-scm.com), [GNU tar](https://cgit.git.savannah.gnu.org/cgit/tar.git/)/[coreutils](https://www.gnu.org/software/coreutils/) (`date`, `sha256sum`), [gzip](https://cgit.git.savannah.gnu.org/cgit/gzip.git/), [OpenSSH](https://www.openssh.com) `ssh-keygen` supporting `-Y sign`/`-Y verify`.
 - Publication: `gh` authenticated with public-repository release rights; Git push rights for `origin` tags and `main`.
 - Signing key: `~/.config/karakoram/release-signing-ed25519`, overridden by `KARAKORAM_RELEASE_SIGNING_KEY`. Authorize its public key in [`deploy/allowed_signers`](deploy/allowed_signers) for `release@karakoram.dev`; never commit the private key.
 - Write `NOTES` outside the checkout (or commit before preparation): changes, security fixes, upgrade steps, state-schema/rollback compatibility. Notes are not generated. Review changes and run applicable [checks](#checks); release targets do not replace them.
+
+### Tidy unreleased history
+
+Before `release-prepare`, squash the commits made since the previous release tag so each change lands as one reviewable commit: a fix, a feature, or a coherent docs change, with its review follow-ups, test-only fix-ups and lint clean-ups folded in. Keep separate commits for unrelated changes and for merge commits that record a released tag (for example a hotfix merged back into `main`).
+
+- Only rewrite commits after the latest release tag. Never rewrite a tagged commit or anything a published release points to.
+- Rewrite on a branch, compare the tree with the original (`git diff ORIGINAL TIDIED` must be empty), then update `main` with `git push --force-with-lease=main:ORIGINAL origin TIDIED:main`.
+- Announce the rewrite to anyone with work based on `main` so they rebase; keep author and `Signed-off-by` lines.
 
 ### Prepare, build, and publish
 
@@ -101,9 +118,9 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | Area | Responsibility |
 | --- | --- |
 | `internal/server`, `internal/api` | Runtime wiring, strict HTTP contract, handlers and authorization |
-| `internal/domain`, `internal/store` | Models, SQLite migrations, durable intent/checkpoints/events/secrets |
+| `internal/domain`, `internal/store` | Models, [SQLite](https://sqlite.org) migrations, durable intent/checkpoints/events/secrets |
 | `internal/reconciler` | Serialized lifecycle/operations, observation and cleanup |
-| `internal/engine` | In-process provider registry and reconciliation/data-plane interfaces |
+| `internal/engine` | In-process engine driver registry and reconciliation/data-plane interfaces |
 | `internal/engine/psmdb`, `internal/engine/psmdb/pbm` | MongoDB topology/access/TLS and PBM backup/PITR/restore |
 | `internal/engine/rabbitmq` | Broker lifecycle, Management API access and definitions recovery |
 | `internal/engine/elastic` | Elasticsearch/Stack lifecycle, native security and snapshot recovery |
@@ -111,12 +128,13 @@ For downloads, [authenticate the signing key, verify the manifest signature, the
 | `internal/agent`, `internal/agentapi` | Engine process supervision/rendering and private protocol |
 | `internal/auth`, `internal/rbac` | Identity, sessions/tokens and policy |
 | `internal/scheduler`, `internal/events`, `internal/monitoring` | Schedules/retention, durable activity/SSE and metrics |
-| `internal/cli`, `ui/`, `internal/ui` | CLI, typed React application and embedded assets |
+| `internal/cli`, `ui/`, `internal/ui` | CLI, typed [React](https://react.dev) application and embedded assets |
 
-- Keep generic durability in reconciler/store; engine mechanisms stay within their provider; Zerops wire formats stay in the backend adapter.
-- Provider metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Providers are compiled in, not dynamically installable plugins.
+- Keep generic durability in reconciler/store; engine mechanisms stay within their engine driver; Zerops wire formats stay in the provider adapter.
+- Engine driver metadata owns versions, topology constraints and UI defaults. Do not create a second CLI/UI catalog. Engine drivers are compiled in, not dynamically installable plugins.
 - Perform at most one disruptive action per reconciliation step. Persist intent/checkpoints and remote identifiers before progressing, then observe completion. SQLite and remote services are not one transaction.
 - Preserve agent config/control/receipt compatibility through rolling deployments. Maintenance/process holds survive restarts and pulls; ambiguous initiation is not permission to repeat destructive work.
+- Engine tests must prove that an unchanged, Ready cluster submits no infrastructure mutations. Reuse `internal/engine/enginetest.AssertIdle` with the engine's native/agent fixture: it uses the real Zerops layout and capabilities, round-trips cluster state through SQLite/JSON on every reconciliation, and requires twenty converged cycles with zero backend mutation submissions. Explicit `startCpu` values exercise decoded-pointer equality. Keep every supported engine/topology covered by `TestIdleReconcileZeroProviderMutations`; the recorder contract test guards the infrastructure mutation surface.
 - Ordinary status/log/event reads must remain credential-free. Preserve separate `cluster-credentials:read`, per-object filtering and deny-overrides policies.
 
 ## Public API changes and regeneration
@@ -134,7 +152,7 @@ make generate
 make openapi-check
 ```
 
-Go generation uses pinned oapi-codegen 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, plus the RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation writes `ui/src/api/schema.d.ts` using lockfile-pinned openapi-typescript. Keep handwritten public client helpers separate from generated files and independent of `internal/`; external consumers import `pkg/client`. See [Clients/SDK](docs/api.md#clientssdk).
+Go generation uses pinned [oapi-codegen](https://github.com/oapi-codegen/oapi-codegen) 2.4.1 for `internal/api/gen.go` and `pkg/client/client.gen.go`, plus the RBAC generator for `internal/api/rbacmap.gen.go`. TypeScript generation writes `ui/src/api/schema.d.ts` using lockfile-pinned [openapi-typescript](https://openapi-ts.dev). Keep handwritten public client helpers separate from generated files and independent of `internal/`; external consumers import `pkg/client`. See [Clients/SDK](docs/api.md#clientssdk).
 
 `make openapi-check` rejects YAML aliases and regenerates/compares Go contract/client/RBAC and TypeScript files; it is a drift check, not live behavior verification. If editing introduces YAML anchors/aliases, normalize without changing meaning:
 
@@ -156,7 +174,12 @@ make lint
 make openapi-check
 ```
 
-Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, staticcheck 2025.1.1 and UI typecheck/ESLint; install UI dependencies first.
+Integration tests use real database containers; read their prerequisites. Skipped tests are not evidence of passing behavior. `make lint` runs Go vet, [staticcheck](https://staticcheck.dev) 2026.2.2 and UI typecheck/[ESLint](https://eslint.org); install UI dependencies first.
+
+Keep error strings lower-case at the start; when a product name leads the message,
+rephrase it without changing the product's capitalization. Use `http.Status*`
+constants for HTTP status codes and remove unused test assignments without
+dropping the assertions that exercise failure and recovery behavior.
 
 Live tests are opt-in and destructive to their resources:
 
@@ -165,7 +188,7 @@ Live tests are opt-in and destructive to their resources:
 make e2e
 ```
 
-Follow [test/e2e/README.md](test/e2e/README.md) for S3, IPv6 allowlist, CLI and OIDC settings. Use an isolated installation in a dedicated project: the suite mutates global policy/settings, so never run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. Report scenarios exercised and results in the pull request.
+Follow [test/e2e/README.md](test/e2e/README.md) for [S3](https://aws.amazon.com/s3/), IPv6 allowlist, CLI and [OIDC](https://openid.net/developers/how-connect-works/) settings. Use an isolated installation in a dedicated project: the suite mutates global policy/settings, so never run against production or concurrently with another live mutation suite. Do not modify the platform's `core` service. Report scenarios exercised and results in the pull request.
 
 ## Security and licensing
 

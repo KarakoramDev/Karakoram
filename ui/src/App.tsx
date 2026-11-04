@@ -33,6 +33,9 @@ import { ApiTokensPage } from '@/pages/settings/ApiTokens';
 import { ConnectedAppsPage } from '@/pages/settings/ConnectedApps';
 import { SsoPage } from '@/pages/settings/Sso';
 import { MonitoringSettingsPage } from '@/pages/settings/Monitoring';
+import { NotificationsPage } from '@/pages/settings/Notifications';
+import { ControlPlaneBackupPage } from '@/pages/settings/ControlPlaneBackup';
+import { AgentRolloutPage } from '@/pages/settings/AgentRollout';
 import { OperationDetailPage } from '@/pages/OperationDetail';
 import '@/engines/register';
 
@@ -86,6 +89,9 @@ const pageRoutes: RouteObject[] = [
               { path: 'connected-apps', element: <ConnectedAppsPage /> },
               { path: 'sso', element: <SsoPage /> },
               { path: 'monitoring', element: <MonitoringSettingsPage /> },
+              { path: 'notifications', element: <NotificationsPage /> },
+              { path: 'control-plane-backup', element: <ControlPlaneBackupPage /> },
+              { path: 'agent-rollout', element: <AgentRolloutPage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

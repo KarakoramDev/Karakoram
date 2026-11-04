@@ -2,11 +2,11 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MCP quick start
 
-Connect an AI agent to a Karakoram installation in a few minutes. The management endpoint `https://YOUR-CONTROL-PLANE/mcp` exposes the REST API as MCP tools; each cluster can additionally expose the data inside it at `/mcp/clusters/{namespace}/{cluster}`. This page covers the common path; the [MCP server](mcp.md), [cluster data MCP](data-mcp.md) and [agent access security model](security.md#agent-access-mcp-security-model) pages are the reference.
+Connect an AI agent to a Karakoram installation in a few minutes. The management endpoint `https://YOUR-CONTROL-PLANE/mcp` exposes the REST API as [MCP](https://modelcontextprotocol.io/) tools; each cluster can additionally expose the data inside it at `/mcp/clusters/{namespace}/{cluster}`. This page covers the common path; the [MCP server](mcp.md), [cluster data MCP](data-mcp.md) and [agent access security model](security.md#agent-access-mcp-security-model) pages are the reference.
 
 ## 1. Check the server mode
 
-`/mcp` is enabled after installation in **read-only** mode: `KARAKORAM_MCP=readonly` is the default, so agents can inspect clusters, backups, operations and events but cannot change anything. Set `readwrite` to also expose mutations and destructive tools (destructive tools still require a human confirmation), or `off` to make `/mcp` return 404. On Zerops, add the variable to the Karakoram service's environment and restart; in an import YAML the setting is:
+`/mcp` is enabled after installation in **read-only** mode: `KARAKORAM_MCP=readonly` is the default, so agents can inspect clusters, backups, operations and events but cannot change anything. Set `readwrite` to also expose mutations and destructive tools (destructive tools still require a human confirmation), or `off` to make `/mcp` return 404. On [Zerops](https://zerops.io/), add the variable to the Karakoram service's environment and restart; in an import YAML the setting is:
 
 ```yaml
 services:
@@ -55,11 +55,11 @@ Run the printed command, substituting your values:
 claude mcp add --transport http karakoram https://YOUR-CONTROL-PLANE/mcp --header 'Authorization: Bearer YOUR_API_TOKEN'
 ```
 
-`--client claude-code --stdio` prints `claude mcp add --transport stdio karakoram -- karactl --context production mcp` instead, which keeps the token in `karactl`'s saved context rather than in Claude Code's settings. `mcp config` never updates a saved context, so that command uses the context's existing credential: first save the newly printed restricted token into a dedicated context (`karactl config set-context mcp-agent --server https://YOUR-CONTROL-PLANE --token NEW_TOKEN`) and use `--context mcp-agent` in the command. Use `/mcp` inside Claude Code to check the connection.
+`--client claude-code --stdio` prints `claude mcp add --transport stdio karakoram -- karactl --context production mcp` instead, which keeps the token in `karactl`'s saved context rather than in [Claude Code](https://code.claude.com/docs/en/overview)'s settings. `mcp config` never updates a saved context, so that command uses the context's existing credential: first save the newly printed restricted token into a dedicated context (`karactl config set-context mcp-agent --server https://YOUR-CONTROL-PLANE --token NEW_TOKEN`) and use `--context mcp-agent` in the command. Use `/mcp` inside Claude Code to check the connection.
 
 ### Claude Desktop
 
-Claude Desktop (and claude.ai) connect to remote servers through **custom connectors**, which are reached from Anthropic's cloud, so the control plane's HTTPS origin must be reachable from the internet. Custom connectors authenticate with OAuth: set `KARAKORAM_OAUTH=on` on the control plane ([connect with OAuth](mcp.md#connect-with-oauth)), then open **Customize → Connectors → Add custom connector**, enter `https://YOUR-CONTROL-PLANE/mcp` and choose **Use Claude's published identity** as the OAuth client. That option uses a client ID metadata document, which Karakoram accepts without dynamic registration; **Register automatically** additionally requires `KARAKORAM_OAUTH_DCR=on`. Each user signs in with their own Karakoram account and approves the scopes and namespace limit on the consent page; the connection appears under **Settings → Connected apps**. Fixed bearer headers for custom connectors are currently a beta feature in Claude that is not available to every organization.
+[Claude Desktop](https://claude.com/download) (and claude.ai) connect to remote servers through **custom connectors**, which are reached from [Anthropic](https://www.anthropic.com/)'s cloud, so the control plane's HTTPS origin must be reachable from the internet. Custom connectors authenticate with [OAuth](https://oauth.net/2/): set `KARAKORAM_OAUTH=on` on the control plane ([connect with OAuth](mcp.md#connect-with-oauth)), then open **Customize → Connectors → Add custom connector**, enter `https://YOUR-CONTROL-PLANE/mcp` and choose **Use [Claude](https://claude.com/)'s published identity** as the OAuth client. That option uses a client ID metadata document, which Karakoram accepts without dynamic registration; **Register automatically** additionally requires `KARAKORAM_OAUTH_DCR=on`. Each user signs in with their own Karakoram account and approves the scopes and namespace limit on the consent page; the connection appears under **Settings → Connected apps**. Fixed bearer headers for custom connectors are currently a beta feature in Claude that is not available to every organization.
 
 Without OAuth, run the stdio bridge locally. Choose **Settings → Developer → Edit Config** in Claude Desktop and add the server to `claude_desktop_config.json` (this is the output of `--client json --stdio`):
 
@@ -78,11 +78,11 @@ If the desktop app cannot find `karactl`, use its absolute path. As with Claude 
 
 ### Cursor
 
-`--client cursor` prints an `mcpServers` entry with `url` and `headers`. Put it in `.cursor/mcp.json` in the project or `~/.cursor/mcp.json` for all projects, for example with `--output ~/.cursor/mcp.json` when the file does not exist yet. Cursor stores the header value in that file, so keep project files out of version control or use `--client cursor --stdio`, which references the saved context instead of a token.
+`--client cursor` prints an `mcpServers` entry with `url` and `headers`. Put it in `.cursor/mcp.json` in the project or `~/.cursor/mcp.json` for all projects, for example with `--output ~/.cursor/mcp.json` when the file does not exist yet. [Cursor](https://cursor.com/) stores the header value in that file, so keep project files out of version control or use `--client cursor --stdio`, which references the saved context instead of a token.
 
 ### VS Code
 
-`--client vscode` prints a `servers` entry with `type: http`. Put it in `.vscode/mcp.json` (workspace) or your user profile's `mcp.json`. To keep the token out of the file, replace the header value with a prompted input as shown in the [MCP server guide](mcp.md#client-configuration); VS Code asks for the secret once and stores it securely.
+`--client vscode` prints a `servers` entry with `type: http`. Put it in `.vscode/mcp.json` (workspace) or your user profile's `mcp.json`. To keep the token out of the file, replace the header value with a prompted input as shown in the [MCP server guide](mcp.md#client-configuration); [VS Code](https://code.visualstudio.com/) asks for the secret once and stores it securely.
 
 ### Codex
 
@@ -94,7 +94,7 @@ url = "https://YOUR-CONTROL-PLANE/mcp"
 http_headers = { Authorization = "Bearer YOUR_API_TOKEN" }
 ```
 
-To avoid writing the token into the file, replace `http_headers` with `bearer_token_env_var = "KARAKORAM_MCP_TOKEN"` and export that variable where Codex runs. `--client codex --stdio` prints a `command`/`args` table for the bridge instead. With `KARAKORAM_OAUTH=on`, `codex mcp login karakoram` starts the OAuth flow.
+To avoid writing the token into the file, replace `http_headers` with `bearer_token_env_var = "KARAKORAM_MCP_TOKEN"` and export that variable where [Codex](https://developers.openai.com/codex/) runs. `--client codex --stdio` prints a `command`/`args` table for the bridge instead. With `KARAKORAM_OAUTH=on`, `codex mcp login karakoram` starts the OAuth flow.
 
 ### Other clients
 
@@ -118,13 +118,13 @@ Start with questions, not changes; everything below works in read-only mode:
 
 In `readwrite` mode with a `--write` token, "Take a backup of `appdb` and wait for it" calls `backup_create` and then `wait`; mutations are asynchronous and `wait` observes the operation. A destructive request such as deleting a backup pauses in your client for a confirmation written by the server; some confirmations require typing the resource's actual name. If your client does not support elicitation, the tool returns an error naming the equivalent `karactl` command and nothing executes.
 
-Clients with tool limits can narrow the list on the server: append `?toolsets=Clusters,Backups,Workflows` to the endpoint URL (OpenAPI tags; `Workflows` keeps `wait` and `cluster_diagnose`).
+Clients with tool limits can narrow the list on the server: append `?toolsets=Clusters,Backups,Workflows` to the endpoint URL ([OpenAPI](https://www.openapis.org/) tags; `Workflows` keeps `wait` and `cluster_diagnose`).
 
 ## 5. Data MCP quick start
 
 [Cluster data MCP](data-mcp.md) gives an agent tools for the data inside one cluster through a separate per-cluster endpoint. It is off per cluster until you enable it, and it needs the `cluster-data` permission, which the built-in viewer and operator roles do not have.
 
-1. Enable it on the cluster with a merge patch (read-only, one MongoDB database in this example):
+1. Enable it on the cluster with a merge patch (read-only, one [MongoDB](https://www.mongodb.com/) database in this example):
 
    ```yaml
    spec:
@@ -139,7 +139,7 @@ Clients with tool limits can narrow the list on the server: append `?toolsets=Cl
    karactl --context production -n production clusters patch appdb -f datamcp.yaml
    ```
 
-   MongoDB, PostgreSQL and Supabase clusters start a small companion service; Elasticsearch and RabbitMQ use built-in tools. Wait until `status.dataMcp.phase` is `Ready` (`karactl -n production clusters get appdb -o json`); the web UI shows the same on the cluster's **Data MCP** card.
+   MongoDB, [PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) clusters start a small companion service; [Elasticsearch](https://www.elastic.co/elasticsearch) and [RabbitMQ](https://www.rabbitmq.com/) use built-in tools. Wait until `status.dataMcp.phase` is `Ready` (`karactl -n production clusters get appdb -o json`); the web UI shows the same on the cluster's **Data MCP** card.
 
 2. Make sure your account holds `cluster-data:read` on `production/appdb`. Administrators already do; otherwise add `p, user:NAME, cluster-data, read, production/appdb` to the [policy](access-control.md#policy-format).
 

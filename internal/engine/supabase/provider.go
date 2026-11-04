@@ -65,19 +65,12 @@ func New(o postgres.Options) *Provider {
 	o.ReservedRole = ReservedRole
 	core := postgres.New(o)
 	flavour.core = core
-	return &Provider{Core: core, options: o}
+	p := &Provider{Core: core, options: o}
+	flavour.provider = p
+	return p
 }
-func (*Provider) Name() string { return "supabase" }
-func ReservedRole(name string) bool {
-	if strings.HasPrefix(name, "supabase_") || strings.HasPrefix(name, "kk_") || strings.HasPrefix(name, "pg_") {
-		return true
-	}
-	switch name {
-	case "postgres", "authenticator", "anon", "authenticated", "service_role", "dashboard_user", "pgbouncer", "supavisor":
-		return true
-	}
-	return false
-}
+func (*Provider) Name() string      { return "supabase" }
+func ReservedRole(name string) bool { return supabaseProfile.ReservedRole(name) }
 func (p *Provider) ApplyDefaults(s *domain.ClusterSpec) {
 	if s.Provider == "" {
 		s.Provider = "supabase"
@@ -87,6 +80,7 @@ func (p *Provider) ApplyDefaults(s *domain.ClusterSpec) {
 }
 func (p *Provider) Describe() domain.ProviderInfo {
 	info := p.Core.Describe()
+	delete(info.EngineOptions, "profiles") // implied profile; wrapper options stay strict.
 	info.Name = "supabase"
 	info.DisplayName = "Supabase"
 	versions := info.Versions
@@ -240,13 +234,7 @@ func (p *Provider) RequiredCapabilities(s domain.ClusterSpec) []string {
 	}
 	return caps
 }
-func availableExtensions() []string {
-	out := strings.Fields("pgcrypto uuid-ossp pg_stat_statements pg_cron pgaudit vector postgis pg_repack pg_stat_monitor set_user hstore citext btree_gist btree_gin unaccent fuzzystrmatch")
-	if artifact, err := nativeartifacts.Get("supabase-pg17-extensions"); err == nil {
-		out = append(out, artifact.Extensions...)
-	}
-	return out
-}
+func availableExtensions() []string { return supabaseProfile.ExtensionNames(17) }
 
 func validateExtensions(extensions []string) error {
 	available := make(map[string]bool)

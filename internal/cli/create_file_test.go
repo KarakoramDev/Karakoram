@@ -88,6 +88,36 @@ func TestBackupAndRestoreCreateFileRejectsSourceOverrides(t *testing.T) {
 	}
 }
 
+func TestBackupCreatePassesProviderBackupTypes(t *testing.T) {
+	for _, typ := range []string{"dump", "incremental", "raft-snapshot", "full"} {
+		t.Run(typ, func(t *testing.T) {
+			var got map[string]any
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method+" "+r.URL.Path != "POST /api/v1/clusters/target/backups" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+					t.Error(err)
+				}
+				w.WriteHeader(http.StatusAccepted)
+				fmt.Fprint(w, `{"name":"b1"}`)
+			}))
+			defer server.Close()
+			code, _, stderr := runCLI(t, server.URL, "", false, "backups", "create", "target", "b1", "--type", typ, "--storage", "archive")
+			if code != 0 || got["type"] != typ || got["storage"] != "archive" || got["name"] != "b1" {
+				t.Fatalf("code=%d stderr=%q body=%v", code, stderr, got)
+			}
+		})
+	}
+	code, _, stderr := runCLI(t, "http://127.0.0.1:1", "", false, "backups", "create", "target", "b1", "--type", " ", "--storage", "archive")
+	if code != 2 || !strings.Contains(stderr, "--type is required") {
+		t.Fatalf("blank type: code=%d stderr=%q", code, stderr)
+	}
+}
+
 func TestClusterCreateFilePreservesSourceAndWaitControls(t *testing.T) {
 	for _, source := range []string{`{"cluster":"source","namespace":"archive","backup":"base"}`, `{"cluster":"source","namespace":"archive","pitrTime":"2026-10-21T20:00:00Z"}`} {
 		t.Run(source, func(t *testing.T) {

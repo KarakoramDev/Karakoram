@@ -104,13 +104,20 @@ func TestDataRoleValidationAndCache(t *testing.T) {
 }
 
 func TestPostgresRespectsExplicitListenHost(t *testing.T) {
-	s := testSpec()
-	if got := parameters(s, dataPaths(t.TempDir()))["listen_addresses"]; got != "*" {
-		t.Fatalf("legacy default listener changed: %v", got)
-	}
-	s.ListenHost = "127.0.0.1"
-	if got := parameters(s, dataPaths(t.TempDir()))["listen_addresses"]; got != "127.0.0.1" {
-		t.Fatalf("explicit loopback listener ignored: %v", got)
+	for _, tc := range []struct{ host, want string }{
+		{"", "*"},
+		{"::", "*"},
+		{"0.0.0.0", "0.0.0.0"},
+		{"127.0.0.1", "127.0.0.1"},
+		{"::1", "::1"},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			s := testSpec()
+			s.ListenHost = tc.host
+			if got := parameters(s, dataPaths(t.TempDir()))["listen_addresses"]; got != tc.want {
+				t.Fatalf("listen_addresses=%v, want %s", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -27,6 +27,23 @@ TOOLCHAINS = json.loads((HERE / 'toolchains.json').read_text())
 STUDIO_ASSETS = json.loads((HERE / 'studio-assets.json').read_text())
 Q = shlex.quote
 TRANSPORTS = []
+ROOTLESS = None
+if os.environ.get('NATIVE_ARTIFACT_TRANSPORT') == 'rootless':
+    from rootless import Rootless
+    ROOTLESS = Rootless(OUT / '.rootless')
+ALL_ORDER = ['supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions',
+             'timescaledb-pg16','timescaledb-pg17','timescaledb-pg18','citus-pg16','citus-pg17','citus-pg18',
+             'supabase-imgproxy','supabase-supavisor','supabase-logflare','supabase-edge-runtime','mongodb-mcp-server']
+
+
+def metadata_path(name):
+    recipe = RECIPES[name]
+    if recipe.get('kind') == 'pg-extension':
+        major = recipe['pgMajor']
+        if major not in (16, 17, 18):
+            raise ValueError('unsupported PostgreSQL major')
+        return f'usr/share/postgresql/{major}/karakoram-native-artifacts/{name}'
+    return 'usr/share/postgresql/17/karakoram-native-artifacts' if name == 'supabase-pg17-extensions' else '.'
 
 
 def build_input_fingerprint(name):
@@ -47,8 +64,26 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 
 
+def execute(instance, *args, **kwargs):
+    if ROOTLESS:
+        return ROOTLESS.execute(instance, *args, **kwargs)
+    return run('incus', 'exec', instance, '--', *args, **kwargs)
+
+
+def push(source, instance, destination):
+    if ROOTLESS:
+        return ROOTLESS.push(source, instance, destination)
+    return run('incus', 'file', 'push', str(source), instance+destination)
+
+
+def pull(instance, source, destination):
+    if ROOTLESS:
+        return ROOTLESS.pull(instance, source, destination)
+    return run('incus', 'file', 'pull', instance+source, str(destination))
+
+
 def guest(script):
-    run('incus', 'exec', BUILDER, '--', 'bash', '-euc', script)
+    return execute(BUILDER, 'bash', '-euc', script)
 
 
 def download(url, filename, digest, headers=None):
@@ -204,6 +239,11 @@ def ensure_builder():
     if shutil.disk_usage(ROOT).free < 120 * 1024**3:
         raise RuntimeError('less than 120 GiB disk available; refusing native build')
     wait_for_host()
+    if ROOTLESS:
+        ROOTLESS.prepare()
+        guest('export DEBIAN_FRONTEND=noninteractive; printf "#!/bin/sh\\nexit 101\\n" > /usr/sbin/policy-rc.d; chmod 0755 /usr/sbin/policy-rc.d; apt-get update; apt-get install -y ca-certificates curl git gnupg lsb-release xz-utils build-essential python3 pkg-config cmake locales; locale-gen en_US.UTF-8')
+        ROOTLESS.ready = True
+        return
     memory_guard(BUILDER, 6)
     instances = get_instances()
     if BUILDER not in {x['name'] for x in instances}:
@@ -218,16 +258,18 @@ def ensure_builder():
 
 
 def push_build_inputs():
-    run('incus', 'file', 'push', str(HERE/'recipe.sh'), BUILDER+'/root/native-recipe.sh')
-    for filename in ('extensions.py','extensions.json','worker.py'):
-        run('incus','file','push',str(HERE/filename),BUILDER+'/root/'+filename)
+    push(HERE/'recipe.sh', BUILDER, '/root/native-recipe.sh')
+    for filename in ('extensions.py','extensions.json','worker.py','pgextension.py'):
+        push(HERE/filename, BUILDER, '/root/'+filename)
     for patch in (HERE/'patches').glob('*.patch'):
-        run('incus','file','push',str(patch),BUILDER+'/root/'+patch.name)
-    run('incus', 'file', 'push', str(HERE/'mongodb_mcp.py'), BUILDER+'/root/mongodb_mcp.py')
+        push(patch, BUILDER, '/root/'+patch.name)
+    push(HERE/'mongodb_mcp.py', BUILDER, '/root/mongodb_mcp.py')
     run('incus', 'file', 'push', '-r', str(HERE/'mongodb-mcp'), BUILDER+'/root/')
 
 
 def get_instances():
+    if ROOTLESS:
+        return [{'name':BUILDER, 'status':'Running', 'config':{'limits.memory':'6GiB'}}] if getattr(ROOTLESS, 'ready', False) else []
     return json.loads(subprocess.check_output(['incus','list','--format','json']))
 
 
@@ -251,7 +293,7 @@ def build(name):
     filename = name+'-'+r['version']+'-ubuntu24.04-amd64.tar.gz'
     candidate = OUT/(filename+'.candidate')
     if candidate.exists():
-        metadata = './usr/share/postgresql/17/karakoram-native-artifacts/manifest.json' if name=='supabase-pg17-extensions' else './manifest.json'
+        metadata = './'+str(Path(metadata_path(name))/'manifest.json')
         with tarfile.open(candidate) as archive:
             manifest = json.load(archive.extractfile(metadata))
         if any(manifest.get(key) != value for key,value in r.items()):
@@ -265,16 +307,19 @@ def build(name):
     envpath = toolchains(r)
     source = '/build/'+name
     guest(f'mkdir -p /build; rm -rf {Q(source)}; git init {Q(source)}; cd {Q(source)}; git remote add origin https://github.com/{r["repo"]}.git; git fetch --depth=1 origin {r["commit"]}; git checkout --detach FETCH_HEAD; test "$(git rev-parse HEAD)" = {r["commit"]}; git submodule update --init --recursive')
-    epoch = subprocess.check_output(['incus','exec',BUILDER,'--','git','-C',source,'show','-s','--format=%ct','HEAD'], text=True).strip()
+    if ROOTLESS:
+        epoch = execute(BUILDER, 'git', '-C', source, 'show', '-s', '--format=%ct', 'HEAD', capture_output=True, text=True).stdout.strip()
+    else:
+        epoch = subprocess.check_output(['incus','exec',BUILDER,'--','git','-C',source,'show','-s','--format=%ct','HEAD'], text=True).strip()
     filename = name+'-'+r['version']+'-ubuntu24.04-amd64.tar.gz'
     manifest = r | {'name':name, 'build':'native-v1', 'platform':'ubuntu24.04-amd64', 'sourceDateEpoch':int(epoch), 'toolchainTransports':TRANSPORTS, 'buildInputFingerprint':fingerprint, 'builderEnvironment':builder_environment()}
     local_manifest = OUT / (name+'.manifest.json'); local_manifest.write_text(json.dumps(manifest,indent=2)+'\n')
-    run('incus','file','push',str(local_manifest),BUILDER+'/root/native-manifest.json')
-    metadata = 'usr/share/postgresql/17/karakoram-native-artifacts' if name=='supabase-pg17-extensions' else '.'
+    push(local_manifest, BUILDER, '/root/native-manifest.json')
+    metadata = metadata_path(name)
     wait_for_host()
     guest(f'export PATH={Q(envpath)} LANG=en_US.UTF-8 NODE_OPTIONS=--max-old-space-size=4096 CARGO_BUILD_JOBS=4 MAKEFLAGS=-j4 ERL_FLAGS="+S 2:2 +SDcpu 1 +SDio 1"; bash /root/native-recipe.sh {Q(name)} {Q(source)} {Q(r.get("node",""))}; cp /root/native-manifest.json /stage/{name}/{metadata}/manifest.json; tar --sort=name --mtime=@{epoch} --owner=0 --group=0 --numeric-owner -C /stage/{name} -czf /root/{filename} .')
     candidate = OUT/(filename+'.candidate')
-    run('incus','file','pull',BUILDER+'/root/'+filename,str(candidate))
+    pull(BUILDER, '/root/'+filename, candidate)
     return qualify(name, candidate, started)
 
 
@@ -282,16 +327,19 @@ def qualify(name, candidate, started):
     r = RECIPES[name]
     filename = candidate.name.removesuffix('.candidate')
     builder = next((x for x in get_instances() if x['name']==BUILDER), None)
-    if builder and builder['status']=='Running':
+    if builder and builder['status']=='Running' and not ROOTLESS:
         run('incus','stop',BUILDER,'--timeout','120')
     try:
-        memory_guard(RUNNER, 2)
-        run('incus','init','images:ubuntu/24.04',RUNNER,'--network',NETWORK,'-c','limits.memory=2GiB','-c','limits.cpu=2')
-        run('incus','start',RUNNER)
-        run('incus','file','push',str(candidate),RUNNER+'/root/artifact.tar.gz')
-        run('incus','file','push',str(HERE/'smoke.py'),RUNNER+'/root/smoke.py')
+        if ROOTLESS:
+            ROOTLESS.remove(RUNNER)
+        else:
+            memory_guard(RUNNER, 2)
+            run('incus','init','images:ubuntu/24.04',RUNNER,'--network',NETWORK,'-c','limits.memory=2GiB','-c','limits.cpu=2')
+            run('incus','start',RUNNER)
+        push(candidate, RUNNER, '/root/artifact.tar.gz')
+        push(HERE/'smoke.py', RUNNER, '/root/smoke.py')
         if name == 'mongodb-mcp-server':
-            run('incus', 'file', 'push', str(HERE/'mongodb_mcp.py'), RUNNER+'/root/mongodb_mcp.py')
+            push(HERE/'mongodb_mcp.py', RUNNER, '/root/mongodb_mcp.py')
         if name == 'supabase-studio':
             meta = next(a for a in json.loads(LOCK.read_text()) if a['name']=='supabase-postgres-meta')
             archive = OUT/meta['file']
@@ -303,26 +351,45 @@ def qualify(name, candidate, started):
         if name == 'supabase-pg17-extensions':
             extension_pins = json.loads((HERE/'extensions.json').read_text())
             smoke_env['extensionFlags'] = {extension:pin['flags'] for extension,pin in extension_pins.items()}
+        elif r.get('kind') == 'pg-extension':
+            smoke_env['pgExtension'] = r | {'name':name}
         with tempfile.NamedTemporaryFile(mode='w') as config:
             json.dump(smoke_env, config); config.flush()
-            run('incus','file','push',config.name,RUNNER+'/root/smoke-env.json','--mode','0600')
+            push(config.name, RUNNER, '/root/smoke-env.json')
         try:
-            run('incus','exec',RUNNER,'--','bash','-euc','apt-get update; apt-get install -y python3 curl '+ ' '.join(map(Q,r['runtimeDeps']))+'; mkdir -p /opt/artifact; tar -xf /root/artifact.tar.gz -C /opt/artifact; python3 /root/smoke.py '+Q(name)+' '+Q(r['health']))
+            execute(RUNNER, 'bash','-euc','export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y python3 curl '+ ' '.join(map(Q,r['runtimeDeps']))+'; mkdir -p /opt/artifact; tar -xf /root/artifact.tar.gz -C /opt/artifact; python3 /root/smoke.py '+Q(name)+' '+Q(r['health']))
         finally:
-            subprocess.run(['incus','file','pull',RUNNER+'/tmp/native-smoke.log',str(OUT/(name+'.smoke.log'))],check=False)
+            try:
+                pull(RUNNER, '/tmp/native-smoke.log', OUT/(name+'.smoke.log'))
+            except subprocess.CalledProcessError:
+                pass
     finally:
-        if RUNNER in {x['name'] for x in get_instances()}:
+        if ROOTLESS:
+            ROOTLESS.remove(RUNNER)
+        elif RUNNER in {x['name'] for x in get_instances()}:
             run('incus','delete',RUNNER,'--force')
-    candidate.replace(OUT/filename)
-    artifact = {'name':name,'version':r['version'],'file':filename,'sha256':hashlib.file_digest((OUT/filename).open('rb'),'sha256').hexdigest(),'size':(OUT/filename).stat().st_size,'upstreamURL':'','license':r['license'],'source':{'repo':'https://github.com/'+r['repo'],'commit':r['commit']},'build':'native-v1','runtimeDeps':r['runtimeDeps']}
+    with candidate.open('rb') as payload:
+        digest = hashlib.file_digest(payload,'sha256').hexdigest()
+    artifact = {'name':name,'version':r['version'],'file':filename,'sha256':digest,'size':candidate.stat().st_size,'upstreamURL':'','license':r['license'],'source':{'repo':'https://github.com/'+r['repo'],'commit':r['commit']},'build':'native-v1','runtimeDeps':r['runtimeDeps']}
     if name=='supabase-pg17-extensions':
-        with tarfile.open(OUT/filename) as archive:
+        with tarfile.open(candidate) as archive:
             qualified = json.load(archive.extractfile('./usr/share/postgresql/17/karakoram-native-artifacts/extensions.json'))
         artifact['extensions'] = sorted(extension for extension, result in qualified.items() if result.get('build')=='passed')
         for extension in artifact['extensions']:
             if any(qualified[extension][key] != extension_pins[extension][key] for key in ('repo','commit','version','license')):
                 raise RuntimeError('retained extension provenance differs from source pin: '+extension)
         artifact['extensionFlags'] = {extension:extension_pins[extension]['flags'] for extension in artifact['extensions']}
+    elif r.get('kind') == 'pg-extension':
+        with tarfile.open(candidate) as archive:
+            qualified = json.load(archive.extractfile('./'+metadata_path(name)+'/extensions.json'))
+        if set(qualified) != set(r['extensions']):
+            raise RuntimeError('extension capability report differs from recipe')
+        for extension, result in qualified.items():
+            if result.get('build') != 'passed' or any(result.get(key) != r[key] for key in ('repo','commit','version','license')):
+                raise RuntimeError('extension provenance differs from recipe: '+extension)
+        artifact |= {'kind':r['kind'], 'pgMajor':r['pgMajor'],
+                     'extensions':sorted(qualified), 'extensionFlags':r['extensions']}
+    candidate.replace(OUT/filename)
     entries = json.loads(LOCK.read_text()); entries = [a for a in entries if a['name'] != name] + [artifact]
     LOCK.write_text(json.dumps(entries,indent=2)+'\n')
     return artifact | {'seconds':round(time.monotonic()-started,2),'smoke':'passed','runtimeDeps':r['runtimeDeps']}
@@ -346,8 +413,9 @@ def main():
         return
     report_file = OUT/'build-report.json'
     report = json.loads(report_file.read_text()) if report_file.exists() else {}
-    order = ['supabase-storage','supabase-postgres-meta','supabase-realtime','supabase-studio','supabase-pg17-extensions','supabase-imgproxy','supabase-supavisor','supabase-logflare','supabase-edge-runtime','mongodb-mcp-server']
-    selected = order if requested==['all'] else [name for name in requested if name in RECIPES]
+    selected = ALL_ORDER if requested==['all'] else [name for name in requested if name in RECIPES]
+    if ROOTLESS and any(RECIPES[name].get('kind') != 'pg-extension' for name in selected):
+        raise SystemExit('rootless transport currently supports standalone PostgreSQL extensions only')
     try:
         for name in selected:
             log = OUT/(name+'.build.log')
@@ -364,8 +432,9 @@ def main():
             print(name+': '+('FAILED: '+report[name]['failure'] if 'failure' in report[name] else 'published'),flush=True)
             (OUT/'build-report.json').write_text(json.dumps(report,indent=2)+'\n')
     finally:
-        if BUILDER in {x['name'] for x in get_instances()}: run('incus','delete',BUILDER,'--force')
-        if RUNNER in {x['name'] for x in get_instances()}: run('incus','delete',RUNNER,'--force')
+        if not ROOTLESS:
+            if BUILDER in {x['name'] for x in get_instances()}: run('incus','delete',BUILDER,'--force')
+            if RUNNER in {x['name'] for x in get_instances()}: run('incus','delete',RUNNER,'--force')
     entries = json.loads(LOCK.read_text())
     (OUT/'SHA256SUMS').write_text(''.join(a['sha256']+'  '+a['file']+'\n' for a in entries if (OUT/a['file']).exists()))
     if any('failure' in report[name] for name in selected): raise SystemExit(1)

@@ -6,6 +6,7 @@ package nomad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/netip"
 	"net/url"
 	"sort"
@@ -177,6 +178,11 @@ func (b *Backend) Logs(ctx context.Context, hostname string, q infra.LogQuery) (
 				// Allow writes racing the end-relative offset, then bound the tail.
 				data, err := b.c.getRaw(ctx, "/v1/client/fs/logs/"+url.PathEscape(a.ID), query, byteLimit+(64<<10))
 				if err != nil {
+					// A task can have no retained file for one output stream.
+					// That stream is empty, not a missing member/allocation.
+					if missingTaskLog(err, task, stream) {
+						continue
+					}
 					if allocationTerminal(a) || a.ClientStatus == "unknown" {
 						continue
 					}
@@ -203,4 +209,10 @@ func (b *Backend) Logs(ctx context.Context, hostname string, q infra.LogQuery) (
 		out = out[len(out)-limit:]
 	}
 	return out, nil
+}
+
+func missingTaskLog(err error, task, stream string) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.Status == 404 &&
+		apiErr.Message == fmt.Sprintf("log entry for task %q and log type %q not found", task, stream)
 }

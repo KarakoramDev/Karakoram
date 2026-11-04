@@ -22,6 +22,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
 	"github.com/KarakoramDev/Karakoram/internal/engine/supabase/sbspec"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
@@ -114,6 +115,9 @@ type testBackend struct {
 	stopped      map[string]bool
 	gatewayHosts map[string]int
 	nativeStatus map[string]pgspec.StatusResponse
+	prepares     map[string][]string
+	agentBuilds  map[string]string
+	imports      []infra.ServiceSpec
 }
 
 func (*testBackend) Name() string { return "test" }
@@ -136,6 +140,7 @@ func (b *testBackend) SetEnvVars(_ context.Context, name string, vars map[string
 	return nil
 }
 func (b *testBackend) ImportServices(_ context.Context, specs []infra.ServiceSpec) (infra.Op, error) {
+	b.imports = append(b.imports, specs...)
 	ids := map[string]string{}
 	for _, spec := range specs {
 		ownership := map[string]string{}
@@ -155,6 +160,10 @@ func (b *testBackend) Deploy(_ context.Context, name string, d infra.Deployment)
 		return infra.Op{}, err
 	}
 	_, err := io.Copy(io.Discard, d.Artifact.Reader)
+	if b.prepares == nil {
+		b.prepares = map[string][]string{}
+	}
+	b.prepares[name] = append([]string(nil), d.Runtime.Prepare...)
 	b.deployed[name] = true
 	return infra.Op{}, err
 }
@@ -174,6 +183,9 @@ func (b *testBackend) Containers(_ context.Context, name string) ([]infra.Contai
 	return instances, nil
 }
 func (*testBackend) DeletePublicPorts(context.Context, string) error { return nil }
+func (*testBackend) ListPublicPorts(context.Context) ([]infra.PublicPortRoute, error) {
+	return nil, nil
+}
 func (b *testBackend) DeleteServiceByID(_ context.Context, name, id string) (infra.Op, error) {
 	if s := b.services[name]; s != nil && s.ID != id {
 		return infra.Op{}, infra.ErrConflict
@@ -235,7 +247,7 @@ func setupProvider(t *testing.T) (*Provider, *engine.Context, *testBackend) {
 				http.Error(w, "config unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: config.ConfigVersion})
+			json.NewEncoder(w).Encode(agentapi.Status{ConfigVersion: config.ConfigVersion, Agent: agentapi.AgentBuild{Build: backend.agentBuilds[name]}})
 		case "/v1/postgres/status":
 			role := "standalone"
 			if strings.HasSuffix(name, "px") {
@@ -322,11 +334,11 @@ func TestPgsodiumDoesNotPreloadWithoutRootKeyManagement(t *testing.T) {
 		},
 	}
 	selected := []string{"pgsodium", "pg_net", "unflagged", "not-qualified", "pg_net"}
-	qualified := selectedExtensionPreloads(selected, bundle)
+	qualified := pgprofile.SelectedExtensionPreloads(selected, bundle)
 	if len(qualified) != 1 || qualified[0] != "pg_net" {
 		t.Fatal("preloads must follow qualified flags, excluding crypto-only pgsodium and duplicates")
 	}
-	if got := selectedExtensionPreloads(selected, nativeartifacts.Artifact{}); len(got) != 0 {
+	if got := pgprofile.SelectedExtensionPreloads(selected, nativeartifacts.Artifact{}); len(got) != 0 {
 		t.Fatal("absent bundle metadata must not enable built extension preloads")
 	}
 }
@@ -674,7 +686,7 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 					{"name":"demop2","role":"data","index":2,"stage":"joined","etcdState":"existing"},
 					{"name":"demop3","role":"data","index":3,"stage":"planned","volume":"demop3v","etcdState":"existing","etcdLearner":true}
 				],
-				"replacement":{"operation":"replace-one","old":"demop1","new":"demop3","stage":"join"}
+				"replacement":{"operation":"replace-one","old":"demop1","new":"demop3","stage":"join","relocate":true,"avoidGroup":"node-a"}
 			}}`)
 			op := &domain.Operation{Kind: domain.OperationReplaceMember, Checkpoint: json.RawMessage(`{"stage":"join"}`)}
 			if !p.Core.SyncDuringOperation(op) {
@@ -705,6 +717,18 @@ func TestOptionalDeploymentDoesNotBlockReplacementProvisioning(t *testing.T) {
 			}
 			if backend.services["demop3"] == nil || backend.services["demop3v"] == nil {
 				t.Fatal("optional deployment blocked replacement runtime/volume provisioning")
+			}
+			foundMove := false
+			for _, spec := range backend.imports {
+				if spec.Hostname == "demop3v" {
+					foundMove = true
+					if len(spec.SpreadAvoid) != 1 || spec.SpreadAvoid[0] != "node-a" {
+						t.Fatalf("Supabase lost inherited move placement: %v", spec.SpreadAvoid)
+					}
+				}
+			}
+			if !foundMove {
+				t.Fatal("missing Supabase replacement volume spec")
 			}
 			if backend.services["demors"] != nil {
 				t.Fatal("unfinished operation did not serialize optional mutations")

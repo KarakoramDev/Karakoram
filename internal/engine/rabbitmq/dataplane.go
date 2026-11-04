@@ -130,7 +130,7 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		}
 		out.Groups[fingerprint] = append(out.Groups[fingerprint], m.Name)
 	}
-	return describePlacement(out, rc.Backend.Capabilities().Placement), nil
+	return engine.DescribePlacement(out.Groups, rc.Backend.Capabilities().Placement), nil
 }
 func (p *Provider) MemberLogs(ctx context.Context, rc *engine.Context, name, process string, lines int) ([]domain.MemberLogLine, error) {
 	s, e := loadState(rc.Cluster)

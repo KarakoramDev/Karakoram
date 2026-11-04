@@ -39,7 +39,7 @@ zerops:
   - setup: karakoram-source
     extends: karakoram
     build:
-      # go.mod selects Go 1.25.0 through automatic toolchain download.
+      # go.mod selects Go 1.26.0 through automatic toolchain download.
       base: [go@1, nodejs@22]
       buildCommands:
         - cd ui && npm ci && npm run build

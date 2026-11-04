@@ -68,6 +68,12 @@ export function validateSpec(spec: Spec): string[] {
   if (spec.engineConfig?.trim()) errors.push('Use engine options instead of raw engine configuration.');
   if (o.synchronousMode !== undefined && !['off', 'on', 'strict'].includes(String(o.synchronousMode))) errors.push('Synchronous mode must be off, on or strict.');
   if (spec.topology.type === 'single' && o.synchronousMode && o.synchronousMode !== 'off') errors.push('Synchronous replication requires HA topology.');
+  if (spec.topology.type === 'distributed') {
+    const citus = object(o.citus), groups = citus.workerGroups ?? 2, database = citus.database ?? 'app';
+    if (spec.provider !== 'postgres') errors.push('Distributed topology requires the postgres provider.');
+    if (!Number.isInteger(groups) || Number(groups) < 1 || Number(groups) > 8) errors.push('Worker groups must be an integer between 1 and 8.');
+    if (typeof database !== 'string' || !database || new TextEncoder().encode(database).length > 63 || database.includes('\0')) errors.push('Citus database must be a nonempty identifier of at most 63 bytes.');
+  }
   for (const [key, value] of Object.entries(object(o.parameters))) {
     if (!/^[a-z][a-z0-9_]*$/.test(key) || /^(archive_|ssl_|listen_addresses$|port$|data_directory$|hba|shared_preload_libraries$)/.test(key)) errors.push(`PostgreSQL parameter ${key} is managed or invalid.`);
     if (typeof value !== 'string' || !value.trim() || /[\0\r\n]/.test(value) || value.length > 1024) errors.push(`PostgreSQL parameter ${key} needs a single-line value of at most 1024 characters.`);
@@ -99,10 +105,11 @@ function validOrigin(value: unknown): boolean {
 }
 export function validateComponents(spec: Spec, topology?: Schemas['ProviderTopology'], resources?: (r: Schemas['Resources'], stateless: boolean, name: string) => string[]): ComponentValidation {
   const errors: ComponentValidation = { topology: [], resources: [] };
-  if (spec.topology.type !== 'single' && spec.topology.type !== 'ha') errors.topology.push('Choose single or HA topology.');
-  if (!(spec.topology.type === 'single' ? [1] : [3, 5]).includes(spec.components.engine.replicas)) errors.topology.push('Single requires 1 data member; HA requires 3 or 5.');
+  if (!['single', 'ha', ...(spec.provider === 'postgres' ? ['distributed'] : [])].includes(spec.topology.type)) errors.topology.push('Choose single, HA or distributed topology.');
+  const replicas = spec.components.engine.replicas;
+  if (!(spec.topology.type === 'single' ? [1] : spec.topology.type === 'distributed' ? [1, 3] : [3, 5]).includes(replicas)) errors.topology.push('Single requires 1 data member; HA requires 3 or 5; distributed requires 1 or 3 per group.');
   const proxy = component(spec, 'proxy')?.replicas ?? 0;
-  if (!Number.isInteger(proxy) || proxy < (spec.topology.type === 'ha' ? 1 : 0)) errors.topology.push('HA requires at least one proxy replica; single permits zero.');
+  if (!Number.isInteger(proxy) || proxy < (spec.topology.type === 'ha' || spec.topology.type === 'distributed' && replicas > 1 ? 1 : 0)) errors.topology.push('Replicated groups require at least one proxy replica; single-member groups permit zero.');
   for (const [name, c] of [['engine', spec.components.engine], ...Object.entries(spec.components.extra ?? {})] as [string, Schemas['Component']][]) {
     if (!Number.isInteger(c.replicas) || c.replicas < 0) errors.topology.push(`${name}: replicas must be a nonnegative integer.`);
     const limits = object(topology?.limits[name]);
@@ -114,10 +121,11 @@ export function validateComponents(spec: Spec, topology?: Schemas['ProviderTopol
   }
   return errors;
 }
-export function specSummary(spec: Spec): string { return `${spec.topology.type === 'ha' ? 'HA' : 'Single'} · ${spec.components.engine.replicas} data · ${component(spec, 'proxy')?.replicas ?? 0} proxy${spec.provider === 'supabase' ? ` · ${SUPABASE_COMPONENTS.filter((name) => component(spec, name)?.replicas).length} components` : ''}`; }
+export function specSummary(spec: Spec): string { return `${spec.topology.type === 'distributed' ? `Distributed · ${Number(object(spec.engineOptions?.citus).workerGroups ?? 2)} worker groups + coordinator` : spec.topology.type === 'ha' ? 'HA' : 'Single'} · ${spec.components.engine.replicas} data${spec.topology.type === 'distributed' ? ' per group' : ''} · ${component(spec, 'proxy')?.replicas ?? 0} proxy${spec.provider === 'supabase' ? ` · ${SUPABASE_COMPONENTS.filter((name) => component(spec, name)?.replicas).length} components` : ''}`; }
 export function configurationReviewRows(spec: Spec): [string, string][] {
   const o = object(spec.engineOptions);
   const rows: [string, string][] = [['PostgreSQL topology', specSummary(spec)], ['Synchronous replication', String(o.synchronousMode ?? 'off')], ['Parameters', Object.entries(object(o.parameters)).map(([k, v]) => `${k}=${v}`).join(', ') || 'Provider defaults'], ['Proxy routing', `${object(o.proxy).readWriteSplit ? 'Read/write split' : 'Writer only'}${object(o.proxy).readerPort ? '; reader port 5433' : ''}`]];
+  if (spec.topology.type === 'distributed') rows.push(['Citus database', String(object(o.citus).database ?? 'app')], ['Worker groups', String(object(o.citus).workerGroups ?? 2)]);
   for (const [name, c] of Object.entries(spec.components.extra ?? {})) if (c.replicas > 0) {
     const r = c.resources;
     rows.push([`${name} resources`, `${c.replicas} × ${r.minCpu}–${r.maxCpu} vCPU ${r.cpuMode.toLowerCase()}, ${r.minRam}–${r.maxRam} GiB RAM`]);

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Supabase operations
 
-Database maintenance follows [PostgreSQL operations](../postgres/operations.md), [access/TLS](../postgres/access-and-tls.md) and [recovery](../postgres/backups.md). PostgreSQL 17 is the only admitted major. Source/target backup providers must match exactly; postgres↔supabase recovery is rejected.
+Database maintenance follows [PostgreSQL operations](../postgres/operations.md), [access/TLS](../postgres/access-and-tls.md) and [recovery](../postgres/backups.md). PostgreSQL 17 is the only admitted major. Source/target backup engine drivers must match exactly; postgres↔supabase recovery is rejected.
 
 When bootstrap inputs change, PostgreSQL writer-discovery status reads each have
 a four-second budget. A deadline fails convergence closed with the member name
@@ -10,10 +10,20 @@ and a request to inspect responsiveness/connectivity; no SQL bootstrap or digest
 acknowledgement follows missing writer evidence. SQL bootstrap mutations retain
 their existing, independent administration budget.
 
+## Monitoring
+
+Application agents emit `karakoram_supabase_up` (readiness gauge, 1/0) and
+`karakoram_supabase_restarts_total` (supervised process restart counter), each
+labelled by `component`. Use reset-aware `rate()`/`increase()` for restarts.
+These are component observations, not whole-stack health or PostgreSQL quorum;
+missing scrapes are not healthy zeroes. PostgreSQL core metrics are separate.
+See the [metric vocabulary](../monitoring.md#supabase-application-components)
+and the bundled Supabase Grafana dashboard.
+
 ## Cluster restart and member software
 
-`karactl clusters restart NAME --wait` first performs the PostgreSQL/ProxySQL
-rolling restart, then restarts every live instance of each enabled Supabase
+`karactl clusters restart NAME --wait` first performs the [PostgreSQL](https://www.postgresql.org/)/[ProxySQL](https://proxysql.com/)
+rolling restart, then restarts every live instance of each enabled [Supabase](https://supabase.com/)
 component, one instance at a time. Disabled components are skipped. Each component
 instance must show a changed supervised child PID, launch identity, restart count
 or start time, acknowledge its configuration, and regain native readiness before
@@ -25,47 +35,88 @@ operation. Progress survives control-plane restarts.
 
 This restarts **application processes in place**, not the member agent or its
 deployment archive. An unchanged allocation, job version or agent artifact is
-therefore expected. A control-plane upgrade alone does not roll member agents.
+therefore expected. Without opt-in automatic rollout, a control-plane upgrade alone does not roll member agents.
 Release/configuration reconciliation only redeploys components when its desired
 runtime/version requires it; a new control-plane executable is not itself such
 an intent. Restart is not an artifact-upgrade command.
 
-To roll an existing stateless component onto the current control plane's member
-artifact when no version-driven redeployment is pending, schedule maintenance,
-save its desired replica count/settings, disable it with
-`spec.components.extra.COMPONENT.replicas: 0`, and wait for removal to converge.
-Then restore the saved count and wait for deployment and native readiness.
-Disable dependent components first and restore dependencies first; temporarily
-disable public gateway exposure if disabling the gateway. This recreates the
-component service and interrupts its sessions; do not substitute a positive
-replica/resource change, which can retain the existing archive. For example,
-Realtime can be disabled and re-enabled independently at its supported singleton
-count. Verify the new allocation's deployed member artifact/build identity, not
-only operation success or `componentVersion`. Realtime's internal RPC listener
-is bound to loopback and must never be reachable.
+Use the agent rollout command below to update member artifacts without changing
+application versions or recreating component identities. Realtime's internal RPC
+listener remains bound to loopback and must never be reachable.
 
-Explicitly disabling an existing component proceeds even while database readiness
-is failing (including WAL retention caused by that component). Wait for its
-service removal, not just operation success: the generation remains unacknowledged
+Explicitly disabling an existing component can proceed while database readiness
+is failing (including WAL retention caused by that component), but starting
+runtime removal still requires an open maintenance window or an explicit override.
+Public exposure withdrawal also needs that permission: backend routing changes
+can replace the serving task. Already-submitted operations finish even after
+the window closes. Wait for service removal, not just operation success:
+the generation remains unacknowledged
 until the database and remaining components are Ready. Re-enabling waits for core
 Ready; it cannot deploy a replacement or expose a new public route during a core
 readiness failure.
 
-Database member-agent upgrades require a provider-driven database member
+Database member-agent upgrades require a engine driver-driven database member
 deployment using the PostgreSQL maintenance/recovery procedures; do not disable
 database members or delete their volumes to emulate a component roll.
+
+## Agent rollout and maintenance windows
+
+`karactl -n NS clusters upgrade-agents NAME` first performs the [PostgreSQL](https://www.postgresql.org/)
+replica-first/primary-switchover rollout, then redeploys enabled optional
+component runtimes one at a time. Each component retains its runtime identity,
+applied application version and published configuration, and must pass native
+readiness and report the frozen target agent build before advancing. A component
+with several instances completes only when every instance agrees on the target.
+Expect a brief interruption for single-instance components.
+
+Already-current agents are skipped unless `--include-current` is supplied.
+Completed members are journaled across control-plane restarts; cancellation
+waits for an in-flight member before stopping. A changed control-plane build
+cannot start another deployment under the previous frozen target. Normal provider
+deploy admission caps and retry budgets apply.
+
+The PostgreSQL maintenance-window rules also apply here. Additionally, component
+version/configuration redeploys or restarts, resource changes, scale-in and
+component removal wait before starting a new disruption. Existing deployments
+continue through readiness after window closure. Component runtime healing,
+initial provisioning/scale-out and agent transport-certificate renewal do not
+wait. See [PostgreSQL operations](../postgres/operations.md#agent-rollout-and-maintenance-windows)
+for database leaf renewal's seven-day emergency exception and policy overrides.
+
+Gateway HTTPS admission is retained separately from runtime route receipts.
+Resume and missing-runtime recovery restore the previously admitted public or
+private policy even while the maintenance window is closed. A deferred HTTPS
+policy change is not published or generation-acknowledged until a window or
+generation override admits it. Legacy applied gateway receipts seed admission;
+if no applied policy survives and a newer generation is pending, recovery stays
+private rather than assuming the current desired public policy was admitted.
+The applied canonical HTTPS URL is retained with that policy so recovered
+components keep their admitted URL configuration instead of needing a second
+maintenance-gated configuration change after routing returns. Final Supabase
+acknowledgement also requires PostgreSQL core generation acknowledgement;
+optional-component readiness cannot bypass a deferred database exposure change.
 
 ## Components and health
 
 Change desired replicas/resources under `spec.components.extra` and follow operation/generation convergence. Explicit zero disables a service, subject to dependency validation. Component application readiness is separate from database readiness. In member status, application releases use `componentVersion`; their database `version` is intentionally empty. Aggregate resource requirements include every enabled service, proxy and data member.
-Enabling or disabling a component changes the shared upstream map in application configuration hashes, so the remaining Supabase applications can restart in place as their configurations converge sequentially; this can take multiple passes and temporarily outlive the [15-second availability observation lease](../clusters.md), without restarting the PostgreSQL core.
+Enabling or disabling a component changes the shared upstream map in application configuration hashes, so the remaining [Supabase](https://supabase.com/) applications can restart in place as their configurations converge sequentially; this can take multiple passes and temporarily outlive the [15-second availability observation lease](../clusters.md), without restarting the [PostgreSQL](https://www.postgresql.org/) core.
 
 Changing only an application's replica count or resource bounds (for example,
 `components.extra.rest.resources.maxCpu`) does not publish a new PostgreSQL or
-ProxySQL configuration or redeploy their runtimes. The database core tracks only
+[ProxySQL](https://proxysql.com/) configuration or redeploy their runtimes. The database core tracks only
 the engine and proxy component bounds. Database/proxy settings, managed access
 revisions, and Supabase engine options still participate in database configuration
 convergence, including extension preload changes.
+
+The embedded PostgreSQL core's ProxySQL count/resource updates follow
+[PostgreSQL maintenance and readiness rules](../postgres/operations.md#agent-rollout-and-maintenance-windows):
+scale-in and resource changes always wait for a maintenance window, including
+serving-preserving resource updates. Count scale-out also waits unless the backend
+guarantees serving preservation for the deployed proxy runtime.
+Every requested live proxy must apply the configuration and report native
+readiness with an ONLINE writer before applied bounds are committed, including
+after a control-plane restart. This is separate from optional Supabase component
+scaling and does not imply that those components have the same rollout contract.
 
 Database slot-retention blockers report `Ready=False/SlotWALRetention`, including
 when all optional components are healthy. An optional-component failure does not
@@ -78,7 +129,7 @@ A smaller positive count supersedes a still-pending larger scale without first
 waiting for the obsolete count. Terminal scale/resize failures retain their exact
 requested count/resource target across restarts and report
 `ComponentRuntimeFailed`; unchanged targets are not repeatedly submitted.
-When the backend can prove the complete desired runtime already exists as healthy
+When the provider can prove the complete desired runtime already exists as healthy
 owned allocations, reconciliation may adopt or start its placement-free recovery
 receipt. Otherwise convergence keeps returning the terminal error so tracking
 operations exhaust their existing bounded failure budget truthfully. A genuinely
@@ -93,9 +144,10 @@ database readiness. A temporarily unhealthy database core cannot hide a terminal
 component error from the tracking operation's failure budget or prevent submitting
 corrected bounds after a failed/superseded rollout. This does not automatically
 replay an unchanged failed target, and database recovery continues independently.
-Gateway public-exposure revocation takes priority over this failure handling.
-An unrelated terminal component failure cannot prevent revocation or hide its
-accepted receipt; the component error remains visible to bounded tracking.
+Once maintenance permits the route change, gateway public-exposure revocation
+takes priority over this failure handling. An unrelated terminal component
+failure cannot prevent revocation or hide its accepted receipt; the component
+error remains visible to bounded tracking.
 Every accepted corrective receipt records the exact failed operation it corrects
 and its full desired target, whether it changes resources or recovers retained
 allocations. While that receipt owns the same component, failure and target, its
@@ -110,7 +162,7 @@ wait neither submits a new operation nor treats unrelated pending work as recove
 Readiness requires the desired number of live instances for **every enabled
 component** and an application/configuration observation from each live instance,
 including extra instances during a rollout. The control plane pins probes to
-backend-provided instance addresses while retaining the logical member's TLS and
+provider-provided instance addresses while retaining the logical member's TLS and
 bearer identity. A healthy service-DNS response cannot mask an unhealthy sibling.
 Missing instances, inaccessible inventory, unusable instance addresses, stale
 configuration and native health failures keep `ComponentsReady=False`; the
@@ -201,16 +253,16 @@ Direct component probes do not traverse the gateway's network path; use
 authenticated end-to-end route/application checks. A REST or Auth instance
 failing native/serving readiness withdraws `ComponentsReady` and stack readiness
 with an instance-scoped message, but remains in the gateway's resolved pool.
-There are no application-level active health checks: Nomad service checks test
-only the listener, and Zerops deploy readiness checks do not feed gateway
-membership. An instance that accepts connections but returns PostgREST HTTP 503
+There are no application-level active health checks: [Nomad](https://developer.hashicorp.com/nomad) service checks test
+only the listener, and [Zerops](https://zerops.io/) deploy readiness checks do not feed gateway
+membership. An instance that accepts connections but returns [PostgREST](https://postgrest.org/) HTTP 503
 is neither retried nor ejected for that response, so extra REST/Auth replicas do
 not mask one instance's database-path loss. Restore or replace the instance named
 in status; see [cluster restart and member software](#cluster-restart-and-member-software).
 
 Storage readiness combines the native `/status` endpoint with an authenticated,
-non-mutating S3 bucket `HEAD` from the Storage member, using its already-projected
-backend registration and optional bucket override. The probe has the shared
+non-mutating [S3](https://aws.amazon.com/s3/) bucket `HEAD` from the Storage member, using its already-projected
+provider registration and optional bucket override. The probe has the shared
 four-second observation timeout; concurrent status/metrics callers share a sample
 for at most the five-second readiness interval. Both successful and failed samples
 expire, and a changed endpoint, bucket or credential invalidates the cache.
@@ -259,7 +311,7 @@ the underlying placement or runtime problem is corrected.
 A confirmed terminal component deployment failure is retained across retries and
 control-plane restarts. `Ready=False` and `ComponentsReady=False` report
 `ComponentDeploymentFailed` with phase `Degraded`, even during initial creation.
-The member message includes the immutable backend service and deployment handle,
+The member message includes the immutable provider service and deployment handle,
 the terminal platform status, and a request to inspect deployment/runtime
 preparation diagnostics. On Zerops, `version:<id>` identifies the exact app
 version; inspect its deployment process and prepare-runtime log, not merely the
@@ -294,7 +346,7 @@ conditions preserve sanitized platform diagnostics. RUNNING/unknown work remains
 fenced regardless of age or elapsed deadlines. A corrected artifact/runtime
 intent can supersede a conclusively terminal receipt under the same
 terminal-process evidence gate.
-The provider exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
+The engine driver exposes a `Deployment/COMPONENT_HOSTNAME` condition with the precise
 `DeploymentRetriesExhausted` reason and operator command. An exhausted component
 is skipped while other components continue reconciliation; pending deploy
 receipts are retired without marking the failed artifact applied. There is no
@@ -306,15 +358,15 @@ An independent database readiness failure retains its own reason; healthy
 database members do not imply that the complete enabled stack is ready.
 Disabled optional components do not participate in this readiness gate.
 Database recovery continues while the optional deployment is pending or failed.
-Correct a backend placement/runtime problem using the exact failed handles; do
+Correct a provider placement/runtime problem using the exact failed handles; do
 not clear operation receipts, start unverified runtimes, or disable Storage
 merely to make the cluster Ready.
 
 Component imports first persist the original request without bearer credentials.
-After an interrupted setup, an owned backend reservation is replayed with the
+After an interrupted setup, an owned provider reservation is replayed with the
 same resources and replica count before applying subsequent desired edits or
 component removal. Its presence alone does not authorize deployment. Preserve the
-original import intent and backend state if an incomplete reservation is reported
+original import intent and provider state if an incomplete reservation is reported
 without a matching intent; do not adopt or recreate it as a different request.
 Cluster deletion likewise finishes reserved setup before removing its services,
 without deploying the component. Accepted import handles retain the same replay
@@ -325,7 +377,8 @@ existing durable member identity and ownership token. Lookup errors do not count
 as absence, and conflicting ownership markers prevent adoption or modification.
 Disabling gateway public HTTPS (or disabling the gateway component) revokes its
 existing public route before database readiness checks, including when a core
-member is unavailable. Pending infrastructure operations still serialize optional
+member is unavailable, once the maintenance window or generation override admits
+the potentially disruptive route update. Pending infrastructure operations still serialize optional
 component changes, but never block PostgreSQL provisioning, replacement or recovery.
 Component polling errors are reported while core reconciliation continues;
 enabling public exposure remains gated on core readiness.
@@ -336,7 +389,7 @@ re-enable and new public exposure wait for core Ready. Dependency validation sti
 requires dependents to be disabled first.
 
 Internal database connections use a local raw TCP forwarder on loopback 5432
-(15432 for Supavisor). HA probes authenticated TLS Patroni `/primary` every second.
+(15432 for [Supavisor](https://github.com/supabase/supavisor)). HA probes authenticated TLS [Patroni](https://patroni.readthedocs.io/) `/primary` every second.
 A negative response/error from the known writer revokes it immediately, without
 waiting for other peers' probes. Leadership loss/change closes existing sessions;
 services must reconnect. New sessions wait up to ten seconds for exactly one
@@ -352,11 +405,11 @@ See the [frozen PostgreSQL primary boundary](../postgres/operations.md#failover-
 
 Realtime supports one application replica, independently of the database's
 single/HA topology. Create/update admission rejects any enabled count above one
-with `realtime replicas must be 0..1`; provider catalogs advertise the same bound.
+with `realtime replicas must be 0..1`; engine driver catalogs advertise the same bound.
 All presets select zero or one. The CLI submits optional-component file bodies
 to that same server admission path rather than maintaining separate replica rules.
 Realtime always renders an explicit empty `CLUSTER_STRATEGIES`, removing the
-pinned default `POSTGRES` discovery topology. Its linked Postgrex notifications
+pinned default `POSTGRES` discovery topology. Its linked [Postgrex](https://github.com/elixir-ecto/postgrex) notifications
 process could exhaust supervision on database loss and exit Realtime even though
 a singleton has no peers to discover. Ordinary database pools and logical
 replication still reconnect through the forwarder; the member supervisor still
@@ -404,7 +457,7 @@ hostname, `APP_NAME` node basename, five-second polling) and `EPMD` (explicit
 platform returns all instance IPs, but changing those two variables alone is not
 equivalent clustering. It additionally requires unique routable `<APP_NAME>@<IP>`
 identities (`POD_IP` is honored by this pinned release), compatible private address
-families, a sealed per-cluster cookie, declared/reachable EPMD and fixed Erlang
+families, a sealed per-cluster cookie, declared/reachable EPMD and fixed [Erlang](https://www.erlang.org/)
 distribution ports, gen_rpc connectivity, and multi-node broadcast/presence tests.
 Those networking changes are not part of the singleton failover correction.
 
@@ -414,7 +467,7 @@ only. Karakoram does not manage a pgsodium server root key and never adds
 transparent column encryption are not enabled.
 
 Realtime's logical decoding uses the packaged `wal2json` output plugin. Supabase
-data members explicitly trust it through Percona's `output_plugin_libraries`,
+data members explicitly trust it through [Percona](https://www.percona.com/)'s `output_plugin_libraries`,
 alongside the default `pgoutput` and `test_decoding` plugins.
 
 Native services and their migration commands use the member's protected data
@@ -446,9 +499,25 @@ The CLI masks credential fields by default in every output format. Protect revea
 
 JWT rotation replaces signing/API-key material and rolls dependent service configuration; old application JWTs/keys stop working as the new configuration takes effect. It is not a dual-key overlap rollout. Coordinate clients and follow the returned operation. Independent dashboard password, database-role passwords and encryption keys are retained. Dashboard username is `supabase`. Service-role/secret keys bypass ordinary application restrictions and must never be embedded in public clients.
 
+The PostgreSQL administrator rotates separately with
+`karactl -n NS system-users rotate appapi postgres --yes`. Upgrade all PostgreSQL
+data agents first; incompatible agents return 409 with `upgrade-agents` guidance.
+The operation changes the writable PostgreSQL primary, publishes the new sealed
+password, then reconfigures/restarts and waits for acknowledgement from enabled
+components, including `meta`, `studio` and `functions`, before retiring the old
+management fallback. Those components can be briefly unavailable during refresh.
+Other service-role passwords, JWT signing keys, dashboard and encryption keys
+are unchanged. Supavisor uses its independent managed credentials and native
+client-verifier lookup. Bindings and Data MCP use dedicated non-superuser roles,
+not `postgres`, and do not require credential rotation as part of this operation.
+External clients must reconnect with the newly revealed administrator password;
+existing PostgreSQL sessions are not terminated. See
+[administrator rotation](../postgres/access-and-tls.md#administrator-credential-containment).
+
+
 ## Security boundaries
 
-Postgres-meta runs with the PostgreSQL superuser credential. Its API binds
+[Postgres-meta](https://github.com/supabase/postgres-meta) runs with the [PostgreSQL](https://www.postgresql.org/) superuser credential. Its API binds
 `127.0.0.1:8081`; its adjacent admin listener also remains on loopback at
 `127.0.0.1:8082`. Private port `8080` is an authenticated metadata proxy:
 requests need the cluster service-role API key in `apikey`, or the internal
@@ -463,7 +532,7 @@ forwarding to Studio. The gateway injects this credential only after dashboard
 Basic authentication succeeds, replacing any caller-supplied value and removing
 dashboard credentials. Private unauthenticated SQL requests are rejected.
 Discovery, runtime ports and readiness all use the authenticated ingress.
-Existing Studio runtimes are redeployed during upgrade so the backend port
+Existing Studio runtimes are redeployed during upgrade so the provider port
 declaration changes as well as the application configuration; a reload alone
 would leave the authenticated ingress unreachable.
 
@@ -493,10 +562,10 @@ it is not a bare database name. Disabling database TLS explicitly selects plaint
 Member configurations are projected before digesting, publishing and local
 caching. Each component receives only its consumed database-role credentials
 and service secrets. Auth alone receives SMTP credentials and private asymmetric
-signing keys; Storage alone receives S3 backend/frontend credentials; imgproxy, Vector
+signing keys; Storage alone receives [S3](https://aws.amazon.com/s3/) provider/frontend credentials; [imgproxy](https://imgproxy.net/), [Vector](https://vector.dev/)
 and the gateway receive no database passwords. Metadata, Studio and Functions
 retain their required privileged database connection; protect their code and
-administrative access accordingly. HA database consumers retain the Patroni
+administrative access accordingly. HA database consumers retain the [Patroni](https://patroni.readthedocs.io/)
 probe credential; enabled log shipping receives its ingestion credential.
 
 The projection changes configuration digests, so existing components redeploy
@@ -523,14 +592,14 @@ Use explicit `npm:` or `jsr:` imports rather than relying on undeclared aliases.
 
 ## Recovery boundaries
 
-Database backups restore database data/roles, not Storage S3 objects or the whole control-plane secret/function store. Protect S3 objects separately and keep consistent control-plane state plus its original master key. A database clone has its own service configuration/keys/object tenant; it is not a complete copy of an application's external objects or deployment. Plan coordinated object/database recovery and re-check application access after restore, especially credentials restored from an older snapshot.
+Database backups restore database data/roles, not Storage [S3](https://aws.amazon.com/s3/) objects or the whole control-plane secret/function store. Protect S3 objects separately and keep consistent control-plane state plus its original master key. A database clone has its own service configuration/keys/object tenant; it is not a complete copy of an application's external objects or deployment. Plan coordinated object/database recovery and re-check application access after restore, especially credentials restored from an older snapshot.
 
-Suspension/removal follows shared cluster retention choices and PostgreSQL volume rules; optional services are stateless runtimes, not independently retained application disks. Preserve external S3 data according to your own policy. See [shared recovery](../backups.md) and [control-plane recovery](../operations.md#control-plane-state-backup-and-recovery).
+Suspension/removal follows shared cluster retention choices and [PostgreSQL](https://www.postgresql.org/) volume rules; optional services are stateless runtimes, not independently retained application disks. Preserve external S3 data according to your own policy. See [shared recovery](../backups.md) and [control-plane recovery](../operations.md#control-plane-state-backup-and-recovery).
 
 Cluster deletion supersedes a component's deployment/readiness wait. The owned
 service's immutable-ID and ownership checks still apply; an in-flight deployment
 receipt is not a prerequisite for submitting deletion. This does not override
-Zerops's own per-service process queue: an accepted `stack.delete` may remain
+[Zerops](https://zerops.io/)'s own per-service process queue: an accepted `stack.delete` may remain
 `PENDING` behind that service's `RUNNING stack.deploy`, including runtime
 preparation. Deleting reports the exact delete process/service, platform status
 and age derived from platform timestamps; when available, it also names the
@@ -539,7 +608,7 @@ in cluster status and the tracked delete operation.
 
 Only observation is retried while a deletion is accepted: each platform read has
 the client's finite request timeout and bounded transient retries (three retries
-by default). Queue inspection is additionally bounded by the backend wait timeout.
+by default). Queue inspection is additionally bounded by the provider wait timeout.
 An unavailable queue inventory is reported, not treated as permission to replay
 deletion. Inventory failures propagate to reconciliation's failure backoff;
 `429`/`503` responses with `Retry-After` retain that reset and stop the observation

@@ -64,7 +64,7 @@ func DefaultPolicy() string {
 		} else if r == "backup-storages" || r == "providers" || r == "namespaces" {
 			fmt.Fprintf(&b, "p, role:operator, %s, read, **, allow\n", r)
 		}
-		if r != "audit" && r != "cluster-credentials" && r != "cluster-data" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {
+		if r != "audit" && r != "cluster-credentials" && r != "cluster-data" && r != "openbao-unseal-keys" && r != "accounts" && r != "api-tokens" && r != "rbac" && r != "settings" {
 			fmt.Fprintf(&b, "p, role:viewer, %s, read, **, allow\n", r)
 		}
 	}

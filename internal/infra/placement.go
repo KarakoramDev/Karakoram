@@ -18,6 +18,13 @@ type PlacementObserver interface {
 	PlacementFailures(context.Context, []string) ([]PlacementFailure, error)
 }
 
+// ResourceUpdatePlanner admits replacement placement before engine-owned
+// disruption (for example taking a database offline). It does not reserve
+// capacity; SetResources must still check immediately before its own stop.
+type ResourceUpdatePlanner interface {
+	PlanResources(context.Context, string, Resources) error
+}
+
 // UnplacedRuntimeObserver proves a runtime's initial deployment has never
 // acquired an allocation. Empty live container inventory is not such proof:
 // terminal or garbage-collected allocations may have served database traffic.

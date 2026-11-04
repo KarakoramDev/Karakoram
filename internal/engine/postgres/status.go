@@ -20,7 +20,7 @@ func connectionMember(rc *engine.Context, s *state) string {
 	if rc.Cluster.Spec.Components.Extra["proxy"].Replicas > 0 {
 		return rc.Cluster.Name + "px"
 	}
-	data := s.data()
+	data := s.group(0).data()
 	if len(data) > 0 {
 		return data[0].Name
 	}
@@ -29,6 +29,11 @@ func connectionMember(rc *engine.Context, s *state) string {
 func discovery(rc *engine.Context, s *state) domain.Connection {
 	host := net.JoinHostPort(connectionMember(rc, s), "5432")
 	u := url.URL{Scheme: "postgresql", Host: host, Path: "/postgres"}
+	if s.Topology == "distributed" {
+		if o, err := ParseOptions(rc.Cluster.Spec.EngineOptions); err == nil {
+			u.Path = "/" + o.citusOptions().Database
+		}
+	}
 	q := u.Query()
 	mode := "verify-full"
 	if rc.Cluster.Spec.TLS.Mode == "disabled" {
@@ -86,20 +91,64 @@ func (p *Core) ProjectCredentialsStatus(ctx context.Context, rc *engine.Context,
 	return status
 }
 
+// expectedRolloutVersion accepts only the assigned or checkpointed source of a
+// forward rollout. Once SQL observes the target, the source checkpoint is cleared.
+func expectedRolloutVersion(rc *engine.Context, s *state, m *member, observed string) bool {
+	target := rc.Cluster.Spec.Version
+	if s.Upgrade != nil && s.Upgrade.To == target && observedReleaseMatches(observed, s.Upgrade.From) {
+		return true
+	}
+	if observedReleaseMatches(observed, m.Version) && upgradeAllowed(m.Version, target) {
+		return true
+	}
+	return m.PreviousVersion != "" && m.Version == target && observedReleaseMatches(observed, m.PreviousVersion) && upgradeAllowed(m.PreviousVersion, target)
+}
+
 func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return domain.ClusterStatus{}, err
 	}
+	driftChanged := false
+	defer func() {
+		if driftChanged {
+			if err := save(rc.Cluster, s); statusErr == nil {
+				statusErr = err
+			}
+		}
+	}()
 	out := domain.ClusterStatus{Phase: domain.PhaseCreating, Version: rc.Cluster.Spec.Version, Members: []domain.MemberStatus{}, Connection: discovery(rc, s), Placement: domain.Placement{Groups: map[string][]string{}}}
 	if s.Suspended {
 		out.Phase = domain.PhaseSuspended
 		return out, nil
 	}
+	// Platform reads can fail before member reduction completes. Seed identities
+	// from the provider checkpoint, not cached positive health, so a partial
+	// observation cannot erase established members or restart lifecycle status.
+	out.Members = make([]domain.MemberStatus, len(s.Members))
+	for i, m := range s.Members {
+		set, role := "postgres", "unknown"
+		if m.Role == "proxy" {
+			set, role = "proxy", "proxy"
+		}
+		out.Members[i] = domain.MemberStatus{Name: m.Name, Set: set, Role: role, State: "unknown"}
+	}
+	defer func() {
+		if statusErr != nil {
+			if rc.Cluster.Status.Phase != "" && status.Phase != domain.PhaseFailed && status.Phase != domain.PhaseError {
+				status.Phase = rc.Cluster.Status.Phase
+			}
+			status = engine.UnknownObservation(status, now(rc), "ObservationFailed")
+		}
+	}()
 	credentialsPending, err := accessIntentPending(ctx, rc)
 	credentialsKnown := err == nil
-	healthy := credentialsKnown && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas && len(s.Members) > 0
+	healthy := credentialsKnown && len(s.data()) == s.desiredDataCount(rc) && len(s.Members) > 0
+	configurationReady := true
 	writer := false
 	quorumHealthy := false
 	quorumRequired := false
@@ -109,7 +158,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	var paused, etcdIssues, archiveIssues []string
 	var dataIssues, capacityIssues, slotIssues, slotUnknown, archiveUnknown []string
 	var proxyIssues []string
+	var versionDrift, versionDriftUnknown []string
+	versionRolloutPending := false
 	var proxyDetails []string
+	var configurationPending []string
 	var proxyPlacementIssues, proxyRolloutIssues, proxyRolloutFailures []string
 	var processConditions []domain.Condition
 	var slotUnsupported, archiveUnsupported, etcdUnsupported, distanceUnsupported, pauseUnsupported, credentialLegacy []string
@@ -123,27 +175,19 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		hash, hashErr := desiredConfigHash(rc, revision)
 		credentialsPublished = credentialsKnown && !credentialsPending && revisionErr == nil && hashErr == nil && s.ConfigHash == hash
 	}
-	// With no proxy the data runtime owns public-port changes. Observe its
-	// infrastructure barrier before collecting fresh native/config status.
 	direct := s.find(connectionMember(rc, s))
-	directReady := true
-	if direct != nil && direct.Role == "data" && direct.Stage != "planned" && direct.Stage != "imported" {
-		runtime, err := rc.Backend.GetService(ctx, direct.Name)
-		if err != nil {
-			return out, err
-		}
-		directReady = runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
-	}
 	liveMembers := observeStatusMembers(ctx, rc, s.Members)
 	// Bind every proxy's fresh runtime rows to the writer observed in this
 	// sweep. Running alone only promises some ONLINE writer (older agents may
 	// only promise a listening frontend), not the current primary.
+	// Distributed client traffic targets only the coordinator (group zero);
+	// worker primaries must not look like competing client-facing writers.
 	primaryHost := ""
 	primaryCount := 0
 	for i, m := range s.Members {
 		observation := liveMembers[i]
 		st := observation.status
-		if m.Role == "data" && observation.agentHealthy && observation.err == nil && st.Running && (st.Role == "primary" || st.Role == "standalone") {
+		if m.Role == "data" && m.Group == 0 && observation.agentHealthy && observation.err == nil && st.Running && (st.Role == "primary" || st.Role == "standalone") {
 			primaryHost = m.Name
 			primaryCount++
 		}
@@ -153,25 +197,46 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	for i, m := range s.Members {
 		member := domain.MemberStatus{Name: m.Name, Set: "postgres", Role: "unknown", State: "starting", Version: m.Version}
+		if m.Role == "data" {
+			member.Version = ""
+		}
+		if s.Topology == "distributed" && m.Role == "data" {
+			group := m.Group
+			member.Group = &group
+		}
 		if m.Role == "proxy" {
 			member.Set = "proxy"
 			member.Role = "proxy"
 		}
 		if m.Stage == "planned" || m.Stage == "imported" {
 			healthy = false
-			out.Members = append(out.Members, member)
+			if m.Role == "data" && m.VersionDrift != "" {
+				versionDriftUnknown = append(versionDriftUnknown, fmt.Sprintf("%s: last confirmed mismatch %s, desired %s; fresh matching SQL observation unavailable", m.Name, m.VersionDrift, rc.Cluster.Spec.Version))
+			}
+			out.Members[i] = member
 			continue
 		}
 		observation := liveMembers[i]
+		runtime := observation.runtime
+		if observation.runtimeErr != nil {
+			return out, fmt.Errorf("observe PostgreSQL member %s runtime: %w", m.Name, observation.runtimeErr)
+		}
+		if runtime != nil {
+			member.Autoscaling = runtime.Autoscaling
+		}
+		member.Resources = engine.MemberResources(nil, member.Autoscaling)
 		var proxyProcesses []struct {
 			instance  string
 			processes map[string]agentapi.ProcessStatus
 		}
 		if observation.agentHealthy {
 			st := observation.agent
-			member.Agent = domain.AgentStatus{Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
+			if !rc.Backend.Capabilities().Placement {
+				member.PlacementGroup = st.HostFingerprint
+			}
+			member.Agent = domain.AgentStatus{Version: st.Agent.Version, Commit: st.Agent.Commit, Build: st.Agent.Build, Healthy: true, ConfigVersion: st.ConfigVersion, LastSeen: now(rc)}
 			member.Uptime = st.UptimeSeconds
-			member.Resources = engine.MemberResources(st.Resources, &m.Resources)
+			member.Resources = engine.MemberResources(st.Resources, member.Autoscaling)
 			if st.Disk.TotalBytes > 0 && st.Disk.FreeBytes < st.Disk.TotalBytes/10 {
 				capacityIssues = append(capacityIssues, m.Name)
 				healthy = false
@@ -191,7 +256,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				member.Role = st.Role
 				member.Health = st.Running
 				member.State = st.Role
-				if m.Role == "data" && s.Topology == "ha" {
+				if m.Role == "data" && patroniTopology(s.Topology) {
 					quorumHealthy = quorumHealthy || st.EtcdHealthy
 					if capabilities.LocalEtcd {
 						quorumRequired = true
@@ -270,10 +335,6 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			observationIssues = append(observationIssues, message)
 		}
 		if m.Role == "proxy" {
-			runtime, err := rc.Backend.GetService(ctx, m.Name)
-			if err != nil {
-				return out, err
-			}
 			runtimeReady := runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
 			first := true
 			responded := 0
@@ -286,6 +347,12 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				}
 				status := sample.agent
 				responded++
+				// Prefer a deterministic non-current identity when instances
+				// disagree, so a current replica cannot hide an older one.
+				if first || (member.Agent.Build == engine.CurrentAgentBuild().Build && status.Agent.Build != member.Agent.Build) ||
+					(member.Agent.Build != engine.CurrentAgentBuild().Build && status.Agent.Build != engine.CurrentAgentBuild().Build && status.Agent.Build < member.Agent.Build) {
+					member.Agent.Version, member.Agent.Commit, member.Agent.Build = status.Agent.Version, status.Agent.Commit, status.Agent.Build
+				}
 				proxyProcesses = append(proxyProcesses, struct {
 					instance  string
 					processes map[string]agentapi.ProcessStatus
@@ -294,7 +361,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 				if first {
 					member.Agent.LastSeen = now(rc)
 					member.Uptime = status.UptimeSeconds
-					member.Resources = engine.MemberResources(status.Resources, &m.Resources)
+					member.Resources = engine.MemberResources(status.Resources, member.Autoscaling)
+					if !rc.Backend.Capabilities().Placement {
+						member.PlacementGroup = status.HostFingerprint
+					}
 				}
 				if first || status.ConfigVersion < member.Agent.ConfigVersion {
 					member.Agent.ConfigVersion = status.ConfigVersion
@@ -363,7 +433,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 		if m == direct && m.Role == "data" {
-			member.Health = member.Health && directReady
+			member.Health = member.Health && runtime != nil && (runtime.Status == infra.StatusRunning || runtime.Status == infra.StatusActive)
 		}
 		engine.ApplyAgentDiagnostic(&member, observation.agent.Error)
 		if m.Role == "data" {
@@ -372,25 +442,47 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		for _, diagnostic := range proxyProcesses {
 			processConditions = append(processConditions, engine.ApplyProcessDiagnostics(&member, diagnostic.processes, diagnostic.instance, now(rc))...)
 		}
-		healthy = healthy && member.Health && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
-		containers, e := rc.Backend.Containers(ctx, m.Name)
-		if e != nil {
-			return out, e
-		}
-		for _, container := range containers {
-			if container.PlacementGroup != "" {
-				member.PlacementGroup = container.PlacementGroup
-				out.Placement.Groups[container.PlacementGroup] = append(out.Placement.Groups[container.PlacementGroup], m.Name)
+		if m.Role == "data" {
+			switch {
+			case member.Version != "" && observedReleaseMatches(member.Version, rc.Cluster.Spec.Version):
+				if m.VersionDrift != "" || m.PreviousVersion != "" {
+					m.VersionDrift, m.PreviousVersion = "", ""
+					driftChanged = true
+				}
+			case member.Version != "" && !expectedRolloutVersion(rc, s, m, member.Version):
+				if m.VersionDrift != member.Version {
+					m.VersionDrift = member.Version
+					driftChanged = true
+				}
+				versionDrift = append(versionDrift, fmt.Sprintf("%s: observed %s, desired %s", m.Name, member.Version, rc.Cluster.Spec.Version))
+			case m.VersionDrift != "":
+				versionDriftUnknown = append(versionDriftUnknown, fmt.Sprintf("%s: last confirmed mismatch %s, desired %s; fresh matching SQL observation unavailable", m.Name, m.VersionDrift, rc.Cluster.Spec.Version))
+			}
+			if m.Version != rc.Cluster.Spec.Version || m.PreviousVersion != "" {
+				versionRolloutPending = true
 			}
 		}
-		out.Members = append(out.Members, member)
+		if (m.Stage == "joined" || m.Stage == "deployed") &&
+			(m.Stage != "joined" || member.Agent.ConfigVersion < m.ConfigVersion || m.ConfigVersion != s.ConfigVersion) {
+			configurationPending = append(configurationPending, fmt.Sprintf("%s (stage %s, observed %d, assigned %d, desired %d)", m.Name, m.Stage, member.Agent.ConfigVersion, m.ConfigVersion, s.ConfigVersion))
+		}
+		healthy = healthy && member.Health
+		configurationReady = configurationReady && m.Stage == "joined" && member.Agent.ConfigVersion >= m.ConfigVersion && m.ConfigVersion == s.ConfigVersion
+		if observation.inventory.Err != nil {
+			return out, fmt.Errorf("observe PostgreSQL member %s containers: %w", m.Name, observation.inventory.Err)
+		}
+		for _, container := range observation.inventory.Containers {
+			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
+				member.PlacementGroup = container.PlacementGroup
+			}
+		}
+		out.Members[i] = member
 	}
-	if s.Topology == "ha" {
-		var primary pgspec.StatusResponse
-		for _, st := range observations {
-			if st.Running && st.Role == "primary" {
-				primary = st
-				break
+	if patroniTopology(s.Topology) {
+		primaries := map[int]pgspec.StatusResponse{}
+		for name, st := range observations {
+			if m := s.find(name); m != nil && m.Role == "data" && st.Running && st.Role == "primary" {
+				primaries[m.Group] = st
 			}
 		}
 		for i := range out.Members {
@@ -399,6 +491,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			if !ok || st.Role != "replica" {
 				continue
 			}
+			primary := primaries[s.find(m.Name).Group]
 			if primary.HealthCapabilities == nil || !primary.HealthCapabilities.ReplicationDistance || st.HealthCapabilities == nil || !st.HealthCapabilities.ReplicationDistance {
 				distanceUnsupported = append(distanceUnsupported, m.Name)
 				continue
@@ -418,6 +511,13 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 	}
+	var citusCondition domain.Condition
+	if s.Topology == "distributed" {
+		citusCondition = citusTopology(ctx, rc, s, observations)
+		if citusCondition.Status != "True" {
+			healthy, healthProbeFailed, writer = false, true, false
+		}
+	}
 	if s.Formed && s.Topology == "ha" && !writer && s.Upgrade == nil && s.RestoreRecovery == nil {
 		bs, backupErr := loadBackupState(rc.Cluster)
 		allMissing := backupErr == nil && !bs.ManagedRolesHeld && bs.Restore == nil && len(s.data()) > 0
@@ -432,7 +532,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			}
 		}
 	}
-	if healthy && !credentialsPending && writer && s.Pending == nil && s.Formed && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (s.Topology != "ha" || !quorumRequired || quorumHealthy) {
+	// Member health alone cannot acknowledge a profile generation: curated SQL
+	// is a post-readiness prerequisite and may still be pending or have failed.
+	profilesReady, err := p.profileBootstrapApplied(ctx, rc, s)
+	if err != nil {
+		return out, err
+	}
+	readyPrerequisites := healthy && !versionRolloutPending && profilesReady && !s.ExtensionsPending && !credentialsPending && writer && s.Pending == nil && s.Formed && s.CitusScale == nil && s.Upgrade == nil && s.Replacement == nil && s.Rolling == nil && s.RestoreRecovery == nil && (!patroniTopology(s.Topology) || !quorumRequired || quorumHealthy)
+	if readyPrerequisites && configurationReady {
 		out.Phase = domain.PhaseReady
 		out.ObservedGeneration = rc.Cluster.Generation
 	} else if rc.Cluster.Status.ObservedGeneration > 0 {
@@ -443,12 +550,21 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	}
 	condition := "False"
 	reason := "MembersStarting"
+	if out.Phase == domain.PhaseUpdating && readyPrerequisites && !configurationReady && len(configurationPending) > 0 {
+		reason = "ConfigurationPending"
+	}
 	if len(slotIssues) > 0 {
 		reason = "SlotWALRetention"
 	}
 	if out.Phase == domain.PhaseReady {
 		condition = "True"
 		reason = "MembersReady"
+	}
+	if !profilesReady {
+		reason = "ProfileBootstrapPending"
+	}
+	if s.ExtensionsPending {
+		reason = "ExtensionUpdatePending"
 	}
 	if healthProbeFailed {
 		reason = "HealthObservationFailed"
@@ -470,6 +586,25 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		out.Phase, out.Message = domain.PhaseUpdating, s.SwitchoverBlocked
 	}
 	out.Conditions = []domain.Condition{{Type: "Ready", Status: condition, Reason: reason, LastTransitionTime: now(rc)}}
+	if reason == "ConfigurationPending" {
+		out.Message = "Native members are healthy; waiting for member configuration acknowledgements: " + strings.Join(configurationPending, ", ") + ". Credential publication is tracked separately by CredentialsPublished."
+		out.Conditions[0].Message = out.Message
+	}
+	if len(versionDrift) > 0 || len(versionDriftUnknown) > 0 {
+		driftStatus, driftReason := "True", "ObservedVersionMismatch"
+		if len(versionDrift) == 0 {
+			driftStatus, driftReason = "Unknown", "ObservationUnavailable"
+		}
+		message := "PostgreSQL version drift: " + strings.Join(append(versionDrift, versionDriftUnknown...), "; ") + ". Verify each running server with SQL, take a backup, and explicitly select the observed or a newer supported catalog release before redeploying members. The specification is unchanged; automatic downgrades are blocked."
+		out.Conditions = append(out.Conditions, domain.Condition{
+			Type: "VersionDrift", Status: driftStatus, Reason: driftReason,
+			Message: message, LastTransitionTime: now(rc),
+		})
+		out.Phase, out.Message = domain.PhaseDegraded, message
+		out.Conditions[0].Status, out.Conditions[0].Reason = "False", "VersionDrift"
+		out.Conditions[0].Message = message
+		out.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
+	}
 	if len(observationIssues) > 0 {
 		message := strings.Join(observationIssues, "; ")
 		out.Conditions[0].Message = message
@@ -515,6 +650,12 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			Type: "ProxyRollout", Status: "False", Reason: "ProxyRolloutFailed", Message: message, LastTransitionTime: now(rc),
 		})
 	}
+	if s.ExtensionsPending {
+		out.Conditions = append(out.Conditions, domain.Condition{Type: "ExtensionsUpdated", Status: "False", Reason: "ExtensionUpdatePending", Message: "Installed profile extension updates have not completed. Restore extension availability and database connectivity so reconciliation can retry.", LastTransitionTime: now(rc)})
+	}
+	if s.Topology == "distributed" {
+		out.Conditions = append(out.Conditions, citusCondition)
+	}
 	if s.SwitchoverBlocked != "" {
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "Switchover", Status: "False", Reason: "SwitchoverBlocked", Message: s.SwitchoverBlocked, LastTransitionTime: now(rc)})
 	}
@@ -553,7 +694,10 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 			if checkpoint.Label != "" {
 				source += ", set " + checkpoint.Label
 			}
-			out.Message = fmt.Sprintf("Resuming restore %s at checkpoint %s (generation %d; %s); repair the source repository or member dependency. Client and process holds remain until the same restore completes.", s.RestoreRecovery.ID, checkpoint.Step, checkpoint.Generation, source)
+			out.Message = fmt.Sprintf("Resuming restore %s at checkpoint %s (generation %d; %s); repair the source repository/member dependency or upgrade the control plane and member agents. Client and process holds remain until this exact restore completes. To abandon recovery, delete the cluster; restore another backup into a new target. Do not resubmit the restore or edit pg_hba.conf.", s.RestoreRecovery.ID, checkpoint.Step, checkpoint.Generation, source)
+			if s.RestoreRecovery.Kind == domain.OperationBackup {
+				out.Message = fmt.Sprintf("Aborting coordinated backup %s; formation membership remains fenced until all original native backup receipts are terminal.", s.RestoreRecovery.ID)
+			}
 		}
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "RestoreRecovery", Status: "False", Reason: "RestoreRecoveryPending", Message: out.Message, LastTransitionTime: now(rc)})
 	}
@@ -579,7 +723,7 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 		capacity.Message = "Less than 10 percent data filesystem space remains on: " + strings.Join(capacityIssues, ", ") + ". Inspect WAL archive backlog and replication slots; restore dependencies or grow the volume. Do not remove PostgreSQL WAL files."
 	}
 	out.Conditions = append(out.Conditions, capacity)
-	if s.Topology == "ha" {
+	if patroniTopology(s.Topology) {
 		quorum := domain.Condition{
 			Type: "EtcdQuorum", Status: "True", Reason: "QuorumAvailable",
 			LastTransitionTime: now(rc),
@@ -677,8 +821,14 @@ func (p *Core) Status(ctx context.Context, rc *engine.Context) (status domain.Cl
 	if err != nil {
 		return out, err
 	}
+	// Reuse this sweep's unique fresh writer, never probe absent/resuming peers
+	// again merely to project PITR coverage after the native health budget.
+	var backupPrimary *pgspec.StatusResponse
+	if st, ok := observations[primaryHost]; ok {
+		backupPrimary = &st
+	}
 	// Backup observations must not discard a fresh database/quorum snapshot.
-	if err := p.backupStatus(ctx, rc, &out); err != nil {
+	if err := p.backupStatus(ctx, rc, &out, s, backupPrimary); err != nil {
 		out.Conditions = append(out.Conditions, domain.Condition{Type: "Backup", Status: "Unknown", Reason: "ObservationUnavailable", Message: "Backup inventory could not be collected; database health is reported independently.", LastTransitionTime: now(rc)})
 	}
 	for _, m := range s.Members {

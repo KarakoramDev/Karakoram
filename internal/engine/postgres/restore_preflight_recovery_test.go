@@ -3,6 +3,7 @@
 package postgres
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -10,13 +11,35 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 )
 
+func TestDistributedRestorePreflightChecksEveryGroup(t *testing.T) {
+	p, rc, _ := backupFixture(t, "single")
+	b := &domain.Backup{Name: "coordinated", Namespace: "default", Storage: "archive", Postgres: &domain.PostgresBackup{Groups: []domain.PostgresBackupGroup{
+		{Group: 0, Backup: domain.PostgresBackup{Repository: "coordinator", Label: "base0"}},
+		{Group: 1, Backup: domain.PostgresBackup{Repository: "worker1", Label: "base1"}},
+	}}}
+	var prefixes []string
+	p.restoreSetPresent = func(_ context.Context, _ *domain.BackupStorage, prefix string) (bool, error) {
+		prefixes = append(prefixes, prefix)
+		return prefix != "worker1/backup/kk/base1/", nil
+	}
+	if err := p.preflightRestoreSet(t.Context(), rc, b); err == nil {
+		t.Fatal("missing worker backup set accepted")
+	}
+	if len(prefixes) != 2 || prefixes[0] != "coordinator/backup/kk/base0/" || prefixes[1] != "worker1/backup/kk/base1/" {
+		t.Fatalf("group set checks = %v", prefixes)
+	}
+}
+
 func TestRestorePreflightFailureDoesNotAcquireRecovery(t *testing.T) {
-	for _, fault := range []string{"deleted-source", "major-mismatch", "invalid-pitr"} {
+	for _, fault := range []string{"deleted-source", "major-mismatch", "invalid-pitr", "missing-profile"} {
 		t.Run(fault, func(t *testing.T) {
 			p, rc, _ := backupFixture(t, "single")
 			b := &domain.Backup{Namespace: "default", Cluster: "demo", Name: "source", Storage: "archive", Provider: "postgres", Phase: domain.PhaseSucceeded, SourceVersion: "17.11.1", Postgres: &domain.PostgresBackup{Label: "20261017-021859F", Repository: "prefix/postgres/default/demo-incarnation"}}
 			if fault == "major-mismatch" {
 				b.SourceVersion = "16.1"
+			}
+			if fault == "missing-profile" {
+				b.Postgres.Profiles = []string{"postgis"}
 			}
 			if fault != "deleted-source" {
 				if err := rc.Store.CreateBackup(t.Context(), b); err != nil {

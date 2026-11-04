@@ -24,7 +24,7 @@ import (
 // callers must also require a positive count. No acknowledgements are cached, so
 // stopped/disappeared instances are excluded and replacements are visited anew.
 func VisitLiveInstances(ctx context.Context, rc *Context, member string, visit func(*agentapi.Client) (bool, error)) (bool, int, error) {
-	inventory := liveInstanceInventory(ctx, rc, member)
+	inventory := ObserveInstanceInventory(ctx, rc, member)
 	return visitObservedInstances(ctx, rc, member, inventory, func(client *agentapi.Client, _ string) (bool, error) { return visit(client) }, false)
 }
 
@@ -32,7 +32,7 @@ func VisitLiveInstances(ctx context.Context, rc *Context, member string, visit f
 // VisitLiveInstances, but visits at most eight instances concurrently. The
 // visitor must be concurrency-safe and must honor the supplied context.
 func VisitLiveInstancesConcurrent(ctx context.Context, rc *Context, member string, visit func(*agentapi.Client) (bool, error)) (bool, int, error) {
-	inventory := liveInstanceInventory(ctx, rc, member)
+	inventory := ObserveInstanceInventory(ctx, rc, member)
 	return VisitObservedInstances(ctx, rc, member, inventory, visit)
 }
 
@@ -52,10 +52,12 @@ func VisitObservedInstancesWithIdentity(ctx context.Context, rc *Context, member
 // VisitLiveInstancesWithIdentity collects fresh inventory and visits each pinned
 // instance sequentially, passing the platform instance ID to the visitor.
 func VisitLiveInstancesWithIdentity(ctx context.Context, rc *Context, member string, visit func(*agentapi.Client, string) (bool, error)) (bool, int, error) {
-	return visitObservedInstances(ctx, rc, member, liveInstanceInventory(ctx, rc, member), visit, false)
+	return visitObservedInstances(ctx, rc, member, ObserveInstanceInventory(ctx, rc, member), visit, false)
 }
 
-func liveInstanceInventory(ctx context.Context, rc *Context, member string) InstanceInventory {
+// ObserveInstanceInventory reads this sweep's instances, distinguishing verified
+// runtime absence from a failed platform read.
+func ObserveInstanceInventory(ctx context.Context, rc *Context, member string) InstanceInventory {
 	containers, err := rc.Backend.Containers(ctx, member)
 	if errors.Is(err, infra.ErrNotFound) {
 		service, observeErr := rc.Backend.GetService(ctx, member)

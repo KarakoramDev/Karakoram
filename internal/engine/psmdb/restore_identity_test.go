@@ -68,6 +68,21 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 			if command.Lookup("createUser").StringValue() != f.username() {
 				t.Error("created a non-scoped user")
 			}
+			password := command.Lookup("pwd").StringValue()
+			generatedPasswordLimit.Assert(t, "native restore identity password", password)
+			identity, err := loadRestorePBMIdentity(rc.Cluster.Internal)
+			if err != nil || identity == nil {
+				t.Error("missing restore identity", err)
+				return bson.M{"ok": 0}
+			}
+			persisted, err := secret(t.Context(), rc, identity.Secret)
+			if err != nil {
+				t.Error(err)
+			}
+			generatedPasswordLimit.Assert(t, "persisted restore identity password", string(persisted))
+			if password != string(persisted) {
+				t.Error("native restore password differs from persisted identity")
+			}
 			f.created++
 			f.exists = true
 		case command.Lookup("dropUser").Type != 0:
@@ -114,6 +129,15 @@ func newIdentityFixture(t *testing.T) *identityFixture {
 				t.Error(err)
 				http.Error(w, "configuration unavailable", 500)
 				return
+			}
+			if cfg.SystemUsers["backup"].Username == f.username() {
+				generatedPasswordLimit.Assert(t, "agent-loaded restore password", cfg.SystemUsers["backup"].Password)
+				identity, err := loadRestorePBMIdentity(cluster.Internal)
+				if err != nil || identity == nil {
+					t.Error("missing published restore identity", err)
+				} else if password, err := secret(t.Context(), &storedRC, identity.Secret); err != nil || cfg.SystemUsers["backup"].Password != string(password) {
+					t.Error("agent-loaded restore password differs from persisted identity", err)
+				}
 			}
 			if !f.ignoreReload {
 				if cfg.ConfigVersion < f.appliedVersion {

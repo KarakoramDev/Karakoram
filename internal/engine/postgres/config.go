@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
+	"slices"
 	"strings"
 
 	"github.com/KarakoramDev/Karakoram/internal/agentapi"
@@ -26,11 +28,35 @@ func PrepareCommands(version string) []string {
 		"sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg lsb-release",
 		nativeartifacts.PrepareCommands(bootstrap, "https://repo.percona.com/apt/percona-release_latest.noble_all.deb", "", "")[0],
 		fmt.Sprintf("sudo percona-release setup -y ppg-%d", m),
+		// Later profile/dependency installs must not select a newer server.
+		// Keep each major separate so offline upgrades can install both releases.
+		fmt.Sprintf("printf 'Package: percona-postgresql-%d\\nPin: version %s\\nPin-Priority: 1001\\n' | sudo tee /etc/apt/preferences.d/karakoram-postgresql-%d >/dev/null", m, packagePins[version], m),
 		"printf '#!/bin/sh\\nexit 101\\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null && sudo chmod 0755 /usr/sbin/policy-rc.d && sudo apt-get install -y postgresql-common && printf 'create_main_cluster = false\\n' | sudo tee /etc/postgresql-common/createcluster.conf >/dev/null",
 		fmt.Sprintf("sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y percona-postgresql-%d='%s' percona-postgresql-contrib='1:293-1.noble' percona-patroni='1:4.1.5-1.noble' percona-pgbackrest='1:2.59.1-1.noble' etcd-server='1:3.5.33-1.noble' etcd-client='1:3.5.33-1.noble' python3-etcd3gw python3-psycopg2", m, packagePins[version]),
 	}
 }
+
+func guardServerDowngrade(member, observed, requested string) error {
+	if observed != "" && observed != requested && !upgradeAllowed(observed, requested) {
+		return engine.Invalid("PostgreSQL member %s version drift: observed %s, requested %s; automatic downgrade is blocked; verify SQL versions, take a backup, and explicitly select the observed or a newer supported catalog release", member, observed, requested)
+	}
+	return nil
+}
 func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, error) {
+	// A prepared runtime must never replace an observed newer server with the
+	// older assigned release, including during an otherwise agent-only rollout.
+	if m.Role == "data" {
+		if err := guardServerDowngrade(m.Name, m.VersionDrift, rc.Cluster.Spec.Version); err != nil {
+			return infra.RuntimeSpec{}, err
+		}
+		for _, observed := range rc.Cluster.Status.Members {
+			if observed.Name == m.Name {
+				if err := guardServerDowngrade(m.Name, observed.Version, rc.Cluster.Spec.Version); err != nil {
+					return infra.RuntimeSpec{}, err
+				}
+			}
+		}
+	}
 	prepare := PrepareCommands(rc.Cluster.Spec.Version)
 	s, err := load(rc.Cluster)
 	if err != nil {
@@ -58,15 +84,39 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 		// The package enables its systemd unit directly, bypassing policy-rc.d.
 		// Only the member agent may supervise the proxy and own its listeners.
 		prepare = append(prepare, "if [ -d /run/systemd/system ]; then sudo systemctl disable --now proxysql.service && sudo systemctl mask proxysql.service; fi")
-	} else if p.options.Flavour != nil {
-		extra, err := p.options.Flavour.PrepareCommands(rc.Backend.Layout(), major(rc.Cluster.Spec.Version))
+	} else {
+		profiles, err := p.profiles(rc.Cluster.Spec.EngineOptions, major(rc.Cluster.Spec.Version))
 		if err != nil {
 			return infra.RuntimeSpec{}, err
 		}
-		prepare = append(prepare, extra...)
+		for _, profile := range profiles {
+			extra, err := profile.PrepareCommands(rc.Backend.Layout(), major(rc.Cluster.Spec.Version))
+			if err != nil {
+				return infra.RuntimeSpec{}, err
+			}
+			prepare = append(prepare, extra...)
+			if profile.UpgradeRules().InstallBothMajors && m.Role == "data" && s.Upgrade != nil && major(s.Upgrade.From) != major(rc.Cluster.Spec.Version) && s.Upgrade.Stage != "finalize" {
+				old, err := profile.PrepareCommands(rc.Backend.Layout(), major(s.Upgrade.From))
+				if err != nil {
+					return infra.RuntimeSpec{}, err
+				}
+				prepare = append(prepare, old...)
+			}
+		}
+	}
+	if m.Role == "data" && rc.Cluster.Spec.Topology.Type == "distributed" {
+		a, err := p.citusArtifact("citus", major(rc.Cluster.Spec.Version))
+		if err != nil {
+			return infra.RuntimeSpec{}, err
+		}
+		u, err := nativeartifacts.ResolveURL(a)
+		if err != nil {
+			return infra.RuntimeSpec{}, err
+		}
+		prepare = append(prepare, nativeartifacts.PrepareCommands(a, u, "/", "root")...)
 	}
 	ports := []infra.Port{{Port: 5432, Protocol: "tcp"}, {Port: 9443, Protocol: "tcp"}}
-	if m.Role == "data" && rc.Cluster.Spec.Topology.Type == "ha" {
+	if m.Role == "data" && patroniTopology(rc.Cluster.Spec.Topology.Type) {
 		for _, port := range []int{8008, 2379, 2380} {
 			ports = append(ports, infra.Port{Port: port, Protocol: "tcp"})
 		}
@@ -90,7 +140,14 @@ func (p *Core) runtimeSpec(rc *engine.Context, m *member) (infra.RuntimeSpec, er
 	if m.Role == "proxy" {
 		runtime.ReadinessArgs = engine.StatelessReadiness(rc, m.Name, &m.NativeReadiness, "--engine=postgres", "--data-dir="+rc.Backend.Layout().DataDir(m.Volume))
 	}
-	return runtime.Spec(rc.Backend.Layout()), nil
+	spec := runtime.Spec(rc.Backend.Layout())
+	if m.Role == "proxy" {
+		if spec.Env == nil {
+			spec.Env = make(map[string]string)
+		}
+		spec.Env["KARAKORAM_PROXY_SERVING_PROBE"] = "1"
+	}
+	return spec, nil
 }
 
 // MemberConfig renders secret-bearing configuration only for an allocated member.
@@ -146,11 +203,17 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	if sp.Topology == "" {
 		sp.Topology = rc.Cluster.Spec.Topology.Type
 	}
+	if sp.Topology == "distributed" && m.Role == "data" {
+		sp.Citus = &pgspec.Citus{Group: m.Group, Database: o.citusOptions().Database}
+	}
 	if p.options.Flavour != nil {
 		sp.Flavour = p.options.Flavour.Name()
 	}
 	agentCert := cert("agents")
 	for _, peer := range s.data() {
+		if sp.Topology == "distributed" && (m.Role == "proxy" && peer.Group != 0 || m.Role == "data" && peer.Group != m.Group) {
+			continue
+		}
 		if m.Role == "proxy" {
 			// Planned and deploying identities may not have a resolvable
 			// runtime yet. Publishing them can block ProxySQL's shared
@@ -168,7 +231,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			}
 		}
 		etcd := ""
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) && peer.Group == 0 {
 			etcd = "voter"
 			if peer.EtcdLearner {
 				etcd = "learner"
@@ -179,6 +242,18 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	desired := []string{"postgres"}
 	if m.Role == "data" {
 		sp.Superuser = credential("postgres")
+		sp.LocalPeerAuth = slices.Contains(rc.AgentConfigCapabilities, agentapi.ConfigCapabilityPostgresLocalPeer)
+		rotation, rotationErr := readAdminRotation(ctx, rc)
+		if rotationErr != nil {
+			return agentapi.MemberConfig{}, rotationErr
+		}
+		if rotation != nil && (rotation.Stage == "transition" || rotation.Stage == "native" || rotation.Stage == "publish") {
+			alternate := rotation.Password
+			if sp.Superuser.Password == rotation.Password {
+				alternate = rotation.Previous
+			}
+			sp.AlternateSuperuser = &pgspec.Credentials{Username: "postgres", Password: alternate}
+		}
 		sp.Replication = credential("kk_replicator")
 		sp.Rewind = credential("kk_rewind")
 		sp.Monitor = credential("kk_monitor")
@@ -187,41 +262,78 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 			return agentapi.MemberConfig{}, err
 		}
 		sp.PatroniREST = credential("kk_admin")
-		cidrs := []string{"::/0"}
+		// IPv6-capable service DNS can also publish A records. Match the
+		// dual-family PostgreSQL listener rather than treating the backend's
+		// preferred private family as its only possible client source family.
+		cidrs := []string{"0.0.0.0/0", "::/0"}
 		if rc.Backend.Layout().PrivateAddressFamily == infra.AddressFamilyIPv4 {
 			cidrs = []string{"0.0.0.0/0"}
 		}
 		sp.Postgres = &pgspec.Postgres{Parameters: o.Parameters, RequireTLS: rc.Cluster.Spec.TLS.Mode == "requireTLS", ClientCIDRs: cidrs, Synchronous: o.SynchronousMode}
-		if p.options.Flavour != nil {
+		parameters, err := p.profileParameters(m.Options)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+		for k, v := range parameters {
 			if sp.Postgres.Parameters == nil {
 				sp.Postgres.Parameters = map[string]string{}
 			}
-			for k, v := range p.options.Flavour.Parameters() {
-				sp.Postgres.Parameters[k] = v
-			}
-			sp.Postgres.SharedPreloadLibraries = p.options.Flavour.SharedPreloadLibraries()
+			sp.Postgres.Parameters[k] = v
 		}
-		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: !s.Formed && !engine.InitialDataSourceUnproven(rc.Cluster), Generation: s.BootstrapGeneration}
+		// Supabase historically selected preloads from desired wrapper options,
+		// even while core member options were still on an applied rolling phase.
+		preloadOptions := m.Options
+		if p.options.Flavour != nil {
+			preloadOptions = rc.Cluster.Spec.EngineOptions
+		}
+		sp.Postgres.SharedPreloadLibraries, err = p.profilePreloads(preloadOptions, sp.Major)
+		if err != nil {
+			return agentapi.MemberConfig{}, err
+		}
+		if p.options.Flavour == nil {
+			sp.Profiles = o.Profiles
+		}
+		if sp.Citus != nil {
+			if sp.Postgres.Parameters == nil {
+				sp.Postgres.Parameters = map[string]string{}
+			}
+			sp.Postgres.Parameters["wal_level"] = "logical"
+			sp.Postgres.SharedPreloadLibraries = append([]string{"citus"}, sp.Postgres.SharedPreloadLibraries...)
+		}
+		sp.Bootstrap = &pgspec.Bootstrap{Method: "initdb", AllowInitDB: !s.group(m.Group).formed() && !engine.InitialDataSourceUnproven(rc.Cluster), Generation: s.BootstrapGeneration}
 		if !s.Formed {
 			sp.Bootstrap.SeedMember = s.ConversionSeed
 		}
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) {
 			entries := []string{}
-			for _, peer := range sp.Peers {
-				entries = append(entries, peer.Name+"=https://"+peer.Host+":2380")
+			for _, peer := range s.group(0).data() {
+				entries = append(entries, peer.Name+"=https://"+net.JoinHostPort(peer.Name, "2380"))
 			}
 			sp.Etcd = &pgspec.Etcd{InitialCluster: strings.Join(entries, ","), State: m.EtcdState, Token: s.UID}
 			if m.InitialCluster != "" {
 				sp.Etcd.InitialCluster = m.InitialCluster
 			}
 			desired = []string{"etcd", "patroni"}
+			if sp.Citus != nil && m.Group != 0 {
+				for _, peer := range s.group(0).data() {
+					if !peer.Removing && !peer.EtcdLearner {
+						sp.Etcd.Endpoints = append(sp.Etcd.Endpoints, net.JoinHostPort(peer.Name, "2379"))
+					}
+				}
+				sp.Etcd.InitialCluster, sp.Etcd.State = "", ""
+				desired = []string{"patroni"}
+			}
 		}
 		if storageName := rc.Cluster.Spec.Backup.Storage; storageName != "" {
 			storage, err := p.backupStorage(ctx, rc, storageName, rc.Cluster.Ref().Namespace)
 			if err != nil {
 				return agentapi.MemberConfig{}, err
 			}
-			repo, err := repository(storage, repoPrefix(storage, rc.Cluster, s))
+			prefix := repoPrefix(storage, rc.Cluster, s)
+			if s.Topology == "distributed" {
+				prefix = groupRepoPrefix(storage, rc.Cluster, s, m.Group)
+			}
+			repo, err := repository(storage, prefix)
 			if err != nil {
 				return agentapi.MemberConfig{}, err
 			}
@@ -270,7 +382,7 @@ func (p *Core) MemberConfig(ctx context.Context, rc *engine.Context, name string
 	}
 	if m.Role == "data" && m.Offline {
 		desired = []string{}
-		if sp.Topology == "ha" {
+		if patroniTopology(sp.Topology) && m.Group == 0 {
 			desired = []string{"etcd"}
 		}
 	}

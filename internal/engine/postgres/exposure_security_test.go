@@ -122,7 +122,7 @@ func TestPublicPortConflictPreservesPrivatePostgresIntent(t *testing.T) {
 	s := converge(t, p, rc)
 	target := connectionMember(rc, s)
 	rc.Cluster.Spec.Exposure = domain.Exposure{Public: true, IPType: "IPV4"}
-	err := p.reconcileExposure(t.Context(), rc, s)
+	_, err := p.reconcileExposure(t.Context(), rc, s)
 	var conflict *infra.PublicPortConflictError
 	if !errors.As(err, &conflict) || conflict.Port != 5432 {
 		t.Fatalf("publication conflict lost: %v", err)

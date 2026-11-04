@@ -8,21 +8,29 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"errors"
+	"github.com/KarakoramDev/Karakoram/internal/agentrollout"
 	"github.com/KarakoramDev/Karakoram/internal/auth"
+	"github.com/KarakoramDev/Karakoram/internal/certificates"
+	"github.com/KarakoramDev/Karakoram/internal/cpbackup"
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/drills"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/openbao"
 	"github.com/KarakoramDev/Karakoram/internal/events"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/monitoring"
 	"github.com/KarakoramDev/Karakoram/internal/namespaces"
+	"github.com/KarakoramDev/Karakoram/internal/notify"
 	"github.com/KarakoramDev/Karakoram/internal/oauth"
 	"github.com/KarakoramDev/Karakoram/internal/orphanvolumes"
+	"github.com/KarakoramDev/Karakoram/internal/pgbinding"
 	"github.com/KarakoramDev/Karakoram/internal/rbac"
 	"github.com/KarakoramDev/Karakoram/internal/reconciler"
 	"github.com/KarakoramDev/Karakoram/internal/scheduler"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"github.com/KarakoramDev/Karakoram/internal/store"
+	"github.com/KarakoramDev/Karakoram/internal/version"
 	"log/slog"
 	"net"
 	"net/http"
@@ -52,6 +60,9 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return err
 	}
 	defer st.Close()
+	if _, err := st.EnsureInstallationID(ctx); err != nil {
+		return err
+	}
 	a, err := auth.New(auth.Options{Store: st, Sealer: sealer, Issuer: c.PublicURL, PublicURL: c.PublicURL, SecureCookies: len(c.PublicURL) >= 8 && c.PublicURL[:8] == "https://", Logger: logger})
 	if err != nil {
 		return err
@@ -91,7 +102,23 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 		return err
 	}
 	logTokenCapability(ctx, logger, backend)
-	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger})
+	var bindingServer *Server
+	bindings := pgbinding.New(pgbinding.Options{Store: st, Source: func(ctx context.Context, ref domain.ClusterRef) (*engine.Context, pgbinding.Access, error) {
+		if bindingServer == nil {
+			return nil, nil, engine.ErrUnavailable
+		}
+		return bindingServer.bindingSource(ctx, ref)
+	}, Trigger: func(ref domain.ClusterRef) {
+		if bindingServer != nil && bindingServer.Trigger != nil {
+			bindingServer.Trigger.Trigger(ref)
+		}
+	}})
+	providers := engineProviders(engineOptions{ControlPlaneURL: c.AdvertiseURL, InternalCAPEM: ca, Store: st, Logger: logger, Bindings: bindings, Targets: func(ctx context.Context, ref domain.ClusterRef) (openbao.Target, error) {
+		if bindingServer == nil {
+			return openbao.Target{}, engine.ErrUnavailable
+		}
+		return bindingServer.openbaoConnectionTarget(ctx, ref)
+	}})
 	registry, err := engine.NewRegistry(providers...)
 	if err != nil {
 		return err
@@ -123,7 +150,7 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	schedules, err := scheduler.New(scheduler.Options{Store: st, Registry: registry, Trigger: manager, Logger: logger})
+	schedules, err := scheduler.New(scheduler.Options{Store: st, Registry: registry, Trigger: manager, Events: recorder, Logger: logger})
 	if err != nil {
 		return err
 	}
@@ -158,11 +185,16 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	if c.OAuth == "on" {
 		oauthServer = oauth.New(oauth.Options{Store: st, Auth: a, PublicURL: c.PublicURL, DCR: c.OAuthDCR == "on", ClientHosts: c.OAuthClientHosts})
 	}
-	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPSealer: sealer, OAuth: oauthServer})
+	server, err := New(Options{Store: st, Auth: a, RBAC: policy, Registry: registry, Backends: backends, Namespaces: namespaceRegistry, RelayHandler: namespaceRegistry.Hub.Handler(), Context: rc, Trigger: manager, Hub: hub, Monitoring: collector, PublicURL: c.PublicURL, Logger: logger, MCPMode: c.MCP, MCPSealer: sealer, OAuth: oauthServer, Bindings: bindings})
 	if err != nil {
 		return err
 	}
 	defer server.Close()
+	bindingServer = server
+	drillController, err := drills.New(drills.Options{Store: st, Create: server.createDrillTarget, Delete: server.deleteDrillTarget, Clock: rc.Clock, Logger: logger, Record: recorder.Record})
+	if err != nil {
+		return err
+	}
 	publicListener, err := net.Listen("tcp", c.PublicListen)
 	if err != nil {
 		return err
@@ -179,18 +211,35 @@ func Run(ctx context.Context, c Config, logger *slog.Logger) error {
 	defer cancel()
 	public.BaseContext = func(net.Listener) context.Context { return child }
 	internal.BaseContext = func(net.Listener) context.Context { return child }
-	results := make(chan error, 9)
+	runners := []func() error{
+		func() error { return public.Serve(publicListener) },
+		func() error { return internal.Serve(tls.NewListener(internalListener, tlsConfig)) },
+		func() error { return internal.Serve(tls.NewListener(namespaceRegistry.Hub.Listener(), tlsConfig)) },
+		func() error { return namespaceRegistry.Run(child) },
+		func() error { return manager.Run(child) },
+		func() error { return schedules.Run(child) },
+		func() error { return drillController.Run(child) },
+		func() error {
+			return agentrollout.New(agentrollout.Options{Store: st, Registry: registry, Trigger: manager, Hub: hub, Logger: logger}).Run(child)
+		},
+		func() error { return notify.New(notify.Options{Store: st, Hub: hub}).Run(child) },
+		func() error {
+			return certificates.New(certificates.Options{Store: st, Hub: hub, Logger: logger}).Run(child)
+		},
+		func() error {
+			return cpbackup.New(cpbackup.Options{Store: st, Sealer: sealer, DataDir: c.DataDir, Events: recorder, Version: version.Version, Commit: version.Commit, Logger: logger}).Run(child)
+		},
+		func() error { return janitor.Run(child) },
+		func() error { return collector.Run(child) },
+		func() error { return server.runIdempotencyPurge(child) },
+	}
+	// Every runner can report once without blocking shutdown.
+	results := make(chan error, len(runners))
 	var workers sync.WaitGroup
-	launch := func(run func() error) { workers.Add(1); go func() { defer workers.Done(); results <- run() }() }
-	launch(func() error { return public.Serve(publicListener) })
-	launch(func() error { return internal.Serve(tls.NewListener(internalListener, tlsConfig)) })
-	launch(func() error { return internal.Serve(tls.NewListener(namespaceRegistry.Hub.Listener(), tlsConfig)) })
-	launch(func() error { return namespaceRegistry.Run(child) })
-	launch(func() error { return manager.Run(child) })
-	launch(func() error { return schedules.Run(child) })
-	launch(func() error { return janitor.Run(child) })
-	launch(func() error { return collector.Run(child) })
-	launch(func() error { return server.runIdempotencyPurge(child) })
+	for _, run := range runners {
+		workers.Add(1)
+		go func() { defer workers.Done(); results <- run() }()
+	}
 	logger.Info("Karakoram server listening", "public", c.PublicListen, "internal", c.InternalListen)
 	var runErr error
 	select {

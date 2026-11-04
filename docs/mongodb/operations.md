@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # MongoDB operations
 
-Scale, upgrade and diagnose managed PSMDB members and PBM processes.
+Scale, upgrade and diagnose managed [PSMDB](https://docs.percona.com/percona-server-for-mongodb/) members and [PBM](https://docs.percona.com/percona-backup-mongodb/) processes.
 
 ## Resource scaling
 
@@ -46,7 +46,7 @@ Secondaries upgrade first, then primary stepdown/former-primary deployment, wait
 
 **Upgrades** shows observed **Running version**, possibly mixed during rollout, separately from **Desired version**. Missing observations mean **not yet observed**, not deployment success.
 
-Zerops exact-version deployment retries have a hard budget.
+[Zerops](https://zerops.io/) exact-version deployment retries have a hard budget.
 `DeploymentRetriesExhausted` records the blocked member and stops submissions for
 that target while other members remain observable and can finish provisioning.
 An unstarted member is not treated as bootstrapped or upgraded, and existing
@@ -65,17 +65,21 @@ Use major form, not `8.0.32-14`. Wrong/non-deployed major returns **400** with f
 
 For stuck/wrong requests, inspect `operations cluster demo`, `operations get ID`, members/status/FCV and events in the database namespace. `karactl operations cancel ID` (API `POST /api/v1/operations/{id}/cancel`) is safe only **before `apply-fcv`**. Acceptance is 202, not completed cancellation; wait to terminal. A 409 `invalid_state` means inspect the new checkpoint, not submit competing work. Cancellation cannot undo applied FCV.
 
-Once terminal and healthy, re-read observed FCV; promote only if still needed and all binaries match. Never edit operation records or change desired binaries to justify a wrong FCV target. Preserve diagnostics and use MongoDB's supported recovery if native FCV partially failed.
+Once terminal and healthy, re-read observed FCV; promote only if still needed and all binaries match. Never edit operation records or change desired binaries to justify a wrong FCV target. Preserve diagnostics and use [MongoDB](https://www.mongodb.com/)'s supported recovery if native FCV partially failed.
 
 ## Rolling restart and overrides
 
-`karactl -n default clusters restart demo --wait` checkpoints members, checks quorum/health and processes secondaries before primary. It is not control-plane redeploy or agent binary rollout; current agents receive the executable on their next provider-driven member deployment. Keep protocol compatibility during mixed versions.
+`karactl -n default clusters restart demo --wait` checkpoints members, checks quorum/health and processes secondaries before primary. It restarts database processes, not the agent executable.
 
-Use validated `engineConfig` YAML only for non-managed settings; see the [overview limits](README.md). Restart/replacement/rotation and Running desired-state/deletion work have no safe general abort; [operation semantics](../clusters.md#operations-and-status) distinguish cancellation from rollback.
+Use `karactl -n default clusters upgrade-agents demo --wait` to deploy the current control-plane executable to the **same runtimes and volumes**, without changing MongoDB versions. Config servers precede shards and routers; each replica set rolls secondaries before its primary, with safe-restart, step-down and replication catch-up gates. Members already reporting the target build are skipped unless `--include-current` is set. Completed members are journaled and never repeated after a control-plane restart. Cancellation is safe between members, not during an active member change. If the control plane changes build during a rollout, the operation fails before another deployment; re-run it to freeze the new target.
+
+`spec.maintenance` windows gate new engine upgrades, rolling resources/configuration changes and scale-in, plus automatic database leaf renewal while more than seven days remain. A member already restarting finishes rejoining even if the window closes. Creation/scale-out, healing, agent transport certificates and database leaves within seven days of expiry are exempt. Imperative restart, TLS rotation, FCV promotion, replacement and agent upgrades wait before claim; `--ignore-maintenance-window` explicitly overrides supported actions. See [maintenance policy](../operations.md).
+
+Use validated `engineConfig` YAML only for non-managed settings; see the [overview limits](README.md). Restart/replacement/rotation and Running desired-state/deletion work have no safe general abort; agent rollout cancellation is available only between members. [Operation semantics](../clusters.md#operations-and-status) distinguish cancellation from rollback.
 
 ## Processes, files and readiness
 
-`mongod` serves data/config members; `mongos` serves routers; PBM placement is described in [sharding](sharding.md). Platform `karakoram agent readiness` probes **TCP 127.0.0.1:27017 only**, without credentials/environment; it does not validate users, replication or PBM. Authenticated provider observations determine [cluster health](replica-sets.md).
+`mongod` serves data/config members; `mongos` serves routers; PBM placement is described in [sharding](sharding.md). Platform `karakoram agent readiness` probes **TCP 127.0.0.1:27017 only**, without credentials/environment; it does not validate users, replication or PBM. Authenticated engine driver observations determine [cluster health](replica-sets.md).
 
 Ready requires an observed, writable primary in every replica set (including config servers and each shard), with data members in PRIMARY/SECONDARY state and within the managed replication-lag gate. Reachable secondary processes alone are not healthy write service. `Replication/<set>` reports `NoWritablePrimary` when election/quorum cannot provide a verified primary. Restore retained voters, disk capacity, DNS and connectivity; Karakoram does not force replica-set reconfiguration or reinitialize a previously formed set. A missing last data copy requires recovery from a verified backup, not an empty replacement. A lost secondary may be safely reseeded only from a verified retained writable primary.
 
@@ -110,7 +114,7 @@ API: `GET /api/v1/clusters/{cluster}/members/{member}/logs?process=mongod&lines=
 
 ## Monitoring vocabulary
 
-Enable `spec.monitoring.enabled` (CLI create default true), then **Monitoring** or `karactl clusters metrics demo --range 1h --step 30s -o json`. Agents authenticate with `clusterMonitor` and collect process/filesystem data. [Shared monitoring](../monitoring.md) owns scrape/history/API range semantics and authorization; MongoDB ships exporter/dashboard, not PMM/query analytics.
+Enable `spec.monitoring.enabled` (CLI create default true), then **Monitoring** or `karactl clusters metrics demo --range 1h --step 30s -o json`. Agents authenticate with `clusterMonitor` and collect process/filesystem data. [Shared monitoring](../monitoring.md) owns scrape/history/API range semantics and authorization; MongoDB ships exporter/dashboard, not [PMM](https://www.percona.com/software/database-tools/percona-monitoring-and-management)/query analytics.
 
 Every public metric has `namespace`, `cluster`, `member`; `set`/`role` are status properties, not guaranteed labels. Availability-dependent metrics may be absent, notably mongos oplog/WiredTiger values. Counter JSON series are reset-aware rates, not raw counters.
 
@@ -136,7 +140,7 @@ Every public metric has `namespace`, `cluster`, `member`; `set`/`role` are statu
 | `karakoram_mongodb_documents_total` | Counter; `operation` | `documents.total`: inserted/updated/deleted/returned |
 | `karakoram_mongodb_network_bytes_total` | Counter bytes; `direction` | `network.bytes`: bytesIn/bytesOut |
 
-Prometheus throughput: `rate(karakoram_opcounters_total[5m])`; never rate gauges. Raw CPU `rate(karakoram_process_cpu_seconds_total[5m]) * 100` can exceed clamped UI values on multicore work.
+[Prometheus](https://prometheus.io/) throughput: `rate(karakoram_opcounters_total[5m])`; never rate gauges. Raw CPU `rate(karakoram_process_cpu_seconds_total[5m]) * 100` can exceed clamped UI values on multicore work.
 
 ## Troubleshooting
 

@@ -64,6 +64,49 @@ func TestPreparationSuppressesDistroCluster(t *testing.T) {
 	}
 }
 
+func TestPreparationRetainsExactServerCandidate(t *testing.T) {
+	for version, pin := range packagePins {
+		commands := strings.Join(PrepareCommands(version), "\n")
+		m := strconv.Itoa(major(version))
+		preference := "Package: percona-postgresql-" + m + "\\nPin: version " + pin + "\\nPin-Priority: 1001\\n"
+		pinned := strings.Index(commands, preference)
+		install := strings.Index(commands, "apt-get install -y percona-postgresql-"+m+"=")
+		if pinned < 0 || install < pinned || !strings.Contains(commands, "/etc/apt/preferences.d/karakoram-postgresql-"+m) {
+			t.Fatalf("%s must persist its server candidate before apt resolves dependencies", version)
+		}
+	}
+}
+
+func TestProfileAndCitusPreparationRetainsExactServerCandidate(t *testing.T) {
+	t.Setenv("KARAKORAM_ARTIFACT_MIRROR", "https://artifacts.example.invalid")
+	for version := range packagePins {
+		p, rc, _ := setup(t, "single")
+		rc.Cluster.Spec.Version = version
+		rc.Cluster.Spec.EngineOptions = json.RawMessage(`{"profiles":["postgis","pgvector","timescaledb"]}`)
+		s := converge(t, p, rc)
+		for _, topology := range []string{"single", "distributed"} {
+			rc.Cluster.Spec.Topology.Type = topology
+			runtime, err := p.runtimeSpec(rc, s.data()[0])
+			if err != nil {
+				t.Fatal(version, topology, err)
+			}
+			base := PrepareCommands(version)
+			if len(runtime.Prepare) <= len(base) || !slices.Equal(runtime.Prepare[:len(base)], base) {
+				t.Fatalf("%s %s profiles bypass the exact server preference", version, topology)
+			}
+			extras := strings.Join(runtime.Prepare[len(base):], "\n")
+			for _, name := range []string{"postgis-3=", "pgvector=", "timescaledb-pg" + strconv.Itoa(major(version))} {
+				if !strings.Contains(extras, name) {
+					t.Fatalf("%s %s does not exercise %s preparation", version, topology, name)
+				}
+			}
+			if topology == "distributed" && !strings.Contains(extras, "citus-pg"+strconv.Itoa(major(version))) {
+				t.Fatal("distributed preparation omitted the Citus artifact")
+			}
+		}
+	}
+}
+
 func TestPerconaBootstrapUsesRootPrivateVerifiedStaging(t *testing.T) {
 	command := PrepareCommands("17.11.1")[1]
 	const prefix = "sudo sh -c '"
@@ -365,16 +408,22 @@ func TestProxyJoinPublicationDuringBootstrapAndConversion(t *testing.T) {
 }
 
 func TestIPv4HBAFamily(t *testing.T) {
-	p, rc, _ := setup(t, "single")
-	converge(t, p, rc)
-	config, err := p.MemberConfig(context.Background(), rc, "demop0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var spec pgspec.Spec
-	json.Unmarshal(config.EngineSpec, &spec)
-	if len(spec.Postgres.ClientCIDRs) != 1 || spec.Postgres.ClientCIDRs[0] != "0.0.0.0/0" {
-		t.Fatal("backend private family ignored")
+	for _, topology := range []string{"single", "ha"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, _ := setup(t, topology)
+			converge(t, p, rc)
+			config, err := p.MemberConfig(context.Background(), rc, "demop0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec pgspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(spec.Postgres.ClientCIDRs, []string{"0.0.0.0/0"}) {
+				t.Fatalf("IPv4-only backend HBA changed: %v", spec.Postgres.ClientCIDRs)
+			}
+		})
 	}
 }
 
@@ -387,19 +436,23 @@ func (b ipv6Backend) Layout() infra.Layout {
 }
 
 func TestIPv6HBAFamily(t *testing.T) {
-	p, rc, b := setup(t, "single")
-	rc.Backend = ipv6Backend{b}
-	converge(t, p, rc)
-	config, err := p.MemberConfig(context.Background(), rc, "demop0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var spec pgspec.Spec
-	if err = json.Unmarshal(config.EngineSpec, &spec); err != nil {
-		t.Fatal(err)
-	}
-	if len(spec.Postgres.ClientCIDRs) != 1 || spec.Postgres.ClientCIDRs[0] != "::/0" {
-		t.Fatal("backend private family ignored")
+	for _, topology := range []string{"single", "ha"} {
+		t.Run(topology, func(t *testing.T) {
+			p, rc, b := setup(t, topology)
+			rc.Backend = ipv6Backend{b}
+			converge(t, p, rc)
+			config, err := p.MemberConfig(context.Background(), rc, "demop0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var spec pgspec.Spec
+			if err := json.Unmarshal(config.EngineSpec, &spec); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(spec.Postgres.ClientCIDRs, []string{"0.0.0.0/0", "::/0"}) {
+				t.Fatalf("dual-family backend must admit both source families: %v", spec.Postgres.ClientCIDRs)
+			}
+		})
 	}
 }
 

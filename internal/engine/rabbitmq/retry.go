@@ -25,13 +25,20 @@ func (s *internalState) resetPlatformRetry(v *pending) {
 // tree and the retry state that survives control-plane restarts.
 func (s *internalState) failPendingCause(rc *engine.Context, cause error) error {
 	v := s.Pending
+	if errors.Is(cause, infra.ErrPlacementUnsatisfiable) && v.Action == "import" {
+		if m := s.find(v.Member); m != nil && m.ReplacesVolume != "" {
+			s.ReplacementFailure = "member relocation failed: no other eligible node"
+			m.Removing = true
+			m.ImportPlan = nil
+		}
+	}
 	var wait *engine.PlatformRetryWait
 	if errors.As(cause, &wait) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause
 	}
-	if errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+	if engine.PlatformFailureDefinitive(cause) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause
@@ -115,6 +122,9 @@ func (p *Provider) submit(ctx context.Context, rc *engine.Context, s *internalSt
 		o, e := parseOptions(m.EngineOptions)
 		if e != nil {
 			return e
+		}
+		if v.ManagementPublic != nil {
+			o.ManagementUI.Public = *v.ManagementPublic
 		}
 		if v.Action == "cleanup-management" {
 			o.ManagementUI.Public = false
@@ -224,6 +234,10 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			s.resetPlatformRetry(v)
 			return false, err
 		}
+		var rejected *infra.ResourceUpdateRejectedError
+		if errors.As(err, &rejected) {
+			return true, s.failPendingCause(rc, err)
+		}
 		if err != nil {
 			return true, err
 		}
@@ -284,6 +298,9 @@ func (p *Provider) observePending(ctx context.Context, rc *engine.Context, s *in
 			return true, err
 		}
 		m.ManagementPublic = o.ManagementUI.Public
+		if v.ManagementPublic != nil {
+			m.ManagementPublic = *v.ManagementPublic
+		}
 	case "cleanup-management":
 		m.ManagementPublic = false
 	case "delete-runtime":

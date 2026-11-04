@@ -17,6 +17,7 @@ func TestMemberRuntimeRecovery(t *testing.T) {
 		t.Run(fault, func(t *testing.T) {
 			p, rc, _, _ := setup(t)
 			rc.Agents = nil
+			closedFleetWindow(rc)
 			rc.Cluster.Spec.Components.Engine.Replicas = 1
 			b := fake.New(fake.Options{})
 			rc.Backend = b

@@ -27,7 +27,7 @@ func TestTrackingWaitSupersedesResolvedPlacementWithoutInventingFreshness(t *tes
 		t.Fatal(err)
 	}
 	c.Status = domain.ClusterStatus{Phase: domain.PhaseUpdating, Message: "waiting for member health", ObservedAt: old.Add(time.Minute)}
-	if err := m.trackingOperations(ctx, p, c, nil, true); err != nil {
+	if err := m.trackingOperations(ctx, p, c, nil, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetOperation(ctx, op.ID)
@@ -44,7 +44,7 @@ func TestTrackingWaitSupersedesResolvedPlacementWithoutInventingFreshness(t *tes
 	// An unrelated imperative operation can prevent an actual convergence pass.
 	c.Status.Message = "unrelated operation progress"
 	c.Status.ObservedAt = old.Add(time.Hour)
-	if err := m.trackingOperations(ctx, p, c, nil, false); err != nil {
+	if err := m.trackingOperations(ctx, p, c, nil, false, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err = st.GetOperation(ctx, op.ID)
@@ -70,7 +70,7 @@ func TestCreateDeadlineReservesRestoreOutcomeWithLongBlocker(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Status = domain.ClusterStatus{Phase: domain.PhaseCreating, Message: strings.Repeat("界", 1000)}
-	if err := m.trackingOperations(ctx, p, c, nil, true); err != nil {
+	if err := m.trackingOperations(ctx, p, c, nil, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetOperation(ctx, op.ID)

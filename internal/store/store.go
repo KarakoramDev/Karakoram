@@ -49,10 +49,12 @@ type Store struct {
 	writer *sql.DB
 	reader *sql.DB
 	sealer *secrets.Sealer
+	lock   *os.File
+	path   string
 }
 
 // Open opens and migrates a SQLite database with encrypted secret persistence.
-func Open(path string, sealer *secrets.Sealer) (_ *Store, openErr error) {
+func open(path string, sealer *secrets.Sealer) (_ *Store, openErr error) {
 	defer func() {
 		if openErr != nil {
 			openErr = fmt.Errorf("control-plane state unavailable: %w; preserve the database, WAL and master key; restore free space and write access, or restore verified control-plane state if corrupt; never recreate the database to bypass this error", openErr)
@@ -101,7 +103,7 @@ func openSQLite(path string, sealer *secrets.Sealer) (*Store, error) {
 	}
 	w.SetMaxOpenConns(1)
 	w.SetMaxIdleConns(1)
-	s := &Store{writer: w, sealer: sealer}
+	s := &Store{writer: w, sealer: sealer, path: path}
 	if _, err = w.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		w.Close()
 		return nil, err
@@ -171,7 +173,7 @@ func initializeStore(path string, sealer *secrets.Sealer) (*Store, error) {
 	// created authoritative file.
 	if err = os.Link(stage, path); err != nil {
 		if os.IsExist(err) {
-			return Open(path, sealer)
+			return open(path, sealer)
 		}
 		return nil, err
 	}
@@ -186,7 +188,13 @@ func initializeStore(path string, sealer *secrets.Sealer) (*Store, error) {
 }
 
 // Close releases pooled SQLite connections.
-func (s *Store) Close() error { return errors.Join(s.reader.Close(), s.writer.Close()) }
+func (s *Store) Close() error {
+	err := errors.Join(s.reader.Close(), s.writer.Close())
+	if s.lock != nil {
+		err = errors.Join(err, s.lock.Close())
+	}
+	return err
+}
 
 // execWriter identifies pool admission separately from SQLite execution for the
 // background metadata/retention paths that can otherwise stall inspection.

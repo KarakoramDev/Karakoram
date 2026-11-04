@@ -3,11 +3,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap, type Schemas } from '@/api/client';
 import { keys } from '@/api/keys';
 import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
-import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
+import { useBackupStorages, useCluster, useClusters, useNamespaceOptions, useNamespaces, useProviders, type ClusterSpec, type Provider } from '@/api/hooks';
 import { useAuth } from '@/auth/session';
 import { DEFAULT_NAMESPACE, clusterObject } from '@/auth/permissions';
 import { useNamespace } from '@/namespaces/useNamespace';
@@ -27,13 +27,16 @@ import { componentEntries, memberChoices, nameError, topologyErrors, validateWiz
 import { resourceMinimums } from './wizard/resources';
 import { engineConsequences, engineRules } from './wizard/engine';
 import { configurationReviewRows, exposureReviewRows, exposureSummary, totalFootprint } from './wizard/review';
-import { validatePitrPoint } from './wizard/restore-point';
+import { pitrIntervals, validatePitrPoint } from './wizard/restore-point';
 import { useSourcePitrWindow } from './wizard/queries';
 import { cleanTLS, wireExposure } from './wizard/access';
 import { WizardNavigation } from './wizard/Navigation';
-import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable } from '@/engines';
+import { defaultProvider, engines, hasCapability, publicExposureMetadata, replicaLimits, validateReplicas, versionSelectable, type RestoreExtras } from '@/engines';
 import { managementIsPublic } from '@/engines/rabbitmq/helpers';
 import { elasticResourceRows } from '@/engines/elasticsearch/resource-summary';
+import { useLocalRequest } from './use-local-request';
+import { resourceRows as temporalResourceRows } from '@/engines/temporal/spec';
+import { plannedPlacementCopy } from './detail/ops-state';
 
 type Topology = Schemas['ProviderTopology'];
 
@@ -67,15 +70,19 @@ export function ClusterWizardPage() {
   const { namespace: selectedNamespace } = useNamespace();
   const providers = useProviders();
   const namespaceOptions = useNamespaceOptions();
+  const namespaces = useNamespaces(auth.can('namespaces', 'read'));
 
   const [step, setStep] = useState<StepId>('basics');
   const [name, setName] = useState('');
   const [targetNamespace, setTargetNamespace] = useState(selectedNamespace ?? '');
   const [spec, setSpec] = useState<ClusterSpec | null>(null);
+  const placementPlan = plannedPlacementCopy(namespaces.data?.items.find((ns) => ns.name === targetNamespace)?.capabilities);
   const [presetName, setPresetName] = useState('');
   const [touched, setTouched] = useState<Record<StepId, boolean>>({ basics: false, topology: false, resources: false, backups: false, access: false, review: false });
 
   const [allAddressesConfirmed, setAllAddressesConfirmed] = useState(false);
+  // Write-only request fields (e.g. OpenBao unseal shares for a deleted source); never part of the spec or any cache.
+  const [restoreExtras, setRestoreExtras] = useState<RestoreExtras>({});
   const submissionLocked = useRef(false);
   const submitted = useRef(false);
   const idempotency = useIdempotencyKey();
@@ -125,11 +132,12 @@ export function ClusterWizardPage() {
     if (!spec) return null;
     const result = validateWizard(name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed);
     if (spec.dataSource?.pitrTime) result.backups.push(...(pitrSource.error ? [errorMessage(pitrSource.error)] : validatePitrPoint(spec.dataSource.pitrTime, pitrSource.data ?? null)));
+    if (spec.dataSource) result.backups.push(...(engines[spec.provider]?.validateRestore?.(restoreExtras) ?? []));
     return result;
-  }, [name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed, pitrSource.data, pitrSource.error]);
+  }, [name, targetNamespace, spec, existingNames, provider, allAddressesConfirmed, pitrSource.data, pitrSource.error, restoreExtras]);
 
-  const create = useMutation({
-    mutationFn: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, headers: idempotencyHeaders(idempotency.key), body })),
+  const create = useLocalRequest({
+    request: (body: Schemas['CreateClusterRequest']) => unwrap(api.POST('/clusters', { params: { query: { namespace: targetNamespace } }, headers: idempotencyHeaders(idempotency.key), body })),
     onSuccess: (c) => {
       idempotency.reset();
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
@@ -137,7 +145,7 @@ export function ClusterWizardPage() {
       navigate(clusterPath(c.namespace || targetNamespace, c.name));
     },
     onError: () => { setStep('review'); },
-    onSettled: () => { submissionLocked.current = false; },
+    onSettled: () => { submissionLocked.current = false; setRestoreExtras({}); },
   });
 
   if (!auth.can('clusters', 'create')) {
@@ -180,6 +188,7 @@ export function ClusterWizardPage() {
   const WizardSection = engineUI?.wizardSection;
   const TopologySection = engineUI?.topologySection;
   const ResourcesSection = engineUI?.resourcesSection;
+  const RestoreSection = engineUI?.restoreSection;
   const engineSummary = engineUI?.specSummary?.(spec) ?? `${spec.components.engine.replicas} nodes`;
 
   const goto = (id: StepId, clickCount: number) => {
@@ -199,13 +208,15 @@ export function ClusterWizardPage() {
       provider: provider.name,
       version: preset.spec.version || s.version,
       dataSource: s.dataSource,
+      // Temporal options (persistence, namespaces, Web UI) do not depend on the topology; presets only size components.
+      ...(provider.name === 'temporal' ? { engineOptions: s.engineOptions } : {}),
     }));
   };
 
   const switchTopology = (type: Topology['type']) => {
     const t = provider.topologies.find((x) => x.type === type);
     if (!t) return;
-    update((s) => ({ ...specFromTopology(provider, t, s.version), backup: s.backup, tls: s.tls, exposure: s.exposure, monitoring: s.monitoring, dataSource: s.dataSource }));
+    update((s) => ({ ...specFromTopology(provider, t, s.version), backup: s.backup, tls: s.tls, exposure: s.exposure, monitoring: s.monitoring, dataSource: s.dataSource, ...(provider.name === 'temporal' ? { engineOptions: s.engineOptions } : {}) }));
     setPresetName('');
   };
 
@@ -216,8 +227,8 @@ export function ClusterWizardPage() {
     }, () => {
       submitted.current = true;
       button.disabled = true;
-      const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed) };
-      create.mutate(body);
+      const body: Schemas['CreateClusterRequest'] = { name, spec: cleanSpec(spec, targetNamespace, allAddressesConfirmed), ...(spec.dataSource ? restoreExtras : {}) };
+      void create.run(body);
     });
   };
 
@@ -381,9 +392,8 @@ export function ClusterWizardPage() {
           {step === 'topology' ? (
             <Card title={mongo ? (sharded ? 'Sharded topology' : 'Replica set') : rules.topology[topology.type]?.title ?? topology.displayName}>
               <div className="stack" style={{ gap: 16 }}>
-                <Callout tone="warn" title="No host anti-affinity on Zerops">
-                  Zerops does not guarantee that members land on separate physical hosts. More members improve resilience against process and container failures, but host-failure tolerance cannot be
-                  promised. Karakoram reports detected co-location on the cluster overview.
+                <Callout tone="info" title={placementPlan.title}>
+                  {placementPlan.message}
                 </Callout>
                 {!mongo ? (TopologySection ? <TopologySection provider={provider} spec={spec} onChange={(next) => update(() => next)} /> : <GenericComponents spec={spec} topology={topology} showErrors={touched.topology} onChange={(next) => update(() => next)} />) : sharded ? (
                   <>
@@ -444,7 +454,7 @@ export function ClusterWizardPage() {
                     hint={touched.topology && counts.engine ? <span className="field-error" role="alert">{counts.engine}</span> : undefined}
                   />
                 )}
-                {!['elasticsearch', 'postgres', 'supabase'].includes(provider.name) ? <TextAreaField
+                {!engineUI?.engineConfigUnsupported && !['elasticsearch', 'postgres', 'supabase', 'mysql', 'pxc', 'neo4j', 'weaviate'].includes(provider.name) ? <TextAreaField
                   label={engineUI?.engineConfigLabel ?? (mongo ? 'Engine configuration overrides (YAML, optional)' : 'Engine configuration overrides (optional)')}
                   mono
                   rows={5}
@@ -538,6 +548,7 @@ export function ClusterWizardPage() {
               </Card>
               {hasCapability(provider, 'restores') ? <Card title="Seed data (optional)">
                 <DataSourceEditor value={spec.dataSource} onChange={(dataSource) => update((s) => ({ ...s, dataSource }))} targetNamespace={targetNamespace || DEFAULT_NAMESPACE} namespaces={namespaceOptions} showErrors={touched.backups} pitr={pitr} />
+                {RestoreSection && spec.dataSource ? <RestoreSection source={{ namespace: spec.dataSource.namespace || targetNamespace || DEFAULT_NAMESPACE, cluster: spec.dataSource.cluster }} inPlace={false} value={restoreExtras} onChange={(extras) => { editAttempt(); setRestoreExtras(extras); }} showErrors={touched.backups} /> : null}
               </Card> : null}
             </div>
           ) : null}
@@ -575,14 +586,14 @@ export function ClusterWizardPage() {
                     ['Name', <span className="mono">{name}</span>],
                     ['Engine', `${provider.displayName} ${spec.version}`],
                     ['Topology', mongo ? (sharded ? `Sharded: ${spec.topology.shards} shards × ${spec.components.engine.replicas} members, ${spec.components.configServer?.replicas} config servers, ${spec.components.router?.replicas} routers` : `Replica set, ${spec.components.engine.replicas} members`) : `${rules.topology[topology.type]?.title ?? topology.displayName}, ${engineSummary}`],
-                    ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
+                    ...(provider.name === 'elasticsearch' ? elasticResourceRows(spec) : provider.name === 'temporal' ? temporalResourceRows(spec) : [['Member resources', resourcesSummary(spec.components.engine.resources)] as [string, string]]),
                     spec.components.configServer && ['Config server resources', resourcesSummary(spec.components.configServer.resources)],
                     spec.components.router && ['Router resources', resourcesSummary(spec.components.router.resources, true)],
                     ['Total runtime footprint', `${footprint.members} instances · ${footprint.minCpu}–${footprint.maxCpu} CPU cores · ${footprint.minRam}–${footprint.maxRam} GiB RAM`],
                     ['Total data volumes', `${footprint.volumes} volumes · ${footprint.minDisk}–${footprint.maxDisk} GiB data disk`],
                     footprint.runtimeMaxDisk > 0 && ['Runtime disks (additional)', `${footprint.runtimeMinDisk}–${footprint.runtimeMaxDisk} GiB across ${footprint.members} runtime instances`],
-                    ['Placement', 'Selected namespace/project; physical hosts are unknown until allocation. Zerops does not guarantee host anti-affinity.'],
-                    ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec)),
+                    ['Placement', placementPlan.message],
+                    ...(provider.name === 'elasticsearch' ? [] : configurationReviewRows(spec, name)),
                     ['Backup storage', spec.backup?.storage ?? 'none'],
                     ['Schedules', (spec.backup?.schedules ?? []).map((s) => `${s.name} (${s.cron}, ${s.type}, keep ${s.retainCount})`).join('; ') || 'none'],
                     pitr && ['PITR', spec.backup?.pitr?.enabled ? `enabled, ${spec.backup.pitr.oplogSpanMinutes} min slices` : 'disabled'],
@@ -637,7 +648,7 @@ function GenericComponents({ spec, topology, resources = false, showErrors = fal
 }
 
 /** Drop empty optional envelopes so the server applies its own defaults. */
-function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfirmed: boolean): ClusterSpec {
+export function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfirmed: boolean): Schemas['ClusterInputSpec'] {
   const out: ClusterSpec = structuredClone(spec);
   if (out.backup) {
     if (!out.backup.storage) delete out.backup.storage;
@@ -651,6 +662,9 @@ function cleanSpec(spec: ClusterSpec, targetNamespace: string, allAddressesConfi
   if (!out.engineConfig) delete out.engineConfig;
   if (out.dataSource) out.dataSource = wireDataSource(out.dataSource, targetNamespace);
   else delete out.dataSource;
+  // Temporal uses only extra components; the zero-replica response engine slot
+  // is not accepted by the shared request schema.
+  if (out.provider === 'temporal') return { ...out, components: { extra: out.components.extra } };
   return out;
 }
 
@@ -798,16 +812,17 @@ export function PitrPicker({ namespace, cluster, value, onChange, showErrors = f
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   };
   const pointErrors = validatePitrPoint(value, win);
+  const intervals = pitrIntervals(win);
   return (
     <div className="stack">
-      <p className="small muted">
-        Restorable window: <strong>{new Date(win.start).toLocaleString()}</strong> → <strong>{new Date(win.end).toLocaleString()}</strong>
-      </p>
+      {intervals.map((range, index) => <p className="small muted" key={index}>
+        Restorable window: <strong>{new Date(range.start).toLocaleString()}</strong> → <strong>{new Date(range.end).toLocaleString()}</strong>{range.backup ? ` · ${range.backup}` : ''}
+      </p>)}
       <TextField
         label="Point in time (local)"
         type="datetime-local"
         step={1}
-        min={toLocal(win.start)}
+        min={toLocal(intervals.reduce((start, range) => Date.parse(range.start) < Date.parse(start) ? range.start : start, win.start))}
         max={toLocal(win.end)}
         value={value ? toLocal(value) : ''}
         onChange={(e) => {

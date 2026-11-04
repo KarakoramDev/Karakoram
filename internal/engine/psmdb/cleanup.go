@@ -21,6 +21,11 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 	if e != nil {
 		return false, e
 	}
+	// Capture legacy application evidence before suspension removes routes.
+	seedExposure(rc, s)
+	if err := save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	// Whole-cluster cleanup takes over infrastructure retirement. Nomad retains
 	// accepted deletion/fencing state; do not resume queued volume removal after
 	// a keep-volumes suspension.

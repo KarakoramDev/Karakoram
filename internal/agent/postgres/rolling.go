@@ -10,7 +10,7 @@ import (
 )
 
 func primaryDecreaseAllowed(s pgspec.Spec, st pgspec.StatusResponse) bool {
-	if s.Topology != pgspec.TopologyHA || !st.Running || st.Role != "primary" || st.Leader != s.Member || !st.EtcdHealthy || s.Postgres == nil || len(st.SharedMemoryParameters) != 5 {
+	if !usesPatroni(s) || !st.Running || st.Role != "primary" || st.Leader != s.Member || !st.EtcdHealthy || s.Postgres == nil || len(st.SharedMemoryParameters) != 5 {
 		return false
 	}
 	decrease := false
@@ -32,4 +32,8 @@ func primaryDecreaseAllowed(s pgspec.Spec, st pgspec.StatusResponse) bool {
 		decrease = decrease || next < current
 	}
 	return decrease
+}
+
+func singletonCitusRestartAllowed(s pgspec.Spec, st pgspec.StatusResponse) bool {
+	return s.Citus != nil && len(s.Peers) == 1 && st.Running && st.Role == "primary" && st.Leader == s.Member && st.EtcdHealthy
 }

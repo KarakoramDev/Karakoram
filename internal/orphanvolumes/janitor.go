@@ -6,6 +6,7 @@ package orphanvolumes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -112,7 +113,7 @@ func (j *Janitor) removed(ctx context.Context, v *domain.OrphanedVolume, replace
 	if replaced {
 		message = fmt.Sprintf("orphaned volume %s was replaced by a different service; dropping record without deleting the replacement", v.Hostname)
 		j.Logger.Warn(message, "serviceId", v.ServiceID)
-		if err := j.event(ctx, v, kind, "OrphanedVolumeRecordRemoved", message); err != nil {
+		if err := j.event(ctx, v, "Warning", "VolumeDeletionRefused", message); err != nil {
 			return err
 		}
 		return j.Store.DeleteOrphanedVolume(ctx, v.Namespace, v.Hostname)
@@ -148,6 +149,11 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 	}
 	service, err := backend.GetService(ctx, v.Hostname)
 	if err != nil {
+		if errors.Is(err, infra.ErrConflict) {
+			if eventErr := j.event(ctx, v, "Warning", "VolumeDeletionRefused", "Volume deletion refused because ownership or identity could not be verified"); eventErr != nil {
+				return eventErr
+			}
+		}
 		if v.ProcessPending {
 			v.NextAttemptAt = j.Now().Add(InitialBackoff)
 			if saveErr := j.Store.PutOrphanedVolume(ctx, v); saveErr != nil {
@@ -197,7 +203,7 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 			message := fmt.Sprintf("Delete process %q for service %q has not finished for at least 15 minutes; inspect or cancel it in the namespace backend; deletion remains fenced until its terminal outcome or service absence is confirmed", v.LastProcessID, v.ServiceID)
 			if v.LastError != message {
 				v.LastError = message
-				if err := j.event(ctx, v, "Warning", "OrphanedVolumeDeleteStuck", message); err != nil {
+				if err := j.event(ctx, v, "Warning", "VolumeDeletionRefused", message); err != nil {
 					return err
 				}
 			}
@@ -212,6 +218,11 @@ func (j *Janitor) attempt(ctx context.Context, v *domain.OrphanedVolume) error {
 		v.LastProcessID = op.ID
 	}
 	if err != nil {
+		if errors.Is(err, infra.ErrConflict) {
+			if eventErr := j.event(ctx, v, "Warning", "VolumeDeletionRefused", "Volume deletion refused because ownership or identity could not be verified"); eventErr != nil {
+				return eventErr
+			}
+		}
 		return j.failed(ctx, v, err.Error())
 	}
 	v.ProcessPending = op.ID != ""

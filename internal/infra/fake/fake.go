@@ -25,6 +25,9 @@ type Options struct {
 	Project      infra.Project
 	Capabilities infra.Capabilities
 	Layout       infra.Layout
+	// PlacementGroups models available authoritative nodes when Placement is enabled.
+	// Nil defaults to three nodes; an explicit empty slice models no eligible nodes.
+	PlacementGroups []string
 	// Polls is the number of incomplete observations before an operation
 	// completes. Service status transitions are applied at completion.
 	Polls       int
@@ -43,6 +46,9 @@ func defaults(o Options) Options {
 	}
 	if o.Layout == (infra.Layout{}) {
 		o.Layout = infra.Layout{AppDir: "/srv/karakoram", VolumeRoot: "/srv/volumes", User: "karakoram"}
+	}
+	if o.Capabilities.Placement && o.PlacementGroups == nil {
+		o.PlacementGroups = []string{"fake-node-1", "fake-node-2", "fake-node-3"}
 	}
 	return o
 }
@@ -211,6 +217,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		return infra.Op{}, err
 	}
 	seen := map[string]bool{}
+	placements := make(map[string]string, len(specs))
 	for _, s := range specs {
 		if b.state.services[s.Hostname] != nil || seen[s.Hostname] {
 			return infra.Op{}, fmt.Errorf("%w: service %s exists", infra.ErrConflict, s.Hostname)
@@ -226,6 +233,17 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 		}
 		if unknownCPUMode(s.Resources) {
 			return infra.Op{}, reject("unknown CPU mode")
+		}
+		if b.options.Capabilities.Placement && s.Kind == infra.KindVolume {
+			for _, group := range b.options.PlacementGroups {
+				if !slices.Contains(s.SpreadAvoid, group) {
+					placements[s.Hostname] = group
+					break
+				}
+			}
+			if placements[s.Hostname] == "" {
+				return infra.Op{}, fmt.Errorf("place volume %s: %w", s.Hostname, infra.ErrPlacementUnsatisfiable)
+			}
 		}
 		seen[s.Hostname] = true
 	}
@@ -243,6 +261,15 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 			}
 		}
 		b.state.services[s.Hostname] = &record{service: infra.Service{ID: id, Hostname: s.Hostname, Kind: s.Kind, Status: infra.StatusCreating, Resources: cloneResources(s.Resources), MinContainers: min, MaxContainers: max}, secrets: maps.Clone(s.Env), vars: maps.Clone(s.Vars), volume: s.Volume}
+		if b.options.Capabilities.Placement {
+			group := placements[s.Hostname]
+			if volume := b.state.services[s.Volume]; volume != nil {
+				group = volume.placementGroup
+			} else if s.Volume != "" {
+				group = placements[s.Volume]
+			}
+			b.state.services[s.Hostname].placementGroup = group
+		}
 		services[s.Hostname] = id
 		ids = append(ids, id)
 	}

@@ -50,6 +50,8 @@ type ProcessSpec struct {
 	// StopSignal defaults to SIGTERM. Engines may select another graceful
 	// shutdown mode, such as PostgreSQL's SIGINT fast shutdown.
 	StopSignal syscall.Signal
+	// StopTimeout optionally increases the shutdown checkpoint budget.
+	StopTimeout time.Duration
 }
 
 // Node exposes protected files and process control to an in-process engine.
@@ -140,7 +142,7 @@ func (n *Node) Configure(name string, spec ProcessSpec) error {
 	if !n.a.allowedProcess(name) {
 		return errors.New("unknown process")
 	}
-	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir, stopSignal: spec.StopSignal, cleanEnv: true})
+	n.a.sup.configure(name, processSpec{binary: spec.Binary, args: spec.Args, env: spec.Env, dir: spec.Dir, stopSignal: spec.StopSignal, stopTimeout: spec.StopTimeout, cleanEnv: true})
 	return nil
 }
 
@@ -185,6 +187,21 @@ func (n *Node) Stop(ctx context.Context, name string) error {
 			return nil
 		}
 		return locked.actionLocked(ctx, name, "stop")
+	})
+}
+
+// Start releases a durable engine stop hold and reapplies start intent. The
+// caller must only release a hold it owns; maintenance and desired intent remain
+// enforced by Action.
+func (n *Node) Start(ctx context.Context, name string) error {
+	return n.WithLock(ctx, func(locked *Node) error {
+		if !locked.a.allowedProcess(name) {
+			return errors.New("unknown process")
+		}
+		if err := locked.a.setProcessStopped(name, false); err != nil {
+			return err
+		}
+		return locked.actionLocked(ctx, name, "start")
 	})
 }
 

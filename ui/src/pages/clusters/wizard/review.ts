@@ -5,6 +5,7 @@ import type { Schemas } from '@/api/client';
 import { managementIsPublic, PLUGIN_GROUPS, selectedPluginGroups } from '../../../engines/rabbitmq/helpers.ts';
 import { readOptions } from '../../../engines/elasticsearch/spec.ts';
 import { configurationReviewRows as postgresReviewRows, isPostgres, object } from '../../../engines/postgres/spec.ts';
+import { configurationReviewRows as temporalReviewRows } from '../../../engines/temporal/spec.ts';
 import { engineRules } from './engine.ts';
 import { componentEntries } from './validation.ts';
 
@@ -12,7 +13,8 @@ export function totalFootprint(spec: Schemas['ClusterSpec']) {
   const totals = { members: 0, volumes: 0, minCpu: 0, maxCpu: 0, minRam: 0, maxRam: 0, minDisk: 0, maxDisk: 0, runtimeMinDisk: 0, runtimeMaxDisk: 0 };
   for (const [name, component] of componentEntries(spec.components)) {
     if (!component) continue;
-    const count = component.replicas * (name === 'engine' && spec.topology.type === 'sharded' ? spec.topology.shards ?? 0 : 1);
+    const groups = spec.provider === 'postgres' && spec.topology.type === 'distributed' ? Number(object(spec.engineOptions?.citus).workerGroups ?? 2) + 1 : 1;
+    const count = component.replicas * (name === 'engine' ? spec.topology.type === 'sharded' ? spec.topology.shards ?? 0 : groups : 1);
     totals.members += count;
     totals.minCpu += count * component.resources.minCpu;
     totals.maxCpu += count * component.resources.maxCpu;
@@ -51,8 +53,9 @@ export function exposureReviewRows(spec: Schemas['ClusterSpec']): [string, strin
   return rows;
 }
 
-export function configurationReviewRows(spec: Schemas['ClusterSpec']): [string, string][] {
+export function configurationReviewRows(spec: Schemas['ClusterSpec'], clusterName = ''): [string, string][] {
   if (isPostgres(spec.provider)) return postgresReviewRows(spec);
+  if (spec.provider === 'temporal') return temporalReviewRows(spec, clusterName);
   const rows: [string, string][] = [['Engine configuration', spec.engineConfig?.trim() || 'Provider defaults']];
   if (spec.provider === 'rabbitmq') {
     const selected = selectedPluginGroups(spec.engineOptions);

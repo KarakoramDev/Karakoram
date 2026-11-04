@@ -1,0 +1,2070 @@
+# HELP async_operations_running Number of currently ongoing async operations
+# TYPE async_operations_running gauge
+async_operations_running{class_name="Probe",operation="lazySegmentClose",path="n/a",shard_name="Q9XLusgwR8tI"} 0
+async_operations_running{class_name="Probe",operation="lazySegmentInit",path="n/a",shard_name="Q9XLusgwR8tI"} 0
+async_operations_running{class_name="Probe",operation="lazySegmentLoad",path="n/a",shard_name="Q9XLusgwR8tI"} 0
+async_operations_running{class_name="Probe",operation="lazySegmentUnLoad",path="n/a",shard_name="Q9XLusgwR8tI"} 0
+# HELP backup_dedupe_planning_ms Wall time of replica-dedupe convergence planning per backup
+# TYPE backup_dedupe_planning_ms summary
+backup_dedupe_planning_ms_sum 0
+backup_dedupe_planning_ms_count 0
+# HELP batch_objects_processed_bytes Number of bytes processed in a batch
+# TYPE batch_objects_processed_bytes counter
+batch_objects_processed_bytes{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+batch_objects_processed_bytes{class_name="Probe",shard_name="n/a"} 0
+# HELP batch_objects_processed_total Number of objects processed in a batch
+# TYPE batch_objects_processed_total counter
+batch_objects_processed_total{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+batch_objects_processed_total{class_name="Probe",shard_name="n/a"} 0
+# HELP batch_size_objects Number of objects in a batch
+# TYPE batch_size_objects summary
+batch_size_objects_sum 0
+batch_size_objects_count 0
+# HELP batch_size_tenants Number of unique tenants referenced in a batch
+# TYPE batch_size_tenants summary
+batch_size_tenants_sum 0
+batch_size_tenants_count 0
+# HELP checksum_bytes_read Number of bytes read during checksum validation
+# TYPE checksum_bytes_read summary
+checksum_bytes_read_sum 0
+checksum_bytes_read_count 0
+# HELP checksum_validation_duration_seconds Duration of checksum validation
+# TYPE checksum_validation_duration_seconds summary
+checksum_validation_duration_seconds_sum 0
+checksum_validation_duration_seconds_count 0
+# HELP concurrent_queries_count Number of concurrently running query operations
+# TYPE concurrent_queries_count gauge
+concurrent_queries_count{class_name="Probe",query_type="get_graphql"} 0
+concurrent_queries_count{class_name="n/a",query_type="add_object"} 0
+# HELP database_buckets_loading 
+# TYPE database_buckets_loading gauge
+database_buckets_loading 0
+# HELP database_buckets_waiting_for_permit_to_load 
+# TYPE database_buckets_waiting_for_permit_to_load gauge
+database_buckets_waiting_for_permit_to_load 0
+# HELP database_shards_loading 
+# TYPE database_shards_loading gauge
+database_shards_loading 0
+# HELP database_shards_waiting_for_permit_to_load 
+# TYPE database_shards_waiting_for_permit_to_load gauge
+database_shards_waiting_for_permit_to_load 0
+# HELP file_io_writes_total_bytes Total number of bytes written to disk
+# TYPE file_io_writes_total_bytes summary
+file_io_writes_total_bytes_sum{operation="appendWAL",strategy="inverted"} 174
+file_io_writes_total_bytes_count{operation="appendWAL",strategy="inverted"} 1
+file_io_writes_total_bytes_sum{operation="appendWAL",strategy="replace"} 184
+file_io_writes_total_bytes_count{operation="appendWAL",strategy="replace"} 1
+file_io_writes_total_bytes_sum{operation="appendWAL",strategy="roaringset"} 159
+file_io_writes_total_bytes_count{operation="appendWAL",strategy="roaringset"} 1
+file_io_writes_total_bytes_sum{operation="appendWAL",strategy="setcollection"} 75
+file_io_writes_total_bytes_count{operation="appendWAL",strategy="setcollection"} 1
+file_io_writes_total_bytes_sum{operation="flushMemtable",strategy="inverted"} 0
+file_io_writes_total_bytes_count{operation="flushMemtable",strategy="inverted"} 0
+file_io_writes_total_bytes_sum{operation="flushMemtable",strategy="replace"} 0
+file_io_writes_total_bytes_count{operation="flushMemtable",strategy="replace"} 0
+file_io_writes_total_bytes_sum{operation="flushMemtable",strategy="roaringset"} 0
+file_io_writes_total_bytes_count{operation="flushMemtable",strategy="roaringset"} 0
+file_io_writes_total_bytes_sum{operation="flushMemtable",strategy="setcollection"} 0
+file_io_writes_total_bytes_count{operation="flushMemtable",strategy="setcollection"} 0
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 1.54e-05
+go_gc_duration_seconds{quantile="0.25"} 2.8625e-05
+go_gc_duration_seconds{quantile="0.5"} 5.1146e-05
+go_gc_duration_seconds{quantile="0.75"} 6.1505e-05
+go_gc_duration_seconds{quantile="1"} 9.1531e-05
+go_gc_duration_seconds_sum 0.000473909
+go_gc_duration_seconds_count 10
+# HELP go_gc_gogc_percent Heap size target percentage configured by the user, otherwise 100. This value is set by the GOGC environment variable, and the runtime/debug.SetGCPercent function. Sourced from /gc/gogc:percent
+# TYPE go_gc_gogc_percent gauge
+go_gc_gogc_percent 100
+# HELP go_gc_gomemlimit_bytes Go runtime memory limit configured by the user, otherwise math.MaxInt64. This value is set by the GOMEMLIMIT environment variable, and the runtime/debug.SetMemoryLimit function. Sourced from /gc/gomemlimit:bytes
+# TYPE go_gc_gomemlimit_bytes gauge
+go_gc_gomemlimit_bytes 2.68435456e+08
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 71
+# HELP go_info Information about the Go environment.
+# TYPE go_info gauge
+go_info{version="go1.26.9"} 1
+# HELP go_memstats_alloc_bytes Number of bytes allocated in heap and currently in use. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_alloc_bytes gauge
+go_memstats_alloc_bytes 1.63559016e+08
+# HELP go_memstats_alloc_bytes_total Total number of bytes allocated in heap until now, even if released already. Equals to /gc/heap/allocs:bytes.
+# TYPE go_memstats_alloc_bytes_total counter
+go_memstats_alloc_bytes_total 2.1960936e+08
+# HELP go_memstats_buck_hash_sys_bytes Number of bytes used by the profiling bucket hash table. Equals to /memory/classes/profiling/buckets:bytes.
+# TYPE go_memstats_buck_hash_sys_bytes gauge
+go_memstats_buck_hash_sys_bytes 1.522311e+06
+# HELP go_memstats_frees_total Total number of heap objects frees. Equals to /gc/heap/frees:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_frees_total counter
+go_memstats_frees_total 691795
+# HELP go_memstats_gc_sys_bytes Number of bytes used for garbage collection system metadata. Equals to /memory/classes/metadata/other:bytes.
+# TYPE go_memstats_gc_sys_bytes gauge
+go_memstats_gc_sys_bytes 4.569376e+06
+# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and currently in use, same as go_memstats_alloc_bytes. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_heap_alloc_bytes gauge
+go_memstats_heap_alloc_bytes 1.63559016e+08
+# HELP go_memstats_heap_idle_bytes Number of heap bytes waiting to be used. Equals to /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_idle_bytes gauge
+go_memstats_heap_idle_bytes 9.682944e+06
+# HELP go_memstats_heap_inuse_bytes Number of heap bytes that are in use. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes
+# TYPE go_memstats_heap_inuse_bytes gauge
+go_memstats_heap_inuse_bytes 1.73817856e+08
+# HELP go_memstats_heap_objects Number of currently allocated objects. Equals to /gc/heap/objects:objects.
+# TYPE go_memstats_heap_objects gauge
+go_memstats_heap_objects 136601
+# HELP go_memstats_heap_released_bytes Number of heap bytes released to OS. Equals to /memory/classes/heap/released:bytes.
+# TYPE go_memstats_heap_released_bytes gauge
+go_memstats_heap_released_bytes 2.53952e+06
+# HELP go_memstats_heap_sys_bytes Number of heap bytes obtained from system. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes + /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_sys_bytes gauge
+go_memstats_heap_sys_bytes 1.835008e+08
+# HELP go_memstats_last_gc_time_seconds Number of seconds since 1970 of last garbage collection.
+# TYPE go_memstats_last_gc_time_seconds gauge
+go_memstats_last_gc_time_seconds 1.7925690853599062e+09
+# HELP go_memstats_mallocs_total Total number of heap objects allocated, both live and gc-ed. Semantically a counter version for go_memstats_heap_objects gauge. Equals to /gc/heap/allocs:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_mallocs_total counter
+go_memstats_mallocs_total 828396
+# HELP go_memstats_mcache_inuse_bytes Number of bytes in use by mcache structures. Equals to /memory/classes/metadata/mcache/inuse:bytes.
+# TYPE go_memstats_mcache_inuse_bytes gauge
+go_memstats_mcache_inuse_bytes 4592
+# HELP go_memstats_mcache_sys_bytes Number of bytes used for mcache structures obtained from system. Equals to /memory/classes/metadata/mcache/inuse:bytes + /memory/classes/metadata/mcache/free:bytes.
+# TYPE go_memstats_mcache_sys_bytes gauge
+go_memstats_mcache_sys_bytes 16072
+# HELP go_memstats_mspan_inuse_bytes Number of bytes in use by mspan structures. Equals to /memory/classes/metadata/mspan/inuse:bytes.
+# TYPE go_memstats_mspan_inuse_bytes gauge
+go_memstats_mspan_inuse_bytes 516160
+# HELP go_memstats_mspan_sys_bytes Number of bytes used for mspan structures obtained from system. Equals to /memory/classes/metadata/mspan/inuse:bytes + /memory/classes/metadata/mspan/free:bytes.
+# TYPE go_memstats_mspan_sys_bytes gauge
+go_memstats_mspan_sys_bytes 603840
+# HELP go_memstats_next_gc_bytes Number of heap bytes when next garbage collection will take place. Equals to /gc/heap/goal:bytes.
+# TYPE go_memstats_next_gc_bytes gauge
+go_memstats_next_gc_bytes 1.9083237e+08
+# HELP go_memstats_other_sys_bytes Number of bytes used for other system allocations. Equals to /memory/classes/other:bytes.
+# TYPE go_memstats_other_sys_bytes gauge
+go_memstats_other_sys_bytes 679945
+# HELP go_memstats_stack_inuse_bytes Number of bytes obtained from system for stack allocator in non-CGO environments. Equals to /memory/classes/heap/stacks:bytes.
+# TYPE go_memstats_stack_inuse_bytes gauge
+go_memstats_stack_inuse_bytes 1.048576e+06
+# HELP go_memstats_stack_sys_bytes Number of bytes obtained from system for stack allocator. Equals to /memory/classes/heap/stacks:bytes + /memory/classes/os-stacks:bytes.
+# TYPE go_memstats_stack_sys_bytes gauge
+go_memstats_stack_sys_bytes 1.048576e+06
+# HELP go_memstats_sys_bytes Number of bytes obtained from system. Equals to /memory/classes/total:byte.
+# TYPE go_memstats_sys_bytes gauge
+go_memstats_sys_bytes 1.9194092e+08
+# HELP go_sched_gomaxprocs_threads The current runtime.GOMAXPROCS setting, or the number of operating system threads that can execute user-level Go code simultaneously. Sourced from /sched/gomaxprocs:threads
+# TYPE go_sched_gomaxprocs_threads gauge
+go_sched_gomaxprocs_threads 2
+# HELP go_sched_latencies_seconds Distribution of the time goroutines have spent in the scheduler in a runnable state before actually running. Bucket counts increase monotonically. Sourced from /sched/latencies:seconds
+# TYPE go_sched_latencies_seconds histogram
+go_sched_latencies_seconds_bucket{le="6.399999999999999e-08"} 50
+go_sched_latencies_seconds_bucket{le="6.399999999999999e-07"} 368
+go_sched_latencies_seconds_bucket{le="7.167999999999999e-06"} 447
+go_sched_latencies_seconds_bucket{le="8.191999999999999e-05"} 466
+go_sched_latencies_seconds_bucket{le="0.0009175039999999999"} 473
+go_sched_latencies_seconds_bucket{le="0.010485759999999998"} 474
+go_sched_latencies_seconds_bucket{le="0.11744051199999998"} 474
+go_sched_latencies_seconds_bucket{le="+Inf"} 474
+go_sched_latencies_seconds_sum 0.001698048
+go_sched_latencies_seconds_count 474
+# HELP go_threads Number of OS threads created.
+# TYPE go_threads gauge
+go_threads 7
+# HELP graphql_namespaces_blocked_requests_total Number of requests to the GraphQL endpoint received while namespaces are enabled, where the GraphQL API is unavailable.
+# TYPE graphql_namespaces_blocked_requests_total counter
+graphql_namespaces_blocked_requests_total 0
+# HELP lsm_memtable_durations_ms Time in ms for a bucket operation to complete
+# TYPE lsm_memtable_durations_ms summary
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0.008306
+lsm_memtable_durations_ms_count{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 1
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="append",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0.012282999999999999
+lsm_memtable_durations_ms_count{class_name="Probe",operation="appendMapSorted",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 3
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0.0006510000000000001
+lsm_memtable_durations_ms_count{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 2
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="get",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0.000782
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 1
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getBySecondary",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getCollection",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="getMap",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0.029746
+lsm_memtable_durations_ms_count{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 1
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="put",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 0
+lsm_memtable_durations_ms_sum{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+lsm_memtable_durations_ms_count{class_name="Probe",operation="setTombstone",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 0
+# HELP lsm_memtable_size Size of memtable by path
+# TYPE lsm_memtable_size gauge
+lsm_memtable_size{class_name="Probe",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/objects",shard_name="Q9XLusgwR8tI",strategy="replace"} 149
+lsm_memtable_size{class_name="Probe",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property__id",shard_name="Q9XLusgwR8tI",strategy="setcollection"} 44
+lsm_memtable_size{class_name="Probe",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text",shard_name="Q9XLusgwR8tI",strategy="roaringset"} 1005
+lsm_memtable_size{class_name="Probe",path="/data/weaviate/probe/Q9XLusgwR8tI/lsm/property_text_searchable",shard_name="Q9XLusgwR8tI",strategy="inverted"} 81
+# HELP migration_records_not_understood_total Reindex migration records a shard load could not place: one it could not stat or read, one over the size bound, one it could not decode, one whose content names a different file, records naming more than one migration unit, or a records directory it could not read at all. Each withholds every promoting and destructive reindex action on its shard; the log line names the file and the reason.
+# TYPE migration_records_not_understood_total counter
+migration_records_not_understood_total 0
+# HELP migration_records_wedged_total Reindex migration records a reconciliation pass left standing, either wedged for a reason no later load can change or with a reconciliation that errored. A shard load counts every one it found, and a periodic pass counts only the ones it newly wedged, so the total is a sum of diagnoses rather than a count of distinct records; the log line for each names the record and the shard.
+# TYPE migration_records_wedged_total counter
+migration_records_wedged_total 0
+# HELP mmap_proc_maps Number of entries in /proc/self/maps
+# TYPE mmap_proc_maps gauge
+mmap_proc_maps 44
+# HELP object_count Number of objects in a shard (one node-wide total per namespace when class grouping is enabled)
+# TYPE object_count gauge
+object_count{class_name="Probe",collection_namespace="",shard_name="Q9XLusgwR8tI"} 0
+# HELP objects_durations_ms Duration of an individual object operation. Also as part of batches.
+# TYPE objects_durations_ms summary
+objects_durations_ms_sum{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="inverted_extend"} 0.042239
+objects_durations_ms_count{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="inverted_extend"} 1
+objects_durations_ms_sum{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="inverted_total"} 0.074259
+objects_durations_ms_count{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="inverted_total"} 1
+objects_durations_ms_sum{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="retrieve_previous_determine_status"} 0.01094
+objects_durations_ms_count{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="retrieve_previous_determine_status"} 1
+objects_durations_ms_sum{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="total"} 0.138549
+objects_durations_ms_count{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="total"} 1
+objects_durations_ms_sum{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="upsert_object_store"} 0.036558
+objects_durations_ms_count{class_name="Probe",operation="put",shard_name="Q9XLusgwR8tI",step="upsert_object_store"} 1
+# HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 0.42
+# HELP process_max_fds Maximum number of open file descriptors.
+# TYPE process_max_fds gauge
+process_max_fds 524288
+# HELP process_network_receive_bytes_total Number of bytes received by the process over the network.
+# TYPE process_network_receive_bytes_total counter
+process_network_receive_bytes_total 1.3181599918e+10
+# HELP process_network_transmit_bytes_total Number of bytes sent by the process over the network.
+# TYPE process_network_transmit_bytes_total counter
+process_network_transmit_bytes_total 1.0678509965e+10
+# HELP process_open_fds Number of open file descriptors.
+# TYPE process_open_fds gauge
+process_open_fds 31
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 2.55668224e+08
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds 1.79256908453e+09
+# HELP process_virtual_memory_bytes Virtual memory size in bytes.
+# TYPE process_virtual_memory_bytes gauge
+process_virtual_memory_bytes 1.643286528e+09
+# HELP process_virtual_memory_max_bytes Maximum amount of virtual memory available in bytes.
+# TYPE process_virtual_memory_max_bytes gauge
+process_virtual_memory_max_bytes 1.8446744073709552e+19
+# HELP promhttp_metric_handler_requests_in_flight Current number of scrapes being served.
+# TYPE promhttp_metric_handler_requests_in_flight gauge
+promhttp_metric_handler_requests_in_flight 1
+# HELP promhttp_metric_handler_requests_total Total number of scrapes by HTTP status code.
+# TYPE promhttp_metric_handler_requests_total counter
+promhttp_metric_handler_requests_total{code="200"} 0
+promhttp_metric_handler_requests_total{code="500"} 0
+promhttp_metric_handler_requests_total{code="503"} 0
+# HELP queries_durations_ms Duration of queries in milliseconds
+# TYPE queries_durations_ms histogram
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="10"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="50"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="100"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="500"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="1000"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="5000"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="10000"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="60000"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="300000"} 1
+queries_durations_ms_bucket{class_name="Probe",collection_namespace="",query_type="get_graphql",le="+Inf"} 1
+queries_durations_ms_sum{class_name="Probe",collection_namespace="",query_type="get_graphql"} 0
+queries_durations_ms_count{class_name="Probe",collection_namespace="",query_type="get_graphql"} 1
+# HELP queries_filtered_vector_durations_ms Duration of queries in milliseconds
+# TYPE queries_filtered_vector_durations_ms summary
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="filter",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="filter",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="filter",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="filter",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="objects",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="objects",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="objects",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="objects",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="sort",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="sort",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="sort",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="sort",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="vector",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="vector",shard_name="Q9XLusgwR8tI"} 0
+queries_filtered_vector_durations_ms_sum{class_name="Probe",operation="vector",shard_name="n/a"} 0
+queries_filtered_vector_durations_ms_count{class_name="Probe",operation="vector",shard_name="n/a"} 0
+# HELP query_admission_grant_size Distribution of granted budget per admitted query.
+# TYPE query_admission_grant_size histogram
+query_admission_grant_size_bucket{le="1"} 0
+query_admission_grant_size_bucket{le="2"} 0
+query_admission_grant_size_bucket{le="4"} 1
+query_admission_grant_size_bucket{le="8"} 1
+query_admission_grant_size_bucket{le="16"} 1
+query_admission_grant_size_bucket{le="32"} 1
+query_admission_grant_size_bucket{le="64"} 1
+query_admission_grant_size_bucket{le="128"} 1
+query_admission_grant_size_bucket{le="256"} 1
+query_admission_grant_size_bucket{le="512"} 1
+query_admission_grant_size_bucket{le="1024"} 1
+query_admission_grant_size_bucket{le="+Inf"} 1
+query_admission_grant_size_sum 4
+query_admission_grant_size_count 1
+# HELP query_admission_inflight Number of queries currently holding an admission grant.
+# TYPE query_admission_inflight gauge
+query_admission_inflight 0
+# HELP query_admission_shed_total Total queries shed because the node was overloaded and the wait queue was full.
+# TYPE query_admission_shed_total counter
+query_admission_shed_total 0
+# HELP query_admission_used_budget Currently granted goroutine-equivalent budget across all admitted queries.
+# TYPE query_admission_used_budget gauge
+query_admission_used_budget 0
+# HELP query_admission_wait_duration_seconds Time queued queries spent waiting before admission or cancellation.
+# TYPE query_admission_wait_duration_seconds histogram
+query_admission_wait_duration_seconds_bucket{le="0.005"} 0
+query_admission_wait_duration_seconds_bucket{le="0.01"} 0
+query_admission_wait_duration_seconds_bucket{le="0.025"} 0
+query_admission_wait_duration_seconds_bucket{le="0.05"} 0
+query_admission_wait_duration_seconds_bucket{le="0.1"} 0
+query_admission_wait_duration_seconds_bucket{le="0.25"} 0
+query_admission_wait_duration_seconds_bucket{le="0.5"} 0
+query_admission_wait_duration_seconds_bucket{le="1"} 0
+query_admission_wait_duration_seconds_bucket{le="2.5"} 0
+query_admission_wait_duration_seconds_bucket{le="5"} 0
+query_admission_wait_duration_seconds_bucket{le="10"} 0
+query_admission_wait_duration_seconds_bucket{le="+Inf"} 0
+query_admission_wait_duration_seconds_sum 0
+query_admission_wait_duration_seconds_count 0
+# HELP query_admission_waiting Number of queries currently waiting for admission.
+# TYPE query_admission_waiting gauge
+query_admission_waiting 0
+# HELP query_dimensions_combined_total The vector dimensions used by any read-query that involves vectors, aggregated across all classes and shards. The sum of all labels for query_dimensions_total should always match this labelless metric
+# TYPE query_dimensions_combined_total counter
+query_dimensions_combined_total 3
+# HELP query_dimensions_total The vector dimensions used by any read-query that involves vectors
+# TYPE query_dimensions_total counter
+query_dimensions_total{class_name="Probe",operation="nearVector",query_type="get_graphql"} 3
+# HELP queue_count Number of queues
+# TYPE queue_count gauge
+queue_count 0
+# HELP queue_disk_usage Disk usage of the queue
+# TYPE queue_disk_usage gauge
+queue_disk_usage{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP queue_partition_processing_duration_ms Duration in ms of a single partition processing
+# TYPE queue_partition_processing_duration_ms histogram
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.005"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.01"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.025"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.05"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.1"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.25"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="0.5"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="1"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="2.5"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="5"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="10"} 0
+queue_partition_processing_duration_ms_bucket{class_name="Probe",shard_name="Q9XLusgwR8tI",le="+Inf"} 0
+queue_partition_processing_duration_ms_sum{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+queue_partition_processing_duration_ms_count{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP queue_paused Number of paused queues
+# TYPE queue_paused gauge
+queue_paused 0
+# HELP queue_size Number of records in the queue
+# TYPE queue_size gauge
+queue_size{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP repl_weaviate_weaviate_grpc_conn_close_total Total connections closed
+# TYPE repl_weaviate_weaviate_grpc_conn_close_total counter
+repl_weaviate_weaviate_grpc_conn_close_total 0
+# HELP repl_weaviate_weaviate_grpc_conn_create_total Total gRPC connections created
+# TYPE repl_weaviate_weaviate_grpc_conn_create_total counter
+repl_weaviate_weaviate_grpc_conn_create_total 0
+# HELP repl_weaviate_weaviate_grpc_conn_open Open connections
+# TYPE repl_weaviate_weaviate_grpc_conn_open gauge
+repl_weaviate_weaviate_grpc_conn_open 0
+# HELP repl_weaviate_weaviate_grpc_conn_reuse_total Total reused connections
+# TYPE repl_weaviate_weaviate_grpc_conn_reuse_total counter
+repl_weaviate_weaviate_grpc_conn_reuse_total 0
+# HELP requests_total Number of all requests made
+# TYPE requests_total gauge
+requests_total{api="graphql",class_name="Probe",query_type="Get",status="ok"} 1
+requests_total{api="rest",class_name="",query_type="misc",status="ok"} 2
+requests_total{api="rest",class_name="",query_type="schema",status="ok"} 1
+requests_total{api="rest",class_name="Probe",query_type="objects",status="ok"} 1
+requests_total{api="rest",class_name="Probe",query_type="schema",status="ok"} 1
+# HELP schema_reads_leader_seconds Duration of schema reads that are passed to the leader
+# TYPE schema_reads_leader_seconds summary
+schema_reads_leader_seconds_sum{type="TYPE_DISTRIBUTED_TASK_LIST"} 0.00033573899999999994
+schema_reads_leader_seconds_count{type="TYPE_DISTRIBUTED_TASK_LIST"} 6
+schema_reads_leader_seconds_sum{type="TYPE_GET_CLASSES"} 4.783e-05
+schema_reads_leader_seconds_count{type="TYPE_GET_CLASSES"} 1
+schema_reads_leader_seconds_sum{type="TYPE_GET_ROLES"} 9.3515e-05
+schema_reads_leader_seconds_count{type="TYPE_GET_ROLES"} 1
+schema_reads_leader_seconds_sum{type="TYPE_GET_SCHEMA"} 0.000308927
+schema_reads_leader_seconds_count{type="TYPE_GET_SCHEMA"} 1
+schema_reads_leader_seconds_sum{type="TYPE_GET_USERS"} 4.8380999999999996e-05
+schema_reads_leader_seconds_count{type="TYPE_GET_USERS"} 2
+schema_reads_leader_seconds_sum{type="TYPE_USER_IDENTIFIER_EXISTS"} 2.4737e-05
+schema_reads_leader_seconds_count{type="TYPE_USER_IDENTIFIER_EXISTS"} 1
+# HELP schema_reads_local_seconds Duration of local schema reads that do not involve the leader
+# TYPE schema_reads_local_seconds summary
+schema_reads_local_seconds_sum{type="Read"} 8.276e-06
+schema_reads_local_seconds_count{type="Read"} 7
+schema_reads_local_seconds_sum{type="ReadOnlyClass"} 2.895e-06
+schema_reads_local_seconds_count{type="ReadOnlyClass"} 6
+schema_reads_local_seconds_sum{type="ReadOnlySchema"} 3.937e-06
+schema_reads_local_seconds_count{type="ReadOnlySchema"} 6
+schema_reads_local_seconds_sum{type="ResolveAlias"} 4.1e-07
+schema_reads_local_seconds_count{type="ResolveAlias"} 1
+schema_reads_local_seconds_sum{type="ShardFromUUID"} 3.025e-06
+schema_reads_local_seconds_count{type="ShardFromUUID"} 2
+schema_reads_local_seconds_sum{type="ShardReplicas"} 1.8365e-05
+schema_reads_local_seconds_count{type="ShardReplicas"} 8
+# HELP schema_writes_seconds Duration of schema writes (which always involve the leader)
+# TYPE schema_writes_seconds summary
+schema_writes_seconds_sum{type="TYPE_ADD_CLASS"} 0.153206301
+schema_writes_seconds_count{type="TYPE_ADD_CLASS"} 1
+schema_writes_seconds_sum{type="TYPE_ADD_ROLES_FOR_USER"} 0.000293729
+schema_writes_seconds_count{type="TYPE_ADD_ROLES_FOR_USER"} 2
+schema_writes_seconds_sum{type="TYPE_UPSERT_USER"} 0.000494214
+schema_writes_seconds_count{type="TYPE_UPSERT_USER"} 1
+# HELP shards_loaded Number of shards loaded
+# TYPE shards_loaded gauge
+shards_loaded 1
+# HELP shards_loading Number of shards in process of loading
+# TYPE shards_loading gauge
+shards_loading 0
+# HELP shards_unloaded Number of shards on not loaded
+# TYPE shards_unloaded gauge
+shards_unloaded 0
+# HELP shards_unloading Number of shards in process of unloading
+# TYPE shards_unloading gauge
+shards_unloading 0
+# HELP startup_durations_ms Duration of individual startup operations in ms
+# TYPE startup_durations_ms summary
+startup_durations_ms_sum{class_name="Probe",operation="hnsw_read_all_commitlogs",shard_name="Q9XLusgwR8tI"} 0.037771
+startup_durations_ms_count{class_name="Probe",operation="hnsw_read_all_commitlogs",shard_name="Q9XLusgwR8tI"} 1
+startup_durations_ms_sum{class_name="Probe",operation="lsm_startup_bucket",shard_name="Q9XLusgwR8tI"} 0.354383
+startup_durations_ms_count{class_name="Probe",operation="lsm_startup_bucket",shard_name="Q9XLusgwR8tI"} 4
+startup_durations_ms_sum{class_name="Probe",operation="shard_total_init",shard_name="n/a"} 1.095479
+startup_durations_ms_count{class_name="Probe",operation="shard_total_init",shard_name="n/a"} 1
+# HELP startup_progress A ratio (percentage) of startup progress for a particular component in a shard
+# TYPE startup_progress gauge
+startup_progress{class_name="Probe",operation="hnsw_read_commitlogs",shard_name="Q9XLusgwR8tI"} 0
+# HELP token_count_per_request Number of tokens processed per request
+# TYPE token_count_per_request histogram
+token_count_per_request_bucket{tokenizer="word",le="1"} 0
+token_count_per_request_bucket{tokenizer="word",le="10"} 1
+token_count_per_request_bucket{tokenizer="word",le="50"} 1
+token_count_per_request_bucket{tokenizer="word",le="100"} 1
+token_count_per_request_bucket{tokenizer="word",le="500"} 1
+token_count_per_request_bucket{tokenizer="word",le="1000"} 1
+token_count_per_request_bucket{tokenizer="word",le="10000"} 1
+token_count_per_request_bucket{tokenizer="word",le="100000"} 1
+token_count_per_request_bucket{tokenizer="word",le="1e+06"} 1
+token_count_per_request_bucket{tokenizer="word",le="+Inf"} 1
+token_count_per_request_sum{tokenizer="word"} 3
+token_count_per_request_count{tokenizer="word"} 1
+# HELP token_count_total Number of tokens processed
+# TYPE token_count_total counter
+token_count_total{tokenizer="word"} 3
+# HELP tokenizer_duration_seconds Duration of a tokenizer operation
+# TYPE tokenizer_duration_seconds histogram
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.005"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.01"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.025"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.05"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.1"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.25"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="0.5"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="1"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="2.5"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="5"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="10"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="25"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="50"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="100"} 1
+tokenizer_duration_seconds_bucket{tokenizer="word",le="+Inf"} 1
+tokenizer_duration_seconds_sum{tokenizer="word"} 7.895e-06
+tokenizer_duration_seconds_count{tokenizer="word"} 1
+# HELP tombstone_delete_list_size Delete list size of tombstones
+# TYPE tombstone_delete_list_size gauge
+tombstone_delete_list_size{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP tombstone_find_global_entrypoint Total number of tombstone delete global entrypoint calls
+# TYPE tombstone_find_global_entrypoint counter
+tombstone_find_global_entrypoint{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP tombstone_find_local_entrypoint Total number of tombstone delete local entrypoint calls
+# TYPE tombstone_find_local_entrypoint counter
+tombstone_find_local_entrypoint{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP tombstone_reassign_neighbors Total number of tombstone reassign neighbor calls
+# TYPE tombstone_reassign_neighbors counter
+tombstone_reassign_neighbors{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_durations_ms Duration of typical vector index operations (insert, delete)
+# TYPE vector_index_durations_ms summary
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_heuristic"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_heuristic"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_search"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_search"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_total"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_total"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_update_connections"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_and_connect_update_connections"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_entrypoint"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="find_entrypoint"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="prepare_and_insert_node"} 0
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="prepare_and_insert_node"} 0
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="total"} 0.014497
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="total"} 1
+vector_index_durations_ms_sum{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="update_global_entrypoint"} 0.011932
+vector_index_durations_ms_count{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI",step="update_global_entrypoint"} 1
+# HELP vector_index_maintenance_durations_ms Duration of a sync or async vector index maintenance operation
+# TYPE vector_index_maintenance_durations_ms summary
+vector_index_maintenance_durations_ms_sum{class_name="Probe",operation="grow",shard_name="Q9XLusgwR8tI"} 0
+vector_index_maintenance_durations_ms_count{class_name="Probe",operation="grow",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_operations Total number of mutating operations on the vector index
+# TYPE vector_index_operations gauge
+vector_index_operations{class_name="Probe",operation="create",shard_name="Q9XLusgwR8tI"} 1
+vector_index_operations{class_name="Probe",operation="delete",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_queue_delete_count Number of delete operations added to the vector index queue
+# TYPE vector_index_queue_delete_count counter
+vector_index_queue_delete_count{class_name="Probe",shard_name="Q9XLusgwR8tI",target_vector=""} 0
+# HELP vector_index_queue_insert_count Number of insert operations added to the vector index queue
+# TYPE vector_index_queue_insert_count counter
+vector_index_queue_insert_count{class_name="Probe",shard_name="Q9XLusgwR8tI",target_vector=""} 0
+# HELP vector_index_size The size of the vector index. Typically larger than number of vectors, as it grows proactively.
+# TYPE vector_index_size gauge
+vector_index_size{class_name="Probe",shard_name="Q9XLusgwR8tI"} 1000
+# HELP vector_index_tombstone_cleaned Total number of deleted objects that have been cleaned up
+# TYPE vector_index_tombstone_cleaned counter
+vector_index_tombstone_cleaned{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_tombstone_cleanup_threads Number of threads in use to clean up tombstones
+# TYPE vector_index_tombstone_cleanup_threads gauge
+vector_index_tombstone_cleanup_threads{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_tombstone_cycle_end_timestamp_seconds Unix epoch timestamp of the end of the last tombstone cleanup cycle. A negative value indicates that the cycle is still running
+# TYPE vector_index_tombstone_cycle_end_timestamp_seconds gauge
+vector_index_tombstone_cycle_end_timestamp_seconds{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_tombstone_cycle_progress A ratio (percentage) of the progress of the current tombstone cleanup cycle. 0 indicates the very beginning, 1 is a complete cycle.
+# TYPE vector_index_tombstone_cycle_progress gauge
+vector_index_tombstone_cycle_progress{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_tombstone_cycle_start_timestamp_seconds Unix epoch timestamp of the start of the current tombstone cleanup cycle
+# TYPE vector_index_tombstone_cycle_start_timestamp_seconds gauge
+vector_index_tombstone_cycle_start_timestamp_seconds{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP vector_index_tombstones Number of active vector index tombstones
+# TYPE vector_index_tombstones gauge
+vector_index_tombstones{class_name="Probe",shard_name="Q9XLusgwR8tI"} 0
+# HELP weaviate_async_checkpoint_active Shards on this node currently holding an active checkpoint. Replacements don't change the count.
+# TYPE weaviate_async_checkpoint_active gauge
+weaviate_async_checkpoint_active 0
+# HELP weaviate_async_checkpoint_create_failure_total Failed CreateAsyncCheckpoint calls (stale createdAt + async-rep-not-active).
+# TYPE weaviate_async_checkpoint_create_failure_total counter
+weaviate_async_checkpoint_create_failure_total 0
+# HELP weaviate_async_checkpoint_create_total Successful local async-checkpoint creations (includes replacements).
+# TYPE weaviate_async_checkpoint_create_total counter
+weaviate_async_checkpoint_create_total 0
+# HELP weaviate_async_checkpoint_delete_total Explicit DeleteAsyncCheckpoint calls that cleared an active checkpoint (stop/disable clears excluded).
+# TYPE weaviate_async_checkpoint_delete_total counter
+weaviate_async_checkpoint_delete_total 0
+# HELP weaviate_async_checkpoint_expired_total Checkpoints cleared for outliving the max lifetime without a delete (e.g. the planning coordinator crashed).
+# TYPE weaviate_async_checkpoint_expired_total counter
+weaviate_async_checkpoint_expired_total 0
+# HELP weaviate_async_checkpoint_lifetime_seconds Time a checkpoint stayed active before being cleared (explicit delete, replacement, stop/disable, or expiry).
+# TYPE weaviate_async_checkpoint_lifetime_seconds histogram
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.01"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.02"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.04"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.08"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.16"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.32"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="0.64"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="1.28"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="2.56"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="5.12"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="10.24"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="20.48"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="40.96"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="81.92"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="163.84"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="327.68"} 0
+weaviate_async_checkpoint_lifetime_seconds_bucket{le="+Inf"} 0
+weaviate_async_checkpoint_lifetime_seconds_sum 0
+weaviate_async_checkpoint_lifetime_seconds_count 0
+# HELP weaviate_async_replication_hashtree_diff_duration_seconds Duration of async replication hashtree diff computation in seconds
+# TYPE weaviate_async_replication_hashtree_diff_duration_seconds histogram
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.01"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.02"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.04"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.08"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.16"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.32"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="0.64"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="1.28"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="2.56"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="5.12"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="10.24"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="20.48"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="40.96"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="81.92"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="163.84"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="327.68"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_bucket{le="+Inf"} 0
+weaviate_async_replication_hashtree_diff_duration_seconds_sum 0
+weaviate_async_replication_hashtree_diff_duration_seconds_count 0
+# HELP weaviate_async_replication_hashtree_init_count Count of async replication hashtree initializations
+# TYPE weaviate_async_replication_hashtree_init_count counter
+weaviate_async_replication_hashtree_init_count 0
+# HELP weaviate_async_replication_hashtree_init_duration_seconds Duration of hashtree initialization in seconds
+# TYPE weaviate_async_replication_hashtree_init_duration_seconds histogram
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.01"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.02"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.04"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.08"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.16"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.32"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="0.64"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="1.28"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="2.56"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="5.12"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="10.24"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="20.48"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="40.96"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="81.92"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="163.84"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="327.68"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_bucket{le="+Inf"} 0
+weaviate_async_replication_hashtree_init_duration_seconds_sum 0
+weaviate_async_replication_hashtree_init_duration_seconds_count 0
+# HELP weaviate_async_replication_hashtree_init_failure_count Count of async replication hashtree initialization failures
+# TYPE weaviate_async_replication_hashtree_init_failure_count counter
+weaviate_async_replication_hashtree_init_failure_count 0
+# HELP weaviate_async_replication_hashtree_init_queued Number of hashtree initializations waiting for an init slot
+# TYPE weaviate_async_replication_hashtree_init_queued gauge
+weaviate_async_replication_hashtree_init_queued 0
+# HELP weaviate_async_replication_hashtree_init_running Number of currently running hashtree initializations
+# TYPE weaviate_async_replication_hashtree_init_running gauge
+weaviate_async_replication_hashtree_init_running 0
+# HELP weaviate_async_replication_iteration_count Count of async replication comparison iterations
+# TYPE weaviate_async_replication_iteration_count counter
+weaviate_async_replication_iteration_count 0
+# HELP weaviate_async_replication_iteration_duration_seconds Duration of async replication comparison iterations in seconds
+# TYPE weaviate_async_replication_iteration_duration_seconds histogram
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.01"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.02"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.04"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.08"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.16"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.32"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="0.64"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="1.28"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="2.56"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="5.12"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="10.24"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="20.48"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="40.96"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="81.92"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="163.84"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="327.68"} 0
+weaviate_async_replication_iteration_duration_seconds_bucket{le="+Inf"} 0
+weaviate_async_replication_iteration_duration_seconds_sum 0
+weaviate_async_replication_iteration_duration_seconds_count 0
+# HELP weaviate_async_replication_iteration_failure_count Count of async replication iteration failures
+# TYPE weaviate_async_replication_iteration_failure_count counter
+weaviate_async_replication_iteration_failure_count 0
+# HELP weaviate_async_replication_iteration_running Number of currently running async replication iterations
+# TYPE weaviate_async_replication_iteration_running gauge
+weaviate_async_replication_iteration_running 0
+# HELP weaviate_async_replication_local_deletions_total Total local object deletions applied due to remote-deleted verdicts or deletion-conflict responses during async replication.
+# TYPE weaviate_async_replication_local_deletions_total counter
+weaviate_async_replication_local_deletions_total 0
+# HELP weaviate_async_replication_object_digests_diff_duration_seconds Duration of async replication object digests diff computation in seconds
+# TYPE weaviate_async_replication_object_digests_diff_duration_seconds histogram
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.01"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.02"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.04"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.08"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.16"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.32"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="0.64"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="1.28"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="2.56"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="5.12"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="10.24"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="20.48"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="40.96"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="81.92"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="163.84"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="327.68"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_bucket{le="+Inf"} 0
+weaviate_async_replication_object_digests_diff_duration_seconds_sum 0
+weaviate_async_replication_object_digests_diff_duration_seconds_count 0
+# HELP weaviate_async_replication_objects_diff_total Total objects found in diff per hashbeat cycle (queued for propagation or locally deleted before propagation).
+# TYPE weaviate_async_replication_objects_diff_total counter
+weaviate_async_replication_objects_diff_total 0
+# HELP weaviate_async_replication_propagation_count Count of async replication propagation executions
+# TYPE weaviate_async_replication_propagation_count counter
+weaviate_async_replication_propagation_count 0
+# HELP weaviate_async_replication_propagation_duration_seconds Duration of async replication propagation in seconds
+# TYPE weaviate_async_replication_propagation_duration_seconds histogram
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.01"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.02"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.04"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.08"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.16"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.32"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="0.64"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="1.28"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="2.56"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="5.12"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="10.24"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="20.48"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="40.96"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="81.92"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="163.84"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="327.68"} 0
+weaviate_async_replication_propagation_duration_seconds_bucket{le="+Inf"} 0
+weaviate_async_replication_propagation_duration_seconds_sum 0
+weaviate_async_replication_propagation_duration_seconds_count 0
+# HELP weaviate_async_replication_propagation_failure_count Count of async replication propagation failures
+# TYPE weaviate_async_replication_propagation_failure_count counter
+weaviate_async_replication_propagation_failure_count 0
+# HELP weaviate_async_replication_propagation_object_count Count of objects propagated by async replication
+# TYPE weaviate_async_replication_propagation_object_count counter
+weaviate_async_replication_propagation_object_count 0
+# HELP weaviate_async_replication_rebuild_failures_total Number of failed hashtree rebuild attempts; a growing rate means shards are out of the repair mesh while retrying.
+# TYPE weaviate_async_replication_rebuild_failures_total counter
+weaviate_async_replication_rebuild_failures_total 0
+# HELP weaviate_async_replication_rebuild_total Number of completed hashtree rebuilds (a shard picked up a changed hashtree height).
+# TYPE weaviate_async_replication_rebuild_total counter
+weaviate_async_replication_rebuild_total 0
+# HELP weaviate_async_replication_rebuild_yields_total Rebuild attempts that stood down for a schema apply, teardown, transfer halt, or drain timeout; spinning with rebuild_total flat means a rebuild is starved.
+# TYPE weaviate_async_replication_rebuild_yields_total counter
+weaviate_async_replication_rebuild_yields_total 0
+# HELP weaviate_async_replication_reconcile_failures_total Number of indices that failed to reconcile async replication with the global AsyncReplicationDisabled flag.
+# TYPE weaviate_async_replication_reconcile_failures_total counter
+weaviate_async_replication_reconcile_failures_total 0
+# HELP weaviate_async_replication_root_prefilter_batch_size Number of shards compared in one batched hashtree-root pre-filter RPC group.
+# TYPE weaviate_async_replication_root_prefilter_batch_size histogram
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="1"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="8"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="32"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="64"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="128"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="256"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="512"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="1024"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="2048"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="4096"} 0
+weaviate_async_replication_root_prefilter_batch_size_bucket{le="+Inf"} 0
+weaviate_async_replication_root_prefilter_batch_size_sum 0
+weaviate_async_replication_root_prefilter_batch_size_count 0
+# HELP weaviate_async_replication_root_prefilter_skips_total Shard cycles short-circuited as in-sync by the batched hashtree-root pre-filter.
+# TYPE weaviate_async_replication_root_prefilter_skips_total counter
+weaviate_async_replication_root_prefilter_skips_total 0
+# HELP weaviate_async_replication_scheduler_queue_depth Number of shards waiting in the scheduler heap (not in-flight).
+# TYPE weaviate_async_replication_scheduler_queue_depth gauge
+weaviate_async_replication_scheduler_queue_depth 0
+# HELP weaviate_async_replication_scheduler_shards_registered Number of shards currently registered with the async replication scheduler
+# TYPE weaviate_async_replication_scheduler_shards_registered gauge
+weaviate_async_replication_scheduler_shards_registered 0
+# HELP weaviate_async_replication_scheduler_worker_pool_size Current target size of the scheduler worker pool.
+# TYPE weaviate_async_replication_scheduler_worker_pool_size gauge
+weaviate_async_replication_scheduler_worker_pool_size 1
+# HELP weaviate_async_replication_scheduler_workers_active Number of scheduler worker goroutines currently executing a hashbeat cycle
+# TYPE weaviate_async_replication_scheduler_workers_active gauge
+weaviate_async_replication_scheduler_workers_active 0
+# HELP weaviate_async_replication_scheduler_workers_live Number of live scheduler worker goroutines (spawned but not yet exited).
+# TYPE weaviate_async_replication_scheduler_workers_live gauge
+weaviate_async_replication_scheduler_workers_live 1
+# HELP weaviate_auto_tenant_duration_seconds Time spent in auto tenant operations
+# TYPE weaviate_auto_tenant_duration_seconds histogram
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.005"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.01"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.025"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.05"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.1"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.25"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="0.5"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="1"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="2.5"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="5"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="10"} 1
+weaviate_auto_tenant_duration_seconds_bucket{operation="total",le="+Inf"} 1
+weaviate_auto_tenant_duration_seconds_sum{operation="total"} 3.817e-06
+weaviate_auto_tenant_duration_seconds_count{operation="total"} 1
+# HELP weaviate_auto_tenant_total Total number of tenants processed
+# TYPE weaviate_auto_tenant_total counter
+weaviate_auto_tenant_total 0
+# HELP weaviate_build_info A metric with a constant '1' value labeled by version, revision, branch, goversion from which weaviate was built, and the goos and goarch for the build.
+# TYPE weaviate_build_info gauge
+weaviate_build_info{branch="",goarch="amd64",goos="linux",goversion="go1.26.9",revision="e0c3f76b59d11413f015de897ba035f43c9ecf01",tags="unknown",version="1.40.1"} 1
+# HELP weaviate_cluster_store_fsm_apply_duration_seconds Time to apply cluster store FSM state in local node
+# TYPE weaviate_cluster_store_fsm_apply_duration_seconds histogram
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="0.001"} 3
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="0.005"} 3
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="0.025"} 3
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="0.125"} 3
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="0.625"} 4
+weaviate_cluster_store_fsm_apply_duration_seconds_bucket{nodeID="node00",le="+Inf"} 4
+weaviate_cluster_store_fsm_apply_duration_seconds_sum{nodeID="node00"} 0.15335212199999998
+weaviate_cluster_store_fsm_apply_duration_seconds_count{nodeID="node00"} 4
+# HELP weaviate_cluster_store_fsm_apply_failures_total Total failure count of cluster store FSM state apply in local node
+# TYPE weaviate_cluster_store_fsm_apply_failures_total counter
+weaviate_cluster_store_fsm_apply_failures_total{nodeID="node00"} 0
+# HELP weaviate_cluster_store_fsm_last_applied_index Current applied index of cluster store FSM in local node. This includes commands without config changes
+# TYPE weaviate_cluster_store_fsm_last_applied_index gauge
+weaviate_cluster_store_fsm_last_applied_index{nodeID="node00"} 7
+# HELP weaviate_cluster_store_fsm_startup_applied_index Previous applied index of the cluster store FSM in local node that any restart would try to catch up
+# TYPE weaviate_cluster_store_fsm_startup_applied_index gauge
+weaviate_cluster_store_fsm_startup_applied_index{nodeID="node00"} 0
+# HELP weaviate_cluster_store_leader_fsm_barriers_total Catch-up barriers issued by this node after winning an election
+# TYPE weaviate_cluster_store_leader_fsm_barriers_total counter
+weaviate_cluster_store_leader_fsm_barriers_total{nodeID="node00"} 1
+# HELP weaviate_cluster_store_raft_last_applied_index Current applied index of a raft cluster in local node. This includes every commands including config changes
+# TYPE weaviate_cluster_store_raft_last_applied_index gauge
+weaviate_cluster_store_raft_last_applied_index{nodeID="node00"} 7
+# HELP weaviate_consistency_level_requests_total Number of API requests by operation and requested consistency level (UNSET when none was given)
+# TYPE weaviate_consistency_level_requests_total counter
+weaviate_consistency_level_requests_total{consistency_level="UNSET",operation="read"} 1
+weaviate_consistency_level_requests_total{consistency_level="UNSET",operation="write"} 1
+# HELP weaviate_distributed_tasks_running Number of active distributed tasks running per namespace
+# TYPE weaviate_distributed_tasks_running gauge
+weaviate_distributed_tasks_running{namespace="drop-vector-index"} 0
+weaviate_distributed_tasks_running{namespace="reindex"} 0
+# HELP weaviate_export_coordination_duration_seconds Duration of the export two-phase commit coordination (prepare all nodes, write metadata, commit all nodes). Does not include the scan and upload phase.
+# TYPE weaviate_export_coordination_duration_seconds histogram
+weaviate_export_coordination_duration_seconds_bucket{le="1"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="5"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="10"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="15"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="30"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="45"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="60"} 0
+weaviate_export_coordination_duration_seconds_bucket{le="+Inf"} 0
+weaviate_export_coordination_duration_seconds_sum 0
+weaviate_export_coordination_duration_seconds_count 0
+# HELP weaviate_export_duration_seconds Duration of the export scan and upload phase on a participant node.
+# TYPE weaviate_export_duration_seconds histogram
+weaviate_export_duration_seconds_bucket{le="10"} 0
+weaviate_export_duration_seconds_bucket{le="30"} 0
+weaviate_export_duration_seconds_bucket{le="60"} 0
+weaviate_export_duration_seconds_bucket{le="300"} 0
+weaviate_export_duration_seconds_bucket{le="600"} 0
+weaviate_export_duration_seconds_bucket{le="1800"} 0
+weaviate_export_duration_seconds_bucket{le="3600"} 0
+weaviate_export_duration_seconds_bucket{le="7200"} 0
+weaviate_export_duration_seconds_bucket{le="14400"} 0
+weaviate_export_duration_seconds_bucket{le="28800"} 0
+weaviate_export_duration_seconds_bucket{le="86400"} 0
+weaviate_export_duration_seconds_bucket{le="+Inf"} 0
+weaviate_export_duration_seconds_sum 0
+weaviate_export_duration_seconds_count 0
+# HELP weaviate_export_objects_total Total number of objects exported.
+# TYPE weaviate_export_objects_total counter
+weaviate_export_objects_total 0
+# HELP weaviate_grpc_server_request_duration_seconds Time (in seconds) spent serving requests.
+# TYPE weaviate_grpc_server_request_duration_seconds histogram
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.0001"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.00025"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.0005"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.001"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.0025"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.005"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.01"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.025"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.05"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.1"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.25"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="0.5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="1"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="2.5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="10"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="25"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="50"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="100"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted",le="+Inf"} 1
+weaviate_grpc_server_request_duration_seconds_sum{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted"} 8.005e-06
+weaviate_grpc_server_request_duration_seconds_count{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",status="ResourceExhausted"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.0001"} 0
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.00025"} 0
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.0005"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.001"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.0025"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.005"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.01"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.025"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.05"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.1"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.25"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="0.5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="1"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="2.5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="5"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="10"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="25"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="50"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="100"} 1
+weaviate_grpc_server_request_duration_seconds_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK",le="+Inf"} 1
+weaviate_grpc_server_request_duration_seconds_sum{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK"} 0.000265748
+weaviate_grpc_server_request_duration_seconds_count{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",status="OK"} 1
+# HELP weaviate_grpc_server_request_size_bytes Size (in bytes) of the request received.
+# TYPE weaviate_grpc_server_request_size_bytes histogram
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="1.048576e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="2.62144e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="5.24288e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="1.048576e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="2.62144e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="5.24288e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="1.048576e+08"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="2.62144e+08"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer",le="+Inf"} 1
+weaviate_grpc_server_request_size_bytes_sum{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer"} 32
+weaviate_grpc_server_request_size_bytes_count{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="5.24288e+06"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="5.24288e+07"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+08"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+08"} 1
+weaviate_grpc_server_request_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="+Inf"} 1
+weaviate_grpc_server_request_size_bytes_sum{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer"} 30
+weaviate_grpc_server_request_size_bytes_count{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer"} 1
+# HELP weaviate_grpc_server_requests_inflight Current number of inflight requests.
+# TYPE weaviate_grpc_server_requests_inflight gauge
+weaviate_grpc_server_requests_inflight{grpc_service="weaviate.internal.cluster.ClusterService",method="JoinPeer"} 0
+weaviate_grpc_server_requests_inflight{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer"} 0
+# HELP weaviate_grpc_server_response_size_bytes Size (in bytes) of the response sent.
+# TYPE weaviate_grpc_server_response_size_bytes histogram
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+06"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+06"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="5.24288e+06"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+07"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+07"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="5.24288e+07"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="1.048576e+08"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="2.62144e+08"} 1
+weaviate_grpc_server_response_size_bytes_bucket{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer",le="+Inf"} 1
+weaviate_grpc_server_response_size_bytes_sum{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer"} 5
+weaviate_grpc_server_response_size_bytes_count{grpc_service="weaviate.internal.cluster.ClusterService",method="NotifyPeer"} 1
+# HELP weaviate_http_request_duration_seconds Time (in seconds) spent serving requests.
+# TYPE weaviate_http_request_duration_seconds histogram
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.0001"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.00025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.0005"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.001"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.0025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.005"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.01"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.05"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/.well-known/ready",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="GET",route="/v1/.well-known/ready",status_code="200"} 2.3695e-05
+weaviate_http_request_duration_seconds_count{method="GET",route="/v1/.well-known/ready",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.0001"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.00025"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.0005"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.001"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.0025"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.005"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.01"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.025"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.05"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.1"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.25"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="0.5"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="1"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="2.5"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="5"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="10"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="25"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="50"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="100"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/meta",status_code="200",le="+Inf"} 2
+weaviate_http_request_duration_seconds_sum{method="GET",route="/v1/meta",status_code="200"} 0.00028862
+weaviate_http_request_duration_seconds_count{method="GET",route="/v1/meta",status_code="200"} 2
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.001"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.0025"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.005"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.01"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.025"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.05"} 0
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="GET",route="/v1/schema",status_code="200"} 0.056236532
+weaviate_http_request_duration_seconds_count{method="GET",route="/v1/schema",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.0001"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.00025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.0005"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.001"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.0025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.005"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.01"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.025"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.05"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="GET",route="/v1/schema",status_code="401",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="GET",route="/v1/schema",status_code="401"} 2.5298e-05
+weaviate_http_request_duration_seconds_count{method="GET",route="/v1/schema",status_code="401"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.001"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.0025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.005"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.01"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.05"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/authz/users/{id}/assign",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="POST",route="/v1/authz/users/{id}/assign",status_code="200"} 0.000858976
+weaviate_http_request_duration_seconds_count{method="POST",route="/v1/authz/users/{id}/assign",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.001"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.0025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.005"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.01"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.05"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/graphql",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="POST",route="/v1/graphql",status_code="200"} 0.000611674
+weaviate_http_request_duration_seconds_count{method="POST",route="/v1/graphql",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.001"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.0025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.005"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.01"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.025"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.05"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/objects",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="POST",route="/v1/objects",status_code="200"} 0.000629778
+weaviate_http_request_duration_seconds_count{method="POST",route="/v1/objects",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.0025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.01"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.05"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.1"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/schema",status_code="200",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="POST",route="/v1/schema",status_code="200"} 0.153781456
+weaviate_http_request_duration_seconds_count{method="POST",route="/v1/schema",status_code="200"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.0001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.00025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.0005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.001"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.0025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.005"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.01"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.025"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.05"} 0
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="0.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="1"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="2.5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="5"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="10"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="25"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="50"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="100"} 1
+weaviate_http_request_duration_seconds_bucket{method="POST",route="/v1/users/db/{user_id}",status_code="201",le="+Inf"} 1
+weaviate_http_request_duration_seconds_sum{method="POST",route="/v1/users/db/{user_id}",status_code="201"} 0.057714667
+weaviate_http_request_duration_seconds_count{method="POST",route="/v1/users/db/{user_id}",status_code="201"} 1
+# HELP weaviate_http_request_size_bytes Size (in bytes) of the request received.
+# TYPE weaviate_http_request_size_bytes histogram
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="GET",route="/v1/.well-known/ready"} 0
+weaviate_http_request_size_bytes_count{method="GET",route="/v1/.well-known/ready"} 1
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="5.24288e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="5.24288e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+08"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+08"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/meta",le="+Inf"} 2
+weaviate_http_request_size_bytes_sum{method="GET",route="/v1/meta"} 0
+weaviate_http_request_size_bytes_count{method="GET",route="/v1/meta"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="5.24288e+06"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="5.24288e+07"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+08"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+08"} 2
+weaviate_http_request_size_bytes_bucket{method="GET",route="/v1/schema",le="+Inf"} 2
+weaviate_http_request_size_bytes_sum{method="GET",route="/v1/schema"} 0
+weaviate_http_request_size_bytes_count{method="GET",route="/v1/schema"} 2
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="POST",route="/v1/authz/users/{id}/assign"} 20
+weaviate_http_request_size_bytes_count{method="POST",route="/v1/authz/users/{id}/assign"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/graphql",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="POST",route="/v1/graphql"} 67
+weaviate_http_request_size_bytes_count{method="POST",route="/v1/graphql"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/objects",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="POST",route="/v1/objects"} 126
+weaviate_http_request_size_bytes_count{method="POST",route="/v1/objects"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/schema",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="POST",route="/v1/schema"} 121
+weaviate_http_request_size_bytes_count{method="POST",route="/v1/schema"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="5.24288e+06"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="5.24288e+07"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+08"} 1
+weaviate_http_request_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="+Inf"} 1
+weaviate_http_request_size_bytes_sum{method="POST",route="/v1/users/db/{user_id}"} 2
+weaviate_http_request_size_bytes_count{method="POST",route="/v1/users/db/{user_id}"} 1
+# HELP weaviate_http_requests_inflight Current number of inflight requests.
+# TYPE weaviate_http_requests_inflight gauge
+weaviate_http_requests_inflight{method="GET",route="/v1/.well-known/ready"} 0
+weaviate_http_requests_inflight{method="GET",route="/v1/meta"} 0
+weaviate_http_requests_inflight{method="GET",route="/v1/schema"} 0
+weaviate_http_requests_inflight{method="POST",route="/v1/authz/users/{id}/assign"} 0
+weaviate_http_requests_inflight{method="POST",route="/v1/graphql"} 0
+weaviate_http_requests_inflight{method="POST",route="/v1/objects"} 0
+weaviate_http_requests_inflight{method="POST",route="/v1/schema"} 0
+weaviate_http_requests_inflight{method="POST",route="/v1/users/db/{user_id}"} 0
+# HELP weaviate_http_response_size_bytes Size (in bytes) of the response sent.
+# TYPE weaviate_http_response_size_bytes histogram
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/.well-known/ready",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="GET",route="/v1/.well-known/ready"} 0
+weaviate_http_response_size_bytes_count{method="GET",route="/v1/.well-known/ready"} 1
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="5.24288e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="5.24288e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="1.048576e+08"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="2.62144e+08"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/meta",le="+Inf"} 2
+weaviate_http_response_size_bytes_sum{method="GET",route="/v1/meta"} 402
+weaviate_http_response_size_bytes_count{method="GET",route="/v1/meta"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="5.24288e+06"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="5.24288e+07"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="1.048576e+08"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="2.62144e+08"} 2
+weaviate_http_response_size_bytes_bucket{method="GET",route="/v1/schema",le="+Inf"} 2
+weaviate_http_response_size_bytes_sum{method="GET",route="/v1/schema"} 140
+weaviate_http_response_size_bytes_count{method="GET",route="/v1/schema"} 2
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/authz/users/{id}/assign",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="POST",route="/v1/authz/users/{id}/assign"} 0
+weaviate_http_response_size_bytes_count{method="POST",route="/v1/authz/users/{id}/assign"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/graphql",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="POST",route="/v1/graphql"} 64
+weaviate_http_response_size_bytes_count{method="POST",route="/v1/graphql"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/objects",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="POST",route="/v1/objects"} 195
+weaviate_http_response_size_bytes_count{method="POST",route="/v1/objects"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/schema",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="POST",route="/v1/schema"} 1543
+weaviate_http_response_size_bytes_count{method="POST",route="/v1/schema"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="5.24288e+06"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="5.24288e+07"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="1.048576e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="2.62144e+08"} 1
+weaviate_http_response_size_bytes_bucket{method="POST",route="/v1/users/db/{user_id}",le="+Inf"} 1
+weaviate_http_response_size_bytes_sum{method="POST",route="/v1/users/db/{user_id}"} 102
+weaviate_http_response_size_bytes_count{method="POST",route="/v1/users/db/{user_id}"} 1
+# HELP weaviate_index_shard_status_update_duration_seconds Time taken to update shard status in seconds
+# TYPE weaviate_index_shard_status_update_duration_seconds histogram
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.005"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.01"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.025"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.05"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.1"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.25"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="0.5"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="1"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="2.5"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="5"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="10"} 1
+weaviate_index_shard_status_update_duration_seconds_bucket{status="READY",le="+Inf"} 1
+weaviate_index_shard_status_update_duration_seconds_sum{status="READY"} 0.001097243
+weaviate_index_shard_status_update_duration_seconds_count{status="READY"} 1
+# HELP weaviate_index_shards_total Total number of shards per index status
+# TYPE weaviate_index_shards_total gauge
+weaviate_index_shards_total{status="LOADING"} 0
+weaviate_index_shards_total{status="READY"} 1
+# HELP weaviate_internal_counter_raft_apply weaviate_internal_counter_raft_apply
+# TYPE weaviate_internal_counter_raft_apply counter
+weaviate_internal_counter_raft_apply 4
+# HELP weaviate_internal_counter_raft_barrier weaviate_internal_counter_raft_barrier
+# TYPE weaviate_internal_counter_raft_barrier counter
+weaviate_internal_counter_raft_barrier 1
+# HELP weaviate_internal_counter_raft_state_candidate weaviate_internal_counter_raft_state_candidate
+# TYPE weaviate_internal_counter_raft_state_candidate counter
+weaviate_internal_counter_raft_state_candidate 1
+# HELP weaviate_internal_counter_raft_state_follower weaviate_internal_counter_raft_state_follower
+# TYPE weaviate_internal_counter_raft_state_follower counter
+weaviate_internal_counter_raft_state_follower 1
+# HELP weaviate_internal_counter_raft_state_leader weaviate_internal_counter_raft_state_leader
+# TYPE weaviate_internal_counter_raft_state_leader counter
+weaviate_internal_counter_raft_state_leader 1
+# HELP weaviate_internal_counter_raft_transition_heartbeat_timeout weaviate_internal_counter_raft_transition_heartbeat_timeout
+# TYPE weaviate_internal_counter_raft_transition_heartbeat_timeout counter
+weaviate_internal_counter_raft_transition_heartbeat_timeout 1
+# HELP weaviate_internal_gauge_raft_commitNumLogs weaviate_internal_gauge_raft_commitNumLogs
+# TYPE weaviate_internal_gauge_raft_commitNumLogs gauge
+weaviate_internal_gauge_raft_commitNumLogs 1
+# HELP weaviate_internal_gauge_raft_leader_dispatchNumLogs weaviate_internal_gauge_raft_leader_dispatchNumLogs
+# TYPE weaviate_internal_gauge_raft_leader_dispatchNumLogs gauge
+weaviate_internal_gauge_raft_leader_dispatchNumLogs 1
+# HELP weaviate_internal_gauge_raft_peers weaviate_internal_gauge_raft_peers
+# TYPE weaviate_internal_gauge_raft_peers gauge
+weaviate_internal_gauge_raft_peers 1
+# HELP weaviate_internal_sample_raft_boltdb_logBatchSize weaviate_internal_sample_raft_boltdb_logBatchSize
+# TYPE weaviate_internal_sample_raft_boltdb_logBatchSize summary
+weaviate_internal_sample_raft_boltdb_logBatchSize{quantile="0.5"} 127
+weaviate_internal_sample_raft_boltdb_logBatchSize{quantile="0.9"} 20123
+weaviate_internal_sample_raft_boltdb_logBatchSize{quantile="0.99"} 20123
+weaviate_internal_sample_raft_boltdb_logBatchSize_sum 20980
+weaviate_internal_sample_raft_boltdb_logBatchSize_count 7
+# HELP weaviate_internal_sample_raft_boltdb_logSize weaviate_internal_sample_raft_boltdb_logSize
+# TYPE weaviate_internal_sample_raft_boltdb_logSize summary
+weaviate_internal_sample_raft_boltdb_logSize{quantile="0.5"} 127
+weaviate_internal_sample_raft_boltdb_logSize{quantile="0.9"} 20123
+weaviate_internal_sample_raft_boltdb_logSize{quantile="0.99"} 20123
+weaviate_internal_sample_raft_boltdb_logSize_sum 20980
+weaviate_internal_sample_raft_boltdb_logSize_count 7
+# HELP weaviate_internal_sample_raft_boltdb_logsPerBatch weaviate_internal_sample_raft_boltdb_logsPerBatch
+# TYPE weaviate_internal_sample_raft_boltdb_logsPerBatch summary
+weaviate_internal_sample_raft_boltdb_logsPerBatch{quantile="0.5"} 1
+weaviate_internal_sample_raft_boltdb_logsPerBatch{quantile="0.9"} 1
+weaviate_internal_sample_raft_boltdb_logsPerBatch{quantile="0.99"} 1
+weaviate_internal_sample_raft_boltdb_logsPerBatch_sum 7
+weaviate_internal_sample_raft_boltdb_logsPerBatch_count 7
+# HELP weaviate_internal_sample_raft_boltdb_writeCapacity weaviate_internal_sample_raft_boltdb_writeCapacity
+# TYPE weaviate_internal_sample_raft_boltdb_writeCapacity summary
+weaviate_internal_sample_raft_boltdb_writeCapacity{quantile="0.5"} 17700.681640625
+weaviate_internal_sample_raft_boltdb_writeCapacity{quantile="0.9"} 64771.03515625
+weaviate_internal_sample_raft_boltdb_writeCapacity{quantile="0.99"} 64771.03515625
+weaviate_internal_sample_raft_boltdb_writeCapacity_sum 218283.52734375
+weaviate_internal_sample_raft_boltdb_writeCapacity_count 7
+# HELP weaviate_internal_timer_memberlist_gossip weaviate_internal_timer_memberlist_gossip
+# TYPE weaviate_internal_timer_memberlist_gossip summary
+weaviate_internal_timer_memberlist_gossip{quantile="0.5"} 9.006999789562542e-06
+weaviate_internal_timer_memberlist_gossip{quantile="0.9"} 2.2823000108473934e-05
+weaviate_internal_timer_memberlist_gossip{quantile="0.99"} 2.2823000108473934e-05
+weaviate_internal_timer_memberlist_gossip_sum 3.1829999898036476e-05
+weaviate_internal_timer_memberlist_gossip_count 2
+# HELP weaviate_internal_timer_raft_boltdb_storeLogs weaviate_internal_timer_raft_boltdb_storeLogs
+# TYPE weaviate_internal_timer_raft_boltdb_storeLogs summary
+weaviate_internal_timer_raft_boltdb_storeLogs{quantile="0.5"} 5.9180001699132845e-05
+weaviate_internal_timer_raft_boltdb_storeLogs{quantile="0.9"} 0.00014662400644738227
+weaviate_internal_timer_raft_boltdb_storeLogs{quantile="0.99"} 0.00014662400644738227
+weaviate_internal_timer_raft_boltdb_storeLogs_sum 0.0004118790056963917
+weaviate_internal_timer_raft_boltdb_storeLogs_count 7
+# HELP weaviate_internal_timer_raft_commitTime weaviate_internal_timer_raft_commitTime
+# TYPE weaviate_internal_timer_raft_commitTime summary
+weaviate_internal_timer_raft_commitTime{quantile="0.5"} 3.6437999369809404e-05
+weaviate_internal_timer_raft_commitTime{quantile="0.9"} 0.0001574950001668185
+weaviate_internal_timer_raft_commitTime{quantile="0.99"} 0.0001574950001668185
+weaviate_internal_timer_raft_commitTime_sum 0.00040846400042937603
+weaviate_internal_timer_raft_commitTime_count 6
+# HELP weaviate_internal_timer_raft_fsm_apply weaviate_internal_timer_raft_fsm_apply
+# TYPE weaviate_internal_timer_raft_fsm_apply summary
+weaviate_internal_timer_raft_fsm_apply{quantile="0.5"} 0.000110116001451388
+weaviate_internal_timer_raft_fsm_apply{quantile="0.9"} 0.15299268066883087
+weaviate_internal_timer_raft_fsm_apply{quantile="0.99"} 0.15299268066883087
+weaviate_internal_timer_raft_fsm_apply_sum 0.15336031867627753
+weaviate_internal_timer_raft_fsm_apply_count 4
+# HELP weaviate_internal_timer_raft_fsm_enqueue weaviate_internal_timer_raft_fsm_enqueue
+# TYPE weaviate_internal_timer_raft_fsm_enqueue summary
+weaviate_internal_timer_raft_fsm_enqueue{quantile="0.5"} 3.867000032187207e-06
+weaviate_internal_timer_raft_fsm_enqueue{quantile="0.9"} 7.3729997893678956e-06
+weaviate_internal_timer_raft_fsm_enqueue{quantile="0.99"} 7.3729997893678956e-06
+weaviate_internal_timer_raft_fsm_enqueue_sum 2.5375999712196062e-05
+weaviate_internal_timer_raft_fsm_enqueue_count 6
+# HELP weaviate_internal_timer_raft_fsm_store_config weaviate_internal_timer_raft_fsm_store_config
+# TYPE weaviate_internal_timer_raft_fsm_store_config summary
+weaviate_internal_timer_raft_fsm_store_config{quantile="0.5"} 2.926500019384548e-05
+weaviate_internal_timer_raft_fsm_store_config{quantile="0.9"} 2.926500019384548e-05
+weaviate_internal_timer_raft_fsm_store_config{quantile="0.99"} 2.926500019384548e-05
+weaviate_internal_timer_raft_fsm_store_config_sum 2.926500019384548e-05
+weaviate_internal_timer_raft_fsm_store_config_count 1
+# HELP weaviate_internal_timer_raft_leader_dispatchLog weaviate_internal_timer_raft_leader_dispatchLog
+# TYPE weaviate_internal_timer_raft_leader_dispatchLog summary
+weaviate_internal_timer_raft_leader_dispatchLog{quantile="0.5"} 2.6388999685877934e-05
+weaviate_internal_timer_raft_leader_dispatchLog{quantile="0.9"} 0.00015380799595732242
+weaviate_internal_timer_raft_leader_dispatchLog{quantile="0.99"} 0.00015380799595732242
+weaviate_internal_timer_raft_leader_dispatchLog_sum 0.0003819249977823347
+weaviate_internal_timer_raft_leader_dispatchLog_count 6
+# HELP weaviate_license_status License status of this instance (1 for the current status, 0 for the others).
+# TYPE weaviate_license_status gauge
+weaviate_license_status{edition="community",status="unlicensed"} 1
+weaviate_license_status{edition="community",status="valid"} 0
+# HELP weaviate_lsm_bucket_compaction_count Total number of LSM bucket compactions requested, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_compaction_count counter
+weaviate_lsm_bucket_compaction_count{strategy="inverted"} 0
+weaviate_lsm_bucket_compaction_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_compaction_count{strategy="replace"} 0
+weaviate_lsm_bucket_compaction_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_compaction_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_compaction_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_compaction_failure_count Number of failed LSM bucket compactions, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_compaction_failure_count counter
+weaviate_lsm_bucket_compaction_failure_count{strategy="inverted"} 0
+weaviate_lsm_bucket_compaction_failure_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_compaction_failure_count{strategy="replace"} 0
+weaviate_lsm_bucket_compaction_failure_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_compaction_failure_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_compaction_failure_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_compaction_in_progress Number of LSM bucket compactions currently in progress, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_compaction_in_progress gauge
+weaviate_lsm_bucket_compaction_in_progress{strategy="inverted"} 0
+weaviate_lsm_bucket_compaction_in_progress{strategy="mapcollection"} 0
+weaviate_lsm_bucket_compaction_in_progress{strategy="replace"} 0
+weaviate_lsm_bucket_compaction_in_progress{strategy="roaringset"} 0
+weaviate_lsm_bucket_compaction_in_progress{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_compaction_in_progress{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_compaction_noop_count Number of times the periodic LSM bucket compaction task ran but found nothing to compact, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_compaction_noop_count counter
+weaviate_lsm_bucket_compaction_noop_count{strategy="inverted"} 0
+weaviate_lsm_bucket_compaction_noop_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_compaction_noop_count{strategy="replace"} 0
+weaviate_lsm_bucket_compaction_noop_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_compaction_noop_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_compaction_noop_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_init_count Total number of LSM bucket initializations requested, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_init_count counter
+weaviate_lsm_bucket_init_count{strategy="inverted"} 1
+weaviate_lsm_bucket_init_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_init_count{strategy="replace"} 1
+weaviate_lsm_bucket_init_count{strategy="roaringset"} 1
+weaviate_lsm_bucket_init_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_init_count{strategy="setcollection"} 1
+# HELP weaviate_lsm_bucket_init_duration_seconds Duration of LSM bucket initialization in seconds, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_init_duration_seconds histogram
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.01"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.02"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.04"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.08"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.16"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.32"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="0.64"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="1.28"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="2.56"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="5.12"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="10.24"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="20.48"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="40.96"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="81.92"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="163.84"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="inverted",le="+Inf"} 1
+weaviate_lsm_bucket_init_duration_seconds_sum{strategy="inverted"} 4.6727e-05
+weaviate_lsm_bucket_init_duration_seconds_count{strategy="inverted"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.01"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.02"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.04"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.08"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.16"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.32"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="0.64"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="1.28"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="2.56"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="5.12"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="10.24"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="20.48"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="40.96"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="81.92"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="163.84"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="replace",le="+Inf"} 1
+weaviate_lsm_bucket_init_duration_seconds_sum{strategy="replace"} 0.000153097
+weaviate_lsm_bucket_init_duration_seconds_count{strategy="replace"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.01"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.02"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.04"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.08"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.16"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.32"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="0.64"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="1.28"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="2.56"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="5.12"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="10.24"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="20.48"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="40.96"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="81.92"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="163.84"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="roaringset",le="+Inf"} 1
+weaviate_lsm_bucket_init_duration_seconds_sum{strategy="roaringset"} 5.9902e-05
+weaviate_lsm_bucket_init_duration_seconds_count{strategy="roaringset"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.01"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.02"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.04"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.08"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.16"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.32"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="0.64"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="1.28"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="2.56"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="5.12"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="10.24"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="20.48"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="40.96"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="81.92"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="163.84"} 1
+weaviate_lsm_bucket_init_duration_seconds_bucket{strategy="setcollection",le="+Inf"} 1
+weaviate_lsm_bucket_init_duration_seconds_sum{strategy="setcollection"} 9.9085e-05
+weaviate_lsm_bucket_init_duration_seconds_count{strategy="setcollection"} 1
+# HELP weaviate_lsm_bucket_init_failure_count Number of failed LSM bucket initializations, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_init_failure_count counter
+weaviate_lsm_bucket_init_failure_count{strategy="inverted"} 0
+weaviate_lsm_bucket_init_failure_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_init_failure_count{strategy="replace"} 0
+weaviate_lsm_bucket_init_failure_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_init_failure_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_init_failure_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_init_in_progress Number of LSM bucket initializations currently in progress, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_init_in_progress gauge
+weaviate_lsm_bucket_init_in_progress{strategy="inverted"} 0
+weaviate_lsm_bucket_init_in_progress{strategy="mapcollection"} 0
+weaviate_lsm_bucket_init_in_progress{strategy="replace"} 0
+weaviate_lsm_bucket_init_in_progress{strategy="roaringset"} 0
+weaviate_lsm_bucket_init_in_progress{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_init_in_progress{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_open_cursors Number of currently open LSM bucket cursors, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_open_cursors gauge
+weaviate_lsm_bucket_open_cursors{strategy="inverted"} 0
+weaviate_lsm_bucket_open_cursors{strategy="mapcollection"} 0
+weaviate_lsm_bucket_open_cursors{strategy="replace"} 0
+weaviate_lsm_bucket_open_cursors{strategy="roaringset"} 0
+weaviate_lsm_bucket_open_cursors{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_open_cursors{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_opened_cursors Number of opened LSM bucket cursors, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_opened_cursors counter
+weaviate_lsm_bucket_opened_cursors{strategy="inverted"} 0
+weaviate_lsm_bucket_opened_cursors{strategy="mapcollection"} 0
+weaviate_lsm_bucket_opened_cursors{strategy="replace"} 0
+weaviate_lsm_bucket_opened_cursors{strategy="roaringset"} 0
+weaviate_lsm_bucket_opened_cursors{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_opened_cursors{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_read_operation_count Total number of LSM bucket read operations requested, labeled by operation and component
+# TYPE weaviate_lsm_bucket_read_operation_count counter
+weaviate_lsm_bucket_read_operation_count{component="active_memtable",operation="get"} 2
+weaviate_lsm_bucket_read_operation_count{component="active_memtable",operation="getbysecondary"} 1
+weaviate_lsm_bucket_read_operation_count{component="flushing_memtable",operation="get"} 0
+weaviate_lsm_bucket_read_operation_count{component="segment_group",operation="get"} 2
+# HELP weaviate_lsm_bucket_read_operation_duration_seconds Duration of LSM bucket read operations in seconds, labeled by operation and component
+# TYPE weaviate_lsm_bucket_read_operation_duration_seconds histogram
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.01"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.02"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.04"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.08"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.16"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.32"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="0.64"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="1.28"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="2.56"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="5.12"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="10.24"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="20.48"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="get",le="+Inf"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_sum{component="active_memtable",operation="get"} 5.8609999999999994e-06
+weaviate_lsm_bucket_read_operation_duration_seconds_count{component="active_memtable",operation="get"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.01"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.02"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.04"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.08"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.16"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.32"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="0.64"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="1.28"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="2.56"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="5.12"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="10.24"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="20.48"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="active_memtable",operation="getbysecondary",le="+Inf"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_sum{component="active_memtable",operation="getbysecondary"} 4.278e-06
+weaviate_lsm_bucket_read_operation_duration_seconds_count{component="active_memtable",operation="getbysecondary"} 1
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.01"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.02"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.04"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.08"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.16"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.32"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="0.64"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="1.28"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="2.56"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="5.12"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="10.24"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="20.48"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_bucket{component="segment_group",operation="get",le="+Inf"} 2
+weaviate_lsm_bucket_read_operation_duration_seconds_sum{component="segment_group",operation="get"} 1.363e-06
+weaviate_lsm_bucket_read_operation_duration_seconds_count{component="segment_group",operation="get"} 2
+# HELP weaviate_lsm_bucket_read_operation_failure_count Number of failed LSM bucket read operations, labeled by operation and component
+# TYPE weaviate_lsm_bucket_read_operation_failure_count counter
+weaviate_lsm_bucket_read_operation_failure_count{component="active_memtable",operation="get"} 0
+weaviate_lsm_bucket_read_operation_failure_count{component="flushing_memtable",operation="get"} 0
+weaviate_lsm_bucket_read_operation_failure_count{component="segment_group",operation="get"} 0
+# HELP weaviate_lsm_bucket_read_operation_ongoing Number of LSM bucket read operations currently in progress, labeled by operation and component
+# TYPE weaviate_lsm_bucket_read_operation_ongoing gauge
+weaviate_lsm_bucket_read_operation_ongoing{component="active_memtable",operation="get"} 0
+weaviate_lsm_bucket_read_operation_ongoing{component="active_memtable",operation="getbysecondary"} 0
+weaviate_lsm_bucket_read_operation_ongoing{component="flushing_memtable",operation="get"} 0
+weaviate_lsm_bucket_read_operation_ongoing{component="segment_group",operation="get"} 0
+# HELP weaviate_lsm_bucket_segment_total Total number of LSM bucket segments, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_segment_total gauge
+weaviate_lsm_bucket_segment_total{strategy="inverted"} 0
+weaviate_lsm_bucket_segment_total{strategy="mapcollection"} 0
+weaviate_lsm_bucket_segment_total{strategy="replace"} 0
+weaviate_lsm_bucket_segment_total{strategy="roaringset"} 0
+weaviate_lsm_bucket_segment_total{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_segment_total{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_shutdown_count Total number of LSM bucket shutdowns requested, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_shutdown_count counter
+weaviate_lsm_bucket_shutdown_count{strategy="inverted"} 0
+weaviate_lsm_bucket_shutdown_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_shutdown_count{strategy="replace"} 0
+weaviate_lsm_bucket_shutdown_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_shutdown_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_shutdown_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_shutdown_failure_count Number of failed LSM bucket shutdowns, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_shutdown_failure_count counter
+weaviate_lsm_bucket_shutdown_failure_count{strategy="inverted"} 0
+weaviate_lsm_bucket_shutdown_failure_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_shutdown_failure_count{strategy="replace"} 0
+weaviate_lsm_bucket_shutdown_failure_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_shutdown_failure_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_shutdown_failure_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_shutdown_in_progress Number of LSM bucket shutdowns currently in progress, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_shutdown_in_progress gauge
+weaviate_lsm_bucket_shutdown_in_progress{strategy="inverted"} 0
+weaviate_lsm_bucket_shutdown_in_progress{strategy="mapcollection"} 0
+weaviate_lsm_bucket_shutdown_in_progress{strategy="replace"} 0
+weaviate_lsm_bucket_shutdown_in_progress{strategy="roaringset"} 0
+weaviate_lsm_bucket_shutdown_in_progress{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_shutdown_in_progress{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_wal_recovery_count Total number of LSM bucket WAL recoveries requested, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_wal_recovery_count counter
+weaviate_lsm_bucket_wal_recovery_count{strategy="inverted"} 0
+weaviate_lsm_bucket_wal_recovery_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_wal_recovery_count{strategy="replace"} 0
+weaviate_lsm_bucket_wal_recovery_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_wal_recovery_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_wal_recovery_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_wal_recovery_failure_count Number of failed LSM bucket WAL recoveries, labeled by segment strategy
+# TYPE weaviate_lsm_bucket_wal_recovery_failure_count counter
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="inverted"} 0
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="mapcollection"} 0
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="replace"} 0
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="roaringset"} 0
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="roaringsetrange"} 0
+weaviate_lsm_bucket_wal_recovery_failure_count{strategy="setcollection"} 0
+# HELP weaviate_lsm_bucket_write_operation_count Total number of LSM bucket write operations requested, labeled by operation
+# TYPE weaviate_lsm_bucket_write_operation_count counter
+weaviate_lsm_bucket_write_operation_count{operation="delete"} 0
+weaviate_lsm_bucket_write_operation_count{operation="put"} 1
+# HELP weaviate_lsm_bucket_write_operation_duration_seconds Duration of LSM bucket write operations in seconds, labeled by operation
+# TYPE weaviate_lsm_bucket_write_operation_duration_seconds histogram
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.01"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.02"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.04"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.08"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.16"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.32"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="0.64"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="1.28"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="2.56"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="5.12"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="10.24"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="20.48"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_bucket{operation="put",le="+Inf"} 1
+weaviate_lsm_bucket_write_operation_duration_seconds_sum{operation="put"} 3.2291e-05
+weaviate_lsm_bucket_write_operation_duration_seconds_count{operation="put"} 1
+# HELP weaviate_lsm_bucket_write_operation_failure_count Number of failed LSM bucket write operations, labeled by operation
+# TYPE weaviate_lsm_bucket_write_operation_failure_count counter
+weaviate_lsm_bucket_write_operation_failure_count{operation="delete"} 0
+weaviate_lsm_bucket_write_operation_failure_count{operation="put"} 0
+# HELP weaviate_lsm_bucket_write_operation_ongoing Number of LSM bucket write operations currently in progress, labeled by operation
+# TYPE weaviate_lsm_bucket_write_operation_ongoing gauge
+weaviate_lsm_bucket_write_operation_ongoing{operation="delete"} 0
+weaviate_lsm_bucket_write_operation_ongoing{operation="put"} 0
+# HELP weaviate_lsm_memtable_flush_failures_total Total number of failed LSM memtable segment writes, plus commit-log failures of a flush, labeled by segment strategy. A flush can therefore record a failure alongside a successful write, or with no write at all
+# TYPE weaviate_lsm_memtable_flush_failures_total counter
+weaviate_lsm_memtable_flush_failures_total{strategy="inverted"} 0
+weaviate_lsm_memtable_flush_failures_total{strategy="mapcollection"} 0
+weaviate_lsm_memtable_flush_failures_total{strategy="replace"} 0
+weaviate_lsm_memtable_flush_failures_total{strategy="roaringset"} 0
+weaviate_lsm_memtable_flush_failures_total{strategy="roaringsetrange"} 0
+weaviate_lsm_memtable_flush_failures_total{strategy="setcollection"} 0
+# HELP weaviate_lsm_memtable_flush_in_progress Number of LSM memtable segment writes in progress, labeled by segment strategy
+# TYPE weaviate_lsm_memtable_flush_in_progress gauge
+weaviate_lsm_memtable_flush_in_progress{strategy="inverted"} 0
+weaviate_lsm_memtable_flush_in_progress{strategy="mapcollection"} 0
+weaviate_lsm_memtable_flush_in_progress{strategy="replace"} 0
+weaviate_lsm_memtable_flush_in_progress{strategy="roaringset"} 0
+weaviate_lsm_memtable_flush_in_progress{strategy="roaringsetrange"} 0
+weaviate_lsm_memtable_flush_in_progress{strategy="setcollection"} 0
+# HELP weaviate_lsm_memtable_flush_total Total number of LSM memtable segment writes, by the flush cycle or a WAL replay, labeled by segment strategy
+# TYPE weaviate_lsm_memtable_flush_total counter
+weaviate_lsm_memtable_flush_total{strategy="inverted"} 0
+weaviate_lsm_memtable_flush_total{strategy="mapcollection"} 0
+weaviate_lsm_memtable_flush_total{strategy="replace"} 0
+weaviate_lsm_memtable_flush_total{strategy="roaringset"} 0
+weaviate_lsm_memtable_flush_total{strategy="roaringsetrange"} 0
+weaviate_lsm_memtable_flush_total{strategy="setcollection"} 0
+# HELP weaviate_mcp_write_access_enabled Current state of the runtime MCP_SERVER_WRITE_ACCESS_ENABLED flag (1 if enabled, 0 otherwise).
+# TYPE weaviate_mcp_write_access_enabled gauge
+weaviate_mcp_write_access_enabled 0
+# HELP weaviate_module_request_resends_total Number of module requests to external APIs sent again after their connection broke
+# TYPE weaviate_module_request_resends_total counter
+weaviate_module_request_resends_total 0
+# HELP weaviate_objects_ttl_deletion_batchdeletes_count Count of object ttl batch deletes executions
+# TYPE weaviate_objects_ttl_deletion_batchdeletes_count counter
+weaviate_objects_ttl_deletion_batchdeletes_count 0
+# HELP weaviate_objects_ttl_deletion_batchdeletes_duration_seconds Duration of object ttl batch deletes in seconds
+# TYPE weaviate_objects_ttl_deletion_batchdeletes_duration_seconds histogram
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.005"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.01"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.025"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.05"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.1"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.25"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="0.5"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="1"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="2.5"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="5"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="10"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="25"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="50"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="100"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_bucket{le="+Inf"} 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_sum 0
+weaviate_objects_ttl_deletion_batchdeletes_duration_seconds_count 0
+# HELP weaviate_objects_ttl_deletion_batchdeletes_failure_count Count of object ttl batch deletes failures
+# TYPE weaviate_objects_ttl_deletion_batchdeletes_failure_count counter
+weaviate_objects_ttl_deletion_batchdeletes_failure_count 0
+# HELP weaviate_objects_ttl_deletion_batchdeletes_objects_deleted Count of expired objects deleted per shard/tenant
+# TYPE weaviate_objects_ttl_deletion_batchdeletes_objects_deleted counter
+weaviate_objects_ttl_deletion_batchdeletes_objects_deleted 0
+# HELP weaviate_objects_ttl_deletion_batchdeletes_running Number of object ttl batch deletes running currently
+# TYPE weaviate_objects_ttl_deletion_batchdeletes_running gauge
+weaviate_objects_ttl_deletion_batchdeletes_running 0
+# HELP weaviate_objects_ttl_deletion_db_count Count of object ttl deletions executions
+# TYPE weaviate_objects_ttl_deletion_db_count counter
+weaviate_objects_ttl_deletion_db_count 0
+# HELP weaviate_objects_ttl_deletion_db_duration_seconds Duration of object ttl deletions in seconds
+# TYPE weaviate_objects_ttl_deletion_db_duration_seconds histogram
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="60"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="300"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="900"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="1800"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="3600"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="7200"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="10800"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="14400"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="28800"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="57600"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="86400"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_bucket{le="+Inf"} 0
+weaviate_objects_ttl_deletion_db_duration_seconds_sum 0
+weaviate_objects_ttl_deletion_db_duration_seconds_count 0
+# HELP weaviate_objects_ttl_deletion_db_failure_count Count of object ttl deletions failures
+# TYPE weaviate_objects_ttl_deletion_db_failure_count counter
+weaviate_objects_ttl_deletion_db_failure_count 0
+# HELP weaviate_objects_ttl_deletion_db_objects_deleted Count of all expired objects deleted
+# TYPE weaviate_objects_ttl_deletion_db_objects_deleted counter
+weaviate_objects_ttl_deletion_db_objects_deleted 0
+# HELP weaviate_objects_ttl_deletion_db_running Number of object ttl deletions running currently
+# TYPE weaviate_objects_ttl_deletion_db_running gauge
+weaviate_objects_ttl_deletion_db_running 0
+# HELP weaviate_objects_ttl_deletion_finduuids_count Count of object ttl find uuids executions
+# TYPE weaviate_objects_ttl_deletion_finduuids_count counter
+weaviate_objects_ttl_deletion_finduuids_count 0
+# HELP weaviate_objects_ttl_deletion_finduuids_duration_seconds Duration of object ttl find uuids in seconds
+# TYPE weaviate_objects_ttl_deletion_finduuids_duration_seconds histogram
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.005"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.01"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.025"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.05"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.1"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.25"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="0.5"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="1"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="2.5"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="5"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="10"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="25"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="50"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="100"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_bucket{le="+Inf"} 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_sum 0
+weaviate_objects_ttl_deletion_finduuids_duration_seconds_count 0
+# HELP weaviate_objects_ttl_deletion_finduuids_failure_count Count of object ttl find uuids failures
+# TYPE weaviate_objects_ttl_deletion_finduuids_failure_count counter
+weaviate_objects_ttl_deletion_finduuids_failure_count 0
+# HELP weaviate_objects_ttl_deletion_finduuids_objects_found Count of expired objects found per shard/tenant
+# TYPE weaviate_objects_ttl_deletion_finduuids_objects_found counter
+weaviate_objects_ttl_deletion_finduuids_objects_found 0
+# HELP weaviate_objects_ttl_deletion_finduuids_running Number of object ttl find uuids running currently
+# TYPE weaviate_objects_ttl_deletion_finduuids_running gauge
+weaviate_objects_ttl_deletion_finduuids_running 0
+# HELP weaviate_replication_complete_operations Number of successfully completed replication operations
+# TYPE weaviate_replication_complete_operations counter
+weaviate_replication_complete_operations{node="node00"} 0
+# HELP weaviate_replication_coordinator_reads_duration_seconds Duration in seconds of read operations from replicas
+# TYPE weaviate_replication_coordinator_reads_duration_seconds histogram
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.00025"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.0005"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.001"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.002"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.004"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.008"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.016"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.032"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.064"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.128"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.256"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="0.512"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="1.024"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="2.048"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="4.096"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="8.192"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="16.384"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="32.768"} 0
+weaviate_replication_coordinator_reads_duration_seconds_bucket{le="+Inf"} 0
+weaviate_replication_coordinator_reads_duration_seconds_sum 0
+weaviate_replication_coordinator_reads_duration_seconds_count 0
+# HELP weaviate_replication_coordinator_reads_failed Count of requests failing due to read from replicas
+# TYPE weaviate_replication_coordinator_reads_failed counter
+weaviate_replication_coordinator_reads_failed 0
+# HELP weaviate_replication_coordinator_reads_succeed_all Count of requests succeeding a read from CL replicas
+# TYPE weaviate_replication_coordinator_reads_succeed_all counter
+weaviate_replication_coordinator_reads_succeed_all 0
+# HELP weaviate_replication_coordinator_reads_succeed_some Count of requests succeeding a read from some replicas < CL but more than zero
+# TYPE weaviate_replication_coordinator_reads_succeed_some counter
+weaviate_replication_coordinator_reads_succeed_some 0
+# HELP weaviate_replication_coordinator_writes_duration_seconds Duration in seconds of write operations to replicas
+# TYPE weaviate_replication_coordinator_writes_duration_seconds histogram
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.001"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.002"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.004"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.008"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.016"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.032"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.064"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.128"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.256"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="0.512"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="1.024"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="2.048"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="4.096"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="8.192"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="16.384"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="32.768"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="65.536"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="131.072"} 0
+weaviate_replication_coordinator_writes_duration_seconds_bucket{le="+Inf"} 0
+weaviate_replication_coordinator_writes_duration_seconds_sum 0
+weaviate_replication_coordinator_writes_duration_seconds_count 0
+# HELP weaviate_replication_coordinator_writes_failed Count of requests failing due to consistency level
+# TYPE weaviate_replication_coordinator_writes_failed counter
+weaviate_replication_coordinator_writes_failed 0
+# HELP weaviate_replication_coordinator_writes_succeed_all Count of requests succeeding a write to all replicas
+# TYPE weaviate_replication_coordinator_writes_succeed_all counter
+weaviate_replication_coordinator_writes_succeed_all 0
+# HELP weaviate_replication_coordinator_writes_succeed_some Count of requests succeeding a write to some replicas > CL but less than all
+# TYPE weaviate_replication_coordinator_writes_succeed_some counter
+weaviate_replication_coordinator_writes_succeed_some 0
+# HELP weaviate_replication_engine_consumer_running_status The replication engine consumer running status (0: not running, 1: running)
+# TYPE weaviate_replication_engine_consumer_running_status gauge
+weaviate_replication_engine_consumer_running_status{node="node00"} 1
+# HELP weaviate_replication_engine_producer_running_status The replication engine producer running status (0: not running, 1: running)
+# TYPE weaviate_replication_engine_producer_running_status gauge
+weaviate_replication_engine_producer_running_status{node="node00"} 1
+# HELP weaviate_replication_engine_running_status The Replication engine running status (0: not running, 1: running)
+# TYPE weaviate_replication_engine_running_status gauge
+weaviate_replication_engine_running_status{node="node00"} 1
+# HELP weaviate_replication_failed_operations Number of failed replication operations
+# TYPE weaviate_replication_failed_operations counter
+weaviate_replication_failed_operations{node="node00"} 0
+# HELP weaviate_replication_ongoing_operations Number of replication operations currently in progress
+# TYPE weaviate_replication_ongoing_operations gauge
+weaviate_replication_ongoing_operations{node="node00"} 0
+# HELP weaviate_replication_operation_cleanup_failures_total Total number of failed replication cleanup batches. A lost election is not a failure
+# TYPE weaviate_replication_operation_cleanup_failures_total counter
+weaviate_replication_operation_cleanup_failures_total 0
+# HELP weaviate_replication_pending_operations Number of replication operations pending processing
+# TYPE weaviate_replication_pending_operations gauge
+weaviate_replication_pending_operations{node="node00"} 0
+# HELP weaviate_replication_read_repair_count Count of read repairs started
+# TYPE weaviate_replication_read_repair_count counter
+weaviate_replication_read_repair_count 0
+# HELP weaviate_replication_read_repair_duration_seconds Duration in seconds of read repair operations
+# TYPE weaviate_replication_read_repair_duration_seconds histogram
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.001"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.002"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.004"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.008"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.016"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.032"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.064"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.128"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.256"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="0.512"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="1.024"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="2.048"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="4.096"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="8.192"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="16.384"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="32.768"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="65.536"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="131.072"} 0
+weaviate_replication_read_repair_duration_seconds_bucket{le="+Inf"} 0
+weaviate_replication_read_repair_duration_seconds_sum 0
+weaviate_replication_read_repair_duration_seconds_count 0
+# HELP weaviate_replication_read_repair_failure Count of read repairs failed
+# TYPE weaviate_replication_read_repair_failure counter
+weaviate_replication_read_repair_failure 0
+# HELP weaviate_schema_collections Number of collections per node and namespace
+# TYPE weaviate_schema_collections gauge
+weaviate_schema_collections{collection_namespace="",nodeID="node00"} 1
+# HELP weaviate_schema_shards Number of shards per node with corresponding status
+# TYPE weaviate_schema_shards gauge
+weaviate_schema_shards{nodeID="node00",status=""} 1
+# HELP weaviate_shards Number of shards the node holds, by lifecycle state and by whether the collection opens its shards eagerly at creation or lazily on first access
+# TYPE weaviate_shards gauge
+weaviate_shards{registration="eager",state="loaded"} 1
+weaviate_shards{registration="eager",state="loading"} 0
+weaviate_shards{registration="eager",state="unloaded"} 0
+weaviate_shards{registration="eager",state="unloading"} 0
+weaviate_shards{registration="lazy",state="loaded"} 0
+weaviate_shards{registration="lazy",state="loading"} 0
+weaviate_shards{registration="lazy",state="unloaded"} 0
+weaviate_shards{registration="lazy",state="unloading"} 0
+# HELP weaviate_startup_shards_loaded Number of eagerly-loaded local shards that have finished loading during startup
+# TYPE weaviate_startup_shards_loaded gauge
+weaviate_startup_shards_loaded 0
+# HELP weaviate_startup_shards_to_load Number of local shards expected to load eagerly during startup
+# TYPE weaviate_startup_shards_to_load gauge
+weaviate_startup_shards_to_load 0
+# HELP weaviate_vector_index_memory_allocation_rejected_total Total number of batch operations rejected per node due to insufficient memory
+# TYPE weaviate_vector_index_memory_allocation_rejected_total counter
+weaviate_vector_index_memory_allocation_rejected_total 0
+# HELP weaviate_weaviate_grpc_conn_close_total Total connections closed
+# TYPE weaviate_weaviate_grpc_conn_close_total counter
+weaviate_weaviate_grpc_conn_close_total 0
+# HELP weaviate_weaviate_grpc_conn_create_total Total gRPC connections created
+# TYPE weaviate_weaviate_grpc_conn_create_total counter
+weaviate_weaviate_grpc_conn_create_total 0
+# HELP weaviate_weaviate_grpc_conn_open Open connections
+# TYPE weaviate_weaviate_grpc_conn_open gauge
+weaviate_weaviate_grpc_conn_open 0
+# HELP weaviate_weaviate_grpc_conn_reuse_total Total reused connections
+# TYPE weaviate_weaviate_grpc_conn_reuse_total counter
+weaviate_weaviate_grpc_conn_reuse_total 0

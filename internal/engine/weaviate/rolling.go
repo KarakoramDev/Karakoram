@@ -1,0 +1,423 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+package weaviate
+
+import (
+	"bytes"
+	"context"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/pki"
+	"reflect"
+	"slices"
+	"sort"
+	"time"
+)
+
+type rollingTarget struct {
+	Config            agentapi.MemberConfig  `json:"config"`
+	Resources         domain.Resources       `json:"resources"`
+	PreviousConfig    *agentapi.MemberConfig `json:"previousConfig,omitempty"`
+	PreviousResources domain.Resources       `json:"previousResources"`
+}
+
+// Automatic transport renewal never needs a window. Database leaf renewal
+// may bypass it only when the active leaf has at most seven days remaining.
+func rollingNeedsWindow(ctx context.Context, rc *engine.Context, m *member, target rollingTarget, reason string) (bool, error) {
+	if reason == "rotate-root-add" || reason == "rotate-root-remove" {
+		return false, nil
+	}
+	if reason != "config" && reason != "renew-tls" || !reflect.DeepEqual(m.Resources, target.Resources) {
+		return true, nil
+	}
+	raw, err := secret(ctx, rc, "config/"+m.Name)
+	if err != nil {
+		return false, err
+	}
+	var active agentapi.MemberConfig
+	if err = json.Unmarshal(raw, &active); err != nil {
+		return false, err
+	}
+	desired := target.Config
+	desired.AgentTLS = active.AgentTLS
+	if desired.TLS.CertPEM != active.TLS.CertPEM && active.TLS.CertPEM != "" {
+		urgent, err := pki.NeedsRenewal([]byte(active.TLS.CertPEM), 7*24*time.Hour, now(rc))
+		if err != nil {
+			return false, err
+		}
+		if urgent {
+			desired.TLS.CertPEM, desired.TLS.KeyPEM = active.TLS.CertPEM, active.TLS.KeyPEM
+		}
+	}
+	return configHash(desired) != configHash(active), nil
+}
+
+func (p *Provider) startRolling(ctx context.Context, rc *engine.Context, s *state, reason, operationID, only string) error {
+	if s.Rolling != nil {
+		return nil
+	}
+	members := ordered(s)
+	sort.SliceStable(members, func(i, j int) bool {
+		return !slices.Contains(s.Voters, members[i].Name) && slices.Contains(s.Voters, members[j].Name)
+	})
+	r := &rolling{Reason: reason, OperationID: operationID, Step: "gate"}
+	for _, m := range members {
+		if only != "" && m.Name != only {
+			continue
+		}
+		cfg, e := p.desiredConfig(ctx, rc, s, m)
+		if e != nil {
+			return e
+		}
+		if reason == "config" && configHash(cfg) == m.ConfigHash && reflect.DeepEqual(m.Resources, rc.Cluster.Spec.Components.Engine.Resources) {
+			continue
+		}
+		target := rollingTarget{Config: cfg, Resources: rc.Cluster.Spec.Components.Engine.Resources}
+		needsWindow, e := rollingNeedsWindow(ctx, rc, m, target, reason)
+		if e != nil {
+			return e
+		}
+		if operationID == "" && needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
+		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
+			if e = engine.RequireDiskGrowth(rc.Backend); e != nil {
+				return e
+			}
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if e = planner.PlanResources(ctx, m.Name, runtimeResources(target.Resources)); e != nil {
+				return e
+			}
+		}
+		previous, e := p.MemberConfig(ctx, rc, m.Name)
+		if e != nil {
+			return e
+		}
+		target.PreviousConfig = &previous
+		target.PreviousResources = m.Resources
+		raw, e := json.Marshal(target)
+		if e != nil {
+			return e
+		}
+		if e = putSecret(ctx, rc, "target/"+m.Name, raw); e != nil {
+			return e
+		}
+		r.Order = append(r.Order, m.Name)
+	}
+	s.Rolling = r
+	s.Phase = "rolling"
+	return nil
+}
+
+// rollingClusterReady relaxes time verification only for active leaves that
+// this same durable roll will replace with valid leaves. This includes peers
+// still waiting their turn, so simultaneous expiry can recover sequentially.
+func (p *Provider) rollingClusterReady(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	if s.Rolling == nil {
+		return p.clusterReady(ctx, rc, s)
+	}
+	expired, err := expiredActiveLeaves(ctx, rc, s)
+	if err != nil {
+		return false, err
+	}
+	for name, activeDER := range expired {
+		if !slices.Contains(s.Rolling.Order[s.Rolling.Position:], name) {
+			return false, fmt.Errorf("native certificate expired for member %s outside replacement roll", name)
+		}
+		raw, err := secret(ctx, rc, "target/"+name)
+		if err != nil {
+			return false, err
+		}
+		var target rollingTarget
+		if err = json.Unmarshal(raw, &target); err != nil {
+			return false, err
+		}
+		block, rest := pem.Decode([]byte(target.Config.TLS.CertPEM))
+		if block == nil || target.Config.TLS.Mode == "disabled" {
+			return false, fmt.Errorf("native certificate expired for member %s without replacement leaf", name)
+		}
+		leaf, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return false, err
+		}
+		if bytes.Equal(leaf.Raw, activeDER) {
+			return false, fmt.Errorf("native certificate expired for member %s without replacement leaf", name)
+		}
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM([]byte(target.Config.TLS.CAPEM)) {
+			return false, fmt.Errorf("invalid replacement CA for member %s", name)
+		}
+		intermediates := x509.NewCertPool()
+		intermediates.AppendCertsFromPEM(rest)
+		if _, err = leaf.Verify(x509.VerifyOptions{Roots: roots, Intermediates: intermediates, DNSName: name, CurrentTime: now(rc)}); err != nil {
+			return false, fmt.Errorf("invalid replacement leaf for member %s: %w", name, err)
+		}
+	}
+	return p.observeClusterReady(ctx, rc, s, expired)
+}
+
+func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state) error {
+	r := s.Rolling
+	if r == nil {
+		return nil
+	}
+	if r.Position == len(r.Order) {
+		s.Rolling = nil
+		return nil
+	}
+	m := s.find(r.Order[r.Position])
+	if m == nil {
+		return fmt.Errorf("rolling member is missing")
+	}
+	if r.Reason == "upgrade-agents" {
+		return p.agentUpgradeStep(ctx, rc, s)
+	}
+	raw, e := secret(ctx, rc, "target/"+m.Name)
+	if e != nil {
+		return e
+	}
+	var target rollingTarget
+	if e = json.Unmarshal(raw, &target); e != nil {
+		return e
+	}
+	needsWindow, e := rollingNeedsWindow(ctx, rc, m, target, r.Reason)
+	if e != nil {
+		return e
+	}
+	switch r.Step {
+	case "gate":
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
+		ready, e := p.rollingClusterReady(ctx, rc, s)
+		if e != nil || !ready {
+			return e
+		}
+		r.Step = "activate"
+		return nil
+	case "activate":
+		if needsWindow && rc.WaitForWindow().RequeueAfter > 0 {
+			return nil
+		}
+		if m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk {
+			if e = engine.RequireDiskGrowth(rc.Backend); e != nil {
+				s.Rolling = nil
+				return e
+			}
+		}
+		if planner, ok := rc.Backend.(infra.ResourceUpdatePlanner); ok && !reflect.DeepEqual(m.Resources, target.Resources) {
+			if e = planner.PlanResources(ctx, m.Name, runtimeResources(target.Resources)); e != nil {
+				if errors.Is(e, infra.ErrRejected) {
+					s.Rolling = nil
+				}
+				return e
+			}
+		}
+		ready, e := p.rollingClusterReady(ctx, rc, s)
+		if e != nil || !ready {
+			return e
+		}
+		if e = restartConfig(&target.Config, s.ConfigVersion+1); e != nil {
+			return e
+		}
+		if e = activateConfig(ctx, rc, s, m, target.Config); e != nil {
+			return e
+		}
+		r.Step = "resources"
+		return nil
+	case "resources":
+		if !reflect.DeepEqual(m.Resources, target.Resources) {
+			diskChanged := m.Resources.MinDisk != target.Resources.MinDisk || m.Resources.MaxDisk != target.Resources.MaxDisk
+			if diskChanged {
+				if e = engine.RequireDiskGrowth(rc.Backend); e != nil {
+					return e
+				}
+				m.Resources = target.Resources
+				s.Pending = &pending{Action: "volume-resources", Member: m.Name}
+				r.Step = "runtime-resources"
+				return nil
+			}
+			m.Resources = target.Resources
+			s.Pending = &pending{Action: "resources", Member: m.Name}
+			r.Step = "deploy"
+			return nil
+		}
+		r.Step = "deploy"
+		return nil
+	case "runtime-resources":
+		s.Pending = &pending{Action: "resources", Member: m.Name}
+		r.Step = "deploy"
+		return nil
+	case "deploy":
+		// A new binary must be installed before the agent pulls its new configuration.
+		s.Pending = &pending{Action: "deploy", Member: m.Name}
+		r.Step = "ack"
+		return nil
+	case "ack":
+		if _, _, e = p.memberReady(ctx, rc, m); e != nil {
+			return nil
+		}
+		c, e := p.native(ctx, rc, s, m.Name)
+		if e != nil {
+			return e
+		}
+		meta, e := c.Meta(ctx)
+		c.Close()
+		if e != nil {
+			return e
+		}
+		if meta.Version != m.DesiredVersion {
+			return nil
+		}
+		ready, e := p.rollingClusterReady(ctx, rc, s)
+		if e != nil || !ready {
+			return e
+		}
+		m.Version = m.DesiredVersion
+		m.Stage = "ready"
+		r.Position++
+		r.Step = "gate"
+		return nil
+	default:
+		return fmt.Errorf("unknown rolling step %q", r.Step)
+	}
+}
+func (*Provider) CanClaimOperation(c *domain.Cluster) (bool, error) {
+	s, e := load(c)
+	if e != nil {
+		return false, e
+	}
+	if s.Pending != nil || s.Rolling != nil || s.ScaleDown != nil || s.Rotation != nil {
+		return false, nil
+	}
+	for _, m := range s.Members {
+		if m.ImportPlan != nil || m.RuntimeRecovery.Op != nil || m.RuntimeRecovery.ImportPlan != nil || m.UnplacedRetirement != nil {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+func (*Provider) SyncDuringOperation(*domain.Operation) bool { return false }
+
+// A definitive placement refusal owns no replacement. Release its captured
+// intent and restore the serving configuration so a corrected generation can
+// converge instead of resubmitting the rejected resource receipt.
+func (p *Provider) rejectResources(ctx context.Context, rc *engine.Context, s *state, m *member, cause error) error {
+	if err := verifyMemberServices(ctx, rc, m); err != nil {
+		return errors.Join(cause, err)
+	}
+	runtime, err := rc.Backend.GetService(ctx, m.Name)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	if runtime == nil {
+		return errors.Join(cause, engine.ErrUnavailable)
+	}
+	applied := runtime.Resources
+	disk, err := engine.ObserveVolumeSize(ctx, rc.Backend, m.Volume, m.VolumeID)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	if disk != nil {
+		applied.MinDisk, applied.MaxDisk = disk.MinDisk, disk.MaxDisk
+	} else {
+		applied.MinDisk, applied.MaxDisk = m.Resources.MinDisk, m.Resources.MaxDisk
+	}
+	if s.Rolling != nil {
+		raw, err := secret(ctx, rc, "target/"+m.Name)
+		if err != nil {
+			return errors.Join(cause, err)
+		}
+		var target rollingTarget
+		if err = json.Unmarshal(raw, &target); err != nil {
+			return errors.Join(cause, err)
+		}
+		if target.PreviousConfig != nil {
+			if disk == nil {
+				applied.MinDisk, applied.MaxDisk = target.PreviousResources.MinDisk, target.PreviousResources.MaxDisk
+			}
+			if err = activateConfig(ctx, rc, s, m, *target.PreviousConfig); err != nil {
+				return errors.Join(cause, err)
+			}
+		}
+	}
+	m.Resources = applied
+	s.Pending, s.Rolling = nil, nil
+	return cause
+}
+
+// Transport-only renewal is independent. A native leaf changes restart-bearing
+// material, so even emergency renewal retains the ordinary one-member rolling
+// readiness and acknowledgement checkpoints, using accepted application intent.
+func (p *Provider) reconcileExemptRenewal(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	var renewal *rolling
+	changed := false
+	members := ordered(s)
+	retiring := false
+	for _, m := range members {
+		if m.Removing {
+			retiring = true
+			break
+		}
+	}
+	for _, m := range members {
+		if m.Removing || m.ConfigVersion == 0 {
+			continue
+		}
+		desired, err := p.desiredConfig(ctx, rc, s, m)
+		if err != nil {
+			return true, err
+		}
+		active, projected, leafChanged, err := p.exemptConfig(ctx, rc, m, desired)
+		if err != nil {
+			return true, err
+		}
+		if leafChanged && retiring {
+			// A native roll cannot pass its membership-readiness gate while
+			// retirement owns a removing member. Finish that owner first,
+			// but continue publishing independently changed agent transport.
+			projected.TLS = active.TLS
+			leafChanged = false
+		}
+		if configHash(projected) == configHash(active) {
+			continue
+		}
+		// Only an unstarted desired roll reaches this helper. Its snapshots
+		// must not later replay superseded leaf or transport material.
+		s.Rolling = nil
+		if leafChanged {
+			target := rollingTarget{Config: projected, Resources: m.Resources, PreviousConfig: &active, PreviousResources: m.Resources}
+			raw, err := json.Marshal(target)
+			if err != nil {
+				return true, err
+			}
+			if err = putSecret(ctx, rc, "target/"+m.Name, raw); err != nil {
+				return true, err
+			}
+			if renewal == nil {
+				renewal = &rolling{Reason: "renew-tls", Step: "gate"}
+			}
+			renewal.Order = append(renewal.Order, m.Name)
+			continue
+		}
+		if err = activateConfig(ctx, rc, s, m, projected); err != nil {
+			return true, err
+		}
+		m.Stage = "deployed"
+		changed = true
+	}
+	if renewal != nil {
+		s.Rolling = renewal
+		s.Phase = "rolling"
+		return true, nil
+	}
+	return changed, nil
+}

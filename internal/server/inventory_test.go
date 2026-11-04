@@ -5,6 +5,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"net/http/httptest"
 	"strings"
@@ -20,6 +21,39 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"DryRunReplaceCluster", "PUT", "/api/v1/dry-run/clusters/prod", `{"spec":{"provider":"psmdb"}}`},
 		{"DryRunPatchCluster", "PATCH", "/api/v1/dry-run/clusters/prod", `{"spec":{"version":"8.0"}}`},
 		{"DryRunCreateRestore", "POST", "/api/v1/dry-run/clusters/prod/restores", `{"name":"preview","source":{"backup":"missing"}}`},
+		{"IssueTemporalClientCertificate", "POST", "/api/v1/clusters/prod/temporal/client-certificates", `{"commonName":"worker"}`},
+		{"ListTemporalClientCertificates", "GET", "/api/v1/clusters/prod/temporal/client-certificates", ""},
+		{"ListTemporalNamespaces", "GET", "/api/v1/clusters/prod/temporal/namespaces", ""},
+		{"DeleteTemporalNamespace", "DELETE", "/api/v1/clusters/prod/temporal/namespaces/orders", ""},
+		{"SetTemporalUIOIDCClientSecret", "PUT", "/api/v1/clusters/prod/temporal/ui/oidc-client-secret", `{"clientSecret":"synthetic-secret"}`},
+		{"ListWeaviateUsers", "GET", "/api/v1/clusters/prod/weaviate/users", ""},
+		{"CreateWeaviateUser", "POST", "/api/v1/clusters/prod/weaviate/users", `{"name":"app","roles":[]}`},
+		{"GetWeaviateUser", "GET", "/api/v1/clusters/prod/weaviate/users/app", ""},
+		{"UpdateWeaviateUser", "PUT", "/api/v1/clusters/prod/weaviate/users/app", `{"roles":[]}`},
+		{"DeleteWeaviateUser", "DELETE", "/api/v1/clusters/prod/weaviate/users/app", ""},
+		{"RotateWeaviateUserKey", "POST", "/api/v1/clusters/prod/weaviate/users/app/rotate-key", ""},
+		{"ListWeaviateRoles", "GET", "/api/v1/clusters/prod/weaviate/roles", ""},
+		{"CreateWeaviateRole", "POST", "/api/v1/clusters/prod/weaviate/roles", `{"name":"app","permissions":[]}`},
+		{"GetWeaviateRole", "GET", "/api/v1/clusters/prod/weaviate/roles/app", ""},
+		{"UpdateWeaviateRole", "PUT", "/api/v1/clusters/prod/weaviate/roles/app", `{"name":"app","permissions":[]}`},
+		{"DeleteWeaviateRole", "DELETE", "/api/v1/clusters/prod/weaviate/roles/app", ""},
+		{"UpgradeClusterAgents", "POST", "/api/v1/clusters/prod/upgrade-agents", "{}"},
+		{"MoveClusterMember", "POST", "/api/v1/clusters/prod/members/prodm0/move", ""},
+		{"GetAgentRolloutSettings", "GET", "/api/v1/settings/agent-rollout", ""},
+		{"UpdateAgentRolloutSettings", "PUT", "/api/v1/settings/agent-rollout", "{\"automatic\":false,\"maxConcurrentClusters\":1}"},
+		{"GetControlPlaneBackupPolicy", "GET", "/api/v1/control-plane/backup-policy", ""},
+		{"UpdateControlPlaneBackupPolicy", "PUT", "/api/v1/control-plane/backup-policy", "{\"enabled\":false,\"storage\":{\"namespace\":\"default\",\"name\":\"storage\"},\"schedule\":\"0 3 * * *\",\"retainCount\":14}"},
+		{"ListControlPlaneBackups", "GET", "/api/v1/control-plane/backups", ""},
+		{"CreateControlPlaneBackup", "POST", "/api/v1/control-plane/backups", ""},
+		{"ListNotificationChannels", "GET", "/api/v1/notification-channels", ""},
+		{"CreateNotificationChannel", "POST", "/api/v1/notification-channels", "{\"name\":\"channel\",\"type\":\"webhook\",\"enabled\":false}"},
+		{"GetNotificationChannel", "GET", "/api/v1/notification-channels/channel", ""},
+		{"ReplaceNotificationChannel", "PUT", "/api/v1/notification-channels/channel", "{\"name\":\"channel\",\"type\":\"webhook\",\"enabled\":false}"},
+		{"DeleteNotificationChannel", "DELETE", "/api/v1/notification-channels/channel", ""},
+		{"TestNotificationChannel", "POST", "/api/v1/notification-channels/channel/test", ""},
+		{"CreateBackupDrill", "POST", "/api/v1/clusters/prod/backup-drills", "{}"},
+		{"ListBackupDrills", "GET", "/api/v1/clusters/prod/backup-drills", ""},
+		{"GetBackupDrill", "GET", "/api/v1/clusters/prod/backup-drills/drill", ""},
 		{"GetSupabaseCredentials", "GET", "/api/v1/clusters/prod/supabase/credentials", ""},
 		{"SetSupabaseSMTPPassword", "PUT", "/api/v1/clusters/prod/supabase/smtp-password", `{"password":"test-password"}`},
 		{"ListSupabaseFunctions", "GET", "/api/v1/clusters/prod/supabase/functions", ""},
@@ -27,7 +61,29 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"PutSupabaseFunction", "PUT", "/api/v1/clusters/prod/supabase/functions/hello", `{"index.ts":"export {}"}`},
 		{"DeleteSupabaseFunction", "DELETE", "/api/v1/clusters/prod/supabase/functions/hello", ""},
 		{"RotateSupabaseJWTSecret", "POST", "/api/v1/clusters/prod/supabase/rotate-jwt-secret", ""},
+		{"RecoverMySQLQuorum", "POST", "/api/v1/clusters/prod/mysql/recover-quorum", `{"confirmation":"all-absent-members-fenced"}`},
+		{"ListMySQLUsers", "GET", "/api/v1/clusters/prod/mysql/users", ""},
+		{"GetMySQLUser", "GET", "/api/v1/clusters/prod/mysql/users/app", ""},
+		{"CreateMySQLUser", "POST", "/api/v1/clusters/prod/mysql/users", `{"name":"app"}`},
+		{"PatchMySQLUser", "PATCH", "/api/v1/clusters/prod/mysql/users/app", `{"locked":true}`},
+		{"DeleteMySQLUser", "DELETE", "/api/v1/clusters/prod/mysql/users/app", ""},
+		{"RotateMySQLUserPassword", "POST", "/api/v1/clusters/prod/mysql/users/app/password", `{"retainCurrent":true}`},
+		{"DiscardMySQLUserOldPassword", "POST", "/api/v1/clusters/prod/mysql/users/app/password/discard-old", ""},
+		{"ListMySQLDatabases", "GET", "/api/v1/clusters/prod/mysql/databases", ""},
+		{"GetMySQLDatabase", "GET", "/api/v1/clusters/prod/mysql/databases/app", ""},
+		{"CreateMySQLDatabase", "POST", "/api/v1/clusters/prod/mysql/databases", `{"name":"app"}`},
+		{"DeleteMySQLDatabase", "DELETE", "/api/v1/clusters/prod/mysql/databases/app?force=true", ""},
+		{"ListMySQLGrants", "GET", "/api/v1/clusters/prod/mysql/grants?database=app", ""},
+		{"GrantMySQLPrivileges", "POST", "/api/v1/clusters/prod/mysql/grants", `{"user":"app","database":"app","privileges":["SELECT"]}`},
+		{"RevokeMySQLPrivileges", "DELETE", "/api/v1/clusters/prod/mysql/grants", `{"user":"app","database":"app","privileges":["SELECT"]}`},
+		{"ListNeo4jUsers", "GET", "/api/v1/clusters/prod/neo4j/users", ""},
+		{"GetNeo4jUser", "GET", "/api/v1/clusters/prod/neo4j/users/app", ""},
+		{"CreateNeo4jUser", "POST", "/api/v1/clusters/prod/neo4j/users", `{"name":"app"}`},
+		{"DeleteNeo4jUser", "DELETE", "/api/v1/clusters/prod/neo4j/users/app", ""},
+		{"SetNeo4jUserPassword", "POST", "/api/v1/clusters/prod/neo4j/users/app/password", ""},
 		{"ListPostgresRoles", "GET", "/api/v1/clusters/prod/postgres/roles", ""},
+		{"ListPostgresBindings", "GET", "/api/v1/clusters/prod/postgres/bindings", ""},
+		{"RotatePostgresBinding", "POST", "/api/v1/clusters/prod/postgres/bindings/binding/rotate", ""},
 		{"GetPostgresRole", "GET", "/api/v1/clusters/prod/postgres/roles/app", ""},
 		{"CreatePostgresRole", "POST", "/api/v1/clusters/prod/postgres/roles", `{"name":"app"}`},
 		{"UpdatePostgresRole", "PUT", "/api/v1/clusters/prod/postgres/roles/app", `{"name":"app"}`},
@@ -121,6 +177,7 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetClusterPlacement", "GET", "/api/v1/clusters/prod/placement", ""},
 		{"RaiseClusterFCV", "POST", "/api/v1/clusters/prod/raise-fcv", "{\"version\":\"8.0\"}"},
 		{"RestartCluster", "POST", "/api/v1/clusters/prod/restart", "{}"},
+		{"RebalancePostgres", "POST", "/api/v1/clusters/prod/actions/rebalance", "{}"},
 		{"RetryClusterDeployments", "POST", "/api/v1/clusters/prod/retry-deployments", ""},
 		{"ListRestores", "GET", "/api/v1/clusters/prod/restores", ""},
 		{"CreateRestore", "POST", "/api/v1/clusters/prod/restores", "{\"name\":\"restore\",\"source\":{\"sourceCluster\":\"prod\",\"backup\":\"backup\"}}"},
@@ -178,6 +235,11 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 		{"GetRabbitMQOperatorPolicy", "GET", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", ``},
 		{"ReplaceRabbitMQOperatorPolicy", "PUT", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", `{"vhost":"app","name":"app","pattern":".*","applyTo":"queues","priority":1,"definition":{}}`},
 		{"DeleteRabbitMQOperatorPolicy", "DELETE", "/api/v1/clusters/prod/rabbitmq/operator-policies/app/app", ``},
+		{"RevealOpenBaoUnsealKeys", "POST", "/api/v1/clusters/prod/openbao/unseal-keys/reveal", `{"confirm":"prod"}`},
+		{"ListOpenBaoDatabaseConnections", "GET", "/api/v1/clusters/prod/openbao/database-connections", ``},
+		{"CreateOpenBaoDatabaseConnection", "POST", "/api/v1/clusters/prod/openbao/database-connections", `{"name":"app","targetCluster":"db","roles":[{"name":"reader","access":"readonly"}]}`},
+		{"GetOpenBaoDatabaseConnection", "GET", "/api/v1/clusters/prod/openbao/database-connections/app", ``},
+		{"DeleteOpenBaoDatabaseConnection", "DELETE", "/api/v1/clusters/prod/openbao/database-connections/app", ``},
 	}
 	seen := map[string]bool{}
 	for _, route := range routes {
@@ -192,7 +254,9 @@ func TestEveryOperationHasImplementedHandler(t *testing.T) {
 			r.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 			testHandler(s).ServeHTTP(w, r)
-			if w.Code == 501 || w.Code == 500 || strings.Contains(w.Body.String(), "Unknown ") {
+			var problem struct{ Code, Message string }
+			_ = json.Unmarshal(w.Body.Bytes(), &problem)
+			if w.Code == 501 || w.Code == 500 || problem.Code == "not_implemented" || strings.HasPrefix(problem.Message, "Unknown ") {
 				t.Fatalf("missing handler: %d %s", w.Code, w.Body.String())
 			}
 			seen[operationID(route.name)] = true

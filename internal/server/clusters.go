@@ -14,6 +14,7 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/pki"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 	"slices"
@@ -83,6 +84,7 @@ func (s *Server) enqueue(ctx context.Context, ref domain.ClusterRef, kind string
 	}
 	actor := store.Actor(ctx)
 	op := domain.Operation{Namespace: ref.Namespace, Cluster: ref.Name, Kind: kind, Payload: data, Actor: actor}
+	ApplyMaintenanceOverride(ctx, &op)
 	if err = s.Store.EnqueueOperation(ctx, &op); err != nil {
 		return s.failure(err)
 	}
@@ -142,7 +144,7 @@ func validateDataMcp(p engine.Provider, c *domain.Cluster) error {
 	return nil
 }
 
-func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previousExposure *domain.Exposure) *response {
+func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provider, c *domain.Cluster, previous *domain.Cluster) *response {
 	kind := "zerops"
 	namespace := domain.NormalizedNamespace(c.Namespace)
 	n, err := s.Store.GetNamespace(ctx, namespace)
@@ -160,13 +162,15 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 	}
 	info := factory.Info()
 	have := info.Capabilities
+	var resolvedBackend infra.Backend
 	if s.namespaces != nil {
 		if backend, err := s.namespaces.Backend(namespace); err == nil && backend != nil {
+			resolvedBackend = backend
 			have = backend.Capabilities()
-			unchangedExposure := previousExposure != nil &&
-				previousExposure.Public == c.Spec.Exposure.Public &&
-				previousExposure.IPType == c.Spec.Exposure.IPType &&
-				slices.Equal(previousExposure.Allowlist, c.Spec.Exposure.Allowlist)
+			unchangedExposure := previous != nil &&
+				previous.Spec.Exposure.Public == c.Spec.Exposure.Public &&
+				previous.Spec.Exposure.IPType == c.Spec.Exposure.IPType &&
+				slices.Equal(previous.Spec.Exposure.Allowlist, c.Spec.Exposure.Allowlist)
 			if !unchangedExposure {
 				if _, err := engine.CheckExposureSupport(ctx, backend, c.Spec.Exposure); err != nil {
 					r := fail(400, "invalid_request", err.Error())
@@ -175,9 +179,38 @@ func (s *Server) validateBackendCapabilities(ctx context.Context, p engine.Provi
 			}
 		}
 	}
+	if previous != nil {
+		if !have.DiskGrowth {
+			var err error
+			previous, err = engine.VolumeAdmissionBaseline(ctx, p, previous, c.Spec, resolvedBackend)
+			if err != nil {
+				r := s.failure(err)
+				if errors.Is(err, engine.ErrNotSupported) {
+					r = fail(400, "invalid_request", err.Error())
+				}
+				return &r
+			}
+		}
+		if err := p.Validate(ctx, previous, c); err != nil {
+			r := s.failure(err)
+			return &r
+		}
+	}
+	if validator, ok := p.(engine.BackendValidator); ok {
+		if err := validator.ValidateBackend(resolvedBackend); err != nil {
+			r := s.failure(err)
+			return &r
+		}
+	}
 	if err := engine.CheckCapabilities(p, c.Spec, info.Kind, have); err != nil {
 		r := fail(400, "invalid_request", err.Error())
 		return &r
+	}
+	if previous != nil {
+		if err := engine.CheckDiskGrowthUpdate(previous.Spec, c.Spec, info.Kind, have); err != nil {
+			r := fail(400, "invalid_request", err.Error())
+			return &r
+		}
 	}
 	return nil
 }
@@ -216,110 +249,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return listResponse(s, ctx, out, err)
 	case "CreateCluster":
-		b := in.Body.(*api.CreateClusterRequest)
-		namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
-		if err := domain.ValidateClusterName(b.Name); err != nil {
-			return fail(400, "invalid_request", err.Error())
-		}
-		if err := domain.ValidateNamespaceName(namespace); err != nil {
-			return fail(400, "invalid_request", err.Error())
-		}
-		if failure := s.usableNamespace(namespace); failure != nil {
-			return *failure
-		}
-		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, b.Name)); err == nil {
-			return fail(409, "conflict", "Cluster already exists")
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return s.failure(err)
-		}
-		c := domain.Cluster{Namespace: namespace, Name: b.Name, Spec: specDomain(b.Spec)}
-		if c.Spec.Provider == "" {
-			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
-		}
-		if d := c.Spec.DataSource; d != nil {
-			d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
-			source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
-			if failure := s.restorePermission(ctx, namespace, source); failure != nil {
-				return *failure
-			}
-			if d.Backup != "" {
-				if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
-					return *failure
-				}
-				backup, err := s.Store.GetBackup(ctx, source, d.Backup)
-				if err != nil {
-					return s.backupDependencyFailure(err, source, d.Backup)
-				}
-				if !backup.ProviderMatches(c.Spec.Provider) {
-					return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
-				}
-			}
-		}
-		p, err := s.Registry.Get(c.Spec.Provider)
-		if err != nil {
-			return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
-		}
-		p.ApplyDefaults(&c.Spec)
-		preserveExplicitSpecValues(&c.Spec, b.Spec)
-		if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
-			return s.failure(err)
-		}
-		c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
-		if err = validateDataMcp(p, &c); err != nil {
-			return s.failure(err)
-		}
-		if err = p.Validate(ctx, nil, &c); err != nil {
-			return s.failure(err)
-		}
-		if failure := s.validateBackendCapabilities(ctx, p, &c, nil); failure != nil {
-			return *failure
-		}
-		if err = s.validateStorages(ctx, &c); err != nil {
-			return s.failure(err)
-		}
-		values, err := tlsValues(b.Spec.Tls)
-		if err != nil {
-			return s.failure(err)
-		}
-		if dryRun {
-			if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
-				return s.failure(err)
-			}
-			return s.dryRunResult("create", nil, &c, nil)
-		}
-		op := domain.Operation{Kind: domain.OperationCreate, Actor: store.Actor(ctx)}
-		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
-			accepted := c
-			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
-			return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
-		})
-		ctx = store.WithOperation(ctx, &op)
-		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
-			c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
-				Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
-				Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
-			})
-		}
-		if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
-			return s.failure(err)
-		}
-		if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
-			if err = s.recordAudit(ctx, domain.Event{
-				Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
-				Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
-				Message: rabbitMQ435Warning,
-			}); err != nil {
-				return s.failure(err)
-			}
-		}
-		if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
-			if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
-				return s.failure(err)
-			}
-		}
-		s.trigger(ctx, clusterRef(ctx, c.Name))
-		c.OperationID = op.ID
-		return response{status: 201, body: s.clusterAPI(c), operationID: op.ID}
+		return s.createCluster(ctx, in.Body.(*api.CreateClusterRequest), nil, dryRun)
 	}
 	if name == "ListBackups" || name == "GetBackup" || name == "DeleteBackup" {
 		if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, in.Cluster)); errors.Is(err, store.ErrNotFound) {
@@ -344,15 +274,43 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if copyErr = json.Unmarshal(data, c); copyErr != nil {
 			return s.failure(copyErr)
 		}
+		// Internal is intentionally absent from public JSON, but capability
+		// previews still need the provider's acknowledged volume inventory.
+		c.Internal = bytes.Clone(rc.Cluster.Internal)
 		rc.Cluster = c
 	}
 	ctx = store.WithClusterSnapshot(ctx, c)
+	if name == "RebalancePostgres" {
+		if c.Spec.Provider != "postgres" {
+			return fail(400, "invalid_request", "Rebalance requires the postgres provider")
+		}
+		if c.Spec.Topology.Type != "distributed" {
+			return fail(409, "conflict", "Rebalance requires distributed topology")
+		}
+	}
+	if name == "ReplaceCluster" || name == "PatchCluster" || name == "DeleteCluster" {
+		if failure := s.drillMutationGuard(ctx, c); failure != nil {
+			return *failure
+		}
+	}
 	if kind := operationKind(name); kind != "" && !slices.Contains(p.Describe().Operations, kind) {
+		if name == "RecoverMySQLQuorum" {
+			return failDetails(409, "conflict", "Quorum recovery requires the pxc provider", map[string]any{"field": "spec.provider", "provider": c.Spec.Provider, "reason": domain.ReasonUnsupported})
+		}
 		return s.unsupportedClusterAction(name, p)
 	}
 	if name == "RotateSystemUser" && (p.Name() == "postgres" || p.Name() == "supabase") {
-		// PostgreSQL rotates only the Data MCP identities; managed roles stay engine-owned.
-		if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
+		if in.User == "postgres" {
+			admission, ok := p.(interface {
+				AdmitAdminRotation(context.Context, *engine.Context) error
+			})
+			if !ok {
+				return s.unsupportedClusterAction(name, p)
+			}
+			if err := admission.AdmitAdminRotation(ctx, rc); err != nil {
+				return s.failure(err)
+			}
+		} else if in.User != engine.DataAccessReadUser && in.User != engine.DataAccessReadWriteUser {
 			return s.unsupportedClusterAction(name, p)
 		}
 		if read, readWrite := engine.DataAccessLevels(c); in.User == engine.DataAccessReadUser && !read || in.User == engine.DataAccessReadWriteUser && !readWrite {
@@ -363,6 +321,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	case "GetCluster":
 		return ok(s.clusterAPI(*c))
 	case "GetClusterStatus":
+		s.maintenanceStatus(c)
 		status := s.projectedClusterStatus(*c)
 		if projector, ok := p.(interface {
 			ProjectCredentialsStatus(context.Context, *engine.Context, domain.ClusterStatus) domain.ClusterStatus
@@ -411,7 +370,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		next := *c
 		next.Spec = specDomain(spec)
+		if failure := validateDrillPolicy(&next); failure != nil {
+			return *failure
+		}
 		next.Spec.RetryEpoch = c.Spec.RetryEpoch
+		if failure := validateMaintenance(next.Spec.Maintenance); failure != nil {
+			return *failure
+		}
 		if next.Spec.Provider == "" {
 			return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
 		}
@@ -432,10 +397,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err = validateDataMcp(p, &next); err != nil {
 			return s.failure(err)
 		}
-		if err = p.Validate(ctx, c, &next); err != nil {
-			return s.failure(err)
+		var optionValues map[string][]byte
+		if extractor, ok := p.(engine.WriteOnlyOptions); ok {
+			optionValues, err = extractor.ExtractWriteOnlyOptions(&c.Spec, &next.Spec)
+			if err != nil {
+				return s.failure(err)
+			}
 		}
-		if failure := s.validateBackendCapabilities(ctx, p, &next, &c.Spec.Exposure); failure != nil {
+		if failure := s.validateBackendCapabilities(ctx, p, &next, c); failure != nil {
 			return *failure
 		}
 		if next.Spec.Version != c.Spec.Version {
@@ -449,6 +418,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		values, err := tlsValues(spec.Tls)
 		if err != nil {
 			return s.failure(err)
+		}
+		tlsChanged := len(values) != 0
+		if values == nil {
+			values = make(map[string][]byte, len(optionValues))
+		}
+		for key, value := range optionValues {
+			values[key] = value
 		}
 		// Existing clusters retain their active trust root. Leaf rotation does not
 		// implement a CA trust-overlap rollout, so CA replacement must fail closed.
@@ -466,7 +442,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		kind := domain.OperationUpdate
 		if next.Spec.Version != c.Spec.Version {
 			kind = domain.OperationUpgrade
-		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || len(values) != 0 {
+		} else if !sameTLS(c.Spec.TLS, next.Spec.TLS) || tlsChanged {
 			kind = domain.OperationTLS
 		}
 		if dryRun {
@@ -481,6 +457,7 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return s.dryRunResult(operation, c, &next, nil)
 		}
 		op := domain.Operation{Kind: kind, Actor: store.Actor(ctx)}
+		ApplyMaintenanceOverride(ctx, &op)
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := next
 			accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
@@ -500,10 +477,17 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if err != nil {
 			return s.failure(err)
 		}
-		s.trigger(ctx, clusterRef(ctx, c.Name))
-		updated.OperationID = op.ID
-		return response{status: 200, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
+		if op.ID != "" || updated.MaintenanceOverrideGeneration != c.MaintenanceOverrideGeneration {
+			s.trigger(ctx, clusterRef(ctx, c.Name))
+		}
+		if op.ID != "" {
+			updated.OperationID = op.ID
+		}
+		return response{status: 200, body: s.clusterAPI(*updated), operationID: updated.OperationID, auditEvent: audit.Event}
 	case "DeleteCluster":
+		if failure := s.openbaoDeletionGuard(ctx, c); failure != nil {
+			return *failure
+		}
 		q := request(ctx).URL.Query()
 		opts := domain.DeleteOptions{KeepVolumes: q.Get("keepVolumes") == "true", KeepBackups: q.Get("keepBackups") == "true"}
 		op := domain.Operation{Kind: domain.OperationDelete, Actor: store.Actor(ctx)}
@@ -514,6 +498,12 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, clusterRef(ctx, c.Name))
 		return response{status: 202, body: operationAPI(op), operationID: op.ID}
 	case "ResumeCluster":
+		// A retained volume keeps its acknowledged size. A stale desired size
+		// must be corrected before resuming on a backend that cannot grow it.
+		next := *c
+		if failure := s.validateBackendCapabilities(ctx, p, &next, c); failure != nil {
+			return *failure
+		}
 		op := domain.Operation{Kind: domain.OperationResume, Actor: store.Actor(ctx)}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			accepted := *c
@@ -570,6 +560,14 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		s.trigger(ctx, c.Ref())
 		updated.OperationID = op.ID
 		return response{status: 202, body: s.clusterAPI(*updated), operationID: op.ID, auditEvent: audit.Event}
+	case "RebalancePostgres":
+		params := domain.RebalanceParams{}
+		if b := in.Body.(*api.RebalanceRequest); b.Strategy != nil {
+			params.Strategy = *b.Strategy
+		}
+		return s.enqueue(ctx, c.Ref(), domain.OperationRebalance, params)
+	case "UpgradeClusterAgents":
+		return s.upgradeAgents(ctx, c, in)
 	case "RestartCluster":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "restart", map[string]string{})
 	case "RotateClusterTLS":
@@ -584,17 +582,8 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			return invalidField("version", domain.ReasonRequired, "version is required")
 		}
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "raise-fcv", map[string]string{"version": b.Version})
-	case "ReplaceClusterMember":
-		found := false
-		for _, m := range c.Status.Members {
-			if m.Name == in.Member {
-				found = true
-			}
-		}
-		if !found {
-			return fail(404, "not_found", "Member not found")
-		}
-		return s.enqueue(ctx, clusterRef(ctx, c.Name), "replace-member", map[string]string{"member": in.Member})
+	case "ReplaceClusterMember", "MoveClusterMember":
+		return s.replaceOrMoveMember(ctx, rc, p, in.Member, name == "MoveClusterMember")
 	case "RotateSystemUser":
 		return s.enqueue(ctx, clusterRef(ctx, c.Name), "rotate-system-user", map[string]string{"user": in.User})
 	case "ListClusterMembers":
@@ -635,8 +624,19 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(backupAPI(*b))
 	case "CreateBackup":
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
 		b := in.Body.(*api.CreateBackupRequest)
-		if c.Deleting || (c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation {
+		upgradeBackup := false
+		if c.Status.Phase == domain.PhaseUpgrading || (c.Status.Phase == domain.PhaseReady || c.Status.Phase == domain.PhaseDegraded) && c.Status.ObservedGeneration < c.Generation {
+			if admission, supported := p.(interface {
+				UpgradeBackupReady(context.Context, *domain.Cluster, engine.SecretStore) bool
+			}); supported {
+				upgradeBackup = admission.UpgradeBackupReady(ctx, c, s.Store)
+			}
+		}
+		if c.Deleting || !upgradeBackup && ((c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded) || c.Status.ObservedGeneration < c.Generation) {
 			state := string(c.Status.Phase)
 			if c.Deleting {
 				state += "; deletion is pending"
@@ -662,6 +662,20 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		if _, err = s.Store.GetBackupStorage(ctx, c.Namespace, b.Storage); err != nil {
 			return s.failure(err)
+		}
+		if validator, yes := p.(interface {
+			ValidateBackup(context.Context, *engine.Context, string) error
+		}); yes {
+			backupRC, _, e := s.context(ctx, c.Ref())
+			if e != nil {
+				return s.failure(e)
+			}
+			if failure := s.providerContext(backupRC); failure != nil {
+				return *failure
+			}
+			if e = validator.ValidateBackup(ctx, backupRC, string(b.Type)); e != nil {
+				return s.failure(e)
+			}
 		}
 		v := domain.Backup{Namespace: c.Namespace, Name: b.Name, Cluster: c.Name, Storage: b.Storage, Type: string(b.Type), Trigger: "manual", Phase: domain.PhasePending}
 		if c.Spec.Provider != "psmdb" {
@@ -701,6 +715,9 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(restoreAPI(*r))
 	case "CreateRestore":
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
 		b := in.Body.(*api.CreateRestoreRequest)
 		source := value(b.Source.SourceCluster)
 		if source == "" {
@@ -713,11 +730,48 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		if b.Name == "" {
 			return invalidField("name", domain.ReasonRequired, "name is required")
 		}
-		if (value(b.Source.Backup) == "") == (b.Source.PitrTime == nil) {
-			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime")
+		selectors := 0
+		if value(b.Source.Backup) != "" {
+			selectors++
+		}
+		if b.Source.PitrTime != nil {
+			selectors++
+		}
+		if value(b.Source.RestorePoint) != "" {
+			selectors++
+		}
+		if selectors != 1 {
+			return invalidField("source", domain.ReasonConflict, "set exactly one of source.backup or source.pitrTime or source.restorePoint")
 		}
 		if b.Source.PitrTime != nil && !slices.Contains(p.Describe().Capabilities, "pitr") {
 			return s.failure(engine.Invalid("%s does not support PITR (point-in-time restore)", p.Describe().DisplayName))
+		}
+		if b.Source.PitrTime != nil && c.Spec.Provider == "postgres" && c.Spec.Topology.Type == "distributed" {
+			return invalidField("source.pitrTime", domain.ReasonUnsupported, "distributed PostgreSQL requires a named restore point")
+		}
+		resolvedBackup := value(b.Source.Backup)
+		if b.Source.RestorePoint != nil {
+			if c.Spec.Provider != "postgres" || c.Spec.Topology.Type != "distributed" {
+				return invalidField("source.restorePoint", domain.ReasonUnsupported, "named restore points require distributed PostgreSQL")
+			}
+			backups, err := s.Store.ListBackups(ctx, sourceRef)
+			if err != nil {
+				return s.failure(err)
+			}
+			found := false
+			for _, backup := range backups {
+				if backup.Phase == domain.PhaseSucceeded && backup.Postgres != nil && backup.Postgres.RestorePoint == *b.Source.RestorePoint && backup.ProviderMatches(c.Spec.Provider) {
+					if failure := s.retainedRestoreSource(ctx, sourceRef, backup.Name); failure != nil {
+						return *failure
+					}
+					resolvedBackup = backup.Name
+					found = true
+					break
+				}
+			}
+			if !found {
+				return invalidField("source.restorePoint", domain.ReasonNotFound, "coordinated restore point does not exist")
+			}
 		}
 		if b.Source.Backup != nil {
 			if failure := s.retainedRestoreSource(ctx, sourceRef, *b.Source.Backup); failure != nil {
@@ -733,6 +787,10 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 			if p.Name() == "rabbitmq" && (backup.Type != "definitions" || backup.Phase != domain.PhaseSucceeded || backup.Location == "") {
 				return s.failure(engine.Invalid("restore source is not a successful RabbitMQ definitions backup"))
 			}
+		}
+		restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, sourceRef, resolvedBackup, b.Name, b.OpenbaoUnsealShares)
+		if restoreFailure != nil {
+			return *restoreFailure
 		}
 		if b.Source.PitrTime != nil {
 			sourceRC, sourceProvider, err := s.context(ctx, sourceRef)
@@ -766,18 +824,38 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				}
 			}
 		}
-		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: value(b.Source.Backup), PITRTime: b.Source.PitrTime, SourceCluster: source}, Phase: domain.PhasePending}
+		if value(b.AcknowledgeBoundConsumers) {
+			ctx = store.WithRestoreAcknowledgement(ctx)
+		}
+		// Pin named points to their validated inventory record so the store's
+		// serialized admission and deletion guards protect the backing backup.
+		r := domain.Restore{Namespace: c.Namespace, SourceNamespace: sourceRef.Namespace, Name: b.Name, Cluster: c.Name, Source: domain.RestoreSource{Backup: resolvedBackup, PITRTime: b.Source.PitrTime, RestorePoint: value(b.Source.RestorePoint), SourceCluster: source}, Phase: domain.PhasePending}
 		if dryRun {
 			if err := s.Store.CheckRestore(ctx, &r); err != nil {
 				return s.failure(err)
 			}
 			return s.dryRunResult("restore", c, c, &r)
 		}
-		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: store.Actor(ctx), Payload: json.RawMessage(`{"restore":` + strconv.Quote(r.Name) + `}`)}
+		payload, err := json.Marshal(struct {
+			Restore                 string `json:"restore"`
+			AcknowledgeSharedSource bool   `json:"acknowledgeSharedSource,omitempty"`
+		}{r.Name, value(b.AcknowledgeSharedSource)})
+		if err != nil {
+			return s.failure(err)
+		}
+		op := domain.Operation{Namespace: c.Namespace, Cluster: c.Name, Kind: "restore", Actor: store.Actor(ctx), Payload: payload}
 		setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
 			return response{status: 202, body: restoreAPI(r), operationID: op.ID}
 		})
-		if err = s.Store.EnqueueRestore(ctx, &r, &op); err != nil {
+		if err = s.Store.EnqueueRestoreWithSecrets(ctx, &r, &op, restoreValues); err != nil {
+			var bound *store.BoundConsumersError
+			if errors.As(err, &bound) {
+				consumers := make([]any, 0, len(bound.Consumers))
+				for _, binding := range bound.Consumers {
+					consumers = append(consumers, postgresBindingAPI(binding).Consumer)
+				}
+				return failDetails(409, "bound_consumers", bound.Error(), map[string]any{"consumers": consumers})
+			}
 			return s.failure(err)
 		}
 		if sourceRef.Namespace != c.Namespace {
@@ -791,14 +869,32 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 	if failure := s.providerContext(rc); failure != nil {
 		return *failure
 	}
+	if strings.Contains(name, "Weaviate") {
+		return s.weaviate(ctx, name, in, rc, p)
+	}
 	if strings.Contains(name, "RabbitMQ") {
 		return s.rabbitmq(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "MySQL") {
+		return s.mysql(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "Neo4j") {
+		return s.neo4j(ctx, name, in, rc, p)
 	}
 	if strings.Contains(name, "Postgres") {
 		return s.postgres(ctx, name, in, rc, p)
 	}
 	if strings.Contains(name, "Supabase") {
 		return s.supabase(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "OpenBao") {
+		return s.openbao(ctx, name, in, rc, p)
+	}
+	if strings.Contains(name, "Temporal") {
+		return s.temporal(ctx, name, in, rc, p)
+	}
+	if name == "GetMemberLogs" {
+		return s.memberLogs(ctx, rc, p, in.Member)
 	}
 	dp, yes := p.(engine.DataPlane)
 	if !yes {
@@ -835,7 +931,13 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 		}
 		return ok(api.Balancer{Enabled: v.Enabled, Running: &v.Running, Mode: &v.Mode})
 	case "GetPITRWindow":
-		windows, err := dp.PITRWindow(ctx, rc)
+		var windows, intervals []domain.TimeWindow
+		if provider, ok := dp.(engine.PITRIntervalsProvider); ok {
+			windows, intervals, err = provider.PITRWindowIntervals(ctx, rc)
+		} else {
+			windows, err = dp.PITRWindow(ctx, rc)
+			intervals = windows
+		}
 		if err != nil {
 			if errors.Is(err, engine.ErrNotSupported) {
 				return invalidField("source.pitrTime", domain.ReasonUnsupported, p.Describe().DisplayName+" does not support PITR for cluster "+c.Name)
@@ -855,42 +957,37 @@ func (s *Server) cluster(ctx context.Context, name string, in input) response {
 				latest = w
 			}
 		}
-		return ok(api.PITRWindow{Available: true, Start: &latest.Start, End: &latest.End})
+		ranges := make([]api.PITRInterval, 0, len(intervals))
+		for _, w := range intervals {
+			interval := api.PITRInterval{Start: w.Start, End: w.End}
+			if w.Backup != "" {
+				interval.Backup = ptr(w.Backup)
+			}
+			ranges = append(ranges, interval)
+		}
+		slices.SortFunc(ranges, func(a, b api.PITRInterval) int {
+			if cmp := a.Start.Compare(b.Start); cmp != 0 {
+				return cmp
+			}
+			if cmp := a.End.Compare(b.End); cmp != 0 {
+				return cmp
+			}
+			var aBackup, bBackup string
+			if a.Backup != nil {
+				aBackup = *a.Backup
+			}
+			if b.Backup != nil {
+				bBackup = *b.Backup
+			}
+			return strings.Compare(aBackup, bBackup)
+		})
+		return ok(api.PITRWindow{Available: true, Start: &latest.Start, End: &latest.End, Intervals: &ranges})
 	case "GetClusterPlacement":
 		v, err := dp.Placement(ctx, rc)
 		if err != nil {
 			return s.failure(err)
 		}
 		return ok(placementAPI(v))
-	case "GetMemberLogs":
-		q := request(ctx).URL.Query()
-		lines := 100
-		if v := q.Get("lines"); v != "" {
-			lines, err = strconv.Atoi(v)
-			if err != nil || lines < 1 || lines > 10000 {
-				return invalid()
-			}
-		}
-		proc := q.Get("process")
-		processes := p.Describe().Processes
-		if proc == "" {
-			proc = "agent"
-			if len(processes) > 0 {
-				proc = processes[0]
-			}
-		}
-		if proc != "agent" && !slices.Contains(processes, proc) {
-			return invalid()
-		}
-		logs, err := dp.MemberLogs(ctx, rc, in.Member, proc, lines)
-		if err != nil {
-			return s.failure(err)
-		}
-		a := api.MemberLogs{Member: in.Member, Lines: []api.LogLine{}}
-		for _, l := range logs {
-			a.Lines = append(a.Lines, api.LogLine{Timestamp: l.Timestamp, Process: l.Process, Message: l.Message})
-		}
-		return response{status: 200, body: a, noStore: true}
 	default:
 		return s.database(ctx, name, in, rc, dp)
 	}
@@ -950,15 +1047,21 @@ func sameTLS(a, b domain.TLSConfig) bool {
 
 func operationKind(name string) string {
 	switch name {
+	case "UpgradeClusterAgents":
+		return domain.OperationUpgradeAgents
 	case "RotateSupabaseJWTSecret":
 		return "rotate-jwt-secret"
+	case "RebalancePostgres":
+		return domain.OperationRebalance
+	case "RecoverMySQLQuorum":
+		return "recover-quorum"
 	case "RestartCluster":
 		return domain.OperationRestart
 	case "RotateClusterTLS":
 		return domain.OperationRotateTLS
 	case "RaiseClusterFCV":
 		return domain.OperationRaiseFCV
-	case "ReplaceClusterMember":
+	case "ReplaceClusterMember", "MoveClusterMember":
 		return domain.OperationReplaceMember
 	case "RotateSystemUser":
 		return domain.OperationRotateSystemUser
@@ -1043,4 +1146,163 @@ func (s *Server) crossNamespaceRestoreEvents(ctx context.Context, target, source
 		}
 	}
 	return nil
+}
+
+// createCluster is the shared, validated admission path for HTTP and owned drills.
+// Internal callers supply ownership; ownership is never accepted from HTTP input.
+func (s *Server) createCluster(ctx context.Context, b *api.CreateClusterRequest, managed *domain.ManagedBy, dryRun bool) response {
+	namespace := domain.NormalizedNamespace(namespaceFilter(ctx))
+	if err := domain.ValidateClusterName(b.Name); err != nil {
+		return fail(400, "invalid_request", err.Error())
+	}
+	if err := domain.ValidateNamespaceName(namespace); err != nil {
+		return fail(400, "invalid_request", err.Error())
+	}
+	if failure := s.usableNamespace(namespace); failure != nil {
+		return *failure
+	}
+	if _, err := s.Store.GetCluster(ctx, clusterRef(ctx, b.Name)); err == nil {
+		return fail(409, "conflict", "Cluster already exists")
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return s.failure(err)
+	}
+	c := domain.Cluster{Namespace: namespace, Name: b.Name, Spec: specDomain(b.Spec), ManagedBy: managed}
+	if failure := validateDrillPolicy(&c); failure != nil {
+		return *failure
+	}
+	if failure := validateMaintenance(c.Spec.Maintenance); failure != nil {
+		return *failure
+	}
+	if c.Spec.Provider == "" {
+		return invalidField("spec.provider", domain.ReasonRequired, "spec.provider is required; list providers with GET /api/v1/providers")
+	}
+	if d := c.Spec.DataSource; d != nil {
+		if failure := openbaoSnapshotAdmission(c.Spec); failure != nil {
+			return *failure
+		}
+		d.Namespace = namespaceOrDefaultSource(d.Namespace, namespace)
+		source := domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}
+		if managed == nil {
+			if failure := s.restorePermission(ctx, namespace, source); failure != nil {
+				return *failure
+			}
+		}
+		if d.Backup != "" {
+			if failure := s.retainedRestoreSource(ctx, source, d.Backup); failure != nil {
+				return *failure
+			}
+			backup, err := s.Store.GetBackup(ctx, source, d.Backup)
+			if err != nil {
+				return s.backupDependencyFailure(err, source, d.Backup)
+			}
+			if !backup.ProviderMatches(c.Spec.Provider) {
+				return s.failure(engine.InvalidField("spec.dataSource.backup", domain.ReasonConflict, "backup provider does not match target provider"))
+			}
+		}
+		if d.PITRTime != nil && (c.Spec.Provider == "pxc" || c.Spec.Provider == "mysql") {
+			sourceRC, sourceProvider, e := s.context(ctx, source)
+			if e != nil {
+				return s.failure(e)
+			}
+			if failure := s.providerContext(sourceRC); failure != nil {
+				return *failure
+			}
+			if validator, yes := sourceProvider.(engine.PITRRestoreValidator); yes {
+				if _, e = validator.ValidatePITRRestore(ctx, sourceRC, *d.PITRTime); e != nil {
+					return s.failure(e)
+				}
+			}
+		}
+	}
+	var restoreSource domain.ClusterRef
+	var restoreBackup string
+	if c.Spec.DataSource != nil {
+		restoreSource = domain.ClusterRef{Namespace: c.Spec.DataSource.Namespace, Name: c.Spec.DataSource.Cluster}
+		restoreBackup = c.Spec.DataSource.Backup
+	}
+	restoreValues, restoreFailure := s.openbaoRestoreValues(ctx, c.Spec.Provider, restoreSource, restoreBackup, "clone", b.OpenbaoUnsealShares)
+	if restoreFailure != nil {
+		return *restoreFailure
+	}
+	p, err := s.Registry.Get(c.Spec.Provider)
+	if err != nil {
+		return invalidField("spec.provider", domain.ReasonUnsupported, "spec.provider is not offered; list providers with GET /api/v1/providers")
+	}
+	p.ApplyDefaults(&c.Spec)
+	preserveExplicitSpecValues(&c.Spec, b.Spec)
+	if err = domain.ValidateExposure(c.Spec.Exposure); err != nil {
+		return s.failure(err)
+	}
+	c.Spec.Exposure.AllowAllAddresses = c.Spec.Exposure.Public && domain.ExposureCoversFamily(c.Spec.Exposure)
+	if err = validateDataMcp(p, &c); err != nil {
+		return s.failure(err)
+	}
+	var optionValues map[string][]byte
+	if extractor, ok := p.(engine.WriteOnlyOptions); ok {
+		optionValues, err = extractor.ExtractWriteOnlyOptions(nil, &c.Spec)
+		if err != nil {
+			return s.failure(err)
+		}
+	}
+	if err = p.Validate(ctx, nil, &c); err != nil {
+		return s.failure(err)
+	}
+	if failure := s.validateBackendCapabilities(ctx, p, &c, nil); failure != nil {
+		return *failure
+	}
+	if err = s.validateStorages(ctx, &c); err != nil {
+		return s.failure(err)
+	}
+	values, err := tlsValues(b.Spec.Tls)
+	if err != nil {
+		return s.failure(err)
+	}
+	if values == nil {
+		values = make(map[string][]byte, len(optionValues))
+	}
+	for key, value := range optionValues {
+		values[key] = value
+	}
+	for key, value := range restoreValues {
+		values[key] = value
+	}
+	if dryRun {
+		if err := s.Store.CheckCreateCluster(ctx, &c); err != nil {
+			return s.failure(err)
+		}
+		return s.dryRunResult("create", nil, &c, nil)
+	}
+	op := domain.Operation{Kind: domain.OperationCreate, Actor: store.Actor(ctx)}
+	setIdempotencyRecovery(ctx, func(op *domain.Operation) response {
+		accepted := c
+		accepted.OperationID, accepted.Generation = op.ID, op.TargetGeneration
+		return response{status: 201, body: s.clusterAPI(accepted), operationID: op.ID}
+	})
+	ctx = store.WithOperation(ctx, &op)
+	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+		c.Status.Conditions = append(c.Status.Conditions, domain.Condition{
+			Type: "DeprecatedVersion", Status: "True", Reason: "StreamAuthorizationDisclosures",
+			Message: rabbitMQ435Warning, LastTransitionTime: engine.RealClock{}.Now(),
+		})
+	}
+	if err = s.Store.CreateClusterWithSecrets(ctx, &c, values); err != nil {
+		return s.failure(err)
+	}
+	if c.Spec.Provider == "rabbitmq" && c.Spec.Version == "4.3.5" {
+		if err = s.recordAudit(ctx, domain.Event{
+			Namespace: namespace, Cluster: c.Name, Resource: "clusters", Target: c.Name,
+			Actor: store.Actor(ctx), Type: "Warning", Reason: "DeprecatedVersion",
+			Message: rabbitMQ435Warning,
+		}); err != nil {
+			return s.failure(err)
+		}
+	}
+	if d := c.Spec.DataSource; d != nil && d.Namespace != namespace {
+		if err = s.crossNamespaceRestoreEvents(ctx, domain.ClusterRef{Namespace: namespace, Name: c.Name}, domain.ClusterRef{Namespace: d.Namespace, Name: d.Cluster}, "clone", op.ID); err != nil {
+			return s.failure(err)
+		}
+	}
+	s.trigger(ctx, clusterRef(ctx, c.Name))
+	c.OperationID = op.ID
+	return response{status: 201, body: s.clusterAPI(c), operationID: op.ID}
 }

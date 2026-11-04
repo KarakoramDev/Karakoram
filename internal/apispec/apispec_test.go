@@ -3,7 +3,10 @@
 
 package apispec
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestEmbeddedSpecLoadsAndValidates(t *testing.T) {
 	doc, err := Load()
@@ -36,5 +39,30 @@ func TestRequestIDRemainsATransportHeader(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestMySQLAndPXCTopologyAndBackupEnums(t *testing.T) {
+	doc, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"Topology", "TopologyInput", "TopologyPatch", "ProviderTopology"} {
+		values := doc.Components.Schemas[name].Value.Properties["type"].Value.Enum
+		for _, topology := range []string{"single", "group", "cluster"} {
+			if !slices.Contains(values, any(topology)) {
+				t.Errorf("%s.type excludes %s", name, topology)
+			}
+		}
+	}
+	for _, name := range []string{"Backup", "BackupSchedule", "BackupScheduleInput"} {
+		values := doc.Components.Schemas[name].Value.Properties["type"].Value.Enum
+		if !slices.Contains(values, any("incremental")) {
+			t.Errorf("%s.type excludes incremental", name)
+		}
+	}
+	values := doc.Components.Schemas["Provider"].Value.Properties["backupTypes"].Value.Items.Value.Enum
+	if !slices.Contains(values, any("incremental")) {
+		t.Error("Provider.backupTypes excludes incremental")
 	}
 }

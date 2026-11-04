@@ -17,10 +17,11 @@ func TestBackendPlacementOverridesAgentFingerprint(t *testing.T) {
 		authoritative bool
 		group         string
 		warning       string
+		source        string
 	}{
-		{"backend", true, "node-a", "are co-located"},
-		{"backend unknown", true, "", "backend placement is unknown"},
-		{"agent fallback", false, "node-a", "Best-effort"},
+		{"backend", true, "node-a", "are co-located", "backend"},
+		{"backend unknown", true, "", "backend placement is unknown", "unavailable"},
+		{"agent fallback", false, "node-a", "best-effort", "best-effort"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, _, _ := setup(t)
@@ -78,6 +79,9 @@ func TestBackendPlacementOverridesAgentFingerprint(t *testing.T) {
 			}
 			if !strings.Contains(status.Placement.Warning, tc.warning) {
 				t.Fatalf("placement = %+v", status.Placement)
+			}
+			if status.Placement.Source != tc.source || status.Placement.GuaranteedAntiAffinity {
+				t.Fatalf("placement evidence = %+v", status.Placement)
 			}
 			if tc.authoritative && strings.Contains(status.Placement.Warning, "fingerprint") {
 				t.Fatalf("authoritative placement described as fingerprints: %+v", status.Placement)

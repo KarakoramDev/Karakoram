@@ -52,7 +52,17 @@ func (s *Server) captureIdempotencyBody(w http.ResponseWriter, r *http.Request) 
 
 func idempotencyCovered(id string) bool {
 	switch id {
-	case "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "createPostgresDatabase", "grantPostgresPrivileges":
+	case "createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole":
+		return true
+	case "createNeo4jUser", "setNeo4jUserPassword", "deleteNeo4jUser":
+		return true
+	case "createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum":
+		return true
+	case "createOpenBaoDatabaseConnection", "setTemporalUIOIDCClientSecret":
+		return true
+	case "rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges":
+		return true
+	case "upgradeClusterAgents", "moveClusterMember", "updateAgentRolloutSettings", "updateControlPlaneBackupPolicy", "createControlPlaneBackup", "createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel", "testNotificationChannel", "createBackupDrill":
 		return true
 	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
 		return true
@@ -96,6 +106,26 @@ func canonicalIdempotencyBody(body []byte) ([]byte, error) {
 	return json.Marshal(value)
 }
 
+func idempotencyNamespaceScoped(id string) bool {
+	switch id {
+	case "createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole",
+		"createNeo4jUser", "setNeo4jUserPassword", "deleteNeo4jUser",
+		"createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum",
+		"createOpenBaoDatabaseConnection", "setTemporalUIOIDCClientSecret",
+		"rebalancePostgres", "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "createPostgresDatabase", "grantPostgresPrivileges",
+		"upgradeClusterAgents", "moveClusterMember", "createBackupDrill",
+		"setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret",
+		"createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
+		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
+		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
+		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
+		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
+		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
+		return true
+	}
+	return false
+}
+
 // idempotent runs inside authentication and authorization, so cached secrets are
 // never accessible to a revoked token or a principal whose permissions changed.
 func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.Context, w http.ResponseWriter, r *http.Request, v any) (any, error) {
@@ -110,23 +140,18 @@ func (s *Server) idempotent(next api.StrictHandlerFunc, id string, ctx context.C
 	if p == nil {
 		return fail(401, "unauthorized", "Authentication required"), nil
 	}
+	if id == "createWeaviateUser" || id == "rotateWeaviateUserKey" {
+		if failure := s.authorizeWeaviateReplay(ctx, id, v); failure != nil {
+			return *failure, nil
+		}
+	}
 	body, _ := ctx.Value(idempotencyBodyKey{}).([]byte)
 	canonical, err := canonicalIdempotencyBody(body)
 	if err != nil {
 		return invalidField("body", domain.ReasonInvalid, "body must contain exactly one valid JSON value"), nil
 	}
 	namespace := ""
-	switch id {
-	case "createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "createPostgresDatabase", "grantPostgresPrivileges":
-		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
-	case "setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret":
-		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
-	case "createCluster", "replaceCluster", "patchCluster", "createBackup", "createRestore", "createBackupStorage", "replaceBackupStorage", "createDatabaseUser", "replaceDatabaseUser", "createDatabaseRole", "replaceDatabaseRole",
-		"createRabbitMQVhost", "replaceRabbitMQVhost", "createRabbitMQUser", "replaceRabbitMQUser",
-		"createRabbitMQPermission", "replaceRabbitMQPermission", "createRabbitMQTopicPermission", "replaceRabbitMQTopicPermission",
-		"createRabbitMQPolicy", "replaceRabbitMQPolicy", "createRabbitMQOperatorPolicy", "replaceRabbitMQOperatorPolicy",
-		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
-		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV", "replaceClusterMember", "rotateSystemUser":
+	if idempotencyNamespaceScoped(id) {
 		namespace = domain.NormalizedNamespace(r.URL.Query().Get("namespace"))
 	}
 	// A JSON tuple avoids delimiter collisions. The actual path adds every path

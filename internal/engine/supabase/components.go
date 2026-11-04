@@ -24,6 +24,10 @@ import (
 type componentState struct {
 	Members map[string]*componentMember `json:"members"`
 	Pending *componentPending           `json:"pending,omitempty"`
+	// GatewayAdmission survives optional-runtime removal, including suspension.
+	// Public on a member is only the current runtime's application receipt.
+	GatewayAdmission engine.ExposureAdmission `json:"gatewayAdmission,omitempty"`
+	GatewayURL       string                   `json:"gatewayUrl,omitempty"`
 }
 type componentMember struct {
 	Name            string                 `json:"name"`
@@ -147,6 +151,9 @@ func loadState(c *domain.Cluster) (*componentState, error) {
 			return nil, err
 		}
 	}
+	if m := s.Members["gateway"]; m != nil && (m.Public || m.Stage == engine.ComponentJoined) {
+		s.GatewayAdmission.Seed(domain.Exposure{Public: m.Public})
+	}
 	return s, nil
 }
 func saveState(c *domain.Cluster, s *componentState) error {
@@ -163,6 +170,33 @@ func saveState(c *domain.Cluster, s *componentState) error {
 	root["supabase"] = raw
 	c.Internal, err = json.Marshal(root)
 	return err
+}
+
+func resolveGatewayExposure(ctx context.Context, rc *engine.Context, s *componentState) (bool, bool, error) {
+	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if err != nil {
+		return false, false, err
+	}
+	effective, deferred := s.GatewayAdmission.Resolve(rc, domain.Exposure{
+		Public: o.Gateway.PublicHTTPS && rc.Cluster.Spec.Components.Extra["gateway"].Replicas > 0,
+	})
+	if !effective.Public {
+		s.GatewayURL = ""
+	} else if m := s.Members["gateway"]; m != nil && m.Public {
+		if endpoint, err := gatewayPublicURL(ctx, rc); err != nil {
+			return false, false, err
+		} else if endpoint != "" {
+			s.GatewayURL = endpoint
+		}
+	}
+	if err := retainGatewayURL(ctx, rc, s); err != nil {
+		return false, false, err
+	}
+	// Admission must be durable before recovery or route submission.
+	if err := saveState(rc.Cluster, s); err != nil {
+		return false, false, err
+	}
+	return effective.Public, deferred, nil
 }
 func verifyComponent(ctx context.Context, rc *engine.Context, m *componentMember) (*infra.Service, error) {
 	service, err := rc.Backend.GetService(ctx, m.Name)
@@ -535,13 +569,25 @@ func (p *Provider) observeComponent(ctx context.Context, rc *engine.Context, s *
 	}
 	return true, nil
 }
-func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (engine.Result, error) {
+func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	defer func() {
+		for _, condition := range rc.Cluster.Status.Conditions {
+			if condition.Type == "MaintenanceWindow" && condition.Status == "False" {
+				wait := rc.WaitForWindow()
+				if wait.RequeueAfter > 0 && (result.RequeueAfter == 0 || wait.RequeueAfter < result.RequeueAfter) {
+					result.RequeueAfter = wait.RequeueAfter
+				}
+				break
+			}
+		}
+	}()
 	certificateErr := p.renewPublishedCertificates(ctx, rc)
 	// Restrict exposure and remove explicitly disabled services even when core
 	// recovery is not Ready. New optional work stays behind the readiness gate.
 	busy, componentErr := p.syncGatewayRestrictions(ctx, rc)
 	observed := rc.Cluster.Status.ObservedGeneration
-	result, err := p.Core.Sync(ctx, rc)
+	result, err = p.Core.Sync(ctx, rc)
+	coreAcknowledged := rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation
 	// The core's applied generation does not include the Supabase services.
 	rc.Cluster.Status.ObservedGeneration = observed
 	if busy || componentErr != nil {
@@ -575,7 +621,7 @@ func (p *Provider) Sync(ctx context.Context, rc *engine.Context) (engine.Result,
 	busy, err = p.syncComponents(ctx, rc)
 	if err == nil && !busy {
 		status, err = p.Status(ctx, rc)
-		if err == nil && status.Phase == domain.PhaseReady {
+		if err == nil && status.Phase == domain.PhaseReady && coreAcknowledged {
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		} else if err == nil {
 			// Final gateway DNS convergence needs another observation even when
@@ -608,15 +654,12 @@ func (p *Provider) syncGatewayRestrictions(ctx context.Context, rc *engine.Conte
 	if busy, e := p.observeComponent(ctx, rc, s); busy || e != nil {
 		return true, e
 	}
-	m := s.Members["gateway"]
-	if m == nil || !m.Public {
-		return p.syncDisabledComponents(ctx, rc, s)
-	}
-	o, err := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	effectivePublic, _, err := resolveGatewayExposure(ctx, rc, s)
 	if err != nil {
 		return false, err
 	}
-	if o.Gateway.PublicHTTPS && rc.Cluster.Spec.Components.Extra["gateway"].Replicas > 0 {
+	m := s.Members["gateway"]
+	if m == nil || !m.Public || effectivePublic {
 		return p.syncDisabledComponents(ctx, rc, s)
 	}
 	service, err := verifyComponent(ctx, rc, m)
@@ -653,6 +696,12 @@ func (p *Provider) syncDisabledComponents(ctx context.Context, rc *engine.Contex
 		if m.ImportBatch != nil {
 			return true, importComponent(ctx, rc, s, m, desired)
 		}
+		// Starting route withdrawal or retained-runtime removal is a new
+		// disruption. Pending receipts were observed by the caller before
+		// reaching this admission boundary.
+		if m.ServiceID != "" && rc.WaitForWindow().RequeueAfter > 0 {
+			return true, nil
+		}
 		return true, deleteComponent(ctx, rc, s, m)
 	}
 	return false, nil
@@ -673,6 +722,10 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 	}
 	if busy, e := p.reconcileComponentRuntimeFailures(ctx, rc, s, true); busy || e != nil {
 		return true, e
+	}
+	effectivePublic, exposureDeferred, err := resolveGatewayExposure(ctx, rc, s)
+	if err != nil {
+		return true, err
 	}
 	for _, def := range stackComponents {
 		m := s.Members[def.Name]
@@ -710,26 +763,32 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			current.Replicas = m.Replicas
 			current.Resources = m.Resources
 		}
-		if m != nil && desired.Replicas > 0 && m.Stage == engine.ComponentJoined {
-			o, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
-			if e != nil {
-				return true, e
+		if m != nil && ((desired.Replicas == 0 && m.ServiceID != "") ||
+			(m.Stage == engine.ComponentJoined && (desired.Replicas < m.Replicas ||
+				(desired.Replicas > 0 && !reflect.DeepEqual(m.Resources, desired.Resources))))) {
+			if rc.WaitForWindow().RequeueAfter > 0 {
+				return true, nil
 			}
-			if def.Name == "gateway" && m.Public != o.Gateway.PublicHTTPS {
+		}
+		if m != nil && desired.Replicas > 0 && m.Stage == engine.ComponentJoined {
+			if def.Name == "gateway" && m.Public != effectivePublic {
 				access, e := engine.PublicHTTPS(rc.Backend)
 				if e != nil {
 					return true, e
 				}
-				op, e := access.SetSubdomainAccess(ctx, m.Name, o.Gateway.PublicHTTPS)
+				op, e := access.SetSubdomainAccess(ctx, m.Name, effectivePublic)
 				if e != nil {
 					return true, e
 				}
-				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "public", Public: o.Gateway.PublicHTTPS}
+				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "public", Public: effectivePublic}
 				return true, nil
 			}
 			// Previous Studio runtimes exposed raw port 3000. A config reload
 			// cannot update backend port declarations, so redeploy them too.
 			if def.Name == "studio" && m.RuntimePort != ports[def.Name] {
+				if rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				m.Stage = engine.ComponentImported
 				return true, nil
 			}
@@ -742,6 +801,9 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return true, e
 			}
 			if sp.RestartToken != m.ConfigHash || renew {
+				if sp.RestartToken != m.ConfigHash && rc.WaitForWindow().RequeueAfter > 0 {
+					return true, nil
+				}
 				if sp.Version != m.Version {
 					m.Stage = engine.ComponentImported
 					return true, nil
@@ -787,37 +849,11 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 				return importComponent(ctx, rc, s, m, desired)
 			},
 			Deploy: func(ctx context.Context) error {
-				if _, e := verifyComponent(ctx, rc, m); e != nil {
-					return e
-				}
 				sp, e := p.desiredSpec(ctx, rc, m)
 				if e != nil {
 					return e
 				}
-				if e = p.publishConfig(ctx, rc, m, sp); e != nil {
-					return e
-				}
-				runtime, e := p.runtimeSpec(rc, m)
-				if e != nil {
-					return e
-				}
-				if m.Stage == engine.ComponentImported {
-					if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, desired.Resources, m.Resources); changed || e != nil {
-						if e == nil {
-							s.Pending = &componentPending{Op: op, Component: def.Name, Action: "resize", Resources: desired.Resources, Target: desired}
-						}
-						return e
-					}
-				}
-				op, e := engine.Deploy(ctx, rc, m.Name, runtime)
-				if e != nil {
-					if errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
-						m.DeploymentFailure = &componentDeploymentFailure{Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(e)}
-					}
-					return e
-				}
-				s.Pending = &componentPending{Op: op, Component: def.Name, Action: "deploy", RuntimePort: ports[def.Name], SubmittedAt: clockNow(rc)}
-				return nil
+				return p.deployComponent(ctx, rc, s, m, sp)
 			},
 			AwaitReady: func(ctx context.Context) error {
 				// A configuration correction must reach an instance even when
@@ -879,7 +915,38 @@ func (p *Provider) syncComponents(ctx context.Context, rc *engine.Context) (hand
 			return handled, e
 		}
 	}
-	return false, nil
+	return exposureDeferred, nil
+}
+
+func (p *Provider) deployComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember, sp sbspec.Spec) error {
+	if _, err := verifyComponent(ctx, rc, m); err != nil {
+		return err
+	}
+	if err := p.publishConfig(ctx, rc, m, sp); err != nil {
+		return err
+	}
+	runtime, err := p.runtimeSpec(rc, m)
+	if err != nil {
+		return err
+	}
+	if m.Stage == engine.ComponentImported {
+		desired := rc.Cluster.Spec.Components.Extra[m.Component]
+		if op, changed, e := engine.PrepareInitialDeploymentResources(ctx, rc, m.Name, runtime, desired.Resources, m.Resources); changed || e != nil {
+			if e == nil {
+				s.Pending = &componentPending{Op: op, Component: m.Component, Action: "resize", Resources: desired.Resources, Target: desired}
+			}
+			return e
+		}
+	}
+	op, err := engine.Deploy(ctx, rc, m.Name, runtime)
+	if err != nil {
+		if errors.Is(err, infra.ErrDeploymentRetriesExhausted) {
+			m.DeploymentFailure = &componentDeploymentFailure{Status: "DeploymentRetriesExhausted", Detail: infra.SafeDetail(err)}
+		}
+		return err
+	}
+	s.Pending = &componentPending{Op: op, Component: m.Component, Action: "deploy", RuntimePort: ports[m.Component], SubmittedAt: clockNow(rc)}
+	return nil
 }
 func deleteComponent(ctx context.Context, rc *engine.Context, s *componentState, m *componentMember) error {
 	service, err := verifyComponent(ctx, rc, m)
@@ -984,8 +1051,13 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 		instances = append(instances, instance)
 	}
 	sort.Strings(instances)
+	var identity agentapi.AgentBuild
 	for i, instance := range instances {
 		applied := agents[instance]
+		// Select a deterministic non-current identity when instances disagree.
+		if i == 0 || (identity.Build == engine.CurrentAgentBuild().Build && applied.Agent.Build != identity.Build) || (identity.Build != engine.CurrentAgentBuild().Build && applied.Agent.Build != engine.CurrentAgentBuild().Build && applied.Agent.Build < identity.Build) {
+			identity = applied.Agent
+		}
 		if i == 0 || applied.ConfigVersion < status.agent.ConfigVersion {
 			status.agent.ConfigVersion = applied.ConfigVersion
 		}
@@ -1004,7 +1076,13 @@ func componentStatus(ctx context.Context, rc *engine.Context, m *componentMember
 		// cluster snapshot: keep database conditions and other member diagnoses.
 		status.Message = fmt.Sprintf("%v; inspect %s agent and native application health/connectivity; restore observations before serving traffic", err, m.Name)
 	}
+	status.agent.Version, status.agent.Commit, status.agent.Build = identity.Version, identity.Commit, identity.Build
 	return status, nil
+}
+
+func componentStatusObserved(ctx context.Context, rc *engine.Context, m *componentMember) (componentObservation, agentapi.AgentBuild, error) {
+	status, err := componentStatus(ctx, rc, m)
+	return status, agentapi.AgentBuild{Version: status.agent.Version, Commit: status.agent.Commit, Build: status.agent.Build}, err
 }
 func (p *Provider) reloadComponent(ctx context.Context, rc *engine.Context, m *componentMember) {
 	if rc.Agents == nil {
@@ -1019,6 +1097,12 @@ func (p *Provider) reloadComponent(ctx context.Context, rc *engine.Context, m *c
 func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.DeleteOptions) (done bool, err error) {
 	s, err := loadState(rc.Cluster)
 	if err != nil {
+		return false, err
+	}
+	if err := retainGatewayURL(ctx, rc, s); err != nil {
+		return false, err
+	}
+	if err := saveState(rc.Cluster, s); err != nil {
 		return false, err
 	}
 	rc.Cluster.Status.Message = "Removing Supabase component services and PostgreSQL infrastructure"
@@ -1080,5 +1164,7 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			return false, err
 		}
 	}
+	s.GatewayAdmission = engine.ExposureAdmission{}
+	s.GatewayURL = ""
 	return true, nil
 }

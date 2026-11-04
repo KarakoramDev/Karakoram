@@ -34,6 +34,7 @@ const (
 	OperationUpdate           = "update"
 	OperationTLS              = "tls"
 	OperationUpgrade          = "upgrade"
+	OperationUpgradeAgents    = "upgrade-agents"
 	OperationDelete           = "delete"
 	OperationResume           = "resume"
 	OperationBackup           = "backup"
@@ -41,20 +42,28 @@ const (
 	OperationRestore          = "restore"
 	OperationRaiseFCV         = "raise-fcv"
 	OperationRestart          = "restart"
+	OperationRebalance        = "rebalance"
 	OperationReplaceMember    = "replace-member"
 	OperationRotateSystemUser = "rotate-system-user"
 	OperationRotateTLS        = "rotate-tls"
 )
 
+// RebalanceParams selects the Citus shard placement strategy.
+type RebalanceParams struct {
+	Strategy string `json:"strategy,omitempty"`
+}
+
 // Cluster holds desired state, observed state, and provider-owned durable state.
 type Cluster struct {
-	Namespace   string          `json:"namespace,omitempty"`
-	Name        string          `json:"name"`
-	OperationID string          `json:"operationId,omitempty"`
-	Spec        ClusterSpec     `json:"spec"`
-	Status      ClusterStatus   `json:"status"`
-	Internal    json.RawMessage `json:"-"`
-	Generation  int64           `json:"generation"`
+	ManagedBy                     *ManagedBy      `json:"managedBy,omitempty"`
+	MaintenanceOverrideGeneration int64           `json:"maintenanceOverrideGeneration,omitempty"`
+	Namespace                     string          `json:"namespace,omitempty"`
+	Name                          string          `json:"name"`
+	OperationID                   string          `json:"operationId,omitempty"`
+	Spec                          ClusterSpec     `json:"spec"`
+	Status                        ClusterStatus   `json:"status"`
+	Internal                      json.RawMessage `json:"-"`
+	Generation                    int64           `json:"generation"`
 	// RequestedBy belongs to Generation, not to observed-state updates.
 	// It remains empty for generations whose historical requester is unknown.
 	RequestedBy   string        `json:"-"`
@@ -66,6 +75,7 @@ type Cluster struct {
 
 // ClusterSpec declares the desired engine, topology, and operational configuration.
 type ClusterSpec struct {
+	Maintenance *MaintenancePolicy `json:"maintenance,omitempty"`
 	// RetryEpoch is advanced only by the operator deployment retry action.
 	RetryEpoch    int64            `json:"retryEpoch,omitempty"`
 	Provider      string           `json:"provider"`
@@ -116,9 +126,10 @@ type Resources struct {
 
 // BackupConfig configures storage, schedules, and point-in-time recovery.
 type BackupConfig struct {
-	Storage   string           `json:"storage,omitempty"`
-	Schedules []BackupSchedule `json:"schedules"`
-	PITR      PITRConfig       `json:"pitr"`
+	Drill     *BackupDrillPolicy `json:"drill,omitempty"`
+	Storage   string             `json:"storage,omitempty"`
+	Schedules []BackupSchedule   `json:"schedules"`
+	PITR      PITRConfig         `json:"pitr"`
 }
 
 // BackupSchedule defines a named cron backup and count-based retention policy.
@@ -133,8 +144,9 @@ type BackupSchedule struct {
 
 // PITRConfig controls oplog capture and slicing.
 type PITRConfig struct {
-	Enabled          bool `json:"enabled"`
-	OplogSpanMinutes int  `json:"oplogSpanMinutes"`
+	Enabled          bool  `json:"enabled"`
+	AutoReanchor     *bool `json:"autoReanchor,omitempty"`
+	OplogSpanMinutes int   `json:"oplogSpanMinutes"`
 }
 
 // TLSConfig configures transport encryption and certificate material.
@@ -172,6 +184,8 @@ type DeleteOptions struct {
 
 // ClusterStatus captures the latest observed cluster health and connectivity.
 type ClusterStatus struct {
+	Agents      *AgentRolloutStatus `json:"agents,omitempty"`
+	Maintenance *MaintenanceStatus  `json:"maintenance,omitempty"`
 	// DeploymentFailures fences terminal platform deployments independently of provider state.
 	DeploymentFailures map[string]DeploymentFailure `json:"deploymentFailures,omitempty"`
 	Phase              Phase                        `json:"phase"`
@@ -250,8 +264,10 @@ type Condition struct {
 
 // MemberStatus reports the state and resource usage of one database member.
 type MemberStatus struct {
-	Name    string `json:"name"`
-	Set     string `json:"set"`
+	Name string `json:"name"`
+	Set  string `json:"set"`
+	// Group identifies a distributed PostgreSQL data group (0 is coordinator).
+	Group   *int   `json:"group,omitempty"`
 	Role    string `json:"role"`
 	State   string `json:"state"`
 	Health  bool   `json:"health"`
@@ -286,6 +302,9 @@ type ObservedResources struct {
 
 // AgentStatus reports agent connectivity and applied configuration.
 type AgentStatus struct {
+	Version       string    `json:"version,omitempty"`
+	Commit        string    `json:"commit,omitempty"`
+	Build         string    `json:"build,omitempty"`
 	Healthy       bool      `json:"healthy"`
 	ConfigVersion int64     `json:"configVersion"`
 	LastSeen      time.Time `json:"lastSeen"`
@@ -310,8 +329,9 @@ type Endpoint struct {
 
 // TimeWindow bounds a restorable point-in-time interval.
 type TimeWindow struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Backup string    `json:"backup,omitempty"`
 }
 
 // BackupStatus summarizes backup recency and PITR availability.
@@ -320,10 +340,12 @@ type BackupStatus struct {
 	LastBackup *time.Time  `json:"lastBackup,omitempty"`
 }
 
-// Placement reports best-effort host placement without promising anti-affinity.
+// Placement reports observed placement and backend anti-affinity guarantees.
 type Placement struct {
-	Warning string              `json:"warning,omitempty"`
-	Groups  map[string][]string `json:"groups"`
+	Source                 string              `json:"source,omitempty"`
+	GuaranteedAntiAffinity bool                `json:"guaranteedAntiAffinity"`
+	Warning                string              `json:"warning,omitempty"`
+	Groups                 map[string][]string `json:"groups"`
 }
 
 // ProviderInfo describes a provider catalog and supported capabilities.
@@ -433,6 +455,36 @@ type StorageCredentials struct {
 	SecretAccessKey string `json:"secretAccessKey"`
 }
 
+// BackupTriggerPITRReanchor identifies automatic physical-writer baselines.
+const BackupTriggerPITRReanchor = "pitr-reanchor"
+
+// PITRReanchorStabilityPeriod is the continuous writer and post-operation wait.
+const PITRReanchorStabilityPeriod = 5 * time.Minute
+
+// OperationDefersPITRReanchor is shared by observation and transactional
+// admission, including terminal operations that just finished between them.
+func OperationDefersPITRReanchor(op Operation, at time.Time) bool {
+	if op.Kind == OperationBackup || op.Kind == OperationDeleteBackup {
+		return false
+	}
+	return op.Phase == PhasePending || op.Phase == PhaseRunning ||
+		op.CompletedAt != nil && op.CompletedAt.After(at.Add(-PITRReanchorStabilityPeriod))
+}
+
+// BackupAdmissionBusyError means an automatic baseline lost admission to work
+// queued after its observation pass. Operation distinguishes maintenance from
+// another backup so callers can report the appropriate deferral.
+type BackupAdmissionBusyError struct {
+	Operation bool
+}
+
+func (e *BackupAdmissionBusyError) Error() string {
+	if e.Operation {
+		return "automatic backup deferred: cluster operation in progress"
+	}
+	return "automatic backup deferred: backup in progress"
+}
+
 // Backup tracks one durable backup inventory entry.
 type Backup struct {
 	Namespace   string `json:"namespace,omitempty"`
@@ -449,6 +501,9 @@ type Backup struct {
 	Location    string `json:"location,omitempty"`
 	// Postgres records pgBackRest's immutable set and dependency metadata.
 	Postgres *PostgresBackup `json:"postgres,omitempty"`
+	MySQL    *MySQLBackup    `json:"mysql,omitempty"`
+	// Weaviate records the immutable native S3 destination and node identities.
+	Weaviate *WeaviateBackup `json:"weaviate,omitempty"`
 	// Provenance survives deletion of the source cluster. PBMPrefix is the
 	// complete destination prefix at snapshot time, not the mutable storage prefix.
 	PBMPrefix      string   `json:"pbmPrefix,omitempty"`
@@ -464,6 +519,17 @@ type Backup struct {
 	CreatedAt        time.Time  `json:"createdAt"`
 }
 
+// WeaviateBackup is non-secret provenance needed after source-cluster deletion.
+type WeaviateBackup struct {
+	Endpoint    string   `json:"endpoint"`
+	Bucket      string   `json:"bucket"`
+	Path        string   `json:"path"`
+	ID          string   `json:"id"`
+	ClusterUID  string   `json:"clusterUid"`
+	Members     []string `json:"members"`
+	MemberCount int      `json:"memberCount"`
+}
+
 // PostgresBackup describes a consistent pgBackRest backup set.
 type PostgresBackup struct {
 	Label      string   `json:"label"`
@@ -475,6 +541,41 @@ type PostgresBackup struct {
 	SystemID   string   `json:"systemId"`
 	Version    string   `json:"version"`
 	RepoBytes  int64    `json:"repoBytes"`
+	// Profiles snapshots required runtime packages; empty legacy sets require none.
+	Profiles []string `json:"profiles,omitempty"`
+	// RestorePoint and Groups form one coordinated Citus recovery target.
+	RestorePoint string                `json:"restorePoint,omitempty"`
+	Groups       []PostgresBackupGroup `json:"groups,omitempty"`
+}
+
+// PostgresBackupGroup is an independently archived replication-group backup.
+// Worker LSNs are conservative post-marker upper bounds, not exact marker LSNs.
+type PostgresBackupGroup struct {
+	Group    int            `json:"group"`
+	Primary  string         `json:"primary,omitempty"`
+	Timeline int            `json:"timeline,omitempty"`
+	Backup   PostgresBackup `json:"backup"`
+	LSN      string         `json:"lsn"`
+}
+
+// MySQLBackup records immutable XtraBackup chain and incarnation provenance.
+type MySQLBackup struct {
+	Label          string    `json:"label"`
+	Repository     string    `json:"repository"`
+	Type           string    `json:"type"`
+	ParentLabel    string    `json:"parentLabel,omitempty"`
+	ChainRootLabel string    `json:"chainRootLabel"`
+	GTIDSet        string    `json:"gtidSet"`
+	FromLSN        uint64    `json:"fromLSN"`
+	ToLSN          uint64    `json:"toLSN"`
+	ServerVersion  string    `json:"serverVersion"`
+	ToolVersion    string    `json:"toolVersion"`
+	EndTime        time.Time `json:"endTime"`
+	ObjectPaths    []string  `json:"objectPaths"`
+	ClusterUID     string    `json:"clusterUID"`
+	Generation     int       `json:"generation"`
+	// PhysicalIdentity binds local InnoDB LSNs to one agent/data incarnation.
+	PhysicalIdentity string `json:"physicalIdentity,omitempty"`
 }
 
 // ProviderMatches reports whether a backup can be consumed by the target engine.
@@ -509,6 +610,7 @@ type Restore struct {
 type RestoreSource struct {
 	Backup        string     `json:"backup,omitempty"`
 	PITRTime      *time.Time `json:"pitrTime,omitempty"`
+	RestorePoint  string     `json:"restorePoint,omitempty"`
 	SourceCluster string     `json:"sourceCluster,omitempty"`
 }
 
@@ -535,15 +637,16 @@ func (o Operation) Terminal() bool {
 
 // Operation tracks durable desired-state convergence or a checkpointed action.
 type Operation struct {
-	Namespace          string          `json:"namespace,omitempty"`
-	ID                 string          `json:"id"`
-	Cluster            string          `json:"cluster"`
-	ClusterIncarnation string          `json:"clusterIncarnation,omitempty"`
-	Kind               string          `json:"kind"`
-	Target             OperationTarget `json:"target"`
-	TargetGeneration   int64           `json:"targetGeneration,omitempty"`
-	Failures           int             `json:"failures,omitempty"`
-	LastError          string          `json:"lastError,omitempty"`
+	IgnoreMaintenanceWindow bool            `json:"ignoreMaintenanceWindow,omitempty"`
+	Namespace               string          `json:"namespace,omitempty"`
+	ID                      string          `json:"id"`
+	Cluster                 string          `json:"cluster"`
+	ClusterIncarnation      string          `json:"clusterIncarnation,omitempty"`
+	Kind                    string          `json:"kind"`
+	Target                  OperationTarget `json:"target"`
+	TargetGeneration        int64           `json:"targetGeneration,omitempty"`
+	Failures                int             `json:"failures,omitempty"`
+	LastError               string          `json:"lastError,omitempty"`
 	// BlockingMessage is the latest observed blocker, independent of retry accounting.
 	BlockingMessage         string          `json:"blockingMessage,omitempty"`
 	BlockingObservedAt      *time.Time      `json:"blockingObservedAt,omitempty"`

@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Sharding
 
-Provision config servers, shard replica sets and mongos routing for PSMDB.
+Provision config servers, shard replica sets and mongos routing for [PSMDB](https://docs.percona.com/percona-server-for-mongodb/).
 
 ## At a glance
 
@@ -16,7 +16,7 @@ These are validation bounds, not load-tested maxima or a project-capacity guaran
 
 ## Create
 
-In **Create cluster → MongoDB**, choose **Sharded**, configure each component, and review the complete runtime/storage footprint. The **sharded** preset is described in the [overview](README.md).
+In **Create cluster → [MongoDB](https://www.mongodb.com/)**, choose **Sharded**, configure each component, and review the complete runtime/storage footprint. The **sharded** preset is described in the [overview](README.md).
 
 CLI alternative:
 
@@ -28,7 +28,7 @@ karactl -n default clusters create analytics --provider psmdb \
 karactl -n default clusters members analytics
 ```
 
-Use `-f` with a complete API-shaped create request for distinct `engine`, `configServer` and `router` resource blocks; see [OpenAPI Components](../../api/openapi.yaml). Explicit zero, including `--shards 0`, is invalid. Provider defaults above differ from CLI convenience defaults, notably its two routers.
+Use `-f` with a complete API-shaped create request for distinct `engine`, `configServer` and `router` resource blocks; see [OpenAPI Components](../../api/openapi.yaml). Explicit zero, including `--shards 0`, is invalid. Engine driver defaults above differ from CLI convenience defaults, notably its two routers.
 
 ## Connect and shard collections
 

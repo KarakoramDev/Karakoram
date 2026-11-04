@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,14 +48,20 @@ func (b *Backend) nodes(ctx context.Context) ([]node, error) {
 	}
 	return out, nil
 }
-func chooseNode(ns []node, rs []*record, group, replaces string) (string, error) {
+func chooseNode(ns []node, rs []*record, group, replaces string, avoid ...string) (string, error) {
 	eligible := make([]node, 0, len(ns))
 	for _, n := range ns {
-		if n.Status == "ready" && n.SchedulingEligibility == "eligible" && !n.Drain {
+		// Allocations report NodeName, falling back to NodeID when omitted.
+		// Accept either authoritative identity even if the node list has a name.
+		excluded := slices.Contains(avoid, n.ID) || n.Name != "" && slices.Contains(avoid, n.Name)
+		if n.Status == "ready" && n.SchedulingEligibility == "eligible" && !n.Drain && !excluded {
 			eligible = append(eligible, n)
 		}
 	}
 	if len(eligible) == 0 {
+		if len(avoid) != 0 {
+			return "", fmt.Errorf("choose volume node: %w", infra.ErrPlacementUnsatisfiable)
+		}
 		return "", fmt.Errorf("%w: no ready eligible nodes", infra.ErrUnavailable)
 	}
 	counts, total := map[string]int{}, map[string]int{}

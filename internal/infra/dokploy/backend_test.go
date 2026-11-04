@@ -1099,3 +1099,9 @@ func TestContainersAddressEveryStillRunningSwarmTask(t *testing.T) {
 		t.Fatalf("desired shutdown hid a still-running task: %+v", containers)
 	}
 }
+
+func TestProxyUpdatesAdvertiseServingWithRuntimeGate(t *testing.T) {
+	if !dokployCapabilities.ReplicaScalePreservesServing || !dokployCapabilities.ResourceUpdatePreservesServing {
+		t.Fatal("marked proxy updates must use health-gated start-first replacement")
+	}
+}

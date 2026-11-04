@@ -1,0 +1,630 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 The Karakoram Authors
+package mysql
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/KarakoramDev/Karakoram/internal/domain"
+	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/secrets"
+	"time"
+)
+
+func desiredComponent(rc *engine.Context, m *member) domain.ComponentSpec {
+	if m.Role == "proxy" {
+		return rc.Cluster.Spec.Components.Extra["proxy"]
+	}
+	c := rc.Cluster.Spec.Components.Engine
+	c.Replicas = 1
+	return c
+}
+func newUUID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = b[6]&15 | 64
+	b[8] = b[8]&63 | 128
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+func verifyMember(ctx context.Context, rc *engine.Context, m *member) error {
+	token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		return engine.ErrNotFound
+	}
+	for _, entry := range []struct {
+		name string
+		id   *string
+	}{{m.Name, &m.ServiceID}, {m.Volume, &m.VolumeID}} {
+		if entry.name == "" {
+			continue
+		}
+		service, err := engine.ObserveRetiringService(ctx, rc.Backend, entry.name, *entry.id, m.Volume, m.VolumeID, m.ConfirmedVolumeLost)
+		if err != nil {
+			return err
+		}
+		if service == nil {
+			continue
+		}
+		if *entry.id != service.ID && !engine.HasOwnership(service, token.Token, rc.Cluster.Name, m.Name) {
+			return engine.UnverifiedOwnership(service)
+		}
+		*entry.id = service.ID
+		if err = engine.EnsureOwnerMarker(ctx, rc.Backend, service, token.Token, rc.Cluster.Name, m.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (p *Core) track(s *state, m *member, action string, op infra.Op) {
+	s.Pending = &pending{Op: op, Action: action, Member: m.Name}
+}
+func resumePlannedImport(ctx context.Context, rc *engine.Context, m *member) (*infra.Op, error) {
+	if m.ImportBatch == nil {
+		return nil, nil
+	}
+	token, err := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+	if err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, engine.ErrNotFound
+	}
+	return engine.ResumeImportPlan(ctx, rc, m.ImportBatch, m.Name, token.Token)
+}
+func (p *Core) observePending(ctx context.Context, rc *engine.Context, s *state) (bool, error) {
+	q := s.Pending
+	if q == nil {
+		return false, nil
+	}
+	m := s.find(q.Member)
+	if m == nil {
+		return true, engine.ErrNotFound
+	}
+	if q.Action == "import" {
+		op, err := resumePlannedImport(ctx, rc, m)
+		if err != nil {
+			return true, err
+		}
+		if op != nil {
+			q.Op = *op
+			return true, nil
+		}
+	}
+	status, err := rc.Backend.OpStatus(ctx, q.Op)
+	if err != nil {
+		return true, err
+	}
+	if !status.Done && !status.Failed {
+		return true, nil
+	}
+	if status.Failed {
+		s.Pending = nil
+		return true, fmt.Errorf("infrastructure %s failed for %s", q.Action, q.Member)
+	}
+	switch q.Action {
+	case "import":
+		if err = verifyMember(ctx, rc, m); err != nil {
+			return true, err
+		}
+		if m.ServiceID == "" || m.Volume != "" && m.VolumeID == "" {
+			return true, engine.ErrUnavailable
+		}
+		m.Stage = "imported"
+		m.ImportBatch = nil
+	case "delete-runtime":
+		m.ServiceID = ""
+		m.Public = false
+		m.Stage = "planned"
+		m.DeployOp = nil
+	case "delete-volume":
+		m.VolumeID = ""
+	}
+	s.Pending = nil
+	return true, nil
+}
+func (p *Core) Sync(ctx context.Context, rc *engine.Context) (result engine.Result, err error) {
+	if engine.ObservationPassCache(ctx) == nil {
+		ctx = engine.WithObservationPass(ctx)
+	}
+	lock, err := p.mutations.acquire(ctx, rc.Cluster.Ref())
+	if err != nil {
+		return result, err
+	}
+	defer p.mutations.release(lock)
+	if intent, e := loadAccessIntent(ctx, rc); e != nil || intent != nil {
+		if e != nil {
+			return result, e
+		}
+		return engine.Result{RequeueAfter: 2 * time.Second}, p.completeAccessIntent(ctx, rc, intent)
+	}
+	result.RequeueAfter = 2 * time.Second
+	s, err := load(rc.Cluster)
+	if err != nil {
+		return result, err
+	}
+	if err = seedExposure(rc, s); err != nil {
+		return result, err
+	}
+	defer func() {
+		if e := save(rc.Cluster, s); err == nil {
+			err = e
+		}
+	}()
+	if busy, e := p.recoverRuntimes(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
+		return result, e
+	}
+	if busy, e := p.reconcileOrphanedAgentDrain(ctx, rc, s); busy || e != nil {
+		s.PITRReanchor.FirstSeen = time.Time{}
+		return result, e
+	}
+	if e := p.reconcilePITRReanchor(ctx, rc, s); e != nil {
+		return result, e
+	}
+	if busy, e := p.reconcilePendingRestoreGTIDCleanup(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	// Collect independent native/agent/platform reads together before optional
+	// history checks. Subsequent formation/readiness scans reuse this pass.
+	observeStatusMembers(ctx, rc, s.Members)
+	// Observation records discontinuities without fencing normal service.
+	if e := checkPXCQuorumGTIDs(ctx, rc, s); e != nil {
+		if _, observation := e.(*myspec.GTIDQuorumError); !observation {
+			return result, e
+		}
+	}
+	if busy, e := p.reconcileGaleraTrafficRotation(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if busy, e := p.reconcileRestoreRecovery(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	for _, m := range s.Members {
+		if m.VolumeID != "" && m.ImportBatch == nil && !m.Removing && !m.ConfirmedVolumeLost {
+			disk, e := engine.PreflightVolumeGrowth(ctx, rc.Backend, m.Volume, m.VolumeID, m.Resources, desiredComponent(rc, m).Resources)
+			if e != nil {
+				return result, e
+			}
+			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
+		}
+	}
+	if s.UID == "" {
+		s.UID, err = secrets.RandomString(16)
+		if err != nil {
+			return result, err
+		}
+		s.Topology = rc.Cluster.Spec.Topology.Type
+	}
+	if err = p.rememberRepository(ctx, rc, s); err != nil {
+		return result, err
+	}
+	if s.Formation.GroupName == "" {
+		s.Formation.GroupName, err = p.newReplicationIdentity()
+		if err != nil {
+			return result, err
+		}
+	}
+	if s.Topology != rc.Cluster.Spec.Topology.Type {
+		if err = p.adoptSingleton(ctx, rc, s); err != nil {
+			return result, err
+		}
+		return result, nil
+	}
+	if s.Suspended {
+		s.Suspended = false
+		if clustered(s.Topology) {
+			s.Formation.Reformation = &reformation{State: "observing"}
+			for _, m := range s.data() {
+				m.Offline = true
+			}
+		}
+		publishRevision(s)
+		return result, nil
+	}
+	if busy, e := p.reconcileMembership(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	s.allocate(rc.Cluster)
+	if rc.Cluster.Spec.Provider == "pxc" {
+		preparePXCFormationCertification(s)
+	}
+	if err = p.ensureSecrets(ctx, rc, s); err != nil {
+		return result, err
+	}
+	if s.GaleraTLS != nil {
+		return result, nil
+	}
+	exposureDeferred, err := p.reconcileExposure(ctx, rc, s, false)
+	if err != nil {
+		return result, err
+	}
+	if busy, e := p.observePending(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if busy, e := p.reconcileRolling(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	raw, e := json.Marshal(rc.Cluster.Spec)
+	if e != nil {
+		return result, e
+	}
+	managed, e := secret(ctx, rc, "mysql/access/proxy-users")
+	if e != nil && !missing(e) {
+		return result, e
+	}
+	digest := sha256.New()
+	digest.Write(raw)
+	digest.Write(managed)
+	hash := hex.EncodeToString(digest.Sum(nil))
+	if s.ConfigHash != hash {
+		s.ConfigHash = hash
+		publishRevision(s)
+	}
+	writer := false
+	if clustered(s.Topology) || s.Topology == "single" {
+		for _, m := range s.data() {
+			// Proxy configuration only publishes joined data backends. Native
+			// ONLINE alone precedes that checkpoint and cannot admit a proxy.
+			if m.Stage != "joined" {
+				continue
+			}
+			st, e := live(ctx, rc, m.Name)
+			if e == nil && (onlinePrimary(st) || s.Topology == "single" && st.MemberState == "ONLINE") {
+				writer = true
+				break
+			}
+		}
+	}
+	if clustered(s.Topology) && s.Formation.State == "formed" && (s.Formation.Reformation == nil || s.Formation.Reformation.State == "formed") {
+		allOffline := len(s.data()) > 0
+		for _, m := range s.data() {
+			st, e := live(ctx, rc, m.Name)
+			if s.Topology == "cluster" {
+				if m.Stage != "joined" || !galeraStopped(ctx, rc, m.Name) {
+					allOffline = false
+				}
+			} else if e != nil || m.Stage != "joined" || st.MemberState != "OFFLINE" && st.MemberState != "ERROR" {
+				allOffline = false
+			}
+		}
+		if allOffline {
+			s.Formation.Reformation = &reformation{State: "observing"}
+			for _, m := range s.data() {
+				m.Offline = true
+			}
+			publishRevision(s)
+			return result, nil
+		}
+	}
+	// Import every data identity before waiting for engine-level readiness.
+	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
+		if m.Role == "proxy" && !writer {
+			continue
+		}
+		desired := desiredComponent(rc, m)
+		if m.Stage != "planned" {
+			continue
+		}
+		tok, e := rc.Secrets.GetAgentToken(ctx, rc.Cluster.Ref(), m.Name)
+		if e != nil {
+			return result, e
+		}
+		if tok == nil {
+			return result, engine.ErrNotFound
+		}
+		if m.ImportBatch == nil {
+			specs := []infra.ServiceSpec{}
+			disk := desired.Resources
+			if m.Volume != "" {
+				v, e := rc.Backend.GetService(ctx, m.Volume)
+				if e != nil {
+					return result, e
+				}
+				if v == nil {
+					if m.Initialized {
+						return result, engine.Invalid("initialized MySQL volume %s is missing", m.Volume)
+					}
+					specs = append(specs, engine.VolumeServiceSpec(rc.Cluster.Name, m.Name, m.Volume, tok.Token, desired.Resources))
+				} else {
+					if mapping := s.Formation.GTIDCertification; mapping != nil {
+						// Existing storage is not proof of empty data.
+						delete(mapping.EmptyMembers, m.Name)
+					}
+					if v.Importing {
+						return result, engine.Invalid("incomplete import has no frozen batch for %s", m.Name)
+					}
+					if (m.VolumeID == "" || m.VolumeID != v.ID) && !engine.HasOwnership(v, tok.Token, rc.Cluster.Name, m.Name) {
+						return result, engine.UnverifiedOwnership(v)
+					}
+					m.VolumeID = v.ID
+					disk = v.Resources
+				}
+			}
+			runtime, e := rc.Backend.GetService(ctx, m.Name)
+			if e != nil {
+				return result, e
+			}
+			if runtime == nil {
+				specs = append(specs, engine.RuntimeServiceSpec(rc.Backend.Layout(), engine.MemberService{Cluster: rc.Cluster.Name, Member: m.Name, Token: tok.Token, Volume: m.Volume, Resources: desired.Resources, Containers: desired.Replicas}))
+			} else if runtime.Importing {
+				return result, engine.Invalid("incomplete import has no frozen batch for %s", m.Name)
+			}
+			m.Resources = desired.Resources
+			// A retained volume keeps its backend size, not the runtime desire.
+			m.Resources.MinDisk, m.Resources.MaxDisk = disk.MinDisk, disk.MaxDisk
+			m.Replicas = desired.Replicas
+			m.Version = rc.Cluster.Spec.Version
+			options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
+			if e != nil {
+				return result, e
+			}
+			if m.Role == "data" {
+				m.Parameters = restartParameters(options.Parameters)
+			}
+			m.ConfigVersion = s.ConfigVersion
+			if len(specs) == 0 {
+				if e = verifyMember(ctx, rc, m); e != nil {
+					return result, e
+				}
+				m.Stage = "imported"
+			} else {
+				m.ImportBatch = engine.NewImportPlan(specs)
+			}
+			return result, nil
+		}
+		op, e := m.ImportBatch.Submit(ctx, rc, m.Name, tok.Token)
+		if e != nil {
+			return result, e
+		}
+		p.track(s, m, "import", op)
+		return result, nil
+	}
+	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
+		if m.Role == "proxy" && !writer {
+			continue
+		}
+		if m.Stage != "imported" {
+			continue
+		}
+		spec, e := p.runtimeSpec(rc, m)
+		if e != nil {
+			return result, e
+		}
+		if engine.DeploymentBlocked(rc, m.Name, spec) {
+			continue
+		}
+		runtimeHash := ""
+		if m.Role == "proxy" {
+			runtimeHash, e = proxyRuntimeHash(rc, spec)
+			if e != nil {
+				return result, e
+			}
+		}
+		op, e := engine.Deploy(ctx, rc, m.Name, spec)
+		if e != nil {
+			return result, e
+		}
+		if m.Role == "proxy" {
+			m.ProxyRuntimeHash = runtimeHash
+		}
+		m.DeployOp = &op
+		m.Stage = "deploying"
+		return result, nil
+	}
+	deploymentsBusy := false
+	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			continue
+		}
+		// A proxy started by an earlier reconciliation may still be waiting
+		// for its first backend. Do not let its rollout block the data join
+		// checkpoint that supplies that backend.
+		if m.Role == "proxy" && !writer {
+			continue
+		}
+		if m.Stage != "deploying" {
+			continue
+		}
+		if m.DeployOp == nil {
+			return result, engine.Invalid("deploying member has no receipt")
+		}
+		st, e := rc.Backend.OpStatus(ctx, *m.DeployOp)
+		if st.Status == "DeploymentRetriesExhausted" && e == nil {
+			e = &infra.DeploymentExhaustedError{Service: m.Name, LastError: st.Message}
+		}
+		if errors.Is(e, infra.ErrDeploymentRetriesExhausted) {
+			spec, x := p.runtimeSpec(rc, m)
+			if x != nil {
+				return result, x
+			}
+			m.Stage = "imported"
+			m.DeployOp = nil
+			if x = engine.RecordDeploymentExhausted(ctx, rc, m.Name, spec, e); x != nil {
+				return result, x
+			}
+			continue
+		}
+		if e != nil {
+			return result, e
+		}
+		if !st.Done && !st.Failed {
+			deploymentsBusy = true
+			continue
+		}
+		m.DeployOp = nil
+		if st.Failed {
+			m.Stage = "imported"
+			return result, fmt.Errorf("deployment failed for %s", m.Name)
+		}
+		m.Stage = "deployed"
+	}
+	if deploymentsBusy {
+		return result, nil
+	}
+	if e := save(rc.Cluster, s); e != nil {
+		return result, e
+	}
+	if busy, e := p.syncInitialRestore(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if e := beginPXCFormationCertification(ctx, rc, s); e != nil {
+		return result, e
+	}
+	if changed, e := p.reconcileFormation(ctx, rc, s); changed || e != nil {
+		return result, e
+	}
+	options, e := ParseOptions(rc.Cluster.Spec.EngineOptions)
+	if e != nil {
+		return result, e
+	}
+	parameters := restartParameters(options.Parameters)
+	converged := s.Rolling == nil && len(s.data()) == rc.Cluster.Spec.Components.Engine.Replicas
+	for _, m := range s.Members {
+		if m.ConfirmedVolumeLost {
+			converged = false
+			continue
+		}
+		desired := desiredComponent(rc, m)
+		if rollingNeedsWindow(m, rc.Cluster.Spec.Version, desired, parameters) || m.Replicas != desired.Replicas {
+			converged = false
+		}
+		if m.Stage != "deployed" && m.Stage != "joined" {
+			converged = false
+			continue
+		}
+		ok, e := ready(ctx, rc, m)
+		if e != nil {
+			return result, e
+		}
+		if !ok {
+			converged = false
+			continue
+		}
+		if m.Stage != "joined" {
+			m.Stage = "joined"
+			if m.Role == "data" {
+				m.Initialized = true
+				publishRevision(s)
+			}
+			if rc.Store != nil && m.Volume != "" {
+				if e = rc.Store.DeleteRetainedVolume(ctx, rc.Cluster.Ref(), m.Name); e != nil && !missing(e) {
+					return result, e
+				}
+			}
+			return result, nil
+		}
+	}
+	if busy, e := reconcilePXCFormationCertification(ctx, rc, s); busy || e != nil {
+		return result, e
+	}
+	if converged && len(s.Members) > 0 {
+		if deferred, e := p.reconcileExposure(ctx, rc, s, true); e != nil {
+			return result, e
+		} else if deferred || exposureDeferred {
+			return rc.WaitForWindow(), nil
+		}
+		if s.Topology == "single" {
+			s.Formation.State = "formed"
+		}
+		if e := save(rc.Cluster, s); e != nil {
+			return result, e
+		}
+		status, e := p.Status(ctx, rc)
+		if e != nil {
+			return result, e
+		}
+		rc.Cluster.Status = status
+		if status.Phase == domain.PhaseReady {
+			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
+			result.RequeueAfter = 15 * time.Second
+		}
+	}
+	return result, nil
+}
+
+// seedExposure migrates only acknowledged policy or a matching retained route
+// receipt. A legacy hash cannot reconstruct a superseded allowlist or IP family.
+func seedExposure(rc *engine.Context, s *state) error {
+	if s.ExposureAdmission.Admitted != nil {
+		return nil
+	}
+	if rc.Cluster.Status.ObservedGeneration > 0 && rc.Cluster.Status.ObservedGeneration == rc.Cluster.Generation {
+		s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+		return nil
+	}
+	raw, err := json.Marshal(rc.Cluster.Spec.Exposure)
+	if err != nil {
+		return err
+	}
+	digest := sha256.Sum256(raw)
+	hash := hex.EncodeToString(digest[:])
+	for _, m := range s.Members {
+		if m.Public && m.ExposureHash == hash {
+			s.ExposureAdmission.Seed(rc.Cluster.Spec.Exposure)
+			break
+		}
+	}
+	return nil
+}
+
+// Revoke changed routes before health gates; publish only after native convergence.
+// Recovery restores admitted policy without a second maintenance admission.
+func (p *Core) reconcileExposure(ctx context.Context, rc *engine.Context, s *state, publish bool) (deferred bool, err error) {
+	if err = seedExposure(rc, s); err != nil {
+		return false, err
+	}
+	exposure, deferred := s.ExposureAdmission.Resolve(rc, rc.Cluster.Spec.Exposure)
+	if err = save(rc.Cluster, s); err != nil {
+		return deferred, err
+	}
+	raw, err := json.Marshal(exposure)
+	if err != nil {
+		return deferred, err
+	}
+	digest := sha256.Sum256(raw)
+	hash := hex.EncodeToString(digest[:])
+	target := connectionMember(rc, s)
+	for _, m := range s.Members {
+		want := exposure.Public && m.Name == target
+		if m.Public && (!want || m.ExposureHash != hash) {
+			if err = rc.Backend.DeletePublicPorts(ctx, m.Name); err != nil {
+				return deferred, err
+			}
+			m.Public = false
+		}
+		if !publish || !want || m.Public {
+			continue
+		}
+		if err = engine.RequirePublicTCP(rc.Backend, exposure); err != nil {
+			return deferred, err
+		}
+		port := infra.PublicPort{Port: 3306, TargetPort: 3306, Protocol: "tcp", IPType: exposure.IPType, Allowlist: exposure.Allowlist}
+		if err = rc.Backend.EnsurePublicPort(ctx, m.Name, port); err != nil {
+			return deferred, err
+		}
+		m.Public = true
+		m.ExposureHash = hash
+	}
+	return deferred, nil
+}

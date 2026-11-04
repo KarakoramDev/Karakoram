@@ -31,6 +31,9 @@ var (
 	// ErrUnavailable reports a transient backend outage, rate limit or
 	// network failure; the request may be retried.
 	ErrUnavailable = errors.New("infra: backend unavailable")
+	// ErrPlacementUnsatisfiable reports that explicit placement exclusions leave
+	// no eligible node. Retrying the same placement intent cannot resolve it.
+	ErrPlacementUnsatisfiable = errors.New("infra: no other eligible node")
 	// ErrUnsupported reports a feature this backend does not provide
 	// (see Capabilities).
 	ErrUnsupported = errors.New("infra: not supported by backend")
@@ -57,6 +60,17 @@ func (e *RejectedError) Error() string {
 
 // Is matches ErrRejected.
 func (e *RejectedError) Is(target error) bool { return target == ErrRejected }
+
+// ResourceUpdateRejectedError is a definitive placement refusal made before
+// stopping the serving runtime. Retrying convergence may recheck capacity but
+// must not mutate the runtime without a successful placement check.
+type ResourceUpdateRejectedError struct {
+	Message string
+}
+
+func (e *ResourceUpdateRejectedError) Error() string        { return e.Message }
+func (e *ResourceUpdateRejectedError) Is(target error) bool { return target == ErrRejected }
+func (e *ResourceUpdateRejectedError) SafeDetail() string   { return e.Message }
 
 // PublicPortConflictError reports a refused publication, not an uncertain
 // delivery. The backend has preserved the previously applied service.
@@ -145,7 +159,7 @@ func SafeDetail(err error) string {
 	if errors.As(err, &d) {
 		return d.SafeDetail()
 	}
-	for _, class := range []error{ErrUnauthorized, ErrNotFound, ErrConflict, ErrUnavailable, ErrUnsupported, ErrResourceChangeCooldown, ErrRejected, ErrConfiguration} {
+	for _, class := range []error{ErrPlacementUnsatisfiable, ErrUnauthorized, ErrNotFound, ErrConflict, ErrUnavailable, ErrUnsupported, ErrResourceChangeCooldown, ErrRejected, ErrConfiguration} {
 		if errors.Is(err, class) {
 			return class.Error()
 		}

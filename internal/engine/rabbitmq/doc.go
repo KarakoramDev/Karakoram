@@ -51,8 +51,14 @@
 // the broker before any disruptive platform action. Durable maintenance holds
 // prevent background configuration pulls from starting a stopped broker while a
 // platform operation is pending. A member must acknowledge its configuration,
-// run, rejoin and revive before another member is changed. Resource changes are
-// applied through the backend and followed by a gated rolling configuration
+// run, rejoin and revive before another member is changed.
+// Restart, TLS rotation and agent rollout recheck the maintenance window before
+// each new member drain, including operations claimed in an earlier window.
+// A drained member always finishes recovery; the persisted operation override
+// permits the entire rolling pass outside windows. All three operations allow
+// provisioning Sync until native formation or scale-out completes, but isolate
+// ordinary Sync while a member change is active.
+// Resource changes are applied through the backend and followed by a gated rolling configuration
 // update. Backends whose resource receipt reapplies the stored runtime enter
 // disruption gates before RAM/CPU changes and skip a second identical deployment;
 // reload, configuration acknowledgement and full membership still gate completion.
@@ -85,6 +91,13 @@
 // Whole-cluster suspension stops every reachable broker locally before removing
 // any runtime, without drain, forget, shrink or reset. Queue replicas, metadata,
 // volumes and credentials are preserved even without a running quorum.
+// Admitted TCP and management HTTPS exposure are retained separately from
+// runtime route receipts; management mutations checkpoint their effective target.
+// Resume and runtime recovery restore that policy without a maintenance wait,
+// including private exposure. Deferred policy edits restore only admitted
+// routes and cannot acknowledge the desired generation until admission.
+// Legacy acknowledged policy or matching retained hashes seed admission;
+// otherwise unknown legacy exposure defaults to private until admission.
 // Unreachable broker shutdowns are recorded and delegated to terminal platform
 // runtime deletion before volume retention. Full deletion skips broker RPCs:
 // no leadership transfer is useful when every replica is being discarded.

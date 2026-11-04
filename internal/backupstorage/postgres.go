@@ -27,6 +27,7 @@ var postgresLabel = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}F(_[0-9]{8}-[0-9]{6}[D
 var postgresExpireMu sync.Mutex
 var postgresWAL = regexp.MustCompile(`^[0-9A-F]{24}(-[0-9a-f]{40})?(\.[a-z0-9]+)?$`)
 var postgresArchiveID = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?-[1-9][0-9]*$`)
+var postgresGroupDirectory = regexp.MustCompile(`^g[0-8](-i[1-9][0-9]*)?$`)
 
 // PostgresDirectory bounds deletion by immutable incarnation provenance, never
 // just a cluster name or a mutable registered-storage prefix.
@@ -38,7 +39,11 @@ func PostgresDirectory(s domain.BackupStorage, namespace, cluster, repository st
 	// The repository recorded on the backup is its immutable provenance.
 	// Registered storage prefixes can change after that repository was created.
 	parts := strings.Split(repository, "/")
-	if len(parts) < 3 || parts[len(parts)-3] != "postgres" || parts[len(parts)-2] != ns {
+	ownership := parts
+	if len(parts) > 0 && postgresGroupDirectory.MatchString(parts[len(parts)-1]) {
+		ownership = parts[:len(parts)-1]
+	}
+	if len(ownership) < 3 || ownership[len(ownership)-3] != "postgres" || ownership[len(ownership)-2] != ns {
 		return "", errors.New("recorded PostgreSQL repository is outside its storage namespace")
 	}
 	for _, part := range strings.Split(repository, "/") {
@@ -46,7 +51,7 @@ func PostgresDirectory(s domain.BackupStorage, namespace, cluster, repository st
 			return "", errors.New("unsafe PostgreSQL repository namespace")
 		}
 	}
-	identity := parts[len(parts)-1]
+	identity := ownership[len(ownership)-1]
 	if cluster == "" || strings.ContainsAny(cluster, "/\\") || !strings.HasPrefix(identity, cluster+"-") || strings.Contains(identity, "/") || len(identity) <= len(cluster)+1 {
 		return "", errors.New("repository lacks a cluster incarnation identity")
 	}

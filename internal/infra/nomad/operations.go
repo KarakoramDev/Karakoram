@@ -73,6 +73,8 @@ type operation struct {
 	Lease            *operationLease   `json:"lease,omitempty"`
 
 	ResourceCorrection *resourceCorrection `json:"resourceCorrection,omitempty"`
+	ResourceRejected   bool                `json:"resourceRejected,omitempty"`
+	PreviousResources  *infra.Resources    `json:"previousResources,omitempty"`
 }
 
 // Conditional resource corrections retain their exact predecessor and accepted
@@ -133,10 +135,10 @@ func decodeOp(op infra.Op) (operation, error) {
 	return o, nil
 }
 func (b *Backend) begin(ctx context.Context, r *record, action string) (infra.Op, error) {
-	return b.beginOperation(ctx, r, action, false, nil)
+	return b.beginOperation(ctx, r, action, false, nil, nil)
 }
 
-func (b *Backend) beginOperation(ctx context.Context, r *record, action string, retainOnly bool, unplacedPrevious *infra.Resources) (infra.Op, error) {
+func (b *Backend) beginOperation(ctx context.Context, r *record, action string, retainOnly bool, unplacedPrevious, previousResources *infra.Resources) (infra.Op, error) {
 	if r.Importing {
 		return infra.Op{}, &APIError{Status: 409, Op: "lifecycle", Message: "import is incomplete; retry the original import before changing this runtime"}
 	}
@@ -158,11 +160,21 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return infra.Op{}, err
 	}
+	if action == "resources" && previousResources != nil && r.Pending != nil && r.Pending.Action == "resources" &&
+		r.Pending.Phase != "done" && r.Pending.PreviousResources != nil &&
+		(job == nil || observed.Meta["karakoram.operation"] != r.Pending.Issued.Format(time.RFC3339Nano)) {
+		// A failed/unacknowledged stop can cause SetResources to be submitted
+		// again before the first replacement was registered. The saved
+		// Resources are then only that attempt's target, not applied bounds.
+		// Retain its original predecessor until the exact operation marker
+		// proves the replacement job was registered.
+		previousResources = r.Pending.PreviousResources
+	}
 	lease, err := b.newOperationLease()
 	if err != nil {
 		return infra.Op{}, err
 	}
-	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease, RetainOnly: retainOnly, UnplacedPrevious: unplacedPrevious}
+	o := operation{Action: action, Hostname: r.Hostname, RecordID: r.ID, JobID: r.Hostname, Issued: time.Now().UTC(), Phase: "stopping", Lease: lease, RetainOnly: retainOnly, UnplacedPrevious: unplacedPrevious, PreviousResources: previousResources}
 	if unplacedPrevious != nil && r.Pending != nil {
 		o.ResourceCorrection = &resourceCorrection{Predecessor: r.Pending.Issued, Resources: r.Resources}
 	}
@@ -174,6 +186,19 @@ func (b *Backend) beginOperation(ctx context.Context, r *record, action string, 
 	if r.Volume == "" && !relay && (action == "deploy" || action == "resources" || action == "scale" || action == "ports") {
 		o.Phase = "registering"
 		o.UnplacedPrevious = nil
+	}
+	// Plan before saving the new resources or issuing the single-writer stop.
+	// An infeasible replacement must leave both the serving job and its durable
+	// specification untouched, including when convergence retries this request.
+	// Conditional initial-deployment corrections have no serving allocation
+	// to protect; their separate admission/history fence must remain usable
+	// while placement is blocked (including on an ineligible node).
+	if action == "resources" && o.Phase == "stopping" && unplacedPrevious == nil {
+		proposed := *r
+		proposed.Pending = &o
+		if err := b.planResourceUpdate(work, &proposed); err != nil {
+			return infra.Op{}, err
+		}
 	}
 	// Claim exclusion and persist the pending specification before mutation.
 	r.Pending = &o
@@ -415,6 +440,9 @@ func (b *Backend) opStatus(ctx context.Context, op infra.Op) (infra.OpState, err
 	if current.Phase == "failed" {
 		state.Failed = true
 		state.Message = current.Message
+		if current.ResourceRejected {
+			return state, &infra.ResourceUpdateRejectedError{Message: current.Message}
+		}
 		return state, nil
 	}
 	if b.operationLeaseBlocked(r) {
@@ -477,6 +505,22 @@ func (b *Backend) advanceOperation(ctx context.Context, r *record, o operation, 
 				return state, err
 			}
 			if !observed.Stop {
+				// A lost/failed initial stop may be retried after capacity
+				// changed. Replan before that retry, not after stopping.
+				if current.Action == "resources" && current.UnplacedPrevious == nil {
+					if err := b.planResourceUpdate(ctx, r); err != nil {
+						if errors.Is(err, infra.ErrRejected) {
+							var rejected *infra.ResourceUpdateRejectedError
+							current.ResourceRejected = errors.As(err, &rejected)
+							if current.ResourceRejected && current.PreviousResources != nil {
+								r.Resources = *current.PreviousResources
+							}
+							failed, saveErr := b.failOperation(ctx, r, state, err.Error())
+							return failed, errors.Join(err, saveErr)
+						}
+						return state, err
+					}
+				}
 				state.Message = "waiting for previous job to stop"
 				return state, b.stopOperationJob(ctx, r, job, observed)
 			}

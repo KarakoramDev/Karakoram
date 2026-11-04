@@ -164,8 +164,20 @@ func (s *Server) validationMiddleware(next http.Handler) http.Handler {
 			SchemaValidationOptions: []openapi3.SchemaValidationOption{openapi3.EnableFormatValidation()},
 		}}
 		if e := openapi3filter.ValidateRequest(r.Context(), input); e != nil {
-			_ = schemaFailure(e).write(w)
+			result := schemaFailure(e)
+			if strings.Contains(route.Operation.OperationID, "Temporal") {
+				result.status = http.StatusUnprocessableEntity
+			}
+			_ = result.write(w)
 			return
+		}
+		// Generated strict handlers decode JSON even when OpenAPI makes the
+		// entire body optional. Preserve absence through schema validation, then
+		// give that decoder the empty object represented by its zero-value input.
+		if body := route.Operation.RequestBody; body != nil && !body.Value.Required && r.ContentLength == 0 && body.Value.Content["application/json"] != nil {
+			r.Body = io.NopCloser(strings.NewReader("{}"))
+			r.ContentLength = 2
+			r.Header.Set("Content-Type", "application/json")
 		}
 		next.ServeHTTP(w, r)
 	})

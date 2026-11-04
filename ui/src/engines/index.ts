@@ -4,7 +4,12 @@
 import type { Schemas } from '../api/client';
 import type { EngineUI, MonitoringPanel } from './types';
 import { postgresMetadata, supabaseMetadata } from './postgres/metadata.ts';
-export type { EngineUI, MonitoringPanel, TopologyEditorProps, WizardSectionProps } from './types';
+import { weaviateMetadata } from './weaviate/metadata.ts';
+import { neo4jMetadata } from './neo4j/index.ts';
+import { mysqlMetadata } from './mysql/metadata.ts';
+import { pxcMetadata } from './pxc/metadata.ts';
+import { openbaoMetadata } from './openbao/metadata.ts';
+export type { EngineUI, MonitoringPanel, RestoreExtras, RestoreSectionProps, TopologyEditorProps, WizardSectionProps } from './types';
 export { reviewChanges } from './changes.ts';
 
 /**
@@ -13,7 +18,12 @@ export { reviewChanges } from './changes.ts';
  */
 export const engines: Record<string, EngineUI> = {
   postgres: postgresMetadata,
+  mysql: mysqlMetadata,
+  pxc: pxcMetadata,
   supabase: supabaseMetadata,
+  openbao: openbaoMetadata,
+  neo4j: neo4jMetadata,
+  weaviate: weaviateMetadata,
   psmdb: {
     label: 'Percona Server for MongoDB',
     description: 'Replica sets and sharded MongoDB clusters.',
@@ -49,7 +59,7 @@ export const genericMonitoringPanels: MonitoringPanel[] = [
 ];
 
 const PSMDB_CAPABILITIES = ['databaseUsers', 'databaseRoles', 'systemUsers', 'balancer', 'pitr', 'backups', 'restores', 'fcv', 'publicExposure', 'tls', 'monitoring', 'engineConfig'];
-const PSMDB_OPERATIONS = ['backup', 'delete-backup', 'restore', 'raise-fcv', 'restart', 'replace-member', 'rotate-system-user', 'rotate-tls'];
+const PSMDB_OPERATIONS = ['backup', 'delete-backup', 'restore', 'raise-fcv', 'restart', 'upgrade-agents', 'replace-member', 'rotate-system-user', 'rotate-tls'];
 type Metadata = Pick<Schemas['Provider'], 'capabilities' | 'operations' | 'processes'> & { name?: string };
 
 /** Catalog access is optional for readers with cluster-scoped permissions. */
@@ -87,6 +97,7 @@ export function versionSelectable(provider: string, version: Schemas['Provider']
 
 export function tabAvailable(provider: Metadata | undefined, tab: string): boolean {
   if (tab === 'postgres') return hasCapability(provider, 'postgresAccess');
+  if (tab === 'mysql') return hasCapability(provider, 'mysqlAccess');
   if (tab === 'components' || tab === 'functions') return provider?.name === 'supabase';
   if (tab === 'users') return hasCapability(provider, 'databaseUsers') || hasCapability(provider, 'systemUsers');
   if (tab === 'backups' || tab === 'restores') return hasCapability(provider, tab);

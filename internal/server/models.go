@@ -110,6 +110,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	// explicit zero before conversion, while nil values remain provider defaults.
 	s := domain.ClusterSpec{Provider: a.Provider, Version: value(a.Version), EngineConfig: value(a.EngineConfig)}
 	s.DataMcp = dataMcpDomain(a.DataMcp)
+	s.Maintenance = maintenanceDomain(a.Maintenance)
 	if a.Topology != nil {
 		s.Topology = domain.Topology{Type: string(value(a.Topology.Type)), Shards: value(a.Topology.Shards)}
 	}
@@ -129,6 +130,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 	}
 	if a.Backup != nil {
 		s.Backup.Storage = value(a.Backup.Storage)
+		s.Backup.Drill = drillPolicyDomain(a.Backup.Drill)
 		if a.Backup.Schedules != nil {
 			s.Backup.Schedules = make([]domain.BackupSchedule, 0, len(*a.Backup.Schedules))
 			for _, b := range *a.Backup.Schedules {
@@ -136,7 +138,7 @@ func specDomain(a api.ClusterInputSpec) domain.ClusterSpec {
 			}
 		}
 		if a.Backup.Pitr != nil {
-			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
+			s.Backup.PITR = domain.PITRConfig{Enabled: a.Backup.Pitr.Enabled, AutoReanchor: a.Backup.Pitr.AutoReanchor, OplogSpanMinutes: value(a.Backup.Pitr.OplogSpanMinutes)}
 		}
 	}
 	if a.Tls != nil {
@@ -201,6 +203,7 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 	a := api.ClusterSpec{Provider: s.Provider, Version: s.Version, Topology: api.Topology{Type: api.TopologyType(s.Topology.Type)}, Components: api.Components{Engine: componentAPI(s.Components.Engine)}, EngineConfig: optionalString(s.EngineConfig), Tls: &api.TLS{Mode: api.TLSMode(s.TLS.Mode), Ca: api.TLSCa(s.TLS.CA)}, Exposure: &api.Exposure{Public: s.Exposure.Public, Allowlist: ptr(nonNil(s.Exposure.Allowlist))}, Monitoring: &api.MonitoringSpec{Enabled: s.Monitoring.Enabled}}
 	a.RetryEpoch = ptr(s.RetryEpoch)
 	a.DataMcp = dataMcpAPI(s.DataMcp)
+	a.Maintenance = maintenanceAPI(s.Maintenance)
 	if s.Exposure.IPType != "" {
 		a.Exposure.IpType = ptr(api.ExposureIpType(s.Exposure.IPType))
 	}
@@ -228,8 +231,9 @@ func specAPI(s domain.ClusterSpec) api.ClusterSpec {
 		schedules = append(schedules, api.BackupSchedule{Name: b.Name, Cron: b.Cron, Type: api.BackupScheduleType(b.Type), Storage: optionalString(b.Storage), RetainCount: b.RetainCount, Enabled: b.Enabled})
 	}
 	a.Backup = &api.BackupSpec{Storage: optionalString(s.Backup.Storage), Schedules: &schedules}
-	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 {
-		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled}
+	a.Backup.Drill = drillPolicyAPI(s.Backup.Drill)
+	if s.Backup.PITR.Enabled || s.Backup.PITR.OplogSpanMinutes != 0 || s.Backup.PITR.AutoReanchor != nil {
+		a.Backup.Pitr = &api.PITRSpec{Enabled: s.Backup.PITR.Enabled, AutoReanchor: s.Backup.PITR.AutoReanchor}
 		if s.Backup.PITR.OplogSpanMinutes != 0 {
 			a.Backup.Pitr.OplogSpanMinutes = &s.Backup.PITR.OplogSpanMinutes
 		}
@@ -268,6 +272,10 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 	a := api.Member{Name: m.Name, Set: m.Set, Role: memberRole(m), State: m.State, Health: m.Health, Version: &m.Version, LagSeconds: ptr(float32(m.LagSeconds)), Optime: &m.Optime, Uptime: &m.Uptime, RamUsageBytes: usage.RAMBytes, DiskUsageBytes: usage.DiskBytes, DiskTotalBytes: usage.DiskTotalBytes, PlacementGroup: &m.PlacementGroup, Agent: &api.AgentStatus{Connected: m.Agent.Healthy, ConfigVersion: &m.Agent.ConfigVersion, LastSeenAt: &m.Agent.LastSeen}}
 	a.Agent.Message = optionalString(redact.Diagnostic(m.Agent.Message))
 	a.ComponentVersion = optionalString(m.ComponentVersion)
+	a.Group = m.Group
+	a.Agent.Version = optionalString(m.Agent.Version)
+	a.Agent.Commit = optionalString(m.Agent.Commit)
+	a.Agent.Build = optionalString(m.Agent.Build)
 	if usage.CPUPercent != nil {
 		a.CpuUsage = ptr(float32(*usage.CPUPercent))
 	}
@@ -285,11 +293,17 @@ func (s *Server) memberAPI(cluster domain.ClusterRef, m domain.MemberStatus) api
 }
 
 func memberRole(m domain.MemberStatus) api.MemberRole {
-	switch m.Role {
-	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector":
-		return api.MemberRole(m.Role)
-	case "broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
-		return api.MemberRole(m.Role)
+	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
+	// Native engines may report roles in upper case (MySQL reports PRIMARY/SECONDARY).
+	switch role := strings.ToLower(m.Role); role {
+	case "primary", "secondary":
+		if config {
+			return api.MemberRole("config-" + role)
+		}
+		return api.MemberRole(role)
+	case "gateway", "auth", "rest", "realtime", "storage", "imgproxy", "meta", "studio", "functions", "pooler", "analytics", "vector",
+		"broker", "master", "data", "master,data", "kibana", "logstash", "apm", "replica", "standalone", "proxy":
+		return api.MemberRole(role)
 	}
 	if m.Role == "mongos" || m.Role == "router" {
 		return api.MemberRole("router")
@@ -298,7 +312,6 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 	if state == "" || state == "paused" || state == "error" {
 		state = strings.ToLower(m.Role)
 	}
-	config := m.Role == "mongod-cfg" || m.Set == "cfg" || strings.HasPrefix(m.Role, "config-")
 	switch state {
 	case "primary", "secondary":
 		if config {
@@ -316,7 +329,10 @@ func memberRole(m domain.MemberStatus) api.MemberRole {
 }
 func placementAPI(p domain.Placement) api.Placement {
 	p.Warning = redact.Diagnostic(p.Warning)
-	a := api.Placement{Warning: p.Warning, GuaranteedAntiAffinity: false, Groups: []api.PlacementGroup{}}
+	a := api.Placement{Warning: p.Warning, GuaranteedAntiAffinity: p.GuaranteedAntiAffinity, Groups: []api.PlacementGroup{}}
+	if p.Source != "" {
+		a.Source = ptr(api.PlacementSource(p.Source))
+	}
 	names := make([]string, 0, len(p.Groups))
 	for n := range p.Groups {
 		names = append(names, n)
@@ -358,6 +374,12 @@ func (s *Server) statusAPI(cluster domain.ClusterRef, status domain.ClusterStatu
 			a.DataMcp.Access = ptr(api.DataMcpStatusAccess(d.Access))
 		}
 	}
+	if status.Agents != nil {
+		a.Agents = &api.AgentRolloutStatus{TargetBuild: status.Agents.TargetBuild, TargetVersion: status.Agents.TargetVersion, Outdated: nonNil(status.Agents.Outdated), Unknown: nonNil(status.Agents.Unknown)}
+	}
+	if status.Maintenance != nil {
+		a.Maintenance = &api.MaintenanceStatus{Open: status.Maintenance.Open, CurrentWindowEnd: status.Maintenance.CurrentWindowEnd, NextWindowStart: status.Maintenance.NextWindowStart}
+	}
 	for _, c := range status.Conditions {
 		a.Conditions = append(a.Conditions, api.Condition{Type: c.Type, Status: api.ConditionStatus(c.Status), Reason: c.Reason, Message: redact.Diagnostic(c.Message), LastTransitionTime: c.LastTransitionTime})
 	}
@@ -393,7 +415,11 @@ func (s *Server) projectedClusterStatus(c domain.Cluster) domain.ClusterStatus {
 }
 func (s *Server) clusterAPI(c domain.Cluster) api.Cluster {
 	c.Status = s.projectedClusterStatus(c)
+	s.maintenanceStatus(&c)
 	a := api.Cluster{Namespace: ptr(domain.NormalizedNamespace(c.Namespace)), Name: c.Name, Spec: specAPI(c.Spec), Status: s.statusAPI(domain.ClusterRef{Namespace: c.Namespace, Name: c.Name}, c.Status), Generation: c.Generation, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt}
+	if c.ManagedBy != nil {
+		a.ManagedBy = &api.ManagedBy{Kind: api.ManagedByKind(c.ManagedBy.Kind), Cluster: c.ManagedBy.Cluster, Id: c.ManagedBy.ID}
+	}
 	if c.OperationID != "" {
 		a.OperationId = &c.OperationID
 	}
@@ -439,12 +465,38 @@ func backupAPI(b domain.Backup) api.Backup {
 		if len(metadata.References) > 0 {
 			a.Postgres.References = &metadata.References
 		}
+		if len(metadata.Profiles) > 0 {
+			a.Postgres.Profiles = &metadata.Profiles
+		}
+		a.Postgres.RestorePoint = optionalString(metadata.RestorePoint)
+		if len(metadata.Groups) > 0 {
+			groups := make([]api.PostgresBackupGroup, 0, len(metadata.Groups))
+			for _, group := range metadata.Groups {
+				item := group.Backup
+				groups = append(groups, api.PostgresBackupGroup{Group: group.Group, Primary: optionalString(group.Primary), Timeline: ptr(group.Timeline), Lsn: group.LSN, Backup: api.PostgresBackup{
+					Label: item.Label, Repository: item.Repository, Prior: optionalString(item.Prior),
+					References: &item.References, WalStart: optionalString(item.WALStart), WalStop: optionalString(item.WALStop),
+					SystemId: item.SystemID, Version: item.Version, RepoBytes: item.RepoBytes,
+					Profiles: &item.Profiles,
+				}})
+			}
+			a.Postgres.Groups = &groups
+		}
+	}
+	if m := b.MySQL; m != nil {
+		a.Mysql = &api.MySQLBackup{Label: m.Label, Repository: m.Repository, Type: api.MySQLBackupType(m.Type), ParentLabel: optionalString(m.ParentLabel), ChainRootLabel: m.ChainRootLabel, GtidSet: m.GTIDSet, FromLSN: m.FromLSN, ToLSN: m.ToLSN, ServerVersion: m.ServerVersion, ToolVersion: m.ToolVersion, EndTime: m.EndTime, ObjectPaths: m.ObjectPaths, ClusterUID: m.ClusterUID, Generation: m.Generation}
+		a.Mysql.PhysicalIdentity = optionalString(m.PhysicalIdentity)
 	}
 	return a
 }
 func restoreAPI(r domain.Restore) api.Restore {
 	r.Error = redact.Diagnostic(r.Error)
-	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: optionalString(r.Source.Backup), PitrTime: r.Source.PITRTime, SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
+	// The resolved backup is an internal dependency, not a second selector.
+	var backup *string
+	if r.Source.RestorePoint == "" {
+		backup = optionalString(r.Source.Backup)
+	}
+	return api.Restore{Namespace: ptr(domain.NormalizedNamespace(r.Namespace)), Name: r.Name, Cluster: r.Cluster, Source: api.RestoreSource{Backup: backup, PitrTime: r.Source.PITRTime, RestorePoint: optionalString(r.Source.RestorePoint), SourceCluster: optionalString(r.Source.SourceCluster)}, Phase: api.RestorePhase(r.Phase), StartedAt: r.StartedAt, CompletedAt: r.CompletedAt, Error: optionalString(r.Error), OperationId: optionalString(r.OperationID)}
 }
 func eventAPI(e domain.Event) api.Event {
 	e.Message = redact.Diagnostic(e.Message)
@@ -566,4 +618,40 @@ func providerAPI(p engine.Provider) api.Provider {
 		a.Presets = append(a.Presets, api.Preset{Name: v.Name, DisplayName: v.Name, Description: &v.Description, Spec: specAPI(spec)})
 	}
 	return a
+}
+
+func maintenanceDomain(p *api.MaintenancePolicy) *domain.MaintenancePolicy {
+	if p == nil {
+		return nil
+	}
+	o := &domain.MaintenancePolicy{TimeZone: value(p.TimeZone)}
+	for _, w := range value(p.Windows) {
+		o.Windows = append(o.Windows, domain.MaintenanceWindow{Schedule: w.Schedule, Duration: w.Duration})
+	}
+	return o
+}
+
+func maintenanceAPI(p *domain.MaintenancePolicy) *api.MaintenancePolicy {
+	if p == nil {
+		return nil
+	}
+	windows := make([]api.MaintenanceWindow, 0, len(p.Windows))
+	for _, w := range p.Windows {
+		windows = append(windows, api.MaintenanceWindow{Schedule: w.Schedule, Duration: w.Duration})
+	}
+	return &api.MaintenancePolicy{TimeZone: optionalString(p.TimeZone), Windows: &windows}
+}
+
+func drillPolicyDomain(p *api.BackupDrillPolicy) *domain.BackupDrillPolicy {
+	if p == nil {
+		return nil
+	}
+	return &domain.BackupDrillPolicy{Enabled: p.Enabled, Schedule: p.Schedule, BackupSchedule: value(p.BackupSchedule), Timeout: value(p.Timeout)}
+}
+
+func drillPolicyAPI(p *domain.BackupDrillPolicy) *api.BackupDrillPolicy {
+	if p == nil {
+		return nil
+	}
+	return &api.BackupDrillPolicy{Enabled: p.Enabled, Schedule: p.Schedule, BackupSchedule: optionalString(p.BackupSchedule), Timeout: optionalString(p.Timeout)}
 }

@@ -42,6 +42,9 @@ func (p *Core) DeleteRetainedBackup(ctx context.Context, storage domain.BackupSt
 }
 
 func deleteRetiredBackup(ctx context.Context, storage domain.BackupStorage, b domain.Backup, store engine.ClusterStore, secretStore engine.SecretStore) error {
+	if b.Postgres != nil && len(b.Postgres.Groups) > 0 {
+		return deleteRetiredCitusBackup(ctx, storage, b, store, secretStore)
+	}
 	if err := backupstorage.DeletePostgresBackup(ctx, storage, b); err != nil {
 		return err
 	}
@@ -182,7 +185,7 @@ func (p *Core) cleanupBackups(ctx context.Context, rc *engine.Context, s *state,
 			continue
 		}
 		for _, b := range items {
-			if b.Storage != name || (b.Postgres != nil && !prefixes[b.Postgres.Repository]) {
+			if b.Storage != name || (b.Postgres != nil && !prefixes[b.Postgres.Repository] && !(len(b.Postgres.Groups) > 0 && prefixes[path.Dir(b.Postgres.Repository)])) {
 				continue
 			}
 			if err = deleteRecoverySecrets(ctx, rc.Secrets, b); err != nil {

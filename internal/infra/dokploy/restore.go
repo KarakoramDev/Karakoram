@@ -18,7 +18,11 @@ const restoreFence = time.Minute
 var errObservationMutation = errors.New("runtime observation requires serialized reconciliation")
 
 type swarmService struct {
-	ID       string `json:"ID"`
+	ID           string `json:"ID"`
+	UpdateStatus struct {
+		State   string `json:"State"`
+		Message string `json:"Message"`
+	} `json:"UpdateStatus"`
 	Endpoint struct {
 		Ports []swarmPort `json:"Ports"`
 	} `json:"Endpoint"`
@@ -34,6 +38,7 @@ type swarmService struct {
 			} `json:"Replicated"`
 		} `json:"Mode"`
 		TaskTemplate struct {
+			ForceUpdate   uint64 `json:"ForceUpdate"`
 			ContainerSpec struct {
 				Image  string            `json:"Image"`
 				Labels map[string]string `json:"Labels"`
@@ -248,7 +253,7 @@ func (b *Backend) mutationReady(ctx context.Context, a *application, m *metadata
 	if m.Pending == nil || m.Pending.Failed && !m.Pending.Uncertain {
 		return nil
 	}
-	if m.Pending.Action != "deploy" && !(m.Desired == "deleting" && m.Pending.Action != "delete" && m.Pending.Action != "stop") {
+	if m.Pending.Action != "deploy" && !m.Pending.HealthGated && !(m.Desired == "deleting" && m.Pending.Action != "delete" && m.Pending.Action != "stop") {
 		return nil
 	}
 	state, err := b.pollOperation(ctx, encodeOp(*m.Pending))
@@ -259,6 +264,9 @@ func (b *Backend) mutationReady(ctx context.Context, a *application, m *metadata
 		return restoreConflict(state.Message)
 	}
 	if !state.Done && !state.Failed {
+		if _, cleanup := infra.CleanupIntentFromContext(ctx); cleanup && m.Desired == "deleting" {
+			return deploymentWait("PreviousDeployment", []string{a.ID}, "waiting for the exact Dokploy mutation receipt before deletion")
+		}
 		return restoreConflict("a Dokploy mutation is queued or running; wait for its exact receipt before stopping, deleting or redeploying")
 	}
 	var current application
@@ -284,6 +292,19 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		ctx = infra.WithoutObservation(ctx)
 	}
 	s := observe(a, m)
+	// Cleanup needs identity, not deployment readiness. Do not restore a runtime
+	// which the engine is about to remove, or require its failed build to heal.
+	// DeleteService retains the durable receipt and waits for terminal delivery
+	// before replacing it with the deletion operation.
+	if intent, ok := infra.CleanupIntentFromContext(ctx); ok {
+		if intent.Services != nil && intent.Services[m.Hostname] != a.ID {
+			return s, restoreConflict("cleanup application identity changed; refusing runtime observation")
+		}
+		if m.Pending != nil && m.Pending.Failed {
+			s.Status = infra.StatusFailed
+		}
+		return s, nil
+	}
 	if m.PortChange != nil && m.PortChange.RollbackPort != 0 {
 		if readOnly {
 			return s, errObservationMutation
@@ -332,6 +353,12 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	if m.Pending != nil && !terminalEndpointRepair(m.Pending) {
 		if m.Pending.Failed && !m.Pending.Uncertain {
 			s.Status = infra.StatusFailed
+			// A failed build is observable state, not a failed identity lookup.
+			// Engines must be able to verify ownership before explicitly deploying
+			// again. Keep the receipt; observation must never resubmit the build.
+			if m.Pending.Action == "deploy" {
+				return s, nil
+			}
 			return s, silentFailure("previous lifecycle operation failed; consult Dokploy deployment logs and explicitly retry the operation")
 		}
 		state, err := b.pollOperation(ctx, encodeOp(*m.Pending))
@@ -340,6 +367,9 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 		}
 		if state.Failed && (m.Pending.Action != "endpoint-repair" || state.Status == "stalled") {
 			s.Status = infra.StatusFailed
+			if m.Pending.Action == "deploy" && state.Status != "stalled" {
+				return s, nil
+			}
 			return s, silentFailure(state.Message)
 		}
 		if !state.Done && !state.Failed {
@@ -385,7 +415,7 @@ func (b *Backend) observeRuntimeMode(ctx context.Context, a application, m metad
 	var err error
 	if a.Status == "error" || len(ds) > 0 && (ds[0].Status == "error" || ds[0].Status == "cancelled") {
 		s.Status = infra.StatusFailed
-		return s, silentFailure("Dokploy deployment failed or was cancelled; consult deployment logs and explicitly redeploy after correcting the failure")
+		return s, nil
 	}
 	for _, d := range ds {
 		if d.Status == "running" || d.Status == "queued" {
@@ -505,6 +535,13 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 	var releaseSlot func(bool)
 	submitted := false
 	if action == "deploy" {
+		epoch := int64(0)
+		if m.DeploymentBudget != nil {
+			epoch = m.DeploymentBudget.RetryEpoch
+		}
+		if err = prepareDeploymentBudget(&m, m.DeploymentDigest, epoch); err != nil {
+			return s, err
+		}
 		releaseSlot, err = b.deploymentSlot(ctx, a.ID)
 		if err != nil {
 			return s, err
@@ -514,6 +551,10 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 	work, cancel := context.WithTimeout(ctx, restoreTimeout)
 	defer cancel()
 	o.WriterFenced = m.WriterFenced
+	if action == "deploy" {
+		o.Digest = m.DeploymentDigest
+		m.DeploymentBudget.Attempts++
+	}
 	m.Pending = &o
 	m.MutationUntil = b.nowTime().Add(restoreFence)
 	if err = b.update(work, &a, m, nil); err != nil {
@@ -530,6 +571,7 @@ func (b *Backend) restoreRuntime(ctx context.Context, a application, m metadata)
 		if action == "deploy" && enqueueRefused(err) {
 			submitted = false
 			m.Pending = nil
+			m.DeploymentBudget.Attempts--
 			m.MutationUntil = time.Time{}
 			if saveErr := b.update(ctx, &a, m, nil); saveErr != nil {
 				return s, errors.Join(err, saveErr)

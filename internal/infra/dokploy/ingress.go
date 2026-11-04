@@ -199,16 +199,19 @@ func (b *Backend) DeletePublicPorts(ctx context.Context, hostname string) error 
 	if len(a.Ports) == 0 && len(m.PublicPorts) == 0 && !m.PortsPending {
 		return nil
 	}
-	if err = b.mutationReady(ctx, a, &m); err != nil {
-		return err
-	}
 	if intent, ok := infra.CleanupIntentFromContext(ctx); ok {
-		if intent.Services[hostname] != a.ID {
+		if intent.Services != nil && intent.Services[hostname] != a.ID {
 			return restoreConflict("cleanup application identity changed; refusing port withdrawal")
 		}
 		// The runtime is about to be stopped/deleted. Withdraw saved routes
 		// without creating a replacement task immediately before scale-to-zero.
 		m.Desired = "deleting"
+		if err = b.update(ctx, a, m, nil); err != nil {
+			return err
+		}
+	}
+	if err = b.mutationReady(ctx, a, &m); err != nil {
+		return err
 	}
 	m.PublicPorts = nil
 	m.PortsPending = true

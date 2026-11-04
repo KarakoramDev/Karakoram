@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgspec"
@@ -41,10 +43,11 @@ type backupState struct {
 	RestoreCheckpoint json.RawMessage `json:"restoreCheckpoint,omitempty"`
 }
 type restoreSource struct {
-	Namespace string `json:"namespace"`
-	Cluster   string `json:"cluster"`
-	Backup    string `json:"backup"`
-	Time      string `json:"time,omitempty"`
+	Namespace    string `json:"namespace"`
+	Cluster      string `json:"cluster"`
+	Backup       string `json:"backup"`
+	Time         string `json:"time,omitempty"`
+	RestorePoint string `json:"restorePoint,omitempty"`
 }
 
 func loadBackupState(c *domain.Cluster) (backupState, error) {
@@ -186,6 +189,13 @@ func (p *Core) backupStorage(ctx context.Context, rc *engine.Context, name, name
 	return st.GetBackupStorage(ctx, namespace, name)
 }
 func primary(ctx context.Context, rc *engine.Context, s *state) (string, pgspec.StatusResponse, error) {
+	if s.Topology == "distributed" {
+		m, st, err := s.group(0).primary(ctx, rc)
+		if err != nil {
+			return "", st, err
+		}
+		return m.Name, st, nil
+	}
 	for _, m := range s.data() {
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
@@ -202,7 +212,13 @@ func pgAction(ctx context.Context, rc *engine.Context, member, action string, re
 	if err != nil {
 		return fmt.Errorf("connect PostgreSQL member: %w", err)
 	}
-	return a.Engine(ctx, "postgres", action, request, response)
+	defer a.Close()
+	err = a.Engine(ctx, "postgres", action, request, response)
+	var rejection *agentapi.HTTPError
+	if action == "rekey" && errors.As(err, &rejection) && rejection.StatusCode == http.StatusUnprocessableEntity {
+		return engine.Invalid("PostgreSQL rejected the system-role rekey transaction on member %s; clients remain held", member)
+	}
+	return err
 }
 
 // EnsureStanza creates the configured repository's stanza, or upgrades its
@@ -211,6 +227,9 @@ func (p *Core) EnsureStanza(ctx context.Context, rc *engine.Context, upgrade boo
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return err
+	}
+	if s.Topology == "distributed" {
+		return p.ensureCitusStanzas(ctx, rc, s, upgrade)
 	}
 	member, _, err := primary(ctx, rc, s)
 	if err != nil {
@@ -267,17 +286,19 @@ func (p *Core) EnqueueFullBackup(ctx context.Context, rc *engine.Context, key st
 }
 
 type backupCheckpoint struct {
-	Step                 string         `json:"step"`
-	Member               string         `json:"member,omitempty"`
-	Label                string         `json:"label,omitempty"`
-	Timeline             int            `json:"timeline,omitempty"`
-	Source               *restoreSource `json:"source,omitempty"`
-	Index                int            `json:"index,omitempty"`
-	Generation           int            `json:"generation,omitempty"`
-	RepositoryGeneration int            `json:"repositoryGeneration,omitempty"`
-	Failure              string         `json:"failure,omitempty"`
-	BackupAttempt        int            `json:"backupAttempt,omitempty"`
-	BackupRetryNotBefore time.Time      `json:"backupRetryNotBefore,omitempty"`
+	Step                 string                  `json:"step"`
+	Member               string                  `json:"member,omitempty"`
+	Label                string                  `json:"label,omitempty"`
+	Timeline             int                     `json:"timeline,omitempty"`
+	Source               *restoreSource          `json:"source,omitempty"`
+	Index                int                     `json:"index,omitempty"`
+	Generation           int                     `json:"generation,omitempty"`
+	RepositoryGeneration int                     `json:"repositoryGeneration,omitempty"`
+	Failure              string                  `json:"failure,omitempty"`
+	BackupAttempt        int                     `json:"backupAttempt,omitempty"`
+	BackupRetryNotBefore time.Time               `json:"backupRetryNotBefore,omitempty"`
+	Citus                *citusBackupCheckpoint  `json:"citus,omitempty"`
+	CitusRestore         *citusRestoreCheckpoint `json:"citusRestore,omitempty"`
 }
 
 func backupResult(cp backupCheckpoint, done bool) engine.OpResult {
@@ -298,9 +319,13 @@ func backupEvent(ctx context.Context, rc *engine.Context, op *domain.Operation, 
 	if rc.Events == nil {
 		return nil
 	}
+	kind := "Normal"
+	if reason == "BackupFailed" {
+		kind = "Warning"
+	}
 	return rc.Events.Record(ctx, domain.Event{
 		Namespace: rc.Cluster.Ref().Namespace, Cluster: rc.Cluster.Name,
-		Operation: op.ID, Type: "Normal", Reason: reason,
+		Operation: op.ID, Type: kind, Reason: reason,
 		Message: message, CreatedAt: now(rc),
 	})
 }
@@ -343,6 +368,9 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 	if err != nil {
 		return backupResult(cp, false), err
 	}
+	if s.Topology == "distributed" {
+		return p.runCitusBackup(ctx, rc, op, cp, s, b)
+	}
 	storage, err := p.backupStorage(ctx, rc, b.Storage, b.Namespace)
 	if err != nil {
 		return backupResult(cp, false), err
@@ -384,8 +412,12 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 		if st.Version == "" {
 			return backupResult(cp, false), engine.ErrUnavailable
 		}
+		profiles, err := p.selectedProfileRequirements(rc.Cluster.Spec.EngineOptions)
+		if err != nil {
+			return backupResult(cp, false), err
+		}
 		b.SourceVersion = st.Version
-		b.Postgres = &domain.PostgresBackup{Repository: prefix, SystemID: st.SystemID, Version: st.Version}
+		b.Postgres = &domain.PostgresBackup{Repository: prefix, SystemID: st.SystemID, Version: st.Version, Profiles: profiles}
 		b.RecoveryIdentity = "backup-" + secrets.Hash(b.Namespace + "/" + b.Cluster + "/" + prefix + "/" + b.Name)[:32]
 		for _, user := range systemNames {
 			pw, err := rc.Secrets.GetClusterSecret(ctx, rc.Cluster.Ref(), "users/"+user)
@@ -481,6 +513,9 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 			if err = rc.Store.UpdateBackup(ctx, b); err != nil {
 				return backupResult(cp, false), err
 			}
+			if err = backupEvent(ctx, rc, op, "BackupFailed", "pgBackRest backup failed"); err != nil {
+				return backupResult(cp, false), err
+			}
 			return backupResult(cp, true), errors.New(b.Error)
 		}
 		if response.State == "done" {
@@ -529,6 +564,7 @@ func (p *Core) runBackup(ctx context.Context, rc *engine.Context, op *domain.Ope
 				WALStart: item.WALStart, WALStop: item.WALStop,
 				SystemID: item.SystemID, Version: item.Version,
 				RepoBytes: item.RepoBytes,
+				Profiles:  b.Postgres.Profiles,
 			}
 			found = true
 		}
@@ -629,6 +665,9 @@ func (p *Core) runDeleteBackup(ctx context.Context, rc *engine.Context, op *doma
 	s, err := load(rc.Cluster)
 	if err != nil {
 		return backupResult(cp, false), err
+	}
+	if len(b.Postgres.Groups) > 0 {
+		return p.runDeleteCitusBackup(ctx, rc, op, cp, s, b, storage)
 	}
 	if b.Postgres.Repository != repoPrefix(storage, rc.Cluster, s) {
 		// No member writes to retired generations. Use the same native-inventory

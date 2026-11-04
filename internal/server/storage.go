@@ -7,6 +7,7 @@ import (
 	"context"
 	"github.com/KarakoramDev/Karakoram/internal/api"
 	"github.com/KarakoramDev/Karakoram/internal/backupstorage"
+	"github.com/KarakoramDev/Karakoram/internal/cpbackup"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/s3endpoint"
@@ -124,6 +125,13 @@ func (s *Server) storage(ctx context.Context, name string, in input) response {
 		}
 		return response{status: 200, body: storageAPI(*b), noStore: true}
 	case "DeleteBackupStorage":
+		policy, policyErr := cpbackup.Policy(ctx, s.Store)
+		if policyErr != nil {
+			return s.failure(policyErr)
+		}
+		if policy.Storage.Name == b.Name && policy.Storage.Namespace == namespace {
+			return fail(409, "conflict", "Backup storage is referenced by the control-plane backup policy")
+		}
 		clusters, err := s.Store.ListClusters(ctx, namespace)
 		if err != nil {
 			return s.failure(err)

@@ -41,8 +41,13 @@ const (
 // state is the secret-free provider-owned durable state stored in
 // Cluster.Internal under internalKey. Secrets live in the SecretStore.
 type state struct {
-	UID   string `json:"uid"`
-	Phase string `json:"phase"`
+	UID                string `json:"uid"`
+	Phase              string `json:"phase"`
+	ReplacementFailure string `json:"replacementFailure,omitempty"`
+	// Admission survives runtime receipts, recovery and retained-volume suspension.
+	NodeExposure   engine.ExposureAdmission `json:"nodeExposure,omitempty"`
+	KibanaExposure engine.ExposureAdmission `json:"kibanaExposure,omitempty"`
+	APMExposure    engine.ExposureAdmission `json:"apmExposure,omitempty"`
 	// ConfigVersion increments whenever any member configuration changes.
 	ConfigVersion int64     `json:"configVersion"`
 	Members       []*member `json:"members"`
@@ -144,7 +149,8 @@ type member struct {
 	// DrainWarning survives condition recovery to suppress repeat flap warnings.
 	DrainWarning string `json:"drainWarning,omitempty"`
 	// Replaces names the member this one replaces (replace-member operation).
-	Replaces string `json:"replaces,omitempty"`
+	Replaces       string   `json:"replaces,omitempty"`
+	PlacementAvoid []string `json:"placementAvoid,omitempty"`
 	// PublicPort/Subdomain record applied public exposure.
 	PublicPort   int    `json:"publicPort,omitempty"`
 	Subdomain    bool   `json:"subdomain,omitempty"`
@@ -163,10 +169,11 @@ type repository struct {
 // rolling is a durable one-member-at-a-time pass over Elasticsearch nodes
 // followed by component services.
 type rolling struct {
-	// Reason: "upgrade", "config", "resources", "restart".
+	// Reason: "upgrade", "agents", "config", "resources", "restart".
 	Reason string `json:"reason"`
 	// Target version for upgrades.
-	Version string `json:"version,omitempty"`
+	Version     string                      `json:"version,omitempty"`
+	AgentTarget *engine.AgentUpgradePayload `json:"agentTarget,omitempty"`
 	// Order is the fixed member order chosen at start.
 	Order []string `json:"order"`
 	// Done lists members finished.

@@ -461,33 +461,7 @@ func (p *Provider) Placement(ctx context.Context, rc *engine.Context) (domain.Pl
 		}
 		v.Groups[group] = append(v.Groups[group], m.Name)
 	}
-	return describePlacement(v, rc.Backend.Capabilities().Placement), nil
-}
-
-func describePlacement(v domain.Placement, authoritative bool) domain.Placement {
-	unknown := len(v.Groups["unknown"]) > 0
-	var warnings []string
-	if !authoritative {
-		warnings = append(warnings, "The infrastructure backend does not guarantee anti-affinity; host fingerprints are best-effort, not proof of host-failure tolerance")
-	}
-	for k, g := range v.Groups {
-		if k != "unknown" && len(g) > 1 {
-			if authoritative {
-				warnings = append(warnings, fmt.Sprintf("members %s are co-located", strings.Join(g, ", ")))
-			} else {
-				warnings = append(warnings, fmt.Sprintf("members %s appear co-located", strings.Join(g, ", ")))
-			}
-		}
-	}
-	if unknown {
-		if authoritative {
-			warnings = append(warnings, "backend placement is unknown for some members")
-		} else {
-			warnings = append(warnings, "placement unknown until members report host fingerprints")
-		}
-	}
-	v.Warning = strings.Join(warnings, "; ")
-	return v
+	return engine.DescribePlacement(v.Groups, rc.Backend.Capabilities().Placement), nil
 }
 
 // MemberLogs retrieves bounded node process logs.

@@ -100,7 +100,7 @@ func TestRabbitMQAgent(t *testing.T) {
 		c, ok := configs[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer integration-")]
 		mu.RUnlock()
 		if r.URL.Path != "/internal/agent/v1/config" || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer integration-") || !ok {
-			http.Error(w, "unauthorized", 401)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(c)

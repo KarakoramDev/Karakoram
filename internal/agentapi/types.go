@@ -16,6 +16,20 @@ const (
 	RoleRouter       = "mongos"
 )
 
+// ConfigCapabilityGaleraListenHost advertises strict-decoder support for the
+// numeric Galera bind policy on a configuration pull, including the first pull.
+const ConfigCapabilityGaleraListenHost = "mysql-galera-listen-host"
+
+// ConfigCapabilityMySQLListenHost advertises support for SQL listener policy.
+const ConfigCapabilityMySQLListenHost = "mysql-listen-host"
+
+// ConfigCapabilityTemporalIPv6 advertises private IPv6 route discovery and listeners.
+const ConfigCapabilityTemporalIPv6 = "temporal-ipv6"
+
+// ConfigCapabilityPostgresLocalPeer advertises password-independent local
+// management authentication, including restore across administrator rotations.
+const ConfigCapabilityPostgresLocalPeer = "postgres-local-peer"
+
 // MemberConfig is the secret-bearing desired configuration pulled by a node agent.
 type MemberConfig struct {
 	Cluster               string                 `json:"cluster"`
@@ -71,6 +85,7 @@ type Credentials struct {
 
 // Status reports process, disk, and applied agent configuration state.
 type Status struct {
+	Agent           AgentBuild               `json:"agent"`
 	Processes       map[string]ProcessStatus `json:"processes"`
 	Volume          *VolumeStatus            `json:"volume,omitempty"`
 	EngineVersion   string                   `json:"engineVersion"`
@@ -85,6 +100,9 @@ type Status struct {
 	PBMRestoreIdentity bool `json:"pbmRestoreIdentity,omitempty"`
 	// CertificateReloadOnly advertises reload-only native certificate application.
 	CertificateReloadOnly bool `json:"certificateReloadOnly,omitempty"`
+	// MySQLRestoreCertification advertises native fencing, history probes and
+	// durable ProxySQL hold/release support as one negotiated restore feature.
+	MySQLRestoreCertification bool `json:"mysqlRestoreCertification,omitempty"`
 	// Error explains a blocked local recovery without making status unreachable.
 	Error string `json:"error,omitempty"`
 	// MongoReady observes authenticated router access to config-server metadata.
@@ -94,6 +112,13 @@ type Status struct {
 	// Resources is what the container can currently use, read at request
 	// time. Nil from agents that predate the field or could read nothing.
 	Resources *ContainerResources `json:"resources,omitempty"`
+}
+
+// AgentBuild is the running Karakoram executable, not the database version.
+type AgentBuild struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	Build   string `json:"build"`
 }
 
 // ContainerResources reports the CPU, memory, and root disk a member

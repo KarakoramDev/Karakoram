@@ -21,8 +21,8 @@ import (
 const licenseHeader = "// SPDX-License-Identifier: Apache-2.0\n// Copyright 2026 The Karakoram Authors\n\n"
 
 var methods = map[string]bool{"get": true, "put": true, "post": true, "delete": true, "patch": true, "head": true, "options": true, "trace": true}
-var resources = map[string]bool{"audit": true, "namespaces": true, "clusters": true, "cluster-credentials": true, "cluster-data": true, "database-users": true, "backups": true, "restores": true, "backup-storages": true, "operations": true, "events": true, "monitoring": true, "accounts": true, "api-tokens": true, "rbac": true, "settings": true, "providers": true}
-var actions = map[string]bool{"create": true, "read": true, "write": true, "update": true, "delete": true, "*": true}
+var resources = map[string]bool{"audit": true, "namespaces": true, "clusters": true, "cluster-credentials": true, "cluster-data": true, "openbao-unseal-keys": true, "database-users": true, "backups": true, "restores": true, "backup-storages": true, "operations": true, "events": true, "monitoring": true, "accounts": true, "api-tokens": true, "rbac": true, "settings": true, "providers": true}
+var actions = map[string]bool{"create": true, "read": true, "write": true, "reveal": true, "update": true, "delete": true, "*": true}
 var operationIDPattern = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 
 type rule struct {

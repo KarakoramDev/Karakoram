@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 The Karakoram Authors
 
-// Package postgres implements the shared PostgreSQL control-plane core. Wrappers
-// supply a Flavour to install extensions, force parameters and preload libraries,
-// bootstrap SQL after readiness, and extend relay targets. Wrappers reconcile
-// their additional components themselves; the core owns data members and proxy.
+// Package postgres implements the shared PostgreSQL control-plane core.
+// Declarative profiles own extension and configuration policy; wrapper hooks
+// compose application readiness and relay targets without duplicating lifecycle.
 package postgres
 
 import (
@@ -18,15 +17,13 @@ import (
 
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
-	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/engine/nativeartifacts"
+	"github.com/KarakoramDev/Karakoram/internal/engine/postgres/pgprofile"
 )
 
 // Flavour customizes data members without duplicating their lifecycle.
 type Flavour interface {
 	Name() string
-	PrepareCommands(infra.Layout, int) ([]string, error)
-	Parameters() map[string]string
-	SharedPreloadLibraries() []string
 	PostReady(context.Context, *engine.Context) error
 	RelayTargets(*domain.Cluster) []string
 }
@@ -39,19 +36,60 @@ type Options struct {
 	Flavour                        Flavour
 	// ReservedRole extends the immutable system-role set for a composed engine.
 	ReservedRole func(string) bool
+	// AvailableExtensions is the admission authority for database extension requests.
+	// Nil uses the conservative Percona contrib baseline.
+	AvailableExtensions func(context.Context, *engine.Context) ([]string, error)
+	// ProfileExtensions lists extensions to update after a version upgrade.
+	ProfileExtensions func(*engine.Context) []string
 }
 
 // Core reconciles the PostgreSQL data plane and its stateless proxy.
 type Core struct {
 	options  Options
-	accessMu sync.Mutex
+	accessMu contextMutex
 	// Overrides only repository I/O in tests; nil uses the guarded S3 client.
 	restoreSetPresent func(context.Context, *domain.BackupStorage, string) (bool, error)
 	deleteRepository  func(context.Context, domain.BackupStorage, string, string, string) error
+	citusArtifact     func(product string, major int) (nativeartifacts.Artifact, error)
 }
 
+// contextMutex keeps all credential mutations serialized while allowing repair
+// callers to stop waiting when their shorter context expires.
+type contextMutex struct {
+	once sync.Once
+	gate chan struct{}
+}
+
+func (m *contextMutex) Lock(ctx context.Context) error {
+	m.once.Do(func() { m.gate = make(chan struct{}, 1) })
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case m.gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			m.Unlock()
+			return err
+		}
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (m *contextMutex) Unlock() { <-m.gate }
+
 // New constructs the shared PostgreSQL core.
-func New(o Options) *Core  { return &Core{options: o} }
+func New(o Options) *Core {
+	p := &Core{options: o, citusArtifact: nativeartifacts.ExtensionArtifact}
+	if p.options.AvailableExtensions == nil {
+		p.options.AvailableExtensions = p.profileAvailableExtensions
+	}
+	if p.options.ProfileExtensions == nil {
+		p.options.ProfileExtensions = p.selectedProfileExtensions
+	}
+	return p
+}
 func (*Core) Name() string { return "postgres" }
 
 var catalog = []domain.VersionInfo{
@@ -94,7 +132,7 @@ func major(v string) int {
 	n, _ := strconv.Atoi(strings.Split(v, ".")[0])
 	return n
 }
-func (*Core) Describe() domain.ProviderInfo {
+func (p *Core) Describe() domain.ProviderInfo {
 	info := domain.ProviderInfo{
 		Name: "postgres", DisplayName: "PostgreSQL",
 		Versions:     append([]domain.VersionInfo(nil), catalog...),
@@ -103,7 +141,8 @@ func (*Core) Describe() domain.ProviderInfo {
 		Capabilities: []string{"tls", "monitoring", "publicExposure", "systemUsers", "backups", "restores", "pitr", "postgresAccess"},
 		Operations: []string{
 			domain.OperationRestart, domain.OperationReplaceMember, "reinit-member",
-			domain.OperationRotateTLS, domain.OperationBackup,
+			domain.OperationUpgradeAgents,
+			domain.OperationRotateTLS, domain.OperationBackup, domain.OperationRebalance,
 			domain.OperationRotateSystemUser,
 			domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore",
 		},
@@ -112,6 +151,11 @@ func (*Core) Describe() domain.ProviderInfo {
 			"synchronousMode": map[string]any{"enum": []string{"off", "on", "strict"}, "default": "off"},
 			"parameters":      map[string]any{"type": "object"},
 			"proxy":           map[string]any{"readWriteSplit": false, "readerPort": false},
+			"profiles":        profileDescription(),
+			"citus": map[string]any{
+				"workerGroups": map[string]any{"type": "integer", "minimum": 1, "maximum": 8, "default": 2},
+				"database":     map[string]any{"type": "string", "default": "app"},
+			},
 		},
 	}
 	for _, t := range []string{"single", "ha"} {
@@ -146,6 +190,14 @@ func (*Core) Describe() domain.ProviderInfo {
 				Extra:  map[string]domain.ComponentSpec{"proxy": comps["proxy"].Defaults},
 			},
 		})
+	}
+	if p.options.Flavour == nil {
+		comps := proxyComponents.Info()
+		comps["engine"] = domain.ComponentInfo{
+			Defaults:    domain.ComponentSpec{Replicas: 3, Resources: defaultResources(true)},
+			MinReplicas: 1, MaxReplicas: 3, AllowedReplicas: []int{1, 3},
+		}
+		info.Topologies = append(info.Topologies, domain.TopologyInfo{Type: "distributed", Components: comps})
 	}
 	return info
 }
@@ -184,7 +236,7 @@ func (*Core) ApplyDefaults(s *domain.ClusterSpec) {
 	}
 	if s.Components.Engine.Replicas == 0 {
 		s.Components.Engine.Replicas = 1
-		if s.Topology.Type == "ha" {
+		if s.Topology.Type == "ha" || s.Topology.Type == "distributed" {
 			s.Components.Engine.Replicas = 3
 		}
 	}
@@ -226,12 +278,12 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if !known {
 		return engine.Invalid("unsupported PostgreSQL version")
 	}
-	if s.Topology.Type != "single" && s.Topology.Type != "ha" {
-		return engine.Invalid("topology must be single or ha")
+	if s.Topology.Type != "single" && s.Topology.Type != "ha" && s.Topology.Type != "distributed" {
+		return engine.Invalid("topology must be single, ha or distributed")
 	}
 	nrep := s.Components.Engine.Replicas
-	if s.Topology.Type == "single" && nrep != 1 || s.Topology.Type == "ha" && nrep != 3 && nrep != 5 {
-		return engine.Invalid("single requires one data member; ha requires three or five")
+	if s.Topology.Type == "single" && nrep != 1 || s.Topology.Type == "ha" && nrep != 3 && nrep != 5 || s.Topology.Type == "distributed" && nrep != 1 && nrep != 3 {
+		return engine.Invalid("single requires one data member; ha requires three or five; distributed requires one or three per group")
 	}
 	if s.Components.Router.Replicas != 0 || s.Components.ConfigServer.Replicas != 0 || s.Topology.Shards != 0 {
 		return engine.Invalid("MongoDB components are not supported")
@@ -243,8 +295,8 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if err := proxyComponents.Validate(components); err != nil {
 		return err
 	}
-	if s.Topology.Type == "ha" && s.Components.Extra["proxy"].Replicas == 0 {
-		return engine.Invalid("ha requires at least one proxy replica")
+	if (s.Topology.Type == "ha" || s.Topology.Type == "distributed" && nrep == 3) && s.Components.Extra["proxy"].Replicas == 0 {
+		return engine.Invalid("ha and replicated distributed groups require at least one proxy replica")
 	}
 	if err := (engine.ComponentSet{{Name: "data", MinReplicas: 1, MaxReplicas: 5}}).Validate(domain.Components{Extra: map[string]domain.ComponentSpec{"data": s.Components.Engine}}); err != nil {
 		return err
@@ -255,8 +307,59 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	if s.EngineConfig != "" {
 		return engine.Invalid("PostgreSQL uses engineOptions, not engineConfig")
 	}
-	if _, err := p.parseOptions(s.EngineOptions); err != nil {
+	o, err := p.parseOptions(s.EngineOptions)
+	if err != nil {
 		return err
+	}
+	if p.options.Flavour == nil {
+		options, _ := p.parseOptions(s.EngineOptions)
+		if _, err := pgprofile.Resolve(options.Profiles, major(s.Version)); err != nil {
+			return engine.Invalid("%v", err)
+		}
+		if old != nil {
+			before, err := p.parseOptions(old.Spec.EngineOptions)
+			if err != nil {
+				return err
+			}
+			for _, id := range before.Profiles {
+				found := false
+				for _, selected := range options.Profiles {
+					found = found || selected == id
+				}
+				if !found {
+					return engine.Invalid("PostgreSQL profiles are additive: cannot remove profile %s", id)
+				}
+			}
+		}
+	}
+	if s.Topology.Type != "distributed" && o.Citus != nil {
+		return engine.Invalid("citus options require distributed topology")
+	}
+	if s.Topology.Type == "distributed" {
+		if p.options.Flavour != nil {
+			return engine.Invalid("distributed topology is supported only by the postgres provider")
+		}
+		if major(s.Version) < 16 || major(s.Version) > 18 {
+			return engine.Invalid("distributed topology requires PostgreSQL 16..18")
+		}
+		if old != nil {
+			if old.Spec.Topology.Type != "distributed" {
+				return engine.Invalid("conversion to distributed topology is not supported")
+			}
+			if major(old.Spec.Version) != major(s.Version) {
+				return engine.Invalid("major upgrades of distributed topology are not supported")
+			}
+			if old.Spec.Components.Engine.Replicas != nrep {
+				return engine.Invalid("components.engine.replicas cannot change for an existing distributed cluster: group-local replica scaling is not supported; scale engineOptions.citus.workerGroups instead")
+			}
+		}
+		a, err := p.citusArtifact("citus", major(s.Version))
+		if err != nil {
+			return engine.Invalid("distributed topology requires a locked Citus artifact: %v", err)
+		}
+		if _, err := nativeartifacts.ResolveURL(a); err != nil {
+			return engine.Invalid("%v", err)
+		}
 	}
 	if s.TLS.Mode != "disabled" && s.TLS.Mode != "preferTLS" && s.TLS.Mode != "requireTLS" {
 		return engine.Invalid("invalid TLS mode")
@@ -267,6 +370,9 @@ func (p *Core) Validate(ctx context.Context, old, n *domain.Cluster) error {
 	var exposure *domain.Exposure
 	if old != nil {
 		exposure = &old.Spec.Exposure
+		if old.Spec.Topology.Type == "distributed" && s.Topology.Type != "distributed" {
+			return engine.Invalid("conversion from distributed topology is not supported")
+		}
 		if s.Components.Engine.Resources.MinDisk < old.Spec.Components.Engine.Resources.MinDisk || s.Components.Engine.Resources.MaxDisk < old.Spec.Components.Engine.Resources.MaxDisk {
 			return engine.Invalid("data volumes cannot shrink")
 		}
@@ -298,14 +404,30 @@ func (p *Core) parseOptions(raw json.RawMessage) (EngineOptions, error) {
 	return ParseOptions(raw)
 }
 
+// observedReleaseMatches preserves the actual observation while allowing
+// upstream-only PostgreSQL output to omit Percona's package revision.
+// A reported product revision must still match exactly.
+func observedReleaseMatches(observed, assigned string) bool {
+	return observed == assigned || (strings.Count(observed, ".") == 1 &&
+		strings.HasPrefix(assigned, observed+"."))
+}
+
 func upgradeAllowed(from, to string) bool {
 	if major(to) != major(from) && major(to) != major(from)+1 {
 		return false
 	}
 	a, b := strings.Split(from, "."), strings.Split(to, ".")
-	for i := 0; i < len(a) && i < len(b); i++ {
-		x, _ := strconv.Atoi(a[i])
-		y, _ := strconv.Atoi(b[i])
+	// Legacy agents report upstream major.minor rather than Percona's
+	// major.minor.revision. Missing numeric components sort as zero, so
+	// 16.15 -> 16.15.1 is not mistaken for a downgrade.
+	for i := 0; i < max(len(a), len(b)); i++ {
+		x, y := 0, 0
+		if i < len(a) {
+			x, _ = strconv.Atoi(a[i])
+		}
+		if i < len(b) {
+			y, _ = strconv.Atoi(b[i])
+		}
 		if x != y {
 			return y > x
 		}

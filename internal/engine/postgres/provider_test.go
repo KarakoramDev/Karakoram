@@ -456,6 +456,13 @@ func setupWithStatePath(t *testing.T, topology, statePath string) (*Core, *engin
 			b.upgradePaused = false
 			b.actions = append(b.actions, r.URL.Path+":"+name)
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
+		case "/v1/postgres/profile-bootstrap":
+			var request pgspec.ProfileBootstrapRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			b.actions = append(b.actions, "profile-bootstrap:"+name+":"+strings.Join(request.Profiles, ","))
+			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})
 		case "/v1/postgres/reinit", "/v1/postgres/stanza-create", "/v1/postgres/stanza-upgrade":
 			b.actions = append(b.actions, r.URL.Path+":"+name)
 			json.NewEncoder(w).Encode(pgspec.ActionResponse{OK: true})

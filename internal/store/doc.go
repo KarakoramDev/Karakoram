@@ -24,6 +24,12 @@
 // Namespace read-modify-write paths read registration and enrollment state through
 // the writer connection before side effects, rather than a pooled reader snapshot.
 //
+// Backup drill admission is idempotent by ID and source. Phase updates use a
+// compare-and-swap; cleanup remains active until a terminal report is committed.
+// Completion retains the newest 50 terminal reports per source, without pruning
+// queued or running work. Source deletion removes its reports and drill schedule
+// cursor atomically; deleting a throwaway target preserves the source's reports.
+//
 // WithActor tags new desired generations and audit events with their requester.
 // Request attribution survives restart and observed-state updates; unchanged
 // desired writes retain the original requester. Automatic new events default to

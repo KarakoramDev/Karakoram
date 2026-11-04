@@ -161,6 +161,12 @@ func TestAccessUserPasswordLifecycle(t *testing.T) {
 	if e != nil || generated == "" {
 		t.Fatal(generated, e)
 	}
+	generatedPasswordLimit.Assert(t, "returned application password", generated)
+	native, ok := puts[0]["password"].(string)
+	if !ok {
+		t.Fatal("native user request omitted password")
+	}
+	generatedPasswordLimit.Assert(t, "native application password", native)
 	if puts[0]["password"] != generated {
 		t.Fatal(puts)
 	}

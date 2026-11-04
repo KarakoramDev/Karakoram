@@ -20,7 +20,7 @@ func TestCreateTrackingWaitsForReadyAfterObservedGeneration(t *testing.T) {
 	c.Status.ObservedGeneration = c.Generation
 	for _, message := range []string{"Availability observation unavailable or stale; inspect member reachability", "broker unavailable", ""} {
 		c.Status.Phase, c.Status.Message = domain.PhaseDegraded, message
-		if err := m.trackingOperations(t.Context(), nil, c, nil, true); err != nil {
+		if err := m.trackingOperations(t.Context(), nil, c, nil, true, ""); err != nil {
 			t.Fatal(err)
 		}
 		got, err := st.GetOperation(t.Context(), op.ID)
@@ -29,7 +29,7 @@ func TestCreateTrackingWaitsForReadyAfterObservedGeneration(t *testing.T) {
 		}
 	}
 	c.Status.Phase, c.Status.Message = domain.PhaseReady, ""
-	if err := m.trackingOperations(t.Context(), nil, c, nil, true); err != nil {
+	if err := m.trackingOperations(t.Context(), nil, c, nil, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	got, err := st.GetOperation(t.Context(), op.ID)

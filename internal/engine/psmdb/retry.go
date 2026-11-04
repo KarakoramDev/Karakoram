@@ -42,7 +42,7 @@ func platformRetryMessage(v *pending, r *platformRetry) string {
 func (s *internalState) failPending(rc *engine.Context, message string) error {
 	v := s.Pending
 	switch v.Action {
-	case "deploy", "upgrade", "resources", "disk", "containers", "import", "delete-runtime", "delete-volume", "cleanup-runtime", "cleanup-volume":
+	case "deploy", "upgrade", "agent", "resources", "disk", "containers", "import", "delete-runtime", "delete-volume", "cleanup-runtime", "cleanup-volume":
 	default:
 		return fmt.Errorf("%s %s failed: %s", v.Action, v.Member, message)
 	}
@@ -90,7 +90,7 @@ func (s *internalState) failPendingCause(rc *engine.Context, cause error) error 
 		s.resetPlatformRetry(v)
 		return cause
 	}
-	if errors.Is(cause, infra.ErrDeploymentRetriesExhausted) {
+	if engine.PlatformFailureDefinitive(cause) {
 		s.Pending = nil
 		s.resetPlatformRetry(v)
 		return cause
@@ -145,7 +145,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 	if err := verifyMemberServices(ctx, rc, m); err != nil {
 		return true, err
 	}
-	if v.Action == "upgrade" || v.Action == "resources" {
+	if v.Action == "upgrade" || v.Action == "agent" || v.Action == "resources" {
 		stepped, err := p.prepareDisruption(ctx, rc, s, m)
 		if err != nil || stepped {
 			return true, err
@@ -156,7 +156,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 	switch v.Action {
 	case "import":
 		err = p.importMember(ctx, rc, s, m)
-	case "deploy", "upgrade":
+	case "deploy", "upgrade", "agent":
 		err = p.deploy(ctx, rc, s, m, v.Action, v.Version)
 	case "resources":
 		op, err = rc.Backend.SetResources(ctx, m.Name, v.Resources)
@@ -200,7 +200,7 @@ func (p *Provider) retryPending(ctx context.Context, rc *engine.Context, s *inte
 		s.Pending = v
 		return true, s.failPendingCause(rc, err)
 	}
-	if v.Action != "import" && v.Action != "deploy" && v.Action != "upgrade" {
+	if v.Action != "import" && v.Action != "deploy" && v.Action != "upgrade" && v.Action != "agent" {
 		v.Op = op
 		s.Pending = v
 	}

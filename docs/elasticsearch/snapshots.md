@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Snapshots
 
-Back up Elasticsearch to S3 and recover data, global state and feature states through native snapshots.
+Back up [Elasticsearch](https://www.elastic.co/elasticsearch) to [S3](https://aws.amazon.com/s3/) and recover data, global state and feature states through native snapshots.
 
 ## Create and schedule
 
@@ -15,7 +15,7 @@ karactl backups list search
 karactl operations cluster search
 ```
 
-Wait for both Backup and Operation success. Partial/failed native snapshots are not recovery bases. Snapshots include indices/data streams, global state and feature states, including security/Kibana; they exclude node files, private keys, keystores and repository registrations. Preserve protected control-plane state, its original encryption key and storage configuration separately.
+Wait for both Backup and Operation success. Partial/failed native snapshots are not recovery bases. Snapshots include indices/data streams, global state and feature states, including security/[Kibana](https://www.elastic.co/kibana); they exclude node files, private keys, keystores and repository registrations. Preserve protected control-plane state, its original encryption key and storage configuration separately.
 
 Use Karakoram schedules/count retention, not Elastic SLM; the [create example](README.md#create) includes a schedule. [Scheduling rules](../backups.md) cover UTC cron, successful-backup counts, array replacement and control-plane downtime. ILM controls live-index retention, not backups.
 
@@ -33,7 +33,7 @@ karactl restores get search recovery
 karactl operations cluster search
 ```
 
-Karakoram stops Kibana/Logstash/APM services at platform level, deletes all destination data streams and non-system indices (including hidden/closed objects), restores global state, aliases and feature states, waits for recovery, re-establishes managed credentials through the unaffected file realm and restarts components with current configuration. System indices restore through feature states, not blanket deletion. Application users, roles, API keys and persistent settings may revert. Verify data, authentication and delivery before reopening writers. Do not duplicate a restore after a client timeout.
+Karakoram stops Kibana/[Logstash](https://www.elastic.co/logstash)/APM services at platform level, deletes all destination data streams and non-system indices (including hidden/closed objects), restores global state, aliases and feature states, waits for recovery, re-establishes managed credentials through the unaffected file realm and restarts components with current configuration. System indices restore through feature states, not blanket deletion. Application users, roles, API keys and persistent settings may revert. Verify data, authentication and delivery before reopening writers. Do not duplicate a restore after a client timeout.
 
 Restore submission uses a durable per-operation receipt, not the presence of an index with a snapshot name. If the control plane loses the native response or cannot persist its successful response, it refuses to submit again and keeps managed components stopped. The Restore error requests reconciliation: inspect native `GET /_recovery?active_only=false&detailed=true`, the source snapshot, expected indices and acknowledged data. Do not delete the receipt or blindly retry. If a full restore cannot be established, keep external writers fenced, suspend with retained volumes to abandon the interrupted operation as described below, then resume and explicitly request a fresh restore. Legacy in-flight submission checkpoints without these receipts also require reconciliation rather than automatic replay.
 

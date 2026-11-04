@@ -2,15 +2,29 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Access control
 
-Karakoram accounts, roles and tokens authorize control-plane actions, independently of backend infrastructure credentials and engine-native users.
+Karakoram accounts, roles and tokens authorize control-plane actions, independently of provider infrastructure credentials and engine-native users.
 
 The server enforces policy; hidden UI controls are not an authorization boundary. Engine identities belong in [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md) and [Elasticsearch](elasticsearch/access-and-security.md).
+[Neo4j](https://neo4j.com/) native users are described in [Neo4j access](neo4j/access-and-tls.md). Every Community user has full administrative privileges; control-plane RBAC does not add native database roles.
+
+Idempotency replay is scoped to the authenticated identity, operation, resource
+path and namespace (including namespace query parameters). A retry in another
+namespace cannot receive a cached secret from the original namespace.
+Generated unconditional additional RBAC grants are checked on the same resource
+before execution or idempotency replay. [PostgreSQL](https://www.postgresql.org/) binding rotation therefore
+requires both `database-users:update` and `clusters:update`. Conditional grants
+(privileged database roles/tags and cross-cluster [OpenBao](https://openbao.org/) targets) are resolved
+against the request body or current engine state by their owning handlers.
+[Weaviate](https://weaviate.io/) user creation and API-key rotation recheck privileged-role access before
+returning cached keys; rotation resolves the user's current native roles. Revoking
+`clusters:update` prevents privileged secret replay even while the principal
+retains its ordinary database-user permissions.
 
 ## Connected OAuth applications
 
 When [OAuth for MCP](mcp.md#connect-with-oauth) is enabled, every connection requires
 interactive consent. Grants intersect the account's current RBAC with approved
-scopes and optional namespace limits; they do not inherit browser OIDC group
+scopes and optional namespace limits; they do not inherit browser [OIDC](https://openid.net/developers/how-connect-works/) group
 bindings. **Settings → Connected apps** lists and revokes your grants.
 `listOAuthGrants` and `deleteOAuthGrant` provide the same self-service API;
 `api-tokens:read` / `api-tokens:delete` allow administrators to manage others'
@@ -89,6 +103,7 @@ CSV `p` rules default to allow. Subjects are `user:NAME`, `group:OIDC_GROUP`, `r
 | `clusters`, `database-users` | CRUD as exposed by route; `<namespace>/<cluster>`; database roles share `database-users` |
 | `cluster-credentials` | read reveals credentials; `<namespace>/<cluster>` |
 | `cluster-data` | read/write through the opt-in [data MCP gateway](data-mcp.md); `<namespace>/<cluster>`; not included in viewer/operator defaults |
+| `openbao-unseal-keys` | reveal; `<namespace>/<cluster>`; independent from ordinary credential read |
 | `backups` | create/read/delete/export; `<namespace>/<cluster>` |
 | `restores`, `operations` | Route-defined actions; `<namespace>/<cluster>` |
 | `backup-storages` | CRUD; `<namespace>/<storage>` |
@@ -99,6 +114,8 @@ CSV `p` rules default to allow. Subjects are `user:NAME`, `group:OIDC_GROUP`, `r
 [OpenAPI](../api/openapi.yaml) defines route mappings. Lists, events/streams and `/metrics` filter/check actual objects; filters never widen access. Namespace metadata does not grant audit access. Cross-namespace source export and target permissions are documented in [backups](backups.md); scoped examples are in [namespaces](namespaces.md).
 
 `events:read` or `audit:read` on `<namespace>/<cluster>` permits reading a cluster event, but only **`audit:read`** returns its optional `details` object in lists and streams; viewer/operator event access alone does not grant structured comparisons. Audit readers still receive masked sensitive values, never secrets; see [audit redaction and durability](security.md#audit-attribution-and-durability).
+
+OpenBao initialization-material reveal is administrator-only by default and uses `openbao-unseal-keys:reveal`, not `cluster-credentials:read`. Database-connection list/get requires `clusters:read` on OpenBao; create/delete requires `clusters:update` there **and** `database-users:create` / `database-users:delete` respectively on the target cluster. An OpenBao grant alone cannot authorize target identity changes. See [OpenBao access](openbao/access-and-tls.md).
 
 Normalization at startup/submission changes object `*` to `**`; legacy bare cluster/storage/audit patterns become `default/<pattern>`. Bare namespace objects remain unchanged. Use `dev/**`, not bare `dev`, for namespace-wide audit; inspect the canonical policy after updates.
 

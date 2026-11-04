@@ -10,14 +10,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/KarakoramDev/Karakoram/internal/datamcp/companion"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/infra"
+	"github.com/KarakoramDev/Karakoram/internal/maintenance"
 	"github.com/KarakoramDev/Karakoram/internal/redact"
 	"github.com/KarakoramDev/Karakoram/internal/store"
 )
@@ -50,8 +53,9 @@ type Options struct {
 	FailureCleanupTimeout time.Duration
 }
 type worker struct {
-	trigger chan struct{}
-	started bool
+	trigger     chan struct{}
+	started     bool
+	reconciling atomic.Bool
 }
 
 // Manager owns one serialized, retrying reconciliation worker per cluster.
@@ -185,6 +189,18 @@ func (m *Manager) discover(ctx context.Context) error {
 func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 	name := ref.Key()
 	defer m.wg.Done()
+	publicationGate := make(chan struct{}, 1)
+	ctx = withObservationPublication(ctx, publicationGate)
+	availabilityCtx, stopAvailability := context.WithCancel(withObservationPublication(ctx, publicationGate))
+	availabilityDone := make(chan struct{})
+	go func() {
+		defer close(availabilityDone)
+		m.availabilityLoop(availabilityCtx, ref, w)
+	}()
+	defer func() {
+		stopAvailability()
+		<-availabilityDone
+	}()
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	observations := time.NewTicker(engine.ReadinessInterval)
@@ -212,7 +228,9 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 		case <-triggers:
 		case <-timer.C:
 		}
+		w.reconciling.Store(true)
 		delay, err := m.reconcile(ctx, ref)
+		w.reconciling.Store(false)
 		if errors.Is(err, errClusterGone) {
 			m.mu.Lock()
 			if m.workers[name] == w {
@@ -279,6 +297,10 @@ func (m *Manager) work(ctx context.Context, ref domain.ClusterRef, w *worker) {
 // Operation and platform retry deadlines remain untouched; a fenced native
 // receipt must not suppress health sampling or cause an early mutation retry.
 func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRef) error {
+	if err := holdObservation(ctx); err != nil {
+		return err
+	}
+	defer releaseObservation(ctx)
 	c, err := m.opts.Store.GetCluster(ctx, ref)
 	if err != nil {
 		return err
@@ -317,16 +339,18 @@ func (m *Manager) observeDuringBackoff(ctx context.Context, ref domain.ClusterRe
 	status.ObservedGeneration = c.Status.ObservedGeneration
 	engine.ApplyDeploymentStatus(&rc, &status)
 	preservePublishedEndpointFailure(c.Status.Conditions, &status)
+	preserveMaintenance(c, &status)
+	preserveAvailabilityLifecycle(c.Status, &status, rc.Clock.Now())
 	preserveTransitions(c.Status.Conditions, status.Conditions)
-	// Observing old healthy processes cannot finish restore/provisioning.
-	if c.Status.Phase != domain.PhaseReady && c.Status.Phase != domain.PhaseDegraded {
-		status.Phase, status.Message = c.Status.Phase, c.Status.Message
-	}
 	if restoring {
 		restoreStatus(&status, domain.PhaseRestoring, "Restoring", c.Status.Message, rc.Clock.Now())
 	}
+	previous := c.Status.Phase
 	c.Status = status
-	return m.opts.Store.UpdateClusterState(ctx, c)
+	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
+		return err
+	}
+	return m.healthTransition(ctx, c, previous)
 }
 func preservePublishedEndpointFailure(previous []domain.Condition, status *domain.ClusterStatus) {
 	for _, condition := range status.Conditions {
@@ -404,16 +428,28 @@ func phaseChangeMessage(c *domain.Cluster, previous domain.Phase) string {
 	return boundedMessage(message, 1024)
 }
 func (m *Manager) state(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
+	started := time.Now()
+	defer m.logStage(c.Ref(), "state.publish", started)
 	c.Status.Message = boundedMessage(redact.Diagnostic(c.Status.Message), 512)
 	if err := m.opts.Store.UpdateClusterState(ctx, c); err != nil {
 		return err
 	}
 	if previous != c.Status.Phase {
+		if err := m.healthTransition(ctx, c, previous); err != nil {
+			return err
+		}
 		return m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: "Normal", Reason: "PhaseChanged", Message: phaseChangeMessage(c, previous)})
 	}
 	return nil
 }
 func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay time.Duration, err error) {
+	ctx = engine.WithObservationPass(ctx)
+	started := time.Now()
+	defer m.logStage(ref, "reconcile", started)
+	if err := holdObservation(ctx); err != nil {
+		return 0, err
+	}
+	defer releaseObservation(ctx)
 	actor := "reconciler"
 	operation := ""
 	defer func() {
@@ -435,6 +471,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		return 0, lookupErr
 	}
 	m.retainOperationBudgets(ref, ops)
+	var startedOperation string
 	for i := range ops {
 		op := &ops[i]
 		if !domain.IsConvergenceOperation(op.Kind) || op.TargetGeneration != c.Generation {
@@ -449,11 +486,19 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 		}
 		operation = op.ID
 		if op.Phase == domain.PhasePending {
-			now := m.opts.Context.Clock.Now()
-			op.Phase, op.StartedAt = domain.PhaseRunning, &now
+			deferred := op.Step == "WaitingForWindow" && desiredGenerationMaintenanceWait(c, op)
+			if deferred {
+				open, _, _, policyErr := maintenance.Open(c.Spec.Maintenance, m.opts.Context.Clock.Now())
+				deferred = policyErr == nil && !open
+			}
+			if !deferred {
+				now := m.opts.Context.Clock.Now()
+				op.Phase, op.StartedAt = domain.PhaseRunning, &now
+				startedOperation = op.ID
+				m.maintenanceBudget(op, c, false)
+			}
 		}
-		// Persist the observation before trackingOperations reloads this record;
-		// otherwise the interval since the preceding reconciliation is lost.
+		// Persist the execution boundary before provider work can block or crash.
 		if err = m.opts.Store.UpdateOperation(ctx, op); err != nil {
 			return 0, err
 		}
@@ -463,7 +508,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	convergenceAttempted := false
 	defer func() {
 		if !errors.Is(err, errClusterGone) {
-			err = errors.Join(err, m.trackingOperations(ctx, p, c, convergenceErr, convergenceAttempted))
+			err = errors.Join(err, m.trackingOperations(ctx, p, c, convergenceErr, convergenceAttempted, startedOperation))
 		}
 	}()
 	// Capture attribution before synchronization advances ObservedGeneration.
@@ -488,6 +533,11 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	// Convergence records bound observation, not the platform calls needed to
 	// finish applying desired state or cleaning up after a failed record.
 	if c.Deleting {
+		// All providers must be able to observe owned runtime identity during
+		// teardown without restoring a failed initial deployment first. This
+		// does not grant exact-ID authorization for escalated removal; providers
+		// may add their stronger persisted cleanup intent below.
+		ctx = infra.WithCleanupIntent(ctx, infra.CleanupIntent{})
 		if c.Spec.DataSource != nil {
 			_ = m.observeInitialDataSourceLifecycle(ctx, p, c, nil)
 			applied := false
@@ -563,6 +613,7 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	// operation's bounded budget rather than leaving it Running indefinitely.
 	// Resume active work before convergence: restore may deliberately have every
 	// database process stopped, making ordinary Sync/Status unsafe or impossible.
+	ctx = store.WithMaintenanceTime(ctx, rc.Clock.Now())
 	op, err := m.opts.Store.ClaimRunningOperation(store.WithClusterSnapshot(ctx, c), ref)
 	if err == nil {
 		actor, operation = op.Actor, op.ID
@@ -615,21 +666,49 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 	if err = m.state(ctx, c, previous); err != nil {
 		return 0, err
 	}
-	if syncErr != nil {
-		return 0, syncErr
-	}
 	if policy, ok := p.(engine.OperationClaimPolicy); ok {
 		allowed, err := policy.CanClaimOperation(c)
 		if err != nil {
 			return 0, err
 		}
 		if !allowed {
-			return result.RequeueAfter, nil
+			if recovery, ok := p.(engine.RecoveryOperationClaimPolicy); ok {
+				kind, policyErr := recovery.RecoveryOperationKind(ctx, &rc)
+				if policyErr != nil {
+					return 0, policyErr
+				}
+				if kind != "" {
+					remedy, claimErr := m.opts.Store.ClaimRecoveryOperation(store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now()), ref, kind)
+					if claimErr == nil {
+						actor, operation = remedy.Actor, remedy.ID
+						if actor == "" {
+							actor = "reconciler"
+						}
+						return m.runOperation(ctx, p, &rc, remedy)
+					}
+					if !errors.Is(claimErr, store.ErrNotFound) {
+						return 0, claimErr
+					}
+				}
+			}
+			return result.RequeueAfter, syncErr
 		}
 	}
-	op, err = m.opts.Store.ClaimOperation(store.WithClusterSnapshot(ctx, c), ref)
+	claimCtx := store.WithMaintenanceTime(store.WithClusterSnapshot(ctx, c), rc.Clock.Now())
+	if syncErr != nil {
+		// An old agent can make Sync fail while its replacement is the remedy.
+		// Only agent rollout may bypass failed convergence; Running ownership
+		// was checked above and provider/native safety gates still apply.
+		op, err = m.opts.Store.ClaimAgentUpgrade(claimCtx, ref)
+	} else {
+		op, err = m.opts.Store.ClaimOperation(claimCtx, ref)
+	}
+	var windowWait *store.MaintenanceWindowWait
+	if errors.As(err, &windowWait) {
+		return maintenance.Delay(rc.Clock.Now(), windowWait.NextStart), nil
+	}
 	if errors.Is(err, store.ErrNotFound) {
-		return result.RequeueAfter, nil
+		return result.RequeueAfter, syncErr
 	}
 	if err != nil {
 		return 0, err
@@ -643,10 +722,24 @@ func (m *Manager) reconcile(ctx context.Context, ref domain.ClusterRef) (delay t
 
 // resolve refreshes project dependencies immediately before each provider call.
 func (m *Manager) resolve(ctx context.Context, rc *engine.Context) error {
+	started := time.Now()
+	defer m.logStage(rc.Cluster.Ref(), "resolve", started)
 	rc.Namespace = domain.NormalizedNamespace(rc.Cluster.Namespace)
 	backend, err := m.opts.Namespaces.Backend(rc.Namespace)
 	if err != nil {
 		c := rc.Cluster
+		// A post-Sync dependency failure may still carry the pre-Sync sample.
+		// It is a new failure, not permission to republish cached positives
+		// over an intervening renewal.
+		hasAvailability := !c.Status.ObservedAt.IsZero() || c.Status.ObservationEpoch != ""
+		for _, member := range c.Status.Members {
+			hasAvailability = hasAvailability || member.Health || member.Agent.Healthy
+		}
+		if hasAvailability {
+			c.Status = engine.UnknownObservation(c.Status, rc.Clock.Now(), "NamespaceUnavailable")
+		}
+		c.Status.ObservedAt = time.Time{}
+		c.Status.ObservationEpoch = ""
 		message := fmt.Sprintf("namespace %q unavailable: %v", rc.Namespace, err)
 		// Dependency failure cannot release an in-progress restore's lifecycle
 		// fence, including during read-only error-backoff observations.
@@ -713,17 +806,22 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	}
 	// Publish health before any recovery/platform work can block. This runs on
 	// the existing per-cluster worker/operation lease, not a second observer.
-	if rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded {
+	if canObserveAvailability(rc.Cluster) {
+		before := rc.Cluster.Status
+		before.Conditions = slices.Clone(before.Conditions)
 		status, _ := m.observeStatus(ctx, p, rc)
 		status.ObservedGeneration = rc.Cluster.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
 		preservePublishedEndpointFailure(rc.Cluster.Status.Conditions, &status)
+		preserveMaintenance(rc.Cluster, &status)
+		preserveAvailabilityLifecycle(before, &status, rc.Clock.Now())
 		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
 		rc.Cluster.Status = status
 		// This is a distinct completed health sample, not the final Sync
 		// checkpoint. Publish successful retries too, so recovery cannot hide a
 		// freshly renewed lease behind long-running work.
 		var saveErr error
+		started := time.Now()
 		if operation == nil {
 			saveErr = m.opts.Store.UpdateClusterState(ctx, rc.Cluster)
 		} else {
@@ -731,15 +829,23 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			// checkpoint; never publish its cluster state without that receipt.
 			saveErr = m.opts.Store.UpdateOperationAndClusterState(ctx, operation, rc.Cluster)
 		}
+		m.logStage(rc.Cluster.Ref(), "availability.pre-sync.publish", started)
 		if saveErr != nil {
+			// The caller still publishes this snapshot on error. Retain the
+			// gate through that write and its deferred release.
 			return engine.Result{}, saveErr
 		}
+		// Release only after this complete sample is durably published. Sync
+		// remains outside the gate so renewal can run during slow convergence.
+		releaseObservation(ctx)
 	}
 	observedGeneration := rc.Cluster.Status.ObservedGeneration
 	rc.DeploymentWait = ""
 	rc.DeploymentWaitReason, rc.DeploymentWaitKey = "", ""
 	rc.SyncWait = ""
+	exposureStarted := time.Now()
 	exposureCondition, exposureErr := engine.CheckExposureSupport(ctx, rc.Backend, rc.Cluster.Spec.Exposure)
+	m.logStage(rc.Cluster.Ref(), "exposure.check", exposureStarted)
 	var result engine.Result
 	syncErr := errors.Join(exposureErr, initialFailure)
 	if recoveringInitial {
@@ -762,8 +868,13 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			}
 		}
 	}
+	// Providers may replace or mutate cluster status while synchronizing.
+	// Preserve transition times against the last observation, not that mutation.
+	previousConditions := slices.Clone(rc.Cluster.Status.Conditions)
 	if syncErr == nil {
+		started := time.Now()
 		result, syncErr = p.Sync(ctx, rc)
+		m.logStage(rc.Cluster.Ref(), "provider.sync", started)
 	}
 	if _, supportsDataMcp := p.(engine.DataMcpProvider); syncErr == nil && !recoveringInitial && supportsDataMcp {
 		companionResult, companionErr := m.opts.Companion.Sync(ctx, rc)
@@ -804,11 +915,15 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 	if applied := rc.Cluster.Status.ObservedGeneration; syncErr == nil && result.ConvergenceError == nil && applied > observedGeneration && applied <= rc.Cluster.Generation {
 		observedGeneration = applied
 	}
+	if err := holdObservation(ctx); err != nil {
+		return result, errors.Join(syncErr, err)
+	}
 	if err := m.resolve(ctx, rc); err != nil {
 		return result, errors.Join(syncErr, err)
 	}
 	status, statusErr := m.observeStatus(ctx, p, rc)
 	engine.ApplyDeploymentStatus(rc, &status)
+	preserveMaintenance(rc.Cluster, &status)
 	if exposureCondition.Type != "" {
 		status.Conditions = append(status.Conditions, exposureCondition)
 	}
@@ -846,7 +961,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 		if status.Message == "" && status.Phase != domain.PhaseReady && status.Phase != domain.PhaseDegraded {
 			status.Message = fmt.Sprintf("%s: observing platform services and member formation", status.Phase)
 		}
-		preserveTransitions(rc.Cluster.Status.Conditions, status.Conditions)
+		preserveTransitions(previousConditions, status.Conditions)
 		if status.Phase == domain.PhaseDegraded && status.Message == "" {
 			status.Message = "Member health is degraded; inspect conditions and member observations"
 		}
@@ -863,7 +978,7 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 			rc.Cluster.Status.ObservedGeneration = rc.Cluster.Generation
 		}
 	}
-	if (rc.Cluster.Status.Phase == domain.PhaseReady || rc.Cluster.Status.Phase == domain.PhaseDegraded) && (result.RequeueAfter <= 0 || result.RequeueAfter > engine.ReadinessInterval) {
+	if canObserveAvailability(rc.Cluster) && (result.RequeueAfter <= 0 || result.RequeueAfter > engine.ReadinessInterval) {
 		result.RequeueAfter = engine.ReadinessInterval
 	}
 	if len(rc.Cluster.Status.DeploymentFailures) > 0 && !rc.Cluster.Deleting {
@@ -898,6 +1013,8 @@ func (m *Manager) synchronize(ctx context.Context, p engine.Provider, rc *engine
 }
 
 func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engine.Context, op *domain.Operation) (requeue time.Duration, attemptErr error) {
+	rc.Operation = op
+	defer func() { rc.Operation = nil }()
 	actor := op.Actor
 	if actor == "" {
 		actor = "reconciler"
@@ -1013,7 +1130,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 				op.Phase = domain.PhaseCancelled
 			}
 		} else {
-			opErr = errors.New("Provider no longer supports cancellation of this operation")
+			opErr = errors.New("provider no longer supports cancellation of this operation")
 		}
 	} else {
 		dependenciesResolved = true
@@ -1058,6 +1175,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 	if opErr == nil && !terminal {
 		op.Failures = 0
 	}
+	m.maintenanceBudget(op, c, rc.WaitingForMaintenance(op))
 	if failing && !cleanupExpired {
 		// Cleanup errors retain the checkpoint and retry with worker backoff,
 		// including errors that would be permanent during ordinary work.
@@ -1135,6 +1253,7 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		}
 		status.ObservedGeneration = c.Status.ObservedGeneration
 		engine.ApplyDeploymentStatus(rc, &status)
+		preserveMaintenance(c, &status)
 		preserveTransitions(c.Status.Conditions, status.Conditions)
 		if phase != domain.PhaseReady && phase != domain.PhaseDegraded {
 			status.Phase, status.Message = phase, message
@@ -1176,6 +1295,9 @@ func (m *Manager) runOperation(ctx context.Context, p engine.Provider, rc *engin
 		return 0, err
 	}
 	if previous != c.Status.Phase {
+		if err := m.healthTransition(ctx, c, previous); err != nil {
+			return 0, err
+		}
 		if err := m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Operation: op.ID, Type: "Normal", Reason: "PhaseChanged", Message: phaseChangeMessage(c, previous)}); err != nil {
 			return 0, err
 		}
@@ -1341,4 +1463,16 @@ func scheduledPlatformWait(err error) *engine.PlatformRetryWait {
 		}
 		return nil
 	}
+}
+
+func (m *Manager) healthTransition(ctx context.Context, c *domain.Cluster, previous domain.Phase) error {
+	unhealthy := func(phase domain.Phase) bool { return phase == domain.PhaseDegraded || phase == domain.PhaseError }
+	if unhealthy(previous) == unhealthy(c.Status.Phase) {
+		return nil
+	}
+	kind, reason := "Warning", "ClusterDegraded"
+	if !unhealthy(c.Status.Phase) {
+		kind, reason = "Normal", "ClusterRecovered"
+	}
+	return m.record(ctx, domain.Event{Namespace: c.Namespace, Cluster: c.Name, Type: kind, Reason: reason, Message: fmt.Sprintf("%s → %s", previous, c.Status.Phase)})
 }

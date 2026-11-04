@@ -111,7 +111,7 @@ func (*Provider) Describe() domain.ProviderInfo {
 	router := domain.ComponentInfo{Defaults: domain.ComponentSpec{Replicas: 1, Resources: r}, MinReplicas: 1, MaxReplicas: 32}
 	v := domain.ProviderInfo{Name: "psmdb", DisplayName: "Percona Server for MongoDB", Versions: append([]domain.VersionInfo(nil), catalog...), BackupTypes: []string{"logical", "physical"}, Topologies: []domain.TopologyInfo{{Type: "replicaSet", Components: map[string]domain.ComponentInfo{"engine": ci}}, {Type: "sharded", Components: map[string]domain.ComponentInfo{"engine": ci, "configServer": ci, "router": router}, Schema: json.RawMessage(`{"type":"object","properties":{"shards":{"type":"integer","minimum":1,"maximum":128,"default":1}}}`)}}}
 	v.Capabilities = []string{"databaseUsers", "databaseRoles", "systemUsers", "balancer", "pitr", "backups", "restores", "fcv", "publicExposure", "tls", "monitoring", "engineConfig"}
-	v.Operations = []string{domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, domain.OperationRaiseFCV, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRotateSystemUser, domain.OperationRotateTLS}
+	v.Operations = []string{domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, domain.OperationRaiseFCV, domain.OperationRestart, domain.OperationReplaceMember, domain.OperationRotateSystemUser, domain.OperationRotateTLS, domain.OperationUpgradeAgents}
 	v.Processes = []string{"mongod", "mongos", "pbm-agent"}
 	for i := range v.Versions {
 		v.Versions[i].PBMVersion = "2.16.0-1"

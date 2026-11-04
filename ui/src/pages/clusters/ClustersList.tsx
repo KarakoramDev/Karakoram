@@ -88,11 +88,11 @@ export function ClustersListPage() {
 
       <Card
         flush
+        className="cluster-list"
         title={`${items.length} cluster${items.length === 1 ? '' : 's'}`}
         actions={
           <input
-            className="input"
-            style={{ width: 240 }}
+            className="input cluster-list-filter"
             type="search"
             placeholder={allNamespaces ? 'Filter by name, namespace, version, phase' : 'Filter by name, version, phase'}
             aria-label="Filter clusters"
@@ -137,6 +137,7 @@ export function ClustersListPage() {
                         <Link to={clusterPath(ns, c.name)} className="strong mono">
                           {c.name}
                         </Link>
+                        {c.managedBy?.kind === 'backup-drill' ? <div><Badge tone="accent" title={`Temporary recovery test for ${c.managedBy.cluster}`}>Managed drill target</Badge></div> : null}
                       </td>
                       {allNamespaces ? <td className="mono small">{ns}</td> : null}
                       <td>
@@ -159,8 +160,8 @@ export function ClustersListPage() {
                             Co-located
                           </Badge>
                         ) : c.status.placement ? (
-                          <Badge plain title={c.status.placement.warning}>
-                            Unverified
+                          <Badge plain tone={c.status.placement.guaranteedAntiAffinity ? 'ok' : 'neutral'} title={c.status.placement.warning}>
+                            {c.status.placement.guaranteedAntiAffinity ? 'Separated' : c.status.placement.source === 'backend' ? 'Not confirmed' : c.status.placement.source === 'unavailable' ? 'Unavailable' : 'Best effort'}
                           </Badge>
                         ) : (
                           <span className="faint">—</span>

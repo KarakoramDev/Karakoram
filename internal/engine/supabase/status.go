@@ -19,7 +19,10 @@ import (
 )
 
 func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domain.ClusterStatus, statusErr error) {
-	defer func() { engine.ApplyDeploymentStatus(rc, &status) }()
+	defer func() {
+		engine.ObservePlacement(&status, rc.Backend.Capabilities().Placement)
+		engine.ApplyDeploymentStatus(rc, &status)
+	}()
 	// Database, component and final gateway observations are independent.
 	// Start them together so a hung native endpoint cannot consume later
 	// members' share of the outer observation sweep.
@@ -129,9 +132,8 @@ func (p *Provider) Status(ctx context.Context, rc *engine.Context) (status domai
 			}
 		}
 		for _, container := range containers {
-			if container.PlacementGroup != "" {
+			if rc.Backend.Capabilities().Placement && container.PlacementGroup != "" {
 				member.PlacementGroup = container.PlacementGroup
-				out.Placement.Groups[container.PlacementGroup] = append(out.Placement.Groups[container.PlacementGroup], m.Name)
 			}
 		}
 		// These members deliberately leave Version empty: the reconciler aggregates
@@ -215,6 +217,9 @@ func gatewayInstancesReady(ctx context.Context, rc *engine.Context, m *component
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (engine.OpResult, error) {
 	if op.Kind == domain.OperationRestart {
 		return p.restartStack(ctx, rc, op)
+	}
+	if op.Kind == domain.OperationUpgradeAgents {
+		return p.upgradeAgents(ctx, rc, op, false)
 	}
 	if string(op.Kind) != "rotate-jwt-secret" {
 		return p.Core.RunOperation(ctx, rc, op)

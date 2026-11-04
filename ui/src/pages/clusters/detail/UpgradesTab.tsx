@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, unwrap } from '@/api/client';
 import { keys } from '@/api/keys';
 import { useProviders } from '@/api/hooks';
-import { idempotencyHeaders, useIdempotencyKey } from '@/api/idempotency';
+import { idempotencyHeaders } from '@/api/idempotency';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/Dialog';
 import { Badge, Callout, Card, ErrorBlock, KV, Loading } from '@/components/ui/Primitives';
@@ -18,6 +18,9 @@ import { FCV_GUIDANCE, fcvObservation, latestSuccessfulBackup, maintenanceCopy, 
 import { fetchBackupInventory } from './backup-inventory';
 import { hasCapability, supportsOperation } from '@/engines';
 import { isPostgres, postgresMajorUpgrade } from '@/engines/postgres/spec';
+import { isMySQL, mysqlMajorUpgrade } from '@/engines/mysql/spec';
+import { MaintenanceOverride } from './Maintenance';
+import { useSubmissionKey } from './use-submission-key';
 
 export function UpgradesTab() {
   const { cluster, namespace, name, base, can } = useClusterContext();
@@ -28,7 +31,8 @@ export function UpgradesTab() {
   const [target, setTarget] = useState<string | null>(null);
   const [fcvTarget, setFcvTarget] = useState<string | null>(null);
   const [restartOpen, setRestartOpen] = useState(false);
-  const submission = useIdempotencyKey();
+  const [ignoreMaintenanceWindow, setIgnoreMaintenanceWindow] = useState(false);
+  const submission = useSubmissionKey(JSON.stringify({ target, fcvTarget, restartOpen, ignoreMaintenanceWindow }));
   const backups = useQuery({
     queryKey: keys.clusterSub(namespace, name, 'backups'),
     queryFn: () => fetchBackupInventory((cursor) => unwrap(api.GET('/clusters/{cluster}/backups', { params: { path: { cluster: name }, query: { namespace, limit: 200, cursor } } }))),
@@ -36,6 +40,11 @@ export function UpgradesTab() {
     refetchInterval: 15_000,
   });
   const lastSuccessful = latestSuccessfulBackup(backups.data?.items ?? []);
+  const bindings = useQuery({
+    queryKey: keys.clusterSub(namespace, name, 'postgres-bindings'),
+    queryFn: () => unwrap(api.GET('/clusters/{cluster}/postgres/bindings', { params: { path: { cluster: name }, query: { namespace } } })),
+    enabled: isPostgres(cluster.spec.provider) && can('read', 'database-users'),
+  });
 
   const provider = providers.data?.items.find((p) => p.name === cluster.spec.provider);
   const running = observedVersion(cluster.status);
@@ -54,11 +63,11 @@ export function UpgradesTab() {
     return provider.upgradePaths
       .filter((p) => p.from === current || p.from === currentMajor || p.from === `${currentMajor}.x` || p.from === '*')
       .map((p) => {
-        const versions = provider.versions.filter((v) => (v.version === p.to || v.major === p.to) && v.status !== 'unavailable' && v.version !== current);
+        const versions = provider.versions.filter((v) => (v.version === p.to || v.major === p.to) && v.status !== 'unavailable' && v.version !== current && (!isMySQL(cluster.spec.provider) || v.version.localeCompare(current, undefined, { numeric: true }) > 0));
         return { path: p, versions };
       })
       .filter((x) => x.versions.length > 0);
-  }, [provider, current, currentMajor]);
+  }, [provider, current, currentMajor, cluster.spec.provider]);
 
   const editable = can('update') && (cluster.status.phase === 'Ready' || cluster.status.phase === 'Degraded');
   const upgrading = cluster.status.phase === 'Upgrading' || (Boolean(running) && cluster.spec.version !== running);
@@ -67,8 +76,10 @@ export function UpgradesTab() {
   const upgrade = useMutation({
     mutationFn: async (version: string) => {
       const path = paths.find((p) => p.versions.some((v) => v.version === version));
+      if (isMySQL(cluster.spec.provider) && version.localeCompare(current, undefined, { numeric: true }) < 0) throw new Error('MySQL and PXC downgrades are blocked.');
+      if (isMySQL(cluster.spec.provider) && mysqlMajorUpgrade(current, version)) requireUpgradeBackup(true, Boolean(lastSuccessful));
       requireUpgradeBackup(Boolean(path?.path.requiresBackup), Boolean(lastSuccessful));
-      return unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace } }, body: { spec: { version } } }));
+      return unwrap(api.PATCH('/clusters/{cluster}', { headers: { ...idempotencyHeaders(submission.key), 'Content-Type': 'application/merge-patch+json' }, params: { path: { cluster: name }, query: { namespace, ignoreMaintenanceWindow } }, body: { spec: { version } } }));
     },
     onSuccess: (c) => {
       submission.reset();
@@ -76,16 +87,18 @@ export function UpgradesTab() {
       void queryClient.invalidateQueries({ queryKey: keys.clusters });
       toast.success(<OperationNotice operationId={c.operationId}>Upgrade to {c.spec.version} requested.</OperationNotice>);
       setTarget(null);
+      setIgnoreMaintenanceWindow(false);
     },
     onError: (e) => toast.error(errorMessage(e)),
   });
 
   const raiseFcv = useMutation({
-    mutationFn: (version: string) => unwrap(api.POST('/clusters/{cluster}/raise-fcv', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } }, body: { version } })),
+    mutationFn: (version: string) => unwrap(api.POST('/clusters/{cluster}/raise-fcv', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace, ignoreMaintenanceWindow } }, body: { version } })),
     onSuccess: (op) => {
       submission.reset();
       toast.success(<OperationNotice operationId={op.id}>FCV raise started.</OperationNotice>);
       setFcvTarget(null);
+      setIgnoreMaintenanceWindow(false);
       void queryClient.invalidateQueries({ queryKey: keys.cluster(namespace, name) });
       navigate(`${base}/operations`);
     },
@@ -93,11 +106,12 @@ export function UpgradesTab() {
   });
 
   const restart = useMutation({
-    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/restart', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace } } })),
+    mutationFn: () => unwrap(api.POST('/clusters/{cluster}/restart', { headers: idempotencyHeaders(submission.key), params: { path: { cluster: name }, query: { namespace, ignoreMaintenanceWindow } } })),
     onSuccess: (op) => {
       submission.reset();
       toast.success(<OperationNotice operationId={op.id}>Rolling restart started.</OperationNotice>);
       setRestartOpen(false);
+      setIgnoreMaintenanceWindow(false);
       navigate(`${base}/operations`);
     },
     onError: (e) => toast.error(errorMessage(e)),
@@ -138,9 +152,15 @@ export function UpgradesTab() {
       </div>
 
       <Callout tone={cluster.spec.components.engine.replicas === 1 ? 'warn' : 'info'} title={isPostgres(cluster.spec.provider) ? 'Minor upgrade and restart availability' : 'Upgrade and restart availability'}>{maintenance}</Callout>
+      {bindings.error ? <ErrorBlock error={bindings.error} retry={() => bindings.refetch()} /> : null}
+      {bindings.data?.items.length ? <Callout tone="warn" title="Major upgrades affect bound consumers">
+        Verify every consumer supports the target major. The server rejects upgrades outside a consumer's declared range.
+        <ul>{bindings.data.items.map((b) => <li key={b.id}>{b.consumer.kind}/{b.consumer.namespace}/{b.consumer.name}: maximum major {b.maxMajor ?? 'not constrained'} (minimum {b.minMajor ?? 'not constrained'})</li>)}</ul>
+      </Callout> : null}
+      {isMySQL(cluster.spec.provider) ? <Callout tone="warn">{cluster.spec.provider === 'pxc' ? 'PXC' : 'MySQL'} 8.0 → 8.4 requires a recent successful current-version backup. Confirm recovery readiness before upgrading; downgrades and provider conversion are blocked. Select only a path offered by this provider catalog. The backend validates backup freshness.</Callout> : null}
       {upgrading ? (
         <Callout tone="info" title="Upgrade in progress">
-          {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.
+          {isMySQL(cluster.spec.provider) ? maintenance : maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, upgradeSource, cluster.spec.version)} Watch per-member versions above and the Operations tab.
         </Callout>
       ) : null}
 
@@ -216,7 +236,7 @@ export function UpgradesTab() {
         </Card> : null}
       </div>
 
-      <ConfirmDialog open={target !== null} onClose={() => { setTarget(null); upgrade.reset(); submission.reset(); }} onConfirm={() => target && upgrade.mutateAsync(target)} title={`Upgrade to ${target ?? ''}`} confirmLabel="Start upgrade" busy={upgrade.isPending} error={upgrade.error}>
+      <ConfirmDialog open={target !== null} onClose={() => { setTarget(null); setIgnoreMaintenanceWindow(false); upgrade.reset(); submission.reset(); }} onConfirm={() => target && upgrade.mutateAsync(target)} title={`Upgrade to ${target ?? ''}`} confirmLabel="Start upgrade" busy={upgrade.isPending} error={upgrade.error}>
         <div className="stack">
           <p className="small">
             <span className="mono">{running || 'not yet observed'}</span> → <span className="mono">{target}</span>. {maintenanceCopy(cluster.spec.provider, cluster.spec.components.engine.replicas, current, target ?? undefined)}
@@ -227,17 +247,20 @@ export function UpgradesTab() {
           {fcv && targetPath?.path.requiresFCV && cluster.status.fcv && cluster.status.fcv < targetPath.path.requiresFCV ? (
             <Callout tone="danger">FCV {cluster.status.fcv} is below the required {targetPath.path.requiresFCV}. Raise FCV first.</Callout>
           ) : null}
+          <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
         </div>
       </ConfirmDialog>
 
-      <ConfirmDialog open={fcvTarget !== null} onClose={() => { setFcvTarget(null); raiseFcv.reset(); submission.reset(); }} onConfirm={() => fcvTarget && raiseFcv.mutateAsync(fcvTarget)} title={`Raise FCV to ${fcvTarget ?? ''}`} confirmLabel="Raise FCV" danger typeToConfirm={name} busy={raiseFcv.isPending} error={raiseFcv.error}>
+      <ConfirmDialog open={fcvTarget !== null} onClose={() => { setFcvTarget(null); setIgnoreMaintenanceWindow(false); raiseFcv.reset(); submission.reset(); }} onConfirm={() => fcvTarget && raiseFcv.mutateAsync(fcvTarget)} title={`Raise FCV to ${fcvTarget ?? ''}`} confirmLabel="Raise FCV" danger typeToConfirm={name} busy={raiseFcv.isPending} error={raiseFcv.error}>
         <Callout tone="warn" title="This cannot be undone">
           Raising FCV enables new on-disk features and cannot be undone through Karakoram. Binary downgrades are not supported. Make sure a backup from after the upgrade exists.
         </Callout>
+        <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
       </ConfirmDialog>
 
-      <ConfirmDialog open={restartOpen} onClose={() => { setRestartOpen(false); restart.reset(); submission.reset(); }} onConfirm={() => restart.mutateAsync()} title="Rolling restart" confirmLabel="Restart" busy={restart.isPending} error={restart.error}>
+      <ConfirmDialog open={restartOpen} onClose={() => { setRestartOpen(false); setIgnoreMaintenanceWindow(false); restart.reset(); submission.reset(); }} onConfirm={() => restart.mutateAsync()} title="Rolling restart" confirmLabel="Restart" busy={restart.isPending} error={restart.error}>
         <p className="small">{maintenance}</p>
+        <MaintenanceOverride cluster={cluster} checked={ignoreMaintenanceWindow} onChange={setIgnoreMaintenanceWindow} />
       </ConfirmDialog>
     </div>
   );

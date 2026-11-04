@@ -27,6 +27,10 @@ func (p *Provider) Cleanup(ctx context.Context, rc *engine.Context, opts domain.
 			err = e
 		}
 	}()
+	seedExposure(rc, s)
+	if err = save(rc.Cluster, s); err != nil {
+		return false, err
+	}
 	if busy, e := drainRuntimeRecovery(ctx, rc, s); busy || e != nil {
 		return false, e
 	}

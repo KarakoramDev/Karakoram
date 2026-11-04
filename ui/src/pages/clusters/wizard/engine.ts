@@ -2,9 +2,50 @@
 // Copyright 2026 The Karakoram Authors
 
 import type { Schemas } from '@/api/client';
+import { readOptions as temporalOptions } from '../../../engines/temporal/spec.ts';
 
 /** Provider-specific copy and fallback rules belong here, not in shared controls. */
 export function engineRules(provider: string) {
+  if (provider === 'keycloak') return {
+    resourceMinimums: { cpu: 1, ram: 1.5, disk: 1 },
+    runtimeDisk: { min: 1, max: 3 },
+    topology: {
+      single: { title: 'Single Keycloak runtime', description: 'One identity-service runtime with a dedicated PostgreSQL binding. Maintenance interrupts authentication.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Use Keycloak public HTTPS routing under engine options',
+    configHint: 'Configure the source PostgreSQL binding and ingress under engine options.',
+  };
+  if (provider === 'mysql' || provider === 'pxc') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 5 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: (provider === 'pxc' ? {
+      cluster: { title: 'Percona XtraDB Cluster', description: 'Three or five Galera members and one ProxySQL-routed writer. Quorum loss rejects reads and writes. Use InnoDB tables with primary keys.' },
+    } : {
+      single: { title: 'Single MySQL member', description: 'Not highly available. One database member without failover; maintenance causes downtime.' },
+      group: { title: 'MySQL Group Replication', description: 'Three or five members with automatic failover. Requires a majority; writes block on quorum loss.' },
+    }) as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose MySQL publicly on port 3306',
+    configHint: 'Configure backend-allowlisted MySQL parameters under engine options.',
+  };
+  if (provider === 'neo4j') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 5 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      single: { title: 'Single instance (Community)', description: 'Exactly one Neo4j Community instance. No clustering, replicas or high availability; backups and maintenance cause a full outage.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Bolt publicly on port 7687',
+    configHint: 'Only allowlisted engineOptions.settings are supported; engineConfig is not accepted.',
+  };
+  if (provider === 'weaviate') return {
+    resourceMinimums: { cpu: 1, ram: 1, disk: 1 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      single: { title: 'Single Weaviate member', description: 'One data member and Raft voter. No redundancy; maintenance interrupts access.' },
+      cluster: { title: 'Weaviate cluster', description: '3–9 data members with three fixed Raft voters. Additional members do not automatically rebalance shards.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Weaviate REST on port 8080 and client gRPC on port 50051',
+    configHint: 'Use typed Weaviate engine options; raw configuration is unsupported.',
+  };
   if (provider === 'psmdb') return {
     resourceMinimums: { cpu: 1, ram: 0.5, disk: 5 },
     runtimeDisk: { min: 1, max: 3 },
@@ -21,6 +62,7 @@ export function engineRules(provider: string) {
     topology: {
       single: { title: 'Single PostgreSQL member', description: 'One database member without failover. Maintenance causes downtime.' },
       ha: { title: 'Highly available PostgreSQL', description: 'Three or five Patroni members with etcd quorum and a stable ProxySQL endpoint.' },
+      ...(provider === 'postgres' ? { distributed: { title: 'Distributed PostgreSQL (Citus)', description: 'A coordinator and worker groups, with Patroni failover per group and coordinator-only ProxySQL access.' } } : {}),
     } as Record<string, { title: string; description: string }>,
     exposureLabel: 'Expose PostgreSQL publicly on port 5432',
     configHint: 'Configure supported PostgreSQL parameters under engine options.',
@@ -35,6 +77,16 @@ export function engineRules(provider: string) {
     exposureLabel: 'Expose Elasticsearch HTTPS publicly on port 9200',
     configHint: 'Configure supported settings under Elastic Stack options.',
   };
+  if (provider === 'temporal') return {
+    resourceMinimums: { cpu: 1, ram: 0.25, disk: 1 },
+    runtimeDisk: { min: 0, max: 0 },
+    topology: {
+      combined: { title: 'Combined server', description: 'One stateless process runs the history, matching, frontend and worker roles. Scale it 1–5 instances; the simplest topology for development and small production clusters.' },
+      split: { title: 'Split services', description: 'History, matching, frontend and worker run as separate components with independent instance counts and resources, as in production Temporal deployments.' },
+    } as Record<string, { title: string; description: string }>,
+    exposureLabel: 'Expose Temporal publicly',
+    configHint: 'Temporal is configured through Temporal options; engine configuration overrides are rejected.',
+  };
   return {
     resourceMinimums: { cpu: 1, ram: 0, disk: 0 },
     topology: {} as Record<string, { title: string; description: string }>,
@@ -45,11 +97,31 @@ export function engineRules(provider: string) {
 }
 
 export function engineConsequences(spec: Schemas['ClusterSpec']): string[] {
+  if (spec.provider === 'mysql' || spec.provider === 'pxc') return [
+    spec.provider === 'pxc' ? 'PXC requires three or five Galera members in a Primary component and one routed writer. Quorum loss rejects reads and writes; never bootstrap an unfenced partition. Strict mode requires compatible InnoDB tables with primary keys.' : spec.topology.type === 'single' ? 'Single is not highly available; maintenance interrupts database access.' : 'Group Replication provides automatic failover, requires a majority, and blocks writes on quorum loss.',
+    'Manage application users through MySQL access to synchronize ProxySQL authentication. Read/write split is not a consistency guarantee.',
+    spec.backup?.pitr?.enabled ? 'PITR requires a completed full backup and continuous binlog archives.' : 'PITR is disabled; recovery is limited to completed backups.',
+  ];
+  if (spec.provider === 'neo4j') return [
+    'Neo4j Community is a single instance with no high availability. Every backup, restart, upgrade, TLS rotation and memory change is a full outage.',
+    'Backups are full offline dumps, with no incremental backups or point-in-time recovery. Scheduled backups require acceptBackupDowntime and have no maintenance window.',
+    'Every Community user has full administrative privileges. Rotate the managed neo4j administrator through System users.',
+    'Only Bolt (7687) can be exposed publicly. HTTPS Query API and Browser remain private; TLS and trusted cluster CA verification are required.',
+  ];
   if (spec.provider === 'postgres' || spec.provider === 'supabase') return [
     spec.topology.type === 'single' ? 'A single data member has no failover; maintenance interrupts database access.' : 'Patroni failover briefly interrupts writes. Three or five etcd voters maintain the data-member quorum.',
     'ProxySQL is the application endpoint. Login-role passwords must be managed through Postgres access to synchronize proxy authentication; roles created directly in SQL are not routable through the proxy.',
     spec.backup?.pitr?.enabled ? 'PITR archives WAL to registered backup storage. Coverage requires a completed full backup and a continuous WAL archive.' : 'PITR is disabled; recovery is limited to completed backups.',
   ];
+  if (spec.provider === 'temporal') {
+    const options = temporalOptions(spec);
+    return [
+      'All Temporal roles are stateless; workflow state and visibility live in the bound PostgreSQL cluster, whose availability and backups decide Temporal’s durability.',
+      spec.topology.type === 'split' ? 'History instances own the history shards; scaling history rebalances shards, while frontends and matching scale request capacity.' : 'A single combined server has no redundancy; add instances or switch to the split topology before production use.',
+      options.frontend.requireClientAuth ? 'SDK clients need a client certificate issued from the Client certificates tab (mutual TLS on port 7233).' : 'The frontend accepts any TLS client inside the project network without a client certificate.',
+      options.ui.publicHttps ? 'The Web UI is reachable from the internet behind OIDC login; store the client secret on the Web UI tab after creation.' : 'The Web UI, when enabled, stays private to the project network.',
+    ];
+  }
   if (spec.provider !== 'psmdb') return [];
   return [
     ...(spec.components.engine.replicas === 1 ? ['A single database member has no failover; maintenance makes its database unavailable.'] : []),

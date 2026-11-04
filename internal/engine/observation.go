@@ -20,6 +20,34 @@ import (
 // Keep headroom inside the sweep without extending the persisted readiness lease.
 const ObservationTimeout = 4 * time.Second
 
+// ErrObservationBudgetExhausted means no new health proof was obtained because
+// this pass's remaining read budget ended after an observation was invalidated.
+// It is not evidence of member failure and must never renew an old sample.
+var ErrObservationBudgetExhausted = errors.New("observation deferred: pass read budget exhausted")
+
+// ObservationFailure carries only fresh negative facts from an otherwise
+// deferred sweep. Agent is true when agent reachability itself was disproved.
+type ObservationFailure struct {
+	Member string
+	Agent  bool
+}
+
+type ObservationBudgetError struct {
+	Failures []ObservationFailure
+	Cause    error
+}
+
+func (e *ObservationBudgetError) Error() string {
+	if e.Cause != nil {
+		return ErrObservationBudgetExhausted.Error() + ": " + e.Cause.Error()
+	}
+	return ErrObservationBudgetExhausted.Error()
+}
+func (e *ObservationBudgetError) Unwrap() error { return e.Cause }
+func (e *ObservationBudgetError) Is(target error) bool {
+	return target == ErrObservationBudgetExhausted
+}
+
 // ObserveAgentStatus bounds a short configuration/process observation without
 // shortening the caller's subsequent administration or engine operations.
 func ObserveAgentStatus(ctx context.Context, client *agentapi.Client, engineName, member string) (agentapi.Status, error) {
@@ -195,6 +223,72 @@ func ApplyAgentDiagnostic(member *domain.MemberStatus, diagnostic string) {
 	member.Agent.Message += "Configuration apply: " + diagnostic
 }
 
+// DeferredObservation retains last-published member facts and their original
+// lease. Overall readiness is Unknown, not a new positive or negative sample.
+// FreshStatus still expires these historical facts at the normal lease limit.
+func DeferredObservation(status domain.ClusterStatus, at time.Time) domain.ClusterStatus {
+	status.Conditions = slices.Clone(status.Conditions)
+	status.Members = slices.Clone(status.Members)
+	if status.Phase == domain.PhaseReady {
+		status.Phase = domain.PhaseDegraded
+	}
+	found := false
+	for i := range status.Conditions {
+		condition := &status.Conditions[i]
+		if readinessCondition(*condition) && (condition.Status == "True" || condition.Type == "Healthy") {
+			found = found || condition.Type == "Healthy"
+			condition.Status, condition.Reason, condition.Message, condition.LastTransitionTime = "Unknown", "ObservationBudgetExhausted", "Read budget exhausted; the previous observation was not renewed", at
+		}
+	}
+	if !found {
+		status.Conditions = append(status.Conditions, domain.Condition{Type: "Healthy", Status: "Unknown", Reason: "ObservationBudgetExhausted", Message: "Read budget exhausted; the previous observation was not renewed", LastTransitionTime: at})
+	}
+	status.Message = "Availability observation deferred; previous health facts retain their original lease"
+	return status
+}
+
+// RebaseDeferredObservation prevents a deferred worker snapshot from overwriting
+// a newer publication made during Sync. Only fresh negative facts and durable
+// safety failures cross the rebase; no invalidated positive proof is reused.
+func RebaseDeferredObservation(latest, partial domain.ClusterStatus, failures []ObservationFailure, at time.Time) domain.ClusterStatus {
+	status := DeferredObservation(latest, at)
+	if partial.Phase == domain.PhaseFailed || partial.Phase == domain.PhaseError {
+		status.Phase = partial.Phase
+	}
+	if partial.InitialDataSource != nil {
+		status.InitialDataSource = partial.InitialDataSource
+	}
+	for _, condition := range partial.Conditions {
+		if condition.Status != "False" || readinessCondition(condition) {
+			continue
+		}
+		found := false
+		for i := range status.Conditions {
+			if status.Conditions[i].Type == condition.Type {
+				found = true
+				if condition.LastTransitionTime.After(status.Conditions[i].LastTransitionTime) {
+					status.Conditions[i] = condition
+				}
+				break
+			}
+		}
+		if !found {
+			status.Conditions = append(status.Conditions, condition)
+		}
+	}
+	for _, failure := range failures {
+		for i := range status.Members {
+			if status.Members[i].Name == failure.Member {
+				status.Members[i].Health = false
+				if failure.Agent {
+					status.Members[i].Agent.Healthy = false
+				}
+			}
+		}
+	}
+	return status
+}
+
 // UnknownObservation retains diagnostics, but withdraws positive availability
 // claims. Clone slices because API projections must not mutate stored snapshots.
 func UnknownObservation(status domain.ClusterStatus, at time.Time, reason string) domain.ClusterStatus {
@@ -224,12 +318,15 @@ func UnknownObservation(status domain.ClusterStatus, at time.Time, reason string
 		}
 	}
 	status.Message = "Availability observation unavailable or stale; inspect member reachability"
+	ObserveAgentVersions(&status, CurrentAgentBuild(), at)
 	return status
 }
 
 // FreshStatus applies a lease to a persisted observation, including legacy
 // snapshots with no sample timestamp. Transition times are not sample times.
 func FreshStatus(status domain.ClusterStatus, at time.Time) domain.ClusterStatus {
+	status.Conditions = slices.Clone(status.Conditions)
+	ObserveAgentVersions(&status, CurrentAgentBuild(), at)
 	active := status.Phase == domain.PhaseReady || status.Phase == domain.PhaseDegraded
 	for _, condition := range status.Conditions {
 		active = active || readinessCondition(condition) && condition.Status == "True"
@@ -256,16 +353,43 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 	if clock == nil {
 		clock = RealClock{}
 	}
+	// Status may return only an early partial result, or mutate its input while
+	// probing. Capture the inspected lifecycle/inventory before either attempt:
+	// an observation error cannot establish new provisioning progress or remove
+	// durable member identities.
+	previous := rc.Cluster.Status
+	previous.Members = slices.Clone(previous.Members)
+	previous.Conditions = slices.Clone(previous.Conditions)
 	for attempt := range 2 {
 		started := clock.Now()
 		probe, cancel := context.WithTimeout(ctx, ObservationSweepTimeout)
 		probe = infra.ObservationContext(probe)
 		status, err = p.Status(probe, rc)
+		if errors.Is(err, ErrObservationBudgetExhausted) {
+			cancel()
+			var deferred *ObservationBudgetError
+			if !errors.As(err, &deferred) {
+				deferred = &ObservationBudgetError{Cause: err}
+				if err == ErrObservationBudgetExhausted {
+					deferred.Cause = nil
+				}
+			}
+			deferred.Cause = errors.Join(deferred.Cause, ApplyInitialDataSourceStatus(p, rc.Cluster, &status))
+			status.ObservedAt, status.ObservationEpoch = previous.ObservedAt, previous.ObservationEpoch
+			status.ObservedGeneration = previous.ObservedGeneration
+			return status, deferred
+		}
 		err = errors.Join(err, ApplyInitialDataSourceStatus(p, rc.Cluster, &status))
 		err = errors.Join(err, observePlacementFailures(probe, rc, &status, attempt == 0))
 		err = errors.Join(err, ObserveRuntimeStops(probe, rc, &status, attempt == 0))
 		err = errors.Join(err, probe.Err())
 		cancel()
+		// Opted-in providers may reuse immutable samples born in this pass.
+		// Validate against that original boundary and publish it conservatively;
+		// a retry must never relabel cached metadata as a newer observation.
+		if passStarted, ok := ObservationPassStartedAt(ctx); ok && passStarted.Before(started) {
+			started = passStarted
+		}
 		status.ObservedAt = started
 		// A tagged result belongs to a completed/cached sweep, not a newly
 		// observed provider result. Never relabel it as this process's sample.
@@ -293,11 +417,26 @@ func ObserveStatus(ctx context.Context, p Provider, rc *Context) (domain.Cluster
 		}
 		if !failed && (!retry || attempt == 1) {
 			status.ObservationEpoch = rc.ObservationEpoch
+			ObserveAgentVersions(&status, CurrentAgentBuild(), clock.Now())
 			return status, nil
 		}
 		if attempt == 1 || ctx.Err() != nil {
-			if status.Phase == "" {
-				status = rc.Cluster.Status
+			if err != nil {
+				// Failure/abort owners may deliberately publish a terminal
+				// lifecycle with an error. Do not turn that safety fence back
+				// into the previously serving phase.
+				if previous.Phase != "" && status.Phase != domain.PhaseFailed && status.Phase != domain.PhaseError {
+					status.Phase = previous.Phase
+				}
+				if len(previous.Members) > 0 {
+					status.Members = previous.Members
+				}
+				status.ObservedGeneration = previous.ObservedGeneration
+				if len(status.Conditions) == 0 {
+					status.Conditions = previous.Conditions
+				}
+			} else if status.Phase == "" {
+				status = previous
 			}
 			status = UnknownObservation(status, clock.Now(), "ObservationFailed")
 			// Failed samples never renew a previously successful readiness lease.

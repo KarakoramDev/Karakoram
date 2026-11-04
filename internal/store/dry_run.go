@@ -88,6 +88,9 @@ func (s *Store) CheckRestore(ctx context.Context, restore *domain.Restore) error
 	if err = admitRestoreBackup(ctx, tx, target, domain.ClusterRef{Namespace: restore.SourceNamespace, Name: restore.Source.SourceCluster}, restore.Source.Backup, restore.Source.PITRTime != nil); err != nil {
 		return err
 	}
+	if err = guardRestoreBindings(ctx, tx, target); err != nil {
+		return err
+	}
 	var exists int
 	err = tx.QueryRowContext(ctx, "SELECT 1 FROM records WHERE kind='restore' AND scope=? AND key=?", target.Key(), restore.Name).Scan(&exists)
 	if err == sql.ErrNoRows {

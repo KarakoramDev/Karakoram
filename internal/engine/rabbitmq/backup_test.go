@@ -132,7 +132,7 @@ func (s *definitionsFakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !strings.Contains(r.Header.Get("Authorization"), "AWS4-HMAC-SHA256") {
-		http.Error(w, "unsigned request", 403)
+		http.Error(w, "unsigned request", http.StatusForbidden)
 		return
 	}
 	body, exists := s.objects[r.URL.Path]
@@ -238,7 +238,7 @@ func newDefinitionsFixture(t *testing.T) *definitionsFixtureEnv {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, password, ok := r.BasicAuth()
 		if !ok || user != "karakoram" || password != "target-secret" {
-			http.Error(w, "bad auth", 401)
+			http.Error(w, "bad auth", http.StatusUnauthorized)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

@@ -29,6 +29,7 @@ func TestReviewPartialNativeDataNeverConfirmsVolumeLoss(t *testing.T) {
 		{"postgres", "karakoram/upgrade-state.json", `{"phase":"old-retired"}`},
 		{"elasticsearch", "karakoram/data/indices/uuid/0/index/segments_1", "retained index"},
 		{"rabbitmq", "rabbitmq/rabbit@member/msg_stores/persistent/1.rdq", "retained queue"},
+		{"openbao", "openbao/raft/raft.db", "partial raft metadata"},
 	} {
 		for _, initialized := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/%s/%t", fixture.engine, fixture.path, initialized), func(t *testing.T) {

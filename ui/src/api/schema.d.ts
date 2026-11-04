@@ -390,6 +390,77 @@ export type paths = {
         patch: operations["patchCluster"];
         trace?: never;
     };
+    "/clusters/{cluster}/actions/rebalance": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebalance shards across distributed PostgreSQL worker groups */
+        post: operations["rebalancePostgres"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/backup-drills": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List backup drills */
+        get: operations["listBackupDrills"];
+        put?: never;
+        /** Create backup drill */
+        post: operations["createBackupDrill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/backup-drills/{drill}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                drill: string;
+            };
+            cookie?: never;
+        };
+        /** Get backup drill */
+        get: operations["getBackupDrill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/backups": {
         parameters: {
             query?: {
@@ -822,6 +893,33 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/members/{member}/move": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                member: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move cluster member
+         * @description Replaces a supported data member with a new runtime and volume, excluding its current host on placement-capable backends. Backends without Placement perform a best-effort replacement with no host placement guarantee. Unknown authoritative placement is refused.
+         */
+        post: operations["moveClusterMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/members/{member}/replace": {
         parameters: {
             query?: {
@@ -869,6 +967,367 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/mysql/databases": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List MySQL application databases */
+        get: operations["listMySQLDatabases"];
+        put?: never;
+        /** Create a MySQL application database */
+        post: operations["createMySQLDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/databases/{database}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                database: string;
+            };
+            cookie?: never;
+        };
+        /** Read a MySQL application database */
+        get: operations["getMySQLDatabase"];
+        put?: never;
+        post?: never;
+        /** Delete a MySQL application database */
+        delete: operations["deleteMySQLDatabase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/grants": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List MySQL grants filtered by user or database
+         * @description At least one of user or database is required; both may be supplied.
+         */
+        get: operations["listMySQLGrants"];
+        put?: never;
+        /** Grant bounded MySQL database privileges */
+        post: operations["grantMySQLPrivileges"];
+        /** Revoke MySQL database privileges */
+        delete: operations["revokeMySQLPrivileges"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/recover-quorum": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explicitly recover a fenced PXC minority component
+         * @description PXC only. Requires explicit operator acknowledgement. The control plane verifies recovered positions and fences missing owned runtimes before bootstrapping one surviving component. Existing Primary components and ambiguous positions are rejected; no data-loss override exists.
+         */
+        post: operations["recoverMySQLQuorum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/users": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List MySQL application users */
+        get: operations["listMySQLUsers"];
+        put?: never;
+        /** Create a MySQL application user */
+        post: operations["createMySQLUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/users/{user}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        /** Read a MySQL application user */
+        get: operations["getMySQLUser"];
+        put?: never;
+        post?: never;
+        /** Delete a MySQL application user */
+        delete: operations["deleteMySQLUser"];
+        options?: never;
+        head?: never;
+        /** Update selected MySQL user attributes */
+        patch: operations["patchMySQLUser"];
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/users/{user}/password": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate a MySQL user password, optionally retaining the current password */
+        post: operations["rotateMySQLUserPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/mysql/users/{user}/password/discard-old": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard a MySQL user's retained password */
+        post: operations["discardMySQLUserOldPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/neo4j/users": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List Neo4j Community users
+         * @description Every Community user has full administrative privileges. The managed neo4j administrator is hidden.
+         */
+        get: operations["listNeo4jUsers"];
+        put?: never;
+        /**
+         * Create a Neo4j Community user
+         * @description Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+         */
+        post: operations["createNeo4jUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/neo4j/users/{user}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a Neo4j Community user
+         * @description Every Community user has full administrative privileges.
+         */
+        get: operations["getNeo4jUser"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a Neo4j Community user
+         * @description Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+         */
+        delete: operations["deleteNeo4jUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/neo4j/users/{user}/password": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set or generate a Neo4j Community user password
+         * @description Every Community user has full administrative privileges. The managed neo4j administrator cannot be mutated.
+         */
+        post: operations["setNeo4jUserPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/openbao/database-connections": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List managed database connections */
+        get: operations["listOpenBaoDatabaseConnections"];
+        put?: never;
+        /** Create a managed database connection */
+        post: operations["createOpenBaoDatabaseConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/openbao/database-connections/{connection}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        /** getOpenBaoDatabaseConnection */
+        get: operations["getOpenBaoDatabaseConnection"];
+        put?: never;
+        post?: never;
+        /** Delete a managed database connection */
+        delete: operations["deleteOpenBaoDatabaseConnection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/openbao/unseal-keys/reveal": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal OpenBao initialization material */
+        post: operations["revealOpenBaoUnsealKeys"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/operations": {
         parameters: {
             query?: {
@@ -906,8 +1365,8 @@ export type paths = {
             cookie?: never;
         };
         /**
-         * Read the continuous restorable PITR window
-         * @description Returns the latest continuous backed interval; an initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
+         * Read restorable PITR intervals
+         * @description Returns every engine-verified restorable range in intervals, with optional anchoring full-backup names; legacy start/end retain the latest-ending merged interval. An initializing cluster with no ready replica set or no configured backup storage returns 409 invalid_state with PITR prerequisite guidance instead of an internal error. Established coverage remains queryable during scaling, upgrades, resource changes, joins and reloads; live agent/storage failures can still affect availability. Engines without PITR return 400 invalid_request with reason unsupported and a message naming the engine capability.
          */
         get: operations["getPITRWindow"];
         put?: never;
@@ -935,6 +1394,53 @@ export type paths = {
         get: operations["getClusterPlacement"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/postgres/bindings": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List inbound PostgreSQL consumer bindings without credentials */
+        get: operations["listPostgresBindings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/postgres/bindings/{binding}/rotate": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                binding: string;
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate binding credentials and refresh the consumer */
+        post: operations["rotatePostgresBinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1768,6 +2274,304 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/temporal/client-certificates": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List non-secret Temporal client certificate metadata */
+        get: operations["listTemporalClientCertificates"];
+        put?: never;
+        /** Issue a Temporal client certificate and return its private key once */
+        post: operations["issueTemporalClientCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/temporal/namespaces": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List Temporal namespaces */
+        get: operations["listTemporalNamespaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/temporal/namespaces/{temporalNamespace}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                temporalNamespace: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Request asynchronous deletion of an unmanaged Temporal namespace */
+        delete: operations["deleteTemporalNamespace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/temporal/ui/oidc-client-secret": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Seal the write-only Temporal UI OIDC client secret */
+        put: operations["setTemporalUIOIDCClientSecret"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/upgrade-agents": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upgrade cluster agents */
+        post: operations["upgradeClusterAgents"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/weaviate/roles": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List Weaviate RBAC roles */
+        get: operations["listWeaviateRoles"];
+        put?: never;
+        /**
+         * Create a Weaviate RBAC role
+         * @description Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be created.
+         */
+        post: operations["createWeaviateRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/weaviate/roles/{role}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                role: string;
+            };
+            cookie?: never;
+        };
+        /** Get a Weaviate RBAC role */
+        get: operations["getWeaviateRole"];
+        /**
+         * Replace a Weaviate RBAC role
+         * @description Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be replaced.
+         */
+        put: operations["updateWeaviateRole"];
+        post?: never;
+        /**
+         * Delete a Weaviate RBAC role
+         * @description Requires database-users/update and clusters/update on the same cluster. Built-in and protected roles cannot be deleted.
+         */
+        delete: operations["deleteWeaviateRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/weaviate/users": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        /** List Weaviate database users */
+        get: operations["listWeaviateUsers"];
+        put?: never;
+        /**
+         * Create a Weaviate database user
+         * @description Requires database-users/create. Assigning any role other than viewer or read-only also requires clusters/update on the same cluster. Protected system users cannot be created.
+         */
+        post: operations["createWeaviateUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/weaviate/users/{user}": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        /** Get a Weaviate database user */
+        get: operations["getWeaviateUser"];
+        /**
+         * Update Weaviate database user roles and activation
+         * @description Requires database-users/update. Assigning any role other than viewer or read-only also requires clusters/update on the same cluster, including roles already present. Protected system users cannot be updated.
+         */
+        put: operations["updateWeaviateUser"];
+        post?: never;
+        /**
+         * Delete a Weaviate database user
+         * @description Requires database-users/delete, including for privileged users, matching PostgreSQL role deletion. Deletion revokes access rather than issuing credentials and does not require clusters/update. Protected system users cannot be deleted.
+         */
+        delete: operations["deleteWeaviateUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/weaviate/users/{user}/rotate-key": {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate a Weaviate database user API key
+         * @description Requires database-users/update. If the user's current roles include any role other than viewer or read-only, also requires clusters/update on the same cluster because the returned key grants those privileges. Protected system user keys cannot be rotated through this operation.
+         */
+        post: operations["rotateWeaviateUserKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/control-plane/backup-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get control plane backup policy */
+        get: operations["getControlPlaneBackupPolicy"];
+        /** Update control plane backup policy */
+        put: operations["updateControlPlaneBackupPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/control-plane/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List control plane backups */
+        get: operations["listControlPlaneBackups"];
+        put?: never;
+        /** Create control plane backup */
+        post: operations["createControlPlaneBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dry-run/clusters": {
         parameters: {
             query?: {
@@ -2029,6 +2833,64 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/notification-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List notification channels */
+        get: operations["listNotificationChannels"];
+        put?: never;
+        /** Create notification channel */
+        post: operations["createNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-channels/{channel}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        /** Get notification channel */
+        get: operations["getNotificationChannel"];
+        /** Replace notification channel */
+        put: operations["replaceNotificationChannel"];
+        post?: never;
+        /** Delete notification channel */
+        delete: operations["deleteNotificationChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notification-channels/{channel}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test notification channel */
+        post: operations["testNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/oauth-grants": {
         parameters: {
             query?: never;
@@ -2282,6 +3144,24 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/settings/agent-rollout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent rollout settings */
+        get: operations["getAgentRolloutSettings"];
+        /** Update agent rollout settings */
+        put: operations["updateAgentRolloutSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/version": {
         parameters: {
             query?: never;
@@ -2324,7 +3204,27 @@ export type components = {
          * @description At least 12 Unicode characters and at most 1024 UTF-8 bytes. Self-service password changes must differ from the current password; rejected changes retain the mandatory-change flag. Administrative resets accept the current password, invalidate previous authentication and force a password change.
          */
         AccountPassword: string;
+        AgentBuild: {
+            build: string;
+            commit: string;
+            version: string;
+        };
+        AgentRolloutSettings: {
+            /** @default false */
+            automatic: boolean;
+            readonly currentBuild?: components["schemas"]["AgentBuild"];
+            /** @default 1 */
+            maxConcurrentClusters: number;
+        };
+        AgentRolloutStatus: {
+            outdated: string[];
+            targetBuild: string;
+            targetVersion: string;
+            unknown: string[];
+        };
         AgentStatus: {
+            build?: string;
+            commit?: string;
             /** Format: int64 */
             configVersion?: number;
             connected: boolean;
@@ -2383,6 +3283,7 @@ export type components = {
             lastWriteTime?: string;
             /** @description Complete snapshot-time object key, prefix, or snapshot reference. */
             location?: string;
+            mysql?: components["schemas"]["MySQLBackup"];
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @description Durable operation that created this backup. */
@@ -2402,10 +3303,74 @@ export type components = {
              * @description What initiated the snapshot; restore identifies an automatic post-restore base backup.
              * @enum {string}
              */
-            trigger: "manual" | "schedule" | "restore";
+            trigger: "manual" | "schedule" | "restore" | "pitr";
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump";
         };
+        BackupDrill: {
+            backup?: string;
+            backupType?: string;
+            checks?: components["schemas"]["BackupDrillCheck"][];
+            cleanup?: components["schemas"]["BackupDrillCleanup"];
+            cluster: string;
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            dataAgeSeconds?: number;
+            error?: string;
+            id: string;
+            limitations?: string;
+            namespace: components["schemas"]["NamespaceName"];
+            /** @enum {string} */
+            phase: "Pending" | "Provisioning" | "Restoring" | "Verifying" | "CleaningUp" | "Succeeded" | "Failed";
+            /** Format: date-time */
+            readyAt?: string;
+            /** Format: int64 */
+            restoreDurationSeconds?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            targetCluster?: string;
+            /** Format: int64 */
+            totalDurationSeconds?: number;
+            /** @enum {string} */
+            trigger: "manual" | "schedule";
+        };
+        BackupDrillCheck: {
+            message?: string;
+            name: string;
+            passed: boolean;
+        };
+        BackupDrillCleanup: {
+            orphanedVolumes: string[];
+            /** @enum {string} */
+            phase: "Pending" | "Done" | "Failed";
+        };
+        BackupDrillList: {
+            items: components["schemas"]["BackupDrill"][];
+            nextCursor?: string;
+        };
+        BackupDrillPolicy: {
+            backupSchedule?: string;
+            enabled: boolean;
+            schedule: string;
+            /**
+             * @description Go duration between 30m and 48h.
+             * @default 6h
+             */
+            timeout: string;
+        };
+        BackupDrillPolicyPatch: {
+            backupSchedule?: string | null;
+            enabled?: boolean | null;
+            schedule?: string | null;
+            /**
+             * @description Go duration between 30m and 48h.
+             * @default 6h
+             */
+            timeout: string | null;
+        } | null;
         BackupList: {
             items: components["schemas"]["Backup"][];
             /** @description Opaque continuation cursor; absent at the end. */
@@ -2421,7 +3386,7 @@ export type components = {
             /** @description Optional override; when omitted, use backup.storage. */
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump";
         };
         BackupScheduleInput: {
             /** @description Five-field cron expression, evaluated in UTC. */
@@ -2432,19 +3397,22 @@ export type components = {
             retainCount: number;
             storage?: string;
             /** @enum {string} */
-            type: "logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr";
+            type: "logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump";
         };
         BackupSpec: {
+            drill?: components["schemas"]["BackupDrillPolicy"];
             pitr?: components["schemas"]["PITRSpec"];
             schedules?: components["schemas"]["BackupSchedule"][];
             storage?: string;
         };
         BackupSpecInput: {
+            drill?: components["schemas"]["BackupDrillPolicy"];
             pitr?: components["schemas"]["PITRSpec"];
             schedules?: components["schemas"]["BackupScheduleInput"][];
             storage?: string;
         };
         BackupSpecPatch: {
+            drill?: components["schemas"]["BackupDrillPolicyPatch"];
             pitr?: components["schemas"]["PITRSpecPatch"];
             schedules?: components["schemas"]["BackupScheduleInput"][] | null;
             storage?: string | null;
@@ -2485,7 +3453,7 @@ export type components = {
         };
         CanRequest: {
             /** @enum {string} */
-            action: "create" | "read" | "update" | "delete" | "export" | "*";
+            action: "create" | "read" | "reveal" | "update" | "delete" | "export" | "*";
             object: string;
             resource: string;
             /** @description Optional subject; checking another subject requires rbac read permission. */
@@ -2506,6 +3474,7 @@ export type components = {
             createdAt: string;
             /** Format: int64 */
             generation: number;
+            readonly managedBy?: components["schemas"]["ManagedBy"];
             name: string;
             readonly namespace: components["schemas"]["NamespaceName"];
             /** @description Tracking operation returned on create, PUT, PATCH and resume acceptance. */
@@ -2531,6 +3500,7 @@ export type components = {
                 [key: string]: unknown;
             };
             exposure?: components["schemas"]["ExposureInput"];
+            maintenance?: components["schemas"]["MaintenancePolicy"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
@@ -2571,6 +3541,7 @@ export type components = {
                 [key: string]: unknown;
             } | null;
             exposure?: components["schemas"]["ExposurePatch"];
+            maintenance?: components["schemas"]["MaintenancePolicyPatch"];
             monitoring?: components["schemas"]["MonitoringSpecPatch"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider?: string | null;
@@ -2589,6 +3560,7 @@ export type components = {
                 [key: string]: unknown;
             };
             exposure?: components["schemas"]["Exposure"];
+            maintenance?: components["schemas"]["MaintenancePolicy"];
             monitoring?: components["schemas"]["MonitoringSpec"];
             /** @description Required provider identifier; list providers with GET /api/v1/providers. */
             provider: string;
@@ -2602,11 +3574,13 @@ export type components = {
             version: string;
         };
         ClusterStatus: {
+            agents?: components["schemas"]["AgentRolloutStatus"];
             backup?: components["schemas"]["ClusterBackupStatus"];
             conditions: components["schemas"]["Condition"][];
             connection?: components["schemas"]["ConnectionSummary"];
             dataMcp?: components["schemas"]["DataMcpStatus"];
             fcv?: string;
+            maintenance?: components["schemas"]["MaintenanceStatus"];
             members: components["schemas"]["Member"][];
             message?: string;
             /** Format: int64 */
@@ -2698,6 +3672,44 @@ export type components = {
             /** @description Connection URI without a password. */
             uri: string;
         };
+        ControlPlaneBackup: {
+            /** Format: date-time */
+            completedAt?: string;
+            /** Format: date-time */
+            createdAt: string;
+            error?: string;
+            id: string;
+            karakoramVersion?: string;
+            keyFingerprint?: string;
+            objectKey?: string;
+            /** @enum {string} */
+            phase: "Pending" | "Running" | "Succeeded" | "Failed";
+            schemaVersion?: string;
+            sha256?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            storage: components["schemas"]["ControlPlaneBackupStorage"];
+            /** @enum {string} */
+            trigger: "manual" | "schedule";
+        };
+        ControlPlaneBackupList: {
+            items: components["schemas"]["ControlPlaneBackup"][];
+            nextCursor?: string;
+        };
+        ControlPlaneBackupPolicy: {
+            enabled: boolean;
+            /** @default 14 */
+            retainCount: number;
+            /** @default 0 3 * * * */
+            schedule: string;
+            storage: components["schemas"]["ControlPlaneBackupStorage"];
+        };
+        ControlPlaneBackupStorage: {
+            name: string;
+            namespace: components["schemas"]["NamespaceName"];
+        };
         CreateAccountRequest: {
             /** @default true */
             enabled: boolean;
@@ -2714,6 +3726,9 @@ export type components = {
             expiresAt?: string;
             name: components["schemas"]["APITokenName"];
             restrictions?: components["schemas"]["APITokenRestrictions"];
+        };
+        CreateBackupDrillRequest: {
+            backup?: string;
         };
         CreateBackupRequest: {
             name: string;
@@ -2740,6 +3755,7 @@ export type components = {
         };
         CreateClusterRequest: {
             name: string;
+            openbaoUnsealShares?: components["schemas"]["OpenBaoRestoreUnsealShares"];
             spec: components["schemas"]["ClusterInputSpec"];
         };
         CreatedAPIToken: {
@@ -2770,7 +3786,12 @@ export type components = {
             tags: ("management" | "policymaker" | "monitoring" | "administrator" | "impersonator")[];
         };
         CreateRestoreRequest: {
+            /** @description Acknowledge that an in-place PostgreSQL restore can invalidate bound consumer data and credentials. */
+            acknowledgeBoundConsumers?: boolean;
+            /** @description Only Temporal reads this flag. Explicitly acknowledge that restoring its shared PostgreSQL source rolls back every consumer. */
+            acknowledgeSharedSource?: boolean;
             name: string;
+            openbaoUnsealShares?: components["schemas"]["OpenBaoRestoreUnsealShares"];
             source: components["schemas"]["RestoreSource"];
             /** @description Source namespace; defaults to the target cluster namespace. */
             sourceNamespace?: components["schemas"]["NamespaceName"];
@@ -3151,6 +4172,41 @@ export type components = {
             /** Format: date-time */
             timestamp: string;
         };
+        MaintenancePolicy: {
+            /**
+             * @description IANA time zone.
+             * @default UTC
+             */
+            timeZone: string;
+            windows?: components["schemas"]["MaintenanceWindow"][];
+        };
+        MaintenancePolicyPatch: {
+            /**
+             * @description IANA time zone.
+             * @default UTC
+             */
+            timeZone: string | null;
+            windows?: components["schemas"]["MaintenanceWindow"][] | null;
+        } | null;
+        MaintenanceStatus: {
+            /** Format: date-time */
+            currentWindowEnd?: string;
+            /** Format: date-time */
+            nextWindowStart?: string;
+            open: boolean;
+        };
+        MaintenanceWindow: {
+            /** @description Go duration between 15m and 168h. */
+            duration: string;
+            /** @description Five-field cron expression specifying window start times. */
+            schedule: string;
+        };
+        ManagedBy: {
+            cluster: string;
+            id: string;
+            /** @enum {string} */
+            kind: "backup-drill";
+        };
         Member: {
             agent?: components["schemas"]["AgentStatus"];
             /** @description Effective runtime vertical autoscaling configuration read from the platform, distinct from desired spec and current allocation. Disk bounds refer to the disposable runtime root disk, not the persistent database volume. */
@@ -3162,6 +4218,8 @@ export type components = {
             diskTotalBytes?: number;
             /** Format: int64 */
             diskUsageBytes?: number;
+            /** @description Distributed PostgreSQL group; 0 is coordinator, positive groups are workers. Absent for other members. */
+            readonly group?: number;
             health: boolean;
             lagSeconds?: number;
             name: string;
@@ -3219,6 +4277,90 @@ export type components = {
             /** @default true */
             enabled: boolean | null;
         } | null;
+        /** @description Immutable XtraBackup dependency chain and repository incarnation provenance. */
+        MySQLBackup: {
+            chainRootLabel: string;
+            clusterUID: string;
+            /** Format: date-time */
+            endTime: string;
+            /** Format: uint64 */
+            fromLSN: number;
+            generation: number;
+            gtidSet: string;
+            label: string;
+            objectPaths: string[];
+            parentLabel?: string;
+            /** @description Opaque source agent/data incarnation binding local InnoDB LSNs. Absent on legacy backups, which cannot parent incrementals. */
+            physicalIdentity?: string;
+            repository: string;
+            serverVersion: string;
+            /** Format: uint64 */
+            toLSN: number;
+            toolVersion: string;
+            /** @enum {string} */
+            type: "full" | "incremental";
+        };
+        MySQLDatabase: {
+            characterSet: string;
+            collation: string;
+            name: string;
+        };
+        MySQLDatabaseWrite: {
+            /** @default utf8mb4 */
+            characterSet: string;
+            /** @default utf8mb4_0900_ai_ci */
+            collation: string;
+            name: string;
+        };
+        MySQLGrant: {
+            database: string;
+            privileges: components["schemas"]["MySQLGrantPrivileges"][];
+            user: string;
+        };
+        /** @enum {string} */
+        MySQLGrantPrivileges: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "CREATE" | "DROP" | "ALTER" | "INDEX" | "REFERENCES" | "CREATE_VIEW" | "SHOW_VIEW" | "TRIGGER" | "EXECUTE" | "CREATE_ROUTINE" | "ALTER_ROUTINE" | "EVENT" | "LOCK_TABLES" | "CREATE_TEMPORARY_TABLES" | "ALL";
+        MySQLPasswordRotation: {
+            generatedPassword: string;
+        };
+        MySQLQuorumRecoveryRequest: {
+            /**
+             * @description Explicit acknowledgement that absent members must be fenced before quorum recovery.
+             * @enum {string}
+             */
+            confirmation: "all-absent-members-fenced";
+        };
+        MySQLUser: {
+            /** @enum {string} */
+            host: "%";
+            locked: boolean;
+            maxUserConnections: number;
+            name: string;
+            passwordRetained: boolean;
+            routableThroughProxy: boolean;
+        };
+        MySQLUserCreated: {
+            /** @description Returned only when the password was generated. */
+            generatedPassword?: string;
+            /** @enum {string} */
+            host: "%";
+            locked: boolean;
+            maxUserConnections: number;
+            name: string;
+            passwordRetained: boolean;
+            routableThroughProxy: boolean;
+        };
+        MySQLUserPatch: {
+            locked?: boolean;
+            maxUserConnections?: number;
+        };
+        MySQLUserWrite: {
+            /** @default false */
+            locked: boolean;
+            /** @default 0 */
+            maxUserConnections: number;
+            name: string;
+            password?: string;
+        };
         Namespace: {
             backend: string;
             capabilities: components["schemas"]["Capability"][];
@@ -3270,6 +4412,93 @@ export type components = {
             /** @description New description; an empty string clears the description. */
             description: string;
         };
+        /** @description A Neo4j Community user. Every user has full administrative privileges. */
+        Neo4jUser: {
+            name: string;
+            passwordChangeRequired: boolean;
+        };
+        Neo4jUserCreate: {
+            /** @description The managed neo4j administrator is reserved. */
+            name: string;
+            /** @description Omit to generate a password returned once. */
+            password?: string;
+        };
+        Neo4jUserCreated: {
+            generatedPassword?: string;
+            user: components["schemas"]["Neo4jUser"];
+        };
+        Neo4jUserPassword: {
+            /** @description Omit to generate a password returned once. */
+            password?: string;
+        };
+        Neo4jUserPasswordChanged: {
+            generatedPassword?: string;
+        };
+        /** @enum {string} */
+        NotificationCategory: "backup-failed" | "cluster-degraded" | "cluster-recovered" | "volume-deletion-refused" | "certificate-expiring" | "deployment-retries-exhausted" | "operation-failed" | "members-co-located" | "backup-drill-failed" | "control-plane-backup-failed" | "agents-outdated";
+        NotificationChannel: {
+            /** @description Empty means all categories. */
+            categories?: components["schemas"]["NotificationCategory"][];
+            /** Format: date-time */
+            readonly createdAt?: string;
+            email?: components["schemas"]["NotificationEmail"];
+            enabled: boolean;
+            name: string;
+            /** @description Empty means all namespaces, including installation-wide events. */
+            namespaces?: string[];
+            slack?: components["schemas"]["NotificationSlack"];
+            readonly status?: components["schemas"]["NotificationChannelStatus"];
+            /** @enum {string} */
+            type: "webhook" | "slack" | "email";
+            /** Format: date-time */
+            readonly updatedAt?: string;
+            webhook?: components["schemas"]["NotificationWebhook"];
+        };
+        NotificationChannelList: {
+            items: components["schemas"]["NotificationChannel"][];
+            nextCursor?: string;
+        };
+        NotificationChannelStatus: {
+            /** Format: int64 */
+            failed?: number;
+            /** Format: date-time */
+            lastDeliveryAt?: string;
+            lastError?: string;
+            /** Format: date-time */
+            lastErrorAt?: string;
+            /** Format: int64 */
+            pending?: number;
+        };
+        NotificationEmail: {
+            from: string;
+            host: string;
+            /** Format: password */
+            password?: string;
+            readonly passwordConfigured?: boolean;
+            port: number;
+            /** @enum {string} */
+            security: "starttls" | "tls";
+            to: string[];
+            username?: string;
+        };
+        NotificationSlack: {
+            /** Format: password */
+            webhookUrl?: string;
+            readonly webhookUrlConfigured?: boolean;
+        };
+        NotificationTestResult: {
+            delivered: boolean;
+            error?: string;
+        };
+        NotificationWebhook: {
+            readonly host?: string;
+            /** Format: password */
+            signingSecret?: string;
+            readonly signingSecretConfigured?: boolean;
+            /** Format: password */
+            url?: string;
+            readonly urlConfigured?: boolean;
+        };
         OAuthGrant: {
             clientHost: string;
             clientId: string;
@@ -3312,6 +4541,76 @@ export type components = {
             redirectURL?: string;
             scopes?: string[];
         };
+        OpenBaoDatabaseConnection: {
+            /** Format: date-time */
+            createdAt: string;
+            message?: string;
+            mountPath: string;
+            name: string;
+            /** @enum {string} */
+            phase: "pending" | "ready" | "deleting" | "failed";
+            roles: components["schemas"]["OpenBaoDatabaseRole"][];
+            targetCluster: string;
+            targetProvider: string;
+        };
+        OpenBaoDatabaseConnectionList: {
+            items: components["schemas"]["OpenBaoDatabaseConnection"][];
+        };
+        OpenBaoDatabaseConnectionWrite: {
+            name: string;
+            roles: components["schemas"]["OpenBaoDatabaseRoleWrite"][];
+            targetCluster: string;
+        };
+        OpenBaoDatabaseRole: {
+            /** @enum {string} */
+            access: "readonly" | "readwrite";
+            credentialsPath: string;
+            database?: string;
+            /** Format: int64 */
+            defaultTtlSeconds?: number;
+            /** Format: int64 */
+            maxTtlSeconds?: number;
+            name: string;
+        };
+        OpenBaoDatabaseRoleWrite: {
+            /** @enum {string} */
+            access: "readonly" | "readwrite";
+            database?: string;
+            /**
+             * Format: int64
+             * @default 3600
+             */
+            defaultTtlSeconds: number;
+            /**
+             * Format: int64
+             * @default 86400
+             */
+            maxTtlSeconds: number;
+            name: string;
+        };
+        /** @description Write-only recovery material required for a retained OpenBao snapshot whose source cluster has been deleted. */
+        OpenBaoRestoreUnsealShares: {
+            recovery?: boolean;
+            /** @enum {string} */
+            sealType?: "shamir" | "transit" | "awskms";
+            shares: string[];
+            threshold: number;
+        };
+        OpenBaoUnsealKeys: {
+            /** Format: date-time */
+            initializedAt: string;
+            /** Format: password */
+            initialRootToken: string;
+            recoveryShares: boolean;
+            /** @enum {string} */
+            sealType: "shamir" | "transit" | "awskms";
+            shares: string[];
+            threshold: number;
+        };
+        OpenBaoUnsealKeysReveal: {
+            /** @description Must equal the OpenBao cluster name. */
+            confirm: string;
+        };
         Operation: {
             /** @description Account, issuer-scoped OIDC account, account plus API token name/ID, or system actor that queued the operation. Historical operations may have no recorded actor. */
             actor?: string;
@@ -3341,7 +4640,7 @@ export type components = {
              */
             targetGeneration?: number;
             /** @enum {string} */
-            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "replace-member" | "rotate-system-user" | "rotate-tls" | "rotate-jwt-secret" | "create" | "update" | "tls" | "upgrade" | "delete" | "resume";
+            type: "backup" | "delete-backup" | "restore" | "raise-fcv" | "restart" | "rebalance" | "replace-member" | "rotate-system-user" | "rotate-tls" | "rotate-jwt-secret" | "recover-quorum" | "create" | "update" | "tls" | "upgrade" | "upgrade-agents" | "delete" | "resume";
         };
         OperationList: {
             items: components["schemas"]["Operation"][];
@@ -3386,30 +4685,46 @@ export type components = {
             permissions: components["schemas"]["Permission"][];
             subject: string;
         };
+        /** @description A continuous engine-verified restorable interval, optionally attributed to its anchoring full backup. */
+        PITRInterval: {
+            /** @description Name of the full backup anchoring this interval; omitted when provenance is unavailable. */
+            backup?: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: date-time */
+            start: string;
+        };
         PITRSpec: {
+            /** @description MySQL and PXC only. Defaults to true when omitted. Automatically take a full backup after a stable archive-writer change; disable to manage new PITR baselines manually. */
+            autoReanchor?: boolean;
             enabled: boolean;
             /** @default 10 */
             oplogSpanMinutes: number;
         };
         PITRSpecPatch: {
+            /** @description MySQL and PXC only. Null restores the default automatic full backup after a stable archive-writer change. */
+            autoReanchor?: boolean | null;
             enabled?: boolean | null;
             /** @default 10 */
             oplogSpanMinutes: number | null;
         } | null;
-        /** @description Only a continuous engine-verified restorable interval is reported. */
+        /** @description Legacy start/end describe the latest-ending continuous interval; intervals lists every restorable range. */
         PITRWindow: {
             available: boolean;
             /** Format: date-time */
             end?: string;
+            /** @description All engine-verified restorable intervals, sorted by start, end, then backup name. Intervals anchored by different full backups are not merged. Omitted or empty when unavailable. */
+            intervals?: components["schemas"]["PITRInterval"][];
             message?: string;
             /** Format: date-time */
             start?: string;
         };
-        /** @description Best-effort detected co-location only. Zerops provides no host anti-affinity guarantee. */
+        /** @description Observed placement; anti-affinity is guaranteed only when supported by the backend and all authoritative placement groups are distinct. */
         Placement: {
             groups: components["schemas"]["PlacementGroup"][];
-            /** @enum {boolean} */
-            guaranteedAntiAffinity: false;
+            guaranteedAntiAffinity: boolean;
+            /** @enum {string} */
+            source?: "backend" | "best-effort" | "unavailable";
             warning: string;
         };
         PlacementGroup: {
@@ -3418,13 +4733,18 @@ export type components = {
         };
         /** @description Immutable pgBackRest backup-set provenance and dependency metadata. */
         PostgresBackup: {
+            readonly groups?: components["schemas"]["PostgresBackupGroup"][];
             label: string;
             prior?: string;
+            /** @description Normalized snapshot-time runtime profile requirements. Physical recovery targets must select a superset; absent legacy metadata requires no profiles. */
+            readonly profiles?: string[];
             references?: string[];
             /** Format: int64 */
             repoBytes: number;
             /** @description Snapshot-time repository object prefix, excluding bucket. */
             repository: string;
+            /** @description Coordinated Citus named recovery target. */
+            readonly restorePoint?: string;
             /** @description PostgreSQL system identifier, encoded as a string without precision loss. */
             systemId: string;
             /** @description PostgreSQL version recorded by pgBackRest. */
@@ -3432,11 +4752,40 @@ export type components = {
             walStart?: string;
             walStop?: string;
         };
+        PostgresBackupGroup: {
+            backup: components["schemas"]["PostgresBackup"];
+            group: number;
+            /** @description Archive fence; worker positions are conservative post-marker upper bounds. */
+            lsn: string;
+            primary?: string;
+            timeline?: number;
+        };
+        PostgresBinding: {
+            consumer: {
+                kind: string;
+                name: string;
+                namespace: string;
+            };
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            credentialGeneration: number;
+            databases: string[];
+            extensions: string[];
+            id: string;
+            maxMajor?: number;
+            minMajor?: number;
+            role: string;
+            state: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         PostgresDatabase: {
             /** @default true */
             allowConnections: boolean;
             /** @default UTF8 */
             encoding: string;
+            extensions?: string[];
             /** @default C.UTF-8 */
             locale: string;
             name: string;
@@ -3535,7 +4884,7 @@ export type components = {
             db?: string;
         };
         Provider: {
-            backupTypes: ("logical" | "physical" | "definitions" | "snapshot" | "full" | "diff" | "incr")[];
+            backupTypes: ("logical" | "physical" | "definitions" | "snapshot" | "raft-snapshot" | "full" | "diff" | "incr" | "incremental" | "dump")[];
             capabilities?: string[];
             displayName: string;
             /** @description Provider-specific configuration format, syntax and managed keys or prefixes that cannot be overridden. Consult the provider guide for matching semantics. */
@@ -3569,7 +4918,7 @@ export type components = {
                 [key: string]: unknown;
             };
             /** @enum {string} */
-            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha";
+            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha" | "distributed" | "combined" | "split" | "group";
             uiSchema?: {
                 [key: string]: unknown;
             };
@@ -3652,6 +5001,10 @@ export type components = {
             /** @description Casbin CSV: p, subject, resource, action, object, allow|deny; g, subject, role. Built-in roles remain installed. Validation errors name policy and the line. Replacement must preserve unrestricted administration for an enabled account or verified active OIDC group identity without denies. */
             policy: string;
         };
+        RebalanceRequest: {
+            /** @description Optional installed Citus rebalance strategy; omitted uses the Citus default. */
+            strategy?: string;
+        };
         /** @description Relay health; the default namespace uses direct networking. */
         RelayStatus: {
             /** Format: date-time */
@@ -3708,12 +5061,12 @@ export type components = {
             /** @enum {string} */
             cpuMode?: "SHARED" | "DEDICATED";
             maxCpu?: number;
-            /** @description GiB */
+            /** @description GiB; must be at least minDisk and meet provider/component floors. */
             maxDisk?: number;
             /** @description GiB */
             maxRam?: number;
             minCpu?: number;
-            /** @description GiB */
+            /** @description GiB; provider/component floors may be higher. */
             minDisk?: number;
             /** @description GiB */
             minRam?: number;
@@ -3723,12 +5076,12 @@ export type components = {
             /** @enum {string|null} */
             cpuMode?: "SHARED" | "DEDICATED" | null;
             maxCpu?: number | null;
-            /** @description GiB */
+            /** @description GiB; must be at least minDisk and meet provider/component floors. */
             maxDisk?: number | null;
             /** @description GiB */
             maxRam?: number | null;
             minCpu?: number | null;
-            /** @description GiB */
+            /** @description GiB; provider/component floors may be higher. */
             minDisk?: number | null;
             /** @description GiB */
             minRam?: number | null;
@@ -3754,13 +5107,14 @@ export type components = {
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
         };
-        /** @description Set exactly one of backup or pitrTime; sourceCluster defaults to the target cluster. Conflicting or missing selectors return 400 with field source and reason conflict. */
+        /** @description Set exactly one of backup, pitrTime or restorePoint; sourceCluster defaults to the target cluster. Distributed PostgreSQL accepts named restore points, not timestamps. */
         RestoreSource: {
             backup?: string;
             /** Format: date-time */
             pitrTime?: string;
+            restorePoint?: string;
             sourceCluster?: string;
-        } & (unknown | unknown);
+        } & (unknown | unknown | unknown);
         RoleReference: {
             db: string;
             role: string;
@@ -3833,6 +5187,58 @@ export type components = {
             items: components["schemas"]["SystemUser"][];
             /** @description Opaque continuation cursor; absent at the end. */
             nextCursor?: string;
+        };
+        TemporalClientCertificate: {
+            caFingerprintSha256: string;
+            commonName: string;
+            /** @description Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap). */
+            currentCa: boolean;
+            fingerprintSha256: string;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            notAfter: string;
+            serial: string;
+        };
+        TemporalClientCertificateList: {
+            items: components["schemas"]["TemporalClientCertificate"][];
+        };
+        TemporalClientCertificateRequest: {
+            commonName: string;
+            /** @default 720 */
+            ttlHours: number;
+        };
+        TemporalIssuedClientCertificate: {
+            caFingerprintSha256: string;
+            caPem: string;
+            certificatePem: string;
+            commonName: string;
+            /** @description Whether the issuing CA is the CA used for new client certificates now; false after a CA rotation, when the certificate no longer authenticates (old clients may still authenticate during the rolling trust overlap). */
+            currentCa: boolean;
+            fingerprintSha256: string;
+            frontendAddress: string;
+            /** Format: date-time */
+            issuedAt: string;
+            /** Format: date-time */
+            notAfter: string;
+            /** Format: password */
+            privateKeyPem: string;
+            serial: string;
+            serverName: string;
+        };
+        TemporalNamespace: {
+            description?: string;
+            managed: boolean;
+            name: string;
+            retention: string;
+            state: string;
+        };
+        TemporalNamespaceList: {
+            items: components["schemas"]["TemporalNamespace"][];
+        };
+        TemporalUIOIDCClientSecret: {
+            /** Format: password */
+            clientSecret: string;
         };
         /** @description PEM inputs are write-only; stored secret material is never included in cluster reads. User-provided CAs require RSA keys of at least 2048 bits or ECDSA P-256, P-384 or P-521 keys. An existing cluster's CA material cannot be replaced through PUT or PATCH (409 Conflict); coordinated CA rotation is not supported. The rotate-tls operation renews leaf certificates only. */
         TLS: {
@@ -3908,17 +5314,17 @@ export type components = {
         Topology: {
             shards?: number;
             /** @enum {string} */
-            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha";
+            type: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha" | "distributed" | "combined" | "split" | "group";
         };
         TopologyInput: {
             shards?: number;
             /** @enum {string} */
-            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha";
+            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha" | "distributed" | "combined" | "split" | "group";
         };
         TopologyPatch: {
             shards?: number | null;
             /** @enum {string|null} */
-            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha" | null;
+            type?: "replicaSet" | "sharded" | "cluster" | "dedicatedMasters" | "single" | "ha" | "distributed" | "combined" | "split" | "group" | null;
         } | null;
         UpdateAccountRequest: {
             enabled: boolean;
@@ -3957,6 +5363,10 @@ export type components = {
             password?: string;
             roles: components["schemas"]["RoleReference"][];
         };
+        UpgradeAgentsRequest: {
+            /** @default false */
+            includeCurrent: boolean;
+        };
         UpgradePath: {
             from: string;
             /**
@@ -3981,6 +5391,110 @@ export type components = {
             readonly oidcEnabled: boolean;
             /** @description Release/source label, or "unknown (built without git metadata)" when not supplied. */
             version: string;
+        };
+        WeaviateAPIKey: {
+            readonly apiKey: string;
+        };
+        WeaviatePermission: {
+            action: string;
+            aliases?: {
+                alias?: string;
+                collection?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            backups?: {
+                collection?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            collections?: {
+                collection?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            data?: {
+                collection?: string;
+                object?: string;
+                tenant?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            groups?: {
+                group?: string;
+                groupType?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            namespaces?: {
+                namespace?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            nodes?: {
+                collection?: string;
+                verbosity?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            replicate?: {
+                collection?: string;
+                shard?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            roles?: {
+                role?: string;
+                scope?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            tenants?: {
+                collection?: string;
+                tenant?: string;
+            } & {
+                [key: string]: unknown;
+            };
+            users?: {
+                users?: string;
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        WeaviateRole: {
+            name: string;
+            permissions: components["schemas"]["WeaviatePermission"][];
+        };
+        WeaviateRoleList: {
+            items: components["schemas"]["WeaviateRole"][];
+        };
+        WeaviateUser: {
+            active: boolean;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            lastUsedAt?: string;
+            name: string;
+            roles: string[];
+            userType: string;
+        };
+        WeaviateUserCreate: {
+            name: string;
+            roles: string[];
+        };
+        WeaviateUserCreated: {
+            /** @description Store securely; matching Idempotency-Key retries replay it for 24 hours, but GET cannot retrieve it. */
+            readonly apiKey: string;
+            user: components["schemas"]["WeaviateUser"];
+        };
+        WeaviateUserList: {
+            items: components["schemas"]["WeaviateUser"][];
+        };
+        WeaviateUserUpdate: {
+            active?: boolean;
+            roles: string[];
         };
     };
     responses: {
@@ -4042,6 +5556,16 @@ export type components = {
         };
         /** @description The requested resource does not exist or is not visible to the caller. */
         NotFound: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The requested feature is not implemented. */
+        NotImplemented: {
             headers: {
                 "X-Request-ID": components["headers"]["RequestID"];
                 [name: string]: unknown;
@@ -4123,6 +5647,8 @@ export type components = {
          *     the original mutation failed. Use a fresh key for each intended mutation.
          */
         IdempotencyKey: string;
+        /** @description Explicitly bypass the cluster maintenance window for this request. */
+        IgnoreMaintenanceWindow: boolean;
         /** @description Maximum results per page. Results are authorization-filtered before pagination. */
         Limit: number;
         /** @description Project namespace name; the RBAC object is this name. */
@@ -5268,6 +6794,8 @@ export interface operations {
     replaceCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -5390,6 +6918,8 @@ export interface operations {
     patchCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -5464,6 +6994,204 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    rebalancePostgres: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebalanceRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned operation. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listBackupDrills: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrillList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createBackupDrill: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateBackupDrillRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrill"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    getBackupDrill: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                drill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupDrill"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     listBackups: {
@@ -6938,11 +8666,74 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    moveClusterMember: {
+        parameters: {
+            query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                member: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted replace-member operation. On backends without Placement, the operation message states that this is best-effort with no host placement guarantee. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     replaceClusterMember: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -7037,6 +8828,1092 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listMySQLDatabases: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Application databases. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MySQLDatabase"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createMySQLDatabase: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLDatabaseWrite"];
+            };
+        };
+        responses: {
+            /** @description Database created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLDatabase"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getMySQLDatabase: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                database: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Database attributes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLDatabase"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteMySQLDatabase: {
+        parameters: {
+            query?: {
+                force?: boolean;
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                database: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Database deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listMySQLGrants: {
+        parameters: {
+            query?: {
+                database?: string;
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+                user?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Explicit database grants, excluding reserved identities. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MySQLGrant"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    grantMySQLPrivileges: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLGrant"];
+            };
+        };
+        responses: {
+            /** @description Privileges granted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revokeMySQLPrivileges: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLGrant"];
+            };
+        };
+        responses: {
+            /** @description Privileges revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    recoverMySQLQuorum: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLQuorumRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned operation. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    "X-Request-ID"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listMySQLUsers: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Application users; reserved identities are hidden. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["MySQLUser"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createMySQLUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLUserWrite"];
+            };
+        };
+        responses: {
+            /** @description User created; generated password returned once, or replayed with the same idempotency key. */
+            201: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLUserCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getMySQLUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User attributes, never password material. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteMySQLUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    patchMySQLUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySQLUserPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    rotateMySQLUserPassword: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    retainCurrent?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Newly generated password; returned once, or replayed with the same idempotency key. */
+            200: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MySQLPasswordRotation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    discardMySQLUserOldPassword: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retained password discarded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listNeo4jUsers: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Application users, without passwords. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Neo4jUser"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createNeo4jUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Neo4jUserCreate"];
+            };
+        };
+        responses: {
+            /** @description User created. An omitted password is generated and returned once. */
+            201: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Neo4jUserCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getNeo4jUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User attributes, never its password. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Neo4jUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteNeo4jUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User deleted. */
+            204: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    setNeo4jUserPassword: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Neo4jUserPassword"];
+            };
+        };
+        responses: {
+            /** @description Password changed. An omitted password is generated and returned once. */
+            200: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Neo4jUserPasswordChanged"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listOpenBaoDatabaseConnections: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnectionList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenBaoDatabaseConnectionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful operation. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoDatabaseConnection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteOpenBaoDatabaseConnection: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                connection: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful operation. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revealOpenBaoUnsealKeys: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenBaoUnsealKeysReveal"];
+            };
+        };
+        responses: {
+            /** @description Secret initialization material; must not be cached. */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenBaoUnsealKeys"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listClusterOperations: {
@@ -7153,6 +10030,95 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listPostgresBindings: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Inbound consumer bindings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PostgresBinding"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    rotatePostgresBinding: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                binding: string;
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated binding metadata; credentials are never returned. */
+            200: {
+                headers: {
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostgresBinding"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["Unavailable"];
         };
     };
     listPostgresDatabases: {
@@ -9081,6 +12047,8 @@ export interface operations {
     raiseClusterFCV: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -9143,6 +12111,8 @@ export interface operations {
     restartCluster: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -9454,6 +12424,8 @@ export interface operations {
     rotateClusterTLS: {
         parameters: {
             query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
                 /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
                 namespace?: components["parameters"]["NamespaceQuery"];
             };
@@ -9943,6 +12915,908 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
+    listTemporalClientCertificates: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issued certificate metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporalClientCertificateList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    issueTemporalClientCertificate: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemporalClientCertificateRequest"];
+            };
+        };
+        responses: {
+            /** @description Client certificate issued. The private key is not retained. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporalIssuedClientCertificate"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listTemporalNamespaces: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Temporal namespaces. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporalNamespaceList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    deleteTemporalNamespace: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                temporalNamespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Namespace deletion accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    setTemporalUIOIDCClientSecret: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemporalUIOIDCClientSecret"];
+            };
+        };
+        responses: {
+            /** @description Client secret stored without returning its value. */
+            204: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    upgradeClusterAgents: {
+        parameters: {
+            query?: {
+                /** @description Explicitly bypass the cluster maintenance window for this request. */
+                ignoreMaintenanceWindow?: components["parameters"]["IgnoreMaintenanceWindow"];
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpgradeAgentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "Karakoram-Operation-Id"?: string;
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    listWeaviateRoles: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RBAC roles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateRoleList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createWeaviateRole: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeaviateRole"];
+            };
+        };
+        responses: {
+            /** @description Role created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateRole"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getWeaviateRole: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RBAC role. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateRole"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateWeaviateRole: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeaviateRole"];
+            };
+        };
+        responses: {
+            /** @description Role replaced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateRole"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteWeaviateRole: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    listWeaviateUsers: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Database users. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateUserList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    createWeaviateUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeaviateUserCreate"];
+            };
+        };
+        responses: {
+            /** @description Generated API key; only matching idempotency retries can retrieve it again. */
+            201: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateUserCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getWeaviateUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: never;
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Database user, without its API key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateWeaviateUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WeaviateUserUpdate"];
+            };
+        };
+        responses: {
+            /** @description User updated. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    deleteWeaviateUser: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    rotateWeaviateUserKey: {
+        parameters: {
+            query?: {
+                /** @description Namespace of the requested object; defaults to default for single-object routes and creation. On collection routes (/clusters, /operations, /events, /events/stream, /orphaned-volumes, /backup-storages and root /metrics), absence includes all authorized namespaces and a value filters to that namespace. A nonexistent explicit namespace returns 404 not_found with resource namespace and its name only when the authenticated caller has a permission in that namespace. Otherwise collections remain empty and object requests retain their normal 403 response without revealing existence. Public and unauthenticated authentication routes do not resolve the parameter. */
+                namespace?: components["parameters"]["NamespaceQuery"];
+            };
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                /** @description Managed cluster name; the RBAC object is namespace/cluster. */
+                cluster: components["parameters"]["ClusterPath"];
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Generated API key; only matching idempotency retries can retrieve it again. */
+            200: {
+                headers: {
+                    /** @description Never cache credentials. */
+                    "Cache-Control"?: "no-store";
+                    "Idempotent-Replayed": components["headers"]["IdempotentReplayed"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeaviateAPIKey"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    getControlPlaneBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    updateControlPlaneBackupPolicy: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    listControlPlaneBackups: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackupList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createControlPlaneBackup: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted; track the returned report or operation. */
+            202: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneBackup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
     dryRunCreateCluster: {
         parameters: {
             query?: {
@@ -10124,7 +13998,7 @@ export interface operations {
                 /** @description Page order. `asc` (default) pages forward from the oldest event; `desc` pages backward from the newest. The cursor continues in the same order. */
                 order?: "asc" | "desc";
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings" | "weaviate-users" | "weaviate-roles";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -10168,7 +14042,7 @@ export interface operations {
                 namespace?: components["parameters"]["NamespaceQuery"];
                 operationId?: string;
                 /** @description Exact resource category. Explicit filters without the required audit/read or events/read permission return 403; unfiltered queries silently omit unauthorized events. */
-                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings";
+                resource?: "" | "accounts" | "api-tokens" | "auth" | "backup-storages" | "backups" | "cluster-credentials" | "cluster-data" | "clusters" | "database-users" | "namespaces" | "operations" | "orphaned-volumes" | "rabbitmq-operator-policies" | "rabbitmq-permissions" | "rabbitmq-policies" | "rabbitmq-topic-permissions" | "rabbitmq-users" | "rabbitmq-vhosts" | "rbac" | "restores" | "settings" | "weaviate-users" | "weaviate-roles";
                 /** @description Exact stored event type, normally Normal, Warning or Audit. Lifecycle details such as OperationFailed are in reason, not type. */
                 type?: "Normal" | "Warning" | "Audit";
             };
@@ -10543,6 +14417,287 @@ export interface operations {
             415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listNotificationChannels: {
+        parameters: {
+            query?: {
+                /** @description Opaque cursor returned by the preceding page. */
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Maximum results per page. Results are authorization-filtered before pagination. */
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    createNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannel"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            201: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    getNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    replaceNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannel"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    deleteNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            204: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    testNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path: {
+                channel: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     listOAuthGrants: {
@@ -11024,6 +15179,91 @@ export interface operations {
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    getAgentRolloutSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRolloutSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
+        };
+    };
+    updateAgentRolloutSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Optional retry key scoped to the authenticated account's name and creation
+                 *     identity (including OIDC issuer), or the specific bearer token identity,
+                 *     plus method, route, namespace and path parameters. Deleting and recreating
+                 *     an account never shares its replays. Retained for 24 hours after
+                 *     a successful response. The same key and canonical JSON body replay the
+                 *     original status, body and relevant headers, including one-time secrets
+                 *     and Karakoram-Operation-Id when present. Different bodies conflict with
+                 *     HTTP 409 (details.field Idempotency-Key, reason conflict); concurrent
+                 *     in-flight duplicates return 409 with reason invalid_state. Reservations
+                 *     use a five-minute lease renewed every minute while the handler runs;
+                 *     after a crash, an expired reservation can be reclaimed. Only successful
+                 *     2xx responses are retained for 24 hours. Lease expiry does not prove that
+                 *     the original mutation failed. Use a fresh key for each intended mutation.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description Required on unsafe methods using session cookies, including refresh/logout and password changes. Must match the session CSRF token returned by login/refresh. Not required for bearer API tokens or pre-authentication login. */
+                "X-Karakoram-CSRF"?: components["parameters"]["CSRF"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRolloutSettings"];
+            };
+        };
+        responses: {
+            /** @description Success. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentRolloutSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            405: components["responses"]["MethodNotAllowed"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            500: components["responses"]["InternalError"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     getVersion: {

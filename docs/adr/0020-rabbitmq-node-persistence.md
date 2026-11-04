@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-A RabbitMQ node's data directory holds its Khepri metadata replica (RabbitMQ 4.3 has no other metadata store), quorum-queue and stream logs, classic-queue message stores and its cluster membership. Node identity is the pair of node name and data directory. Zerops runtime disks are wiped on every deployment, so a broker could either keep its data directory on a per-node Local Storage volume (as PSMDB members do, ADR 0007) or run ephemerally and resynchronize replicas from peers after every deployment.
+A [RabbitMQ](https://www.rabbitmq.com) node's data directory holds its [Khepri](https://github.com/rabbitmq/khepri) metadata replica (RabbitMQ 4.3 has no other metadata store), quorum-queue and stream logs, classic-queue message stores and its cluster membership. Node identity is the pair of node name and data directory. [Zerops](https://zerops.io) runtime disks are wiped on every deployment, so a broker could either keep its data directory on a per-node Local Storage volume (as [PSMDB](https://www.percona.com/mongodb/software/percona-server-for-mongodb) members do, ADR 0007) or run ephemerally and resynchronize replicas from peers after every deployment.
 
 Persistent node identity and data avoid resynchronizing full queue backlogs after ordinary redeployments. An ephemeral node can recover replicas only while peers retain usable metadata and queue majorities; losing several ephemeral nodes together can lose queues and metadata. Single-node re-admission behavior is version-dependent and is not a recovery guarantee.
 

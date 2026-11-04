@@ -18,12 +18,14 @@ The app-shell switcher offers **All namespaces** and readable namespaces with to
 
 ## Clusters and creation
 
-**Clusters** lists authorized clusters and their phases. **Create cluster** opens the catalog-driven wizard:
+**Clusters** lists authorized clusters and their phases. On narrow screens, the cluster filter wraps within its card and wide tables scroll independently. The sidebar uses an icon rail; **Change password** remains available through its key icon, with a tooltip and accessible name.
+
+**Create cluster** opens the catalog-driven wizard:
 
 | Step | What to choose or inspect |
 | --- | --- |
 | Basics | Namespace, unique name, engine, exact catalog version, topology and optional preset |
-| Topology | Provider-supported members, components and configuration |
+| Topology | Engine driver-supported members, components and configuration |
 | Resources | Per-component CPU mode and CPU/RAM/disk bounds |
 | Backups | Namespace-local storage, supported schedules and optional recovery source |
 | Access & TLS | Supported TLS/certificate options, private/public exposure, allowlist and monitoring |
@@ -34,6 +36,13 @@ Use **Continue** or **Back**; validation keeps you on the affected step. Names a
 Engine-specific fields, presets, minimum resources and connection procedures belong in the [MongoDB](mongodb/README.md), [RabbitMQ](rabbitmq/README.md) and [Elasticsearch](elasticsearch/README.md) guides. Review aggregate capacity across every component against project capacity before submission. Footprint bounds are not initial allocations, a price quote or a host-separation guarantee; backup object storage is additional. Read [platform limitations](limitations.md).
 
 [PostgreSQL](postgres/README.md) and [Supabase](supabase/README.md) add single/HA database topology, proxy resources, synchronous policy and engine-specific options. Supabase component versions are release-locked; the [current artifact inventory](supabase/components.md) can reject a catalog preset or component even when its configuration is otherwise valid.
+
+[OpenBao](https://openbao.org/) adds engine options in the Basics step: unseal share count and threshold (5/3 by default), the seal (Shamir, transit or [AWS KMS](https://aws.amazon.com/kms/) auto-unseal, with the transit token and [AWS](https://aws.amazon.com/) keys entered as write-only secrets that are stored encrypted and never shown again), Raft or PostgreSQL storage and the log level. Unseal shares, seal and storage are fixed once the cluster is initialized; **Topology** shows them read-only and only the log level remains editable. When seeding a new OpenBao cluster from a Raft snapshot whose source cluster was deleted, the Backups step accepts the source's unseal shares pasted from your offline copy; they travel once in the create request and are never cached.
+
+PostgreSQL storage is selectable only when the OpenBao engine driver advertises `postgresql-storage`, which requires the control plane's shared PostgreSQL binding service (present in the standard server); merely having PostgreSQL clusters in the namespace is not sufficient. Without that service the wizard disables the option and explains that integrated Raft must be used. Pasted restore shares are discarded when disabled and after submission, including a failed request; retrying requires pasting them again.
+[MySQL and PXC](mysql/README.md) are separate engine driver choices. MySQL offers single or Group Replication (3/5); PXC offers only [Galera](https://galeracluster.com/) `cluster` (3/5), requires [ProxySQL](https://proxysql.com/) and hides Group Replication-only settings. Both expose MySQL-native application access, TLS connection help, physical backup/PITR caveats and engine driver-specific maintenance review.
+
+[Weaviate](weaviate/README.md) adds single/3–9-member topology with three fixed voters, typed modules/inference and full [S3](https://aws.amazon.com/s3/) backups. Review private-network requirements and topology-preserving [restore limits](weaviate/backups.md).
 
 Creation acceptance starts asynchronous work. Follow cluster health and desired-generation convergence, not just the success notification; see [operations and status](clusters.md#operations-and-status).
 
@@ -52,8 +61,12 @@ Tabs and actions are gated by engine capabilities and your permissions.
 | Access | Engine-native access management | RabbitMQ |
 | Elastic Access | Engine-native access management | Elasticsearch |
 | Postgres access | PostgreSQL roles, databases and grants | PostgreSQL and Supabase |
+| MySQL access | MySQL users, databases, grants and password rotation | MySQL and PXC |
+| Recovery | Explicit fenced minority quorum recovery with typed danger confirmation | PXC; requires supported operation and cluster update permission |
+| Weaviate access | Native database users, API-key rotation and RBAC roles; capability `weaviateAccess` | Weaviate |
 | Components | Supabase service topology/resources | Supabase |
 | Functions & SMTP | Source deployment/deletion and write-only SMTP password | Supabase |
+| OpenBao | Seal/initialization state per member and Raft voter observations, explicit unseal-key reveal, database credential connections | OpenBao |
 | Monitoring | Per-member time series and status context | All |
 | Events | Cluster activity and diagnostic messages with actor attribution | All |
 | Operations | Durable asynchronous work, progress, failure and initiating actor | All |
@@ -63,9 +76,17 @@ In **Topology → Review & apply**, inspect **What will change** and expand **Me
 
 PostgreSQL major upgrades (16→17 and 17→18) require **offline maintenance**, not a rolling restart: all data members stop for `pg_upgrade --link`, and database access remains unavailable through replica rebuild. Both the topology change review and upgrade confirmation describe this outage and require a recent successful backup. The in-progress warning retains the offline guidance while data members report mixed source/target majors during replica rebuild. Minor upgrades retain replica-first rolling maintenance (or downtime for a single member).
 
+MySQL/PXC upgrades use their separate catalog paths and block downgrades/engine driver conversion. The 8.0→8.4 path requires a recent successful current-version backup. PXC's Recovery tab is not a generic force-bootstrap switch: the provider refuses an existing Primary component, compares same-history committed positions and completes fencing before recovering one survivor. Full-outage recovery and backup restore use different evidence rules; see [MySQL/PXC operations](mysql/operations.md).
+
 **Reveal credentials** requires `cluster-credentials:read` and is audited. Revealed credentials are the engine's administrative identity, **not an application identity**. Use scoped application access: [MongoDB](mongodb/access-and-tls.md), [RabbitMQ](rabbitmq/access-and-tls.md), [Elasticsearch](elasticsearch/access-and-security.md). The response is not retained in the query cache. Keep copied passwords/URIs out of logs. Reveal also provides the public CA with copy/download controls; if clipboard access fails, use manual copy or download without losing PEM line breaks.
 
 Supabase adds a separately authorized API/dashboard credential reveal; do not expose service-role/secret keys to application browsers. [PostgreSQL access](postgres/access-and-tls.md) describes database identities and ProxySQL limits; [Supabase operations](supabase/operations.md) covers source visibility and key rotation. Functions source controls do not supply an absent runtime artifact.
+
+The **OpenBao** tab reveals the unseal (or recovery) shares and the initial root token only after typing the cluster name; it requires `openbao-unseal-keys:reveal` (administrators by default), is audited, and keeps the response in the open panel only — hide it or leave the page and it is gone. Store the shares offline immediately. Database connections list each target, mount, phase and the credential paths of its roles; creating one needs `clusters:update` on the OpenBao cluster and `database-users:create` on the target, deleting one `database-users:delete` on the target. Only PostgreSQL, MongoDB replica-set and RabbitMQ clusters in the same namespace are offered as targets. In-place restores of an OpenBao cluster from another cluster's snapshot accept pasted unseal shares the same way as the creation wizard.
+
+Changing either the cluster name or namespace discards the revealed material and confirmation state immediately. Pending reveal requests are aborted when their panel is removed, and late responses cannot populate a different cluster's panel.
+
+[Weaviate access](weaviate/access-and-tls.md) lists native users/roles and supports user creation, complete role-list replacement, activation, deletion, key rotation and custom role replacement/deletion, subject to management permissions. Protected identities and built-in roles are read-only. This is separate from the MongoDB Users tab and from administrative reveal. Generated database-user keys appear once in a dedicated dialog, bypassing query/mutation caching; closing it or leaving the tab clears the key, and GET cannot retrieve it. Rotation immediately replaces the old key and also requires `clusters/update` if current roles exceed `viewer`/`read-only`; user deletion needs only `database-users/delete`.
 
 JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabase rotate-jwt-secret CLUSTER --yes` or POST `/api/v1/clusters/{cluster}/supabase/rotate-jwt-secret`; follow the [CLI/API rotation procedure](supabase/operations.md#credentials-and-rotation) and coordinate application key replacement.
 
@@ -73,9 +94,18 @@ JWT rotation is not a **Functions & SMTP** UI action. Use `karactl -n NS supabas
 
 ## Data MCP
 
-Supported clusters show a **Data MCP** card on **Overview**, separate from database connection credentials. Inspect the phase, backend/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
+Supported clusters show a **Data [MCP](https://modelcontextprotocol.io/)** card on **Overview**, separate from database connection credentials. Inspect the phase, provider/upstream version, cluster-level access and diagnostic message. Copy the per-cluster endpoint or the `karactl mcp config --cluster <namespace>/<cluster>` command; the CLI, not the browser, mints the restricted token. A write command requests token scope but does not bypass owner RBAC or the installation write switch.
 
 Users with cluster update permission can enable/disable data MCP, select read-only/read-write access, set engine-specific scope, deny tools, require write confirmations and opt into recording query text in audit. Save applies `spec.dataMcp` as a cluster merge patch; disabling asks for confirmation. Other users see settings read-only. Enabling data access and requesting writes are security decisions: review the [data MCP guide](data-mcp.md), particularly [all four write switches](data-mcp.md#four-switches-for-writes), before sharing a client configuration.
+### Fleet operations and restore verification
+
+Member agent identity is distinct from the database version. **Upgrade agents** rolls the current control-plane executable through the existing engine safety gates without changing database versions. Unknown agent identities are not proof of a current build; inspect the reported build and operation result. Automatic rollout is opt-in under installation settings.
+
+Configure maintenance time zone, cron starts and durations in the **Topology** maintenance policy editor; the current window badge shows whether disruption can begin. Configured windows gate the start of a new disruption. A pending operation can wait without consuming an execution attempt; an explicit maintenance override bypasses that policy for the requested action, not the engine's quorum or readiness checks. Windows never stop a member halfway through an already-started disruptive step.
+
+Placement evidence is provider-dependent. **Move member** replaces and synchronizes the selected member; it is not a direct disk move. Providers with authoritative placement exclude the predecessor's group, while best-effort providers cannot promise a different host. Review the placement source and warning before confirming.
+
+**Backups → Drills** lists retained reports with pagination and links to individual report details; **Run drill** restores an eligible successful backup into a server-managed throwaway target in the same namespace. The policy editor controls scheduled runs. Reports retain verification checks, data age, restore duration and cleanup outcome. Managed targets are labeled and protected while active. RabbitMQ verification restores definitions only, not messages. See [backup drills](backup-drills.md).
 
 ## Installation settings
 
@@ -86,10 +116,13 @@ Users with cluster update permission can enable/disable data MCP, select read-on
 | Accounts, RBAC, API tokens, SSO | Account lifecycle, policy/effective-permission checks, one-time token creation and OIDC configuration; see [access control](access-control.md) |
 | Monitoring | Collection status and Prometheus guidance; scrape URL is installation-root `/metrics` |
 | Orphaned volumes | Read-only inventory of volumes awaiting platform cleanup; see [operations](operations.md#orphaned-platform-volumes) |
+| Agent rollout | Inspect the current executable build and opt into bounded automatic member rollout; see [upgrade](upgrade.md) |
+| Control-plane backup | Configure S3 snapshot policy, run a snapshot and inspect retained reports; rebuild remains an offline administrative action |
+| Notifications | Configure write-only webhook, Slack or TLS email destinations, filters and test delivery; inspect delivery failures |
 
-The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored backend infrastructure credentials or the operator master key.
+The sidebar **API specification** opens `/api/v1/openapi.yaml`. Settings never expose stored provider infrastructure credentials or the operator master key.
 
-The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running OpenAPI link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
+The API-token creation dialog blocks double submission and reuses its retry key for an unchanged body. After creation, the one-time-secret panel provides `KARAKORAM_SERVER` / `KARAKORAM_TOKEN` CLI commands and the running [OpenAPI](https://www.openapis.org/) link. Store the secret before closing; prefer secret-manager injection over pasting secret-bearing commands into history or shared logs.
 
 ## Events history and live rows
 

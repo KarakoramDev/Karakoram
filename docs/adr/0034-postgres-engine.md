@@ -4,39 +4,41 @@ Status: Accepted
 
 ## Context
 
-PostgreSQL needs a native runtime, a single-writer authority independent of the control plane, physical recovery, and PostgreSQL-shaped access administration. A replica count alone is not a failure-domain guarantee. Supabase also needs the same database lifecycle without inheriting a proxy's wire-protocol restrictions.
+[PostgreSQL](https://www.postgresql.org) needs a native runtime, a single-writer authority independent of the control plane, physical recovery, and PostgreSQL-shaped access administration. A replica count alone is not a failure-domain guarantee. [Supabase](https://supabase.com) also needs the same database lifecycle without inheriting a proxy's wire-protocol restrictions.
 
 ## Decision
 
 ### Database and coordination
 
-The `postgres` provider installs catalog-pinned Percona Distribution for PostgreSQL packages on Ubuntu 24.04, with majors 16, 17 and 18; 17.11.1 is the default. Preparation disables distribution cluster creation and package-service autostart. Runtime supervision, ownership and data paths use the existing infrastructure layout rather than a platform-specific filesystem or service manager.
+The `postgres` engine driver installs catalog-pinned [Percona Distribution for PostgreSQL](https://docs.percona.com/postgresql/) packages on [Ubuntu](https://ubuntu.com) 24.04, with majors 16, 17 and 18; 17.11.1 is the default. Preparation disables distribution cluster creation and package-service autostart. Runtime supervision, ownership and data paths use the existing infrastructure layout rather than a platform-specific filesystem or service manager.
 
-`single` runs one foreground PostgreSQL server, without Patroni or a DCS. `ha` has three or five data members, each with PostgreSQL, Patroni 4 and an etcd v3 voter. PostgreSQL and etcd data persist together on that member's volume. Patroni owns PostgreSQL in HA: the runtime must never start a competing standalone server. etcd uses TLS and client certificates; Patroni REST uses TLS and authenticated mutations. Replication uses the cluster PKI. Patroni leader-lock checks, not a successful SQL connection alone, establish writable-primary authority for management actions.
+`single` runs one foreground PostgreSQL server, without [Patroni](https://patroni.readthedocs.io) or a DCS. `ha` has three or five data members, each with PostgreSQL, Patroni 4 and an [etcd](https://etcd.io) v3 voter. PostgreSQL and etcd data persist together on that member's volume. Patroni owns PostgreSQL in HA: the runtime must never start a competing standalone server. etcd uses TLS and client certificates; Patroni REST uses TLS and authenticated mutations. Replication uses the cluster PKI. Patroni leader-lock checks, not a successful SQL connection alone, establish writable-primary authority for management actions.
 
 Co-located etcd avoids an external coordination service and allows failover during control-plane downtime. Quorum loss must fail closed rather than create a second writer. `engineOptions.synchronousMode` is `off` (default), `on`, or `strict`; strict mode may block writes without a qualifying synchronous standby. Rewind, replication slots and rebuilding divergent replicas are engine-managed. Voters still need independent infrastructure failure domains.
 
 ### Client and internal connections
 
-A separate stateless `proxy` component runs locked ProxySQL 3.0.11, defaults to one replica and supports up to five. HA requires a proxy; only `single` permits zero replicas and then uses its data-member endpoint. Native `pgsql_replication_hostgroups` monitors `pg_is_in_recovery()` with writer/reader hostgroups 10/20. Port 5432 is writer-only by default. `engineOptions.proxy.readWriteSplit` enables limited SELECT-pattern routing; `readerPort` adds private port 5433. These rules are not a SQL correctness or read-after-write consistency classifier. The administrative listeners remain loopback-only.
+A separate stateless `proxy` component runs locked [ProxySQL](https://proxysql.com) 3.0.11, defaults to one replica and supports up to five. HA requires a proxy; only `single` permits zero replicas and then uses its data-member endpoint. Native `pgsql_replication_hostgroups` monitors `pg_is_in_recovery()` with writer/reader hostgroups 10/20. Port 5432 is writer-only by default. `engineOptions.proxy.readWriteSplit` enables limited SELECT-pattern routing; `readerPort` adds private port 5433. These rules are not a SQL correctness or read-after-write consistency classifier. The administrative listeners remain loopback-only.
+
+IPv6-capable layouts bind separate IPv4 and IPv6 ProxySQL frontend sockets on both writer and optional reader ports: ProxySQL sets `IPV6_V6ONLY`, so an IPv6 wildcard alone cannot serve dual-family service DNS. IPv4-only layouts retain IPv4 listeners. Existing proxies need an agent upgrade to apply renderer changes; a control-plane-only update does not replace their listener implementation.
 
 ProxySQL PostgreSQL support began in the 3.0 alpha series and was described as beta in 3.0.2; the 3.0.11 series is labelled Stable Tier upstream, not a separate PostgreSQL GA assurance. Document its protocol boundaries: asynchronous LISTEN/NOTIFY forwarding, named portals, Flush, incremental Execute row limits and extended COPY FROM STDIN are unsupported; mixed per-column result formats also require client adaptation. Prepared statements alone do not establish full PostgreSQL compatibility. Applications must reconnect after failover.
 
-ProxySQL requires recoverable login passwords. Application roles managed through the native access API have passwords sealed in the secret store and synchronized to proxy configurations. SQL-created roles are not automatically routable through the proxy. Direct member listeners remain private except the explicit proxy-free single-member exposure case. Public TCP publishes the selected client endpoint, with backend-specific allowlist capability checks.
+ProxySQL requires recoverable login passwords. Application roles managed through the native access API have passwords sealed in the secret store and synchronized to proxy configurations. SQL-created roles are not automatically routable through the proxy. Direct member listeners remain private except the explicit proxy-free single-member exposure case. Public TCP publishes the selected client endpoint, with provider-specific allowlist capability checks.
 
 Internal Supabase services bypass ProxySQL. A local leader-aware raw TCP forwarder preserves PostgreSQL TLS and session/replication protocols, polls authenticated Patroni `/primary` over TLS every second, and closes old sessions when leadership disappears or changes. Single topology forwards to its sole data member. This is internal plumbing, not a general public connection API.
 
 ### Recovery and access
 
-pgBackRest writes backups and WAL directly from the current primary to registered S3 storage. Repositories use stanza `kk` and `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>` isolation. Types are `full`, `diff`, and `incr`. Durable operation receipts prevent duplicate backup dispatch from being mistaken for new work. WAL archiving is configured even when PITR restores are disabled; without repository storage it is a no-op, not recoverability.
+[pgBackRest](https://pgbackrest.org) writes backups and WAL directly from the current primary to registered [S3](https://aws.amazon.com/s3/) storage. Repositories use stanza `kk` and `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>` isolation. Types are `full`, `diff`, and `incr`. Durable operation receipts prevent duplicate backup dispatch from being mistaken for new work. WAL archiving is configured even when PITR restores are disabled; without repository storage it is a no-op, not recoverability.
 
 Karakoram owns scheduled count retention. pgBackRest automatic expiration is disabled; live deletion invokes `expire --set=<label>`. Removing an anchor also removes dependent backups and their inventory records, potentially crossing schedules. Retained repositories use guarded S3 cleanup and native dependency metadata when no live member remains. PITR is opt-in and reports a conservative archive-backed interval, not a precise last-commit guarantee.
 
-In-place restore is destructive and offline. Single recovery stops PostgreSQL, restores and promotes. HA fences all data members, resets only the cluster's DCS scope, restores a seed through Patroni custom bootstrap and rebuilds replicas. Recovery adopts the backup's sealed system credentials after fencing. Clone bootstrap reads the source repository with archiving disabled, then establishes the target repository and a new recovery history. Source and target providers and PostgreSQL majors must match; `postgres` and `supabase` are not interchangeable backup providers. See [recovery details](../postgres/backups.md).
+In-place restore is destructive and offline. Single recovery stops PostgreSQL, restores and promotes. HA fences all data members, resets only the cluster's DCS scope, restores a seed through Patroni custom bootstrap and rebuilds replicas. Recovery adopts the backup's sealed system credentials after fencing. Clone bootstrap reads the source repository with archiving disabled, then establishes the target repository and a new recovery history. Source and target engine drivers and PostgreSQL majors must match; `postgres` and `supabase` are not interchangeable backup engine drivers. See [recovery details](../postgres/backups.md).
 
 Cross-source restore into an existing target repository appends the restored database system-ID history through stanza-upgrade, retaining prior target backup sets rather than overwriting their inventory with source metadata. Archiving resumes only after target repository configuration is active and bootstrap archive overrides have been removed from all members.
 
-Native `/clusters/{cluster}/postgres/roles`, `/databases` and `/grants` routes model PostgreSQL rather than MongoDB users. Bounded actions execute on the current primary through its local socket; the interface is not arbitrary SQL execution. Roles support login, memberships, expiry and privilege flags, with extra cluster-update authorization for privileged changes. System roles are hidden and immutable. Password generation/rotation returns the generated value once; role-action SQL receives a SCRAM verifier. Database encoding/locale are creation-only; grants cover database and schema privileges, not arbitrary object ACLs.
+Native `/clusters/{cluster}/postgres/roles`, `/databases` and `/grants` routes model PostgreSQL rather than [MongoDB](https://www.mongodb.com) users. Bounded actions execute on the current primary through its local socket; the interface is not arbitrary SQL execution. Roles support login, memberships, expiry and privilege flags, with extra cluster-update authorization for privileged changes. System roles are hidden and immutable. Password generation/rotation returns the generated value once; role-action SQL receives a SCRAM verifier. Database encoding/locale are creation-only; grants cover database and schema privileges, not arbitrary object ACLs.
 
 ### Maintenance
 
@@ -51,11 +53,11 @@ One database core supplies both standalone PostgreSQL and Supabase recovery and 
 ## Alternatives considered
 
 - **Patroni Raft:** deprecated upstream; unsuitable for a new coordination dependency.
-- **External Consul, ZooKeeper or Kubernetes DCS:** viable Patroni integrations, but add infrastructure dependencies not otherwise required here.
+- **External [Consul](https://developer.hashicorp.com/consul), [ZooKeeper](https://zookeeper.apache.org) or [Kubernetes](https://kubernetes.io) DCS:** viable Patroni integrations, but add infrastructure dependencies not otherwise required here.
 - **Karakoram as DCS:** adds consensus/lease semantics and makes failover depend on control-plane availability.
 - **Patroni plus one etcd voter for single topology:** adds processes without HA; plain PostgreSQL is simpler.
 - **ProxySQL for internal Supabase services:** incompatible with notifications, replication and session features those services need.
-- **HAProxy sidecar or client multi-host strings for internal access:** extra executable/configuration or uneven driver support; a protocol-transparent local forwarder is smaller.
+- **[HAProxy](https://www.haproxy.org) sidecar or client multi-host strings for internal access:** extra executable/configuration or uneven driver support; a protocol-transparent local forwarder is smaller.
 - **Generic database-users API:** misrepresents PostgreSQL roles, memberships and database/schema privileges.
 
 ## References

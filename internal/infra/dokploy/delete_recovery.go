@@ -160,7 +160,7 @@ func (b *Backend) agedShutdown(ctx context.Context, o operation, a application, 
 // changing the receipt: stop is idempotent, unlike build/restore/final removal.
 // An explicit native zero also confirms legacy receipts without resending stop.
 func (b *Backend) ensureDeleteStopped(ctx context.Context, a *application, m *metadata, o operation) error {
-	if m.DeleteStopConfirmed || !m.Deployed || m.DeleteRemoval != nil && m.DeleteRemoval.Attempted {
+	if m.DeleteStopConfirmed || m.DeleteRemoval != nil && m.DeleteRemoval.Attempted {
 		return nil
 	}
 	if m.Desired != "deleting" || !sameOperation(m.Pending, o) || a.ID != o.AppID || a.AppName != o.AppName || a.Name != o.Hostname || a.Environment != b.target.ID {

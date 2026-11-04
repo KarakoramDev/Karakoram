@@ -179,6 +179,7 @@ func (f *coreInfra) EnsurePublicPort(_ context.Context, name string, port infra.
 	defer f.mu.Unlock()
 	f.mutations++
 	f.calls = append(f.calls, "public:"+name)
+	f.public = slices.DeleteFunc(f.public, func(r infra.PublicPortRoute) bool { return r.Hostname == name && r.Port == port.Port })
 	f.public = append(f.public, infra.PublicPortRoute{Hostname: name, PublicPort: port})
 	return nil
 }

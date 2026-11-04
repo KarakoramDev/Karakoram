@@ -233,6 +233,15 @@ func ensureCertificates(ctx context.Context, rc *engine.Context, s *state, force
 				if !renew {
 					continue
 				}
+				if !initial && !force {
+					urgent, err := pki.NeedsRenewal(active, 7*24*time.Hour, now(rc))
+					if err != nil {
+						return err
+					}
+					if !urgent && rc.WaitForWindow().RequeueAfter > 0 {
+						continue
+					}
+				}
 				certPEM, keyPEM, err = ca.Issue(pki.CertRequest{
 					CommonName: m.Name, DNSNames: []string{m.Name, "localhost"},
 					IPs: ips, Server: true, Client: kind == "servers",

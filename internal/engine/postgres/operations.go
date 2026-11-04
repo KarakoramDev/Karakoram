@@ -36,6 +36,11 @@ func (p *Core) convertTopology(ctx context.Context, rc *engine.Context, s *state
 func (p *Core) scaleDown(ctx context.Context, rc *engine.Context, s *state, result engine.Result) (engine.Result, error) {
 	data := s.data()
 	m := data[len(data)-1]
+	if m.Retirement == "" && !m.Removing {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			return wait, nil
+		}
+	}
 	if m.ServiceID != "" {
 		fenced, err := fenceRetirement(ctx, rc, s, m)
 		if err != nil || !fenced {
@@ -60,25 +65,78 @@ func (*Core) CanClaimOperation(c *domain.Cluster) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// Initial recovery is what establishes formation. Requiring Formed here
+	// waits on Sync, which cannot acknowledge formation until that same restore
+	// publishes its application receipt.
+	initialRestore := false
+	if c.Spec.DataSource != nil {
+		bs, err := loadBackupState(c)
+		if err != nil {
+			return false, err
+		}
+		initialRestore = bs.InitialQueued && !bs.InitialApplied
+	}
+	if s.Topology == "distributed" {
+		if s.Pending != nil || len(s.data()) != s.desiredDataCount(&engine.Context{Cluster: c}) {
+			return false, nil
+		}
+		for _, m := range s.data() {
+			if m.Stage != "joined" || !initialRestore && !s.group(m.Group).formed() {
+				return false, nil
+			}
+		}
+	}
 	for _, m := range s.Members {
 		if m.UnplacedRetirement != nil || m.ImportBatch != nil || m.RuntimeRecovery.Op != nil || m.RuntimeRecovery.ImportPlan != nil {
 			return false, nil
 		}
 	}
-	return s.RestoreRecovery == nil && s.Upgrade == nil && s.Rolling == nil && (s.Replacement == nil || s.Replacement.Recovery == ""), nil
+	return s.CitusScale == nil && s.CitusOperation == "" && s.Rebalance == nil && s.RestoreRecovery == nil && s.Upgrade == nil && s.Rolling == nil && (s.Replacement == nil || s.Replacement.Recovery == ""), nil
 }
 
 // RunOperation executes bounded, checkpointed rolling restarts.
 func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
+	journal, readErr := readAdminRotation(ctx, rc)
+	if readErr != nil {
+		return engine.OpResult{}, readErr
+	}
+	if journal != nil && journal.Operation != op.ID && journal.Stage != "rotated" && journal.Stage != "rejected" {
+		recovery, recoveryErr := p.rotateAdministrator(ctx, rc, &domain.Operation{ID: journal.Operation, Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"postgres"}`)})
+		return engine.OpResult{Message: "Administrator rotation recovery owns the cluster: " + recovery.Message, RequeueAfter: time.Second}, recoveryErr
+	}
 	allowed, err := p.CanClaimOperation(rc.Cluster)
 	if err != nil {
 		return engine.OpResult{}, err
+	}
+	if rc.Cluster.Spec.Topology.Type == "distributed" && rc.Cluster.Spec.DataSource != nil && op.Kind != domain.OperationUpgradeAgents {
+		bs, readErr := loadBackupState(rc.Cluster)
+		if readErr != nil {
+			return engine.OpResult{}, readErr
+		}
+		if bs.InitialQueued && !bs.InitialApplied {
+			initial, readErr := rc.Store.GetRestore(ctx, rc.Cluster.Ref(), "initial-restore")
+			if readErr != nil {
+				return engine.OpResult{}, readErr
+			}
+			if !restoreOperation(op) || initial.OperationID != op.ID {
+				return engine.OpResult{}, engine.Invalid("initial PostgreSQL recovery owns the cluster")
+			}
+		}
 	}
 	if !allowed {
 		// Replacement join deliberately runs Sync to provision its new member.
 		// Its own frozen import is admission fencing for other operations, not
 		// a reason to fail the already-running, non-destructive join observer.
 		s, loadErr := load(rc.Cluster)
+		if loadErr == nil && op.Kind == "rebalance" && s.Rebalance != nil && s.Rebalance.Operation == op.ID {
+			return p.runCitusRebalance(ctx, rc, op, false)
+		}
+		if loadErr == nil && s.CitusOperation != "" && (restoreOperation(op) || op.Kind == domain.OperationBackup) && s.CitusOperation == op.ID {
+			return p.runBackupOperation(ctx, rc, op)
+		}
 		if loadErr != nil {
 			return engine.OpResult{}, loadErr
 		}
@@ -90,7 +148,20 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 	}
 	switch op.Kind {
 	case domain.OperationRotateSystemUser:
+		var rotation struct {
+			User string `json:"user"`
+		}
+		if err := json.Unmarshal(op.Payload, &rotation); err != nil {
+			return engine.OpResult{}, engine.Invalid("invalid rotation payload")
+		}
+		if rotation.User == "postgres" {
+			return p.rotateAdministrator(ctx, rc, op)
+		}
 		return p.rotateDataUser(ctx, rc, op)
+	case "rebalance":
+		return p.runCitusRebalance(ctx, rc, op, false)
+	case domain.OperationUpgradeAgents:
+		return p.upgradeAgents(ctx, rc, op, false)
 	case domain.OperationBackup, domain.OperationDeleteBackup, domain.OperationRestore, "initial-restore":
 		return p.runBackupOperation(ctx, rc, op)
 	case domain.OperationReplaceMember:
@@ -124,20 +195,40 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		}
 	}
 	if len(checkpoint.Order) == 0 {
-		primary := ""
-		for _, m := range s.Members {
-			st, e := live(ctx, rc, m.Name)
-			if e != nil || !st.Running {
-				return engine.OpResult{}, engine.ErrUnavailable
+		if s.Topology == "distributed" {
+			for _, m := range s.Members {
+				if m.Role == "proxy" {
+					checkpoint.Order = append(checkpoint.Order, m.Name)
+				}
 			}
-			if st.Role == "primary" {
-				primary = m.Name
-			} else {
-				checkpoint.Order = append(checkpoint.Order, m.Name)
+			for _, group := range s.maintenanceGroups() {
+				primary, _, err := group.primary(ctx, rc)
+				if err != nil {
+					return engine.OpResult{}, err
+				}
+				for _, m := range group.data() {
+					if m != primary {
+						checkpoint.Order = append(checkpoint.Order, m.Name)
+					}
+				}
+				checkpoint.Order = append(checkpoint.Order, primary.Name)
 			}
-		}
-		if primary != "" {
-			checkpoint.Order = append(checkpoint.Order, primary)
+		} else {
+			primary := ""
+			for _, m := range s.Members {
+				st, e := live(ctx, rc, m.Name)
+				if e != nil || !st.Running {
+					return engine.OpResult{}, engine.ErrUnavailable
+				}
+				if st.Role == "primary" {
+					primary = m.Name
+				} else {
+					checkpoint.Order = append(checkpoint.Order, m.Name)
+				}
+			}
+			if primary != "" {
+				checkpoint.Order = append(checkpoint.Order, primary)
+			}
 		}
 	}
 	if checkpoint.Index >= len(checkpoint.Order) {
@@ -157,6 +248,10 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 			checkpoint.Waiting = false
 		}
 	} else {
+		if wait := rc.WaitForWindow(); wait.RequeueAfter > 0 {
+			raw, err := json.Marshal(checkpoint)
+			return engine.OpResult{Checkpoint: raw, Step: "restart", Message: "Waiting for maintenance window", RequeueAfter: wait.RequeueAfter}, err
+		}
 		st, err := live(ctx, rc, m.Name)
 		if err != nil {
 			return engine.OpResult{}, err
@@ -165,7 +260,7 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 		if err != nil {
 			return engine.OpResult{}, err
 		}
-		if st.Role == "primary" && s.Topology == "ha" {
+		if st.Role == "primary" && patroniTopology(s.Topology) && rc.Cluster.Spec.Components.Engine.Replicas > 1 {
 			if err = switchAway(ctx, rc, s, m.Name); err != nil {
 				return engine.OpResult{}, err
 			}
@@ -174,7 +269,7 @@ func (p *Core) RunOperation(ctx context.Context, rc *engine.Context, op *domain.
 			if m.Role == "proxy" {
 				process = "proxysql"
 			}
-			if m.Role == "data" && s.Topology == "ha" {
+			if m.Role == "data" && patroniTopology(s.Topology) {
 				err = a.Engine(ctx, "postgres", "restart", struct{}{}, nil)
 			} else {
 				err = a.Process(ctx, agentapi.ProcessAction{Process: process, Action: "restart", RequestID: op.ID + "/restart/" + m.Name})

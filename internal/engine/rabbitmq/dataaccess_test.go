@@ -11,8 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
+	"github.com/KarakoramDev/Karakoram/internal/engine/enginetest"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/mgmt"
 )
 
@@ -46,7 +48,8 @@ func TestDataMcpScope(t *testing.T) {
 }
 
 func TestDataAccessReconcile(t *testing.T) {
-	_, rc, _, _ := setup(t)
+	p, rc, _, _ := setup(t)
+	ready(t, p, rc)
 	rc.Cluster.Spec.DataMcp = &domain.DataMcpSpec{Enabled: true, Access: "readWrite"}
 	users := map[string]mgmt.UserWrite{}
 	permissions := map[string]mgmt.Permission{}
@@ -123,6 +126,24 @@ func TestDataAccessReconcile(t *testing.T) {
 		if len(v.Tags) != 1 || v.Tags[0] != "monitoring" || v.Password == nil || *v.Password == "" {
 			t.Fatal(user, v)
 		}
+		generatedPasswordLimit.Assert(t, "native data password", *v.Password)
+		persisted, err := secret(t.Context(), rc, "users/"+user)
+		if err != nil {
+			t.Fatal(err)
+		}
+		generatedPasswordLimit.Assert(t, "persisted data password", string(persisted))
+		level := engine.DataAccessRead
+		if user == engine.DataAccessReadWriteUser {
+			level = engine.DataAccessReadWrite
+		}
+		creds, err := p.DataAccessCredentials(t.Context(), rc, level)
+		if err != nil {
+			t.Fatal(err)
+		}
+		generatedPasswordLimit.Assert(t, "returned data password", creds.Password)
+		if *v.Password != string(persisted) || creds.Password != string(persisted) {
+			t.Fatal("native, persisted and returned data passwords differ")
+		}
 	}
 	for _, v := range permissions {
 		write := "^$"
@@ -175,9 +196,9 @@ func TestDataAccessReconcile(t *testing.T) {
 }
 
 func TestDataAccessRotation(t *testing.T) {
-	for _, user := range []string{engine.DataAccessReadUser, engine.DataAccessReadWriteUser} {
+	for _, user := range []string{"karakoram", "admin", engine.DataAccessReadUser, engine.DataAccessReadWriteUser} {
 		t.Run(user, func(t *testing.T) {
-			p, rc, _, _ := setup(t)
+			p, rc, _, agents := setup(t)
 			ready(t, p, rc)
 			rc.Cluster.Spec.DataMcp = &domain.DataMcpSpec{Enabled: true, Access: "readWrite"}
 			s := state(t, rc)
@@ -187,6 +208,12 @@ func TestDataAccessRotation(t *testing.T) {
 			before, err := secret(t.Context(), rc, "users/"+user)
 			if err != nil {
 				t.Fatal(err)
+			}
+			recorded := enginetest.RecordCredentials(rc)
+			var nativePassword string
+			agents.configObserver = func(cfg agentapi.MemberConfig) {
+				nativePassword = cfg.SystemUsers[user].Password
+				generatedPasswordLimit.Assert(t, "agent-loaded rotation password", nativePassword)
 			}
 			op := &domain.Operation{ID: "rotate-data-user", Kind: domain.OperationRotateSystemUser, Payload: json.RawMessage(`{"user":"` + user + `"}`)}
 			done := false
@@ -204,6 +231,43 @@ func TestDataAccessRotation(t *testing.T) {
 			after, err := secret(t.Context(), rc, "users/"+user)
 			if !done || err != nil || string(before) == string(after) {
 				t.Fatal("rotation incomplete", done, err)
+			}
+			recorded.AssertValues(t, map[string]enginetest.CredentialLimit{
+				"rotations/" + op.ID: generatedPasswordLimit,
+				"users/" + user:      generatedPasswordLimit,
+			}, 0)
+			if string(recorded.Values["rotations/"+op.ID]) != string(after) {
+				t.Fatal("staged and persisted rotation passwords differ")
+			}
+			generatedPasswordLimit.Assert(t, "persisted rotated password", string(after))
+			if nativePassword != string(after) {
+				t.Fatal("agent-loaded password differs from persisted rotation")
+			}
+			if user == "admin" {
+				out, err := p.Connection(t.Context(), rc)
+				if err != nil || len(out.Credentials) == 0 {
+					t.Fatal("missing returned admin credentials", err)
+				}
+				for _, credential := range out.Credentials {
+					generatedPasswordLimit.Assert(t, "returned rotated admin password", credential.Password)
+					if credential.Password != string(after) {
+						t.Fatal("returned admin password differs from persisted rotation")
+					}
+				}
+			}
+			if user == engine.DataAccessReadUser || user == engine.DataAccessReadWriteUser {
+				level := engine.DataAccessRead
+				if user == engine.DataAccessReadWriteUser {
+					level = engine.DataAccessReadWrite
+				}
+				creds, err := p.DataAccessCredentials(t.Context(), rc, level)
+				if err != nil {
+					t.Fatal(err)
+				}
+				generatedPasswordLimit.Assert(t, "returned rotated data password", creds.Password)
+				if creds.Password != string(after) {
+					t.Fatal("returned password differs from persisted rotation")
+				}
 			}
 			listed, err := p.SystemUsers(t.Context(), rc)
 			if err != nil || len(listed) != 4 {

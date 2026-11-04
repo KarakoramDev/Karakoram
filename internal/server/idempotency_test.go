@@ -223,8 +223,8 @@ func TestIdempotentClusterCreatePutPatchAndPathScope(t *testing.T) {
 	triggers := s.Trigger.(*triggerSpy)
 	triggers.mu.Lock()
 	defer triggers.mu.Unlock()
-	if len(triggers.names) != 4 {
-		t.Fatal("replays triggered reconciliation", triggers.names)
+	if len(triggers.names) != 3 {
+		t.Fatal("no-op PUT or keyed replays triggered reconciliation", triggers.names)
 	}
 }
 
@@ -275,19 +275,50 @@ func TestIdempotencyContractCoverage(t *testing.T) {
 		}
 	}
 	for _, id := range []string{
+		"upgradeClusterAgents", "moveClusterMember", "updateAgentRolloutSettings", "updateControlPlaneBackupPolicy", "createControlPlaneBackup",
+		"createNotificationChannel", "replaceNotificationChannel", "deleteNotificationChannel", "testNotificationChannel", "createBackupDrill",
 		"retryClusterDeployments", "restartCluster", "rotateClusterTLS", "resumeCluster", "raiseClusterFCV",
 		"replaceClusterMember", "rotateSystemUser", "replaceDatabaseUser",
 		"replaceDatabaseRole", "replaceBackupStorage",
 		"createElasticAPIKey", "createElasticUser", "updateElasticUser", "createElasticRole", "updateElasticRole",
-		"createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "createPostgresDatabase", "grantPostgresPrivileges",
+		"createPostgresRole", "updatePostgresRole", "patchPostgresRole", "rotatePostgresRolePassword", "rotatePostgresBinding", "rebalancePostgres", "createPostgresDatabase", "grantPostgresPrivileges",
+		"createMySQLUser", "rotateMySQLUserPassword", "recoverMySQLQuorum",
 		"setSupabaseSMTPPassword", "putSupabaseFunction", "rotateSupabaseJWTSecret",
+		"createOpenBaoDatabaseConnection",
+		"createNeo4jUser", "deleteNeo4jUser", "setNeo4jUserPassword",
+		"createWeaviateUser", "updateWeaviateUser", "rotateWeaviateUserKey", "createWeaviateRole", "updateWeaviateRole",
 	} {
 		if !covered[id] {
 			t.Errorf("keyed UI operation %s is not covered", id)
 		}
 	}
-	if len(covered) != 47 {
-		t.Fatalf("covered operations = %d, want 47", len(covered))
+	if len(covered) != 72 {
+		t.Fatalf("covered operations = %d, want 72", len(covered))
+	}
+}
+
+func TestIdempotencyNamespaceContractCoverage(t *testing.T) {
+	doc, err := apispec.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range doc.Paths.Map() {
+		for _, operation := range path.Operations() {
+			if !idempotencyCovered(operation.OperationID) {
+				continue
+			}
+			t.Run(operation.OperationID, func(t *testing.T) {
+				namespace := false
+				for _, parameter := range append(path.Parameters, operation.Parameters...) {
+					if parameter.Value.In == "query" && parameter.Value.Name == "namespace" {
+						namespace = true
+					}
+				}
+				if got := idempotencyNamespaceScoped(operation.OperationID); got != namespace {
+					t.Errorf("namespace scope = %t, OpenAPI namespace query parameter = %t", got, namespace)
+				}
+			})
+		}
 	}
 }
 

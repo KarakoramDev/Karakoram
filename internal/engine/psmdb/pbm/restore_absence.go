@@ -53,6 +53,8 @@ func restoreAbsent(ctx context.Context, env Env, name string) (int64, bool, []by
 
 // RestoreStorageAbsent checks the recorded destination, without modifying it.
 func RestoreStorageAbsent(ctx context.Context, env Env, name string) (bool, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	client, closeClient, err := backupstorage.NewClient(env.Storage, env.Credentials)
 	if err != nil {
 		return false, err

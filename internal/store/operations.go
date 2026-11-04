@@ -148,6 +148,11 @@ func (s *Store) UpdateOperation(ctx context.Context, op *domain.Operation) error
 	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), false); err != nil {
 		return err
 	}
+	if domain.IsConvergenceOperation(op.Kind) && op.Step == "WaitingForWindow" && !op.Terminal() {
+		if err = recordMaintenanceWait(ctx, tx, op); err != nil {
+			return err
+		}
+	}
 	if err = finalizeOperationRecord(ctx, tx, op); err != nil {
 		return err
 	}
@@ -265,6 +270,28 @@ func (s *Store) ClaimRunningOperation(ctx context.Context, ref domain.ClusterRef
 	return s.claimOperation(ctx, ref.Key(), false, "")
 }
 
+// ClaimAgentUpgrade permits remediation after ordinary synchronization fails.
+// The reconciler must resume any Running operation before using this claim.
+// Maintenance admission and execution accounting remain identical to normal work.
+func (s *Store) ClaimAgentUpgrade(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	return s.claimOperation(ctx, ref.Key(), true, domain.OperationUpgradeAgents)
+}
+
+// ClaimRecoveryOperation claims only the provider's explicit recovery kind.
+// Running ownership must already have been checked by the reconciler.
+func (s *Store) ClaimRecoveryOperation(ctx context.Context, ref domain.ClusterRef, kind string) (*domain.Operation, error) {
+	if err := ref.Validate(); err != nil {
+		return nil, err
+	}
+	if kind == "" {
+		return nil, ErrNotFound
+	}
+	return s.claimOperation(ctx, ref.Key(), true, kind)
+}
+
 // ClaimBackupDeletion permits retained-object cleanup without starting unrelated
 // runtime work while a cluster is suspended.
 func (s *Store) ClaimBackupDeletion(ctx context.Context, ref domain.ClusterRef) (*domain.Operation, error) {
@@ -280,15 +307,20 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 		return nil, err
 	}
 	defer tx.Rollback()
-	var data []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM records WHERE kind='operation' AND scope=? AND phase IN ('Pending','Running') AND json_extract(data,'$.targetGeneration') IS NULL AND (? OR phase='Running') AND (?='' OR json_extract(data,'$.kind')=?) ORDER BY CASE phase WHEN 'Running' THEN 0 ELSE 1 END,created,key LIMIT 1", cluster, includePending, kind, kind).Scan(&data)
+	selected, wait, err := maintenanceCandidate(ctx, tx, cluster, includePending, kind)
 	if err != nil {
-		return nil, typed(err)
-	}
-	var op domain.Operation
-	if err = json.Unmarshal(data, &op); err != nil {
 		return nil, err
 	}
+	if selected == nil {
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+		if wait != nil {
+			return nil, wait
+		}
+		return nil, ErrNotFound
+	}
+	op := *selected
 	if (op.Kind == domain.OperationRestore || op.Kind == "initial-restore") && op.Phase != domain.PhaseRunning {
 		if err = claimInitialDataSource(ctx, tx, domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}); err != nil {
 			return nil, err
@@ -308,7 +340,7 @@ func (s *Store) claimOperation(ctx context.Context, cluster string, includePendi
 			}
 		}
 	}
-	now := time.Now().UTC()
+	now := maintenanceTime(ctx)
 	op.Phase = domain.PhaseRunning
 	op.Attempts++
 	op.UpdatedAt = now
@@ -352,6 +384,46 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 	if backup.Cluster != op.Cluster || domain.NormalizedNamespace(backup.Namespace) != op.Namespace {
 		return ErrConflict
 	}
+	if backup.Trigger == domain.BackupTriggerPITRReanchor {
+		// Recheck under the same writer transaction as insertion: an API or
+		// scheduler enqueue may have won after the engine's observation pass.
+		scope := domain.ClusterRef{Namespace: backup.Namespace, Name: backup.Cluster}.Key()
+		rows, e := tx.QueryContext(ctx, `SELECT data FROM records WHERE kind='operation' AND scope=?`, scope)
+		if e != nil {
+			return e
+		}
+		blocked := false
+		for rows.Next() {
+			var raw []byte
+			var existing domain.Operation
+			if e = rows.Scan(&raw); e == nil {
+				e = json.Unmarshal(raw, &existing)
+			}
+			if e != nil {
+				rows.Close()
+				return e
+			}
+			if domain.OperationDefersPITRReanchor(existing, backup.CreatedAt) {
+				blocked = true
+				break
+			}
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return e
+		}
+		if blocked {
+			return &domain.BackupAdmissionBusyError{Operation: true}
+		}
+		var backups int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM records WHERE scope=? AND phase IN ('Pending','Running') AND (kind='backup' OR (kind='operation' AND json_extract(data,'$.kind')=?))`, scope, domain.OperationBackup).Scan(&backups); err != nil {
+			return err
+		}
+		if backups != 0 {
+			return &domain.BackupAdmissionBusyError{}
+		}
+	}
 	if err = admitClusterOperation(ctx, tx, op); err != nil {
 		return err
 	}
@@ -369,6 +441,12 @@ func (s *Store) enqueueBackup(ctx context.Context, backup *domain.Backup, op *do
 
 // EnqueueRestore creates a restore record and its operation in one transaction.
 func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op *domain.Operation) error {
+	return s.EnqueueRestoreWithSecrets(ctx, restore, op, nil)
+}
+
+// EnqueueRestoreWithSecrets atomically stages write-only restore inputs with
+// the restore record and operation. Inputs are encrypted before the transaction.
+func (s *Store) EnqueueRestoreWithSecrets(ctx context.Context, restore *domain.Restore, op *domain.Operation, values map[string][]byte) error {
 	if err := (domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}).Validate(); err != nil {
 		return err
 	}
@@ -382,6 +460,11 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	}
 	if restore.Phase == "" {
 		restore.Phase = domain.PhasePending
+	}
+	ref := domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}
+	sealed, err := s.sealClusterValues(ref.Key(), values)
+	if err != nil {
+		return err
 	}
 	tx, err := s.writer.BeginTx(ctx, nil)
 	if err != nil {
@@ -407,10 +490,16 @@ func (s *Store) EnqueueRestore(ctx context.Context, restore *domain.Restore, op 
 	if err = admitRestoreBackup(ctx, tx, domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}, domain.ClusterRef{Namespace: restore.SourceNamespace, Name: restore.Source.SourceCluster}, restore.Source.Backup, restore.Source.PITRTime != nil); err != nil {
 		return err
 	}
+	if err = guardRestoreBindings(ctx, tx, domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}); err != nil {
+		return err
+	}
 	if err = put(ctx, tx, "restore", domain.ClusterRef{Namespace: restore.Namespace, Name: restore.Cluster}.Key(), restore.Name, restore, "", "", string(restore.Phase), true); err != nil {
 		return err
 	}
 	if err = put(ctx, tx, "operation", domain.ClusterRef{Namespace: op.Namespace, Name: op.Cluster}.Key(), op.ID, op, "", "", string(op.Phase), true); err != nil {
+		return err
+	}
+	if err = writeClusterValues(ctx, tx, ref.Key(), sealed); err != nil {
 		return err
 	}
 	return tx.Commit()

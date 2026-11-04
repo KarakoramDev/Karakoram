@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/KarakoramDev/Karakoram/internal/agentapi"
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/elastic/esapi"
@@ -79,6 +80,19 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	if busy, err := p.observePending(ctx, rc, s); busy || err != nil {
 		return false, "waiting for platform operation", err
 	}
+	// Observe accepted work, but never replay a deployment using a different
+	// control-plane artifact. Compensation only restores the admitted member.
+	if r := s.Rolling; agentTargetChanged(r) {
+		if s.Retry != nil && (s.Retry.Action == "upgrade" || s.Retry.Action == "stop") {
+			r.Step = "build-start"
+			delete(s.PlatformRetries, retryKey(s.Retry))
+			s.Retry = nil
+		}
+		if busy, _, err := p.retryPending(ctx, rc, s); busy || err != nil {
+			return false, "waiting for platform recovery retry", err
+		}
+		return p.recoverAgentBuildChange(ctx, rc, s)
+	}
 	if busy, _, err := p.retryPending(ctx, rc, s); busy || err != nil {
 		return false, "waiting for platform retry", err
 	}
@@ -95,6 +109,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		m := s.find(name)
 		return m != nil && component(rc.Cluster.Spec, m).Replicas > 0
 	})
+	if wait := rollingWindowWait(rc, s); wait.RequeueAfter > 0 {
+		return false, "waiting for maintenance window", nil
+	}
 	if len(r.Order) == 0 {
 		c, err := p.es(ctx, rc, s)
 		if err != nil {
@@ -115,6 +132,16 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			include := !m.Removing && (isES(m) || component(rc.Cluster.Spec, m).Replicas > 0)
 			if include && r.Reason == "upgrade" {
 				include = m.Version != targetVersion
+			}
+			if include && r.Reason == "agents" {
+				observed := domain.MemberStatus{Name: m.Name}
+				for _, status := range rc.Cluster.Status.Members {
+					if status.Name == m.Name {
+						observed = status
+						break
+					}
+				}
+				include = !slices.Contains(r.Done, m.Name) && engine.MemberNeedsAgentUpgrade(observed, *r.AgentTarget)
 			}
 			if include && (r.Reason == "config" || r.Reason == "resources") {
 				desired, err := p.desiredSpec(ctx, rc, s, m, targetVersion)
@@ -185,6 +212,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	if version == "" {
 		version = rc.Cluster.Spec.Version
 	}
+	if r.Reason == "agents" {
+		version = m.Version
+	}
 	if !isES(m) {
 		if r.Reason == "restart" && component(rc.Cluster.Spec, m).Replicas == 0 {
 			// The desired component no longer exists. Its readiness cannot be
@@ -195,7 +225,7 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		}
 		switch r.Step {
 		case "prepare":
-			if r.Reason == "upgrade" {
+			if r.Reason == "upgrade" || r.Reason == "agents" {
 				err := p.issueAction(ctx, rc, s, &pending{Action: "stop", Member: m.Name})
 				if err == nil || s.Retry != nil {
 					r.Step = "apply"
@@ -206,10 +236,10 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			return false, "preparing component", nil
 		case "apply":
 			resources := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
-			if !reflect.DeepEqual(m.Resources, resources) {
+			if r.Reason != "agents" && !reflect.DeepEqual(m.Resources, resources) {
 				return false, "resizing component", p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
 			}
-			if r.Reason == "upgrade" {
+			if r.Reason == "upgrade" || r.Reason == "agents" {
 				if spec, err := p.deploymentSpec(rc, m, version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
 					return false, "deployment retries exhausted; operator re-arm required", nil
 				}
@@ -243,6 +273,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			if readinessErr != nil || !ready {
 				return false, "waiting for component readiness", readinessErr
 			}
+			if r.Reason == "agents" && !p.agentBuildReady(ctx, rc, m, r.AgentTarget.TargetBuild) {
+				return false, "waiting for component agent target build", nil
+			}
 			m.Version = version
 			m.Stage = stageJoined
 			r.Done = append(r.Done, m.Name)
@@ -272,7 +305,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		r.Step = "flush"
 		return false, "replica allocation paused", nil
 	case "flush":
-		_ = c.Flush(ctx)
+		if err := c.Flush(ctx); err != nil {
+			return false, "waiting for index flush", err
+		}
 		r.Step = "apply"
 		return false, "flushed indices", nil
 	case "apply":
@@ -280,10 +315,10 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 			return false, "waiting for all master-eligible nodes to join", err
 		}
 		resources := runtimeResources(m, component(rc.Cluster.Spec, m).Resources)
-		if !reflect.DeepEqual(m.Resources, resources) {
+		if r.Reason != "agents" && !reflect.DeepEqual(m.Resources, resources) {
 			return false, "resizing node", p.issueAction(ctx, rc, s, &pending{Action: "resources", Member: m.Name, Resources: resources})
 		}
-		if r.Reason == "upgrade" {
+		if r.Reason == "upgrade" || r.Reason == "agents" {
 			if spec, err := p.deploymentSpec(rc, m, version); err == nil && engine.DeploymentBlocked(rc, m.Name, spec) {
 				return false, "deployment retries exhausted; operator re-arm required", nil
 			}
@@ -325,6 +360,9 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 		if !joined || !p.componentReady(ctx, rc, m) {
 			return false, "waiting for node rejoin", nil
 		}
+		if r.Reason == "agents" && !p.agentBuildReady(ctx, rc, m, r.AgentTarget.TargetBuild) {
+			return false, "waiting for node agent target build", nil
+		}
 		m.Version = version
 		m.Stage = stageJoined
 		r.Step = "allocation"
@@ -346,6 +384,106 @@ func (p *Provider) rollingStep(ctx context.Context, rc *engine.Context, s *state
 	default:
 		return false, "", invalid("unknown rolling step")
 	}
+}
+
+func agentTargetChanged(r *rolling) bool {
+	return r != nil && r.Reason == "agents" && (r.AgentTarget == nil || r.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build)
+}
+
+func agentBuildChangedError() error {
+	return fmt.Errorf("agent upgrade target build differs from the running control plane; re-run upgrade-agents")
+}
+
+// A changed artifact cannot fulfill the frozen target. Undo pre-deployment
+// disruption, or finish readiness/recovery of an accepted deployment, without
+// deploying any new artifact or admitting the next member. The operation fails
+// only after the durable journal no longer owns cluster disruption.
+func (p *Provider) recoverAgentBuildChange(ctx context.Context, rc *engine.Context, s *state) (bool, string, error) {
+	r := s.Rolling
+	finish := func() (bool, string, error) {
+		s.Rolling = nil
+		return true, "agent target changed; admitted member recovered", agentBuildChangedError()
+	}
+	if r.Current == "" || r.Step == "prepare" {
+		return finish()
+	}
+	m := s.find(r.Current)
+	if m == nil {
+		// Allocation is cluster-wide and still needs restoring for a removed node.
+		c, err := p.es(ctx, rc, s)
+		if err != nil {
+			return false, "", err
+		}
+		defer c.Close()
+		if err := c.SetAllocationEnable(ctx, nil); err != nil {
+			return false, "", err
+		}
+		return finish()
+	}
+	if r.Step == "build-start" {
+		err := p.issueAction(ctx, rc, s, &pending{Action: "start", Member: m.Name})
+		if err == nil || s.Retry != nil {
+			r.Step = "rejoin"
+		}
+		return false, "starting admitted member after agent target change", err
+	}
+	if r.Step == "rejoin" {
+		desired, err := p.desiredSpec(ctx, rc, s, m, m.Version)
+		if err != nil {
+			return false, "", err
+		}
+		if desired.RestartToken != m.ConfigHash {
+			// Repair configuration on the admitted artifact only. Re-entering
+			// apply would install the new control-plane build under the old target.
+			if err := p.publishConfig(ctx, rc, s, m, m.Version, rollingNonce(r)); err != nil {
+				return false, "", err
+			}
+			p.reloadMembers(ctx, rc, m.Name)
+			return false, "applying corrected configuration after agent target change", nil
+		}
+	}
+	if !isES(m) {
+		if r.Step == "apply" {
+			err := p.issueAction(ctx, rc, s, &pending{Action: "start", Member: m.Name})
+			if err == nil || s.Retry != nil {
+				r.Step = "rejoin"
+			}
+			return false, "restoring stopped component after agent target change", err
+		}
+		ready, err := p.componentReadyResult(ctx, rc, m)
+		if err != nil || !ready {
+			return false, "waiting for component recovery after agent target change", err
+		}
+		m.Stage = stageJoined
+		return finish()
+	}
+	c, err := p.es(ctx, rc, s)
+	if err != nil {
+		return false, "", err
+	}
+	defer c.Close()
+	if r.Step == "rejoin" {
+		nodes, err := c.Nodes(ctx)
+		if err != nil {
+			return false, "", err
+		}
+		if !slices.ContainsFunc(nodes, func(n esapi.Node) bool { return n.Name == m.Name && n.Version == m.Version }) || !p.componentReady(ctx, rc, m) {
+			return false, "waiting for node recovery after agent target change", nil
+		}
+		m.Stage = stageJoined
+	}
+	if r.Step != "recover" {
+		if err := c.SetAllocationEnable(ctx, nil); err != nil {
+			return false, "", err
+		}
+		r.Step = "recover"
+		return false, "allocation restored after agent target change", nil
+	}
+	healthy, err := p.healthy(ctx, c, rc.Cluster.Spec.Components.Engine.Replicas)
+	if err != nil || !healthy {
+		return false, "waiting for shard recovery after agent target change", err
+	}
+	return finish()
 }
 
 func rollingMasterReady(ctx context.Context, rc *engine.Context, s *state, m *member, c *esapi.Client, recovering bool) error {
@@ -401,4 +539,30 @@ func rollingNonce(r *rolling) string {
 		return r.OperationID + "/" + strconv.FormatInt(r.StartedAt.UnixNano(), 10)
 	}
 	return ""
+}
+
+// Once allocation is restricted (or a component is stopped), finish recovery
+// regardless of the window; only a fresh prepare step may wait.
+func rollingWindowWait(rc *engine.Context, s *state) engine.Result {
+	if s.Rolling != nil && (s.Rolling.Current == "" || s.Rolling.Step == "prepare") {
+		return rc.WaitForWindow()
+	}
+	return engine.Result{}
+}
+
+func (p *Provider) agentBuildReady(ctx context.Context, rc *engine.Context, m *member, build string) bool {
+	if !isES(m) {
+		ready, _ := engine.ComponentInstancesHealthy(ctx, rc, m.Name, m.Containers, m.ConfigVersion, engine.ComponentProbe{Ready: func(a *agentapi.Client) (bool, error) {
+			status, err := a.Status(ctx)
+			return err == nil && status.Agent.Build == build, err
+		}})
+		return ready
+	}
+	a, err := p.agentClient(ctx, rc, m.Name)
+	if err != nil {
+		return false
+	}
+	defer a.Close()
+	status, err := a.Status(ctx)
+	return err == nil && status.Agent.Build == build
 }

@@ -9,16 +9,18 @@ import (
 	"github.com/KarakoramDev/Karakoram/internal/domain"
 	"github.com/KarakoramDev/Karakoram/internal/engine"
 	"github.com/KarakoramDev/Karakoram/internal/engine/rabbitmq/rmqspec"
+	"github.com/KarakoramDev/Karakoram/internal/infra"
 	"github.com/KarakoramDev/Karakoram/internal/secrets"
 	"slices"
 	"time"
 )
 
 type operationState struct {
-	Done      []string `json:"done"`
-	Waiting   string   `json:"waiting,omitempty"`
-	Stage     string   `json:"stage"`
-	NewMember string   `json:"newMember,omitempty"`
+	Done        []string                    `json:"done"`
+	Waiting     string                      `json:"waiting,omitempty"`
+	Stage       string                      `json:"stage"`
+	NewMember   string                      `json:"newMember,omitempty"`
+	AgentTarget *engine.AgentUpgradePayload `json:"agentTarget,omitempty"`
 }
 
 func opResult(cp operationState, done bool, step string) (engine.OpResult, error) {
@@ -32,6 +34,9 @@ func decodeJSON(b []byte, v any) error {
 	return json.Unmarshal(b, v)
 }
 func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *domain.Operation) (result engine.OpResult, err error) {
+	previousOperation := rc.Operation
+	rc.Operation = op
+	defer func() { rc.Operation = previousOperation }()
 	recoveryState, recoveryErr := loadState(rc.Cluster)
 	if recoveryErr != nil {
 		return result, recoveryErr
@@ -55,7 +60,7 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		return result, e
 	}
 	defer func() {
-		if op.Kind == domain.OperationRestart || op.Kind == domain.OperationRotateTLS || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationUpdate {
+		if op.Kind == domain.OperationRestart || op.Kind == domain.OperationRotateTLS || op.Kind == domain.OperationUpgradeAgents || op.Kind == domain.OperationUpgrade || op.Kind == domain.OperationUpdate {
 			for _, m := range s.Members {
 				if len(m.QuorumBlockers) > 0 {
 					result.Message = quorumMessage(m)
@@ -72,8 +77,35 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	if e = decodeJSON(op.Checkpoint, &cp); e != nil {
 		return result, e
 	}
+	if op.Kind == domain.OperationUpgradeAgents {
+		if cp.AgentTarget == nil {
+			target, err := engine.AgentUpgradeTarget(op)
+			if err != nil {
+				return result, err
+			}
+			cp.AgentTarget = &target
+			if target.TargetBuild != engine.CurrentAgentBuild().Build {
+				return result, fmt.Errorf("agent upgrade target build differs from the running control plane; re-run upgrade-agents")
+			}
+			return opResult(cp, false, "agent-target-frozen")
+		}
+		if cp.AgentTarget.TargetBuild != engine.CurrentAgentBuild().Build {
+			return result, fmt.Errorf("agent upgrade target build differs from the running control plane; re-run upgrade-agents")
+		}
+	}
 	payload := map[string]string{}
-	if e = decodeJSON(op.Payload, &payload); e != nil {
+	var relocation struct {
+		Member     string `json:"member"`
+		Relocate   bool   `json:"relocate"`
+		AvoidGroup string `json:"avoidGroup"`
+	}
+	if op.Kind == domain.OperationReplaceMember {
+		e = decodeJSON(op.Payload, &relocation)
+		payload["member"] = relocation.Member
+	} else if op.Kind != domain.OperationUpgradeAgents {
+		e = decodeJSON(op.Payload, &payload)
+	}
+	if e != nil {
 		return result, invalid("invalid operation payload")
 	}
 	if s.Pending != nil || s.Retry != nil {
@@ -91,6 +123,15 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 	if cp.Waiting == "" {
 		for _, m := range ordered(s) {
 			if m.ChangeAction != "" && m.ChangeAction != "password" {
+				wait, err := changeWindow(ctx, rc, m)
+				if err != nil || wait.RequeueAfter != 0 {
+					r, checkpointErr := opResult(cp, false, "waiting-maintenance-window")
+					r.RequeueAfter = wait.RequeueAfter
+					if err != nil {
+						return r, err
+					}
+					return r, checkpointErr
+				}
 				_, e := p.changeStep(ctx, rc, s, m)
 				r, checkpointErr := opResult(cp, false, "waiting-member-change")
 				if e != nil {
@@ -104,23 +145,35 @@ func (p *Provider) RunOperation(ctx context.Context, rc *engine.Context, op *dom
 		}
 	}
 	switch op.Kind {
-	case domain.OperationRestart, domain.OperationRotateTLS:
+	case domain.OperationRestart, domain.OperationRotateTLS, domain.OperationUpgradeAgents:
 		return p.rollingOperation(ctx, rc, s, cp, op.Kind == domain.OperationRotateTLS)
 	case domain.OperationReplaceMember:
 		old := s.find(payload["member"])
 		if cp.Stage == "" {
-			if old == nil || old.Removing || old.Stage != "ready" {
-				return result, invalid("replacement requires a ready member")
+			if err := validateReplacementMember(s, payload["member"]); err != nil {
+				return result, err
 			}
 			m, e := allocateNewMember(ctx, rc, s)
 			if e != nil {
 				return result, e
 			}
 			m.ReplacesVolume = old.Volume
+			s.ReplacementFailure = ""
+			if relocation.Relocate && relocation.AvoidGroup != "" {
+				m.PlacementAvoid = []string{relocation.AvoidGroup}
+			}
 			cp.NewMember = m.Name
 			cp.Stage = "join"
 			s.ReplaceActive = true
 			return opResult(cp, false, "replacement-planned")
+		}
+		if s.ReplacementFailure != "" {
+			if s.find(cp.NewMember) != nil {
+				return opResult(cp, false, "replacement-rollback")
+			}
+			s.ReplaceActive = false
+			result, _ = opResult(cp, true, "replacement-failed")
+			return result, fmt.Errorf("%s: %w", s.ReplacementFailure, infra.ErrPlacementUnsatisfiable)
 		}
 		m := s.find(cp.NewMember)
 		if m == nil {
@@ -256,12 +309,30 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		if m == nil {
 			return engine.OpResult{}, engine.ErrNotFound
 		}
+		if m.ChangeAction == "" && cp.AgentTarget != nil {
+			st, err := p.agentStatus(ctx, rc, m.Name)
+			if err != nil || !running(st) || st.Agent.Build != cp.AgentTarget.TargetBuild {
+				return opResult(cp, false, "waiting-agent-build")
+			}
+			cp.Done = append(cp.Done, m.Name)
+			cp.Waiting = ""
+			return opResult(cp, false, "member-healthy")
+		}
+		wait, err := changeWindow(ctx, rc, m)
+		if err != nil || wait.RequeueAfter != 0 {
+			r, checkpointErr := opResult(cp, false, "waiting-maintenance-window")
+			r.RequeueAfter = wait.RequeueAfter
+			if err != nil {
+				return r, err
+			}
+			return r, checkpointErr
+		}
 		done, err := p.changeStep(ctx, rc, s, m)
 		if err != nil {
 			r, _ := opResult(cp, false, "member-change")
 			return r, err
 		}
-		if done {
+		if done && cp.AgentTarget == nil {
 			cp.Done = append(cp.Done, m.Name)
 			cp.Waiting = ""
 		}
@@ -293,6 +364,34 @@ func (p *Provider) rollingOperation(ctx context.Context, rc *engine.Context, s *
 		if m.Removing || slices.Contains(cp.Done, m.Name) {
 			continue
 		}
+		if cp.AgentTarget != nil {
+			observed := domain.MemberStatus{Name: m.Name}
+			for _, status := range rc.Cluster.Status.Members {
+				if status.Name == m.Name {
+					observed = status
+					break
+				}
+			}
+			if !engine.MemberNeedsAgentUpgrade(observed, *cp.AgentTarget) {
+				cp.Done = append(cp.Done, m.Name)
+				continue
+			}
+			wait := rc.WaitForWindow()
+			if wait.RequeueAfter != 0 {
+				r, err := opResult(cp, false, "waiting-maintenance-window")
+				r.RequeueAfter = wait.RequeueAfter
+				return r, err
+			}
+			beginChange(rc, s, m, "agent")
+			cp.Waiting = m.Name
+			return opResult(cp, false, "member-planned")
+		}
+		wait := rc.WaitForWindow()
+		if wait.RequeueAfter != 0 {
+			r, err := opResult(cp, false, "waiting-maintenance-window")
+			r.RequeueAfter = wait.RequeueAfter
+			return r, err
+		}
 		if rotate {
 			if err := rotateCertificate(ctx, rc, m); err != nil {
 				return engine.OpResult{}, err
@@ -318,7 +417,7 @@ func (*Provider) SyncDuringOperation(op *domain.Operation) bool {
 	switch op.Kind {
 	case domain.OperationReplaceMember:
 		return cp.Stage == "join" || cp.Stage == "remove"
-	case domain.OperationRestart, domain.OperationRotateTLS:
+	case domain.OperationRestart, domain.OperationRotateTLS, domain.OperationUpgradeAgents:
 		return cp.Stage == "provision" && cp.Waiting == ""
 	default:
 		return false
@@ -326,3 +425,20 @@ func (*Provider) SyncDuringOperation(op *domain.Operation) bool {
 }
 
 var _ engine.OperationSyncPolicy = (*Provider)(nil)
+
+// ValidateMemberReplacement rejects targets the native replacement cannot serve.
+func (p *Provider) ValidateMemberReplacement(c *domain.Cluster, name string) error {
+	s, err := loadState(c)
+	if err != nil {
+		return err
+	}
+	return validateReplacementMember(s, name)
+}
+
+func validateReplacementMember(s *internalState, name string) error {
+	m := s.find(name)
+	if m == nil || m.Removing || m.Stage != "ready" {
+		return invalid("replacement requires a ready member")
+	}
+	return nil
+}

@@ -43,6 +43,8 @@ func accessFailure(err error) error {
 			return &accessError{http.StatusNotFound, "PostgreSQL object not found"}
 		case "25006":
 			return &accessError{http.StatusServiceUnavailable, "PostgreSQL is not currently writable"}
+		case "0A000":
+			return invalidAccess("PostgreSQL does not support the requested operation")
 		case "42710", "42P04", "23505", "2BP01", "55006", "55000", "40001", "40P01":
 			return &accessError{http.StatusConflict, "PostgreSQL object conflicts with the requested change"}
 		case "42501":
@@ -66,7 +68,7 @@ func validSQLName(name string) bool {
 	return true
 }
 func managedRole(name string) bool {
-	return validSQLName(name) && name != "postgres" && !strings.HasPrefix(name, "pg_") && !strings.HasPrefix(name, "kk_")
+	return validSQLName(name) && name != "postgres" && !strings.HasPrefix(name, "pg_") && !strings.HasPrefix(name, "kk_") && !strings.HasPrefix(name, "kb_")
 }
 func managedDatabase(name string) bool {
 	return validSQLName(name) && name != "postgres" && name != "template0" && name != "template1"
@@ -107,8 +109,11 @@ func validVerifier(verifier string) bool {
 	return true
 }
 func validateRoleWrite(role pgspec.RoleWrite) error {
-	if !managedRole(role.Name) {
+	if !managedRole(role.Name) && !(role.Binding && bindingRole(role.Name)) {
 		return invalidAccess("invalid or protected role name")
+	}
+	if role.Binding && (role.Superuser || role.Createdb || role.Createrole || role.Replication || role.BypassRLS || len(role.MemberOf) != 0 || role.ConnectionLimit < 1) {
+		return invalidAccess("binding roles must be bounded least-privilege roles")
 	}
 	if role.ConnectionLimit < -1 || role.ConnectionLimit > 1000000 {
 		return invalidAccess("invalid role connection limit")
@@ -122,6 +127,13 @@ func validateRoleWrite(role pgspec.RoleWrite) error {
 			return invalidAccess("invalid, privileged or duplicate role membership")
 		}
 		seen[name] = true
+	}
+	adminSeen := map[string]bool{}
+	for _, name := range role.MemberOfAdmin {
+		if !seen[name] || adminSeen[name] {
+			return invalidAccess("memberOfAdmin must be a duplicate-free subset of memberOf")
+		}
+		adminSeen[name] = true
 	}
 	if role.ValidUntil != nil && *role.ValidUntil != "infinity" {
 		if _, err := time.Parse(time.RFC3339, *role.ValidUntil); err != nil {
@@ -171,6 +183,7 @@ func roleStatement(operation string, role pgspec.RoleWrite) (string, []any, erro
 
 const roleSelect = `SELECT r.rolname,r.rolcanlogin,r.rolsuper,r.rolcreatedb,r.rolcreaterole,r.rolreplication,r.rolbypassrls,r.rolconnlimit,
  ARRAY(SELECT DISTINCT parent.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid WHERE membership.member=r.oid ORDER BY parent.rolname),
+ ARRAY(SELECT DISTINCT parent.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid WHERE membership.member=r.oid AND membership.admin_option ORDER BY parent.rolname),
  CASE WHEN pg_catalog.isfinite(r.rolvaliduntil) THEN pg_catalog.to_char(r.rolvaliduntil AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') ELSE NULL END FROM pg_catalog.pg_roles r`
 
 func readRoles(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Role, error) {
@@ -189,7 +202,7 @@ func readRoles(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Role, er
 	result := []pgspec.Role{}
 	for rows.Next() {
 		var role pgspec.Role
-		if err = rows.Scan(&role.Name, &role.Login, &role.Superuser, &role.Createdb, &role.Createrole, &role.Replication, &role.BypassRLS, &role.ConnectionLimit, &role.MemberOf, &role.ValidUntil); err != nil {
+		if err = rows.Scan(&role.Name, &role.Login, &role.Superuser, &role.Createdb, &role.Createrole, &role.Replication, &role.BypassRLS, &role.ConnectionLimit, &role.MemberOf, &role.MemberOfAdmin, &role.ValidUntil); err != nil {
 			return nil, err
 		}
 		result = append(result, role)
@@ -219,15 +232,14 @@ func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.R
 	if _, err = tx.Exec(ctx, sql, args...); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `SELECT parent.rolname,grantor.rolname FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid JOIN pg_catalog.pg_roles child ON child.oid=membership.member JOIN pg_catalog.pg_roles grantor ON grantor.oid=membership.grantor WHERE child.rolname=$1`, role.Name)
+	rows, err := tx.Query(ctx, `SELECT parent.rolname,grantor.rolname,membership.admin_option FROM pg_catalog.pg_auth_members membership JOIN pg_catalog.pg_roles parent ON parent.oid=membership.roleid JOIN pg_catalog.pg_roles child ON child.oid=membership.member JOIN pg_catalog.pg_roles grantor ON grantor.oid=membership.grantor WHERE child.rolname=$1`, role.Name)
 	if err != nil {
 		return err
 	}
-	type membership struct{ parent, grantor string }
-	current := []membership{}
+	current := []roleMembership{}
 	for rows.Next() {
-		var row membership
-		if err = rows.Scan(&row.parent, &row.grantor); err != nil {
+		var row roleMembership
+		if err = rows.Scan(&row.parent, &row.grantor, &row.admin); err != nil {
 			rows.Close()
 			return err
 		}
@@ -238,33 +250,57 @@ func writeRoleTx(ctx context.Context, tx pgx.Tx, operation string, role pgspec.R
 	if err != nil {
 		return err
 	}
-	desired := map[string]bool{}
-	for _, parent := range role.MemberOf {
-		desired[parent] = true
-	}
-	present := map[string]bool{}
-	for _, membership := range current {
-		present[membership.parent] = true
-		if !desired[membership.parent] {
-			sql := "REVOKE " + pgx.Identifier{membership.parent}.Sanitize() + " FROM " + pgx.Identifier{role.Name}.Sanitize() + " GRANTED BY " + pgx.Identifier{membership.grantor}.Sanitize()
-			if _, err = tx.Exec(ctx, sql); err != nil {
-				return err
-			}
-		}
-	}
-	for _, parent := range role.MemberOf {
-		if !present[parent] {
-			if _, err = tx.Exec(ctx, "GRANT "+pgx.Identifier{parent}.Sanitize()+" TO "+pgx.Identifier{role.Name}.Sanitize()); err != nil {
-				return err
-			}
+	for _, sql := range roleMembershipStatements(role.Role, current) {
+		if _, err = tx.Exec(ctx, sql); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
+type roleMembership struct {
+	parent, grantor string
+	admin           bool
+}
+
+func roleMembershipStatements(role pgspec.Role, current []roleMembership) []string {
+	desired, admin := map[string]bool{}, map[string]bool{}
+	for _, parent := range role.MemberOf {
+		desired[parent] = true
+	}
+	for _, parent := range role.MemberOfAdmin {
+		admin[parent] = true
+	}
+	statements := []string{}
+	present, presentAdmin := map[string]bool{}, map[string]bool{}
+	name := pgx.Identifier{role.Name}.Sanitize()
+	for _, membership := range current {
+		parent := pgx.Identifier{membership.parent}.Sanitize()
+		present[membership.parent] = true
+		presentAdmin[membership.parent] = presentAdmin[membership.parent] || membership.admin
+		if !desired[membership.parent] {
+			statements = append(statements, "REVOKE "+parent+" FROM "+name+" GRANTED BY "+pgx.Identifier{membership.grantor}.Sanitize())
+		} else if membership.admin && !admin[membership.parent] {
+			// Preserve membership while removing delegation, including grants
+			// originating from a different grantor.
+			statements = append(statements, "REVOKE ADMIN OPTION FOR "+parent+" FROM "+name+" GRANTED BY "+pgx.Identifier{membership.grantor}.Sanitize())
+		}
+	}
+	for _, parent := range role.MemberOf {
+		if !present[parent] || admin[parent] && !presentAdmin[parent] {
+			sql := "GRANT " + pgx.Identifier{parent}.Sanitize() + " TO " + name
+			if admin[parent] {
+				sql += " WITH ADMIN OPTION"
+			}
+			statements = append(statements, sql)
+		}
+	}
+	return statements
+}
+
 // ROW(d) has the anonymous record type. row_to_json(record) is an exact builtin
 // match, so even an old named pg_database overload cannot intercept this call.
-const databaseSelect = `SELECT d.datname,pg_catalog.pg_get_userbyid(d.datdba),pg_catalog.pg_encoding_to_char(d.encoding),COALESCE(pg_catalog.row_to_json(ROW(d))->'f1'->>'datlocale',pg_catalog.row_to_json(ROW(d))->'f1'->>'daticulocale',d.datcollate),d.datallowconn FROM pg_catalog.pg_database d`
+const databaseSelect = `SELECT d.datname,pg_catalog.pg_get_userbyid(d.datdba),d.datdba,pg_catalog.pg_encoding_to_char(d.encoding),COALESCE(pg_catalog.row_to_json(ROW(d))->'f1'->>'datlocale',pg_catalog.row_to_json(ROW(d))->'f1'->>'daticulocale',d.datcollate),d.datallowconn FROM pg_catalog.pg_database d`
 
 func readDatabases(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Database, error) {
 	query := databaseSelect
@@ -282,7 +318,7 @@ func readDatabases(ctx context.Context, c *pgx.Conn, name string) ([]pgspec.Data
 	result := []pgspec.Database{}
 	for rows.Next() {
 		var db pgspec.Database
-		if err = rows.Scan(&db.Name, &db.Owner, &db.Encoding, &db.Locale, &db.AllowConnections); err != nil {
+		if err = rows.Scan(&db.Name, &db.Owner, &db.OwnerOID, &db.Encoding, &db.Locale, &db.AllowConnections); err != nil {
 			return nil, err
 		}
 		result = append(result, db)
@@ -426,18 +462,42 @@ func readGrants(ctx context.Context, c *pgx.Conn, database string) ([]pgspec.Gra
 	return result, rows.Err()
 }
 func validateAccessRequest(action string, req pgspec.AccessRequest) error {
+	if req.Role != nil {
+		req.Role.Binding = req.Binding
+	}
 	if req.Name != "" && !validSQLName(req.Name) {
 		return invalidAccess("invalid PostgreSQL object name")
 	}
 	switch action {
+	case pgspec.ActionUpdateExtensions:
+		return validateExtensionNames(req.Extensions, req.AvailableExtensions)
 	case pgspec.ActionRoles:
+		if req.Binding && req.Operation != "journal" && (req.Operation == "update" || req.Operation == "password" || req.Operation == "delete") {
+			return invalidAccess("binding role mutations require a journaled OID-fenced request")
+		}
 		switch req.Operation {
 		case "capabilities":
 			return nil
+		case "admin-rotation":
+			if req.RequestID != "" && safeValue(req.RequestID, 256) && req.Role != nil && req.Role.Name == "postgres" && req.Role.Password != nil && validVerifier(*req.Role.Password) && !req.Binding {
+				return nil
+			}
+			return invalidAccess("invalid administrator rotation request")
 		case "journal":
 			if req.RequestID == "" || !safeValue(req.RequestID, 256) || req.Role == nil ||
-				(req.RoleOperation != "create" && req.RoleOperation != "update") {
+				(req.RoleOperation != "create" && req.RoleOperation != "update" && !(req.Binding && req.RoleOperation == "delete")) {
 				return invalidAccess("invalid journaled role request")
+			}
+			if req.Binding && req.RoleOperation != "create" {
+				if req.ExpectedRoleOID == 0 {
+					return invalidAccess("binding role mutations require the original role OID")
+				}
+				if req.RoleOperation == "delete" {
+					if !bindingRole(req.Role.Name) {
+						return invalidAccess("invalid binding role name")
+					}
+					return nil
+				}
 			}
 			return validateRoleWrite(*req.Role)
 		case "list":
@@ -447,11 +507,11 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 				return nil
 			}
 		case "delete":
-			if managedRole(req.Name) {
+			if managedRole(req.Name) || req.Binding && bindingRole(req.Name) {
 				return nil
 			}
-		case "password":
-			if req.Role != nil && managedRole(req.Role.Name) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
+		case "password", "recover-password", "recover-password-local":
+			if req.Role != nil && (managedRole(req.Role.Name) || req.Binding && bindingRole(req.Role.Name)) && req.Role.Password != nil && validVerifier(*req.Role.Password) && (req.Name == "" || req.Name == req.Role.Name) {
 				return nil
 			}
 		case "create", "update":
@@ -461,6 +521,10 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 		}
 	case pgspec.ActionDatabases:
 		switch req.Operation {
+		case "public-owner":
+			if req.Binding && req.Database != nil && managedDatabase(req.Database.Name) && bindingRole(req.Database.Owner) {
+				return nil
+			}
 		case "list":
 			return nil
 		case "get":
@@ -471,8 +535,11 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 			if managedDatabase(req.Name) {
 				return nil
 			}
-		case "create", "update":
+		case "create", "update", "extensions":
 			if req.Database != nil && (req.Name == "" || req.Name == req.Database.Name) {
+				if err := validateExtensionNames(req.Database.Extensions, req.AvailableExtensions); err != nil {
+					return err
+				}
 				return validateDatabase(*req.Database)
 			}
 		}
@@ -495,11 +562,13 @@ func validateAccessRequest(action string, req pgspec.AccessRequest) error {
 }
 func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.AccessRequest) (any, error) {
 	switch action {
+	case pgspec.ActionUpdateExtensions:
+		return updateInstalledExtensions(ctx, c, req.Extensions)
 	case pgspec.ActionRoles:
 		if req.Operation == "capabilities" {
 			return pgspec.AccessCapabilities{CredentialReceipts: true}, nil
 		}
-		if req.Operation == "journal" {
+		if req.Operation == "journal" || req.Operation == "admin-rotation" {
 			return journalRole(ctx, c, req), nil
 		}
 		switch req.Operation {
@@ -517,7 +586,7 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			return roles, nil
 		case "create", "update":
 			return struct{}{}, writeRole(ctx, c, req.Operation, *req.Role)
-		case "password":
+		case "password", "recover-password", "recover-password-local":
 			_, err := c.Exec(ctx, "ALTER ROLE "+pgx.Identifier{req.Role.Name}.Sanitize()+" PASSWORD $1", pgx.QueryExecModeSimpleProtocol, *req.Role.Password)
 			return struct{}{}, err
 		case "delete":
@@ -526,6 +595,8 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 		}
 	case pgspec.ActionDatabases:
 		switch req.Operation {
+		case "public-owner":
+			return struct{}{}, ownBindingPublicSchema(ctx, c, *req.Database)
 		case "list", "get":
 			databases, err := readDatabases(ctx, c, req.Name)
 			if err != nil {
@@ -539,14 +610,50 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 			}
 			return databases, nil
 		case "create":
-			sql, args, err := createDatabaseStatement(*req.Database)
+			if len(req.Database.Extensions) > 0 && !req.Database.AllowConnections {
+				return nil, invalidAccess("database extensions require allowConnections")
+			}
+			database := *req.Database
+			if req.Binding {
+				database.AllowConnections = false
+			}
+			sql, args, err := createDatabaseStatement(database)
 			if err != nil {
 				return nil, err
 			}
 			_, err = c.Exec(ctx, sql, args...)
-			return struct{}{}, err
+			if err != nil {
+				var pg *pgconn.PgError
+				if len(req.Database.Extensions) == 0 || !errors.As(err, &pg) || pg.Code != "42P04" {
+					return nil, err
+				}
+				// CREATE DATABASE is not transactional. A retry after extension
+				// failure may resume only against the requested owner.
+				existing, readErr := readDatabases(ctx, c, req.Database.Name)
+				if readErr != nil {
+					return nil, readErr
+				}
+				if len(existing) != 1 || existing[0].Owner != req.Database.Owner {
+					return nil, err
+				}
+			}
+			if req.Binding && req.Database.AllowConnections {
+				if err := ownBindingPublicSchema(ctx, c, *req.Database); err != nil {
+					return nil, err
+				}
+			}
+			return struct{}{}, createDatabaseExtensions(ctx, c, *req.Database, req.AvailableExtensions)
 		case "update":
 			return struct{}{}, updateDatabase(ctx, c, *req.Database)
+		case "extensions":
+			existing, err := readDatabases(ctx, c, req.Database.Name)
+			if err != nil {
+				return nil, err
+			}
+			if len(existing) != 1 || existing[0].Owner != req.Database.Owner {
+				return nil, &accessError{http.StatusConflict, "database owner does not match extension request"}
+			}
+			return struct{}{}, createDatabaseExtensions(ctx, c, *req.Database, req.AvailableExtensions)
 		case "delete":
 			sql := "DROP DATABASE " + pgx.Identifier{req.Name}.Sanitize()
 			if req.Force {
@@ -580,8 +687,30 @@ func executeAccess(ctx context.Context, c *pgx.Conn, action string, req pgspec.A
 	}
 	return nil, invalidAccess("invalid PostgreSQL access action")
 }
+
+// Only the distinct local operation promises coordinated all-primary fan-out.
+// Legacy control planes send password/recover-password only to the coordinator,
+// so those operations must retain Citus propagation even under client holds.
+func recoveryPasswordLocal(s pgspec.Spec, action string, req pgspec.AccessRequest) (bool, error) {
+	if action != pgspec.ActionRoles {
+		return false, nil
+	}
+	if req.Operation == "recover-password" || req.Operation == "recover-password-local" {
+		if s.Postgres == nil || !s.Postgres.RecoveryClientsHeld {
+			return false, &accessError{http.StatusConflict, "recovery password action requires client holds"}
+		}
+	}
+	if req.Operation != "recover-password-local" {
+		return false, nil
+	}
+	if s.Citus == nil {
+		return false, invalidAccess("local recovery password action requires Citus")
+	}
+	return true, nil
+}
+
 func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
-	for _, action := range []string{pgspec.ActionRoles, pgspec.ActionDatabases, pgspec.ActionGrants} {
+	for _, action := range []string{pgspec.ActionRoles, pgspec.ActionDatabases, pgspec.ActionGrants, pgspec.ActionUpdateExtensions} {
 		mux.HandleFunc("POST /v1/postgres/"+action, func(w http.ResponseWriter, r *http.Request) {
 			var req pgspec.AccessRequest
 			if err := decodeAction(w, r, &req); err != nil {
@@ -589,7 +718,7 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				return
 			}
 			if err := validateAccessRequest(action, req); err != nil {
-				if action == pgspec.ActionRoles && req.Operation == "journal" {
+				if action == pgspec.ActionRoles && (req.Operation == "journal" || req.Operation == "admin-rotation") {
 					actionJSON(w, http.StatusOK, accessRejected("invalid_request", err.Error(), http.StatusBadRequest))
 					return
 				}
@@ -604,10 +733,14 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if err != nil {
 					return err
 				}
+				localPassword, err := recoveryPasswordLocal(s, action, req)
+				if err != nil {
+					return err
+				}
 				if s.Role != pgspec.RoleData {
 					return &accessError{http.StatusServiceUnavailable, "access action requires a data member"}
 				}
-				if s.Topology == pgspec.TopologyHA {
+				if usesPatroni(s) {
 					if err = patroniRequest(ctx, s, http.MethodGet, "/primary", nil, nil); err != nil {
 						return &accessError{http.StatusServiceUnavailable, "access action requires the Patroni primary with its leader lock"}
 					}
@@ -624,12 +757,19 @@ func (e *Runner) accessRoutes(mux *http.ServeMux, n *agent.Node) {
 				if recovery {
 					return &accessError{http.StatusServiceUnavailable, "access action cannot run on a replica"}
 				}
+				if localPassword {
+					// The explicit operation promises fan-out by the caller.
+					// This short-lived connection must not contact fenced peers.
+					if _, err = c.Exec(ctx, "SET citus.enable_ddl_propagation = off"); err != nil {
+						return err
+					}
+				}
 				result, err = executeAccess(ctx, c, action, req)
 				return err
 			})
 			if err != nil {
 				safe := accessFailure(err).(*accessError)
-				if action == pgspec.ActionRoles && req.Operation == "journal" {
+				if action == pgspec.ActionRoles && (req.Operation == "journal" || req.Operation == "admin-rotation") {
 					actionJSON(w, http.StatusOK, pgspec.AccessResult{Outcome: "unknown", Code: "execution_unavailable", Message: safe.message})
 					return
 				}

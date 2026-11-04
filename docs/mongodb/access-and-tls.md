@@ -2,7 +2,7 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # Users, roles and TLS
 
-Manage MongoDB identities and database transport; [Karakoram accounts](../access-control.md) authorize the control plane separately.
+Manage [MongoDB](https://www.mongodb.com/) identities and database transport; [Karakoram accounts](../access-control.md) authorize the control plane separately.
 
 ## Application users and custom roles
 
@@ -53,7 +53,7 @@ Reserved `admin` accounts have independent generated passwords:
 | `backup` | `backup`, `restore`, `clusterMonitor`, `readWrite`, custom `pbmAnyAction` |
 | `databaseAdmin` | `readWriteAnyDatabase`, `readAnyDatabase`, `dbAdminAnyDatabase`, `backup`, `restore`, `clusterMonitor` |
 
-**Warning:** `pbmAnyAction` grants `anyAction` on `anyResource`; PBM is not read-only. Database administration and user administration also carry broad/escalation authority. Never use these system accounts in applications.
+**Warning:** `pbmAnyAction` grants `anyAction` on `anyResource`; [PBM](https://docs.percona.com/percona-backup-mongodb/) is not read-only. Database administration and user administration also carry broad/escalation authority. Never use these system accounts in applications.
 
 ```sh
 karactl -n default system-users list demo
@@ -123,7 +123,7 @@ Provision from a trusted **operator workstation**, with [authenticated karactl](
 
    Replica sets supply `rs0`; mongos summaries omit it. Encode usernames too if changed to characters requiring escaping.
 
-3. Persist `MONGODB_URI` and, if stored separately, the application password as **Zerops application-service secret environment variables**, not source/pipeline variables. Ship the public multiline `ca.pem` in the app's deployment/configuration to a readable fixed path, such as `/var/www/ca.pem`. Restart/redeploy the application to load updated secrets. A shell `export` affects only a test shell; it is not persistent service configuration.
+3. Persist `MONGODB_URI` and, if stored separately, the application password as **[Zerops](https://zerops.io/) application-service secret environment variables**, not source/pipeline variables. Ship the public multiline `ca.pem` in the app's deployment/configuration to a readable fixed path, such as `/var/www/ca.pem`. Restart/redeploy the application to load updated secrets. A shell `export` affects only a test shell; it is not persistent service configuration.
 4. Run clients **inside the database namespace's project network**, or use a deliberately validated public access plan:
 
    ```sh

@@ -1,0 +1,74 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!-- Copyright 2026 The Karakoram Authors -->
+# OpenBao
+
+Karakoram operates native [OpenBao](https://openbao.org/) servers on member runtimes and persistent volumes. OpenBao is MPL-2.0; Karakoram remains Apache-2.0. See [ADR 0047](../adr/0047-openbao-engine.md) for the design.
+
+## At a glance
+
+| Setting | Value |
+| --- | --- |
+| Catalog default | OpenBao **2.7.1** |
+| Topology | `cluster`, component `engine`, **1/3/5** members; default 3; `dev` = 1, `prod` = 3 |
+| Per-member defaults | Shared CPU, 1 core, 1 GB RAM, 5 GB persistent data volume |
+| Resource minima | 1 whole core, 0.5 GB RAM, 5 GB disk |
+| Storage | Integrated Raft by default; [PostgreSQL storage integration caveat](operations.md#postgresql-storage-opt-in) |
+| Seal | Shamir by default, 5 shares / threshold 3; immutable transit or AWS KMS auto-unseal option |
+| TLS | Mandatory `requireTLS`; self-signed cluster CA by default |
+| Recovery | S3 `raft-snapshot` backups; no PITR |
+| Application access | OpenBao HTTPS API and native tokens/policies; no published Karakoram management token |
+
+Each member has its own runtime and volume. Replica count and the `prod` preset do not guarantee independent failure domains; see [placement limitations](../limitations.md). A singleton has no quorum redundancy. Runtime disk is separate from persistent Raft data; replacement temporarily needs another runtime and volume.
+
+Runtime preparation installs CA certificates, curl and Python 3 before downloading OpenBao and its plugins. Python validates archive members before extraction; a minimal Ubuntu runtime must not rely on a preinstalled interpreter. Dokploy performs these steps during the member image build, while Nomad performs them during runtime preparation.
+
+## Create
+
+Save `openbao.json`:
+
+```json
+{
+  "name": "secrets",
+  "spec": {
+    "provider": "openbao",
+    "version": "2.7.1",
+    "topology": {"type": "cluster"},
+    "components": {"engine": {"replicas": 3}},
+    "tls": {"mode": "requireTLS", "ca": "selfSigned"},
+    "engineOptions": {
+      "storage": {"type": "raft"},
+      "seal": {"type": "shamir"},
+      "unseal": {"shares": 5, "threshold": 3},
+      "logLevel": "info"
+    }
+  }
+}
+```
+
+```sh
+karactl -n NS providers get openbao -o json
+karactl -n NS clusters create -f openbao.json --wait --timeout 30m
+karactl -n NS clusters status secrets -o json
+karactl -n NS clusters members secrets -o json
+```
+
+A wait timeout does not cancel creation. Continue observing with `clusters wait secrets --timeout 30m`, rather than submitting another create. Formation includes initialization, unsealing and healthy Raft voter checks, not just runtime startup.
+
+## Options and limits
+
+`engineOptions` is a typed object; unknown fields and `null` are rejected. Raw `engineConfig` overrides are not supported. Inspect the running engine driver catalog for its schema.
+
+- `unseal.shares` and `unseal.threshold` are immutable. Bounds: `1 <= threshold <= shares <= 10`; multiple shares require threshold at least 2. Set both explicitly for a nondefault split.
+- Seal configuration and storage selection are immutable. Write-only seal credentials can be rotated; changing the seal type is not supported.
+- `logLevel`: `trace`, `debug`, `info` (default), `warn`, `error`.
+- Version changes are forward-only and catalog-bound. The current catalog contains only 2.7.1, so no newer-version upgrade is currently available.
+- No PITR, seal migration, performance/DR replication, OpenBao namespaces or HSM seals. Lost-quorum recovery is manual.
+- [PostgreSQL](https://www.postgresql.org/) storage uses the shared PostgreSQL binding service that `karakoram server` constructs once and passes to the PostgreSQL bindings API, [Keycloak](https://www.keycloak.org/), OpenBao and [Temporal](https://temporal.io/). Engine driver metadata advertises `postgresql-storage` only when that service is present; a composition without it rejects the option. It is not required for ordinary PostgreSQL credential connections.
+- [RabbitMQ](https://www.rabbitmq.com/) credential connections require one shared default/maximum TTL pair per connection. Native TLS credential issuance, permissions and revocation are covered by development proofs (see [verification](../verification.md#openbao-coverage)).
+
+## Guides
+
+- [API access, TLS, offline key custody and database connections](access-and-tls.md)
+- [Raft snapshots, restore and clone](backups.md)
+- [Formation, unseal, membership, maintenance and troubleshooting](operations.md)
+- [Verification coverage and deployment checks](../verification.md)

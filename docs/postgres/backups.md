@@ -2,11 +2,11 @@
 <!-- Copyright 2026 The Karakoram Authors -->
 # PostgreSQL backups and recovery
 
-PostgreSQL and Supabase use pgBackRest physical backups and WAL in registered S3-compatible storage. Read [shared storage, schedules, restore and clone procedures](../backups.md), including namespace permissions and endpoint verification. Database backups and control-plane state/master-key backups protect different assets.
+[PostgreSQL](https://www.postgresql.org/) and [Supabase](https://supabase.com/) use [pgBackRest](https://pgbackrest.org/) physical backups and WAL in registered [S3](https://aws.amazon.com/s3/)-compatible storage. Read [shared storage, schedules, restore and clone procedures](../backups.md), including namespace permissions and endpoint verification. Database backups and control-plane state/master-key backups protect different assets.
 
 ## Configure and create
 
-Set `spec.backup.storage` to a storage registered in the target namespace. The default storage provides continuous archiving; a backup/schedule may select another registered destination. Repositories are isolated at `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>`, stanza `kk`. Leading and trailing slashes in the storage prefix are removed from recorded S3 repository keys; pgBackRest receives the corresponding absolute repository path. Members transfer backup/WAL bytes directly to S3; control-plane endpoint verification alone does not prove member connectivity.
+Set `spec.backup.storage` to a storage registered in the target namespace. The default storage provides continuous archiving; a backup/schedule may select another registered destination. Repositories are isolated at `<storage-prefix>/postgres/<namespace>/<cluster>-<uid>`, stanza `kk`. Leading and trailing slashes in the storage prefix are removed from recorded [S3](https://aws.amazon.com/s3/) repository keys; [pgBackRest](https://pgbackrest.org/) receives the corresponding absolute repository path. Members transfer backup/WAL bytes directly to S3; control-plane endpoint verification alone does not prove member connectivity.
 
 ```yaml
 spec:
@@ -23,7 +23,7 @@ spec:
         enabled: true
 ```
 
-Use a patch file with `clusters patch CLUSTER -f FILE --wait`, or configure the Backups UI. Explicitly choose a PostgreSQL backup type: the generic CLI default `logical` belongs to MongoDB.
+Use a patch file with `clusters patch CLUSTER -f FILE --wait`, or configure the Backups UI. Explicitly choose a [PostgreSQL](https://www.postgresql.org/) backup type: the generic CLI default `logical` belongs to [MongoDB](https://www.mongodb.com/).
 
 ```sh
 karactl -n NS backups create appdb --type full
@@ -32,37 +32,138 @@ karactl -n NS backups list appdb
 
 `full` is independent; `diff` needs an existing full; `incr` needs a consistent predecessor chain. Backups run on the current primary with operation-bound durable receipts. Acceptance is not completion: follow the operation and resulting backup status. Once a usable base exists, replicas may bootstrap from pgBackRest with basebackup fallback.
 
+Distributed [Citus](https://www.citusdata.com/) backups coordinate a base backup from every replication group
+before creating and archiving the common restore point. A primary/timeline change
+invalidates that attempt. Failure cleanup retains the formation membership fence
+and observes receipts on the original members without starting absent backups.
+Once every native receipt is terminal, it records the failed aggregate and
+releases the fence; a subsequent backup captures the new primaries/timelines.
+An unreachable original agent keeps the fence until receipt observation is
+possible; do not manually clear it while a native backup may still be writing.
+
+The aggregate backup `size` is the sum of pgBackRest repository bytes for the
+recorded coordinator and worker-group backups. It is not total bucket usage:
+shared predecessor backups and archived WAL are not added. Named points that
+reuse bases describe those same base bytes, not newly uploaded bytes.
+For distributed clusters, `PITR=False` with reason `NamedPointsOnly` explains
+that recovery selects completed coordinated named points, not arbitrary
+timestamps; it does not diagnose a broken WAL chain. Check `WALArchive`
+separately for archive health.
+
+Each Citus group has a persistent repository incarnation. Initial group paths end
+in `/g<group>`; retiring and recreating a worker advances its path to
+`/g<group>-i<incarnation>` before new database initialization. Coordinator and
+unaffected worker paths do not change. Retired repositories and recorded backup
+provenance remain intact for recovery. HA and single-node repository paths are
+unchanged.
+
 ## Retention and deletion
 
-Karakoram schedules own count retention; pgBackRest automatic expiration is disabled. Retention defers expiration of the newest full until a newer successful full exists in that repository. It also preserves ancestors needed by retained backups, including newer backups from other schedules and manual backups. A skipped set remains eligible for a later retention pass, so counts may temporarily exceed the configured limit. Live `delete-backup` uses `pgbackrest expire --set=<label>`; explicit deletion can remove dependent differentials/incrementals and their records, regardless of schedule. The newest full cannot be explicitly deleted until a newer full exists. Failed or rejected expiration fails its operation and releases the serialized queue rather than blocking future backups. Expiration prunes WAL no longer needed by the oldest retained full chain.
+Karakoram schedules own count retention; [pgBackRest](https://pgbackrest.org/) automatic expiration is disabled. Retention defers expiration of the newest full until a newer successful full exists in that repository. It also preserves ancestors needed by retained backups, including newer backups from other schedules and manual backups. A skipped set remains eligible for a later retention pass, so counts may temporarily exceed the configured limit. Live `delete-backup` uses `pgbackrest expire --set=<label>`; explicit deletion can remove dependent differentials/incrementals and their records, regardless of schedule. The newest full cannot be explicitly deleted until a newer full exists. Failed or rejected expiration fails its operation and releases the serialized queue rather than blocking future backups. Expiration prunes WAL no longer needed by the oldest retained full chain.
+
+For coordinated [Citus](https://www.citusdata.com/) backups, scheduled retention evaluates every coordinator
+and worker dependency chain, not just the coordinator label. A retained manual
+or scheduled differential/incremental protects its ancestors in each group,
+including when a partially failed full left different full bases across groups.
+An aggregate is eligible only when every group can be expired safely; ancestors
+and descendants may expire together when all affected aggregates are candidates.
+Labels are scoped to the recorded storage, source, repository generation and
+group incarnation, so an identical label in another repository cannot affect
+eligibility.
 
 After source deletion, retained cleanup uses recorded repository/dependency metadata and checksummed native inventory, and removes the isolated repository when its last set is deleted. Cleanup validates the recorded repository's namespace and cluster incarnation, independently of later changes to the registered storage prefix. Interrupted expiration plans are rebased onto current inventory before resuming, preserving deletions completed by other expiration operations. Keep registered storage and sealed backup credentials available until cleanup/recovery is finished. Externally deleting or changing repository objects can invalidate inventory and recovery.
 
 Retained expiration tracks surviving backups separately for each database-history ID. When the final backup chain for an older major's history is removed, its entire WAL archive-ID prefix is deleted; histories still referenced by backups retain WAL from their oldest required segment onward. A surviving history with no known archive-start boundary keeps its WAL rather than being treated as unreferenced.
 
-Whole-cluster deletion (including Supabase's PostgreSQL core) retires runtime services and non-retained volumes before touching backup objects. The control plane then removes only the exact current/retired incarnation repositories using the registered backup-store binding; no working PostgreSQL/pgBackRest member credentials are required. `--keep-backups` skips artifact and inventory removal. Active restore/clone dependencies still refuse destructive deletion with **409**, including the stricter PITR live-source fence.
+Whole-cluster deletion (including [Supabase](https://supabase.com/)'s [PostgreSQL](https://www.postgresql.org/) core) retires runtime services and non-retained volumes before touching backup objects. The control plane then removes only the exact current/retired incarnation repositories using the registered backup-store binding; no working PostgreSQL/pgBackRest member credentials are required. `--keep-backups` skips artifact and inventory removal. Active restore/clone dependencies still refuse destructive deletion with **409**, including the stricter PITR live-source fence.
 
 Object cleanup retries transient binding/storage/authentication failures within a durable **two-minute total window**, checkpointing each confirmed repository removal. The window survives controller restarts. At exhaustion, **`BackupArtifactsRetained`** identifies the storage, bucket/repositories when known, and cluster incarnation; affected inventory remains while cluster-record deletion completes. Terminal cluster deletion therefore does not alone prove empty remote storage. Restore the original storage binding, verify the recorded incarnation ownership, remove only its exact repository prefixes with object-store tooling, then delete retained backup records. Never infer an unknown prefix from a reused cluster name. Resume from a retained-volume suspension clears cleanup deadlines/outcomes so a later deletion receives a new bounded attempt.
+Coordinated sets may span both active and retired worker incarnations. Expiration
+uses native pgBackRest operations for still-active group repositories and offline
+retained cleanup only for retired group repositories. Dependency matching uses
+the full repository identity, so labels from recreated workers cannot expire
+the retired incarnation's backups (or vice versa).
 
 ## PITR
 
-Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinutes` controls PostgreSQL `archive_timeout`, defaulting to one minute; the inherited field name does not mean MongoDB oplog behavior. Low-activity WAL switching is not an exact commit-time recovery guarantee.
+Enable `spec.backup.pitr.enabled` and configure default storage. `oplogSpanMinutes` controls [PostgreSQL](https://www.postgresql.org/) `archive_timeout`, defaulting to one minute; the inherited field name does not mean [MongoDB](https://www.mongodb.com/) oplog behavior. Low-activity WAL switching is not an exact commit-time recovery guarantee.
 
 Restore and clone `pitrTime` inputs use RFC 3339, including `Z` or numeric offsets. Native recovery arguments normalize the instant to UTC with an explicit numeric offset and PostgreSQL's microsecond precision; sub-microsecond fractions are truncated, not rounded forward.
 
 GET `/api/v1/clusters/{cluster}/pitr` reports a conservative interval from the oldest successful consistent base's stop time to a committed primary WAL watermark covered by an archived segment. Archive upload completion time is never treated as WAL-content coverage. Status sampling emits a small committed WAL heartbeat at most every ten seconds, so idle clusters continue advancing with `archive_timeout` (one minute by default). After a member restart or failover, the window remains unavailable until a sample from the current database system and primary timeline is archived. No interval is advertised when disabled or archiving is failing; external removal of repository objects can still invalidate recovery. Without configured storage, the archive command is a no-op and provides no recovery history.
 
+[Citus](https://www.citusdata.com/) schedules quarter-hour named restore points only when a successful base
+aggregate covers exactly the current formation groups and each group's current
+repository incarnation. After worker scale-up, scale-down or recreation, point
+scheduling waits for a matching coordinated backup instead of queuing an
+unrecoverable target from an obsolete group layout.
+
 ## Restore and clone
 
-**In-place restore is destructive and offline.** Quiesce applications and retain a recovery copy. PITR requests are checked against the source's live conservative WAL watermark before any member is stopped or lineage state changes. Single topology stops PostgreSQL, performs a delta restore and starts/promotes. HA fences every data member, resets only its Patroni DCS scope, restores a seed by custom bootstrap and rebuilds replicas before completing. System identities remain target-owned: recovered database roles are rekeyed to the target's existing passwords, never published as source credentials. Cross-source recovery keeps archiving disabled until target repository configuration and archive-override removal reach every member. When PITR is enabled, a new full is queued; it is not protection until successful.
+Physical recovery requires matching engine drivers and [PostgreSQL](https://www.postgresql.org/) majors, plus a target
+`engineOptions.profiles` set containing every profile recorded in the backup's
+`postgres.profiles`. Ordering and duplicates do not matter; additional target
+profiles are allowed. The snapshot is retained independently of source deletion
+or later source profile additions. Timestamp recovery uses the selected consistent
+base's requirements; coordinated scheduled PITR points retain requirements for
+their bases and point-time selection. Missing legacy metadata means no required
+profiles, not an instruction to inspect today's source selection. These checks
+precede clone provisioning and destructive restore work. [Supabase](https://supabase.com/) retains its
+existing engine driver-specific runtime contract.
 
-Restore stop holds survive configuration refreshes and member restarts until the workflow explicitly starts each restored member. ProxySQL administration credentials remain target-local during restore and clone; they are not database catalog credentials.
+For distributed PostgreSQL, `source.restorePoint` resolves to a specific coordinated
+backup inventory record. The restore internally records both that backup name and
+the named point; API responses and dry-runs retain only the requested
+`source.restorePoint` selector. Admission rechecks the backup inside the same
+serialized store transaction that creates the restore dependency: if deletion
+commits first, admission fails;
+if restore admission commits first, backup deletion and another cluster's source
+deletion without `keepBackups` fail with **409** while the restore is pending or
+running. A dry-run resolves the same backup and checks the same admission fences,
+but does not reserve a dependency or prevent a later deletion.
+
+**In-place restore is destructive and offline.** Quiesce applications and retain a recovery copy. PITR requests are checked against the source's live conservative WAL watermark before any member is stopped or lineage state changes. Single topology stops PostgreSQL, performs a delta restore and starts/promotes. HA fences every data member, resets only its [Patroni](https://patroni.readthedocs.io/) DCS scope, restores a seed by custom bootstrap and rebuilds replicas before completing. System identities remain target-owned: recovered database roles are rekeyed to the target's existing passwords, never published as source credentials. Cross-source recovery keeps archiving disabled until target repository configuration and archive-override removal reach every member. When PITR is enabled, a new full is queued; it is not protection until successful.
+
+Restore stop holds survive configuration refreshes and member restarts until the workflow explicitly starts each restored member. [ProxySQL](https://proxysql.com/) administration credentials remain target-local during restore and clone; they are not database catalog credentials.
 
 When recovery reads a repository other than the target's current repository, the target switches to a fresh `<cluster>-<uid>-g<generation>` repository after all members are stopped. This includes repeated cross-source recovery and recovery from an older generation of the same cluster. `stanza-create` initializes the new system identifier before archiving is enabled; timeline numbers may safely repeat across generations. Earlier target backup sets remain listed and restorable with their original repository metadata and sealed recovery credentials. Explicit deletion of these retired sets uses retained-backup cleanup, so even their final full can be deleted without a running writer. A fresh full is queued after every repository-generation change, whether or not PITR is enabled.
 
-Source repository access is read-only in the recovery workflow: no source stanza mutation, archive-push, expiration or backup is performed. Recovery temporarily places the registered source storage's S3 credentials in owner-only target configuration. **These are not automatically scoped read-only credentials:** providers do not universally support temporary scoped keys. A compromised target runtime during recovery can therefore exercise the source key's underlying permissions. Use narrowly scoped source storage credentials and a trusted target runtime; cross-namespace restore authorization does not itself reduce S3 permissions. After recovery, every member refreshes its durable configuration and removes the source restore/action configuration, CA file and bootstrap script before managed client logins are published and the restore completes. Subsequent configuration applies do not recreate source credentials.
+Source repository access is read-only in the recovery workflow: no source stanza mutation, archive-push, expiration or backup is performed. Recovery temporarily places the registered source storage's [S3](https://aws.amazon.com/s3/) credentials in owner-only target configuration. **These are not automatically scoped read-only credentials:** providers do not universally support temporary scoped keys. A compromised target runtime during recovery can therefore exercise the source key's underlying permissions. Use narrowly scoped source storage credentials and a trusted target runtime; cross-namespace restore authorization does not itself reduce S3 permissions. After recovery, every member refreshes its durable configuration and removes the source restore/action configuration, CA file and bootstrap script before managed client logins are published and the restore completes. Subsequent configuration applies do not recreate source credentials.
 
 During recovery, remote database-client HBA rules and ProxySQL client users are held closed. Local administration and replication remain available for recovery and replica rebuilds. Client rules and managed proxy logins return only after source-only configuration has been removed.
+
+### Failed restore and client holds
+
+A queue operation can become **Failed** while the cluster remains **Degraded**
+with `RestoreRecovery=False/RestoreRecoveryPending`. The condition identifies
+the original operation, checkpoint, generation and frozen backup set. Ordinary
+reconciliation resumes that exact journal; it does not run the destructive
+restore again from the beginning. Fix the named repository/member dependency
+and monitor the restore resource and recovery condition. A historical Failed
+operation does not change to Succeeded when background recovery finishes.
+
+At `access`, native data recovery and replica rebuild have already completed.
+Karakoram rekeys recovered managed login roles to the target's current passwords
+(or the imported snapshot passwords for a clone), then publishes normal HBA
+rules and proxy users. Successful reconciliation releases client holds
+automatically. It does not overwrite recovered role attributes or memberships.
+Restore-only binding password changes require a client-held member and still
+check native writable-primary authority; normal binding mutations retain their
+OID/receipt fences.
+
+There is no safe timeout that opens a partly restored database: data already
+replaced by a destructive restore cannot be rolled back by dropping a hold.
+Until the exact restore can finish, keep applications quiesced. Do not edit
+`pg_hba.conf`, clear internal journals, or resubmit an in-place restore while its
+recovery journal owns the cluster. To abandon an unrecoverable target, use
+`karactl -n NS clusters delete CLUSTER --keep-backups --wait`; preserve backup
+inventory, sealed credentials and the master key, and restore a retained backup
+into a **new** target using `dataSource`. A new-target restore may need to precede
+source deletion when a live-source/PITR dependency prevents deletion.
+
+For the v0.4.0 access-checkpoint defect and mixed-version binding limitations,
+follow the [v0.4.1 recovery notes](../upgrade.md#postgresql-restores-stuck-at-access).
+
 
 Patroni uses the private Unix socket for local administration and replication
 probes; connections between members retain hostname-verified TLS. Custom restore
@@ -71,7 +172,7 @@ directory `fsync`. It does not require permission to synchronize the entire
 mounted filesystem.
 Singleton restore bootstrap follows the same completion-receipt rule: the mere
 presence of `PG_VERSION` never proves a restore finished. A missing, malformed or
-different-generation receipt keeps PostgreSQL stopped and resumes pgBackRest
+different-generation receipt keeps PostgreSQL stopped and resumes [pgBackRest](https://pgbackrest.org/)
 with `--delta`, including for bootstrap generation zero. The completion receipt
 is durable before startup is allowed. Bootstrap restores use the operation's
 lifecycle rather than the two-minute deadline used for short native commands.
@@ -127,7 +228,7 @@ queue checkpoint response cannot discard an already-started recovery.
 
 For a new cluster, `spec.dataSource` names a source backup or PITR target, optionally in another namespace. Use the shared [clone commands and permission rules](../backups.md#cross-namespace-recovery). Requirements:
 
-- Provider matches exactly: postgres→postgres or supabase→supabase, never across providers.
+- Engine driver matches exactly: postgres→postgres or supabase→supabase, never across engine drivers.
 - PostgreSQL major matches; source/target topology may differ.
 - Configure target-local backup storage to establish an independent history.
 - Source bootstrap is read-only with archiving disabled; target stanza creation and a fresh full establish its own repository afterward.

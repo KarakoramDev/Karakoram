@@ -7,12 +7,21 @@ import sys
 import tarfile
 
 
-def validate(filename, extensions):
+def validate(filename, kind, major=None, executable_members=()):
+    if kind not in ("application", "pg-extension"):
+        raise ValueError("invalid archive kind")
+    extensions = kind == "pg-extension"
+    if extensions and major not in ("16", "17", "18"):
+        raise ValueError("missing or invalid PostgreSQL major")
+    if not extensions and major is not None:
+        raise ValueError("unexpected PostgreSQL major")
+    if extensions and executable_members:
+        raise ValueError("executable members require an application archive")
     with tarfile.open(filename, "r:*") as archive:
         members = archive.getmembers()
     entries = {}
     symlinks = {}
-    roots = ("usr/lib/postgresql/17", "usr/share/postgresql/17")
+    roots = (f"usr/lib/postgresql/{major}", f"usr/share/postgresql/{major}")
     ancestors = {".", "usr", "usr/lib", "usr/share", "usr/lib/postgresql", "usr/share/postgresql"}
     for member in members:
         name = member.name
@@ -81,9 +90,24 @@ def validate(filename, extensions):
                     raise ValueError("hardlink must reference a regular file: " + repr(name))
                 target = linked.linkname
 
+    for name in executable_members:
+        if (not name or name.startswith("/") or posixpath.normpath(name) != name
+                or ".." in name.split("/")
+                or any(ord(c) < 32 or ord(c) == 127 for c in name)):
+            raise ValueError("invalid executable path: " + repr(name))
+        if name not in entries or not entries[name].isfile():
+            raise ValueError("executable member must be a regular file: " + repr(name))
+
 
 if __name__ == "__main__":
     try:
-        validate(sys.argv[1], sys.argv[2] == "extensions")
+        if len(sys.argv) < 3:
+            raise ValueError("expected archive, kind and PostgreSQL major or executable members")
+        if sys.argv[2] == "pg-extension":
+            if len(sys.argv) != 4:
+                raise ValueError("expected archive, kind and PostgreSQL major")
+            validate(sys.argv[1], sys.argv[2], sys.argv[3])
+        else:
+            validate(sys.argv[1], sys.argv[2], executable_members=sys.argv[3:])
     except (OSError, ValueError, tarfile.TarError) as error:
         sys.exit("unsafe archive member: " + str(error))

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.KarakoramDev/karakoram",
+  "title": "Karakoram",
+  "description": "Self-hosted database control plane: clusters, backups and operations. Read-only by default.",
+  "version": "0.4.3",
+  "websiteUrl": "https://karakoram.dev/docs/mcp/",
+  "repository": {
+    "url": "https://github.com/KarakoramDev/Karakoram",
+    "source": "github",
+    "id": "1416769453"
+  },
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/KarakoramDev/Karakoram/main/assets/brand/karakoram-icon-512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://{control_plane_host}/mcp",
+      "variables": {
+        "control_plane_host": {
+          "description": "Host name of your own Karakoram control plane (the host of KARAKORAM_PUBLIC_URL)",
+          "isRequired": true,
+          "placeholder": "karakoram.example.com"
+        }
+      },
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Karakoram API token; `karactl mcp config` mints a restricted, read-only one",
+          "isRequired": true,
+          "isSecret": true,
+          "value": "Bearer {api_token}",
+          "variables": {
+            "api_token": {
+              "description": "Karakoram API token (not a provider or database credential)",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

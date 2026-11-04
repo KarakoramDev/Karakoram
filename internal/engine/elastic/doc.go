@@ -22,6 +22,13 @@
 // preserves the import, deploy, readiness and scale stages; Elasticsearch keeps
 // ownership checks, durable operation tracking and database safety decisions.
 //
+// TCP and Kibana/APM HTTPS admission is persisted independently of runtime
+// route receipts. Resume and runtime repair restore admitted access even outside
+// maintenance windows; deferred policy changes still prevent generation
+// acknowledgement until a window opens or its override is accepted. Legacy
+// TCP digests seed admission only when the applied policy is recoverable;
+// otherwise an unacknowledged legacy generation falls back to private access.
+//
 // Agent connectivity means a successful status response, independently of child
 // health. Node and pinned component observations retain paused/error diagnostics
 // as Process conditions without losing native roles. Every live component must
@@ -46,4 +53,11 @@
 // Their roles exclude restricted indices, but wildcard grants still match
 // non-restricted dot indices: the native gateway must independently exclude all
 // dot indices and prevent alias or wildcard expansion from reaching them.
+// Agent rollouts freeze their target build. If the control-plane build changes,
+// no new deployment is admitted or retried for that rollout. An already stopped
+// component is started on its existing artifact; an accepted deployment consumes
+// operator-corrected configuration at its existing engine version and waits for
+// service readiness. Elasticsearch allocation and shard health recover before
+// the rolling journal is retired and the operation fails. Recovery never reports
+// the changed artifact as satisfying the old target.
 package elastic

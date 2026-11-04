@@ -50,7 +50,7 @@ func (s *Server) retainedBackup(ctx context.Context, name string, in input) resp
 	if name == "GetBackup" {
 		return ok(backupAPI(*b))
 	}
-	if b.PBMName == "" && b.Location == "" && b.Postgres == nil && (b.Phase == domain.PhaseFailed || b.Phase == domain.PhasePending) {
+	if b.PBMName == "" && b.Location == "" && b.Postgres == nil && b.MySQL == nil && (b.Phase == domain.PhaseFailed || b.Phase == domain.PhasePending) {
 		op := &domain.Operation{Namespace: b.Namespace, Cluster: b.Cluster, Kind: domain.OperationDeleteBackup, Actor: store.Actor(ctx)}
 		if err = s.Store.EnqueueBackupDeletion(ctx, b, op); err != nil {
 			return s.failure(err)
@@ -117,6 +117,17 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.Clust
 	message := ""
 	if b.Phase != domain.PhaseSucceeded {
 		message = "Retained backup must be succeeded and not deleting"
+	} else if b.Provider == "postgres" || b.Provider == "supabase" {
+		// PostgreSQL restores use the recorded pgBackRest repository and set,
+		// not Location (which coordinated Citus backups do not populate).
+		// Binary compatibility and profile checks remain provider-owned.
+		if b.Postgres == nil || b.Postgres.Repository == "" || b.Postgres.Label == "" || b.SourceVersion == "" || b.SourceTopology.Type == "" {
+			message = "Retained backup lacks pgBackRest snapshot/topology/version provenance"
+		} else if b.RecoveryIdentity == "" {
+			message = "Retained PostgreSQL backup has no sealed recovery identity"
+		} else if b.SourceTopology.Type == "distributed" && !retainedPostgresGroups(b.Postgres) {
+			message = "Retained distributed backup lacks coordinated group provenance"
+		}
 	} else if b.Provider != "" && b.Provider != "psmdb" {
 		if b.Location == "" {
 			message = "Retained backup lacks a snapshot-time artifact reference"
@@ -141,4 +152,24 @@ func (s *Server) retainedRestoreSource(ctx context.Context, cluster domain.Clust
 		return &r
 	}
 	return nil
+}
+
+// A coordinated backup needs an unambiguous set and replay bound for every
+// group, including the coordinator. Never infer them from today's source spec
+// or from the optional display location.
+func retainedPostgresGroups(b *domain.PostgresBackup) bool {
+	if b.RestorePoint == "" || len(b.Groups) == 0 {
+		return false
+	}
+	seen := make([]bool, len(b.Groups))
+	for _, g := range b.Groups {
+		if g.Group < 0 || g.Group >= len(seen) || seen[g.Group] || g.Backup.Repository == "" || g.Backup.Label == "" || g.LSN == "" {
+			return false
+		}
+		if g.Group == 0 && (g.Backup.Repository != b.Repository || g.Backup.Label != b.Label) {
+			return false
+		}
+		seen[g.Group] = true
+	}
+	return true
 }
