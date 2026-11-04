@@ -215,6 +215,27 @@ blocked-change recovery are fixed in v0.4.5, not by the hotfix.
   On Group Replication and PXC the relaunch moves the writer, so point-in-time
   recovery into the stalled period itself is not available.
 
+- **On Zerops, raising the resources of a member that failed its first deployment
+  doesn't take effect** (also present in v0.4.3). If a newly added member, extra
+  component or proxy exhausts its deployment retries — for example because it
+  was given too little memory to start — a later resource increase is recorded
+  but never deployed, and retrying deployments redeploys it at the old size.
+  These members never started, so they hold no data. Recovery: for optional
+  extras and proxies, disable the component and enable it again with the larger
+  resources; for a data member added by scaling out, scale back in to remove it,
+  then scale out again with the new resources; for a brand-new cluster that
+  never became Ready, delete it and create it again. If a replacement member
+  is stuck in a cluster that already holds data, never delete the cluster;
+  instead: for PostgreSQL and Supabase, cancel the replace operation
+  (`karactl operations cancel OPERATION`), which removes only the new member
+  and keeps the original; for MySQL Group Replication and PXC, cancel the
+  replace operation before the old member starts retiring; for MongoDB, wait
+  for the operation to time out (about 2 hours), which removes the new member;
+  for RabbitMQ, Elasticsearch, Weaviate and OpenBao, leave the cluster as it
+  is and upgrade once the fix is released. After cancelling or a timeout,
+  check that the new member is actually gone before making further changes.
+  Neo4j and the Data MCP companion are not
+  affected. A fix is planned for the next release.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
