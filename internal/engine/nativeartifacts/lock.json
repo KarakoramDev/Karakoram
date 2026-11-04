@@ -357,8 +357,8 @@
     "name": "mongodb-mcp-server",
     "version": "3.1.0",
     "file": "mongodb-mcp-server-3.1.0-ubuntu24.04-amd64.tar.gz",
-    "sha256": "a5c6f723b4c4eaf87ecbc3da336a5c1ec784e47a087e351e89aff65e70018242",
-    "size": 239960287,
+    "sha256": "381e6031a658bf78abe3fd912a1683437e57a2271a0cf04f9d5daadb8d874204",
+    "size": 239978754,
     "upstreamURL": "",
     "license": "Apache-2.0",
     "source": {
