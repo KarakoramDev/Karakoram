@@ -100,10 +100,13 @@ archiving; verify that the endpoint advances after post-backup writes.
 
 Archive attempts that fail decoding, rotation or upload now report
 `BinlogArchive=False/ArchiveFailed`, a Warning event and an agent log diagnostic.
-The condition includes a safe error category; inspect the writer agent log for
-the full native diagnostic. The sanitized last-attempt result is stored durably
-per repository and survives agent restarts; only a successful later pass clears
-the attempt failure. Failure to read or persist that result is itself unhealthy.
+The condition includes a safe error category; the writer agent log adds sanitized
+native/client causes (for example, MySQL error number/SQLSTATE or S3 code/status),
+without SQL, account statements or decoded native output. The sanitized
+last-attempt result is stored durably per repository and survives agent restarts;
+only a completed successful pass clears it. Writer-ineligible/fenced skips retain
+the prior result, and status probe failures report `binlog_status_failed`.
+Failure to read or persist the attempt result is itself unhealthy.
 Neither a failed attempt nor the writer's current position extends the recovery
 window: only successfully uploaded, contiguous transaction metadata does.
 
@@ -116,8 +119,11 @@ user/database changes alone do not establish archive health. The corrected
 parser handles native space/tab headers, standalone queries, transaction-wrapped
 row/statement DML, compressed transactions and durable XA prepare boundaries.
 
-Install the corrected **member agents**, not just the control plane. On releases
-supporting MySQL/PXC `upgrade-agents`, use the [agent rollout](operations.md#agent-rollout).
+Install the corrected **member agents**, not just the control plane: upgrade the
+control plane first, then relaunch member agents. On releases with MySQL
+`upgrade-agents`, use that rollout; on releases without it, a genuine CPU/memory
+resource change relaunches the agents. Follow the [upgrade guidance](../upgrade.md)
+and the topology's availability requirements before relaunching members.
 At the next scheduled archive pass, existing durable receipts are retained and
 all still-present, unarchived closed binlogs are retried automatically in native
 order; no manual skip, index edit or new baseline is required to repair a parser
