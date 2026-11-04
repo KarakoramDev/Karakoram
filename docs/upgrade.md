@@ -793,8 +793,24 @@ a later release.
 
 ### Known issues in v0.4.3
 
-The following issue is fixed in the next release.
+The following issues are fixed in the next release.
 
+- **MySQL point-in-time recovery silently stops archiving after the first schema
+  or account change** (v0.4.3 only; single, Group Replication and PXC). After a
+  full backup, the first statement such as `CREATE DATABASE`, `CREATE TABLE`,
+  `ALTER`, `CREATE USER` or `GRANT` — including databases and users created
+  through Karakoram itself — stops binlog archiving: no further binlogs are
+  uploaded, the `BinlogArchive` condition can still report healthy, and
+  point-in-time restore cannot go past that point. Full backups are not
+  affected. To check a cluster, compare the end of its point-in-time window
+  (`karactl backups pitr-window CLUSTER`) with the current time: if it stops
+  advancing while the archive lag grows, the cluster is affected. A new full
+  backup, disabling and re-enabling point-in-time recovery, or restarting the
+  cluster does not restart archiving. Until the fix: rely on full backups
+  (schedule them as often as your recovery point requires) and don't lower
+  binlog retention, so the fix can still archive retained binlogs; binlogs that
+  MySQL purges before then leave a permanent gap in point-in-time coverage.
+  A fix is planned for the next release.
 - **PXC clusters can be wrongly flagged as having diverged GTID history after a
   member restart** (also present in earlier v0.4 releases). After any member
   restarts and rejoins while writes continue — a rolling CPU, memory or
