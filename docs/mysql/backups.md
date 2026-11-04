@@ -107,6 +107,8 @@ last-attempt result is stored durably per repository and survives agent restarts
 only a completed successful pass clears it. Writer-ineligible/fenced skips retain
 the prior result, and status probe failures report `binlog_status_failed`.
 Failure to read or persist the attempt result is itself unhealthy.
+Member state directories must be absolute; an empty or relative directory is
+rejected as `archive_state_directory_invalid`, never used for attempt-state writes.
 Repeated status probes within one observation pass do not duplicate a successfully
 recorded Warning; a failed event recording remains retryable.
 Neither a failed attempt nor the writer's current position extends the recovery

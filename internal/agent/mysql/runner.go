@@ -145,6 +145,9 @@ func availableLocalPool(ctx context.Context, pool *sql.DB, open func() (*sql.DB,
 	return replacement, replacement.PingContext(ctx)
 }
 func (e *Runner) Apply(ctx context.Context, n *agent.Node, c agentapi.MemberConfig) ([]string, error) {
+	if !filepath.IsAbs(n.DataDir()) {
+		return nil, errArchiveStateDir
+	}
 	s, err := decodeSpec(c)
 	if err != nil {
 		return nil, err

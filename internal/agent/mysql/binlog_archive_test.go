@@ -126,9 +126,10 @@ func TestArchiveGapFreezesContiguousEnd(t *testing.T) {
 
 func TestArchiveLoopSurvivesConfigurationRefresh(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
 	fired := make(chan struct{}, 10)
-	archive := func(context.Context) error { fired <- struct{}{}; return nil }
+	archive := func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped }
 	e.configureArchiveLoop(true, archive)
 	defer e.resetArchiveLoop(false)
 	refresh := time.NewTicker(100 * time.Millisecond)
@@ -156,9 +157,10 @@ func TestArchiveLoopSurvivesConfigurationRefresh(t *testing.T) {
 
 func TestArchiveLoopIntervalChangeReschedules(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 86400}}
 	fired := make(chan struct{}, 10)
-	archive := func(context.Context) error { fired <- struct{}{}; return nil }
+	archive := func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped }
 	e.configureArchiveLoop(true, archive)
 	defer e.resetArchiveLoop(false)
 	e.mu.Lock()
@@ -176,6 +178,7 @@ func TestArchiveLoopIntervalChangeReschedules(t *testing.T) {
 
 func TestArchiveLoopRepositoryChangeCancelsAttempt(t *testing.T) {
 	e := New()
+	e.dir = t.TempDir()
 	e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
 	started := make(chan struct{})
 	canceled := make(chan struct{})
@@ -197,7 +200,7 @@ func TestArchiveLoopRepositoryChangeCancelsAttempt(t *testing.T) {
 	e.current.Backup = &next
 	e.mu.Unlock()
 	fired := make(chan struct{}, 10)
-	e.configureArchiveLoop(true, func(context.Context) error { fired <- struct{}{}; return nil })
+	e.configureArchiveLoop(true, func(context.Context) error { fired <- struct{}{}; return errArchiveSkipped })
 	select {
 	case <-canceled:
 	case <-time.After(time.Second):
@@ -406,5 +409,29 @@ func TestArchiveAttemptPersistenceFailureIsNotHealthy(t *testing.T) {
 	status, err = e.archiveStatus()
 	if err != nil || status.Error != "" {
 		t.Fatalf("repaired persistence did not clear failure: %+v %v", status, err)
+	}
+}
+
+func TestArchiveRejectsUnboundStateDirectory(t *testing.T) {
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	for _, dir := range []string{"", "relative"} {
+		e := New()
+		e.dir = dir
+		e.current.Role = myspec.RoleData
+		e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true}}
+		_, p := e.state()
+		e.recordArchiveResult(p, e.current.Backup.Repository, errors.New("binlog_decode_failed"))
+		status, err := e.archiveStatus()
+		if err != nil || status.Error != "archive_state_directory_invalid" {
+			t.Fatalf("unbound state directory appeared healthy: %+v %v", status, err)
+		}
+		if err := e.archiveBinlogs(t.Context()); !errors.Is(err, errArchiveStateDir) {
+			t.Fatalf("unbound state directory reached native SQL: %v", err)
+		}
+	}
+	entries, err := os.ReadDir(cwd)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("unbound state directory wrote relative artifacts: count=%d error=%v", len(entries), err)
 	}
 }

@@ -190,6 +190,9 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Galera != nil && s.Galera.RestoreFence {
 		return myspec.BinlogArchiveStatus{}, errors.New("binlog_archiving_disabled")
 	}
+	if !filepath.IsAbs(p.root) {
+		return myspec.BinlogArchiveStatus{Error: errArchiveStateDir.Error()}, nil
+	}
 	archiveMu.Lock()
 	defer archiveMu.Unlock()
 	idx, err := loadArchiveState(archiveIndexPath(p, s.Backup.Repository))
@@ -275,6 +278,7 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 }
 
 var errArchiveSkipped = errors.New("archive_skipped")
+var errArchiveStateDir = errors.New("archive_state_directory_invalid")
 
 // Loss of writer admission is not a successful archive pass. Probe failures
 // are failures, whereas an observed ineligible role simply defers the attempt.
@@ -349,7 +353,10 @@ func (e *Runner) recordArchiveResult(p paths, repo myspec.Repository, err error)
 	}
 	resultPath := archiveIndexPath(p, repo) + ".attempt"
 	archiveMu.Lock()
-	writeErr := privateDir(p.root)
+	writeErr := errArchiveStateDir
+	if filepath.IsAbs(p.root) {
+		writeErr = privateDir(p.root)
+	}
 	if writeErr == nil {
 		writeErr = durableJSON(resultPath, message)
 	}
@@ -472,6 +479,9 @@ func (e *Runner) archiveBinlogs(ctx context.Context) error {
 	s, p := e.state()
 	if s.Backup == nil || !s.Backup.Binlog.Enabled || s.Role != myspec.RoleData || s.Galera != nil && s.Galera.RestoreFence {
 		return errArchiveSkipped
+	}
+	if !filepath.IsAbs(p.root) {
+		return errArchiveStateDir
 	}
 	st, err := e.status(ctx)
 	if err := archiveWriterAdmission(st, err, s.Galera != nil); err != nil {
