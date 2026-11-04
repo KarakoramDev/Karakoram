@@ -153,8 +153,8 @@ func TestPXCFullAcknowledgesOnlyExistingFrozenDeltas(t *testing.T) {
 	}
 	st.GTIDExecuted = current + ":1-11," + local + ":1-3"
 	b.native[bad] = st
-	if err := checkPXCQuorumGTIDs(t.Context(), rc, s); err != nil {
-		t.Fatalf("normal active lag after acknowledgement: %v", err)
+	if err, ok := checkPXCQuorumGTIDs(t.Context(), rc, s).(*myspec.GTIDQuorumError); !ok || err.Diverged || activeGTIDIncident(s) != nil {
+		t.Fatalf("equal-position active lag after acknowledgement did not remain Unknown: %v", err)
 	}
 	st.GTIDExecuted = current + ":1-11," + local + ":1-4"
 	b.native[bad] = st
@@ -414,10 +414,12 @@ func TestPXCRestoreActivationCertifiesSharedInverseHistory(t *testing.T) {
 			return prior != nil && prior(w, r, name)
 		}
 		set := active + ":1-206," + historical + ":1-165"
+		position := int64(206)
 		if name == bad {
 			set = active + ":1-207," + historical + ":1-165"
+			position++
 		}
-		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: stateUUID, GTIDExecuted: set})
+		_ = json.NewEncoder(w).Encode(myspec.GaleraStatusResponse{ClusterStatus: "Primary", LocalStateComment: "Synced", Ready: true, Connected: true, ClusterSize: 3, StateUUID: stateUUID, GTIDExecuted: set, LastCommitted: position})
 		return true
 	}
 	cp := backupCheckpoint{Step: "activate", Generation: 1, Request: &myspec.Restore{}, GTIDCertification: &pxcRestoreCertification{Certified: true}}

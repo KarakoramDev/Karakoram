@@ -13,6 +13,10 @@ import (
 type GTIDQuorumError struct {
 	Diverged bool
 	Members  []string
+	// PrefixInFlight identifies a completed, journal-backed compatible-prefix
+	// comparison. It withholds continuity claims but may permit maintenance;
+	// stale state and observation/persistence failures never set this flag.
+	PrefixInFlight bool
 	// Detail is a controller-generated, secret-safe observation discriminator.
 	Detail string
 	// Cause preserves cancellation without publishing its potentially unsafe text.

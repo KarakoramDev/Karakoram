@@ -544,7 +544,11 @@ func agentUpgradeGate(ctx context.Context, rc *engine.Context, s *state, m *memb
 	}
 	if s.Topology == "cluster" {
 		if err := checkPXCQuorumGTIDs(ctx, rc, s); err != nil {
-			return fmt.Errorf("PXC agent rollout requires safe GTID history: %w", err)
+			// A nested active-SID prefix is compatible with restart catch-up
+			// or torn reads. It withholds continuity claims, not maintenance.
+			if comparison, ok := err.(*myspec.GTIDQuorumError); !ok || comparison.Diverged || !comparison.PrefixInFlight {
+				return fmt.Errorf("PXC agent rollout requires safe GTID history: %w", err)
+			}
 		}
 		if incident := activeGTIDIncident(s); incident != nil {
 			return engine.Invalid("PXC agent rollout blocked by latched GTID history divergence: %s", incident.message())

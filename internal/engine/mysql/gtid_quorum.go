@@ -255,6 +255,9 @@ func checkPXCQuorumGTIDs(ctx context.Context, rc *engine.Context, s *state) (res
 		}
 		unavailable.Detail = quorumOutcomeDetail(outcomes, class)
 	}
+	if err == nil && prefixSuspected {
+		return &myspec.GTIDQuorumError{Members: append([]string(nil), s.GTIDPrefixLag.Members...), PrefixInFlight: true, Detail: " (equal-position-prefix-in-flight)"}
+	}
 	return err
 }
 
