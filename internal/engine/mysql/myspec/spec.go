@@ -262,6 +262,7 @@ type BinlogArchiveStatus struct {
 	GapReason         string    `json:"gapReason,omitempty"`
 	ContiguousEndTime time.Time `json:"contiguousEndTime"`
 	ContiguousGTIDSet string    `json:"contiguousGTIDSet"`
+	Error             string    `json:"error,omitempty"`
 }
 type RestoreRequest struct {
 	Receipt    string  `json:"receipt"`

@@ -98,6 +98,37 @@ observation reports `Unknown/ObservationUnavailable`. A full-backup-only
 zero-width window is a snapshot recovery point, not evidence of continuous
 archiving; verify that the endpoint advances after post-backup writes.
 
+Archive attempts that fail decoding, rotation or upload now report
+`BinlogArchive=False/ArchiveFailed`, a Warning event and an agent log diagnostic.
+The condition includes a safe error category; inspect the writer agent log for
+the full native diagnostic. A successful later pass clears the attempt failure.
+Neither a failed attempt nor the writer's current position extends the recovery
+window: only successfully uploaded, contiguous transaction metadata does.
+
+### Upgrading an archive stalled after DDL
+
+Older agents can stop archiving at a native tab-separated Query header without
+an Xid (for example, `CREATE DATABASE IF NOT EXISTS` on an existing database).
+Ordinary atomic DDL/account statements carrying Xid may continue, so successful
+user/database changes alone do not establish archive health. The corrected
+parser handles native space/tab headers, standalone queries, transaction-wrapped
+row/statement DML, compressed transactions and durable XA prepare boundaries.
+
+Install the corrected **member agents**, not just the control plane. On releases
+supporting MySQL/PXC `upgrade-agents`, use the [agent rollout](operations.md#agent-rollout).
+At the next scheduled archive pass, existing durable receipts are retained and
+all still-present, unarchived closed binlogs are retried automatically in native
+order; no manual skip, index edit or new baseline is required to repair a parser
+stall. Coverage advances after those uploads complete and pass lineage checks.
+Keep native binary logs until this catch-up finishes.
+
+Purged, unarchived logs cannot be reconstructed by an upgrade. A missing pending
+file reports `unarchived_binlog_purged` and freezes the contiguous archive end;
+physical-source/GTID coverage checks also reject missing history, including a gap
+that predates the local pending inventory. Do not force the window across it.
+Preserve earlier restorable coverage and take a fresh full backup to establish
+a new recovery baseline after the gap.
+
 Each archive pass releases its repository connection pool when it completes or
 fails; backup, restore and coverage observations do the same. This prevents
 short archive intervals from accumulating abandoned idle S3/TLS connections.

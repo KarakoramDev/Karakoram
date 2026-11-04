@@ -448,6 +448,23 @@ func (p *Core) backupStatus(ctx context.Context, rc *engine.Context, status *dom
 					condition.Reason = "ArchivePending"
 					condition.Message = "No binlog transaction has been archived"
 				}
+				if a.Error != "" {
+					condition.Status = "False"
+					condition.Reason = "ArchiveFailed"
+					condition.Message = "Binlog archiving failed: " + a.Error + "; recovery coverage ends at the last successfully archived transaction"
+					known := false
+					for _, old := range rc.Cluster.Status.Conditions {
+						if old.Type == condition.Type && old.Reason == condition.Reason && old.Message == condition.Message {
+							known = true
+							break
+						}
+					}
+					if !known && rc.Events != nil {
+						if err := rc.Events.Record(ctx, domain.Event{Namespace: rc.Cluster.Namespace, Cluster: rc.Cluster.Name, Resource: writer, Type: "Warning", Reason: condition.Reason, Message: condition.Message, CreatedAt: now(rc)}); err != nil {
+							return err
+						}
+					}
+				}
 			}
 			status.Conditions = append(status.Conditions, condition)
 		}

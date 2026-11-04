@@ -36,6 +36,7 @@ type Runner struct {
 	rejoinCancel           context.CancelFunc
 	archiveCancel          context.CancelFunc
 	archiveBackup          myspec.Backup
+	archiveError           string
 	coverageServiceMu      sync.Mutex
 	coverageRefresh        *coverageRefresh
 	coverageStopped        bool

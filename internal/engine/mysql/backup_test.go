@@ -214,10 +214,14 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 		{name: "disabled", fail: true, want: "Unknown", reason: "ObservationUnavailable"},
 		{name: "healthy", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0)}, want: "True", reason: "ArchiveObservation"},
 		{name: "gap", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Gap: true}, want: "False", reason: "ArchiveObservation"},
+		{name: "failed-before-upload", archive: myspec.BinlogArchiveStatus{Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
+		{name: "failed-after-upload", archive: myspec.BinlogArchiveStatus{LastArchivedFile: "binlog.000001", LastEventTime: time.Unix(20, 0), Error: "binlog_decode_failed"}, want: "False", reason: "ArchiveFailed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, rc, b := backupFixture(t, "single")
 			rc.Cluster.Spec.Backup.PITR.Enabled = true
+			events := &gtidEvents{}
+			rc.Events = events
 			b.action = func(w http.ResponseWriter, r *http.Request, _ string) bool {
 				if r.URL.Path != "/v1/mysql/archive-status" {
 					return false
@@ -237,6 +241,19 @@ func TestBinlogArchiveConditionRequiresArchivedTransaction(t *testing.T) {
 				if condition.Type == "BinlogArchive" {
 					if condition.Status != tc.want || condition.Reason != tc.reason {
 						t.Fatal(condition)
+					}
+					if tc.reason == "ArchiveFailed" {
+						if !strings.Contains(condition.Message, tc.archive.Error) || len(events.events) != 1 || events.events[0].Type != "Warning" || events.events[0].Reason != "ArchiveFailed" {
+							t.Fatalf("missing failure diagnostic/event: %+v %+v", condition, events.events)
+						}
+						rc.Cluster.Status = status
+						var repeated domain.ClusterStatus
+						if err := p.backupStatus(t.Context(), rc, &repeated); err != nil {
+							t.Fatal(err)
+						}
+						if len(events.events) != 1 {
+							t.Fatal("repeated observation duplicated warning")
+						}
 					}
 					return
 				}

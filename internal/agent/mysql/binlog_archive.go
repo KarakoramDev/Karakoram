@@ -192,8 +192,11 @@ func (e *Runner) archiveStatus() (myspec.BinlogArchiveStatus, error) {
 	defer archiveMu.Unlock()
 	idx, err := loadArchiveState(archiveIndexPath(p, s.Backup.Repository))
 	if err != nil {
-		return idx.Status, errors.New("archive_index_invalid")
+		return myspec.BinlogArchiveStatus{Error: "archive_index_invalid"}, nil
 	}
+	e.mu.RLock()
+	idx.Status.Error = e.archiveError
+	e.mu.RUnlock()
 	if !idx.Status.LastEventTime.IsZero() {
 		idx.Status.LagSeconds = time.Since(idx.Status.LastEventTime).Seconds()
 		if idx.Status.LagSeconds < 0 {
@@ -248,10 +251,32 @@ func (e *Runner) configureArchiveLoop(enabled bool, archive func(context.Context
 			case <-time.After(interval):
 			}
 			run, cancel := context.WithTimeout(ctx, 5*time.Minute)
-			_ = archive(run)
+			err := archive(run)
 			cancel()
+			if ctx.Err() != nil {
+				return
+			}
+			e.recordArchiveResult(err)
 		}
 	}()
+}
+
+// Keep failures separate from durable upload receipts: an unsuccessful attempt
+// never advances the archived position, and the next successful pass clears it.
+func (e *Runner) recordArchiveResult(err error) {
+	message := ""
+	if err != nil {
+		// Native diagnostics can contain SQL or local paths. Publish only the
+		// stable error category; full diagnostics belong in the agent log.
+		message, _, _ = strings.Cut(err.Error(), ":")
+	}
+	e.mu.Lock()
+	e.archiveError = message
+	node := e.node
+	e.mu.Unlock()
+	if err != nil && node != nil {
+		node.Logger().Warn("MySQL binlog archive failed", "error", err)
+	}
 }
 func hashFile(name string) (string, int64, error) {
 	f, err := os.Open(name)
@@ -420,38 +445,6 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	if err != nil || len(logs) == 0 {
 		return errors.New("binlog_query_failed")
 	}
-	// Only a file containing a committed transaction needs bounded rotation.
-	current := logs[len(logs)-1]
-	localCurrent := filepath.Join(filepath.Dir(base), current.name)
-	resume, err := resumeBinlog(localCurrent, uuid+"/"+current.name, idx.Active)
-	if err != nil {
-		return fmt.Errorf("binlog_read_failed: %w", err)
-	}
-	hasTransactions := false
-	decoded, err := decodeBinlogFrom(ctx, s, localCurrent, resume.Position, func(binlogTransaction) error {
-		hasTransactions = true
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if decoded.DecodePosition >= resume.Position {
-		resume.Position = decoded.DecodePosition
-	}
-	idx.Active = &resume
-	if hasTransactions {
-		latest, err := status(ctx)
-		if err != nil || !latest.WriterEligible(s.Galera != nil) {
-			return nil
-		}
-		if _, err = db.ExecContext(ctx, "FLUSH BINARY LOGS"); err != nil {
-			return errors.New("binlog_rotate_failed")
-		}
-		logs, err = list()
-		if err != nil || len(logs) == 0 {
-			return errors.New("binlog_query_failed")
-		}
-	}
 	present := map[string]bool{}
 	for _, f := range logs {
 		key := uuid + "/" + f.name
@@ -486,6 +479,47 @@ func archiveNativeBinlogs(ctx context.Context, s myspec.Spec, p paths, db *sql.D
 	}
 	if err = writeArchivePending(indexPath, idx.Pending); err != nil {
 		return errors.New("archive_index_write")
+	}
+	// Persist the native inventory before decoding can fail. A later purge
+	// must remain distinguishable from a successfully archived file.
+	if err = writeArchiveSummary(indexPath, idx); err != nil {
+		return errors.New("archive_index_write")
+	}
+	// Only a file containing a committed transaction needs bounded rotation.
+	current := logs[len(logs)-1]
+	localCurrent := filepath.Join(filepath.Dir(base), current.name)
+	resume, err := resumeBinlog(localCurrent, uuid+"/"+current.name, idx.Active)
+	if err != nil {
+		return fmt.Errorf("binlog_read_failed: %w", err)
+	}
+	hasTransactions := false
+	decoded, err := decodeBinlogFrom(ctx, s, localCurrent, resume.Position, func(binlogTransaction) error {
+		hasTransactions = true
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if decoded.DecodePosition >= resume.Position {
+		resume.Position = decoded.DecodePosition
+	}
+	idx.Active = &resume
+	if hasTransactions {
+		latest, err := status(ctx)
+		if err != nil || !latest.WriterEligible(s.Galera != nil) {
+			return nil
+		}
+		if _, err = db.ExecContext(ctx, "FLUSH BINARY LOGS"); err != nil {
+			return errors.New("binlog_rotate_failed")
+		}
+		logs, err = list()
+		if err != nil || len(logs) == 0 {
+			return errors.New("binlog_query_failed")
+		}
+		idx.Pending[uuid+"/"+logs[len(logs)-1].name] = true
+		if err = writeArchivePending(indexPath, idx.Pending); err != nil {
+			return errors.New("archive_index_write")
+		}
 	}
 	if err = writeArchiveSummary(indexPath, idx); err != nil {
 		return errors.New("archive_index_write")

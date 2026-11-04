@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"github.com/KarakoramDev/Karakoram/internal/engine/mysql/myspec"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -222,5 +224,67 @@ func TestArchiveStatusDisabledAndEmpty(t *testing.T) {
 	status, err := e.archiveStatus()
 	if err != nil || status.LastArchivedFile != "" || !status.LastEventTime.IsZero() {
 		t.Fatalf("empty archive must remain distinguishable from healthy coverage: %+v %v", status, err)
+	}
+}
+
+func TestArchiveLoopReportsFailureAndRecovery(t *testing.T) {
+	e := New()
+	e.dir = t.TempDir()
+	e.current.Backup = &myspec.Backup{Repository: testBackupRepository(), Binlog: myspec.Binlog{Enabled: true, RotateIntervalSeconds: 1}}
+	var attempts atomic.Int32
+	e.configureArchiveLoop(true, func(context.Context) error {
+		if attempts.Add(1) == 1 {
+			return errors.New("binlog_decode_failed: private native diagnostics")
+		}
+		return nil
+	})
+	defer e.resetArchiveLoop(false)
+	wait := func(want string) {
+		t.Helper()
+		deadline := time.After(1800 * time.Millisecond)
+		tick := time.NewTicker(10 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			status, err := e.archiveStatus()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.Error == want {
+				return
+			}
+			select {
+			case <-tick.C:
+			case <-deadline:
+				t.Fatalf("archive error = %q, want %q", status.Error, want)
+			}
+		}
+	}
+	wait("binlog_decode_failed")
+	wait("")
+}
+
+func TestArchiveFailureDoesNotAdvanceCoverage(t *testing.T) {
+	dir := t.TempDir()
+	p := dataPaths(dir)
+	if err := privateDir(p.root); err != nil {
+		t.Fatal(err)
+	}
+	repo := testBackupRepository()
+	index, _ := readArchiveIndex(archiveIndexPath(p, repo))
+	index.Status.LastArchivedFile = "binlog.000001"
+	index.Status.LastEventTime = time.Unix(100, 0).UTC()
+	index.Status.ContiguousEndTime = index.Status.LastEventTime
+	index.Status.GTIDSet = recoverySID + ":1-4"
+	index.Status.ContiguousGTIDSet = index.Status.GTIDSet
+	if err := durableJSON(archiveIndexPath(p, repo), index); err != nil {
+		t.Fatal(err)
+	}
+	e := New()
+	e.dir = dir
+	e.current.Backup = &myspec.Backup{Repository: repo, Binlog: myspec.Binlog{Enabled: true}}
+	e.recordArchiveResult(errors.New("binlog_decode_failed: private native diagnostics"))
+	status, err := e.archiveStatus()
+	if err != nil || status.Error != "binlog_decode_failed" || status.LastArchivedFile != index.Status.LastArchivedFile || !status.LastEventTime.Equal(index.Status.LastEventTime) || !status.ContiguousEndTime.Equal(index.Status.ContiguousEndTime) || status.GTIDSet != index.Status.GTIDSet || status.ContiguousGTIDSet != index.Status.ContiguousGTIDSet {
+		t.Fatalf("failure changed archived coverage: %+v %v", status, err)
 	}
 }
