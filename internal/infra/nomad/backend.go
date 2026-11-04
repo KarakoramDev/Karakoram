@@ -335,18 +335,26 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 			}
 		}
 	}
-	// Check every explicit exclusion before publishing any batch reservation.
-	// An impossible later volume must not leave earlier services half allocated.
+	// Check placement before publishing any batch reservation. An impossible
+	// later volume must not leave earlier services half allocated.
+	placements := make(map[string]string)
+	var pending []volumePlacement
+	placementRecords := append([]*record(nil), rs...)
 	for _, spec := range specs {
-		if spec.Kind != infra.KindVolume || len(spec.SpreadAvoid) == 0 || existing[spec.Hostname] != nil {
+		if spec.Kind != infra.KindVolume {
 			continue
 		}
-		nodes, err := b.nodes(ctx)
-		if err != nil {
+		fixedNode := ""
+		if current := existing[spec.Hostname]; current != nil {
+			fixedNode = current.Node
+		}
+		var selected string
+		if selected, err = b.chooseVolumeNode(ctx, placementRecords, spec, volumeTaskResources(spec, specs), fixedNode, &pending); err != nil {
 			return op, err
 		}
-		if _, err = chooseNode(nodes, rs, spec.SpreadGroup, spec.SpreadReplaces, spec.SpreadAvoid...); err != nil {
-			return op, err
+		placements[spec.Hostname] = selected
+		if existing[spec.Hostname] == nil {
+			placementRecords = append(placementRecords, &record{Hostname: spec.Hostname, Kind: infra.KindVolume, SpreadGroup: spec.SpreadGroup, Node: selected})
 		}
 	}
 	ordered := append([]infra.ServiceSpec(nil), specs...)
@@ -363,7 +371,7 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 	for _, s := range ordered {
 		r := existing[s.Hostname]
 		if r == nil {
-			r, err = b.reserveImport(ctx, s, batchHash, rs, existing)
+			r, err = b.reserveImport(ctx, s, batchHash, existing, placements[s.Hostname])
 			if r != nil {
 				ids[r.Hostname] = r.ID
 			}
@@ -371,7 +379,6 @@ func (b *Backend) ImportServices(ctx context.Context, specs []infra.ServiceSpec)
 				return op, err
 			}
 			existing[r.Hostname] = r
-			rs = append(rs, r)
 		}
 		ids[r.Hostname] = r.ID
 		reserved = append(reserved, r)

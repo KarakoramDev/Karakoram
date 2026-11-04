@@ -28,7 +28,7 @@ func resumableImport(r *record, hash string) bool {
 	return r.ImportHash == hash && r.Desired == "stopped" && r.Deployment == nil && r.Pending == nil
 }
 
-func (b *Backend) reserveImport(ctx context.Context, s infra.ServiceSpec, hash string, records []*record, existing map[string]*record) (*record, error) {
+func (b *Backend) reserveImport(ctx context.Context, s infra.ServiceSpec, hash string, existing map[string]*record, selectedNode string) (*record, error) {
 	id, err := newID()
 	if err != nil {
 		return nil, err
@@ -42,14 +42,7 @@ func (b *Backend) reserveImport(ctx context.Context, s infra.ServiceSpec, hash s
 	}
 	sort.Strings(r.SecretKeys)
 	if r.Kind == infra.KindVolume {
-		nodes, err := b.nodes(ctx)
-		if err != nil {
-			return nil, err
-		}
-		r.Node, err = chooseNode(nodes, records, r.SpreadGroup, s.SpreadReplaces, s.SpreadAvoid...)
-		if err != nil {
-			return nil, err
-		}
+		r.Node = selectedNode
 		// A reserved, unguessable incarnation attributes an accepted create
 		// even when its server-generated volume ID never reaches the caller.
 		r.VolumeName = volumeName(b.target.ID, r.Hostname) + "-" + r.ID

@@ -317,7 +317,7 @@ func fakeTerminal(a *fakeAlloc) bool {
 	return false
 }
 func fakeNodeRow(node fakeNode) fakeRow {
-	return fakeRow{"ID": node.ID, "Name": node.Name, "Datacenter": node.Datacenter, "NodePool": node.NodePool, "Status": node.Status, "SchedulingEligibility": node.SchedulingEligibility, "Drain": node.Drain, "Address": node.Address}
+	return fakeRow{"ID": node.ID, "Name": node.Name, "Datacenter": node.Datacenter, "NodePool": node.NodePool, "Status": node.Status, "SchedulingEligibility": node.SchedulingEligibility, "Drain": node.Drain, "Address": node.Address, "NodeResources": fakeRow{"Cpu": fakeRow{"CpuShares": 1000000, "ReservableCpuCores": []int{0, 1, 2, 3, 4, 5, 6, 7}}, "Memory": fakeRow{"MemoryMB": 1000000}}}
 }
 func fakeSorted(rows []fakeRow, key string) []fakeRow {
 	slices.SortFunc(rows, func(a, b fakeRow) int { return strings.Compare(fakeString(a, key), fakeString(b, key)) })
@@ -572,6 +572,17 @@ func (f *fakeNomad) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			rows = append(rows, fakeNodeRow(node))
 		}
 		fakeJSON(w, 200, fakeSorted(rows, "ID"))
+		return
+	}
+	if strings.HasPrefix(path, "/v1/node/") && strings.HasSuffix(path, "/allocations") && r.Method == http.MethodGet {
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/v1/node/"), "/allocations")
+		rows := []fakeRow{}
+		for _, allocation := range f.allocs {
+			if allocation.row["NodeID"] == id {
+				rows = append(rows, fakeCopy(allocation.row))
+			}
+		}
+		fakeJSON(w, 200, rows)
 		return
 	}
 	if strings.HasPrefix(path, "/v1/node/") && r.Method == http.MethodGet {
